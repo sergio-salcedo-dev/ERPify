@@ -186,6 +186,17 @@ Do **not** spawn subagents for tasks that share state mid-flight — two agents 
 - **Never force-push `main`** — no `git push --force` / `--force-with-lease` / `--force-if-includes` to `main`, ever.
 - **Never merge into `main` without explicit per-merge permission from the user** — neither a local `git merge`/`git rebase` onto `main` nor merging a PR (web UI, `gh pr merge`, MCP). Prepare the branch/PR and stop. Approval for one PR/branch does not carry over to the next.
 
+### Finishing substantial work means committed **and pushed** (hard rule for agents)
+
+A local commit is not a deliverable. It is invisible to CI, to review, and to the user, and it dies with the worktree — so when a substantial piece of work is done and its gates are green, **commit and push the branch in the same breath**, without waiting to be asked.
+
+- **Trigger:** any change worth a commit message beyond a typo — a feature slice, a fix, a review pass applied, a docs sweep. If you would summarise it to the user as "done", it gets pushed.
+- **Push the feature branch, never `main`** (see *Protected `main`* above). Pushing a branch is not merging it; opening the PR is still the separate, permitted step, and merging still needs per-merge permission.
+- **Gates first.** Push only behind the required checks for what you touched (`make php.quality`, `make pwa.quality`, the relevant tests), each from a fresh run with its printed exit code.
+- **Report the remote state, not the local one.** "Committed" and "pushed" are different claims; say which one is true. If a push is deliberately withheld, say so and why — silence reads as pushed.
+
+The rule exists because the silent failure is expensive and asymmetric: a code review of PR #553 produced thirteen patches, they were committed locally and never pushed, and the PR merged from the unchanged head — the review's whole output was stranded on a branch nobody could see, including a guard that answered 500 instead of 422 on a reachable path. Recovering it needed a cherry-pick onto a follow-up branch. Nothing warned; a merged PR looks identical whether or not your work reached it.
+
 ### Confirm branch creation & topology (hard rule for agents)
 
 - **Get explicit authorization before creating a new branch**, and before **splitting one task across multiple branches** (e.g. a `docs/` branch plus a separate `feat/` branch for related work). Don't decide branch topology unilaterally.
