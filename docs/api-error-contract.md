@@ -65,7 +65,7 @@ The Session Admission Gate has two deliberately distinct outcomes for an authent
 
 Marker resolution honours implements-clause order, intersected with the canonical marker list (`firstMatchingMarker`, lines 444–456). Subclasses may override `DomainException::type()` to return a more specific opaque identifier. A concrete exception implementing two or more markers must declare an explicit `TYPE` constant / `type()` override — enforced by a CI gate test (`MarkerStatusMapContractTest`) — so its resolution never silently depends on implements-clause order. Markers are framework-free — no HTTP / ORM / transport imports allowed inside `Shared/ErrorContract/Domain/Exception/`.
 
-> **Adding a marker interface or changing its mapping requires updating this page.** `ErrorContractGateTest` enforces the first half: every `.php` at any depth under `api/src/Shared/ErrorContract/Domain/Exception/` must be cited on this page as a backticked token (`` `Forbidden` ``), checked against the directory's current contents — so a marker this page never names fails the gate in any checkout, on any branch. A citation anywhere in the prose satisfies it — the gate reads presence, not placement — but a name appearing only inside a fenced code sample does not count. Changing an existing marker's **status** is not machine-checkable and stays manual discipline.
+> **Adding a marker interface or changing its mapping requires updating this page.** `ErrorContractGateTest` enforces the first half: every `.php` at any depth under `api/src/Shared/ErrorContract/Domain/Exception/` must be cited on this page as a backticked token (`` `Forbidden` ``), checked against the directory's current contents — so a marker this page never names fails the gate in any checkout, on any branch. A citation anywhere in the prose satisfies it — the gate reads presence, not placement — but a name appearing only inside a fenced code sample does not count. On top of that, the table above must hold exactly one row per marker in `MARKER_STATUS_MAP`: a marker with no row fails, and so does a row left behind by a marker that no longer exists. Only the **status value** in a row escapes machine checking — the constant is the source, the table a navigation aid — so changing a mapping stays manual discipline.
 
 ### Symfony framework exception bridge
 
@@ -379,6 +379,7 @@ The bench is **not** CI-blocking. The contract tests above are CI-blocking (NFR4
 | `NativeJsonEncodeContractTest`, `LoggerInterfaceContractTest`                                     | NFR4 / NFR5 contracts                           |
 | `ConstantTimeAuthBranchingContractTest`, `ConstantTimeAuthBranchingBenchmarkTest`                 | NFR9                                            |
 | `RedactionDenylistTest`                                                                           | denylist semantics + extension procedure (NFR8) |
+| `ErrorContractGateTest`                                                                           | no catch-and-respond; this page documents every marker |
 
 Behat features under `api/features/shared/error_contract/` pin the wire contract end-to-end (correlation-id propagation, instance UUIDv7, violations extension).
 
