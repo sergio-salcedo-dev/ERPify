@@ -55,6 +55,13 @@ final class OutboxContext extends AbstractContext
     private const array INSPECTABLE_QUEUES = ['async', 'failed'];
 
     /**
+     * InMemoryTransport::get() takes a fetch size that defaults to 1 and stops there. Inspecting an
+     * outbox means reading all of it, so the size is passed explicitly — left implicit, every count
+     * above one silently reads as one and the assertion passes for the wrong reason.
+     */
+    private const int WHOLE_QUEUE = PHP_INT_MAX;
+
+    /**
      * Queues drained before each scenario so in-memory pending messages don't leak across scenarios.
      * Distinct constant from {@see INSPECTABLE_QUEUES} so a transport can be drained without becoming an
      * inspectable outbox queue that inflates the domain-event count.
@@ -406,7 +413,7 @@ final class OutboxContext extends AbstractContext
                 continue;
             }
 
-            foreach ($transport->get() as $envelope) {
+            foreach ($transport->get(self::WHOLE_QUEUE) as $envelope) {
                 $messages[] = ['queue' => $queueName, 'envelope' => $envelope, 'event' => $envelope->getMessage()];
             }
         }

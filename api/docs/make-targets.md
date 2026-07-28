@@ -13,7 +13,7 @@ All targets are ENV-aware (`ENV=dev|ci|staging|prod`) and default to `IN_CONTAIN
 -   `make php.test` = `php.unit` + `php.behat`.
 -   `make php.unit c='--filter SomeTest'` — PHPUnit single filter.
 -   `make php.behat c='features/foo.feature:42'` — single scenario.
--   First-time install: `make php.behat.install` (builds `api/tools/behat`; PHPUnit needs no separate install — it runs from the app vendor).
+-   No separate install: Behat and PHPUnit both run from the app vendor.
 
 ## Lint / static analysis
 

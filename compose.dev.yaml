@@ -24,8 +24,8 @@ services:
       - ./api/frankenphp/worker.Caddyfile:/etc/frankenphp/worker.Caddyfile:ro
       - ./api/frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
     environment:
-      # Scope file watching to source dirs so composer/behat installs writing into
-      # vendor/ and tools/behat/vendor/ don't trigger a worker reload mid-step.
+      # Scope file watching to source dirs so composer installs writing into
+      # vendor/ don't trigger a worker reload mid-step.
       # Use `-` (not `:-`) so an explicit empty value disables watching/hot-reload:
       # CI sets these to "" (see ci.yml) to avoid cold-boot worker reloads, but `:-`
       # would treat "" as unset and re-apply the defaults. Unset (local dev) still

@@ -1,7 +1,7 @@
 # Loaded only when Behat is running (Kernel::configureContainer checks
-# $_ENV['BEHAT_RUNNING'], set by api/tools/behat/bootstrap.php). Keeps
-# PHPUnit from autoloading AbstractContext, whose Behat\Behat\Context\Context
-# parent interface lives only in the isolated tools/behat/vendor.
+# $_ENV['BEHAT_RUNNING'], set by api/tests/Behat/bootstrap.php). Keeps the step
+# contexts and their collaborators out of the PHPUnit container, which has no
+# use for them.
 services:
     _defaults:
         autowire: true

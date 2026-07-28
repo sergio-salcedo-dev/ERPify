@@ -71,6 +71,5 @@ super-lint.pull: ## Pre-pull the SuperLinter image
 #		--env "SKIP_COMPOSER_INSTALL=true" \
 #		-v $(ROOT_DIR):/tmp/lint \
 #		-v /tmp/lint/api/vendor \
-#		-v /tmp/lint/api/tools/behat/vendor \
 #		-v /tmp/lint/node_modules \
 #		$(SUPERLINTER_IMAGE)

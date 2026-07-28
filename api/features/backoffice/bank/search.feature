@@ -83,7 +83,7 @@ Feature: Search banks
     And the JSON node "violations" should have 1 element
     And the JSON node "violations[0]" should have 3 elements
     And the JSON node "violations[0].field" should be equal to "paginationMode"
-    And the JSON node "violations[0].message" should be equal to "This value should be of type int|string."
+    And the JSON node "violations[0].message" should be equal to 'The data must be one of the following values: "detailed", "light"'
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
@@ -371,7 +371,7 @@ Feature: Search banks
     And the JSON node "violations" should have 1 element
     And the JSON node "violations[0]" should have 3 elements
     And the JSON node "violations[0].field" should be equal to "filters[0].operator"
-    And the JSON node "violations[0].message" should be equal to "This value should be of type int|string."
+    And the JSON node "violations[0].message" should be equal to 'The data must be one of the following values: "eq", "in", "contains", "gt", "gte", "lt", "lte"'
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
@@ -672,7 +672,7 @@ Feature: Search banks
     And the JSON node "violations" should have 1 element
     And the JSON node "violations[0]" should have 3 elements
     And the JSON node "violations[0].field" should be equal to "direction"
-    And the JSON node "violations[0].message" should be equal to "This value should be of type int|string."
+    And the JSON node "violations[0].message" should be equal to 'The data must be one of the following values: "ASC", "DESC"'
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
@@ -689,7 +689,7 @@ Feature: Search banks
     And the JSON node "violations" should have 1 element
     And the JSON node "violations[0]" should have 3 elements
     And the JSON node "violations[0].field" should be equal to "direction"
-    And the JSON node "violations[0].message" should be equal to "This value should be of type int|string."
+    And the JSON node "violations[0].message" should be equal to 'The data must be one of the following values: "ASC", "DESC"'
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections

@@ -11,8 +11,10 @@ Feature: Restrict the bank routes to the bank permission
   # row. mallory (role-less) is denied every route; a VIEWER (read only) and an EDITOR (read+write, no delete)
   # pin that each route demands its exact permission — a write route weakened to bank.read would let the VIEWER
   # through and a delete route weakened to bank.write would let the EDITOR through, so those refusals must stay
-  # 403. Granted 2xx write/delete paths run as MANAGER in the create/update/delete features. Write refusals send
-  # a valid body so the permission gate — which runs after payload mapping — is what answers, not a 422.
+  # 403. Granted 2xx write/delete paths run as MANAGER in the create/update/delete features. The permission gate
+  # dispatches ahead of payload mapping — #[IsGranted] rides ControllerAttributesListener at -10000 on
+  # kernel.controller_arguments, RequestPayloadValueResolver maps at -10100 — so the permission verdict wins
+  # even over a body that would fail validation; the invalid-body scenario pins that ordering.
   Background:
     Given I add "Accept" header equal to "application/json"
 
@@ -124,6 +126,20 @@ Feature: Restrict the bank routes to the bank permission
     """
     Then the response status code should be 403
     And the JSON node "type" should be equal to "forbidden"
+
+  # The one refusal that deliberately sends an INVALID body: it goes red with a 422 if payload mapping ever
+  # runs ahead of the permission gate, which would hand an unauthorized caller the validation verdict.
+  Scenario: A viewer sending an invalid body is still refused with 403 — authorization precedes validation
+    Given I am logged in as a viewer
+    When I send a POST request to "/backoffice/banks" with body:
+    """
+    {
+      "name": ""
+    }
+    """
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "forbidden"
+    And the response should not contain "violations"
 
   Scenario: A viewer is refused an update with 403 — write is above the read tier
     Given I am logged in as a viewer

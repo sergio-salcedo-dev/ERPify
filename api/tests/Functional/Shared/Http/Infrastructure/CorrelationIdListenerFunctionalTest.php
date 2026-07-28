@@ -85,7 +85,7 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         $found = null;
 
         foreach ($eventDispatcher->getListeners(KernelEvents::REQUEST) as $listener) {
-            $target = \is_array($listener) ? ($listener[0] ?? null) : $listener;
+            $target = \is_array($listener) ? $listener[0] : $listener;
 
             if ($target instanceof CorrelationIdListener) {
                 $found = $listener;
@@ -95,7 +95,6 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         }
 
         $this->assertNotNull($found, 'CorrelationIdListener must be registered on kernel.request.');
-        \assert(\is_callable($found));
 
         $priority = $eventDispatcher->getListenerPriority(KernelEvents::REQUEST, $found);
         $this->assertSame(
@@ -195,12 +194,11 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         $found = \array_find(
             $eventDispatcher->getListeners(KernelEvents::RESPONSE),
             static fn ($candidate): bool => \is_array($candidate)
-            && ($candidate[0] ?? null) instanceof CorrelationIdListener
-            && ($candidate[1] ?? null) === 'onResponse',
+            && $candidate[0] instanceof CorrelationIdListener
+            && 'onResponse' === $candidate[1],
         );
 
         $this->assertNotNull($found, 'CorrelationIdListener::onResponse must be registered on kernel.response.');
-        \assert(\is_callable($found));
 
         $priority = $eventDispatcher->getListenerPriority(KernelEvents::RESPONSE, $found);
         $this->assertSame(

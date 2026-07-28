@@ -7,8 +7,6 @@ namespace Erpify;
 use Erpify\Shared\Event\Infrastructure\DependencyInjection\RegisterDomainEventsPass;
 use Override;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
-use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
-use Symfony\Component\DependencyInjection\Compiler\PassConfig;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\HttpKernel\Kernel as BaseKernel;
@@ -25,39 +23,16 @@ class Kernel extends BaseKernel
         // Builds the (eventName, eventVersion) ⇒ class map for the event store from a compile-time scan
         // of every concrete DomainEvent, failing the build on an eventName collision.
         $container->addCompilerPass(new RegisterDomainEventsPass());
-
-        // The isolated Behat toolchain (tools/behat/vendor) pulls in symfony/translation, which the
-        // app itself does not depend on — so the Behat kernel registers a TranslationDataCollector
-        // and serialises it into every profile. The `print the web profiler link` debug step targets
-        // the dev server's /_profiler page, but the dev process (main vendor only) cannot load that
-        // class and renders it as __PHP_Incomplete_Class, 500-ing the page. Dropping the collector tag
-        // keeps Behat-collected profiles renderable cross-kernel; it is the one divergent collector.
-        if ('1' !== \getenv('BEHAT_RUNNING')) {
-            return;
-        }
-
-        $container->addCompilerPass(
-            new class implements CompilerPassInterface {
-                #[Override]
-                public function process(ContainerBuilder $container): void
-                {
-                    if ($container->hasDefinition('data_collector.translation')) {
-                        $container->getDefinition('data_collector.translation')->clearTag('data_collector');
-                    }
-                }
-            },
-            PassConfig::TYPE_BEFORE_OPTIMIZATION,
-            100,
-        );
     }
 
     #[Override]
     public function getCacheDir(): string
     {
-        // Segregate Behat's compiled container from PHPUnit's: both run with
-        // env=test but Behat also loads tools/behat/vendor, and the compiled
-        // container bakes absolute paths. Sharing the cache causes
-        // `Cannot redeclare Psr\Container\ContainerInterface`.
+        // Segregate Behat's compiled container from PHPUnit's: both run under
+        // env=test, but only Behat imports services_behat.yaml, so the two
+        // compile to different containers. Symfony keys the container cache on
+        // env + debug alone, so a shared directory has each runner overwrite the
+        // other's compiled container and rebuild on every alternating run.
         if ('1' === \getenv('BEHAT_RUNNING')) {
             return parent::getCacheDir() . '_behat';
         }
@@ -77,9 +52,9 @@ class Kernel extends BaseKernel
     {
         $this->defaultConfigureContainer($container);
 
-        // Behat-only service definitions (kept out of services_test.yaml so
-        // PHPUnit never autoloads classes whose parents live in the isolated
-        // tools/behat/vendor — see api/tools/behat/bootstrap.php).
+        // Behat-only service definitions, kept out of services_test.yaml so the
+        // PHPUnit container never wires the step contexts and the services they
+        // pull in. BEHAT_RUNNING is set by api/tests/Behat/bootstrap.php.
         if ('1' === \getenv('BEHAT_RUNNING')) {
             $configDir = $this->getConfigDir();
 

@@ -3,10 +3,10 @@
 # =============================================================================
 
 # Target names match CI (.github/workflows/ci.yml):
-#   php.unit / php.behat / php.behat.install / php.test
+#   php.unit / php.behat / php.test
 
 .PHONY: php.unit php.unit.coverage \
-		php.behat php.behat.install \
+		php.behat \
 		php.test \
 		php.bench
 
@@ -51,11 +51,10 @@ php.unit.coverage: ## PHPUnit with clover coverage → api/var/coverage/clover.x
 
 ## —— Behat ——
 
+# Behat runs from the app vendor, like PHPUnit — no separate tools tree to install.
+# The config file is discovered from the cwd (api/behat.dist.php), so no -c is needed.
 php.behat: ## Behat; pass c='…' for extra args, example: php.behat c='features/backoffice/bank/get.feature'
-	@$(PHP_BEHAT) php tools/behat/run.php -c tools/behat/behat.yml.dist --format=pretty $(c)
-
-php.behat.install: ## Install Behat tooling (api/tools/behat)
-	@$(COMPOSER) behat-tools-install
+	@$(PHP_BEHAT) vendor/bin/behat --format=pretty $(c)
 
 ## —— benchmarks ——
 

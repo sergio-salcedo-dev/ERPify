@@ -13,7 +13,7 @@
 
 > **Status:** accepted (implemented) · **Date:** 2026-06-14 · **Scope:**
 > `api/tests/Behat/Context/{Messenger,MessengerConsume,Outbox,Logger}Context` + its registration in
-> `tools/behat/behat.yml.dist` + `features/shared/domain_events/event_publication.feature`.
+> `behat.dist.php` + `features/shared/domain_events/event_publication.feature`.
 >
 > Sigue a [`event-driven-architecture.md`](./event-driven-architecture.md) (rama
 > `feat/shared-event-bus-outbox-b1pa`, aún sin mergear a `main`): aquel ADR cerró el dual-write
@@ -150,7 +150,7 @@ olvido.
 ### D7 — Ubicación y aislamiento de la infra de test
 
 Los cuatro contextos viven en `api/tests/Behat/Context/` y se registran explícitamente en
-`tools/behat/behat.yml.dist` (Behat solo instancia los listados): es infra de test, no producción, así
+`behat.dist.php` (Behat solo instancia los listados): es infra de test, no producción, así
 que **no** dispara el gate de bounded-context. No se añadió ningún doble nuevo (D4 reusa el
 `BufferingLogger`). Los pasos se mantienen **genéricos** — nombre de transporte, FQCN del evento, nombre
 del store — sin reachear a internals de `Bank`, para que la infra de test no se acople a un módulo.

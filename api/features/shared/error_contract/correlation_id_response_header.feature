@@ -5,7 +5,7 @@ Feature: X-Correlation-Id response header on every API response
     echoing the per-request UUIDv7 minted by CorrelationIdListener.
 
   # The default Behat suite's HttpRequestContext is constructor-bound to baseUrl=/api/v1
-  # (see api/tools/behat/behat.yml.dist). Routes under /api/test/_throw-* are reached via
+  # (see api/behat.dist.php). Routes under /api/test/_throw-* are reached via
   # absolute URLs (HttpRequestContext skips the prepend when the URL starts with `http`).
 
   Background:

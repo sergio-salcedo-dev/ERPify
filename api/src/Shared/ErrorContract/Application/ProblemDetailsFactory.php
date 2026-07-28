@@ -216,6 +216,19 @@ final readonly class ProblemDetailsFactory
      */
     private const string VIOLATION_FIELD_FALLBACK = 'value';
 
+    /**
+     * Violation parameter Symfony's argument resolver fills with the denormalizer's own
+     * sentence whenever it marks one as usable.
+     */
+    private const string VIOLATION_HINT_PARAMETER = 'hint';
+
+    /**
+     * Template the argument resolver falls back to when a denormalization error carries no expected
+     * types to interpolate. Its rendering says nothing at all, which is the only case where the hint
+     * is worth preferring — see {@see ProblemDetailsFactory::buildViolations()}.
+     */
+    private const string VIOLATION_UNINFORMATIVE_TEMPLATE = 'This value was of an unexpected type.';
+
     public function __construct(
         #[Autowire('%kernel.environment%')]
         private string $environment,
@@ -364,6 +377,19 @@ final readonly class ProblemDetailsFactory
     }
 
     /**
+     * Denormalization failures reach the validator through Symfony's argument resolver, which cannot
+     * always express the problem in the violation message: when a value has the right type but is not
+     * an admissible one — a query parameter naming a backed-enum case that does not exist — there are
+     * no expected types to interpolate, so the message degrades to saying nothing while the sentence a
+     * client can act on ("must be one of the following values: …") is handed over separately in the
+     * `hint` parameter.
+     *
+     * The hint is preferred only when the message is that uninformative fallback, never as a general
+     * override, because `hint` is not a wire-safe channel: the same denormalizer marks as
+     * user-presentable a sibling message that names the target class, and emitting it would put an
+     * internal FQCN in a public error body. Where the resolver had expected types it also had
+     * something to say, so the rendered message already wins on both counts.
+     *
      * @param iterable<ConstraintViolationInterface> $violations
      *
      * @return list<array{field: string, message: string, code: string}>
@@ -374,10 +400,14 @@ final readonly class ProblemDetailsFactory
 
         foreach ($violations as $violation) {
             $field = $violation->getPropertyPath();
+            $hint = $violation->getParameters()[self::VIOLATION_HINT_PARAMETER] ?? null;
+            $usesHint = self::VIOLATION_UNINFORMATIVE_TEMPLATE === $violation->getMessageTemplate()
+                && \is_string($hint)
+                && '' !== $hint;
 
             $out[] = [
                 'field' => '' !== $field ? $field : self::VIOLATION_FIELD_FALLBACK,
-                'message' => (string) $violation->getMessage(),
+                'message' => $usesHint ? $hint : (string) $violation->getMessage(),
                 'code' => $violation->getCode() ?? '',
             ];
         }

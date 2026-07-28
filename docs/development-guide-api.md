@@ -19,12 +19,6 @@ make db.migrate                       # apply Doctrine migrations
 make db.load.fixtures                 # Hautelook Alice fixtures (dev only)
 ```
 
-Optional — install Behat into its isolated Composer tree:
-
-```bash
-make composer c='behat-tools-install'
-```
-
 ### Logging in (dev)
 
 `make db.load.fixtures` seeds the single organization (`ERPify`), users, and their memberships, so **dev has a working login out of the box** — you do *not* run the bootstrap commands below. Sign in with a seeded account; the fullest is Alice (`ACTIVE`, roles `MANAGER` + `AUDIT_READER`, so both the bank routes and the audit trail are reachable):
@@ -122,7 +116,7 @@ make composer c='update'              # respect allow-plugins + bump-after-updat
 make composer.check.all               # composer-unused + composer-require-checker + security advisories
 ```
 
-**Never** add `symfony/symfony` (in `conflict`) or `behat/*` (isolated tree) to `api/composer.json`.
+**Never** add `symfony/symfony` (it is in `conflict`) to `api/composer.json`.
 **Never** add polyfills listed in the `replace` block.
 
 ## Database
@@ -145,11 +139,11 @@ Migrations live in `api/migrations/2026/Version<timestamp>.php` (organised by ye
 make php.test                              # unit + e2e
 make php.unit                              # PHPUnit
 make php.unit c='--filter SomeTest'        # filter
-make php.behat                             # Behat (isolated tree)
+make php.behat                             # Behat (config: api/behat.dist.php)
 ```
 
 - **PHPUnit config**: `api/phpunit.xml.dist`.
-- **Behat tree**: `api/tools/behat/` with its own `composer.json`.
+- **Behat config**: `api/behat.dist.php` (Behat 4 dropped YAML config).
 - Integration tests touching Doctrine use **real Postgres** (Compose), not SQLite.
 
 ## Lint / analyze
