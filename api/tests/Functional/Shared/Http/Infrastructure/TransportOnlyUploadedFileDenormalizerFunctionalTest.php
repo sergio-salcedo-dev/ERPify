@@ -6,6 +6,7 @@ namespace Erpify\Tests\Functional\Shared\Http\Infrastructure;
 
 use Erpify\Shared\Http\Infrastructure\TransportOnlyUploadedFileDenormalizer;
 use Erpify\Tests\Functional\Shared\Http\Infrastructure\Fixtures\PlainFileBearingPayload;
+use Erpify\Tests\Functional\Shared\Http\Infrastructure\Fixtures\SplFileBearingPayload;
 use Erpify\Tests\Functional\Shared\Http\Infrastructure\Fixtures\UploadBearingPayload;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -60,7 +61,7 @@ final class TransportOnlyUploadedFileDenormalizerFunctionalTest extends KernelTe
             'a request body described an upload and the serializer built one — the named file is readable',
         );
         $this->assertStringNotContainsString(
-            (string) \file_get_contents(self::EXFILTRATION_TARGET),
+            $this->exfiltrationTargetBytes(),
             $exception->getMessage(),
             'the refusal must not carry the bytes it refused to hand over',
         );
@@ -93,7 +94,37 @@ final class TransportOnlyUploadedFileDenormalizerFunctionalTest extends KernelTe
             'a request body described a plain File and the serializer built one — the named file is readable',
         );
         $this->assertStringNotContainsString(
-            (string) \file_get_contents(self::EXFILTRATION_TARGET),
+            $this->exfiltrationTargetBytes(),
+            $exception->getMessage(),
+            'the refusal must not carry the bytes it refused to hand over',
+        );
+    }
+
+    /**
+     * `SplFileInfo` is the ancestor the vector actually belongs to: `filename` is its constructor
+     * parameter, and `SplFileObject` goes further and opens the named file. Anchored on `File`, both walk
+     * past unclaimed.
+     */
+    public function testABodyDescribingAnSplFileIsRefusedOnTheSameTerms(): void
+    {
+        $exception = null;
+
+        try {
+            $this->denormalizer()->denormalize(
+                ['name' => 'Exfiltration probe', 'image' => ['filename' => self::EXFILTRATION_TARGET]],
+                SplFileBearingPayload::class,
+            );
+        } catch (NotNormalizableValueException $notNormalizableValueException) {
+            $exception = $notNormalizableValueException;
+        }
+
+        $this->assertInstanceOf(
+            NotNormalizableValueException::class,
+            $exception,
+            'a request body described an SplFileInfo and the serializer built one — the named file is readable',
+        );
+        $this->assertStringNotContainsString(
+            $this->exfiltrationTargetBytes(),
             $exception->getMessage(),
             'the refusal must not carry the bytes it refused to hand over',
         );
@@ -183,6 +214,19 @@ final class TransportOnlyUploadedFileDenormalizerFunctionalTest extends KernelTe
     private function describeUpload(string $path): array
     {
         return ['path' => $path, 'originalName' => 'logo.png', 'mimeType' => 'image/png', 'test' => true];
+    }
+
+    /**
+     * The bytes the refusals must not echo back. Asserted non-empty because an empty needle is contained
+     * in every string: were the target unreadable or empty, every "did not leak" assertion below would
+     * fail loudly instead of passing for the wrong reason.
+     */
+    private function exfiltrationTargetBytes(): string
+    {
+        $bytes = (string) \file_get_contents(self::EXFILTRATION_TARGET);
+        $this->assertNotSame('', $bytes, 'the exfiltration target must be readable and non-empty');
+
+        return $bytes;
     }
 
     private function denormalizer(): DenormalizerInterface

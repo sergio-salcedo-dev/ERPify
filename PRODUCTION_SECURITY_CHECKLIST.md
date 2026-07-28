@@ -442,6 +442,17 @@ mitigated state. Accepting one means recording who accepted it and against which
       suite writes into, so any `git add -A` commits whatever a test last wrote — into a **public**
       repository. Today the residue is a 91-byte 1×1 PNG; the exposure grows the day a test writes
       realistic fixture data. Add the path to `.gitignore` and delete the residue.
+- [ ] **One shipped dependency tracks an untagged upstream branch: `symfony/mercure-bundle:
+      0.4.x-dev`.** It sits in `require`, so it reaches production, and it is the only breach of
+      `minimum-stability: stable` that does (the other two `stability-flags` entries are dev-only).
+      What is reviewed is a commit no maintainer tagged: `composer.lock` pins an exact ref, so builds
+      stay reproducible, but **`composer update` on this package moves it to whatever `main` HEAD
+      is** — unreviewed code into the deployed tree. The pin is deliberate, not an oversight: the
+      `v0.4.2` tag extends a class deprecated in Symfony 8.1 and `failOnDeprecation="true"` turns the
+      suite red, so the alternative was suppressing a real deprecation gate. Full argument and the
+      retirement trigger (first tag ≥ `0.4.3` carrying upstream `8708c813`) in
+      [`api/CLAUDE.md`](api/CLAUDE.md). **Before a customer deployment:** either the tag has landed
+      and the pin is gone, or re-diff the pinned ref against `v0.4.2` and record who accepted it.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

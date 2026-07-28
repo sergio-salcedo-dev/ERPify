@@ -55,6 +55,11 @@ return (new Config())->withProfile(
         // Upstream marks GHERKIN_32 incomplete and LEGACY as eventually removed, so
         // adopting cucumber parity is its own migration, not a side effect of a
         // dependency bump.
+        //
+        // Whoever runs that migration: gherkin's FileCache keys on the .feature path
+        // and mtime, not on the compatibility mode, so flipping this line alone
+        // serves ASTs parsed under the old mode. Touch the features or clear the
+        // cache, otherwise the first run reports the mode change as a no-op.
         ->withGherkinOptions(
             (new GherkinOptions())
                 ->withCompatibilityMode(GherkinCompatibilityMode::LEGACY)

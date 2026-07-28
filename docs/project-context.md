@@ -183,7 +183,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 #### PHP — Behat (api/)
 
 - Declared in `api/composer.json` (`require-dev`); configured by `api/behat.dist.php`. Run via `make php.behat`.
-- Feature files describe business behavior, not endpoints. Step definitions live in the Behat tree.
+- Feature files describe business behavior, not endpoints. Step definitions live in `api/tests/Behat/`.
 - Drive the app via HTTP (Mink/BrowserKit) — do not bootstrap the Symfony kernel directly from Behat steps.
 - Fixtures: Hautelook Alice via `make db.load.fixtures`. Reset DB between mutating scenarios.
 
