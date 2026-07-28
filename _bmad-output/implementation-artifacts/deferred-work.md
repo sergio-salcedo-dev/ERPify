@@ -1,5 +1,9 @@
 # Deferred work
 
+## Deferred from: code review of PR #553 — Symfony 8.1 (2026-07-28)
+
+- **(api/tools — gate inerte) La mitad git-aware del gate de frescura del contrato de error nunca corre.** `resolveGitBase()` sale sin base porque `/app` no es un repositorio git dentro del contenedor php, así que la comprobación «¿tocaste el pipeline sin tocar `docs/api-error-contract.md`?» sólo se evalúa en la mitad estática. Preexistente, no lo introduce esta rama, pero significa que NFR26 se apoya en revisión humana donde creíamos tener un gate. Fix: montar `.git` en el contenedor, o pasar la base por variable de entorno desde el Make target, que sí corre en el host.
+
 ## Deferred from: code review of spec-iam-session-validity-predicate (2026-07-27)
 
 - **(api/tests — fidelidad del doble) Las revocaciones bulk del doble no mutan `byId`.** `InMemorySessionRepository::revokeAllForUser`/`revokeOthersForUser` solo registran la llamada; tras invocarlas, `findActiveById` sigue devolviendo la sesión como admisible, mientras el adaptador real la ha marcado `REVOKED`. Es la misma clase de divergencia que esta PR cerró para el predicado temporal, en los métodos de escritura. Hoy inerte (ningún test lee después de revocar en bulk), pero el próximo que lo haga escribirá la aserción equivocada. Ref: `api/tests/Unit/Iam/Session/Application/InMemorySessionRepository.php:95-105`.

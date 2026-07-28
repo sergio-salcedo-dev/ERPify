@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Http\Infrastructure;
 
+use SplFileInfo;
 use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Serializer\Exception\NotNormalizableValueException;
 use Symfony\Component\Serializer\Normalizer\DenormalizerInterface;
 
 /**
- * Refuses to build a {@see File} out of request-body data: an upload reaches a payload from the request's
- * file bag or not at all.
+ * Refuses to build a {@see \SplFileInfo} out of request-body data: an upload reaches a payload from the
+ * request's file bag or not at all.
  *
  * A payload that declares a file member is mapped from the merge of the parsed body and `$request->files`,
  * so the member is reachable from either side. Only one of them is a real upload. The other is body data
@@ -21,10 +22,12 @@ use Symfony\Component\Serializer\Normalizer\DenormalizerInterface;
  * server path would otherwise be read from disk, stored, and served back — the caller choosing which file,
  * and the `#[Assert\File]` MIME and size checks passing because they inspect the real bytes at that path.
  *
- * The rule is anchored on `File`, not on `UploadedFile`: the vector is constructibility from a path, which
- * `File` already has, so a member typed as any other `File` subclass would otherwise walk straight past
- * this guard into `ObjectNormalizer`. `checkPath: false` makes that variant quieter still, since it does
- * not even raise the `FileNotFoundException` an absent path would.
+ * The rule is anchored on `SplFileInfo`, not on {@see File} or `UploadedFile`: the vector is
+ * constructibility from a path, and that belongs to the ancestor — `SplFileInfo` takes `filename` and
+ * `SplFileObject` opens the named file outright, while `FileValidator` accepts any `Stringable` path and
+ * would inspect the real bytes. Anchored any lower, those two shapes are claimed by neither this rule nor
+ * `DataUriNormalizer` and walk straight past into `ObjectNormalizer`. `File` with `checkPath: false` is
+ * quieter still, since it does not even raise the `FileNotFoundException` an absent path would.
  *
  * Declining a member the serializer has already resolved to a genuine file object is what keeps real
  * multipart uploads working: they arrive as the object itself, not as data to build one from.
@@ -71,8 +74,8 @@ final readonly class TransportOnlyUploadedFileDenormalizer implements Denormaliz
         ?string $format = null,
         array $context = [],
     ): bool {
-        return !$data instanceof File
-            && (File::class === $type || \is_subclass_of($type, File::class));
+        return !$data instanceof SplFileInfo
+            && (SplFileInfo::class === $type || \is_subclass_of($type, SplFileInfo::class));
     }
 
     /**
@@ -80,6 +83,6 @@ final readonly class TransportOnlyUploadedFileDenormalizer implements Denormaliz
      */
     public function getSupportedTypes(?string $format): array
     {
-        return [File::class => false];
+        return [SplFileInfo::class => false];
     }
 }

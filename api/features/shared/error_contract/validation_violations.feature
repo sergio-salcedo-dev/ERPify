@@ -84,6 +84,8 @@ Feature: ValidationFailedException surfaces as a 422 Problem Details with a stru
     And the JSON node "violations[0].message" should be equal to 'The data must be one of the following values: "detailed", "light"'
     And the JSON node "violations[1].field" should be equal to "direction"
     And the JSON node "violations[1].message" should be equal to "This value should be of type int|string."
+    And the JSON node "violations[2].field" should be equal to "status"
+    And the JSON node "violations[2].message" should be equal to "This value was of an unexpected type."
     And the response should not contain "Erpify"
     And 0 requests got executed across all doctrine connections
 

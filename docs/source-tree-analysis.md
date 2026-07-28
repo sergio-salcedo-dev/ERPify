@@ -53,8 +53,8 @@ ERPify/
 │   │   └── 2026/                   # Doctrine migrations (timestamped per year)
 │   ├── tests/                      # PHPUnit (mirrors src/) + Functional + Behat context
 │   ├── features/                   # Behat .feature files (BDD)
-│   ├── tools/
-│   │   └── behat/                  # Isolated Composer tree for Behat (Symfony 8 / Behat 3 conflict isolation)
+│   ├── behat.dist.php              # Behat 4 config (suites, contexts, gherkin mode)
+│   ├── tools/                      # Per-tool configs + isolated Composer trees (phpstan, phpunit, phpmd, …)
 │   ├── public/                     # FrankenPHP doc-root
 │   ├── frankenphp/                 # Caddyfile + worker entry
 │   ├── docs/                       # API-specific docs (upstream symfony-docker + local additions)

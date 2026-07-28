@@ -1,0 +1,11 @@
+# The API answers JSON for machines and has no localized surface, so the translator stays off.
+#
+# `symfony/translation` is a `require-dev` dependency, pulled in by `behat/behat`. FrameworkBundle
+# enables the translator by default whenever the component is installed, which would wire it in dev and
+# test but not under `composer install --no-dev` — and `RequestPayloadValueResolver` renders violation
+# messages through the translator when one exists and through `strtr()` when it does not. That is a
+# divergence between the tree the acceptance suite pins the error contract against and the tree
+# production runs. Disabling it explicitly keeps one rendering path in every environment.
+framework:
+    translator:
+        enabled: false

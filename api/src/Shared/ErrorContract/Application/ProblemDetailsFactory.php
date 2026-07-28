@@ -226,6 +226,10 @@ final readonly class ProblemDetailsFactory
      * Template the argument resolver falls back to when a denormalization error carries no expected
      * types to interpolate. Its rendering says nothing at all, which is the only case where the hint
      * is worth preferring — see {@see ProblemDetailsFactory::buildViolations()}.
+     *
+     * Duplicates the literal `RequestPayloadValueResolver::mapRequestPayload()` (symfony/http-kernel)
+     * interpolates: if upstream rephrases it, the preference stops matching — loudly, because the
+     * hint scenarios in `validation_violations.feature` and `search.feature` pin both branches.
      */
     private const string VIOLATION_UNINFORMATIVE_TEMPLATE = 'This value was of an unexpected type.';
 
@@ -388,7 +392,10 @@ final readonly class ProblemDetailsFactory
      * override, because `hint` is not a wire-safe channel: the same denormalizer marks as
      * user-presentable a sibling message that names the target class, and emitting it would put an
      * internal FQCN in a public error body. Where the resolver had expected types it also had
-     * something to say, so the rendered message already wins on both counts.
+     * something to say, so the rendered message already wins on both counts. Even then the hint is
+     * an open set — any denormalizer, vendor or ours, can throw with no expected types and a
+     * user-presentable message — so one that carries a backslash (the FQCN marker no authored
+     * refusal sentence has) is dropped in favour of the template.
      *
      * @param iterable<ConstraintViolationInterface> $violations
      *
@@ -403,7 +410,8 @@ final readonly class ProblemDetailsFactory
             $hint = $violation->getParameters()[self::VIOLATION_HINT_PARAMETER] ?? null;
             $usesHint = self::VIOLATION_UNINFORMATIVE_TEMPLATE === $violation->getMessageTemplate()
                 && \is_string($hint)
-                && '' !== $hint;
+                && '' !== $hint
+                && !\str_contains($hint, '\\');
 
             $out[] = [
                 'field' => '' !== $field ? $field : self::VIOLATION_FIELD_FALLBACK,

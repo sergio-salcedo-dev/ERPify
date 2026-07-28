@@ -68,6 +68,16 @@ Feature: Restrict the bank routes to the bank permission
     And the header "Content-Type" should contain "application/problem+json"
     And the JSON node "type" should be equal to "forbidden"
 
+  # The read side maps its query string with #[MapQueryString], the same resolver the write bodies go
+  # through, so it needs its own canary: an invalid query from an unauthorized caller must answer 403, not
+  # the 422 that would prove mapping ran ahead of the permission gate.
+  Scenario: A role-less authenticated user sending an invalid query is still refused with 403
+    Given I am logged in as a user without the audit-reader role
+    When I send a "GET" request to "/backoffice/banks?paginationMode=nonsense&limit=-5"
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "forbidden"
+    And the response should not contain "violations"
+
   # The subscriber cookie is minted behind bank.read — the same permission that gates the data the stream
   # refreshes — so a caller refused here is equally refused the collection. Refusing with 403 rather than a
   # cookie-less 204 keeps the denial auditable. The absent Set-Cookie is the load-bearing half: a refusal

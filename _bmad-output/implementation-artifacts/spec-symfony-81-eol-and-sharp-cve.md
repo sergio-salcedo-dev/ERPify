@@ -4,7 +4,7 @@ type: 'chore'
 created: '2026-07-22'
 status: 'in-review'
 baseline_commit: '6243f123fb115f8f3ce7178dc25b1cbf3b2eb6c7'
-review_loop_iteration: 0
+review_loop_iteration: 3
 context:
   - '{project-root}/api/CLAUDE.md'
 ---
@@ -331,3 +331,66 @@ fijadas por `_throw-validation-hint` en `validation_violations.feature`, que ade
 cuerpo no contiene el token `Erpify`.
 
 Verificación en fresco: `php.stan` 0, `php.unit` 0, `php.quality` 0, `php.behat` 0 (373/373).
+
+### 2026-07-28 -- code review por capas (`/bmad-code-review`) sobre la PR #553
+
+Dos capas adversariales independientes (hostil general + recorrido exhaustivo de ramas), read-only,
+sobre el diff de rama contra `main` sin lockfiles. 18 hallazgos brutos → 14 tras deduplicar: 13
+parcheados aquí, 1 diferido, 1 descartado. Ninguno invalidó el diseño de la rama; la mayor parte son
+aberturas de un invariante que la rama ya afirmaba, o afirmaciones de gobierno que nacían
+desactualizadas.
+
+Los tres con consecuencia real:
+
+- **El ancla del guard de subida estaba un nivel por debajo del vector.** `SplFileInfo` es donde
+  empieza la construibilidad desde una ruta (`filename` es su parámetro de constructor, y
+  `SplFileObject` además abre el fichero); anclado en `File`, un miembro tipado `?\SplFileInfo` o
+  `?\SplFileObject` no lo reclamaba ni esta regla ni `DataUriNormalizer` y caía en `ObjectNormalizer`.
+  Reanclado en `SplFileInfo`, con `SplFileBearingPayload` fijando la forma.
+- **La preferencia por `hint` confiaba en un conjunto abierto de productores.** El gate era por
+  plantilla, no por productor: cualquier denormalizador (vendor o propio) que lance sin
+  `expectedTypes` y con mensaje presentable emitía su texto crudo al cuerpo público. Añadido un gate
+  de contenido -- un hint con backslash (el marcador de FQCN que ninguna frase de rechazo redactada
+  lleva) cae a la plantilla. Fijado con una tercera violación en `_throw-validation-hint`.
+- **`symfony/translation` entraba en dev/test y bifurcaba el render de violaciones.** FrameworkBundle
+  activa el translator con el componente presente, así que la suite fijaba el contrato de error por el
+  camino *con* translator mientras producción (`--no-dev`) renderiza por `strtr`. Cerrado con
+  `config/packages/translation.yaml` (`translator.enabled: false`): un solo camino en todo entorno.
+
+El resto: pin de retirada para `^4.0@alpha`; corregido «single breach» de `minimum-stability` (el lock
+lleva tres flags, una la introduce esta misma rama); ítem de supply-chain para el pin `0.4.x-dev` en
+`PRODUCTION_SECURITY_CHECKLIST.md`; documentadas las dos recetas Flex con ficheros declinados
+adrede; escenarios 403-antes-de-422 para las tres escrituras de BankAccount (las que exponen IBAN) y
+para la query string de `MapQueryString`; gotcha del `FileCache` de gherkin movido al comentario de
+`behat.dist.php`; guard de needle vacío en el test de exfiltración; ancla vendor de
+`VIOLATION_UNINFORMATIVE_TEMPLATE`.
+
+**Diferido** (pre-existente, no de esta rama): la mitad git-aware del gate de frescura de NFR26 nunca
+corre porque `/app` no es un repositorio git dentro del contenedor php. **Descartado**: conservar
+`TransportOnlyUploadedFileDenormalizer` sin consumidor en `src/` -- es una decisión ya tomada y
+registrada, no un hallazgo.
+
+Verificación en fresco tras los parches al final de esta entrada.
+
+Verificación en fresco tras los parches de review, con su exit code impreso, en el stack del worktree:
+
+| Gate | Resultado |
+|---|---|
+| `make php.stan` | **0** — 1094 ficheros, sin errores |
+| `make php.unit` | **0** — 2052 tests, 8996 aserciones (los 2 notices son preexistentes en `Iam/Session`) |
+| `make php.behat` | **0** — 378 escenarios, 3413 pasos |
+| `make php.quality` | **0** — deptrac 0 violaciones / 0 uncovered; segunda pasada sin más mutaciones |
+
+Los 378 escenarios se explican: HEAD (`d121c05e`) ejecutaba 374 -- la tabla anterior dice 373 porque se
+midió antes de ese último commit, que añadió el escenario invalid-body de `bank/access_control` -- más los
+4 que añade esta review.
+
+El guard reanclado **se demostró capaz de ir a rojo**: revertido el ancla a `File` y ejecutado el test del
+payload `?\SplFileInfo`, falla -- y con un síntoma peor que "sin reclamar": la forma cae en
+`DataUriNormalizer::denormalize()`, que hace `preg_match()` sobre el array y lanza `TypeError`
+(`vendor/symfony/serializer/Normalizer/DataUriNormalizer.php:88`), o sea un 500, no un 422. Restaurado el
+ancla, los 7 tests vuelven a verde.
+
+Nota de fixers: `php.quality` normalizó `\SplFileInfo` a `use SplFileInfo;` en los tres ficheros nuevos.
+Cambio semánticamente idéntico; `php.stan`, `php.unit` y `php.behat` se re-ejecutaron **después** de esa
+mutación y los tres siguen en 0.

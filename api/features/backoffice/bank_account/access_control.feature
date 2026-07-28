@@ -212,6 +212,49 @@ Feature: Restrict the bank-account routes to the bank-account permission
     Then the response status code should be 403
     And the JSON node "type" should be equal to "forbidden"
 
+  # The refusals that deliberately send an INVALID body. They go red with a 422 if payload mapping ever runs
+  # ahead of the permission gate, which would hand an unauthorized caller the validation verdict on routes
+  # whose payloads carry an IBAN. One per write shape, because each maps a different payload.
+  Scenario: A viewer sending an invalid create body is still refused with 403 — authorization precedes validation
+    Given I am logged in as a viewer
+    When I send a POST request to "/backoffice/bank-accounts" with body:
+    """
+    {
+      "bankId": "not-a-uuid",
+      "holderName": "",
+      "iban": "nonsense",
+      "currency": "EUR"
+    }
+    """
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "forbidden"
+    And the response should not contain "violations"
+
+  Scenario: A viewer sending an invalid update body is still refused with 403 — authorization precedes validation
+    Given I am logged in as a viewer
+    When I send a PUT request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000001" with body:
+    """
+    {
+      "holderName": "",
+      "iban": "nonsense"
+    }
+    """
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "forbidden"
+    And the response should not contain "violations"
+
+  Scenario: An editor sending an invalid status body is still refused with 403 — authorization precedes validation
+    Given I am logged in as an editor
+    When I send a PATCH request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000001/status" with body:
+    """
+    {
+      "status": "NOT_A_STATUS"
+    }
+    """
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "forbidden"
+    And the response should not contain "violations"
+
   Scenario: An editor is refused a delete with 403 — delete is above the write tier
     Given I am logged in as an editor
     When I send a "DELETE" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000001"
