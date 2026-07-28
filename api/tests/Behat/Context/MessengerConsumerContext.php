@@ -37,6 +37,13 @@ use Throwable;
  * no handler would run. Running the `Worker` class directly keeps the queued message and is still the
  * real consume (same worker, bus middleware and handlers), only without the CLI wrapper.
  *
+ * What the private dispatcher costs, since it is invisible until someone writes a scenario against it:
+ * none of the framework's `WorkerMessageFailedEvent` listeners are subscribed to it — not the retry
+ * strategy, not `SendFailedMessageToFailureTransportListener`, not Sentry. A handler that throws under
+ * these steps is therefore never retried and never routed to the `failed` transport, so no scenario
+ * here can assert failure routing; a count on `failed` would read 0 by construction rather than by
+ * behaviour. Covering that needs the listeners wired in deliberately, not an assertion.
+ *
  * The worker's own logger is a {@see ConsoleLogger} over a buffer, so `the command should succeed` and
  * `the output should contain` can assert it ran (e.g. the "handled successfully" acknowledgement).
  *
