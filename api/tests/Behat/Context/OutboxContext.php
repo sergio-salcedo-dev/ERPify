@@ -56,6 +56,10 @@ final class OutboxContext extends AbstractContext
     /**
      * The in-memory transport survives the request and leaks across scenarios otherwise; reset the
      * pending queues (and the selection) so each scenario starts from an empty outbox.
+     *
+     * The hook is what every scenario relies on. The step is a hand-invocation escape hatch for
+     * draining mid-scenario, so no committed feature should call it: doing so would blank an outbox
+     * the scenario had already filled, and the assertions after it would pass against nothing.
      */
     #[BeforeScenario]
     #[Given('I reset the outbox context')]
@@ -263,6 +267,11 @@ final class OutboxContext extends AbstractContext
         }
     }
 
+    /**
+     * Hand-invocation escape hatch, like {@see printLastOutboxEvent()}: it asserts nothing and writes
+     * to the formatter's output. Drop it into a feature while diagnosing one, then take it out —
+     * committed, it prints on every CI run for a scenario that is no better pinned for having it.
+     */
     #[Then('I print all outbox events')]
     public function printAllOutboxEvents(): void
     {
@@ -271,6 +280,9 @@ final class OutboxContext extends AbstractContext
         }
     }
 
+    /**
+     * Hand-invocation escape hatch — see {@see printAllOutboxEvents()}.
+     */
     #[Then('I print last outbox event')]
     public function printLastOutboxEvent(): void
     {

@@ -32,6 +32,10 @@ Name **ports by capability** and **implementations by technology/strategy** — 
 - An in-memory double that also records the calls it received still uses `InMemory<Port>` — the implementation nature dominates the incidental spying.
 - Reserve `Spy*` / `Stub*` / `Dummy*` for doubles that embody a test-double pattern instead of an alternative implementation of a domain port (a stubbed framework exception, a spy mailer, a stub clock).
 
+## Behat step vocabulary
+
+A step definition is a shared asset. Never delete one for being unused, and search the vocabulary before writing a new one — `make php.behat c='-dl'` lists it, `make php.behat c="-d '<text>'"` searches it. When you touch a feature, spend the idle steps that fit it: an assertion that exists and is never made proves nothing. Full rule, current numbers and the debugging-only exception: [`api/CLAUDE.md`](../../api/CLAUDE.md).
+
 ## Error Handling in Tests
 - Use exceptions for error handling, not return codes
 - Create specific exception types for different error scenarios
