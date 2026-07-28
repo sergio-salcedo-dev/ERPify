@@ -417,38 +417,22 @@ final class OutboxContext extends AbstractContext
     }
 
     /**
-     * Total by design. A queue that cannot be inspected makes every assertion above it vacuous —
-     * `0 outbox events were created` and `there should not have been an outbox event created`
-     * would both pass while nothing was ever read — so an absent or non-in-memory transport is a
-     * test-infrastructure failure, not a condition to carry on under.
+     * Total by design: an uninspectable queue would make every assertion above it pass without
+     * reading anything, so it is a test-infrastructure failure rather than a state to carry on under.
      */
     private function transport(string $queueName): InMemoryTransport
     {
         $serviceId = 'messenger.transport.' . $queueName;
+        $found = $this->container->has($serviceId) ? $this->container->get($serviceId) : null;
 
-        self::assertTrue(
-            $this->container->has($serviceId),
-            \sprintf(
-                'Messenger transport "%s" (service %s) is not registered, so its outbox cannot be inspected.',
-                $queueName,
-                $serviceId,
-            ),
-        );
-
-        $transport = $this->container->get($serviceId);
-
-        self::assertInstanceOf(
+        self::assertInstanceOf(InMemoryTransport::class, $found, \sprintf(
+            'Queue "%s" must resolve to an inspectable %s; service %s is %s.',
+            $queueName,
             InMemoryTransport::class,
-            $transport,
-            \sprintf(
-                'Messenger transport "%s" (service %s) must be an %s to be inspectable, got %s.',
-                $queueName,
-                $serviceId,
-                InMemoryTransport::class,
-                \get_debug_type($transport),
-            ),
-        );
+            $serviceId,
+            null === $found ? 'not registered' : \get_debug_type($found),
+        ));
 
-        return $transport;
+        return $found;
     }
 }
