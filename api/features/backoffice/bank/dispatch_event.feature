@@ -80,3 +80,37 @@ Feature: Dispatch a bank domain event onto the outbox
     And 1 notification email was sent
     And The notification email subject should be equal to "[ERPify] Bank created"
     And 2 Mercure updates were published
+
+  # The (eventId, handler) claim lives in the handled_domain_event table, so it has to outlive the
+  # delivery that set it. The redelivery scenario above cannot show that: both messages sit in one
+  # worker run, so a claim that was merely per-run state would produce an identical count. Here the
+  # queue is drained and the messages acknowledged first, and only then are the same handlers re-run
+  # over the retained sent envelope — the email handler must still find its claim taken.
+  #
+  # The Mercure assertion is what stops this passing vacuously: the realtime handler is deliberately
+  # not deduplicated, so it MUST publish again. If re-processing ran no handler at all, that count
+  # would stay at 1 and this scenario would fail rather than quietly agreeing with itself.
+  Scenario: The email claim outlives the consume, so re-processing an acknowledged event adds no email
+    When I dispatch the "Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent" outbox event with:
+    """
+    {
+      "aggregateId": "01970000-0000-7000-8000-000000000011",
+      "eventId": "01970000-0000-7000-8000-0000000000b1",
+      "occurredOn": "2026-06-16T10:00:00+00:00",
+      "payload": {
+        "name": "Reprocessed Bank",
+        "shortName": "RPB",
+        "createdAt": "2026-06-16T10:00:00+00:00",
+        "updatedAt": "2026-06-16T10:00:00+00:00"
+      }
+    }
+    """
+    Then 1 outbox event was created on the queue "async"
+    And I consume 1 message from the "async" transport
+    And the command should succeed
+    And 0 outbox events were created on the queue "async"
+    And 1 notification email was sent
+    And 1 Mercure update was published
+    And message 1 sent to "async" is processed
+    And 1 notification email was sent
+    And 2 Mercure updates were published

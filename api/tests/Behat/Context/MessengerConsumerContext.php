@@ -15,8 +15,11 @@ use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
 use Symfony\Component\Messenger\EventListener\StopWorkerOnTimeLimitListener;
+use Symfony\Component\Messenger\Handler\HandlerDescriptor;
+use Symfony\Component\Messenger\Handler\HandlersLocatorInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Worker;
 use Throwable;
@@ -24,7 +27,8 @@ use Throwable;
 /**
  * Drives a real Messenger {@see Worker} so a scenario can assert the effects only the full consuming
  * pipeline produces — the receiving-side bus middleware (idempotency claim in `handled_domain_event`)
- * and the handlers themselves (notification email, realtime publish).
+ * and the handlers themselves (notification email, realtime publish). For a lightweight handler-only
+ * invocation use "message N ... is processed".
  *
  * The worker is constructed against the very transport instance the rest of the suite reads, then run
  * with a message-limit and a time-limit backstop on a private dispatcher. This deliberately bypasses
@@ -33,8 +37,17 @@ use Throwable;
  * no handler would run. Running the `Worker` class directly keeps the queued message and is still the
  * real consume (same worker, bus middleware and handlers), only without the CLI wrapper.
  *
+ * What the private dispatcher costs, since it is invisible until someone writes a scenario against it:
+ * none of the framework's `WorkerMessageFailedEvent` listeners are subscribed to it — not the retry
+ * strategy, not `SendFailedMessageToFailureTransportListener`, not Sentry. A handler that throws under
+ * these steps is therefore never retried and never routed to the `failed` transport, so no scenario
+ * here can assert failure routing; a count on `failed` would read 0 by construction rather than by
+ * behaviour. Covering that needs the listeners wired in deliberately, not an assertion.
+ *
  * The worker's own logger is a {@see ConsoleLogger} over a buffer, so `the command should succeed` and
  * `the output should contain` can assert it ran (e.g. the "handled successfully" acknowledgement).
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final class MessengerConsumerContext extends AbstractContext
 {
@@ -62,6 +75,8 @@ final class MessengerConsumerContext extends AbstractContext
         private readonly MessengerTransports $transports,
         #[Autowire(service: 'messenger.routable_message_bus')]
         private readonly MessageBusInterface $routableMessageBus,
+        #[Autowire(service: 'messenger.bus.default.messenger.handlers_locator')]
+        private readonly HandlersLocatorInterface $handlersLocator,
     ) {
     }
 
@@ -135,6 +150,48 @@ final class MessengerConsumerContext extends AbstractContext
     }
 
     /**
+     * Runs the message through its registered handlers in-process — the lightweight way to assert a
+     * handler's side effects without running the worker loop. Uses the (retained) `getSent()` log, so
+     * it works after the pending queue has been drained by a real consume.
+     */
+    #[Then('message :number sent to :transportName is processed')]
+    public function messageSentIsProcessed(int $number, string $transportName): void
+    {
+        $envelope = $this->sentEnvelope($transportName, $number);
+
+        $handlersRan = 0;
+
+        /** @var HandlerDescriptor $handler */
+        foreach ($this->handlersLocator->getHandlers($envelope) as $handler) {
+            $handler->getHandler()($envelope->getMessage());
+            ++$handlersRan;
+        }
+
+        self::assertGreaterThanOrEqual(
+            1,
+            $handlersRan,
+            \sprintf('No handler found for message %d on transport "%s"', $number, $transportName),
+        );
+    }
+
+    /**
+     * Asserts how many messages are pending on a transport without consuming them — `get()` is a
+     * non-destructive read of the in-memory queue. This is the behavioural guard for the audit
+     * deduplication invariant: a canonical route must enqueue exactly one audit message (its explicit
+     * entry), and the generic access-log hook must not add a second.
+     */
+    #[Then('the :transportName transport should hold :count message')]
+    #[Then('the :transportName transport should hold :count messages')]
+    public function theTransportShouldHold(string $transportName, int $count): void
+    {
+        self::assertCount(
+            $count,
+            $this->transports->pending($transportName),
+            \sprintf('Unexpected number of pending messages on transport "%s"', $transportName),
+        );
+    }
+
+    /**
      * @param list<mixed> $transportNames
      */
     private function runWorker(array $transportNames, int $limit, int $timeLimit, int $verbosity): void
@@ -169,5 +226,18 @@ final class MessengerConsumerContext extends AbstractContext
         }
 
         $this->lastOutput = $output->fetch();
+    }
+
+    private function sentEnvelope(string $transportName, int $number): Envelope
+    {
+        $envelope = $this->transports->sent($transportName)[$number - 1] ?? null;
+
+        self::assertInstanceOf(
+            Envelope::class,
+            $envelope,
+            \sprintf('Message %d not found on transport "%s"', $number, $transportName),
+        );
+
+        return $envelope;
     }
 }

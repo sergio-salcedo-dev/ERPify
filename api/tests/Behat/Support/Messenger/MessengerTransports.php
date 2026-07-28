@@ -71,6 +71,16 @@ final readonly class MessengerTransports
         return $envelopes;
     }
 
+    /**
+     * The retained sent log, which survives a consume that has already drained {@see pending()}.
+     *
+     * @return list<Envelope>
+     */
+    public function sent(string $name): array
+    {
+        return \array_values($this->inMemory($name)->getSent());
+    }
+
     public function reset(string $name): void
     {
         $this->inMemory($name)->reset();
