@@ -65,7 +65,7 @@ The Session Admission Gate has two deliberately distinct outcomes for an authent
 
 Marker resolution honours implements-clause order, intersected with the canonical marker list (`firstMatchingMarker`, lines 444–456). Subclasses may override `DomainException::type()` to return a more specific opaque identifier. A concrete exception implementing two or more markers must declare an explicit `TYPE` constant / `type()` override — enforced by a CI gate test (`MarkerStatusMapContractTest`) — so its resolution never silently depends on implements-clause order. Markers are framework-free — no HTTP / ORM / transport imports allowed inside `Shared/ErrorContract/Domain/Exception/`.
 
-> **Adding a marker interface or changing its mapping requires updating this page**. The CI grep gate that enforces freshness.
+> **Adding a marker interface or changing its mapping requires updating this page.** `ErrorContractGateTest` enforces the first half: every `.php` under `api/src/Shared/ErrorContract/Domain/Exception/` must be cited on this page as a backticked token (`` `Forbidden` ``), checked against the directory's current contents — so a marker this page never names fails the gate in any checkout, on any branch. A citation in prose satisfies it; the gate reads presence, not the table. Changing an existing marker's **status** is not machine-checkable and stays manual discipline.
 
 ### Symfony framework exception bridge
 
@@ -141,13 +141,13 @@ None is HTTP-reachable with real inputs today. `InvalidKek` guards a misconfigur
 
 Redaction: `DekDestroyed` / `DecryptionFailed` carry only `{encryptionScopeId}` (a `<ResourceType>:<uuid>` label — internal, non-PII); `InvalidKek` / `InvalidEncryptionScopeId` carry no context (the offending value is never included). Nothing here needs the redaction denylist.
 
-The drift gate (`ErrorContractGateTest`) watches only new markers under `api/src/Shared/ErrorContract/Domain/Exception/`, so it does **not** enforce this section — documenting a marker-less `DomainException` that can reach HTTP is manual discipline (see the Review checklist).
+The drift gate (`ErrorContractGateTest`) covers only markers under `api/src/Shared/ErrorContract/Domain/Exception/`, so it does **not** enforce this section — documenting a marker-less `DomainException` that can reach HTTP is manual discipline (see the Review checklist).
 
 > **Deferred decision for Epic 3 — do not skip.** Before the Epic 3 decrypt/read route ships, `dek-destroyed` and `decryption-failed` need a deliberate status *on that path*: `dek-destroyed` is an expected post-erasure outcome (candidate **410 Gone**), while `decryption-failed` stays a **5xx** integrity fault (keep it Sentry-visible). Assign these by **translating at the read boundary** — the read handler catches the crypto exception and throws a read-specific, marker-carrying exception. Do **not** add a marker to `DekDestroyed` / `DecryptionFailed` themselves: they are shared with the write/seal path where 500 is correct, and a 4xx marker (`extends ClientError`) would silence a real integrity fault there in Sentry.
 
-## How to add a new error (Amelia walk-through from PRD §Journey 1)
+## How to add a new error
 
-Amelia owns the Bank bounded context. Ticket: `GET /api/backoffice/banks/{id}` with an unknown ID currently throws and the PWA receives a Symfony HTML error page. She wants a proper 404 problem details body. **Twenty minutes, no controller edit, no listener edit, no DI config.**
+Worked example: `GET /api/backoffice/banks/{id}` with an unknown id throws, so the PWA receives a Symfony HTML error page instead of a 404 problem details body. Reaching the right body takes **no controller edit, no listener edit and no DI config**.
 
 1. Define the domain exception under your bounded context's `Domain/Exception/` directory.
 2. Have it `extends Erpify\Shared\ErrorContract\Domain\Exception\DomainException`.
@@ -200,9 +200,9 @@ X-Correlation-Id: 019045c3-7b8a-7c4e-9f30-000000000001
 
 The `bank_id` extension is the `context` array, with reserved keys stripped and the redaction denylist applied.
 
-## PWA consumption example (Marc walk-through from PRD §Journey 2)
+## PWA consumption example
 
-Marc is wiring a form for creating bank accounts. Validation failures, not-found, forbidden, and unexpected 500s are all possible. He routes on `body.type` (FR44 — `type` is the contract-level signal; status is the transport-level signal):
+A form creating bank accounts can hit validation failures, not-found, forbidden and unexpected 500s. The client routes on `body.type` (FR44 — `type` is the contract-level signal; status is the transport-level signal):
 
 ```ts
 const res = await fetch(`/api/backoffice/banks/${id}`);
@@ -226,7 +226,7 @@ if (!res.ok) {
 }
 ```
 
-When QA reports an intermittent 500, they paste `problem.instance` into the ticket. Oncall finds the single log line by `instance=`, pulls the `correlation_id` from it, and queries the full request trail. Marc's error-handling code is ~30 lines for the whole form; he never touches it again until new `type` identifiers appear.
+When QA reports an intermittent 500, `problem.instance` pasted into the ticket locates the single log line by `instance=`; its `correlation_id` then yields the full request trail. Client-side error handling changes only when new `type` identifiers appear.
 
 ## Extending the redaction denylist
 

@@ -20,6 +20,13 @@ services:
     volumes:
       - ./api:/app/api
       - ./api/var:/app/api/var
+      # The error-contract drift gate asserts that every marker exception under
+      # api/src/Shared/ErrorContract/Domain/Exception/ is named in this doc. The image's
+      # build context is ./api, so a repo-root doc is absent from it and `/app` holds
+      # nothing but `api/` and `public/` — without this mount the gate has nothing to
+      # read and fails. Read-only, and the single file rather than all of docs/, so the
+      # container's only dependency on the repo root is the one the gate actually needs.
+      - ./docs/api-error-contract.md:/app/docs/api-error-contract.md:ro
       - ./api/frankenphp/Caddyfile:/etc/frankenphp/Caddyfile:ro
       - ./api/frankenphp/worker.Caddyfile:/etc/frankenphp/worker.Caddyfile:ro
       - ./api/frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
@@ -117,6 +124,10 @@ services:
       # above, so it wins for this subtree, isolating the worker from the shared
       # var/cache/dev that `php` rebuilds. var/log and the rest of var/ stay shared.
       - messenger_cache:/app/api/var/cache
+      # Mirrors the `php` service: `make php.stan PHP_SERVICE=messenger_worker` is a
+      # documented escape hatch for the web container's segfaults, so the gates have to
+      # be runnable here too.
+      - ./docs/api-error-contract.md:/app/docs/api-error-contract.md:ro
       - ./api/frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
 
 volumes:

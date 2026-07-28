@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Behat\Config\Config;
 use Behat\Config\Extension;
-use Behat\Config\Filter\TagFilter;
 use Behat\Config\GherkinOptions;
 use Behat\Config\Profile;
 use Behat\Config\Suite;
@@ -40,10 +39,6 @@ use FriendsOfBehat\SymfonyExtension\ServiceContainer\SymfonyExtension;
 // %paths.base% is this file's directory (api/).
 return (new Config())->withProfile(
     (new Profile('default'))
-        // @wip scenarios are skipped by default (legacy Mink-era steps pending
-        // migration to SymfonyExtension/KernelBrowser). Override with --tags=@wip
-        // at invocation to run them.
-        //
         // LEGACY is pinned rather than inherited: the parser default is GHERKIN_32,
         // which changes eight parsing behaviours at once (tag `@` prefix retention,
         // table-cell parsing, docstring delimiter unescaping, description padding,
@@ -62,8 +57,7 @@ return (new Config())->withProfile(
         // cache, otherwise the first run reports the mode change as a no-op.
         ->withGherkinOptions(
             (new GherkinOptions())
-                ->withCompatibilityMode(GherkinCompatibilityMode::LEGACY)
-                ->withFilter(new TagFilter('~@wip')),
+                ->withCompatibilityMode(GherkinCompatibilityMode::LEGACY),
         )
         ->withSuite(
             (new Suite('default'))

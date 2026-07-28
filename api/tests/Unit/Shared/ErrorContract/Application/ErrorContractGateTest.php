@@ -19,11 +19,16 @@ use PHPUnit\Framework\TestCase;
  *       shapes back into the `/api/*` surface and re-fragment the unified error
  *       wire format.
  *
- *   (2) Adding a new marker exception under `api/src/Shared/ErrorContract/Domain/Exception/`
- *       without updating `docs/api-error-contract.md` in the same change is a
- *       documentation-freshness regression. Implemented as a git-aware
- *       sub-check that no-ops when no merge base is reachable (e.g. detached
- *       HEAD on a tag in CI), to avoid false positives outside PR context.
+ *   (2) Every marker exception under `api/src/Shared/ErrorContract/Domain/Exception/`
+ *       MUST be cited in `docs/api-error-contract.md` as a backticked token
+ *       (`Forbidden`). That page owns the marker → status map, so a marker it never
+ *       names is an undocumented public wire contract.
+ *
+ *       Stated over the directory's current contents rather than over a diff: the
+ *       invariant then needs no VCS context, holds in any checkout at any clone depth,
+ *       and offers nothing to skip. An unreachable doc or an empty marker directory is
+ *       a failure, not a pass — either state is precisely when an undocumented marker
+ *       would otherwise sail through.
  *
  * Sample drift fixture (single-line, mirrors the legacy Bank controller shape):
  *
@@ -60,6 +65,27 @@ final class ErrorContractGateTest extends TestCase
     public const string FAILURE_PREAMBLE
         = 'Controllers must not catch-and-respond. Throw a DomainException instead. '
         . 'See docs/api-error-contract.md#how-to-add-a-new-error';
+
+    /**
+     * Preamble for the second invariant. Separate from {@see FAILURE_PREAMBLE} because the
+     * two failures call for different fixes, and a scraper keying on one must not swallow
+     * the other.
+     */
+    public const string DOC_CITATION_FAILURE_PREAMBLE
+        = 'Every marker exception must be cited in docs/api-error-contract.md. '
+        . 'See docs/api-error-contract.md#marker-interface--http-status-table';
+
+    /**
+     * Marker exceptions, relative to `api/src`. Every `.php` here owns a slice of the public
+     * wire contract, so the doc-citation invariant covers the whole directory.
+     */
+    private const string MARKER_DIRECTORY = 'Shared/ErrorContract/Domain/Exception';
+
+    /**
+     * Relative to the project root — outside `api/`, so in a container it arrives through the
+     * read-only bind mount declared for the `php` service in `compose.dev.yaml`.
+     */
+    private const string CONTRACT_DOC_PATH = 'docs/api-error-contract.md';
 
     /**
      * Lookahead window (lines) when scanning a `catch (...)` body. The catch
@@ -172,47 +198,40 @@ final class ErrorContractGateTest extends TestCase
         );
     }
 
-    public function testNewMarkerExceptionWithoutDocsUpdateIsRejected(): void
+    public function testEveryMarkerIsCitedInTheContractDoc(): void
     {
-        // Git-aware sub-check. Skipped when git context isn't usable
-        // (detached tag build, missing merge base, sandbox without git binary).
-        $base = $this->resolveGitBase();
+        $undocumented = $this->undocumentedMarkers($this->markerNames(), $this->readContractDoc());
 
-        if (null === $base) {
-            $this->markTestSkipped(
-                'Doc-freshness check skipped: no usable git merge base '
-                . '(set ERROR_CONTRACT_GATE_BASE=<sha> to override).',
-            );
-        }
-
-        $apiRoot = $this->apiRoot();
-
-        $addedMarkers = $this->gitAddedFiles(
-            $base,
-            $apiRoot,
-            'src/Shared/ErrorContract/Domain/Exception/',
-        );
-
-        if ([] === $addedMarkers) {
-            // No marker added on this branch — nothing to enforce.
-            $this->addToAssertionCount(1);
-
-            return;
-        }
-
-        $docChanged = $this->gitFileChanged(
-            $base,
-            $this->projectRoot(),
-            'docs/api-error-contract.md',
-        );
-
-        $this->assertTrue(
-            $docChanged,
+        $this->assertSame(
+            [],
+            $undocumented,
             \sprintf(
-                "%s\nAdded marker exception(s) without updating docs/api-error-contract.md:\n%s",
-                self::FAILURE_PREAMBLE,
-                \implode("\n", $addedMarkers),
+                "%s\nMarker exception(s) never cited as `Name` in %s:\n%s",
+                self::DOC_CITATION_FAILURE_PREAMBLE,
+                self::CONTRACT_DOC_PATH,
+                \implode("\n", $undocumented),
             ),
+        );
+    }
+
+    public function testFixtureExposesDocCitationMatcher(): void
+    {
+        // Proves the matcher against a synthetic doc, so its four decisions stay pinned without
+        // depending on the real doc's current wording.
+        $docBody = <<<'MD'
+            | `Conflict` | 409 | Optimistic-lock and uniqueness refusals |
+
+            `Conflict` is cited a second time here — presence is the contract, not uniqueness.
+
+            Gone appears in bare prose. GoneAway is an unrelated symbol, and a stale
+            filename like Gone.php.old is not a citation either.
+            MD;
+
+        $this->assertSame(
+            ['Gone'],
+            $this->undocumentedMarkers(['Conflict', 'Gone'], $docBody),
+            'Doc-citation matcher regressed. It must accept a backticked citation (including a '
+            . 'repeated one) and reject bare prose, a longer symbol and a stale filename.',
         );
     }
 
@@ -360,148 +379,75 @@ final class ErrorContractGateTest extends TestCase
     }
 
     /**
-     * Resolves the git base ref to diff against. Order:
-     *   1. `ERROR_CONTRACT_GATE_BASE` env var (CI override).
-     *   2. `origin/main` if reachable.
-     *   3. `main` if reachable.
-     *   4. `null` → caller skips the check.
-     */
-    private function resolveGitBase(): ?string
-    {
-        $override = \getenv('ERROR_CONTRACT_GATE_BASE');
-
-        if (\is_string($override) && '' !== $override) {
-            return $this->gitMergeBase($override);
-        }
-
-        foreach (['origin/main', 'main'] as $candidate) {
-            $base = $this->gitMergeBase($candidate);
-
-            if (null !== $base) {
-                return $base;
-            }
-        }
-
-        return null;
-    }
-
-    private function gitMergeBase(string $ref): ?string
-    {
-        $cwd = $this->projectRoot();
-        $output = $this->runGit($cwd, ['merge-base', 'HEAD', $ref]);
-
-        if (null === $output) {
-            return null;
-        }
-
-        $sha = \trim($output);
-
-        return '' === $sha ? null : $sha;
-    }
-
-    /**
      * @return list<string>
      */
-    private function gitAddedFiles(string $base, string $cwd, string $pathPrefix): array
+    private function markerNames(): array
     {
-        $output = $this->runGit($cwd, [
-            'diff',
-            '--diff-filter=A',
-            '--name-only',
-            $base . '...HEAD',
-            '--',
-            $pathPrefix,
-        ]);
+        $directory = $this->apiSrcRoot() . '/' . self::MARKER_DIRECTORY;
 
-        if (null === $output) {
-            return [];
-        }
+        // Two distinct ways for the scan to come up empty, kept distinguishable: a moved or
+        // renamed directory reads very differently from one that lost its files.
+        $this->assertDirectoryExists(
+            $directory,
+            \sprintf(
+                "%s\nMarker directory not found at %s — the gate cannot scan what it cannot reach.",
+                self::DOC_CITATION_FAILURE_PREAMBLE,
+                $directory,
+            ),
+        );
 
-        $files = [];
+        $names = \array_map(
+            static fn (string $file): string => \basename($file, '.php'),
+            \glob($directory . '/*.php') ?: [],
+        );
 
-        foreach (\preg_split('/\R/', $output) ?: [] as $line) {
-            $trimmed = \trim($line);
+        $this->assertNotEmpty(
+            $names,
+            \sprintf(
+                "%s\nMarker directory %s holds no .php file; a zero-marker scan would make this gate vacuous.",
+                self::DOC_CITATION_FAILURE_PREAMBLE,
+                $directory,
+            ),
+        );
 
-            if ('' === $trimmed) {
-                continue;
-            }
-
-            // Only PHP files matching the prefix; the diff already filters by path.
-            if (\str_ends_with($trimmed, '.php')) {
-                $files[] = $trimmed;
-            }
-        }
-
-        return $files;
+        return $names;
     }
 
-    private function gitFileChanged(string $base, string $cwd, string $relativePath): bool
+    private function readContractDoc(): string
     {
-        $output = $this->runGit($cwd, [
-            'diff',
-            '--name-only',
-            $base . '...HEAD',
-            '--',
-            $relativePath,
-        ]);
+        $path = $this->projectRoot() . '/' . self::CONTRACT_DOC_PATH;
+        $body = \is_file($path) ? \file_get_contents($path) : false;
 
-        if (null === $output) {
-            return false;
+        if (false === $body) {
+            // Never a skip: an unreachable doc is exactly the state in which an undocumented
+            // marker would sail through, so it has to be as loud as a real violation.
+            $this->fail(\sprintf(
+                "%s\nThe contract doc is unreadable at %s. An image built from the api/ context does not "
+                . 'carry a repo-root doc, so inside a container it arrives only through the read-only bind '
+                . 'mount declared for the php service in compose.dev.yaml.',
+                self::DOC_CITATION_FAILURE_PREAMBLE,
+                $path,
+            ));
         }
 
-        return '' !== \trim($output);
+        return $body;
     }
 
     /**
-     * @param list<string> $args
+     * A marker counts as documented when the doc cites it as an inline-code token — the form every
+     * marker already takes there. A bare substring would be satisfied by an unrelated longer symbol
+     * (`GoneAway`) or by a stale filename (`Gone.php.old`), so the backticks are load-bearing.
+     * The doc body is read once by the caller and passed in.
      *
-     * @SuppressWarnings("PHPMD.CyclomaticComplexity")
-     * @SuppressWarnings("PHPMD.NPathComplexity")
+     * @param list<string> $markerNames
+     *
+     * @return list<string>
      */
-    private function runGit(string $cwd, array $args): ?string
+    private function undocumentedMarkers(array $markerNames, string $docBody): array
     {
-        if (!\is_dir($cwd . '/.git') && !\is_file($cwd . '/.git')) {
-            return null;
-        }
-
-        $command = 'git ' . \implode(' ', \array_map(\escapeshellarg(...), $args));
-
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-
-        /** @var array<int, resource> $pipes */
-        $pipes = [];
-
-        $process = \proc_open($command, $descriptors, $pipes, $cwd, [
-            'GIT_OPTIONAL_LOCKS' => '0',
-            'PATH' => \getenv('PATH') ?: '/usr/bin:/bin',
-        ]);
-
-        if (!\is_resource($process)) {
-            return null;
-        }
-
-        if (isset($pipes[0]) && \is_resource($pipes[0])) {
-            \fclose($pipes[0]);
-        }
-
-        $stdout = isset($pipes[1]) && \is_resource($pipes[1])
-            ? \stream_get_contents($pipes[1])
-            : false;
-
-        if (isset($pipes[1]) && \is_resource($pipes[1])) {
-            \fclose($pipes[1]);
-        }
-
-        if (isset($pipes[2]) && \is_resource($pipes[2])) {
-            \fclose($pipes[2]);
-        }
-
-        $exit = \proc_close($process);
-
-        return (0 !== $exit || false === $stdout) ? null : $stdout;
+        return \array_values(\array_filter(
+            $markerNames,
+            static fn (string $name): bool => !\str_contains($docBody, '`' . $name . '`'),
+        ));
     }
 }
