@@ -453,6 +453,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       retirement trigger (first tag ≥ `0.4.3` carrying upstream `8708c813`) in
       [`api/CLAUDE.md`](api/CLAUDE.md). **Before a customer deployment:** either the tag has landed
       and the pin is gone, or re-diff the pinned ref against `v0.4.2` and record who accepted it.
+      **Accepted 2026-07-28 (Sergio):** the pinned ref `28e75026` was upstream `main` HEAD at
+      acceptance time, and its full delta against `v0.4.2` is two commits / two files / four lines —
+      upstream `8708c813` (the DI-extension fix the pin exists for) plus a branch-alias metadata
+      fix. The acceptance is void the moment the lock ref moves: re-diff and re-record. Tag watch:
+      the weekly CI cron runs `make composer.check.mercure-pin`, which goes red at the first
+      upstream tag newer than `v0.4.2`. Tracking issue:
+      [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.
