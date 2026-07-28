@@ -19,10 +19,11 @@ use PHPUnit\Framework\TestCase;
  *       shapes back into the `/api/*` surface and re-fragment the unified error
  *       wire format.
  *
- *   (2) Every marker exception under `api/src/Shared/ErrorContract/Domain/Exception/`
- *       MUST be cited in `docs/api-error-contract.md` as a backticked token
- *       (`Forbidden`). That page owns the marker → status map, so a marker it never
- *       names is an undocumented public wire contract.
+ *   (2) Every marker exception at any depth under
+ *       `api/src/Shared/ErrorContract/Domain/Exception/` MUST be cited in
+ *       `docs/api-error-contract.md` as a backticked token (`Forbidden`). That page owns
+ *       the marker → status map, so a marker it never names is an undocumented public
+ *       wire contract.
  *
  *       Stated over the directory's current contents rather than over a diff: the
  *       invariant then needs no VCS context, holds in any checkout at any clone depth,
@@ -76,14 +77,20 @@ final class ErrorContractGateTest extends TestCase
         . 'See docs/api-error-contract.md#marker-interface--http-status-table';
 
     /**
-     * Marker exceptions, relative to `api/src`. Every `.php` here owns a slice of the public
-     * wire contract, so the doc-citation invariant covers the whole directory.
+     * Marker exceptions, relative to `api/src`. Every `.php` in this tree owns a slice of the
+     * public wire contract, so the doc-citation invariant covers the whole of it.
      */
     private const string MARKER_DIRECTORY = 'Shared/ErrorContract/Domain/Exception';
 
     /**
+     * A tree whose `.php` files all sit below its top level, so the marker scan's recursion is
+     * exercised against a real directory instead of being taken on trust.
+     */
+    private const string NESTED_SCAN_PROBE_DIRECTORY = 'Shared/ErrorContract';
+
+    /**
      * Relative to the project root — outside `api/`, so in a container it arrives through the
-     * read-only bind mount declared for the `php` service in `compose.dev.yaml`.
+     * read-only `docs/` bind mount declared for the `php` service in `compose.dev.yaml`.
      */
     private const string CONTRACT_DOC_PATH = 'docs/api-error-contract.md';
 
@@ -211,6 +218,22 @@ final class ErrorContractGateTest extends TestCase
                 self::CONTRACT_DOC_PATH,
                 \implode("\n", $undocumented),
             ),
+        );
+    }
+
+    public function testMarkerScanReachesNestedDirectories(): void
+    {
+        // The marker directory is flat today, so the only way to pin the scan's recursion is to
+        // point it at a tree that is not: DomainException sits three levels below this probe, out
+        // of reach of a top-level-only scan, which would silently exempt any marker filed in a
+        // subdirectory from the citation invariant.
+        $names = $this->markerNamesIn($this->apiSrcRoot() . '/' . self::NESTED_SCAN_PROBE_DIRECTORY);
+
+        $this->assertContains(
+            'DomainException',
+            $names,
+            'Marker scan stopped at the top level, so a marker filed in a subdirectory of api/src/'
+            . self::MARKER_DIRECTORY . ' would never be checked against the contract doc.',
         );
     }
 
@@ -383,8 +406,19 @@ final class ErrorContractGateTest extends TestCase
      */
     private function markerNames(): array
     {
-        $directory = $this->apiSrcRoot() . '/' . self::MARKER_DIRECTORY;
+        return $this->markerNamesIn($this->apiSrcRoot() . '/' . self::MARKER_DIRECTORY);
+    }
 
+    /**
+     * Walks the tree, not just its top level. A marker filed one directory deeper is still a
+     * marker owning its slice of the wire contract, and a single-level scan would leave it
+     * undocumented with the gate reporting green. {@see ApiSourceFiles} is the shared walk the
+     * sibling sub-check already uses, so both gates agree on what "every source file" means.
+     *
+     * @return list<string>
+     */
+    private function markerNamesIn(string $directory): array
+    {
         // Two distinct ways for the scan to come up empty, kept distinguishable: a moved or
         // renamed directory reads very differently from one that lost its files.
         $this->assertDirectoryExists(
@@ -396,10 +430,11 @@ final class ErrorContractGateTest extends TestCase
             ),
         );
 
-        $names = \array_map(
-            static fn (string $file): string => \basename($file, '.php'),
-            \glob($directory . '/*.php') ?: [],
-        );
+        $names = [];
+
+        foreach (ApiSourceFiles::phpFiles($directory) as $file) {
+            $names[] = $file->getBasename('.php');
+        }
 
         $this->assertNotEmpty(
             $names,
@@ -409,6 +444,10 @@ final class ErrorContractGateTest extends TestCase
                 $directory,
             ),
         );
+
+        // Filesystem iteration order is not guaranteed; sorting keeps a failure listing stable
+        // across machines so a rerun is comparable to the run that produced it.
+        \sort($names);
 
         return $names;
     }
@@ -423,8 +462,8 @@ final class ErrorContractGateTest extends TestCase
             // marker would sail through, so it has to be as loud as a real violation.
             $this->fail(\sprintf(
                 "%s\nThe contract doc is unreadable at %s. An image built from the api/ context does not "
-                . 'carry a repo-root doc, so inside a container it arrives only through the read-only bind '
-                . 'mount declared for the php service in compose.dev.yaml.',
+                . 'carry a repo-root doc, so inside a container it arrives only through the read-only docs/ '
+                . 'bind mount declared for the php service in compose.dev.yaml.',
                 self::DOC_CITATION_FAILURE_PREAMBLE,
                 $path,
             ));
