@@ -65,7 +65,7 @@ The Session Admission Gate has two deliberately distinct outcomes for an authent
 
 Marker resolution honours implements-clause order, intersected with the canonical marker list (`firstMatchingMarker`, lines 444–456). Subclasses may override `DomainException::type()` to return a more specific opaque identifier. A concrete exception implementing two or more markers must declare an explicit `TYPE` constant / `type()` override — enforced by a CI gate test (`MarkerStatusMapContractTest`) — so its resolution never silently depends on implements-clause order. Markers are framework-free — no HTTP / ORM / transport imports allowed inside `Shared/ErrorContract/Domain/Exception/`.
 
-> **Adding a marker interface or changing its mapping requires updating this page**. The CI grep gate that enforces freshness.
+> **Adding a marker interface or changing its mapping requires updating this page.** `ErrorContractGateTest` enforces the first half: every `.php` under `api/src/Shared/ErrorContract/Domain/Exception/` must be cited on this page as a backticked token (`` `Forbidden` ``), checked against the directory's current contents — so a marker this page never names fails the gate in any checkout, on any branch. A citation in prose satisfies it; the gate reads presence, not the table. Changing an existing marker's **status** is not machine-checkable and stays manual discipline.
 
 ### Symfony framework exception bridge
 
@@ -141,7 +141,7 @@ None is HTTP-reachable with real inputs today. `InvalidKek` guards a misconfigur
 
 Redaction: `DekDestroyed` / `DecryptionFailed` carry only `{encryptionScopeId}` (a `<ResourceType>:<uuid>` label — internal, non-PII); `InvalidKek` / `InvalidEncryptionScopeId` carry no context (the offending value is never included). Nothing here needs the redaction denylist.
 
-The drift gate (`ErrorContractGateTest`) watches only new markers under `api/src/Shared/ErrorContract/Domain/Exception/`, so it does **not** enforce this section — documenting a marker-less `DomainException` that can reach HTTP is manual discipline (see the Review checklist).
+The drift gate (`ErrorContractGateTest`) covers only markers under `api/src/Shared/ErrorContract/Domain/Exception/`, so it does **not** enforce this section — documenting a marker-less `DomainException` that can reach HTTP is manual discipline (see the Review checklist).
 
 > **Deferred decision for Epic 3 — do not skip.** Before the Epic 3 decrypt/read route ships, `dek-destroyed` and `decryption-failed` need a deliberate status *on that path*: `dek-destroyed` is an expected post-erasure outcome (candidate **410 Gone**), while `decryption-failed` stays a **5xx** integrity fault (keep it Sentry-visible). Assign these by **translating at the read boundary** — the read handler catches the crypto exception and throws a read-specific, marker-carrying exception. Do **not** add a marker to `DekDestroyed` / `DecryptionFailed` themselves: they are shared with the write/seal path where 500 is correct, and a 4xx marker (`extends ClientError`) would silence a real integrity fault there in Sentry.
 

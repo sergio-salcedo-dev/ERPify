@@ -33,7 +33,8 @@ use Throwable;
  * double; this reads their PENDING queue ({@see InMemoryTransport::get()}, non-destructive — not
  * `getSent()`, which retains acked envelopes). The count therefore drains to 0 once a consume acks
  * the message, letting a scenario assert the full publish→consume→ack cycle. `sync` (`sync://`) is a
- * `SyncTransport` with no queue and is never inspectable, so aggregation instanceof-filters it out.
+ * `SyncTransport` with no queue, so it is absent from {@see INSPECTABLE_QUEUES} by design; every queue
+ * that IS listed there must resolve to an inspectable transport, and failing that is an error.
  *
  * The permanent `event_store` (the append-only log, not the outbox) is asserted with raw-SQL steps;
  * nested payload fields are read here, on the pending event.
@@ -91,7 +92,7 @@ final class OutboxContext extends AbstractContext
         $this->selectedEvent = null;
 
         foreach (self::RESETTABLE_QUEUES as $queueName) {
-            $this->transport($queueName)?->reset();
+            $this->transport($queueName)->reset();
         }
     }
 
@@ -276,7 +277,7 @@ final class OutboxContext extends AbstractContext
 
         self::assertNotNull($message, \sprintf('No outbox event number %d found', $number));
 
-        $this->transport($message['queue'])?->reject($message['envelope']);
+        $this->transport($message['queue'])->reject($message['envelope']);
     }
 
     /**
@@ -287,7 +288,7 @@ final class OutboxContext extends AbstractContext
     {
         foreach ($this->messages() as $message) {
             if ($message['event'] instanceof $fullyQualifiedClassName) {
-                $this->transport($message['queue'])?->reject($message['envelope']);
+                $this->transport($message['queue'])->reject($message['envelope']);
             }
         }
     }
@@ -407,13 +408,7 @@ final class OutboxContext extends AbstractContext
         $messages = [];
 
         foreach (self::INSPECTABLE_QUEUES as $queueName) {
-            $transport = $this->transport($queueName);
-
-            if (!$transport instanceof InMemoryTransport) {
-                continue;
-            }
-
-            foreach ($transport->get(self::WHOLE_QUEUE) as $envelope) {
+            foreach ($this->transport($queueName)->get(self::WHOLE_QUEUE) as $envelope) {
                 $messages[] = ['queue' => $queueName, 'envelope' => $envelope, 'event' => $envelope->getMessage()];
             }
         }
@@ -421,16 +416,39 @@ final class OutboxContext extends AbstractContext
         return $messages;
     }
 
-    private function transport(string $queueName): ?InMemoryTransport
+    /**
+     * Total by design. A queue that cannot be inspected makes every assertion above it vacuous —
+     * `0 outbox events were created` and `there should not have been an outbox event created`
+     * would both pass while nothing was ever read — so an absent or non-in-memory transport is a
+     * test-infrastructure failure, not a condition to carry on under.
+     */
+    private function transport(string $queueName): InMemoryTransport
     {
         $serviceId = 'messenger.transport.' . $queueName;
 
-        if (!$this->container->has($serviceId)) {
-            return null;
-        }
+        self::assertTrue(
+            $this->container->has($serviceId),
+            \sprintf(
+                'Messenger transport "%s" (service %s) is not registered, so its outbox cannot be inspected.',
+                $queueName,
+                $serviceId,
+            ),
+        );
 
         $transport = $this->container->get($serviceId);
 
-        return $transport instanceof InMemoryTransport ? $transport : null;
+        self::assertInstanceOf(
+            InMemoryTransport::class,
+            $transport,
+            \sprintf(
+                'Messenger transport "%s" (service %s) must be an %s to be inspectable, got %s.',
+                $queueName,
+                $serviceId,
+                InMemoryTransport::class,
+                \get_debug_type($transport),
+            ),
+        );
+
+        return $transport;
     }
 }

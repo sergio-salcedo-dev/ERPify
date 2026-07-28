@@ -75,8 +75,10 @@ php.lint.doctrine: ## Doctrine ORM mapping validation
 
 # Fails CI if a controller catches and
 # responds with `new JsonResponse(...)` (skipping `api/.error-contract-allowlist`),
-# or if a new file under `api/src/Shared/Domain/Exception/` is added without
-# updating `docs/api-error-contract.md` in the same diff.
+# or if any marker exception under `api/src/Shared/ErrorContract/Domain/Exception/` is
+# not cited in `docs/api-error-contract.md`. The second half is a state invariant over
+# the directory, not a diff, so it needs no git context inside the container — the doc
+# reaches it through a read-only bind mount declared in `compose.dev.yaml`.
 php.lint.error-contract: ## Error-contract drift gate
 	@$(PHP_TEST) bin/phpunit --filter=ErrorContractGateTest
 
