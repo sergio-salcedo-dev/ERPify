@@ -8,12 +8,12 @@ use Behat\Gherkin\Node\PyStringNode;
 use Behat\Step\Then;
 use Behat\Step\When;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
+use Erpify\Tests\Behat\Support\Messenger\MessengerTransports;
 use JsonException;
 use Symfony\Component\Console\Logger\ConsoleLogger;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
@@ -21,8 +21,6 @@ use Symfony\Component\Messenger\EventListener\StopWorkerOnTimeLimitListener;
 use Symfony\Component\Messenger\Handler\HandlerDescriptor;
 use Symfony\Component\Messenger\Handler\HandlersLocatorInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
-use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 use Symfony\Component\Messenger\Worker;
 use Throwable;
 
@@ -53,13 +51,6 @@ final class MessengerConsumerContext extends AbstractContext
     private const int TIME_LIMIT_SECONDS = 5;
 
     /**
-     * InMemoryTransport::get() takes a fetch size that defaults to 1 and stops there. Counting what is
-     * pending means reading the whole transport, so the size is passed explicitly — left implicit, any
-     * backlog above one silently reads as one.
-     */
-    private const int WHOLE_TRANSPORT = PHP_INT_MAX;
-
-    /**
      * @var array<string, int>
      */
     private const array VERBOSITY_FLAGS = [
@@ -74,8 +65,7 @@ final class MessengerConsumerContext extends AbstractContext
     private string $lastOutput = '';
 
     public function __construct(
-        #[Autowire(service: 'test.service_container')]
-        private readonly Container $container,
+        private readonly MessengerTransports $transports,
         #[Autowire(service: 'messenger.routable_message_bus')]
         private readonly MessageBusInterface $routableMessageBus,
         #[Autowire(service: 'messenger.bus.default.messenger.handlers_locator')]
@@ -187,17 +177,9 @@ final class MessengerConsumerContext extends AbstractContext
     #[Then('the :transportName transport should hold :count messages')]
     public function theTransportShouldHold(string $transportName, int $count): void
     {
-        $transport = $this->receiver($transportName);
-
-        self::assertInstanceOf(
-            InMemoryTransport::class,
-            $transport,
-            \sprintf('Transport "%s" is not an in-memory test double', $transportName),
-        );
-
         self::assertCount(
             $count,
-            $transport->get(self::WHOLE_TRANSPORT),
+            $this->transports->pending($transportName),
             \sprintf('Unexpected number of pending messages on transport "%s"', $transportName),
         );
     }
@@ -214,7 +196,7 @@ final class MessengerConsumerContext extends AbstractContext
                 continue;
             }
 
-            $receivers[$transportName] = $this->receiver($transportName);
+            $receivers[$transportName] = $this->transports->receiver($transportName);
         }
 
         $output = new BufferedOutput($verbosity);
@@ -239,37 +221,9 @@ final class MessengerConsumerContext extends AbstractContext
         $this->lastOutput = $output->fetch();
     }
 
-    private function receiver(string $transportName): ReceiverInterface
-    {
-        $serviceId = 'messenger.transport.' . $transportName;
-
-        self::assertTrue(
-            $this->container->has($serviceId),
-            \sprintf('Transport "%s" is not registered', $transportName),
-        );
-
-        $receiver = $this->container->get($serviceId);
-
-        self::assertInstanceOf(
-            ReceiverInterface::class,
-            $receiver,
-            \sprintf('Transport "%s" is not a message receiver', $transportName),
-        );
-
-        return $receiver;
-    }
-
     private function sentEnvelope(string $transportName, int $number): Envelope
     {
-        $transport = $this->receiver($transportName);
-
-        self::assertInstanceOf(
-            InMemoryTransport::class,
-            $transport,
-            \sprintf('Transport "%s" is not an in-memory test double', $transportName),
-        );
-
-        $envelope = $transport->getSent()[$number - 1] ?? null;
+        $envelope = $this->transports->sent($transportName)[$number - 1] ?? null;
 
         self::assertInstanceOf(
             Envelope::class,

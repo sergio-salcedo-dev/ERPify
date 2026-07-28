@@ -50,12 +50,15 @@ services:
 
     # Recording Mercure hub: captures the realtime Updates a consumed bank event publishes, instead of
     # reaching the live hub (which has no test double and hangs ~5s per consume). Overriding the
-    # Reads the in-memory Messenger transports that stand in for the outbox under APP_ENV=test. Takes
-    # the test service container because the transports are resolved by service id at assertion time,
-    # which keeps the inspectable-queue list data instead of constructor wiring.
-    Erpify\Tests\Behat\Support\Messenger\Outbox:
+    # Resolves a Messenger transport by logical name for the contexts that inspect or consume one. Takes
+    # the test service container because transports are fetched by service id at assertion time, which
+    # keeps the queue names data instead of constructor wiring.
+    Erpify\Tests\Behat\Support\Messenger\MessengerTransports:
         arguments:
             $container: '@test.service_container'
+
+    # The outbox over the fixed inspectable queues, on top of that resolution.
+    Erpify\Tests\Behat\Support\Messenger\Outbox: ~
 
     # MercureBundle's HubInterface alias makes RefreshRealtimeOnBankChanged and MercureContext share it.
     Erpify\Tests\Behat\Support\Mercure\RecordingHub: ~
