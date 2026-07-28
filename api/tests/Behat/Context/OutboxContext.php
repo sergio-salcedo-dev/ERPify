@@ -16,66 +16,38 @@ use Erpify\Shared\Event\Domain\DomainEvent;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 use Erpify\Tests\Behat\Support\Json\Json;
+use Erpify\Tests\Behat\Support\Messenger\Outbox;
 use Erpify\Tests\Behat\Support\PostProcess\JsonToolTrait;
 use JsonException;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Throwable;
 
 /**
- * Asserts the event-driven *outbox* — the Messenger transport, addressed by logical queue name and
- * never by SQL on a concrete table, so a Doctrine→Redis swap touches neither features nor context.
- *
- * Under `framework.test: true` the `async`/`failed` transports are the `in-memory://?serialize=true`
- * double; this reads their PENDING queue ({@see InMemoryTransport::get()}, non-destructive — not
- * `getSent()`, which retains acked envelopes). The count therefore drains to 0 once a consume acks
- * the message, letting a scenario assert the full publish→consume→ack cycle. `sync` (`sync://`) is a
- * `SyncTransport` with no queue, so it is absent from {@see INSPECTABLE_QUEUES} by design; every queue
- * that IS listed there must resolve to an inspectable transport, and failing that is an error.
+ * Gherkin steps over the event-driven *outbox*. Reading it — which logical queues are inspectable, and
+ * how a queue resolves to a transport — belongs to {@see Outbox}; this class turns those reads into
+ * assertions and owns the one piece of per-scenario state, the selected event.
  *
  * The permanent `event_store` (the append-only log, not the outbox) is asserted with raw-SQL steps;
  * nested payload fields are read here, on the pending event.
  *
+ * The three suppressions below are measured, not inherited: 21 public methods and 27 methods are the
+ * 21 Gherkin steps this context owns, and cutting them means splitting the step vocabulary across
+ * contexts, which is a change to the feature files' surface rather than a refactor. Coupling sits one
+ * over the threshold at 13.
+ *
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  * @SuppressWarnings("PHPMD.TooManyMethods")
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
- * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
  */
 final class OutboxContext extends AbstractContext
 {
     use JsonToolTrait;
 
-    /**
-     * In-memory transports whose pending queue is the outbox. `sync` is excluded by design.
-     *
-     * @var list<string>
-     */
-    private const array INSPECTABLE_QUEUES = ['async', 'failed'];
-
-    /**
-     * InMemoryTransport::get() takes a fetch size that defaults to 1 and stops there. Inspecting an
-     * outbox means reading all of it, so the size is passed explicitly — left implicit, every count
-     * above one silently reads as one and the assertion passes for the wrong reason.
-     */
-    private const int WHOLE_QUEUE = PHP_INT_MAX;
-
-    /**
-     * Queues drained before each scenario so in-memory pending messages don't leak across scenarios.
-     * Distinct constant from {@see INSPECTABLE_QUEUES} so a transport can be drained without becoming an
-     * inspectable outbox queue that inflates the domain-event count.
-     *
-     * @var list<string>
-     */
-    private const array RESETTABLE_QUEUES = ['async', 'failed'];
-
     private ?object $selectedEvent = null;
 
     public function __construct(
-        #[Autowire(service: 'test.service_container')]
-        private readonly Container $container,
+        private readonly Outbox $outbox,
         private readonly MessageBusInterface $messageBus,
         private readonly EntityManagerInterface $entityManager,
     ) {
@@ -91,16 +63,14 @@ final class OutboxContext extends AbstractContext
     {
         $this->selectedEvent = null;
 
-        foreach (self::RESETTABLE_QUEUES as $queueName) {
-            $this->transport($queueName)->reset();
-        }
+        $this->outbox->reset();
     }
 
     #[Then(':number outbox event was created')]
     #[Then(':number outbox events were created')]
     public function outboxEventsWereCreated(int $number): void
     {
-        $count = \count($this->messages());
+        $count = \count($this->outbox->messages());
 
         self::assertSame(
             $number,
@@ -113,7 +83,7 @@ final class OutboxContext extends AbstractContext
     #[Then(':number outbox events were created on the queue :queueName')]
     public function outboxEventsWereCreatedOnQueue(int $number, string $queueName): void
     {
-        $count = \count($this->messagesOnQueue($queueName));
+        $count = \count($this->outbox->messagesOnQueue($queueName));
 
         self::assertSame(
             $number,
@@ -125,13 +95,13 @@ final class OutboxContext extends AbstractContext
     #[Then('I got the event number :number from the outbox')]
     public function selectEventByNumber(int $number): void
     {
-        $this->selectEvent($this->messages(), $number);
+        $this->selectEvent($this->outbox->messages(), $number);
     }
 
     #[Then('I got the event number :number on queue :queueName from the outbox')]
     public function selectEventByNumberOnQueue(int $number, string $queueName): void
     {
-        $this->selectEvent($this->messagesOnQueue($queueName), $number);
+        $this->selectEvent($this->outbox->messagesOnQueue($queueName), $number);
     }
 
     /**
@@ -210,7 +180,7 @@ final class OutboxContext extends AbstractContext
     #[Then('there should have been an outbox event created containing:')]
     public function anOutboxEventCreatedContaining(TableNode $table): void
     {
-        foreach ($this->messages() as $message) {
+        foreach ($this->outbox->messages() as $message) {
             if ($this->eventMatchesTable($message['event'], $table)) {
                 return;
             }
@@ -222,7 +192,7 @@ final class OutboxContext extends AbstractContext
     #[Then('there should not have been an outbox event created containing:')]
     public function noOutboxEventCreatedContaining(TableNode $table): void
     {
-        foreach ($this->messages() as $message) {
+        foreach ($this->outbox->messages() as $message) {
             if ($this->eventMatchesTable($message['event'], $table)) {
                 self::fail('An outbox event was found containing the properties that should be absent');
             }
@@ -272,12 +242,12 @@ final class OutboxContext extends AbstractContext
     #[Then('I remove event :number from the outbox')]
     public function removeEventByNumber(int $number): void
     {
-        $messages = $this->messages();
+        $messages = $this->outbox->messages();
         $message = $messages[$number - 1] ?? null;
 
         self::assertNotNull($message, \sprintf('No outbox event number %d found', $number));
 
-        $this->transport($message['queue'])->reject($message['envelope']);
+        $this->outbox->remove($message);
     }
 
     /**
@@ -286,9 +256,9 @@ final class OutboxContext extends AbstractContext
     #[Then('I remove event of type :fullyQualifiedClassName from the outbox')]
     public function removeEventByType(string $fullyQualifiedClassName): void
     {
-        foreach ($this->messages() as $message) {
+        foreach ($this->outbox->messages() as $message) {
             if ($message['event'] instanceof $fullyQualifiedClassName) {
-                $this->transport($message['queue'])->reject($message['envelope']);
+                $this->outbox->remove($message);
             }
         }
     }
@@ -296,7 +266,7 @@ final class OutboxContext extends AbstractContext
     #[Then('I print all outbox events')]
     public function printAllOutboxEvents(): void
     {
-        foreach ($this->messages() as $index => $message) {
+        foreach ($this->outbox->messages() as $index => $message) {
             echo \sprintf('#%d [%s] %s%s', $index + 1, $message['queue'], $this->describe($message['event']), PHP_EOL);
         }
     }
@@ -304,7 +274,7 @@ final class OutboxContext extends AbstractContext
     #[Then('I print last outbox event')]
     public function printLastOutboxEvent(): void
     {
-        $messages = $this->messages();
+        $messages = $this->outbox->messages();
         $last = \end($messages);
 
         echo false === $last ? 'No outbox events' : $this->describe($last['event']);
@@ -372,67 +342,5 @@ final class OutboxContext extends AbstractContext
         }
 
         return $event::class;
-    }
-
-    /**
-     * @return list<array{queue: string, envelope: Envelope, event: object}>
-     */
-    private function messagesOnQueue(string $queueName): array
-    {
-        // Fail loudly on a queue that is not an inspectable in-memory outbox queue (a typo, or `sync`):
-        // without this it would silently count 0, so `0 outbox events … on queue "<typo>"` would pass.
-        self::assertContains(
-            $queueName,
-            self::INSPECTABLE_QUEUES,
-            \sprintf(
-                'Queue "%s" is not an inspectable outbox queue; expected one of: %s',
-                $queueName,
-                \implode(', ', self::INSPECTABLE_QUEUES),
-            ),
-        );
-
-        return \array_values(\array_filter(
-            $this->messages(),
-            static fn (array $message): bool => $message['queue'] === $queueName,
-        ));
-    }
-
-    /**
-     * Reads the pending queue fresh each call (cheap, non-destructive), so a post-consume assertion
-     * sees the drained 0 rather than a stale cached count.
-     *
-     * @return list<array{queue: string, envelope: Envelope, event: object}>
-     */
-    private function messages(): array
-    {
-        $messages = [];
-
-        foreach (self::INSPECTABLE_QUEUES as $queueName) {
-            foreach ($this->transport($queueName)->get(self::WHOLE_QUEUE) as $envelope) {
-                $messages[] = ['queue' => $queueName, 'envelope' => $envelope, 'event' => $envelope->getMessage()];
-            }
-        }
-
-        return $messages;
-    }
-
-    /**
-     * Total by design: an uninspectable queue would make every assertion above it pass without
-     * reading anything, so it is a test-infrastructure failure rather than a state to carry on under.
-     */
-    private function transport(string $queueName): InMemoryTransport
-    {
-        $serviceId = 'messenger.transport.' . $queueName;
-        $found = $this->container->has($serviceId) ? $this->container->get($serviceId) : null;
-
-        self::assertInstanceOf(InMemoryTransport::class, $found, \sprintf(
-            'Queue "%s" must resolve to an inspectable %s; service %s is %s.',
-            $queueName,
-            InMemoryTransport::class,
-            $serviceId,
-            null === $found ? 'not registered' : \get_debug_type($found),
-        ));
-
-        return $found;
     }
 }
