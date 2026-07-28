@@ -90,6 +90,25 @@ context:
 
 ## Spec Change Log
 
+### 2026-07-28 -- las dos deudas encontradas de paso entran en el alcance (decisión de Sergio)
+
+Se propusieron como seguimiento y Sergio pidió arreglarlas en esta misma rama, así que dejan de ser
+"deuda propuesta" y pasan a ser trabajo de esta PR:
+
+1. **Ancla muerta en `docs/api-error-contract.md`.** `#how-to-add-a-new-error` no resolvía porque el
+   heading real llevaba `(Amelia walk-through from PRD §Journey 1)`, y tres sitios enlazan la forma
+   corta. Arreglar sólo el heading dejaba el doc incoherente: la narrativa de personas seguía en el
+   cuerpo de ambas secciones. Retirada entera conservando cada hecho técnico.
+2. **`OutboxContext` en su techo de tamaño.** `Support\Messenger\Outbox` se lleva la lectura del
+   outbox (438 → 347 líneas); la supresión `ExcessiveClassComplexity` se cae por medición y el
+   coupling baja de 14 a 13. Las tres supresiones restantes se verificaron borrando las cuatro y
+   volviendo a correr PHPMD. `MessengerConsumerContext`, segundo consumidor real, **no** se migra.
+
+KEEP: el conteo de aserciones de `make php.unit` bajó 9003 → 9000 y **no** lo causa este cambio.
+Revertido el árbol al estado exacto que midió 9003, PHPUnit sigue dando 9000: el delta es ambiental
+(Behat resetea y resiembra la BD entre corridas, y algún test funcional cuenta según filas). No
+atribuir esa cifra al diff si reaparece.
+
 ## Design Notes
 
 **Por qué estado y no diff.** El sub-check nació como "el doc cambió en el mismo diff", y eso exige contexto de VCS que el contenedor no tiene y que CI tampoco daría: el job de calidad hace checkout con `fetch-depth` por defecto (1), así que ni existe `origin/main` para el `merge-base`. Revivir el diseño de diff cuesta tres piezas (script de host, target nuevo, `fetch-depth: 0`) y **conserva** la fragilidad que lo mató: cualquier estado sin base utilizable vuelve a saltárselo.
