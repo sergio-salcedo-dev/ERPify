@@ -13,7 +13,7 @@ durable_output: 'docs/adr/images-vs-documents-conservation-contract.md'
 
 # Sesión de brainstorming — módulo de imágenes en Shared
 
-**Registro canónico:** [`.memlog.md`](./.memlog.md) · **Salida durable:** [`../../../docs/adr/images-vs-documents-conservation-contract.md`](../../../docs/adr/images-vs-documents-conservation-contract.md)
+**Salida durable:** [`../../../docs/adr/images-vs-documents-conservation-contract.md`](../../../docs/adr/images-vs-documents-conservation-contract.md) — el ADR es el registro vinculante; este documento sólo conserva el recorrido que lo produjo.
 
 ## Encuadre
 

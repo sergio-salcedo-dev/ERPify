@@ -2,7 +2,7 @@
 
 > **Status:** superseded · **Date:** 2026-06-14 · **Scope:** the upload seam consumed by `Backoffice/Bank` and future callers (company logos, client/user avatars, product images).
 >
-> **Superseded by** [images-vs-documents-conservation-contract.md](./images-vs-documents-conservation-contract.md) — which redraws this boundary by the promise made over the byte instead of by file format and size.
+> **Superseded by** [images-vs-documents-conservation-contract.md](./images-vs-documents-conservation-contract.md) — which redraws this boundary by the promise made over the byte instead of by file format and size. The supersession is on the **criterion**, not on the whole file: D1 (a transport type stops at the input adapter) is carried forward and hardened there, and D2's input-type trade-off — the `UploadedImage` value object, and why a stream-capable port was rejected for images — stands as the live argument until the pipeline story replaces it.
 >
 > **Superseded:** the API carries no upload surface. Nothing consumed it, so it was removed rather than
 > carried forward; images will be modelled afresh in their own epic. The reasoning below — where the
