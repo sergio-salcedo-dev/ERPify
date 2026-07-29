@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { BankRowActions } from "@/app/backoffice/banks/_components/BankRowActions";
+import { openRowDeleteItem } from "./_interactions";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
@@ -52,9 +53,7 @@ describe("BankRowActions", () => {
     );
     expect(screen.queryByTestId(`banks-cards__delete-${ID}`)).toBeNull();
 
-    fireEvent.click(screen.getByTestId(`banks-cards__actions-${ID}`));
-
-    expect(await screen.findByTestId(`banks-cards__delete-${ID}`)).toBeInTheDocument();
+    expect(await openRowDeleteItem("banks-cards", ID)).toBeInTheDocument();
   });
 
   it("opens the confirmation dialog from the Delete menu item", async () => {
@@ -68,8 +67,7 @@ describe("BankRowActions", () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId(`banks-cards__actions-${ID}`));
-    fireEvent.click(await screen.findByTestId(`banks-cards__delete-${ID}`));
+    fireEvent.click(await openRowDeleteItem("banks-cards", ID));
 
     expect(await screen.findByTestId("banks-detail__delete-dialog")).toBeInTheDocument();
   });
@@ -85,8 +83,7 @@ describe("BankRowActions", () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId(`banks-cards__actions-${ID}`));
-    fireEvent.click(await screen.findByTestId(`banks-cards__delete-${ID}`));
+    fireEvent.click(await openRowDeleteItem("banks-cards", ID));
 
     expect(await screen.findByTestId("banks-detail__delete-guard-view-accounts")).toHaveAttribute(
       "href",
