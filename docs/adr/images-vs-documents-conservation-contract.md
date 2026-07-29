@@ -74,6 +74,18 @@ Recorded here because they constrain what the first slice may assume, not as a l
 - Two digests with different meanings and different types: the original's (integrity, custody, signature) and the canonical image's (visual identity, caching).
 - Scanning classifies, it cannot clean an immutable byte. State lives on the aggregate, and the invariant is not "everything is scanned" but **no consumer reaches the content before the document is ready**.
 
+## Invariants for downstream work
+
+Every story derived from this ADR preserves these explicitly; a story that violates one is misframed, not merely incomplete.
+
+1. **Storage keeps bytes; semantics belong to the aggregate.** Nothing in `Shared/` decides what a byte means, who owns it, or when it dies.
+2. **The canonical digest is an attribute, never an identity or a uniqueness key.** Two users uploading the same avatar produce two independent images that happen to share a hash. That is correct, not an anomaly to reconcile — the reflex to add a unique index is the failure mode this invariant exists to stop.
+3. **The first iteration introduces neither deduplication nor global bookkeeping.** No shared blob identity, no reference counting, no GC.
+4. **A derivative does not change owner by living in `Shared/`.** Its lifecycle stays with the aggregate that ordered it, which is what keeps a derivative of evidence dying with its evidence (D5).
+5. **The conservation contract is the boundary** between the images module and `Documents` — never format, never size.
+
+**Review criterion for a story.** If it forces the reader to ask *"is this an image or a document?"*, the story is written against the superseded model. The aligned question is *"what conservation contract does this resource promise?"* — and if the answer to that question determines the behaviour, the story is on contract.
+
 ## Consequences
 
 - The images module ships smaller than the design that opened this discussion: no shared blob, no dedup, no refcount, no GC. Every future need examined — S3, WORM, content-addressed storage, IFC, video, a project-wide case file able to order coordinated destruction across all its documents and derivatives — reinforced D5 instead of adding infrastructure.
