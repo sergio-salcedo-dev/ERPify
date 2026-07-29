@@ -55,9 +55,13 @@ The consequence that is easy to miss: **a derivative of evidence is not fungible
 
 Irreversible means *persisted, or a public contract* — not merely expensive to refactor. By that test exactly one decision cannot be postponed: **the domain never knows a physical storage key.** Aggregates reference a stable `ImageId`; where and how the bytes live is nobody's business upstream.
 
-In the first slice: `UploadImage`, `UploadedImage`, an image processor, an `ImageStorage` port that promises nothing about persistence, a deterministic pipeline, and storage addressed by an opaque identifier.
+In the first slice: `UploadImage`, the `Image` aggregate it produces, an image processor, an `ImageStorage` port that promises nothing about persistence, a deterministic pipeline, and storage addressed by an opaque identifier.
+
+**The image pipeline does not know how its input arrives.** No HTTP transport type reaches it — `UploadImage` is an adapter towards the pipeline, not the pipeline. Only the negative half is settled here: what the input *is* stays open, since that type is internal to the module and by this section's own test neither persisted nor public, while what may not cross is stated so it can be checked. A producer that is not an upload — rendering a document's first page — then enters the same way without touching an invariant, and what it produces is an `Image` like any other. The aggregate is named for what it is, not for how it got there.
 
 Deferred, none of it forcing a redesign when it lands: deduplication, a shared blob with its own identity, reference counting and GC, multipart, S3/Dropbox backends, virus scanning, OCR, versioning, retention.
+
+**Materialising derivatives from another bounded context is deliberately outside the first slice** — `Documents` producing page previews and thumbnails, with no HTTP and no interactive user. Only the seam is recorded here, not built: the pipeline must admit producers other than `UploadImage` without modifying any invariant defined below.
 
 **Deduplication is dropped from the first slice on purpose.** It is what gives the blob an independent identity and lifecycle, what makes `delete()` unsafe, and what drags in refcounting, GC, ownership and concurrency — all to save storage that small images barely consume. Avatars are `PersonalData`, so an unsafe delete there has GDPR teeth from the first sprint. The one real collision — the same bank logo referenced from many accounts — is a modelling problem, not a storage one: `Bank → Logo → N accounts` says there is a single official logo per bank, and the duplication never reaches infrastructure.
 
@@ -83,6 +87,7 @@ Every story derived from this ADR preserves these explicitly; a story that viola
 3. **The first iteration introduces neither deduplication nor global bookkeeping.** No shared blob identity, no reference counting, no GC.
 4. **A derivative does not change owner by living in `Shared/`.** Its lifecycle stays with the aggregate that ordered it, which is what keeps a derivative of evidence dying with its evidence (D5).
 5. **The conservation contract is the boundary** between the images module and `Documents` — never format, never size.
+6. **No HTTP transport type crosses the image pipeline's edge.** Stated over the category rather than over `UploadedFile`, so a different transport type tomorrow does not escape it. The invariant is intended to be mechanically enforceable — otherwise it cannot reliably act as an architectural boundary — so the story that introduces the pipeline carries a structural check (deptrac or equivalent) in its definition of done. This ADR defines the rule; the implementation owns its enforcement.
 
 **Review criterion for a story.** If it forces the reader to ask *"is this an image or a document?"*, the story is written against the superseded model. The aligned question is *"what conservation contract does this resource promise?"* — and if the answer to that question determines the behaviour, the story is on contract.
 
