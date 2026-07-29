@@ -83,9 +83,29 @@ Feature: Server-side session registry and admission gate
     Then the response status code should be 401
     And the JSON node "type" should be equal to "session-expired"
 
+  # The failed-attempt lockout is weighed on the login path alone (UserChecker::checkPostAuth); the gate reads
+  # session status and expiry and nothing else. So a caller already inside keeps their session for its full TTL
+  # while the same identity is barred from signing in again. This is pinned because it is the property that
+  # bounds the lockout's blast radius: were the gate ever taught to read the lock, whoever can trip it from
+  # outside would eject live sessions instead of merely barring new logins, and the seeded SELECT below is what
+  # keeps the scenario from passing vacuously if the lock were never actually set.
+  Scenario: A lockout bars the door without ejecting a session already inside
+    Given I reload the fixtures
+    And I send a "GET" request to "/me"
+    And the response status code should be 200
+    When I execute the SQL query "UPDATE identity_user SET failed_attempts = 10, locked_until = '2099-01-01 00:00:00' WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b'"
+    And I execute the SQL query "SELECT id FROM identity_user WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b' AND locked_until > NOW()"
+    And there should have 1 records in SQL result
+    And I send a "GET" request to "/me"
+    Then the response status code should be 200
+    And the JSON node "data.email" should be equal to "alice@erpify.test"
+
   @anonymous
   Scenario: A successful login mints a live registry session the gate then admits
-    Given I add "Content-Type" header equal to "application/json"
+    # An earlier scenario seals the lockout on this identity to prove the gate ignores it; reload so the login
+    # door under test is genuinely open, or this would read a 403 wall as a broken handshake.
+    Given I reload the fixtures
+    And I add "Content-Type" header equal to "application/json"
     And I add "Origin" header equal to "http://localhost"
     When I send a POST request to "/backoffice/login" with body:
     """
