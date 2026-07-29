@@ -152,24 +152,33 @@ development_status:
 #     BankAccountSnapshot excluye PII). El gap real es que nada EJECUTA esa invariante. La pasada adversarial a
 #     U-5b abrió además #545 (membership huérfana) y cerró #495 (sesiones, ya resuelto por #529); la regla de
 #     proceso quedó fijada en CLAUDE.md → "Security review on every change" → Process.
-# Quedan solo los items de DECISIÓN PROPIA:
-action_items:
-  - epic: "users-admin"
-    action: "Política de rol del invitador (#505): cualquier ADMIN acuña ADMINs sin límite; decisión propia sobre el modelo de propagación de privilegio"
-    owner: "API/Iam"
-    status: open
-  - epic: "users-admin"
-    action: "Lockout por email = DoS contra admins (review U-4): revisar antes de prod (throttling adaptativo / MFA / recuperación). Descartado filtrar locked_until en el directorio de admins — no re-proponer"
-    owner: "API/Iam"
-    status: open
-  # DECIDIDAS 2026-07-22 (round trip con IA externa, contrastado contra el repo) y removidas de aquí:
-  #   · SI-15 autoridad de roles → A1, User.roles única fuente; se elimina Membership.roles → #549.
-  #     Descartadas A2 (obligaría a cruzar frontera en auth y en el guard ≥1-admin) y A3 (consistencia
-  #     eventual en la ruta de autorización). Condición de reapertura escrita en el issue.
-  #   · Core RBAC → NO se mueve. La premisa "shared kernel de facto" es falsa: cero imports de tipo fuera
-  #     de Iam/, el acoplamiento es por literal de cadena en #[IsGranted], y Role ya vive en Shared/Access.
-  #   · Orden: #545 (seam de erasure, arregla el defecto) ANTES que #549 (limpieza de modelo). Quitar
-  #     Membership.roles NO cierra #545 — el residuo GDPR es el user_id, no los roles.
-  #   · Se descartó abrir un ADR sobre si Membership sigue siendo agregado: su organization_id se lee en
-  #     hot path de login y el seam de #545 le devuelve comportamiento, así que la forma final emerge de
-  #     esos dos cambios en vez de deliberarse antes.
+# DECIDIDAS 2026-07-22 (round trip con IA externa, contrastado contra el repo) y removidas de aquí:
+#   · SI-15 autoridad de roles → A1, User.roles única fuente; se elimina Membership.roles → #549.
+#     Descartadas A2 (obligaría a cruzar frontera en auth y en el guard ≥1-admin) y A3 (consistencia
+#     eventual en la ruta de autorización). Condición de reapertura escrita en el issue.
+#   · Core RBAC → NO se mueve. La premisa "shared kernel de facto" es falsa: cero imports de tipo fuera
+#     de Iam/, el acoplamiento es por literal de cadena en #[IsGranted], y Role ya vive en Shared/Access.
+#   · Orden: #545 (seam de erasure, arregla el defecto) ANTES que #549 (limpieza de modelo). Quitar
+#     Membership.roles NO cierra #545 — el residuo GDPR es el user_id, no los roles.
+#   · Se descartó abrir un ADR sobre si Membership sigue siendo agregado: su organization_id se lee en
+#     hot path de login y el seam de #545 le devuelve comportamiento, así que la forma final emerge de
+#     esos dos cambios en vez de deliberarse antes.
+# DECIDIDAS 2026-07-29 (pase de tres personas BMAD: arquitectura / implementación / test-riesgo, medido
+# contra main) y removidas de aquí — con ellas el registro queda vacío:
+#   · Política de rol del invitador (#505) → permiso `users.grantAdmin` declarado CON fila `=> [ADMIN]`,
+#     chequeado en los dos controllers sólo cuando el payload trae ADMIN, más la fila de auditoría con actor
+#     (ya escrita y revertida en 50ed6708 esperando #555, que cerró en #558). Alcance ampliado: superficie
+#     HTTP para RevokeInvitation — hoy una invitación ADMIN vive 3 días y sólo se revoca por CLI. La fila
+#     nace en [ADMIN] y no vacía porque `users.invite` y `users.changeRoles` son ambos ADMIN-only: prohibir
+#     que un ADMIN acuñe ADMIN dejaría al producto sin forma de crear un segundo administrador, y eso hace
+#     INSATISFACIBLE el borrado GDPR del admin único (FulfilIdentityErasure rechaza con 409 a quien tiene
+#     ADMIN). Restringir más es una edición de una línea de datos. Descartados: rung OWNER, matriz de
+#     delegación, type-to-confirm como control, y pasar los roles al voter como subject. Orden: tras #549.
+#     El ADR authorization-model-boundaries.md necesita enmienda — su frase del "no-op" es cierta del
+#     ADMIN-superusuario anterior y falsa desde #550 (TIER_OPT_OUT incluye 'users').
+#   · Lockout por email = DoS contra admins → ACEPTADO tal cual, registrado en #602, y condicionado a fijar
+#     antes el test de que una sesión viva sobrevive al bloqueo (el muro salta en UserChecker::checkPostAuth,
+#     no en SessionAdmissionGate) — es la premisa de la que cuelga toda la evaluación y nada la pinnea.
+#     Descartados: dimensión IP/origen (re-deriva login_throttling y abandona el caso del spray distribuido
+#     que el contador existe para cazar), y MFA como respuesta a esto (el muro es anterior al segundo factor).
+action_items: []
