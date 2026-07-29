@@ -1,6 +1,6 @@
 # ADR — Conservation contract: fungible representations vs evidence
 
-> **Status:** accepted (design, no code yet) · **Date:** 2026-07-29 · **Scope:** every uploaded binary the ERP holds — bank and company logos, user avatars, product images, thumbnails, and the future technical documentation of a construction business (drawings, reports, DWG/IFC, scanned PDFs, RAW, video).
+> **Status:** accepted (design, no code yet) · **Date:** 2026-07-29 · **Amended:** 2026-07-29 (D6 gains the transport isolation and the materialisation seam; invariant 6) · **Scope:** every binary the ERP holds, uploaded or produced — bank and company logos, user avatars, product images, thumbnails, and the future technical documentation of a construction business (drawings, reports, DWG/IFC, scanned PDFs, RAW, video).
 >
 > **Supersedes** [media-vs-documents-upload-boundary.md](./media-vs-documents-upload-boundary.md) — that ADR drew the same boundary by file format and size; this one draws it by the promise made over the byte, and reaches a smaller first module.
 >
@@ -8,7 +8,7 @@
 
 ## Context
 
-The API currently has no upload surface: the previous one was withdrawn rather than migrated, because nothing consumed it. The architecture decision was left deliberately open in `_bmad-output/implementation-artifacts/deferred-work.md` and has to be taken before code is written.
+The API currently has no upload surface: the previous one was withdrawn rather than migrated, because nothing consumed it. The architecture decision was left deliberately open and has to be taken before code is written; this document takes it.
 
 The obvious framing — *small images here, large documents there* — does not survive its first real counterexample. A site photograph is an 8 MB JPEG carrying GPS and a timestamp; it is attached to a monthly progress certificate and ends up supporting an invoice. Sent through an image pipeline it gets its EXIF stripped and is re-encoded, which destroys precisely what made it proof. Format is the wrong discriminant, and so is size.
 
@@ -18,10 +18,10 @@ The obvious framing — *small images here, large documents there* — does not 
 
 Two contracts, and a JPEG can fall under either:
 
-- **Fungible representation.** The original byte carries no evidentiary weight; what matters is the resulting pixels. It may be decoded, normalised, stripped of metadata, resized, re-encoded and converted at will, because it can always be regenerated or requested again. Logos, avatars, product images, thumbnails, banners, favicons.
+- **Fungible representation.** The original byte carries no evidentiary weight; what matters is the resulting pixels. It may be decoded, normalised, stripped of metadata, resized, re-encoded and converted at will, because it can be replaced by a canonical representation generated afresh from a newly supplied source. The pipeline destroys information on purpose, so this is replacement, not recovery. Logos, avatars, product images, thumbnails, banners, favicons.
 - **Evidence.** The original byte *is* the asset. It is never transformed; any processing produces derivatives alongside it. Drawings, technical reports, contracts, certificates, RAW, and the site photograph.
 
-Re-encoding is what sanitises a fungible image, which is why virus scanning belongs only to the evidence side: an antivirus is the price of having given up the right to transform the byte.
+Re-encoding is what sanitises a fungible image — of what the raster and its metadata carry, not of the risk of parsing hostile input, since the decoder is itself an attack surface. That residual risk is identical on both sides and argues for hardening the processor, not for moving the scanner: virus scanning belongs to the evidence side because an antivirus is the price of having given up the right to transform the byte.
 
 **Discarded: classification by MIME type or by size.** It puts `Strip metadata` and "preserve the GPS" on the same file, and it is the framing that loses the site photograph.
 
@@ -43,7 +43,7 @@ A bounded context must not change the historical meaning of an object. Entering 
 
 Its rule is technical and stable — *this context manages canonical visual representations, it does not preserve originals* — and deliberately not legal. No notion of tax law, prescription or construction liability lives in `Shared/`; the semantics of "this is proof" are born in the use case that calls `UploadEvidence`.
 
-The name stays `Images` while it is honest. At ten years' distance the concept is closer to *renditions* — materialised representations of some other resource (a document's page previews, a video's poster frame, a RAW file's preview). Renaming a `Shared` module is a mechanical refactor over code, not a data migration, so it is not decided today; **the trigger is the arrival of the second producer of derivatives.**
+The name stays `Images` while it is honest. At ten years' distance the concept is closer to *renditions* — materialised representations of some other resource (a document's page previews, a video's poster frame, a RAW file's preview). Renaming a `Shared` module is a mechanical refactor over code, not a data migration, so it is not decided today; **the trigger is the first time another bounded context materialises a rendition through this module in merged code** — implemented, not merely foreseen, since D6 already foresees it.
 
 ### D5 — Lifecycle belongs to the owning aggregate, never to storage and never to the derivative
 
@@ -57,15 +57,17 @@ Irreversible means *persisted, or a public contract* — not merely expensive to
 
 In the first slice: `UploadImage`, the `Image` aggregate it produces, an image processor, an `ImageStorage` port that promises nothing about persistence, a deterministic pipeline, and storage addressed by an opaque identifier.
 
-**The image pipeline does not know how its input arrives.** No HTTP transport type reaches it — `UploadImage` is an adapter towards the pipeline, not the pipeline. Only the negative half is settled here: what the input *is* stays open, since that type is internal to the module and by this section's own test neither persisted nor public, while what may not cross is stated so it can be checked. A producer that is not an upload — rendering a document's first page — then enters the same way without touching an invariant, and what it produces is an `Image` like any other. The aggregate is named for what it is, not for how it got there.
+`Image` is **state-oriented**, not event-sourced: the business needs where it is, its dimensions and its digest, never the sequence of changes that produced them. Change history belongs to `Audit`, to the consuming aggregate, or later to `Documents`. The aggregate stays small enough that a domain entity referencing it holds nothing but an `ImageId` — `Bank.logoImageId`, `User.avatarImageId` — which is also where invariant 4 locates its owner.
+
+**The image pipeline does not know how its input arrives.** *The pipeline* is everything between accepting content for processing and handing bytes to `ImageStorage` — decode, validate, normalise, re-encode, digest. `UploadImage` sits outside it, translating a request into a call into it, and that handover is the edge invariant 6 names; without a stated edge the invariant would not be falsifiable. No HTTP transport type reaches past it. Only the negative half is settled here: what the input *is* stays open, since that type is internal to the module and by this section's own test neither persisted nor public, while what may not cross is stated so it can be checked. A producer that is not an upload — rendering a document's first page — then enters the same way without touching an invariant, and what it produces is an `Image` like any other. The aggregate is named for what it is, not for how it got there.
 
 Deferred, none of it forcing a redesign when it lands: deduplication, a shared blob with its own identity, reference counting and GC, multipart, S3/Dropbox backends, virus scanning, OCR, versioning, retention.
 
 **Materialising derivatives from another bounded context is deliberately outside the first slice** — `Documents` producing page previews and thumbnails, with no HTTP and no interactive user. Only the seam is recorded here, not built: the pipeline must admit producers other than `UploadImage` without modifying any invariant defined below.
 
-**Deduplication is dropped from the first slice on purpose.** It is what gives the blob an independent identity and lifecycle, what makes `delete()` unsafe, and what drags in refcounting, GC, ownership and concurrency — all to save storage that small images barely consume. Avatars are `PersonalData`, so an unsafe delete there has GDPR teeth from the first sprint. The one real collision — the same bank logo referenced from many accounts — is a modelling problem, not a storage one: `Bank → Logo → N accounts` says there is a single official logo per bank, and the duplication never reaches infrastructure.
+**Deduplication is dropped from the first slice on purpose.** It is what gives the blob an independent identity and lifecycle, what makes `delete()` unsafe, and what drags in refcounting, GC, ownership and concurrency — all to save storage that small images barely consume. Avatars carry personal data, so an unsafe delete there has GDPR teeth from the first sprint. The one real collision — the same bank logo referenced from many accounts — is a modelling problem, not a storage one: `Bank → Logo → N accounts` says there is a single official logo per bank, and the duplication never reaches infrastructure.
 
-The canonical digest is only a stored attribute until something consumes it; it becomes irreversible **the day it enters a URL**, which is when immutable caching of variants (`/{imageId}/{hash}/{width}.webp`) needs it.
+The canonical digest is only a stored attribute until something consumes it; it becomes irreversible **the day it enters a URL**, which is when immutable caching of variants (`/{imageId}/{hash}/{variant}`) needs it.
 
 **Hard constraint carried over:** the upload seam is designed against the Symfony 8.1 argument resolver (`mergeParamsAndFiles`) from the start, not patched afterwards — that resolver change is what exposed an arbitrary file read in the withdrawn implementation.
 
@@ -85,7 +87,7 @@ Every story derived from this ADR preserves these explicitly; a story that viola
 1. **Storage keeps bytes; semantics belong to the aggregate.** Nothing in `Shared/` decides what a byte means, who owns it, or when it dies.
 2. **The canonical digest is an attribute, never an identity or a uniqueness key.** Two users uploading the same avatar produce two independent images that happen to share a hash. That is correct, not an anomaly to reconcile — the reflex to add a unique index is the failure mode this invariant exists to stop.
 3. **The first iteration introduces neither deduplication nor global bookkeeping.** No shared blob identity, no reference counting, no GC.
-4. **A derivative does not change owner by living in `Shared/`.** Its lifecycle stays with the aggregate that ordered it, which is what keeps a derivative of evidence dying with its evidence (D5).
+4. **A derivative does not change owner by living in `Shared/`.** Its lifecycle stays with the aggregate that ordered it, which is what keeps a derivative of evidence dying with its evidence (D5). The aggregate that owns the reference is responsible for the lifecycle of that reference: replacing or removing it includes making the previously referenced image no longer reachable through the domain model. This applies equally when replacing an image and when erasing the owning subject. *How* that happens is the implementing story's decision, not this ADR's.
 5. **The conservation contract is the boundary** between the images module and `Documents` — never format, never size.
 6. **No HTTP transport type crosses the image pipeline's edge.** Stated over the category rather than over `UploadedFile`, so a different transport type tomorrow does not escape it. The invariant is intended to be mechanically enforceable — otherwise it cannot reliably act as an architectural boundary — so the story that introduces the pipeline carries a structural check (deptrac or equivalent) in its definition of done. This ADR defines the rule; the implementation owns its enforcement.
 
@@ -96,4 +98,4 @@ Every story derived from this ADR preserves these explicitly; a story that viola
 - The images module ships smaller than the design that opened this discussion: no shared blob, no dedup, no refcount, no GC. Every future need examined — S3, WORM, content-addressed storage, IFC, video, a project-wide case file able to order coordinated destruction across all its documents and derivatives — reinforced D5 instead of adding infrastructure.
 - Issue #268 (`Documents` epic) keeps its enablers #266 (`writeStream`) and #267 (Dropbox/S3 backends) but inherits a different frontier: not *image vs non-image*, but *fungible vs evidence*. A JPEG can belong to `Documents`.
 - The derivative-of-evidence leak in D5 is a privacy defect by construction, so any story touching erasure or derivative lifecycle needs the recorded adversarial pass required by the root `CLAUDE.md`; self-certification does not close it.
-- The reasoning behind this decision is preserved in the brainstorming session under `_bmad-output/brainstorming/`, which is transient by repo policy — this ADR is the durable record.
+- This ADR is the durable record: everything it depends on is stated here, so the brainstorming session that produced it can be swept without loss.
