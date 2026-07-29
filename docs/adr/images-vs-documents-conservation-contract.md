@@ -1,6 +1,6 @@
 # ADR — Conservation contract: fungible representations vs evidence
 
-> **Status:** accepted (design, no code yet) · **Date:** 2026-07-29 · **Scope:** every binary the ERP holds, uploaded or produced — bank and company logos, user avatars, product images, thumbnails, and the future technical documentation of a construction business (drawings, reports, DWG/IFC, scanned PDFs, RAW, video).
+> **Status:** accepted (design, no code yet) · **Date:** 2026-07-29 · **Scope:** every binary the ERP holds, uploaded or produced — bank, company and collaborator logos, user avatars, bank-account and product images, thumbnails, and the future technical documentation of a construction business (drawings, reports, DWG/IFC, scanned PDFs, RAW, video).
 >
 > **Supersedes** [media-vs-documents-upload-boundary.md](./media-vs-documents-upload-boundary.md) — that ADR drew the same boundary by file format and size; this one draws it by the promise made over the byte, and reaches a smaller first module.
 >
@@ -69,7 +69,11 @@ In the first slice: `UploadImage`, the `Image` aggregate it produces, an image p
 
 **The read path belongs to the slice, not to a later one.** An opaque identifier is unguessable, which is not the same as authorised, and serving an avatar is a read of a personal record — a case [`regulatory-audit-trail.md`](./regulatory-audit-trail.md) D4 already brought under "every read of every entity" with a resource extractor. The story that serves bytes declares the voter it expects, or declares the route consciously public and argues it, and the read is audited like any other.
 
-`Image` is **state-oriented**, not event-sourced: the business needs where it is, its dimensions and its digest, never the sequence of changes that produced them. Change history belongs to `Audit`, to the consuming aggregate, or later to `Documents`. The aggregate stays small enough that a domain entity referencing it will hold nothing but an `ImageId` — `Bank.logoImageId` and `User.avatarImageId` are the intended consumers, neither of which exists yet — which is also where invariant 4 locates its owner.
+**`Image` is a state-oriented aggregate. Domain history belongs to the owning aggregate and to the audit trail, not to `Image` itself.** An update replaces the state; the business needs where the image is, its dimensions and its digest, never the sequence of changes that produced them.
+
+**Discarded: event-sourcing the image.** It would buy a full change history, temporal reconstruction, and audit native to the aggregate, at the cost of events, projections and event versioning — with no business consumer today. Cost is not what settles it, though: the history that matters is not *how an image evolved* but **which entity referenced which image at each moment**, and that already lives with the owning aggregate and in `audit_log`. `Image` is not a business process; it is a technical resource other aggregates point at, and every consumer the scope names — bank, company and collaborator logos, user avatars, bank-account and product images — wants the current representation, not a timeline.
+
+The aggregate stays small enough that a domain entity referencing it will hold nothing but an `ImageId` — `Bank.logoImageId` and `User.avatarImageId` are the intended consumers, neither of which exists yet — which is also where invariant 4 locates its owner.
 
 **The image pipeline does not know how its input arrives.** *The pipeline* is everything between accepting content for processing and handing bytes to `ImageStorage` — decode, validate, normalise, re-encode, digest. Translating a request is the job of the module's **Infrastructure** adapter, the only layer allowed a framework type; `UploadImage` is an `Application` use case and so holds none either. That puts the edge where `deptrac` already enforces it, one layer stricter than "outside the pipeline" would suggest — the superseded ADR drew the same line and was right to.
 
