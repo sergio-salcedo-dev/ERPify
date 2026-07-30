@@ -8,12 +8,11 @@ Status: ready-for-dev
 
 <!-- Validación opcional: correr `validate-create-story` antes de `dev-story` para un check de calidad. -->
 
-> **La primera tarea no es código, es una decisión por escrito.** La épica recomienda ① (desenrutar a `sync`)
-> pero deja el mecanismo abierto, y la precondición normativa prohíbe empezar a implementar antes de registrar
-> la elección. **Léela con los cuatro hechos medidos del bloque siguiente**: dos de ellos no están en el corte
-> de épica ni en el addendum y **cambian el coste de ①** — desenrutar no es «no entregar», es *entregar dentro
-> de la transacción de escritura*; y el `event_store` conserva el mismo id para siempre pase lo que pase con el
-> routing. La decisión se toma sobre esos hechos, no sobre la frase de una línea del addendum.
+> **La decisión de mecanismo YA ESTÁ TOMADA y registrada** (ver *Decisión registrada*, más abajo): **①b**,
+> ratificada por Sergio el 2026-07-30 tras consulta a tres analistas independientes. La precondición normativa
+> de la épica queda satisfecha por este bloque; **no la re-abras**, pero **léela entera antes de tocar código**:
+> el argumento que la sostiene es lo que impide implementar ①a por accidente, que es el error natural aquí
+> (parece el mismo cambio de una línea y rompe producción).
 
 ## Story
 
@@ -103,32 +102,100 @@ consumer yet (wire-on-consumer)»*, pero `SendEmailOnPasswordResetCompleted` lo 
 `docs/architecture/event-catalog.md:239` lo lista como consumidor. Es la regla del boy-scout sobre un fichero
 que la historia toca de todas formas.
 
-## Decisión abierta — **Tarea 1, precondición normativa de la épica**
+## Decisión registrada — mecanismo **①b** (precondición normativa de la épica: SATISFECHA)
 
-Ninguna implementación empieza antes de que esto quede **registrado por escrito** (cuerpo del PR o este
-artefacto). La épica recomienda ①; la primera tarea es **confirmarla o refutarla**, no darla por buena en
-silencio. La medición (A) abre un sub-fork dentro de ① que la épica no podía ver:
+**Decidido:** 2026-07-30. **Quién:** Sergio, tras consulta a tres analistas independientes sobre el mismo
+dossier medido — arquitectura (Winston), implementación (Amelia) y un tercero externo (ChatGPT), este último vía
+`tmp/bmad-md/consult-g4a-messenger-leak-mechanism-20260730.md`. **Dónde queda el registro:** este bloque, y el
+cuerpo del PR debe reproducirlo.
+
+**Los tres convergieron en ①b por tres argumentos independientes**, lo cual es señal pero **no es verificación**
+(el pase adversarial de NFR10 sigue siendo obligatorio y lo debe hacer alguien distinto del autor):
+
+- *Arquitectura:* el reactor vive en `Iam/Identity/Infrastructure` y reacciona a un evento de `Iam/Identity`,
+  dependiendo del `UserRepository` y del sender **del mismo módulo**. Cero desacoplamiento ganado, toda la
+  maquinaria de transporte + deduplicación pagada: es la forma cara del acoplamiento directo.
+- *Implementación:* ①a muere por una vía extra — el `claim()` del deduplicador correría en la misma transacción
+  que el rollback, así que **el propio guard de idempotencia se revierte mientras el SMTP ya salió**.
+- *Externo:* desenrutar no rompe el diseño, **revela un error de diseño que ya existía**; `async` lo ocultaba.
+
+**Sub-fork medido que la épica no podía ver** (nace del hecho (A)) y que es la razón de que ①a esté descartada:
 
 | Opción | Qué hace | Coste medido |
 |--------|----------|--------------|
 | **①a** | Desenrutar (borrar la línea 28) o enrutar a `sync`, **dejando el reactor** | El envío SMTP entra en la transacción con el lock de fila tomado, y un fallo de correo **rollea el reset**. Notifica antes del commit. **Refutada por medición** salvo argumento explícito en contra. |
-| **①b** *(recomendada)* | Desenrutar **y** mover la notificación a un envío **post-commit best-effort** en `CompletePasswordReset`, espejo exacto de `RequestPasswordReset:95–101` y `RevokeSessionsBestEffort` | Garantía **estructural**: no hay copia persistida porque no hay transporte. Sin SMTP en transacción, sin rollback del reset, sin notificar un cambio no comiteado. Cuesta retirar el reactor y su claim de deduplicación (bajo entrega única post-commit no hay redelivery que deduplicar). |
+| **①b** ✅ **ELEGIDA** | Desenrutar **y** mover la notificación a un envío **post-commit best-effort** en `CompletePasswordReset`, espejo exacto de `RequestPasswordReset:95–101` y `RevokeSessionsBestEffort` | Garantía **estructural**: no hay copia persistida porque no hay transporte. Sin SMTP en transacción, sin rollback del reset, sin notificar un cambio no comiteado. Cuesta retirar el reactor y su claim de deduplicación (bajo entrega única post-commit no hay redelivery que deduplicar). |
 | **②** | Mantener `async` y purgar `messenger_messages` + `failed` en la cadena de erasure | Compensatoria, no estructural: cuerpos serializados, `failed` no se vacía nunca, y añade **otro colaborador** a `FulfilIdentityErasure`, que ya está por encima del umbral y lo declara (`@SuppressWarnings("PHPMD.CouplingBetweenObjects")`, línea 62). |
 | **③** | Transporte con TTL | No borra la PII: la **envejece**. Refutada por el propio invariante SI-21. |
 
-**Regístralo así:** opción elegida · por qué · qué alternativa se descarta y con qué argumento · dónde queda
-el registro. Si eliges ①b, di explícitamente que retiras el reactor y por qué la deduplicación deja de hacer
-falta.
+**Alternativas descartadas, con su argumento (no re-proponer sin refutar esto):**
+
+- **①a** — el SMTP entra en la transacción con el lock de fila tomado y su fallo **rollea el reset**. Envolver
+  el reactor en un `catch` total no la salva: quitaría el rollback pero **no el lock-hold**, que es el problema
+  de escalabilidad.
+- **②** — dos razones medidas, cualquiera basta. (i) El `body` de `messenger_messages` es
+  `addslashes(serialize($envelope))` (`vendor/symfony/messenger/Transport/Serialization/PhpSerializer.php:159–171`
+  devuelve **solo** `body`, sin emitir `headers`, y no hay `serializer:` configurado): el id va PHP-serializado
+  en un `TEXT`, no en columna indexable. (ii) Un mensaje en vuelo (`delivered_at IS NOT NULL`) durante la purga
+  **se re-inserta en `failed` después del commit** — es la resurrección asíncrona de #376 con otro nombre.
+  Además diluiría el `@SuppressWarnings` de `FulfilIdentityErasure:62`, que hoy está justificado por la
+  **atomicidad del acto de des-identificar**; podar una cola no es parte de ese acto.
+- **③** — un TTL no borra la PII: la **envejece**. Y donde la retención es indefinida es en `failed`, que es
+  justo lo que cubre ④ (abajo), pero cableado en un DSN que nadie mira en vez de en un mensaje programado que
+  se loguea y se testea.
+- **Despacho de eventos post-commit (`AfterCommitDispatcher`)** — propuesta por el analista externo como
+  «arquitectónicamente superior». **Descartada por incompatibilidad, no por coste:** este repo ya tiene ese
+  patrón y se llama **outbox** — el `event_store` y la fila del transporte se insertan **dentro** de la
+  transacción a propósito, para que log y encolado commiteen atómicamente con el agregado
+  (`PersistDomainEventMiddleware:14–18`). Diferir el dispatch al post-commit **destruye esa atomicidad y
+  convierte el outbox en un dual-write**.
+- **`kernel.terminate`** — depende de HTTP: rompe CLI, workers y tests.
+
+**Consecuencia directa de ①b sobre la idempotencia (decidida, no abierta):** el `DomainEventHandlerDeduplicator`
+**se elimina para este envío**, no se simplifica. Existe contra la redelivery *at-least-once* del transporte
+(`api/src/Shared/Event/Application/DomainEventHandlerDeduplicator.php:7–12`); sin transporte no hay redelivery.
+Reintento HTTP, doble submit y reintento del caso de uso mueren todos en el `consume()` single-use del token
+(`CompletePasswordReset.php:93–95`), ya pinnado en `password_reset.feature:139–144`. El cambio de *at-least-once*
+a *at-most-once* es la elección correcta para esta notificación y ya está aceptado en `RevokeSessionsBestEffort`.
+
+**Honestidad debida — el mejor argumento CONTRA ①b, que hay que responder y no callar:** el reactor resuelve el
+usuario en el momento del handling (`SendEmailOnPasswordResetCompleted.php:47–51`), así que un sujeto borrado
+entre el commit y el envío **no recibe el correo** — su docblock lo vende como garantía anti-resurrección. Con
+envío post-commit inmediato esa ventana casi desaparece, así que en la práctica ①b empata o mejora; pero
+decláralo en el PR en vez de dejarlo sin respuesta.
+
+## ④ — Poda programada de la cola `failed` (**dentro del alcance de esta historia**, decisión de Sergio)
+
+**Medido:** existe un `#[AsSchedule('maintenance')]`
+(`api/src/Shared/Event/Infrastructure/Messenger/Maintenance/HandledDomainEventMaintenanceSchedule.php:19–29`)
+con poda diaria de candados de deduplicación y **chequeo horario del backlog de dead-letter que alarma sobre
+umbral**, consumido por el worker. Y hay cuatro ficheros que **leen** `failed` (`DeadLetterReader`,
+`MessengerDeadLetterReader`, `FailedMessagesStatusCommand`, `ReportDeadLetterBacklogHandler`). **`grep` confirma
+que nada la drena jamás:** la cola muerta se observa pero no se vacía.
+
+**Por qué entra aquí:** ①b arregla *este* caso; ④ cierra la *clase*. Sin ④, el día que alguien enrute otro
+evento con un id de persona en el sobre, `failed` vuelve a acumular referencias sin dueño de borrado — que es
+literalmente lo que SI-21 prohíbe. Es un tercer `RecurringMessage` sobre un patrón ya establecido y testeado
+(espeja `PruneHandledDomainEventsHandler`), **sin tocar `FulfilIdentityErasure`** y sin carrera con el worker.
+
+**Ojo con el alcance:** ④ es *retención de cola*, no borrado por sujeto. No enumera sujetos ni conoce personas.
+Dilo así en el PR — si se describe como «borrado GDPR» se está prometiendo algo que no hace.
 
 ## Acceptance Criteria
 
-**AC1 — El id del sujeto borrado no sobrevive en ningún transporte persistido (FR1).**
-**Given** un usuario que completó un restablecimiento de contraseña,
-**When** se ejerce su borrado,
-**Then** ninguna fila de `messenger_messages` ni de `failed` contiene su id.
-*Cómo se pinna:* por **hecho (C)**, en test no existe `messenger_messages`; la aserción es *«el flujo de reset
-no crea evento en la cola `async`»* con el vocabulario de `OutboxContext`. El AC se satisface **de raíz** (no
-hay transporte) o **por barrido** (opción ②), según la decisión de la Tarea 1 — y el test debe reflejar cuál.
+**AC1 — El transporte persistido deja de retener el id del sujeto (FR1).**
+**Given** el flujo de restablecimiento de contraseña,
+**When** un usuario lo completa,
+**Then** **no se crea ninguna fila de transporte** para ese evento — ni en `async` ni, por tanto, en `failed`.
+*Cómo se pinna:* por **hecho (C)**, en test no existe `messenger_messages`; la aserción es
+`0 outbox events were created on the queue "async"` (`OutboxContext:86`), falsable de verdad porque el soporte
+lanza si la cola no es inspeccionable.
+
+> **Redacción deliberada, no descuido.** Este AC dice *«el transporte persistido ya no retiene el id del
+> sujeto»*, **no** *«ninguna copia del id del sujeto sobrevive al borrado»*. La segunda frase es
+> **verificablemente falsa** con un `SELECT aggregate_id FROM event_store` después de una erasure (hecho (B)),
+> y los tres analistas coincidieron en que declararla sería exactamente el patrón que ya nos mordió: prometer
+> una garantía que el código no da. **No la re-amplíes al escribir el PR.**
 
 **AC2 — La garantía no se compra dejando de notificar.**
 **Given** el flujo de restablecimiento,
@@ -143,13 +210,43 @@ hay transporte) o **por barrido** (opción ②), según la decisión de la Tarea
 **When** corre la suite,
 **Then** un control **falla**, y su mensaje enuncia *«un payload "solo el id del agregado" es seguro si y solo
 si el agregado no es una persona»* — **no** solo el nombre del evento.
-*Plantilla de la casa:* test bajo `api/tests/Unit/Shared/Architecture/`, `#[CoversNothing]`, con la preambulo
-de fallo en una **constante de clase** para que CI la pueda grepear (precedente:
-`EventDispatchGateTest::FAILURE_PREAMBLE`). Si el control se envuelve en un target `php.lint.*`, **tiene que
-entrar en `php.quality` Y en `php.quality.dry-run`** (NFR11 — CI corre el *dry-run*; ver
-`make/php-quality.mk:148,166,173–174`). Si en cambio se deja como test unitario normal, corre ya bajo
-`make php.unit` (`api/tools/phpunit/phpunit.dist.xml` incluye todo `tests/`) y **no** hace falta target nuevo:
-di cuál de las dos formas eliges y por qué.
+*Forma decidida (no la re-inventes) — es lo único que hace fallar la reintroducción: ni unit ni Behat ven la
+línea de routing.* **Registro declarativo cruzado contra `routing`, no lista negra de un evento:**
+
+- Registro nuevo `api/.persistent-transport-policy`, en la **raíz de `api/`** como `.audit-resource-types` (es
+  artefacto de revisión, no módulo). Líneas del tipo `Iam.Identity => person`, clavadas en **`aggregateType()`**
+  y **NO** en el FQCN del evento — un rename del FQCN dejaría el registro mudo.
+- Gate bajo `api/tests/Unit/Shared/Architecture/`, `#[CoversNothing]`, preámbulo de fallo en **constante de
+  clase** para que CI lo grepee (precedente: `EventDispatchGateTest::FAILURE_PREAMBLE`). Recorre cada entrada de
+  `framework.messenger.routing`, resuelve su `aggregateType()` **por reflexión** y falla si es `person` y el
+  transporte no es `sync`.
+- **Excepción explícita** con la forma `Iam.Identity => person :: docs/adr/<fichero>.md`, y el gate hace
+  `assertFileExists` sobre esa ruta — espeja `PersonResourceErasureGateTest:82–87`.
+- **Lo que impide que se autosatisfaga (SI-23):** el **check de completitud** — todo `aggregateType()` que
+  aparezca en `routing` debe estar clasificado. Enrutar un evento nuevo sin línea rompe el build; añadir la
+  línea obliga a decidir; declarar excepción obliga a que exista un ADR real.
+- **Sí, target `php.lint.*` propio**, cableado en `php.quality` **Y** en `php.quality.dry-run`
+  (NFR11 — CI corre el *dry-run*; `make/php-quality.mk:148,166,173–174`), siguiendo la convención uno-a-uno de
+  los gates existentes para que CI diga **qué frontera** se rompió.
+- Pinna que el gate **detecta** (fixture sucio → falla) y que **no es vacuo** (escanea ≥1 entrada), como
+  `EventDispatchGateTest::testFixtureExposesMatcher` / `testGateScansAtLeastOneApplicationFile`.
+
+**AC3b — El envío queda pinnado como POST-commit, no solo como «se envía».**
+**Given** el flujo de restablecimiento,
+**When** corre la suite unitaria,
+**Then** existe `CompletePasswordResetTest` (**hoy no existe** — hueco medido) que pinna **el orden**, porque
+«se envía» pasa igual si el envío está dentro de la transacción:
+① un doble de `TransactionManager` que exponga `committed`, y el spy del mailer **registra su valor al ser
+llamado** → aserción `true` (esto es lo que mata ①a); ② un mailer que **lanza** → el reset queda commiteado
+igual (token consumido, credencial cambiada, sin excepción), que es lo que pinna el best-effort.
+
+**AC3c — La cola `failed` deja de ser retención indefinida (④).**
+**Given** mensajes muertos que superan la antigüedad configurada,
+**When** corre el schedule de mantenimiento,
+**Then** se podan **sin intervención humana**, mediante un tercer `RecurringMessage` en
+`HandledDomainEventMaintenanceSchedule`, espejando `PruneHandledDomainEventsHandler`. El handler **no enumera
+sujetos ni conoce personas**: es retención de cola por antigüedad. La alarma horaria de backlog existente sigue
+funcionando.
 
 **AC4 — El comentario de routing enuncia la regla sobre el código ACTUAL.**
 **Given** el comentario de `messenger.yaml:25–27`, que hoy autoriza la cola con un razonamiento correcto para
@@ -171,18 +268,26 @@ de alcance (bloqueada por la pregunta abierta de *ownership de referencias nacid
 
 ## Tasks / Subtasks
 
-- [ ] **Tarea 1 — Registrar la decisión de mecanismo (AC1; PRECONDICIÓN, bloquea todo lo demás)**
-  - [ ] Leer los hechos (A) y (B) del `Estado medido` antes de elegir.
-  - [ ] Elegir entre ①a / ①b / ② / ③ y escribir: opción · argumento · alternativa descartada · dónde queda.
-  - [ ] Confirmar o refutar **por escrito** la recomendación ① de la épica. Si se refuta, decir contra qué hecho.
-- [ ] **Tarea 2 — Cerrar la fuga (AC1)**
-  - [ ] Aplicar el mecanismo elegido en `api/config/packages/messenger.yaml`.
-  - [ ] Si es ①b: mover el envío a post-commit best-effort en `CompletePasswordReset`, espejando
-        `RequestPasswordReset:95–101`; retirar `SendEmailOnPasswordResetCompleted` y su claim de deduplicación,
-        y borrar su test (`api/tests/Unit/Iam/Identity/Infrastructure/Messenger/SendEmailOnPasswordResetCompletedTest.php`).
+- [x] **Tarea 1 — Registrar la decisión de mecanismo (PRECONDICIÓN).** HECHA: ver *Decisión registrada*.
+      Reprodúcela en el cuerpo del PR; no la re-abras.
+- [ ] **Tarea 2 — Cerrar la fuga con ①b (AC1)**
+  - [ ] Borrar la línea 28 de `api/config/packages/messenger.yaml` (**desenrutar**, no enrutar a `sync://`:
+        `sync://` re-despacha por el mismo bus y repite la pila de middleware, incluido un `INSERT` extra a
+        `event_store` dentro de la transacción con el lock tomado — absorbido por `ON CONFLICT`, pero no gratis).
+  - [ ] Mover el envío a **post-commit best-effort** en `CompletePasswordReset`, espejando
+        `RequestPasswordReset:95–101`: swallow + log, para que un mailer caído no convierta un reset commiteado
+        en un 500.
+  - [ ] Retirar `SendEmailOnPasswordResetCompleted`, su `DomainEventHandlerDeduplicator` para este envío y su
+        test (`api/tests/Unit/Iam/Identity/Infrastructure/Messenger/SendEmailOnPasswordResetCompletedTest.php`).
   - [ ] Verificar que el evento **se sigue publicando y almacenando** — `password_reset.feature:127` afirma
         `there should be 1 event stored named "erpify.iam.identity.password-reset-completed"` y **no puede
         romperse**: el evento no desaparece, deja de viajar por un transporte persistido.
+  - [ ] `sync: 'sync://'` (`messenger.yaml:15`) queda como **config muerta** — ninguna ruta apunta ahí. Decide
+        si se retira (boy-scout) o se conserva, y dilo.
+- [ ] **Tarea 2b — Poda programada de `failed` (AC3c, ④)**
+  - [ ] Tercer `RecurringMessage` en `HandledDomainEventMaintenanceSchedule` + handler espejando
+        `PruneHandledDomainEventsHandler`, con su test.
+  - [ ] Describirlo en el PR como **retención de cola**, nunca como «borrado GDPR» — no enumera sujetos.
 - [ ] **Tarea 3 — El control que enuncia la regla (AC3)**
   - [ ] Test bajo `api/tests/Unit/Shared/Architecture/`, sobre `config/packages/messenger.yaml`, con la regla en
         el mensaje de fallo y la preámbulo en constante de clase.
@@ -202,10 +307,50 @@ de alcance (bloqueada por la pregunta abierta de *ownership de referencias nacid
         notificando (AC2) y no deja evento en la cola persistida (AC1).
   - [ ] Ojo con `api/features/backoffice/users/erase.feature`: **no** añadas ahí una aserción de
         `messenger_messages` — por (C) no existe en test.
-- [ ] **Tarea 6 — Declarar los límites y el hallazgo nuevo (AC5)**
+- [ ] **Tarea 6 — Declarar los límites y colocar los hallazgos (AC5)**
   - [ ] Dejar constancia de que FR9/G-4b sigue fuera de alcance y por qué.
-  - [ ] **Abrir issue** por el hecho (B): el `event_store` conserva ids de persona a perpetuidad y ninguna cadena
-        de borrado lo toca; ningún ADR declara ese eje borrable. **No lo arregles en este PR.**
+  - [ ] **Hallazgo (B) — `event_store` retiene ids de persona.** **NO se arregla en este PR** y **no se abre
+        issue** (decisión de Sergio: el contador de issues ya está saturado). Se añade como **historia nueva a
+        `_bmad-output/planning-artifacts/epics-gdpr-hardening.md`**, que ya tiene espina, DAG y definición de
+        hecho. Razón de que no quepa aquí: `aggregate_id` es `UUID NOT NULL`, **clave de stream e índice**
+        (`event_store_stream_version_uniq`, `event_store_aggregate_idx`), así que el crypto-shredding que el repo
+        usa en `audit_log` **no aplica a una columna clave**, y D4 veta la tabla de correspondencia. La única vía
+        viable —que el `aggregate_id` **nazca** como sustituto derivado por sujeto y la erasure destruya el
+        secreto de derivación— toca todos los eventos, el replay de proyecciones y los checkpoints: es
+        **estrategia de persistencia**, decisión del usuario y material de ADR, no una tarea.
+        *Inventario medido para esa historia:* como `aggregate_id` — `PasswordResetCompleted`, `UserSuspended`,
+        `UserDeactivated`, `UserRolesChanged`, `UserLocked` (`User.php:176,191,206,224,264`) y
+        `PasswordResetRequested` (grabado sobre el agregado del token pero construido con el id del **usuario**,
+        `PasswordResetToken.php:70`); en el **payload** — `SessionStarted` (`['userId' => …]`) y los seis
+        `Invitation*` (`invitedUserId`). Ninguno está enrutado, así que ninguno pasa por la cola: **viven solo
+        en `event_store`, para siempre.** Dato que refuerza la premisa: **aquí no hay Event Sourcing** — ningún
+        agregado se rehidrata de eventos (`User` es entidad Doctrine); `event_store` es log de negocio + fuente
+        de proyecciones. Sin replay de agregados no hay coartada para conservar el UUID real, pero **sí** hay
+        replay de proyecciones, así que el id no se puede anular sin más.
+- [ ] **Tarea 6b — UNIQUE de stream inoperante (se intenta EN ESTE PR, con chequeo previo)**
+  - [ ] **Medido:** `event_store_stream_version_uniq` es `UNIQUE (tenant_id, aggregate_id, aggregate_version)` y
+        `DbalEventStore:73` escribe `tenant_id` **siempre `NULL`**. PostgreSQL usa `NULLS DISTINCT` por defecto,
+        así que dos filas `(NULL, x, 1)` **no colisionan**: el control de concurrencia optimista que
+        `DbalEventStore:26–27` afirma **no existe hoy**, y su `catch (UniqueConstraintViolationException)` es
+        inalcanzable.
+  - [ ] **Antes de tocar nada**, contar duplicados existentes: si hay filas `(NULL, aggregate_id,
+        aggregate_version)` repetidas, la recreación del índice **falla** y esto sale de este PR.
+  - [ ] Si está limpio: migración que recrea el índice con `NULLS NOT DISTINCT` (PostgreSQL 18 lo soporta),
+        `down()` reversible, más un test que fije el comportamiento nuevo.
+  - [ ] **Declarar el cambio de comportamiento en el PR:** appends concurrentes al mismo agregado que hoy pasan
+        en silencio empezarán a dar `EventStreamConcurrencyConflict`. Es el comportamiento que el docblock ya
+        promete, pero es un cambio real y puede destapar carreras latentes.
+- [ ] **Tarea 6c — Runbook de despliegue (las filas de HOY no las arregla el código)**
+  - [ ] `①b` cierra la fuga **futura**; las filas ya escritas siguen ahí. Orden decidido, **sin downtime y sin
+        perder notificaciones**: desplegar → dejar que los workers **drenen `async` solos** (cuenta a 0; esos
+        usuarios sí reciben su correo) → purgar solo lo que quede en `failed`. *No hace falta parar workers:*
+        tras el deploy no se escribe ni una fila más de este tipo.
+  - [ ] **La purga se hace por tipo de mensaje, no enumerando sujetos borrados** — se retira la clase entera y
+        nadie toca un UUID. **Cuidado con el patrón:** el `body` es `addslashes(serialize($envelope))` y
+        `addslashes` **duplica cada backslash**, así que un `LIKE '%Domain\Event\PasswordResetCompleted%'` **no
+        casa**. Usa el nombre corto de clase, sin backslashes: `LIKE '%PasswordResetCompleted%'`. Un
+        `SELECT count(*)` con el mismo `WHERE` **antes** es el inventario.
+  - [ ] Decir explícitamente que el runbook **no toca `event_store`** (ver Tarea 6).
 - [ ] **Tarea 7 — Gates y pase adversarial (AC6 + definición de hecho de la épica)**
   - [ ] `make php.quality`, `make php.unit`, `make php.behat` — frescos, con exit code.
   - [ ] Recorrer la checklist de seguridad de `CLAUDE.md` sobre el diff (ver *Seguridad* abajo).

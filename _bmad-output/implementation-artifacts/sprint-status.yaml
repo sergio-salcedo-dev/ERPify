@@ -162,6 +162,14 @@ development_status:
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   g-3a-segundo-testigo-del-registro: backlog
   g-3b-schedule-observable-alertado-del-reconciliador: backlog
+  # G-5 (FR10) NO estaba en el corte original: se descubrió midiendo al contextualizar G-4a. El `event_store`
+  # conserva el id real del sujeto a perpetuidad (aggregate_id de 6 eventos + payload de SessionStarted y los
+  # seis Invitation*), ningún routing lo cambia y la cadena de erasure no toca la tabla — luego G-4a persigue la
+  # fuga MENOR. No se abrió issue (decisión de Sergio, 2026-07-30: el contador ya está saturado); vive aquí y en
+  # epics-gdpr-hardening.md. Bloqueada por una decisión de ESTRATEGIA DE PERSISTENCIA que es del usuario y va a
+  # ADR: crypto-shredding no aplica a una columna clave e indexada, y D4 veta la tabla de correspondencia.
+  # Mientras G-5 no cierre, la épica NO puede declararse completada.
+  g-5-ids-de-persona-fuera-del-event-store: backlog
   epic-gdpr-hardening-retrospective: optional
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
