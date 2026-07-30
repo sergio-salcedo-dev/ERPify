@@ -21,6 +21,12 @@ use Symfony\Component\Mime\Email;
  * The body is static and PII-free by design — no IP, timestamp or device: interpolating request context here
  * would drag it into the triggering domain event and its durable `event_store` row. "Wasn't you?" is answered
  * by the monitored security mailbox in the copy instead.
+ *
+ * It states the credential change and nothing else, because nothing else is certain at the moment of sending.
+ * Not that open sessions were closed: the eager teardown is best-effort and swallows its failures, so the
+ * app's own session rows can stay `ACTIVE` while the mail says otherwise. And not that the old password
+ * stopped working: no constraint requires the new credential to differ from the old one, so a reset to the
+ * same password would make that sentence false in the very run it is sent.
  */
 #[AsAlias(PasswordChangedEmailSender::class)]
 final readonly class SymfonyPasswordChangedEmailSender implements PasswordChangedEmailSender
@@ -54,7 +60,6 @@ final readonly class SymfonyPasswordChangedEmailSender implements PasswordChange
     {
         return \implode("\n", [
             'Your ERPify password has changed.',
-            'Your previous password no longer works.',
             '',
             'If this was not you, contact ' . $from . ' immediately.',
         ]);
@@ -67,9 +72,6 @@ final readonly class SymfonyPasswordChangedEmailSender implements PasswordChange
         return $this->chrome->render(<<<HTML
             <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">
               Your <strong>ERPify</strong> password has changed.
-            </p>
-            <p style="font-size:16px;line-height:1.5;margin:0 0 24px;">
-              Your previous password no longer works.
             </p>
             <p style="font-size:13px;line-height:1.5;color:#6b7280;margin:0;">
               If this was not you, contact {$safeFrom} immediately.

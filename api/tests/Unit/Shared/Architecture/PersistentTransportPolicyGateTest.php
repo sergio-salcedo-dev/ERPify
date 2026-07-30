@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
-use Erpify\Shared\Event\Domain\DomainEvent;
+use Erpify\Tests\Support\MessengerRoutingConfig;
 use Erpify\Tests\Support\PersistentTransportPolicy;
-use Erpify\Tests\Unit\Shared\Architecture\Fixture\AsMessageRoutedFixtureEvent;
 use Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonAggregateFixtureEvent;
-use Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonScopedFixtureEvent;
 use PHPUnit\Framework\Attributes\CoversNothing;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -54,6 +51,37 @@ final class PersistentTransportPolicyGateTest extends TestCase
         . 'api/.persistent-transport-policy.';
 
     #[Test]
+    public function theGateAcceptsTheSanctionedNonPersistedTransport(): void
+    {
+        $this->assertSame(
+            [],
+            $this->policy()->violations(
+                ['*' => [MessengerRoutingConfig::NON_PERSISTED_TRANSPORT]],
+                $this->fixtureEvents(),
+            ),
+            'The gate flagged the one transport that never persists a body — false positive.',
+        );
+    }
+
+    #[Test]
+    public function theGateIgnoresNonPersonAggregates(): void
+    {
+        // Otherwise "everything fails" would masquerade as "the rule is enforced".
+        $this->assertSame(
+            [],
+            $this->policy()->violations(['*' => ['async']], ['Erpify\Fixture\Absent' => 'Backoffice.Bank']),
+        );
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function fixtureEvents(): array
+    {
+        return [PersonAggregateFixtureEvent::class => PersonAggregateFixtureEvent::AGGREGATE_TYPE];
+    }
+
+    #[Test]
     public function everyAggregateTypeInSourceIsClassified(): void
     {
         $policy = $this->policy();
@@ -74,7 +102,7 @@ final class PersistentTransportPolicyGateTest extends TestCase
     public function noPersonAggregateReachesAPersistedTransport(): void
     {
         $policy = $this->policy();
-        $violations = $policy->violations($policy->configuredRoutes(), $policy->eventsInSource());
+        $violations = $policy->violations($policy->config()->configuredRoutes(), $policy->eventsInSource());
 
         if ([] === $violations) {
             $this->addToAssertionCount(1);
@@ -102,9 +130,13 @@ final class PersistentTransportPolicyGateTest extends TestCase
         }
 
         foreach ($exceptions as $aggregateType => $adr) {
-            $this->assertFileExists(\dirname($policy->apiRoot()) . '/' . $adr, \sprintf(
-                'The ADR declared for the queued person aggregate "%s" does not exist: %s. An exception '
-                . 'without a recorded decision is just the defect with a comment on it.',
+            // assertFileExists() is file_exists(), which is true for a DIRECTORY — so `person :: docs`
+            // would silence the policy check with no ADR written at all.
+            $absolute = \dirname($policy->apiRoot()) . '/' . $adr;
+
+            $this->assertTrue(\is_file($absolute) && \str_ends_with($adr, '.md'), \sprintf(
+                'The ADR declared for the queued person aggregate "%s" is not an existing Markdown file: %s. '
+                . 'An exception without a recorded decision is just the defect with a comment on it.',
                 $aggregateType,
                 $adr,
             ));
@@ -134,87 +166,16 @@ final class PersistentTransportPolicyGateTest extends TestCase
         $policy = $this->policy();
 
         $this->assertNotEmpty($policy->eventsInSource(), 'The gate discovered zero domain events.');
-        $this->assertNotEmpty($policy->configuredRoutes(), 'The gate read zero routing entries.');
-        $this->assertContains(
-            PersistentTransportPolicy::PERSON_NO_EXCEPTION,
-            $policy->classification(),
-            'The registry classifies no aggregate as an unexcepted person, so the policy check cannot fire.',
+        $this->assertNotEmpty($policy->config()->configuredRoutes(), 'The gate read zero routing entries.');
+        // Guards vacuity WITHOUT deadlocking against theRegistryDeclaresNoAggregateTypeThatNothingEmits:
+        // asserting specifically on an UNEXCEPTED person would make the two mutually unsatisfiable the day
+        // the only person type earns an ADR exception — one test would demand the line go, the other stay.
+        $persons = \array_filter($policy->classification(), static fn (?string $adr): bool => null !== $adr);
+
+        $this->assertNotEmpty(
+            $persons,
+            'The registry classifies no aggregate as a person, so the policy check can never fire.',
         );
-    }
-
-    /**
-     * @param array<string, list<string>> $routes
-     */
-    #[DataProvider('provideTheGateCatchesEveryRoutingShapeMessengerResolvesCases')]
-    #[Test]
-    public function theGateCatchesEveryRoutingShapeMessengerResolves(array $routes): void
-    {
-        $this->assertNotSame(
-            [],
-            $this->policy()->violations($routes, $this->fixtureEvents()),
-            'The gate missed a routing shape Messenger resolves, so the leak can return with the build green.',
-        );
-    }
-
-    /**
-     * The routing shapes `SendersLocator` resolves. All but the first are not a concrete event class, so a
-     * gate reading routing keys as class names would step straight over them — and its completeness check
-     * could not classify them either, leaving the build green while the leak returned.
-     *
-     * @return iterable<string, array{array<string, list<string>>}>
-     */
-    public static function provideTheGateCatchesEveryRoutingShapeMessengerResolvesCases(): iterable
-    {
-        yield 'exact class' => [[PersonAggregateFixtureEvent::class => ['async']]];
-        yield 'parent class' => [[DomainEvent::class => ['async']]];
-        yield 'implemented interface' => [[PersonScopedFixtureEvent::class => ['async']]];
-        yield 'namespace wildcard' => [['Erpify\Tests\Unit\Shared\Architecture\Fixture\*' => ['async']]];
-        yield 'bare catch-all' => [['*' => ['async']]];
-    }
-
-    #[Test]
-    public function theGateReadsTheAsMessageAttributeThatNeedsNoRoutingEntry(): void
-    {
-        // The one shape invisible to the config: with routing empty, the attribute alone still puts the
-        // message on `async`. Asserted on the extraction, since folding it into an entry keyed by the class
-        // is what makes the policy check see it at all.
-        $policy = $this->policy();
-        $events = [AsMessageRoutedFixtureEvent::class => AsMessageRoutedFixtureEvent::aggregateType()];
-        $routes = $policy->attributeRoutes($events);
-
-        $this->assertSame([AsMessageRoutedFixtureEvent::class => ['async']], $routes);
-        $this->assertNotSame([], $policy->violations($routes, $events));
-    }
-
-    #[Test]
-    public function theGateAcceptsTheSanctionedNonPersistedTransport(): void
-    {
-        $this->assertSame(
-            [],
-            $this->policy()->violations(
-                ['*' => [PersistentTransportPolicy::NON_PERSISTED_TRANSPORT]],
-                $this->fixtureEvents(),
-            ),
-            'The gate flagged the one transport that never persists a body — false positive.',
-        );
-    }
-
-    #[Test]
-    public function theGateIgnoresNonPersonAggregates(): void
-    {
-        // Otherwise "everything fails" would masquerade as "the rule is enforced".
-        $this->assertSame(
-            [],
-            $this->policy()->violations(['*' => ['async']], ['Erpify\Fixture\Absent' => 'Backoffice.Bank']),
-        );
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function fixtureEvents(): array
-    {
-        return [PersonAggregateFixtureEvent::class => PersonAggregateFixtureEvent::AGGREGATE_TYPE];
     }
 
     private function policy(): PersistentTransportPolicy

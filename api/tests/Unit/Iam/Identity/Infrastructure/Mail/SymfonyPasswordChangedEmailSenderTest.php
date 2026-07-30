@@ -42,8 +42,6 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
         $this->assertIsString($html);
         $this->assertStringContainsString('Your ERPify password has changed.', $text);
         $this->assertStringContainsString('contact ' . self::FROM . ' immediately', $text);
-        $this->assertStringContainsString('Your previous password no longer works.', $text);
-        $this->assertStringContainsString('Your previous password no longer works.', $html);
         // A notification, not an action email: no CTA, no link, no token. (The shared chrome's <style>
         // block still names .erpify-btn; the invariant is that no anchor/button ELEMENT is rendered.)
         $this->assertStringNotContainsString('href', $html);
@@ -52,10 +50,12 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
 
     public function testTheBodyClaimsOnlyWhatTheCredentialChangeItselfGuarantees(): void
     {
-        // The eager session teardown is best-effort and swallows its failures, so a copy that promises every
-        // session was signed out states an outcome the system does not guarantee — and, with the send ordered
-        // after the revoke, would state it in the very run where the revoke silently failed. Replacing the
-        // credential is what is certain, so that is all the mail is allowed to say.
+        // Two claims this mail is NOT allowed to make, each false in a reachable run:
+        //   - that every open session was signed out. The eager teardown is best-effort and swallows its
+        //     failures, so the app's own session rows can stay ACTIVE while the mail says otherwise — and
+        //     with the send ordered after the revoke, it would say so in the very run that failed.
+        //   - that the previous password no longer works. Nothing requires the new credential to differ from
+        //     the old one, so a reset to the same password falsifies it at the moment of sending.
         $email = $this->send();
         $text = $email->getTextBody();
         $html = $email->getHtmlBody();
@@ -63,9 +63,17 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
         $this->assertIsString($text);
         $this->assertIsString($html);
 
-        foreach (['signed out', 'signed you out', 'all your open sessions'] as $unguaranteed) {
-            $this->assertStringNotContainsString($unguaranteed, $text);
-            $this->assertStringNotContainsString($unguaranteed, $html);
+        $unguaranteed = [
+            'signed out',
+            'signed you out',
+            'all your open sessions',
+            'previous password',
+            'no longer works',
+        ];
+
+        foreach ($unguaranteed as $claim) {
+            $this->assertStringNotContainsString($claim, $text);
+            $this->assertStringNotContainsString($claim, $html);
         }
     }
 

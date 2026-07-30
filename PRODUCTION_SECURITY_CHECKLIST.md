@@ -315,7 +315,8 @@ you change anything here.
       Security emails come from `MAILER_SECURITY_FROM` (monitored, replyable — a blank/no-reply value **fails
       loudly** outside dev/test) and refuse to emit a non-HTTPS link outside dev/test; token-bearing emails stay
       **synchronous best-effort** (never routed through a Messenger transport, which would serialise the raw
-      token); only the token-free password-changed notification rides the async reactor. Retention: expired
+      token); the token-free password-changed notification is sent the same way, by `CompletePasswordReset` through
+      `SendPasswordChangedEmailBestEffort`, post-commit and after the session revocation. Retention: expired
       reset tokens are swept by `identity:password-reset-tokens:prune` (schedule it in prod cron). **GDPR
       identity erasure** runs through `FulfilIdentityErasure` (chained + atomic): it hard-deletes the identity
       plus its reset tokens (`GDPR_SUBJECT_ERASED`), anonymises every audit row the subject authored, hard-deletes
@@ -432,8 +433,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       `userId`, `Iam.Invitation`'s `invitedUserId`) is out of its reach — and it says nothing about
       `event_store`, which keeps the real `aggregate_id` forever regardless of routing (below).
 - [ ] **`event_store` retains a person's real id past their own erasure.** Every dispatched event is
-      appended with its real `aggregate_id` — `PasswordResetCompleted`, `UserSuspended`, `UserDeactivated`,
-      `UserRolesChanged`, `UserLocked`, `PasswordResetRequested` — and no erasure path touches the table.
+      appended with its real `aggregate_id`, and no erasure path touches the table. As the `aggregate_id`:
+      `PasswordResetCompleted`, `UserSuspended`, `UserDeactivated`, `UserRolesChanged`, `UserLocked`,
+      `PasswordResetRequested`, plus `AllSessionsRevoked` and `OtherSessionsRevoked` — those last two are
+      coarse facts about the USER, so their `aggregate_id` is the `userId` and their payload is empty, the
+      same shape as the leak this entry closes. In the payload: `SessionStarted` and `SessionRevoked`
+      (`userId`) and the six `Invitation*` (`invitedUserId`).
       It is not reachable by the crypto-shredding used in `audit_log`: `aggregate_id` is `UUID NOT NULL`, a
       stream key and an index (`event_store_stream_version_uniq`, `event_store_aggregate_idx`), and a
       lookup table is barred by [`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4. The

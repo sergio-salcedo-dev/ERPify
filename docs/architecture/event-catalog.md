@@ -42,11 +42,15 @@ Two invariants hold everywhere:
 
 ## Domain events
 
-The `event_store` axis. Two aggregates emit today — **Backoffice / Bank** and
-**Backoffice / BankAccount** — each event recorded inside its own aggregate and published by its use
-case through the `EventBus` port inside the write transaction (atomic with the aggregate row — no
-dual-write). All route to the **`async`** transport (Doctrine outbox → `messenger_worker`,
-at-least-once).
+The `event_store` axis. Five aggregate types emit today — **Backoffice.Bank**, **Backoffice.BankAccount**,
+**Iam.Identity**, **Iam.Invitation** and **Iam.Session** — each event recorded inside its own aggregate and
+published by its use case through the `EventBus` port inside the write transaction (atomic with the aggregate
+row — no dual-write).
+
+**Routing is per event, and most events are not routed.** Only the seven `Backoffice.*` events go to the
+**`async`** transport (Doctrine outbox → `messenger_worker`, at-least-once). The rest are unrouted, which
+means `SendMessageMiddleware` hands them straight to their handlers *in the caller*, inside the write
+transaction. Whether an event may be routed at all is governed by the persisted-transport rule below.
 
 ### Backoffice.Bank (`aggregateType: Backoffice.Bank`)
 
@@ -70,8 +74,11 @@ wire-on-consumer default awaiting its first consumer:
 > path touches, so a queued id outlives the erasure the application confirmed to the subject.
 
 Declared in [`api/.persistent-transport-policy`](../../api/.persistent-transport-policy) and enforced by
-`make php.lint.persistent-transport`, which resolves each routing key to the events Messenger would actually
-send through it — parents, interfaces, namespace wildcards, `'*'` and `#[AsMessage]` included.
+`make php.lint.persistent-transport`, which resolves each event to the transports Messenger would
+actually send it through — walking class parents, interfaces, namespace wildcards, the bare `'*'` and
+`#[AsMessage]` (including the attribute inherited from a parent or an interface, and every repetition of it).
+Its blind spots are enumerated in the registry header; the load-bearing ones are `TransportNamesStamp`, plain
+non-`DomainEvent` messages, and the payload (as opposed to the aggregate id).
 
 The one consumed event today:
 
@@ -269,7 +276,7 @@ What a `DomainEvent` becomes in the `event_store` (raw DBAL; full rationale in
 | `event_id` | UUID v7, `UNIQUE` — stable identity (idempotent re-append). |
 | `aggregate_id` | the subject's id (envelope). |
 | `aggregate_type` | e.g. `Backoffice.Bank`. |
-| `aggregate_version` | per-stream `MAX+1`; `UNIQUE` = optimistic concurrency. |
+| `aggregate_version` | per-stream `MAX+1`. The stream `UNIQUE` is **inert today** — it spans `tenant_id`, which is always written `NULL`, and PostgreSQL defaults to `NULLS DISTINCT`, so it never fires and the optimistic concurrency control it is meant to provide does not exist. Tracked in `deferred-work.md`. |
 | `event_name`, `event_version` | the canonical key. |
 | `payload` | JSONB — `toPrimitives()` (domain state only). |
 | `metadata` | JSONB `{}` — reserved (`correlation_id`/`causation_id`/actor). |
@@ -277,8 +284,9 @@ What a `DomainEvent` becomes in the `event_store` (raw DBAL; full rationale in
 | `occurred_on` | TIMESTAMPTZ — **domain** time (envelope). |
 | `recorded_on` | TIMESTAMPTZ — **system** time (when persisted). |
 
-The same event is also enqueued on the Doctrine transport in that one transaction — permanent log +
-ephemeral delivery, atomic ([ADR D8](../adr/event-store-and-projections.md)).
+When the event is **routed**, it is also enqueued on the Doctrine transport in that same transaction —
+permanent log + ephemeral delivery, atomic ([ADR D8](../adr/event-store-and-projections.md)). Most events are
+not routed (see *Domain events* above), and for those the `event_store` row is the only durable write.
 
 ## Versioning & evolution
 

@@ -5,27 +5,21 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Architecture\Fixture;
 
 use DateTimeImmutable;
-use Erpify\Shared\Event\Domain\DomainEvent;
 use Override;
-use Symfony\Component\Messenger\Attribute\AsMessage;
 
 /**
- * A person-aggregate event routed by attribute alone. `SendersLocator::send()` falls back to
- * `#[AsMessage(transport:)]` when no routing entry matched, so this shape reaches a persisted transport with
- * `framework.messenger.routing` completely empty — the one evasion vector that leaves no trace in the config
- * the gate reads. No event in `src` carries the attribute today, which is why proving the scan works needs a
- * fixture rather than a real class.
+ * A person-aggregate event carrying no attribute of its own: its routing comes entirely from an abstract
+ * parent and an interface, through a subclass of `AsMessage`. Symfony sends it to both transports; a gate
+ * reflecting only the concrete class with a plain `AsMessage` filter sees none of it.
  *
  * @internal
  */
-#[AsMessage(transport: 'async')]
-#[AsMessage(transport: 'sync')]
-final class AsMessageRoutedFixtureEvent extends DomainEvent
+final class AsMessageInheritedFixtureEvent extends AbstractAsMessageCarrier implements AsMessageCarrierContract
 {
     #[Override]
     public static function eventName(): string
     {
-        return 'erpify.tests.fixture.as-message-routed';
+        return 'erpify.tests.fixture.as-message-inherited';
     }
 
     #[Override]

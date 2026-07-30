@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Erpify\Tests\Support;
 
 use Erpify\Shared\Event\Domain\DomainEvent;
+use ReflectionAttribute;
 use ReflectionClass;
 use RuntimeException;
 use Symfony\Component\Messenger\Attribute\AsMessage;
-use Symfony\Component\Yaml\Yaml;
 
 /**
  * Resolution engine behind the persistent-transport gate: it reads the declared classification of every
@@ -23,9 +23,6 @@ use Symfony\Component\Yaml\Yaml;
  */
 final readonly class PersistentTransportPolicy
 {
-    /** The only transport that never persists a message body, in every environment. */
-    public const string NON_PERSISTED_TRANSPORT = 'sync';
-
     /**
      * A classification is three-state and the distinction is load-bearing: `null` is non-person (never a
      * violation), this constant is a person with no sanctioned exception (a violation once routed), and any
@@ -35,8 +32,16 @@ final readonly class PersistentTransportPolicy
 
     private const string NON_PERSON = 'non-person';
 
+    private MessengerRoutingConfig $config;
+
     public function __construct(private string $apiRoot)
     {
+        $this->config = new MessengerRoutingConfig($apiRoot);
+    }
+
+    public function config(): MessengerRoutingConfig
+    {
+        return $this->config;
     }
 
     public static function fromGateLocation(string $gateDirectory): self
@@ -119,47 +124,64 @@ final readonly class PersistentTransportPolicy
     }
 
     /**
-     * Every `framework.messenger.routing` map in the config, plus each `#[AsMessage(transport:)]` folded in
-     * as an entry keyed by its own class — which is how `SendersLocator` treats it when no map entry matched.
-     * `when@*` blocks are included: their transports are in-memory today, but a gate that modelled that could
-     * only ever be weaker.
+     * `#[AsMessage(transport:)]` as Symfony reads it: over the class, its parents and its interfaces, matching
+     * subclasses of the attribute, and MERGING every occurrence because the attribute is repeatable. PHP does
+     * not inherit attributes, so reflecting only the concrete class — the obvious implementation — misses an
+     * attribute on an abstract carrier or a marker interface, which is the idiomatic way to route a whole
+     * aggregate at once.
      *
-     * @return array<string, list<string>>
+     * @return list<string>
      */
-    public function configuredRoutes(): array
+    public function attributeTransportsFor(string $fqcn): array
     {
-        $config = Yaml::parseFile($this->apiRoot . '/config/packages/messenger.yaml');
-        $routes = [];
+        if (!\class_exists($fqcn)) {
+            return [];
+        }
 
-        foreach (\is_array($config) ? $config : [] as $section) {
-            foreach ($this->routingMapIn($section) as $key => $transports) {
-                $routes[(string) $key] = $this->transportList($transports);
+        $transports = [];
+
+        foreach ($this->selfParentsAndInterfaces($fqcn) as $class) {
+            $reflection = new ReflectionClass($class);
+            $attributes = $reflection->getAttributes(AsMessage::class, ReflectionAttribute::IS_INSTANCEOF);
+
+            foreach ($attributes as $attribute) {
+                $transports = [...$transports, ...$this->config->transportList($attribute->newInstance()->transport)];
             }
         }
 
-        return [...$routes, ...$this->attributeRoutes($this->eventsInSource())];
+        return \array_values(\array_unique($transports));
     }
 
     /**
-     * @param array<class-string<DomainEvent>, string> $events
+     * The transports one event is actually sent through, ported from `SendersLocator::send()`: walk the type
+     * list, skip wildcard entries once a concrete type has already matched (they are fallbacks, not extra
+     * senders), and fall back to the attribute only when the map matched nothing at all.
      *
-     * @return array<string, list<string>>
+     * Resolving per EVENT rather than per routing key is what makes the answer faithful. Keyed the other way,
+     * `{'*': async, SomeEvent: sync}` reads as a violation even though Symfony sends that event to `sync`
+     * alone — a red build on correct config, which is how a gate teaches people to route around it.
+     *
+     * @param array<string, list<string>> $routes
+     *
+     * @return list<string>
      */
-    public function attributeRoutes(array $events): array
+    public function sendersFor(string $fqcn, array $routes): array
     {
-        $routes = [];
+        $seen = [];
 
-        foreach (\array_keys($events) as $fqcn) {
-            foreach ((new ReflectionClass($fqcn))->getAttributes(AsMessage::class) as $attribute) {
-                $transports = $this->transportList($attribute->newInstance()->transport);
+        foreach ($this->listTypes($fqcn) as $type) {
+            if (\str_ends_with($type, '*') && [] !== $seen) {
+                continue;
+            }
 
-                if ([] !== $transports) {
-                    $routes[$fqcn] = $transports;
+            foreach ($routes[$type] ?? [] as $sender) {
+                if (!\in_array($sender, $seen, true)) {
+                    $seen[] = $sender;
                 }
             }
         }
 
-        return $routes;
+        return [] === $seen ? $this->attributeTransportsFor($fqcn) : $seen;
     }
 
     /**
@@ -173,66 +195,81 @@ final readonly class PersistentTransportPolicy
         $classification = $this->classification();
         $violations = [];
 
-        foreach ($routes as $key => $transports) {
+        foreach ($events as $fqcn => $aggregateType) {
+            // Non-person and ADR-excepted are allowed; unclassified is the completeness check's job.
+            if (($classification[$aggregateType] ?? null) !== self::PERSON_NO_EXCEPTION) {
+                continue;
+            }
+
             $persisted = \array_values(\array_filter(
-                $transports,
-                static fn (string $transport): bool => self::NON_PERSISTED_TRANSPORT !== $transport,
+                $this->sendersFor($fqcn, $routes),
+                static fn (string $t): bool => MessengerRoutingConfig::NON_PERSISTED_TRANSPORT !== $t,
             ));
 
             if ([] === $persisted) {
                 continue;
             }
 
-            foreach ($this->eventsReachableFrom((string) $key, $events) as $fqcn => $aggregateType) {
-                // Non-person and ADR-excepted are allowed; unclassified is the completeness check's job.
-                if (($classification[$aggregateType] ?? null) !== self::PERSON_NO_EXCEPTION) {
-                    continue;
-                }
-
-                $violations[] = \sprintf(
-                    '%s (%s) reaches transport(s) %s through routing key "%s"',
-                    $fqcn,
-                    $aggregateType,
-                    \implode(', ', $persisted),
-                    $key,
-                );
-            }
+            $violations[] = \sprintf(
+                '%s (%s) reaches persisted transport(s) %s',
+                $fqcn,
+                $aggregateType,
+                \implode(', ', $persisted),
+            );
         }
 
         return $violations;
     }
 
     /**
-     * Resolves one routing key to the events Messenger would actually send through it, mirroring
-     * `HandlersLocator::listTypes()`: the class itself, its parents, its interfaces, namespace wildcards and
-     * the bare `'*'`. None of the last four is a concrete class, which is why a gate that read routing keys
-     * as class names would step over every one of them.
+     * Ported from `HandlersLocator::listTypes()`, which `SendersLocator` walks: the class, its parents, its
+     * interfaces, the namespace wildcards, and the bare `'*'`. Four of those five are not a concrete class,
+     * which is why a gate that read routing keys as class names would step over them.
      *
-     * @param array<string, string> $events
-     *
+     * @return list<string>
+     */
+    public function listTypes(string $fqcn): array
+    {
+        if (!\class_exists($fqcn)) {
+            return [$fqcn, '*'];
+        }
+
+        $types = $this->selfParentsAndInterfaces($fqcn) + $this->listWildcards($fqcn) + ['*' => '*'];
+
+        return \array_values($types);
+    }
+
+    /**
+     * @return array<class-string, class-string>
+     */
+    private function selfParentsAndInterfaces(string $fqcn): array
+    {
+        if (!\class_exists($fqcn)) {
+            return [];
+        }
+
+        /** @var array<class-string, class-string> $types */
+        $types = [$fqcn => $fqcn]
+            + (\class_parents($fqcn) ?: [])
+            + (\class_implements($fqcn) ?: []);
+
+        return $types;
+    }
+
+    /**
      * @return array<string, string>
      */
-    public function eventsReachableFrom(string $key, array $events): array
+    private function listWildcards(string $type): array
     {
-        if ('*' === $key) {
-            return $events;
+        $type .= '\*';
+        $wildcards = [];
+
+        while ($i = \strrpos($type, '\\', -3)) {
+            $type = \substr_replace($type, '\*', $i);
+            $wildcards[$type] = $type;
         }
 
-        if (\str_ends_with($key, '\*')) {
-            $prefix = \substr($key, 0, -1);
-
-            return \array_filter(
-                $events,
-                static fn (string $fqcn): bool => \str_starts_with($fqcn, $prefix),
-                ARRAY_FILTER_USE_KEY,
-            );
-        }
-
-        return \array_filter(
-            $events,
-            static fn (string $fqcn): bool => $fqcn === $key || \is_subclass_of($fqcn, $key),
-            ARRAY_FILTER_USE_KEY,
-        );
+        return $wildcards;
     }
 
     /**
@@ -256,51 +293,5 @@ final readonly class PersistentTransportPolicy
         }
 
         return isset($person[1]) ? \trim($person[1]) : self::PERSON_NO_EXCEPTION;
-    }
-
-    /**
-     * The `messenger.routing` map inside one top-level config section, whether that section is `framework`
-     * itself or a `when@<env>` block wrapping one.
-     *
-     * @return array<array-key, mixed>
-     */
-    private function routingMapIn(mixed $section): array
-    {
-        if (!\is_array($section)) {
-            return [];
-        }
-
-        $messenger = $section['messenger'] ?? null;
-
-        if (!\is_array($messenger)) {
-            $framework = $section['framework'] ?? null;
-            $messenger = \is_array($framework) ? ($framework['messenger'] ?? null) : null;
-        }
-
-        if (!\is_array($messenger)) {
-            return [];
-        }
-
-        $routing = $messenger['routing'] ?? null;
-
-        return \is_array($routing) ? $routing : [];
-    }
-
-    /**
-     * A routing value is one transport name or a list of them.
-     *
-     * @return list<string>
-     */
-    private function transportList(mixed $transports): array
-    {
-        $list = [];
-
-        foreach (\is_array($transports) ? $transports : [$transports] as $transport) {
-            if (\is_string($transport)) {
-                $list[] = $transport;
-            }
-        }
-
-        return $list;
     }
 }

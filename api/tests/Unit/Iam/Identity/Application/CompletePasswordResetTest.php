@@ -144,9 +144,10 @@ final class CompletePasswordResetTest extends TestCase
         };
         $tokens = new InMemoryPasswordResetTokenRepository($token);
         $eventBus = new RecordingEventBus();
+        $emails = new RecordingPasswordChangedEmailSender();
 
         try {
-            $this->useCase($users, $tokens, new InMemorySessionRepository(), $eventBus)
+            $this->useCase($users, $tokens, new InMemorySessionRepository(), $eventBus, $emails)
                 ->complete(self::TOKEN_ID . '.' . $secret, $this->precomputedHash())
             ;
             $this->fail('Expected ' . AccountSuspended::class);
@@ -158,6 +159,10 @@ final class CompletePasswordResetTest extends TestCase
         $this->assertSame([], $tokens->consumed);
         $this->assertSame([], $users->saved);
         $this->assertSame([], $eventBus->publishedEvents);
+        // This rejection happens INSIDE the transaction, which is what makes it the case that catches a
+        // notification wrongly sent from a failure path: every rejection the shared helper covers throws
+        // before the transaction is even opened, so none of them would.
+        $this->assertSame([], $emails->sentTo);
     }
 
     public function testAUserGoneUnderTheLockIsRejectedAsTheUniformInvalidToken(): void
@@ -168,12 +173,18 @@ final class CompletePasswordResetTest extends TestCase
         $users->goneUnderLock = true;
 
         $tokens = new InMemoryPasswordResetTokenRepository($token);
+        $emails = new RecordingPasswordChangedEmailSender();
 
-        $this->expectException(InvalidResetToken::class);
+        try {
+            $this->useCase($users, $tokens, new InMemorySessionRepository(), new RecordingEventBus(), $emails)
+                ->complete(self::TOKEN_ID . '.' . $secret, $this->precomputedHash())
+            ;
+            $this->fail('Expected ' . InvalidResetToken::class);
+        } catch (Throwable $throwable) {
+            $this->assertInstanceOf(InvalidResetToken::class, $throwable);
+        }
 
-        $this->useCase($users, $tokens, new InMemorySessionRepository(), new RecordingEventBus())
-            ->complete(self::TOKEN_ID . '.' . $secret, $this->precomputedHash())
-        ;
+        $this->assertSame([], $emails->sentTo);
     }
 
     /**
@@ -191,10 +202,11 @@ final class CompletePasswordResetTest extends TestCase
             : new InMemoryPasswordResetTokenRepository();
         $sessions = new InMemorySessionRepository();
         $eventBus = new RecordingEventBus();
+        $emails = new RecordingPasswordChangedEmailSender();
         $kdfRuns = 0;
 
         try {
-            $this->useCase($users, $tokens, $sessions, $eventBus)
+            $this->useCase($users, $tokens, $sessions, $eventBus, $emails)
                 ->complete($token, static function () use (&$kdfRuns): HashedPassword {
                     ++$kdfRuns;
 
@@ -213,6 +225,9 @@ final class CompletePasswordResetTest extends TestCase
         $this->assertSame([], $users->saved);
         $this->assertSame([], $sessions->revokeAllCalls);
         $this->assertSame([], $eventBus->publishedEvents);
+        // A reset that did NOT happen must not mail "your password has changed": on the walled paths that
+        // would be a false security alert, and an existence oracle for an account that merely refused.
+        $this->assertSame([], $emails->sentTo);
     }
 
     private function useCase(

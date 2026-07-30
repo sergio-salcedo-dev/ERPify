@@ -433,10 +433,10 @@ de alcance (bloqueada por la pregunta abierta de *ownership de referencias nacid
         `LIKE '%Domain\Event\PasswordResetCompleted%'` **no casa**; usa el nombre corto de clase, sin
         backslashes: `LIKE '%PasswordResetCompleted%'`.
   - [ ] Decir explícitamente que ese procedimiento **no tocaría `event_store`** (ver Tarea 6).
-- [ ] **Tarea 7 — Gates y pase adversarial (AC6 + definición de hecho de la épica)**
+- [x] **Tarea 7 — Gates y pase adversarial (AC6 + definición de hecho de la épica)**
   - [x] `make php.quality`, `make php.unit`, `make php.behat` — frescos, con exit code.
   - [x] Recorrer la checklist de seguridad de `CLAUDE.md` sobre el diff (ver *Seguridad* abajo).
-  - [ ] **Pase adversarial por alguien distinto del autor, REGISTRADO**, declarando dónde quedó. Sin él la
+  - [x] **Pase adversarial por alguien distinto del autor, REGISTRADO**, declarando dónde quedó. Sin él la
         historia no llega a `done` (NFR10). Un pase que no encuentra nada cuenta — y también se declara.
 
 ## Pase adversarial — REGISTRADO (NFR10 / `CLAUDE.md` → *Security review* → **Process**)
@@ -502,7 +502,7 @@ al cliente por caminos que hoy pasan en silencio. Enumera esos caminos antes de 
 saca 6b del PR. **Y ten presente que es un cambio de concurrencia del `event_store` compartido embutido en una
 historia GDPR** — si al enumerarlos aparece más de un camino afectado, sácalo.
 
-### Sospecha no cerrada
+### Sospecha no cerrada (pase del contrato)
 
 AC1 (`0 outbox events … on queue "async"`) **también pasa si el reset falló** y no hubo evento. Escribe la
 aserción en el escenario que ya lleva `password_reset.feature:127` (que exige el evento almacenado), para que no
@@ -695,9 +695,10 @@ del **agregado**, no del payload (`Iam.Session`.`userId`, `Iam.Invitation`.`invi
 dice nada del `event_store`.
 
 **Tarea 6b — SACADA del PR por su propio criterio, con la medición que lo decide.** A-7 fijó por adelantado:
-*«enumera los caminos afectados; si aparece más de uno, sácalo»*. Enumerados los 18 publicadores de eventos de
-dominio: **solo 3 toman lock de fila sobre el agregado antes de publicar** (`AcceptInvitation`,
-`ChangeUserStatus`, `ChangeUserRoles`). Los 15 restantes no. Además el `INSERT` del `event_store` es DBAL crudo
+*«enumera los caminos afectados; si aparece más de uno, sácalo»*. Enumeradas las **20** clases que publican eventos de
+dominio: **solo 4 toman lock de fila sobre el agregado por el que publican** (`AcceptInvitation`,
+`ChangeUserStatus`, `ChangeUserRoles` y `CompletePasswordReset`). Las **16** restantes no. *(La cifra
+«15 de 18» que esta nota llevó primero era errónea; la corrigió el pase adversarial — ver I-14.)* Además el `INSERT` del `event_store` es DBAL crudo
 que corre en `publish()`, **antes** del flush del ORM, así que el `UPDATE` de la entidad no los serializa
 tampoco. Activar `NULLS NOT DISTINCT` convertiría carreras hoy silenciosas en 409 crudos en 15 caminos a la vez,
 dentro de una historia GDPR. Registrado en `deferred-work.md` con la enumeración completa y con el hallazgo más
@@ -741,10 +742,9 @@ uso del token, ya pinnado en `password_reset.feature`. Queda dicho, no implícit
 **1 commit por delante** (`009b0756`, #611, sobre `pwa/`). Por eso un `git diff main` muestra `pwa/CLAUDE.md` y
 `pwa/eslint.config.mjs` como revertidos: no son cambios de esta rama. Conviene rebasar antes de mergear.
 
-**Pendiente y BLOQUEANTE para `done` (no para `review`): el pase adversarial de la IMPLEMENTACIÓN.** El
-registrado en este artefacto cubre el **contrato y la decisión**, antes de que existiera código, y así lo
-declara su propio alcance. NFR10 exige una lectura hostil de alguien distinto del autor sobre lo que ahora
-existe: el gate nuevo, el reordenamiento de `complete()`, y el texto del correo. No se ha ejecutado.
+**Pase adversarial de la IMPLEMENTACIÓN: EJECUTADO y registrado abajo** (sección *Pase adversarial —
+IMPLEMENTACIÓN*). Encontró un defecto ALTO en el propio cambio y varias afirmaciones falsas; todo lo
+confirmado está arreglado y re-falsificado.
 
 ### File List
 
@@ -753,11 +753,19 @@ existe: el gate nuevo, el reordenamiento de `complete()`, y el texto del correo.
 - `api/.persistent-transport-policy`
 - `api/src/Iam/Identity/Application/SendPasswordChangedEmailBestEffort.php`
 - `api/tests/Support/PersistentTransportPolicy.php`
+- `api/tests/Support/MessengerRoutingConfig.php`
 - `api/tests/Unit/Shared/Architecture/PersistentTransportPolicyGateTest.php`
+- `api/tests/Unit/Shared/Architecture/PersistentTransportRoutingShapeGateTest.php`
 - `api/tests/Unit/Shared/Architecture/Fixture/PersonAggregateFixtureEvent.php`
 - `api/tests/Unit/Shared/Architecture/Fixture/PersonScopedFixtureEvent.php`
 - `api/tests/Unit/Shared/Architecture/Fixture/AsMessageRoutedFixtureEvent.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/AsMessageInheritedFixtureEvent.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/AbstractAsMessageCarrier.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/AsMessageCarrierContract.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/PersistedRoutingFixtureAttribute.php`
 - `api/tests/Unit/Iam/Identity/Application/CompletePasswordResetNotificationTest.php`
+- `api/tests/Unit/Iam/Identity/Application/SendPasswordChangedEmailBestEffortTest.php`
+- `api/tests/Unit/Iam/Identity/Application/RecordingLogger.php`
 
 **Modificados**
 
@@ -798,4 +806,154 @@ existe: el gate nuevo, el reordenamiento de `complete()`, y el texto del correo.
 | 2026-07-30 | Implementación de ①b: evento desenrutado, notificación post-commit best-effort tras la revocación, reactor y su dedup retirados. |
 | 2026-07-30 | Gate nuevo `php.lint.persistent-transport` + registro `api/.persistent-transport-policy`, cubriendo las seis formas de routing que `SendersLocator` resuelve. |
 | 2026-07-30 | Cuerpo del correo reescrito: deja de afirmar el cierre de sesiones, que es best-effort. |
-| 2026-07-30 | Tarea 6b (UNIQUE de stream) sacada del PR por el criterio de A-7 — 15 de 18 publicadores sin lock de fila; registrada en `deferred-work.md`. |
+| 2026-07-30 | Tarea 6b (UNIQUE de stream) sacada del PR por el criterio de A-7 — 16 de 20 publicadores sin lock de fila sobre su agregado; registrada en `deferred-work.md`. |
+| 2026-07-30 | Pase adversarial de la implementación: 17 hallazgos. `Iam.Session` reclasificado a `person` (dos de sus eventos llevan el id de usuario como `aggregate_id`), lector de `#[AsMessage]` alineado con Symfony, gate leyendo toda la config y uniendo entornos, resolución por evento en vez de por clave, y el correo reducido a lo que la credencial garantiza. |
+
+
+## Pase adversarial — IMPLEMENTACIÓN (NFR10). REGISTRADO
+
+**Dónde queda:** aquí, y reproducido en el cuerpo del PR. **Cuándo:** 2026-07-30, sobre el código ya escrito.
+**Quién:** tres lecturas hostiles independientes por revisores **distintos del autor**, con instrucción
+explícita de *refutar* y de re-medir contra `vendor/` y la BD, y prohibición de aceptar como cierta ninguna
+afirmación del artefacto. **Alcance declarado:** (1) el gate nuevo y su motor; (2) el reorden de
+`complete()`, la transacción y la entrega; (3) toda afirmación del diff — prosa, comentario, cuerpo del
+correo, checklist — contra el código. **No cubre:** PWA (no hay cambios), ni el despliegue.
+**Veredicto: la dirección ①b aguanta; la implementación NO aguantaba.**
+
+**Yo verifiqué cada hallazgo antes de aceptarlo, y los revisores también fallaron detalles** — uno situó una
+falsificación como "no detectada" que en realidad falló por *mi* arnés de shell (backslashes duplicados), y
+otro dio por bueno un `#[AsMessage]` como «el único vector sin rastro en config» cuando `TransportNamesStamp`
+también lo es. Trátalos como a los analistas: aciertan en lo grande, hay que medirles lo pequeño.
+
+### I-1 (ALTA) — `Iam.Session => non-person` era FALSO, y el gate habría dado luz verde a la misma fuga. **ARREGLADO.**
+
+Hallado por dos de los tres revisores por caminos distintos. `AllSessionsRevoked` y `OtherSessionsRevoked`
+tienen **`aggregateId` = `userId`** y payload vacío (`AllSessionsRevoked.php:12-14`, `RevokeAllSessions.php:35`,
+`RevokeOtherSessions.php:39`): forma **byte-idéntica** a `PasswordResetCompleted`. Mi registro los declaraba
+seguros. Enrutar `AllSessionsRevoked: async` pasaba el gate en verde metiendo un id de persona en
+`messenger_messages` — el defecto exacto que la historia cierra, por el evento hermano que **el mismo
+`complete()` publica**.
+
+La causa raíz es de modelado, no un descuido: **la clave del registro (`aggregateType`) es más gruesa que la
+propiedad que clasifica (qué denota el `aggregate_id`)**, y `Iam.Session` es mixto. Arreglado clasificándolo
+`person` (el tipo toma el veredicto de su evento más expuesto), reescribiendo la cabecera —que describía la
+exposición de Session como *de payload*, que es justo lo que la hacía invisible— y **declarando la coarseness
+como límite** en vez de dejarla implícita. Falsificado: `AllSessionsRevoked: async` ahora rompe el gate.
+
+### I-2 (ALTA) — el gate no leía `#[AsMessage]` como lo lee Symfony. **ARREGLADO.**
+
+`SendersLocator::getTransportNamesFromAttribute()` (`vendor/.../SendersLocator.php:82-89`) recorre
+`[$clase] + class_parents() + class_implements()`, filtra con `ReflectionAttribute::IS_INSTANCEOF` y **fusiona**
+con `array_merge`. Mi lector hacía las tres cosas mal: solo la clase concreta, sin `IS_INSTANCEOF`, y
+asignando (last-wins). Consecuencia medida por el revisor: `#[AsMessage('async')]` sobre un padre abstracto,
+sobre una interfaz o vía subclase del atributo enruta y el gate no ve nada; y con `#[AsMessage('async')]
+#[AsMessage('sync')]` el gate reportaba solo `sync`. Arreglado y cubierto con fixtures propios
+(`AbstractAsMessageCarrier`, `AsMessageCarrierContract`, `PersistedRoutingFixtureAttribute`,
+`AsMessageInheritedFixtureEvent`, y el atributo repetido en `AsMessageRoutedFixtureEvent`).
+
+### I-3 (ALTA) — el gate leía UN fichero de config. **ARREGLADO.**
+
+Symfony fusiona `config/packages/*.yaml`, `config/packages/<env>/*.yaml` y `config/services*.yaml`. Un
+`config/packages/prod/messenger.yaml` enrutaba de verdad y era invisible — y `config/packages/test/` ya existe
+como precedente. Ahora lee todos. La config en PHP no se parsea: se **tripwirea** (falla si un `.php` de
+config menciona Messenger) en vez de fingir que la entiende.
+
+### I-4 (ALTA) — la unión de entornos: incluir `when@*` **debilitaba** el gate. **ARREGLADO.**
+
+Mi razonamiento escrito («incluirlos solo puede hacerlo más fuerte») era **falso para mi propio código**:
+`$routes[$key] = ...` es last-wins y las secciones se leen en orden de documento, así que una entrada
+`when@test` (donde todo es in-memory) **borraba** la ruta de producción. Ahora es unión.
+
+### I-5 (MEDIA) — la forma `senders:` anidada. **ARREGLADO.** Deprecada en 8.1 y viva hasta 9.0
+(`Configuration.php:1720-1723`); mi lector se quedaba solo con strings y la tiraba en silencio.
+
+### I-6 (MEDIA) — `sync` se confiaba por NOMBRE. **ARREGLADO** con un control que lee el DSN: redefinir
+`sync: 'doctrine://…'` convertía la única escapatoria sancionada en la fuga, con todo verde.
+
+### I-7 (MEDIA) — dos aserciones del gate se volvían mutuamente insatisfacibles. **ARREGLADO.** El canario
+exigía un `person` **sin excepción**; el check de obsolescencia exige que todo tipo del registro lo emita
+algún evento. El día que `Iam.Identity` ganara un ADR de excepción —el camino que el propio diseño bendice—
+un test exigiría borrar la línea y el otro conservarla, sin build verde posible. Ahora el canario exige un
+`person` cualquiera.
+
+### I-8 (MEDIA) — `assertFileExists` acepta DIRECTORIOS. **ARREGLADO.** `person :: docs` silenciaba la
+política sin ADR alguno. Ahora exige fichero real con sufijo `.md`.
+
+### I-9 (MEDIA) — falso positivo del comodín. **ARREGLADO reestructurando.** `SendersLocator` salta los tipos
+comodín en cuanto un tipo concreto ya casó, así que `{'*': async, Evento: sync}` es correcto y mi gate lo
+marcaba en rojo. La causa era resolver **por clave de routing**; ahora resuelve **por evento**, portando
+`SendersLocator::send()` y `HandlersLocator::listTypes()`. El mismo cambio elimina la clase de falso positivo
+que enseña a la gente a rodear un gate.
+
+### I-10 (MEDIA) — nada pinnaba que un reset RECHAZADO no envía correo. **ARREGLADO.**
+
+El revisor construyó una implementación errónea que pasaba **todos** los tests del diff: enviar el correo
+desde un `catch` alrededor de la transacción. Notificaría un cambio de contraseña que no ocurrió a cada cuenta
+walled y a cada token caducado — alerta de seguridad falsa, y oráculo de existencia en los caminos walled.
+Mi primer arreglo fue **cosmético** y lo descubrí falsificando: las tres rechazos del helper compartido lanzan
+*antes* de abrir la transacción, así que la aserción no mordía. Los casos que muerden son los dos rechazos
+**dentro** de la transacción; ahí están ahora, y la implementación errónea produce 2 fallos.
+
+### I-11 (MEDIA) — `SendPasswordChangedEmailBestEffort` no tenía test propio. **ARREGLADO.** Sustituir todo el
+cuerpo del `catch` por `// ignore` pasaba la suite entera. Ahora hay tres tests: pasa-a-través, traga-y-loguea
+a WARNING con la excepción en contexto, y **no** loguea el destinatario.
+
+### I-12 (MEDIA) — la observabilidad que se pierde no estaba declarada. **DECLARADO** (no arreglado aquí).
+
+Medido por el revisor: en prod `monolog.yaml:61-67` es `fingers_crossed` con `action_level: error`, así que un
+`warning` sin error acompañante **se descarta**: un fallo de envío no deja rastro. Lo que el reactor borrado
+daba y ya no existe: captura en Sentry desde el worker, fila en `failed` reintentable a mano, y la alarma de
+dead-letter (que dispara con `maxBacklog = 0`). El intercambio de *entrega* (at-least-once → at-most-once) sí
+estaba declarado; el de *observabilidad* no lo estaba, y no es lo mismo. **No se arregla en esta PR** —
+cablear una alarma es otra decisión— pero queda dicho aquí y en el PR, y la analogía con
+`RevokeSessionsBestEffort` **no es fiel**: aquel traga un efecto *redundante* (la credencial ya
+des-autentica), mientras que esta notificación es el único canal fuera de banda por el que la víctima de un
+robo de cuenta se entera.
+
+### I-13 (MEDIA) — el envío bloquea **antes** del login, y eso no estaba escrito. **DECLARADO.**
+
+`complete()` retorna y el controller hace `security->login(...)`. Con SMTP colgado y sin timeout configurado
+(`SocketStream` cae a `default_socket_timeout`, 60 s — issue #612), el usuario espera con **todas sus sesiones
+ya revocadas** y sin cookie nueva; si el cliente abandona, el token ya está consumido y hay que reiniciar el
+flujo. El docblock argumentaba el orden frente al revoke y callaba el orden frente al login.
+
+### I-14 (MEDIA) — la cifra «15 de 18 publicadores» era **errónea**. **CORREGIDA a 16 de 20.**
+
+Recuento propio: `git grep -l 'eventBus->publish(' api/src` → **20** clases. Con lock de fila sobre el
+agregado por el que publican: `AcceptInvitation`, `ChangeUserStatus`, `ChangeUserRoles` y —lo que yo había
+omitido— **`CompletePasswordReset`**, que bloquea la fila del usuario y publica un evento cuyo `aggregateId`
+**es** ese usuario. Son 4, no 3. `RequestPasswordReset` bloquea al usuario pero publica el evento del token.
+Corregido en `deferred-work.md`, en estas notas y en el PR. La cifra es *load-bearing*: es la medición que
+justificó diferir la Tarea 6b, y la iba a heredar la historia siguiente.
+
+### I-15 (MEDIA) — el inventario de ids de persona en `event_store` estaba **incompleto**. **CORREGIDO.**
+
+Faltaban `AllSessionsRevoked` y `OtherSessionsRevoked` (como `aggregate_id`) y `SessionRevoked` (en payload).
+Importa porque la **Story 1.7 (G-5)** dice explícitamente *«el inventario está ahí y no se reenumera»*: iba a
+heredar una lista corta en tres eventos, dos de ellos de la forma más expuesta.
+
+### I-16 (MEDIA) — documentación con afirmaciones falsas o contradictorias. **CORREGIDAS.**
+
+`PRODUCTION_SECURITY_CHECKLIST.md` seguía diciendo, 100 líneas antes de mi entrada nueva, que la notificación
+*«rides the async reactor»* — el reactor que esta PR borra. `event-catalog.md` decía «dos agregados emiten» y
+«todos van a `async`» (son cinco tipos y 7 de 23 eventos), y que el evento «también se encola» siempre.
+`architecture-api.md` decía «una excepción deliberada» en la viñeta a la que yo había añadido la tercera. Y
+**ambos** ficheros seguían prometiendo el control de concurrencia optimista del `event_store` que esta misma
+rama midió como **inexistente** — dejar la promesa mientras se difiere el arreglo es exactamente el modo de
+fallo del repo.
+
+### I-17 (BAJA) — *«Your previous password no longer works»* tampoco estaba garantizado. **ARREGLADO.**
+
+No hay constraint que exija que la contraseña nueva difiera de la vieja (`ResetPasswordRequest` solo valida
+`NotBlank` + `Length`), así que un reset a la misma contraseña falsifica la frase en la ejecución que la
+envía. Es el mismo defecto que la frase que ella sustituía. El correo ahora afirma **solo** el cambio de
+credencial. Y el razonamiento con el que yo había retirado la frase anterior era **erróneo**: dije «el sistema
+no lo garantiza», pero el revisor midió que la credencial **sí** des-autentica nativamente vía
+`ContextListener::hasUserChanged()`; el motivo correcto es que las filas de `iam_session` pueden quedar
+`ACTIVE` en el registro propio de la app y la des-autenticación es perezosa. Corregido en el docblock.
+
+### Hallazgos NO arreglados, declarados como límites del gate
+
+`TransportNamesStamp` (se honra **antes** que el mapa y que el atributo), mensajes que no son `DomainEvent`,
+config en PHP (tripwireada), y el **payload** frente al `aggregate_id`. Los cuatro están ahora en la cabecera
+del registro, que es el sitio donde alguien lee qué prueba un build verde.
