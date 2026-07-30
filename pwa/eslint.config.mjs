@@ -82,6 +82,15 @@ const eslintConfig = [
           message:
             "A dynamic test id (data-testid or a testId/testIdPrefix prop) must not be keyed by a positional index (index/i/idx/n) — it breaks under reorder, filter, or pagination. Suffix with the entity's stable id (UUID) instead. See docs/adr/test-id-naming-contract.md.",
         },
+        {
+          // Both `:not(:has(ArrowFunctionExpression))` guards keep each side's `:has()` inside its own
+          // statement: without them the descent reaches into whole `it(…)` callbacks and consecutive
+          // `it(…)` statements match each other as the sibling pair.
+          selector:
+            "ExpressionStatement:not(:has(ArrowFunctionExpression)):has(CallExpression[callee.property.name='getByTestId'] TemplateLiteral[quasis.0.value.raw=/__actions-$/]) ~ ExpressionStatement:not(:has(ArrowFunctionExpression)):has(CallExpression[callee.property.name='findByTestId'] TemplateLiteral[quasis.0.value.raw=/__delete-$/])",
+          message:
+            "Opening a row's ⋯ overflow menu and then awaiting its `…__delete-<id>` item is a race: under jsdom a just-opened Base UI popup can close again before its content mounts, so the single-shot open survives locally and goes red under CI parallelism. Open it through openRowDeleteItem(surface, id) from tests/app/backoffice/banks/_interactions.ts — it retries the open, so a Delete that genuinely never renders still fails.",
+        },
       ],
       "react/react-in-jsx-scope": "off", // Next.js doesn't need it
       "react/prop-types": "off", // Using TS
