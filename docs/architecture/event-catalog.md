@@ -60,17 +60,30 @@ Source: [`api/src/Backoffice/Bank/Domain/Event/`](../../api/src/Backoffice/Bank/
 
 ### Iam.Identity (`aggregateType: Iam.Identity`)
 
-The identity lifecycle events are recorded by the `User`/`PasswordResetToken` aggregates and reach the
-`event_store` outbox, but stay **unrouted** until a consumer exists (wire-on-consumer). The one consumed —
-and therefore `async`-routed — event today:
+The identity lifecycle events are recorded by the `User`/`PasswordResetToken` aggregates, are appended to
+`event_store`, and are **unrouted** — every one of them. For this aggregate that is a rule, not a
+wire-on-consumer default awaiting its first consumer:
+
+> An "aggregate id alone" payload is safe on a persisted transport **if and only if** the aggregate is not a
+> natural person. `Iam.Identity`'s aggregate is a user, so the envelope id IS the personal datum and an empty
+> payload proves nothing. `async` and `failed` are Doctrine tables with no TTL and no prune that no erasure
+> path touches, so a queued id outlives the erasure the application confirmed to the subject.
+
+Declared in [`api/.persistent-transport-policy`](../../api/.persistent-transport-policy) and enforced by
+`make php.lint.persistent-transport`, which resolves each routing key to the events Messenger would actually
+send through it — parents, interfaces, namespace wildcards, `'*'` and `#[AsMessage]` included.
+
+The one consumed event today:
 
 | `eventName` | ver | Producer (use case) | Payload | Consumers |
 |-------------|:---:|---------------------|---------|-----------|
-| `erpify.iam.identity.password-reset-completed` | 1 | `CompletePasswordReset` (recorded by `User::resetPassword()`) | *empty* `[]` (user id in envelope — PII-free by design) | password-changed email |
+| `erpify.iam.identity.password-reset-completed` | 1 | `CompletePasswordReset` (recorded by `User::resetPassword()`) | *empty* `[]` (user id in envelope — **not** PII-free: the id is the subject) | password-changed email, sent in process |
 
-Its payload is deliberately the aggregate id alone: the reactor resolves the recipient in-module at
-handling time, so nothing secret or personal ever rides the transport, and a user hard-deleted before the
-async send is simply skipped (never resurrected into a mail).
+Being unrouted means the handlers run inside the caller, so `RunProjectionsOnDomainEvent` joins the write
+transaction — the shape every unrouted event in the app already has. The notification is deliberately **not**
+one of those handlers: `CompletePasswordReset` sends it itself, after the commit and after the session
+revocation, best-effort. A blocking mailer must be able neither to roll the reset back nor to delay the
+teardown this flow exists to perform.
 
 #### `BankSnapshot` — the shared payload
 
@@ -236,7 +249,14 @@ delivered message — so a missed or duplicated delivery cannot corrupt a read m
 
 | Consumer | Kind | password-reset-completed | Effect |
 |----------|------|:---:|--------|
-| `SendEmailOnPasswordResetCompleted` | reactor | ● | Password-changed notification email (no token, no link); idempotent via `(eventId, handler)` claim |
+| `RunProjectionsOnDomainEvent` | trigger | ● | Fires projector catch-up for any event (no Identity projector today) |
+
+The password-changed notification has **no** consumer row: it is not a reactor. `CompletePasswordReset` sends
+it directly, post-commit and best-effort. Without a persisted transport there is no at-least-once redelivery,
+so the `(eventId, handler)` dedup claim that an async reactor needs has nothing left to guard — delivery moves
+from at-least-once to at-most-once, which is the right trade for a notification and the one
+`RevokeSessionsBestEffort` already makes beside it. The retry paths that remain (HTTP retry, double submit,
+a replayed use case) all die on the token's single-use `consume()`, not on a claim.
 
 ## Stored event row
 
@@ -277,10 +297,19 @@ To keep this catalog true:
    `<Context>/<Aggregate>/Domain/Event/` with `eventName` `erpify.<ctx>.<agg>.<fact>` and
    `aggregateType`. `record()` it in the aggregate; `publish(...)` it from the use case via `EventBus`
    inside the write transaction.
-2. **Route it** — add its FQCN under `routing:` → `async` in
-   [`messenger.yaml`](../../api/config/packages/messenger.yaml) (the default bus is `allow_no_handlers:
-   false`, so an unrouted/unhandled event fails fast).
-3. **Wire consumers** — reactors as `<Effect>On<Event>` (`#[AsMessageHandler]`); projectors implementing
-   `Projector` with their `subscribedTo()` and a read model.
-4. **Evolve a payload** — bump `eventVersion` and add the matching `Upcaster`.
-5. **Update this file** and its `index.md` entry.
+2. **Classify its aggregate** — a line in
+   [`api/.persistent-transport-policy`](../../api/.persistent-transport-policy) declaring whether the
+   aggregate denotes a natural person. A new `aggregateType` with no line fails
+   `make php.lint.persistent-transport`.
+3. **Decide the transport, don't default it** — routing to `async` is a choice, not a step. An event whose
+   aggregate is a person may not reach a persisted transport at all: leave it unrouted and its handlers run
+   in the caller, inside the write transaction, which is how most events in this app already live. Route to
+   `async` only for a non-person aggregate that needs the work off the request. `allow_no_handlers: false`
+   is not a reason to route: `RunProjectionsOnDomainEvent` handles every `DomainEvent`, so an unrouted event
+   always has a handler.
+4. **Wire consumers** — reactors as `<Effect>On<Event>` (`#[AsMessageHandler]`); projectors implementing
+   `Projector` with their `subscribedTo()` and a read model. An unrouted event gets no at-least-once
+   redelivery, so a reactor on one needs no dedup claim — and a blocking or failing effect on one belongs in
+   the use case post-commit, not in a handler that would run inside the transaction.
+5. **Evolve a payload** — bump `eventVersion` and add the matching `Upcaster`.
+6. **Update this file** and its `index.md` entry.

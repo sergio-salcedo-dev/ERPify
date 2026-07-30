@@ -11,8 +11,13 @@ use Override;
 /**
  * Records that an identity's credential was replaced through the password-reset flow. Recorded by the {@see
  * \Erpify\Iam\Identity\Domain\Entity\User} aggregate itself (mirror {@see UserSuspended}), because a domain
- * fact is always captured at its source. The subject is the aggregate id alone, so the payload is empty and
- * carries no credential or PII. Emitted to the outbox with no consumer yet (wire-on-consumer).
+ * fact is always captured at its source. The payload is empty and carries no credential.
+ *
+ * It is NOT PII-free, and the distinction is the whole reason this event stays off every persisted transport:
+ * the subject is the aggregate id alone, so that id — a user id — IS the personal datum. Queued, it would
+ * outlive the erasure of the person it names. Unrouted, it is appended to `event_store` and handled in
+ * process; the notification is sent by {@see \Erpify\Iam\Identity\Application\CompletePasswordReset} itself,
+ * post-commit and best-effort. See api/.persistent-transport-policy.
  */
 final class PasswordResetCompleted extends DomainEvent
 {

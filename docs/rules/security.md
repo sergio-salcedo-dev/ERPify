@@ -101,6 +101,7 @@ Before ANY commit, I MUST perform security checks on all changed files:
 - [ ] File uploads are properly validated
 - [ ] Authentication and authorization checks are in place
 - [ ] CSRF protection is implemented for forms
+- [ ] No domain event whose aggregate is a natural person is routed to a persisted transport — `async`/`failed` have no TTL, no prune, and no erasure path, so the queued id outlives the subject's erasure. Classify the `aggregateType` in `api/.persistent-transport-policy`; `make php.lint.persistent-transport` gates it
 
 #### Environment/Configuration Files
 - [ ] No `.env` files are committed (check `.gitignore`)

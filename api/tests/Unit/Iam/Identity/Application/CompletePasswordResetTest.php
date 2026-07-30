@@ -8,6 +8,7 @@ use Closure;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\CompletePasswordReset;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
+use Erpify\Iam\Identity\Application\SendPasswordChangedEmailBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
@@ -219,6 +220,8 @@ final class CompletePasswordResetTest extends TestCase
         InMemoryPasswordResetTokenRepository $tokens,
         InMemorySessionRepository $sessions,
         RecordingEventBus $eventBus,
+        ?RecordingPasswordChangedEmailSender $emails = null,
+        ?InlineTransactionManager $transactions = null,
     ): CompletePasswordReset {
         $clock = new FixedClock($this->now());
 
@@ -229,8 +232,12 @@ final class CompletePasswordResetTest extends TestCase
                 new RevokeAllSessions($sessions, new RecordingEventBus(), new InlineTransactionManager(), $clock),
                 new NullLogger(),
             ),
+            new SendPasswordChangedEmailBestEffort(
+                $emails ?? new RecordingPasswordChangedEmailSender(),
+                new NullLogger(),
+            ),
             $eventBus,
-            new InlineTransactionManager(),
+            $transactions ?? new InlineTransactionManager(),
             $clock,
         );
     }

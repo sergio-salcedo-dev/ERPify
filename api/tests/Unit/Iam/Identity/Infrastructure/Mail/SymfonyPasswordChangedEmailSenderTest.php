@@ -42,12 +42,31 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
         $this->assertIsString($html);
         $this->assertStringContainsString('Your ERPify password has changed.', $text);
         $this->assertStringContainsString('contact ' . self::FROM . ' immediately', $text);
-        $this->assertStringContainsString('We signed out all your open sessions for security.', $html);
-        // A notification, not an action email: no CTA, no link, no token — which is why it may ride the
-        // async transport while the invitation/reset emails must not. (The shared chrome's <style> block
-        // still names .erpify-btn; the invariant is that no anchor/button ELEMENT is rendered.)
+        $this->assertStringContainsString('Your previous password no longer works.', $text);
+        $this->assertStringContainsString('Your previous password no longer works.', $html);
+        // A notification, not an action email: no CTA, no link, no token. (The shared chrome's <style>
+        // block still names .erpify-btn; the invariant is that no anchor/button ELEMENT is rendered.)
         $this->assertStringNotContainsString('href', $html);
         $this->assertStringNotContainsString('<a ', $html);
+    }
+
+    public function testTheBodyClaimsOnlyWhatTheCredentialChangeItselfGuarantees(): void
+    {
+        // The eager session teardown is best-effort and swallows its failures, so a copy that promises every
+        // session was signed out states an outcome the system does not guarantee — and, with the send ordered
+        // after the revoke, would state it in the very run where the revoke silently failed. Replacing the
+        // credential is what is certain, so that is all the mail is allowed to say.
+        $email = $this->send();
+        $text = $email->getTextBody();
+        $html = $email->getHtmlBody();
+
+        $this->assertIsString($text);
+        $this->assertIsString($html);
+
+        foreach (['signed out', 'signed you out', 'all your open sessions'] as $unguaranteed) {
+            $this->assertStringNotContainsString($unguaranteed, $text);
+            $this->assertStringNotContainsString($unguaranteed, $html);
+        }
     }
 
     public function testRendersThroughTheSharedChrome(): void

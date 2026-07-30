@@ -40,10 +40,24 @@ use SensitiveParameter;
  *   4. AFTER that commit, revoke every session (including the current one — whoever resets holds no trusted
  *      session) through {@see RevokeSessionsBestEffort}: the credential change already de-authenticates the old
  *      sessions natively, so a revoke failure is swallowed there rather than stranding a reset that committed.
+ *   5. LAST, notify the identity that its credential changed, through {@see SendPasswordChangedEmailBestEffort}.
+ *      Both halves of that position are load-bearing. Post-commit, because the send blocks (Symfony's
+ *      `SendEmailMessage` is deliberately unrouted) and running it inside the transaction would hold the user
+ *      row lock across an SMTP round trip and announce a change a rollback could still undo. And after the
+ *      revoke, because revocation is the containment this endpoint exists to perform: a hung mail server must
+ *      never keep the sessions of a just-compromised account alive for the length of an SMTP timeout.
  *
  * It returns the identity's email so the HTTP adapter can establish the session (programmatic login on the
  * just-set credential, reusing the native id regeneration): a successful reset signs the user in, and every
  * prior session was already revoked above — reset everywhere, then sign in here.
+ *
+ * The coupling above the PHPMD threshold is the five ordered steps themselves: four ports, the identity
+ * aggregate, the token, and the three exception types the two walls raise. The one collaborator that could be
+ * removed honestly is the status wall — `wallUnlessActive()` asks the aggregate two questions and decides for
+ * it, so `User` could own it and take {@see AccountSuspended}/{@see AccountDeactivated} with it. That is a
+ * change to a security wall and belongs in its own change, not folded into an unrelated one.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final readonly class CompletePasswordReset
 {
@@ -51,6 +65,7 @@ final readonly class CompletePasswordReset
         private UserRepository $users,
         private PasswordResetTokenRepository $tokens,
         private RevokeSessionsBestEffort $revokeSessions,
+        private SendPasswordChangedEmailBestEffort $notifyPasswordChanged,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,
@@ -104,6 +119,7 @@ final readonly class CompletePasswordReset
         });
 
         $this->revokeSessions->revoke($resetToken->userId());
+        $this->notifyPasswordChanged->send($email);
 
         return $email;
     }

@@ -54,7 +54,7 @@ final readonly class SymfonyPasswordChangedEmailSender implements PasswordChange
     {
         return \implode("\n", [
             'Your ERPify password has changed.',
-            'We signed out all your open sessions for security.',
+            'Your previous password no longer works.',
             '',
             'If this was not you, contact ' . $from . ' immediately.',
         ]);
@@ -69,7 +69,7 @@ final readonly class SymfonyPasswordChangedEmailSender implements PasswordChange
               Your <strong>ERPify</strong> password has changed.
             </p>
             <p style="font-size:16px;line-height:1.5;margin:0 0 24px;">
-              We signed out all your open sessions for security.
+              Your previous password no longer works.
             </p>
             <p style="font-size:13px;line-height:1.5;color:#6b7280;margin:0;">
               If this was not you, contact {$safeFrom} immediately.

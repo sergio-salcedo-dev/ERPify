@@ -659,8 +659,8 @@ coartada** para conservar el UUID real; pero **sí** hay replay de proyecciones,
 sin más. *Alternativa a evaluar y hoy no descartada:* borrado/anulación selectiva con reproyección, si se acepta
 que el log deje de ser estrictamente append-only para esta clase de fila.
 
-**Por qué no entró en G-4a:** G-4a cierra una fuga que vive **segundos** en una cola de trabajo (más una cola
-muerta que G-4a poda); esta vive **para siempre** en un log permanente. Bloquear el arreglo barato tras el caro
+**Por qué no entró en G-4a:** G-4a cierra una fuga que vive **segundos** en una cola de trabajo (y en la cola
+muerta a la que esa cola desemboca); esta vive **para siempre** en un log permanente. Bloquear el arreglo barato tras el caro
 habría sido un error, y meterlos en la misma PR convertiría una corrección auditable en una refactorización del
 backbone de eventos.
 
