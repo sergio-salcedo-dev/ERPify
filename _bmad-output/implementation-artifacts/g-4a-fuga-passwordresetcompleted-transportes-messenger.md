@@ -334,9 +334,17 @@ de alcance (bloqueada por la pregunta abierta de *ownership de referencias nacid
         (post-commit + swallow), **no la posición** (última línea). La contención precede a la comunicación.
   - [ ] Reescribir el cuerpo de `SymfonyPasswordChangedEmailSender` (líneas 57 y 72) para no afirmar el cierre
         de sesiones.
-  - [ ] **Issue de seguimiento, fuera de esta PR:** acotar el timeout SMTP. Es transversal del adaptador Mailer,
-        no del caso de uso, y la misma exposición ya existe en `RequestPasswordReset.php:100` — el issue cubre
-        **ambos** call sites, no medio.
+  - [ ] **NO acotes el timeout SMTP aquí — está en el issue #612, con tripwire.** Medido: `EsmtpTransportFactory`
+        **no lee ninguna opción `timeout` del DSN** (`?timeout=5` no hace nada), y `SocketStream::getTimeout()`
+        cae a `ini_get('default_socket_timeout')` = **60 s**; `setTimeout()` existe y nadie lo llama. Y el riesgo
+        es **latente**: `MAILER_DSN` es `null://null` en `compose.yaml` y `compose.prod.yaml`, y solo
+        `compose.dev.yaml` usa `smtp://mailpit:1025` (local, instantáneo) — **ninguna configuración del repo
+        apunta a un SMTP remoto**, que es la misma razón de alcanzabilidad por la que #564 quedó fuera de la
+        épica. *Tripwire:* el día que `MAILER_DSN` apunte a un SMTP remoto real pasa a defecto de disponibilidad.
+        El issue cubre **ambos** call sites (`CompletePasswordReset` y `RequestPasswordReset.php:100`).
+  - [ ] **Consecuencia que NO debes escribir mal en el PR:** con `null://null` desplegado, la notificación
+        **tampoco se entrega** realmente. AC2 se cumple a nivel de código, no de configuración desplegada. No
+        escribas «se sigue notificando» sin ese matiz.
 
 - [ ] **Tarea 3 — El control que enuncia la regla (AC3)**
   - [ ] Test bajo `api/tests/Unit/Shared/Architecture/`, sobre `config/packages/messenger.yaml`, con la regla en
