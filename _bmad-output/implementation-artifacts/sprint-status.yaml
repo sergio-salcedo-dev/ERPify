@@ -157,7 +157,12 @@ development_status:
   # o deploy rolling, momento en el que pasa a defecto de DISPONIBILIDAD urgente.
   epic-gdpr-hardening: in-progress
   g-4a-fuga-passwordresetcompleted-transportes-messenger: done
-  g-1a-eje-declaracion-atributo-registro-generado-gate: backlog
+  # G-1a arranca con TRES decisiones abiertas que el corte no marcó porque nacen de mediciones que el corte no
+  # hizo: (1) ¿el gate DETECTA huecos o solo verifica lo declarado? — "llega verde" y "cada hueco posterior es un
+  # gate rojo" NO son simultáneamente ciertas; (2) dónde vive el generador y cómo escribe (sin precedente en el
+  # repo, y el camino obvio choca con el read-only/parallel-safe que php.quality.dry-run declara); (3) forma de la
+  # clave. Precondición normativa de la épica: nada se implementa antes de registrarlas por escrito.
+  g-1a-eje-declaracion-atributo-registro-generado-gate: ready-for-dev
   g-1b-referencias-huerfanas-membership-invitation: backlog
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   g-3a-segundo-testigo-del-registro: backlog
