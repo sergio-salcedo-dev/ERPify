@@ -7,6 +7,7 @@ import type { BankAccountRealtimeHandlers } from "@/context/backoffice/bankaccou
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
+import { openRowDeleteItem } from "../_interactions";
 
 const BANK_ID = "11111111-1111-7111-8111-111111111111";
 
@@ -90,8 +91,7 @@ const NOT_CLOSED_PROBLEM: ProblemDetails = {
 };
 
 async function openRowDelete(id: string): Promise<void> {
-  fireEvent.click(screen.getByTestId(`bank-accounts-table__actions-${id}`));
-  fireEvent.click(await screen.findByTestId(`bank-accounts-table__delete-${id}`));
+  fireEvent.click(await openRowDeleteItem("bank-accounts-table", id));
 }
 
 describe("BankAccountsPage — mutations hub", () => {
