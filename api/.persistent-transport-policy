@@ -1,0 +1,60 @@
+# Every domain-event `aggregateType()` in the app, classified by whether its `aggregate_id` denotes a
+# NATURAL PERSON.
+#
+# The rule this file exists to enforce: an "aggregate id alone" payload is safe to put on a persisted
+# transport if and only if that id is not a person's. When it is, the aggregate id IS the personal datum,
+# so an empty payload proves nothing — and `messenger_messages` and `failed` are Doctrine tables with no
+# TTL and no prune that no erasure path touches, so the id outlives the deletion the application confirmed
+# to the subject.
+#
+# Format, one per line:
+#   <AggregateType> => non-person
+#   <AggregateType> => person
+#   <AggregateType> => person :: <path of the ADR recording why it is queued anyway>
+#
+# The gate (PersistentTransportPolicyGateTest, run by `make php.lint.persistent-transport`) fails the build
+# when a `person` aggregate is reachable from a `framework.messenger.routing` key or an `#[AsMessage]`
+# attribute on a transport other than `sync`, and when an aggregate type declared in `src` has no line here.
+#
+# ---------------------------------------------------------------------------------------------------------
+# What it deliberately does NOT do. Read this list as the specification of the gate's blind spots — a green
+# build proves what is below the line, and nothing above it.
+#
+#   - It cannot judge the classification. Writing `Iam.Identity => non-person` makes the policy check pass;
+#     the completeness check still demands a line, so the decision is forced into a diff, which is the point.
+#     Review is what judges it.
+#   - THE KEY IS COARSER THAN THE PROPERTY. One `aggregateType` can cover events with different id
+#     semantics — `Iam.Session` does, see its line below — and this file can only carry one verdict per type.
+#     Where a type is mixed, the conservative verdict is the correct one, and routing any of its events then
+#     needs an argued ADR exception. Keying per event class instead would be finer, but a class rename would
+#     silently empty the registry; `aggregateType()` is the stable key.
+#   - It classifies the `aggregate_id`, NOT the payload. An event whose id is safe but whose payload carries
+#     a person's id — every `Invitation*` (`invitedUserId`), `SessionStarted` and `SessionRevoked`
+#     (`userId`) — is out of its reach. Closing that is FR9/G-4b in the GDPR-hardening epic.
+#   - It only sees `DomainEvent` subclasses under `src`. A plain Messenger message carrying a user id, routed
+#     to `async` and consumed by an `#[AsMessageHandler]`, reproduces the defect with this gate green. That
+#     is the cheapest way to reintroduce it and nothing here stops it.
+#   - It reads configuration, so it cannot see `TransportNamesStamp`, which `SendersLocator::getSenders()`
+#     honours BEFORE consulting either the routing map or the attribute. A dispatch that stamps a transport
+#     leaves no trace in anything this gate reads.
+#   - Config written in PHP is executed, not parsed. The gate fails loudly if a PHP config file mentions
+#     Messenger at all, rather than pretending to understand it.
+#   - It says nothing about `event_store`. Every dispatched event is appended there with its real
+#     `aggregate_id` regardless of routing, and no erasure path touches that table.
+# ---------------------------------------------------------------------------------------------------------
+
+Backoffice.Bank => non-person
+Backoffice.BankAccount => non-person
+
+# The aggregate is the user.
+Iam.Identity => person
+
+# The aggregate id is the invitation's, for all six events; the invited user's id rides the payload, which
+# this gate does not reach.
+Iam.Invitation => non-person
+
+# MIXED, and therefore person. `SessionStarted` and `SessionRevoked` carry the session's id — but
+# `AllSessionsRevoked` and `OtherSessionsRevoked` are coarse facts about the USER, so their `aggregate_id`
+# is the `userId` and their payload is empty: byte-identical in shape to the leak this policy was written
+# for. One verdict per type means the type takes the verdict of its most exposed event.
+Iam.Session => person

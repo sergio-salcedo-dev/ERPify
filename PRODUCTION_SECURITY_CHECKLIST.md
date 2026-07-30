@@ -315,7 +315,8 @@ you change anything here.
       Security emails come from `MAILER_SECURITY_FROM` (monitored, replyable — a blank/no-reply value **fails
       loudly** outside dev/test) and refuse to emit a non-HTTPS link outside dev/test; token-bearing emails stay
       **synchronous best-effort** (never routed through a Messenger transport, which would serialise the raw
-      token); only the token-free password-changed notification rides the async reactor. Retention: expired
+      token); the token-free password-changed notification is sent the same way, by `CompletePasswordReset` through
+      `SendPasswordChangedEmailBestEffort`, post-commit and after the session revocation. Retention: expired
       reset tokens are swept by `identity:password-reset-tokens:prune` (schedule it in prod cron). **GDPR
       identity erasure** runs through `FulfilIdentityErasure` (chained + atomic): it hard-deletes the identity
       plus its reset tokens (`GDPR_SUBJECT_ERASED`), anonymises every audit row the subject authored, hard-deletes
@@ -418,6 +419,35 @@ mitigated state. Accepting one means recording who accepted it and against which
       and `identity:gdpr:reconcile-subject-references` reports any erased identity the trail still
       names. Verify when adding a person-denoting `resource_type`: classify it, wire its erasure, and
       cover it with a Behat scenario — the gate checks declaration and wiring, not runtime reach.
+- [x] **GDPR erasure is not defeated by the Messenger transport tables** — closed for the one event that
+      reached them. `messenger_messages` and the `failed` queue have neither TTL nor prune and no erasure
+      path touches them, so a queued message naming a person outlives that person's erasure. The rule is
+      now declarative: an "aggregate id alone" payload may ride a persisted transport only if the aggregate
+      is not a natural person. Classification lives in `api/.persistent-transport-policy`, enforced by
+      `make php.lint.persistent-transport`, which resolves each routing key to the events Messenger would
+      really send — class parents, interfaces, namespace wildcards, a bare `'*'` and `#[AsMessage]` all
+      route without naming a class, and a gate reading keys as class names would miss every one. Verify when
+      adding an event: classify its aggregate, and do not route a person's aggregate off the request.
+      **Two limits, stated so a green build is not read as more than it is:** the gate classifies the
+      *aggregate*, not the payload — a non-person aggregate carrying a person's id (`Iam.Session`'s
+      `userId`, `Iam.Invitation`'s `invitedUserId`) is out of its reach — and it says nothing about
+      `event_store`, which keeps the real `aggregate_id` forever regardless of routing (below).
+- [ ] **`event_store` retains a person's real id past their own erasure.** Every dispatched event is
+      appended with its real `aggregate_id`, and no erasure path touches the table. As the `aggregate_id`:
+      `PasswordResetCompleted`, `UserSuspended`, `UserDeactivated`, `UserRolesChanged`, `UserLocked`,
+      `PasswordResetRequested`, plus `AllSessionsRevoked` and `OtherSessionsRevoked` — those last two are
+      coarse facts about the USER, so their `aggregate_id` is the `userId` and their payload is empty, the
+      same shape as the leak this entry closes. In the payload: `SessionStarted` and `SessionRevoked`
+      (`userId`) and the six `Invitation*` (`invitedUserId`).
+      It is not reachable by the crypto-shredding used in `audit_log`: `aggregate_id` is `UUID NOT NULL`, a
+      stream key and an index (`event_store_stream_version_uniq`, `event_store_aggregate_idx`), and a
+      lookup table is barred by [`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4. The
+      only viable route — the id being born a per-subject derived substitute whose derivation secret the
+      erasure destroys — touches every event, projection replay and checkpoint, so it is a persistence
+      strategy decision and ADR material, tracked as a story in the GDPR-hardening epic. Nothing in the
+      repo declares `event_store` erasable today
+      ([`docs/adr/regulatory-audit-trail.md`](docs/adr/regulatory-audit-trail.md) separates it, as the
+      business log, from the retention-bound PII-erasable trail).
 - [ ] **`audit:gdpr:erase` is not atomic.** The anonymisation `UPDATE` commits and the
       `GDPR_ERASURE_EXECUTED` self-audit is written *after*, outside any transaction — a crash
       between them leaves the erasure done with no evidence of it, and the original id no longer

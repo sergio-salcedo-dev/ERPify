@@ -136,6 +136,20 @@ propiedades) **no la alcanza**. Bloqueada por la pregunta abierta de *ownership 
 (ver Additional Requirements). Se lista para trazabilidad: es **secuenciación diferida, no exclusión
 permanente**. FR1 cierra la fuga concreta **sin** requerir esta respuesta.
 
+FR10: **El `event_store` deja de conservar el identificador real de una persona a perpetuidad** (SI-21 · G-5) —
+descubierto **al contextualizar G-4a**, midiendo contra `main`, y **no registrado en el addendum**:
+[`PersistDomainEventMiddleware`](../../api/src/Shared/Event/Infrastructure/Messenger/PersistDomainEventMiddleware.php)
+escribe **todo** evento despachado en `event_store` **antes** de que Messenger decida transporte, así que ocurre
+con `async`, con `sync` y sin enrutar — **el routing no lo cambia, y por tanto G-4a no lo toca**. Llevan el id
+real como `aggregate_id` `PasswordResetCompleted`, `UserSuspended`, `UserDeactivated`, `UserRolesChanged`,
+`UserLocked` ([`User`](../../api/src/Iam/Identity/Domain/Entity/User.php), líneas 176/191/206/224/264) y
+`PasswordResetRequested` (grabado sobre el agregado del token pero construido con el id del **usuario**,
+[`PasswordResetToken`](../../api/src/Iam/Identity/Domain/Entity/PasswordResetToken.php) línea 70); y lo llevan en
+el **payload** `SessionStarted` (`['userId' => …]`) y los seis `Invitation*` (`invitedUserId`). **Ninguno está
+enrutado**, luego ninguno pasa por la cola: viven **solo** ahí, para siempre, y
+[`FulfilIdentityErasure`](../../api/src/Iam/Identity/Application/FulfilIdentityErasure.php) no toca la tabla.
+**La fuga que persigue G-4a es la más pequeña y la más transitoria de las dos.**
+
 ### NonFunctional Requirements
 
 NFR1 (Invariante · **SI-21**): **Toda referencia persistida a una persona física tiene un dueño de borrado
@@ -263,6 +277,7 @@ su **fallo observable** necesita destino de alerta, y eso es observabilidad, no 
 | FR7 | Épica 1 | **1.5** (G-3 ①) | Segundo testigo de `.audit-resource-types` |
 | FR8 | Épica 1 | **1.6** (G-3 ②) | Agendado + fallo observable + alertado del reconciliador |
 | FR9 | Épica 1 — **diferida** | — (G-4b) | Eje Messenger completo. **No se corta**: bloqueada por la pregunta abierta de *ownership de referencias nacidas en configuración*. Listada para que la ausencia sea explícita, no silenciosa. |
+| FR10 | Épica 1 | **1.7** (G-5) | Ids de persona fuera del `event_store` — **abre con decisión de estrategia de persistencia, que es del usuario** |
 
 **G-3 se corta en dos historias** (1.5 y 1.6) porque el addendum las declara *«dos subproblemas
 independientes: cada uno se cierra sin responder al otro»* — mantenerlas juntas ataría el segundo testigo
@@ -609,3 +624,47 @@ estáticamente decidible (SI-21/NFR1).
 **Given** la ubicación elegida para el schedule,
 **When** corren `make php.lint.bounded-context` y `make php.deptrac`,
 **Then** siguen verdes (NFR7).
+
+### Story 1.7 (G-5): Ids de persona fuera del `event_store` — la fuga permanente que G-4a no alcanza
+
+Como **sujeto de datos borrado**,
+quiero que mi identificador tampoco sobreviva en el log de eventos de negocio,
+para que el borrado deje de ser cierto solo en las tablas que alguien se acordó de mirar.
+
+**Eje que instala:** declaración (qué eventos denotan persona) · mecanismo (**a decidir**) · control.
+**Invariantes que consume:** SI-21/NFR1, D4/NFR4 (prohibición de crosswalk).
+**Dependencias:** ninguna técnica. **Bloqueada por una decisión del usuario**, no por código.
+
+**Estado medido:** ver FR10. El inventario está ahí y no se reenumera.
+
+**Decisión abierta de rango ADR — y es de estrategia de persistencia, luego es del usuario
+([`../../CLAUDE.md`](../../CLAUDE.md) → *Per-aggregate persistence strategy*).** Las dos vías obvias están
+cerradas por medición: el **crypto-shredding** que el repo ya usa en `audit_log` (`Shared/Crypto/`,
+`PiiDiffSealer`, DEK por `EncryptionScopeId`) **no aplica a `aggregate_id`**, que es `UUID NOT NULL` y **clave de
+stream e índice** (`event_store_stream_version_uniq`, `event_store_aggregate_idx`) — una columna clave no se
+cifra; y la **tabla de correspondencia `id real → pseudónimo` está vetada por D4**, en columna y en JSONB. La
+única vía viable identificada es que el `aggregate_id` **nazca** como sustituto derivado por sujeto y la erasure
+destruya el secreto de derivación — lo que toca **todos** los eventos, el replay de proyecciones y
+`projection_checkpoint`.
+
+**Encuadre correcto del problema, porque «el crypto-shredding no aplica» se malinterpreta:** el crypto-shredding
+aplica a **secretos** y no aplica a una **clave indexada**, así que esto **no es un problema criptográfico sino
+de modelado de identidad**. La pregunta real no es *«cómo ciframos el `aggregate_id`»* sino *«¿debe el UUID real
+de una persona ser la identidad permanente de su stream de eventos?»*. Formulada así se ve por qué es material
+de ADR y no una tarea: la respuesta cambia el **modelo**, no la infraestructura.
+
+**Dato que acota el debate:** aquí **no hay Event Sourcing** — ningún agregado se rehidrata de eventos (`User`
+es entidad Doctrine); `event_store` es log de negocio + fuente de proyecciones. Sin replay de agregados **no hay
+coartada** para conservar el UUID real; pero **sí** hay replay de proyecciones, así que el id no puede anularse
+sin más. *Alternativa a evaluar y hoy no descartada:* borrado/anulación selectiva con reproyección, si se acepta
+que el log deje de ser estrictamente append-only para esta clase de fila.
+
+**Por qué no entró en G-4a:** G-4a cierra una fuga que vive **segundos** en una cola de trabajo (y en la cola
+muerta a la que esa cola desemboca); esta vive **para siempre** en un log permanente. Bloquear el arreglo barato tras el caro
+habría sido un error, y meterlos en la misma PR convertiría una corrección auditable en una refactorización del
+backbone de eventos.
+
+**Consecuencia de gobierno — no negociable:** mientras esta historia no cierre, **la épica GDPR-hardening no
+puede declararse completada**, y ninguna historia puede afirmar *«ninguna copia del identificador sobrevive»*.
+La afirmación admisible es *«el transporte persistido ya no retiene el identificador del sujeto»*. La diferencia
+es falsable con un `SELECT aggregate_id FROM event_store` después de una erasure.

@@ -126,6 +126,12 @@ Feature: Reset a forgotten password uniformly
     And the header "Set-Cookie" should contain "httponly"
     And there should be 1 event stored named "erpify.iam.identity.password-reset-completed"
     And there should be 1 event stored named "erpify.iam.session.all-revoked"
+    And 0 outbox events were created on the queue "async"
+    And 1 notification email was sent
+    And I get the sent notification email number 1
+    And The notification email recipient should be "alice@erpify.test"
+    And The notification email subject should be equal to "Your ERPify password has changed"
+    And The notification email body should contain "Your ERPify password has changed."
     And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'alice@erpify.test' AND failed_attempts = 0 AND locked_until IS NULL"
     And there should have 1 records in SQL result
     And I execute the SQL query "SELECT id FROM iam_session WHERE user_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b' AND status = 'ACTIVE'"

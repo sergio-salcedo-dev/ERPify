@@ -42,12 +42,39 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
         $this->assertIsString($html);
         $this->assertStringContainsString('Your ERPify password has changed.', $text);
         $this->assertStringContainsString('contact ' . self::FROM . ' immediately', $text);
-        $this->assertStringContainsString('We signed out all your open sessions for security.', $html);
-        // A notification, not an action email: no CTA, no link, no token — which is why it may ride the
-        // async transport while the invitation/reset emails must not. (The shared chrome's <style> block
-        // still names .erpify-btn; the invariant is that no anchor/button ELEMENT is rendered.)
+        // A notification, not an action email: no CTA, no link, no token. (The shared chrome's <style>
+        // block still names .erpify-btn; the invariant is that no anchor/button ELEMENT is rendered.)
         $this->assertStringNotContainsString('href', $html);
         $this->assertStringNotContainsString('<a ', $html);
+    }
+
+    public function testTheBodyClaimsOnlyWhatTheCredentialChangeItselfGuarantees(): void
+    {
+        // Two claims this mail is NOT allowed to make, each false in a reachable run:
+        //   - that every open session was signed out. The eager teardown is best-effort and swallows its
+        //     failures, so the app's own session rows can stay ACTIVE while the mail says otherwise — and
+        //     with the send ordered after the revoke, it would say so in the very run that failed.
+        //   - that the previous password no longer works. Nothing requires the new credential to differ from
+        //     the old one, so a reset to the same password falsifies it at the moment of sending.
+        $email = $this->send();
+        $text = $email->getTextBody();
+        $html = $email->getHtmlBody();
+
+        $this->assertIsString($text);
+        $this->assertIsString($html);
+
+        $unguaranteed = [
+            'signed out',
+            'signed you out',
+            'all your open sessions',
+            'previous password',
+            'no longer works',
+        ];
+
+        foreach ($unguaranteed as $claim) {
+            $this->assertStringNotContainsString($claim, $text);
+            $this->assertStringNotContainsString($claim, $html);
+        }
     }
 
     public function testRendersThroughTheSharedChrome(): void
