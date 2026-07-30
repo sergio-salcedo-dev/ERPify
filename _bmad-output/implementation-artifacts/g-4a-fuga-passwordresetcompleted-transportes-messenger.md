@@ -179,22 +179,32 @@ entre el commit y el envío **no recibe el correo** — su docblock lo vende com
 envío post-commit inmediato esa ventana casi desaparece, así que en la práctica ①b empata o mejora; pero
 decláralo en el PR en vez de dejarlo sin respuesta.
 
-## ④ — Poda programada de la cola `failed` (**dentro del alcance de esta historia**, decisión de Sergio)
+## ④ — Poda de la cola `failed`: **FUERA DE ALCANCE** (revertido tras el pase adversarial)
 
-**Medido:** existe un `#[AsSchedule('maintenance')]`
-(`api/src/Shared/Event/Infrastructure/Messenger/Maintenance/HandledDomainEventMaintenanceSchedule.php:19–29`)
-con poda diaria de candados de deduplicación y **chequeo horario del backlog de dead-letter que alarma sobre
-umbral**, consumido por el worker. Y hay cuatro ficheros que **leen** `failed` (`DeadLetterReader`,
-`MessengerDeadLetterReader`, `FailedMessagesStatusCommand`, `ReportDeadLetterBacklogHandler`). **`grep` confirma
-que nada la drena jamás:** la cola muerta se observa pero no se vacía.
+**Entró por decisión de Sergio y sale por medición.** El propio autor de la propuesta (Winston) la retiró:
+*«la saco; el revisor tiene razón y yo la propuse sin medir»*. Los tres analistas coinciden ahora en sacarla, y
+el argumento es el mismo por tres caminos:
 
-**Por qué entra aquí:** ①b arregla *este* caso; ④ cierra la *clase*. Sin ④, el día que alguien enrute otro
-evento con un id de persona en el sobre, `failed` vuelve a acumular referencias sin dueño de borrado — que es
-literalmente lo que SI-21 prohíbe. Es un tercer `RecurringMessage` sobre un patrón ya establecido y testeado
-(espeja `PruneHandledDomainEventsHandler`), **sin tocar `FulfilIdentityErasure`** y sin carrera con el worker.
+- **Con `maxBacklog = 0`, el estado estable declarado de `failed` es VACÍO.** Un podador por antigüedad es
+  entonces **código muerto en el caso sano y destructivo justo en el caso enfermo**: solo llega a disparar
+  cuando un humano ya falló en actuar, y entonces borra la evidencia y el contador. Es lo contrario de un
+  guardarraíl.
+- **`failed` no es almacenamiento: es una bandeja de trabajo.** Un mensaje muerto es un efecto de negocio que
+  no ocurrió — una incidencia viva, más parecida a un ticket abierto que a un log. La retención indefinida es
+  legítima *mientras represente trabajo pendiente*, y podarla la deja de convertir en work queue.
+- **Y no hace falta aquí:** ①b retira el único evento enrutado que porta un id de persona, y el gate de AC3
+  impide encolar el siguiente. La retención de `failed` pasa a ser **higiene operativa, no GDPR**.
 
-**Ojo con el alcance:** ④ es *retención de cola*, no borrado por sujeto. No enumera sujetos ni conoce personas.
-Dilo así en el PR — si se describe como «borrado GDPR» se está prometiendo algo que no hace.
+**La consecuencia arquitectónica que sale de esto es más fuerte que la poda, y conviene dejarla escrita:** si un
+mensaje **no puede** vivir indefinidamente en `failed`, el defecto está en **el mensaje**, no en la política de
+retención — ese mensaje no debería contener el dato. Que es exactamente la tesis de esta épica.
+
+**Forma que tendría que tener si algún día vuelve** (para que nadie la re-proponga peor): nunca barrido por
+edad como higiene rutinaria, sino **alarmar → intervención humana → si nadie interviene en X, registrar y
+eliminar**, con ventana de retención **estrictamente mayor** que el SLA de escalado, poda limitada a clases de
+mensaje listadas explícitamente, traza estructurada antes del `DELETE` (clase, conteo, fecha, antigüedad,
+motivo — **nunca ids**), y tests **del observable, no del mecanismo**: mientras quede un mensaje fuera de
+política la alarma debe seguir disparando *después* de podar.
 
 ## Acceptance Criteria
 
@@ -265,15 +275,22 @@ línea de routing.* **Registro declarativo cruzado contra `routing`, no lista ne
 «se envía» pasa igual si el envío está dentro de la transacción:
 ① un doble de `TransactionManager` que exponga `committed`, y el spy del mailer **registra su valor al ser
 llamado** → aserción `true` (esto es lo que mata ①a); ② un mailer que **lanza** → el reset queda commiteado
-igual (token consumido, credencial cambiada, sin excepción), que es lo que pinna el best-effort.
+igual (token consumido, credencial cambiada, sin excepción), que es lo que pinna el best-effort; ③ **el orden
+frente a la revocación** — los dobles de `RevokeSessionsBestEffort` y del mailer escriben en un **registrador
+compartido** (`$orden[] = 'revoke'` / `$orden[] = 'send'`) y la aserción es
+`assertSame(['revoke', 'send'], $orden)`, que se rompe si alguien sube el envío una línea.
+**Son tres propiedades distintas y ninguna sustituye a otra:** post-commit, best-effort y orden.
 
-**AC3c — La cola `failed` deja de ser retención indefinida (④).**
-**Given** mensajes muertos que superan la antigüedad configurada,
-**When** corre el schedule de mantenimiento,
-**Then** se podan **sin intervención humana**, mediante un tercer `RecurringMessage` en
-`HandledDomainEventMaintenanceSchedule`, espejando `PruneHandledDomainEventsHandler`. El handler **no enumera
-sujetos ni conoce personas**: es retención de cola por antigüedad. La alarma horaria de backlog existente sigue
-funcionando.
+**AC3c — El correo deja de afirmar lo que el sistema no garantiza.**
+**Given** el cuerpo de la notificación de contraseña cambiada,
+**When** se revisa tras el cambio de orden,
+**Then** **no afirma** *«We signed out all your open sessions for security»*: la revocación es best-effort y
+traga sus fallos (`RevokeSessionsBestEffort.php:27–36`), así que el correo estaría declarando un hecho no
+garantizado — y con el envío ya ordenado después de la revocación lo declararía **de forma determinista**.
+Se reescribe para informar del **cambio de contraseña** sin afirmar un resultado absoluto.
+*Alternativa descartada:* hacer la revocación obligatoria — cambiaría el contrato del endpoint (hoy un fallo de
+revocación deja el reset válido; pasaría a invalidarlo) e introduciría un motivo de error nuevo dependiente de
+infraestructura. Eso es otra historia.
 
 **AC4 — El comentario de routing enuncia la regla sobre el código ACTUAL.**
 **Given** el comentario de `messenger.yaml:25–27`, que hoy autoriza la cola con un razonamiento correcto para
@@ -311,10 +328,16 @@ de alcance (bloqueada por la pregunta abierta de *ownership de referencias nacid
         romperse**: el evento no desaparece, deja de viajar por un transporte persistido.
   - [ ] `sync: 'sync://'` (`messenger.yaml:15`) queda como **config muerta** — ninguna ruta apunta ahí. Decide
         si se retira (boy-scout) o se conserva, y dilo.
-- [ ] **Tarea 2b — Poda programada de `failed` (AC3c, ④)**
-  - [ ] Tercer `RecurringMessage` en `HandledDomainEventMaintenanceSchedule` + handler espejando
-        `PruneHandledDomainEventsHandler`, con su test.
-  - [ ] Describirlo en el PR como **retención de cola**, nunca como «borrado GDPR» — no enumera sujetos.
+- [ ] **Tarea 2b — Orden y texto del correo (AC3b, AC3c)**
+  - [ ] El envío va **DESPUÉS** de `revokeSessions` (`CompletePasswordReset.php:106`) y antes del `return`.
+        **No** es «espejo exacto» del caso hermano: de `RequestPasswordReset` se hereda el **patrón**
+        (post-commit + swallow), **no la posición** (última línea). La contención precede a la comunicación.
+  - [ ] Reescribir el cuerpo de `SymfonyPasswordChangedEmailSender` (líneas 57 y 72) para no afirmar el cierre
+        de sesiones.
+  - [ ] **Issue de seguimiento, fuera de esta PR:** acotar el timeout SMTP. Es transversal del adaptador Mailer,
+        no del caso de uso, y la misma exposición ya existe en `RequestPasswordReset.php:100` — el issue cubre
+        **ambos** call sites, no medio.
+
 - [ ] **Tarea 3 — El control que enuncia la regla (AC3)**
   - [ ] Test bajo `api/tests/Unit/Shared/Architecture/`, sobre `config/packages/messenger.yaml`, con la regla en
         el mensaje de fallo y la preámbulo en constante de clase.
@@ -424,7 +447,7 @@ pequeño.
 
 ### A-1 (ALTA) — el gate era evadible por cinco vías. **INCORPORADO en AC3.**
 
-### A-2 (MEDIA-ALTA) — el envío queda entre el commit y la revocación de sesiones. **ABIERTO, decídelo al implementar.**
+### A-2 (MEDIA-ALTA) — el envío queda entre el commit y la revocación. **RESUELTO: va DESPUÉS de `revokeSessions`.**
 
 `CompletePasswordReset.php:106` revoca todas las sesiones **post-commit**, y `SendEmailMessage` no está enrutado,
 luego `MailerInterface::send()` **bloquea**. Si el envío se coloca antes de esa línea —que es lo que sugiere
@@ -445,17 +468,14 @@ no dio y que baja la gravedad:* esto **ya es así hoy para los otros 15 eventos 
 este evento con la norma en vez de estrenar un riesgo. Pero la frase «sin rollback del reset» era falsa y está
 corregida.
 
-### A-4 (MEDIA) — ④ desarma el único observable de `failed`. **ABIERTO — es una decisión, no una tarea.**
+### A-4 (MEDIA) — ④ desarma el único observable de `failed`. **RESUELTO: ④ sale del alcance.**
 
 Medido: `ReportDeadLetterBacklogMessage` nace con `maxBacklog = 0` y `maxAgeHours = 24`, y el handler solo calla
 si `total <= maxBacklog` **y** `oldestAgeHours <= maxAgeHours` (`ReportDeadLetterBacklogHandler.php:43–45`). Con
 `maxBacklog = 0`, **hoy cualquier mensaje en reposo dispara la alarma**, y esa alarma es la única señal (Sentry
 está deliberadamente sin cablear). Podar `failed` convierte «alarma hasta que un humano haga
 `messenger:failed:retry`» en **pérdida silenciosa del efecto**. La afirmación de AC3c «la alarma horaria
-existente sigue funcionando» es **engañosa**. ④ entró en alcance por decisión de Sergio; este hallazgo dice que
-④ tal como está formulada **degrada un control existente**, así que hay que elegir: retención mucho más larga
-que el umbral de alarma, poda restringida a clases concretas, o alarmar-antes-de-podar. **No implementes ④ sin
-resolver esto por escrito.**
+existente sigue funcionando» es **engañosa**. **Resuelto sacando ④ del alcance** — ver la sección *④ … FUERA DE ALCANCE* arriba, con el argumento de los tres analistas y la forma que tendría que tener si algún día vuelve.
 
 ### A-5 (MEDIA) — el runbook se contradecía. **INCORPORADO en la Tarea 6c.**
 
