@@ -1,5 +1,5 @@
 # generated: 2026-06-23
-# last_updated: 2026-07-10
+# last_updated: 2026-07-30
 # project: ERPify
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-22
+last_updated: 2026-07-30
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -134,6 +134,35 @@ development_status:
   u-5a-cerrar-376-tombstone-actor-ids: done
   u-5b-borrado-gdpr-consola: done
   epic-users-admin-retrospective: done
+
+  # Epic gdpr-hardening (G): garantías de borrado ejecutables — convertir las garantías de borrado de datos
+  # personales de prosa en mecanismo con control capaz de fallar, sobre Iam/Identity, Iam/Invitation,
+  # Organization/Membership, Shared/Audit y los transportes Messenger persistidos.
+  # arch-addendum-gdpr-hardening.md (SI-21…SI-23, #606/#607) + epics-gdpr-hardening.md (PR #609).
+  # No introduce principio nuevo: extiende el patrón ya institucionalizado (registro declarativo + gate
+  # obligatorio, 6 instancias). Unidad = EJE de garantía, no issue: cada historia instala declaración +
+  # mecanismo + control capaz de fallar. Orden de merge safe-first (las historias van en ese orden, no en
+  # G-N numérico): G-4a → G-1a → (G-1b · G-2) → G-3a · G-3b. G-1b y G-2 tienen gate en G-1a (el eje, que
+  # llega VERDE); G-4a, G-3a y G-3b son independientes y paralelizables. G-4a primero por ser la única fuga
+  # viva medida — y es la primera instancia de SI-21, no una excepción a él.
+  # G-3a y G-3b arrancan con una DECISIÓN de diseño abierta (qué cuenta como segundo testigo · dónde vive el
+  # schedule de Iam). Precondición normativa de la épica: ninguna implementación empieza antes de que esa
+  # decisión quede registrada por escrito; con recomendación, la primera tarea es confirmarla o refutarla.
+  # Definición de hecho de la épica: ninguna historia llega a done sin pase adversarial REGISTRADO por alguien
+  # distinto del autor, declarando dónde quedó (CLAUDE.md → Security review → Process).
+  # FUERA: G-4b (eje Messenger completo) diferida, bloqueada por el ownership de referencias nacidas en
+  # configuración — no es GDPR sino metadatos arquitectónicos. #567 (¿sobrevive el CLI audit:gdpr:erase?)
+  # decisión pendiente del usuario, ninguna historia lo presupone. #562/#565 seguimiento operativo. #564 fuera
+  # por ALCANZABILIDAD (php no declara replicas: en compose.prod.yaml); tripwire de reapertura: réplicas de php
+  # o deploy rolling, momento en el que pasa a defecto de DISPONIBILIDAD urgente.
+  epic-gdpr-hardening: backlog
+  g-4a-fuga-passwordresetcompleted-transportes-messenger: backlog
+  g-1a-eje-declaracion-atributo-registro-generado-gate: backlog
+  g-1b-referencias-huerfanas-membership-invitation: backlog
+  g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
+  g-3a-segundo-testigo-del-registro: backlog
+  g-3b-schedule-observable-alertado-del-reconciliador: backlog
+  epic-gdpr-hardening-retrospective: optional
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.
