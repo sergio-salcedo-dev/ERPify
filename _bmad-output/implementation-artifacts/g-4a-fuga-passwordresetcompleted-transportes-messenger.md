@@ -139,7 +139,7 @@ cuerpo del PR debe reproducirlo.
 | Opción | Qué hace | Coste medido |
 |--------|----------|--------------|
 | **①a** | Desenrutar (borrar la línea 28) o enrutar a `sync`, **dejando el reactor** | El envío SMTP entra en la transacción con el lock de fila tomado, y un fallo de correo **rollea el reset**. Notifica antes del commit. **Refutada por medición** salvo argumento explícito en contra. |
-| **①b** ✅ **ELEGIDA** | Desenrutar **y** mover la notificación a un envío **post-commit best-effort** en `CompletePasswordReset`, espejo exacto de `RequestPasswordReset:95–101` y `RevokeSessionsBestEffort` | Garantía **estructural**: no hay copia persistida porque no hay transporte. Sin SMTP en transacción, sin rollback del reset, sin notificar un cambio no comiteado. Cuesta retirar el reactor y su claim de deduplicación (bajo entrega única post-commit no hay redelivery que deduplicar). |
+| **①b** ✅ **ELEGIDA** | Desenrutar **y** mover la notificación a un envío **post-commit best-effort** en `CompletePasswordReset`, espejo exacto de `RequestPasswordReset:95–101` y `RevokeSessionsBestEffort` | Garantía **estructural**: no hay copia persistida porque no hay transporte. Sin SMTP en transacción y sin notificar un cambio no comiteado. **Matiz que el pase adversarial corrigió: «sin rollback del reset» era demasiado fuerte** — desenrutar mete en la transacción no solo el reactor de correo sino también `RunProjectionsOnDomainEvent`, y un proyector que lance sí rolearía el reset (ver hallazgo A-3). Cuesta retirar el reactor y su claim de deduplicación (bajo entrega única post-commit no hay redelivery que deduplicar). |
 | **②** | Mantener `async` y purgar `messenger_messages` + `failed` en la cadena de erasure | Compensatoria, no estructural: cuerpos serializados, `failed` no se vacía nunca, y añade **otro colaborador** a `FulfilIdentityErasure`, que ya está por encima del umbral y lo declara (`@SuppressWarnings("PHPMD.CouplingBetweenObjects")`, línea 62). |
 | **③** | Transporte con TTL | No borra la PII: la **envejece**. Refutada por el propio invariante SI-21. |
 
@@ -243,8 +243,20 @@ línea de routing.* **Registro declarativo cruzado contra `routing`, no lista ne
 - **Sí, target `php.lint.*` propio**, cableado en `php.quality` **Y** en `php.quality.dry-run`
   (NFR11 — CI corre el *dry-run*; `make/php-quality.mk:148,166,173–174`), siguiendo la convención uno-a-uno de
   los gates existentes para que CI diga **qué frontera** se rompió.
+- **OBLIGATORIO — el gate ingenuo es evadible por cinco vías, y sin cubrirlas no sirve de nada.** Medido en
+  `vendor/symfony/messenger/Handler/HandlersLocator.php:62–71`: `listTypes()` devuelve la clase **más**
+  `class_parents()`, `class_implements()`, comodines de namespace y `'*'`; y
+  `Transport/Sender/SendersLocator.php:50–76` recorre esa lista contra el mapa **y además** aplica
+  `#[AsMessage(transport:)]` declarado en el propio evento **sin ninguna entrada en `routing`**. Es decir,
+  devuelven el id al transporte persistido: `Erpify\Shared\Event\Domain\DomainEvent: async`, un comodín
+  `Erpify\Iam\Identity\Domain\Event\*: async`, `'*': async`, una **interfaz** que el evento implemente,
+  o un `#[AsMessage('async')]` sobre la clase. **Ninguna es una clase concreta con `aggregateType()`
+  invocable**, así que un gate que itere las claves de `routing` esperando FQCN las salta — y el check de
+  completitud tampoco puede clasificarlas, luego tampoco rompe el build. El gate debe resolver cada clave
+  a su **conjunto de eventos alcanzables** (no a una clase), y escanear `#[AsMessage]` en `api/src`.
 - Pinna que el gate **detecta** (fixture sucio → falla) y que **no es vacuo** (escanea ≥1 entrada), como
-  `EventDispatchGateTest::testFixtureExposesMatcher` / `testGateScansAtLeastOneApplicationFile`.
+  `EventDispatchGateTest::testFixtureExposesMatcher` / `testGateScansAtLeastOneApplicationFile`. **Añade un
+  fixture por cada una de las cinco vías de arriba** — si el gate no las caza, no protege nada.
 
 **AC3b — El envío queda pinnado como POST-commit, no solo como «se envía».**
 **Given** el flujo de restablecimiento,
@@ -379,8 +391,11 @@ de alcance (bloqueada por la pregunta abierta de *ownership de referencias nacid
   - [ ] Lo que sí hay que hacer: **dejar el procedimiento escrito** en el PR para el día que exista despliegue,
         porque el conocimiento se pierde y esta historia es donde se midió. Orden correcto —**sin downtime y sin
         perder notificaciones**— sería: desplegar → dejar que los workers **drenen `async` solos** (cuenta a 0;
-        esos usuarios sí reciben su correo) → purgar solo lo que quede en `failed`. *No hace falta parar
-        workers:* tras el deploy no se escribe ni una fila más de este tipo.
+        **y aquí está la trampa que el pase adversarial destapó:** ese drenado **NO envía los correos**, porque
+        el mismo despliegue retira `SendEmailOnPasswordResetCompleted` y el único handler que queda es
+        `RunProjectionsOnDomainEvent`. O se drena **antes** de desplegar, o se acepta la pérdida de esas
+        notificaciones y **se declara**. *No hace falta parar workers:* tras el deploy no se escribe ni
+        una fila más de este tipo.
   - [ ] Y el detalle que hace que el `LIKE` funcione, porque es el que se olvida: la purga va **por tipo de
         mensaje, no enumerando sujetos** — se retira la clase entera y nadie toca un UUID. El `body` es
         `addslashes(serialize($envelope))` y `addslashes` **duplica cada backslash**, así que
@@ -392,6 +407,84 @@ de alcance (bloqueada por la pregunta abierta de *ownership de referencias nacid
   - [ ] Recorrer la checklist de seguridad de `CLAUDE.md` sobre el diff (ver *Seguridad* abajo).
   - [ ] **Pase adversarial por alguien distinto del autor, REGISTRADO**, declarando dónde quedó. Sin él la
         historia no llega a `done` (NFR10). Un pase que no encuentra nada cuenta — y también se declara.
+
+## Pase adversarial — REGISTRADO (NFR10 / `CLAUDE.md` → *Security review* → **Process**)
+
+**Dónde queda el registro: aquí, y debe reproducirse en el cuerpo del PR.** **Cuándo:** 2026-07-30, sobre el
+contrato y la decisión, **antes** de escribir código. **Quién:** lectura hostil por un revisor **distinto del
+autor** de la historia, con instrucción explícita de *romper*, prohibición de aceptar como cierta ninguna
+afirmación del artefacto, y obligación de re-medir. **Cobertura declarada:** el artefacto y el código de `api/`;
+**no** cubre ejecución de gates, PWA, ni la implementación (que no existe todavía). **Veredicto:** la dirección
+①b aguanta; **el contrato no aguantaba** — siete hallazgos, cuatro de ellos ya incorporados arriba.
+
+**Yo verifiqué cada hallazgo antes de aceptarlo, y el revisor también falló un detalle:** situó el
+`@SuppressWarnings` de `FulfilIdentityErasure` en la línea 63; está en la **62**. Su recuento de 8 colaboradores
+en el constructor sí es correcto. Trátalo como a los demás analistas: acierta en lo grande, hay que medirle lo
+pequeño.
+
+### A-1 (ALTA) — el gate era evadible por cinco vías. **INCORPORADO en AC3.**
+
+### A-2 (MEDIA-ALTA) — el envío queda entre el commit y la revocación de sesiones. **ABIERTO, decídelo al implementar.**
+
+`CompletePasswordReset.php:106` revoca todas las sesiones **post-commit**, y `SendEmailMessage` no está enrutado,
+luego `MailerInterface::send()` **bloquea**. Si el envío se coloca antes de esa línea —que es lo que sugiere
+«espejo exacto de `RequestPasswordReset:95–101`», donde el envío va al final del método— entonces **con un
+servidor de correo colgado las sesiones de una cuenta recién comprometida siguen vivas durante todo el timeout
+SMTP**, que es justo la ventana que este flujo existe para cerrar; y además retrasa la cookie de la sesión nueva.
+**El espejo no es transplantable:** `RequestPasswordReset` es anónimo y de respuesta uniforme; `complete()`
+termina en una revocación crítica. **Requisito: el envío va DESPUÉS de `revokeSessions`**, y AC3b debe pinnar
+también ese orden, no solo el orden respecto al commit.
+
+### A-3 (MEDIA) — desenrutar mete el runner de proyecciones en la transacción. **INCORPORADO en la tabla ①b.**
+
+`RunProjectionsOnDomainEvent` maneja **todo** `DomainEvent`, y `ProjectionRunner::catchUp` hace
+`entityManager->wrapInTransaction(...)` con `checkpointStore->lockAndRead($name)` **por cada proyector**
+(`ProjectionRunner.php:41–44,56–60`). Al desenrutar, eso pasa a ejecutarse dentro de la transacción del reset,
+tomando locks de `projection_checkpoint`, y **un proyector que lance rolea el reset**. *Contexto que el revisor
+no dio y que baja la gravedad:* esto **ya es así hoy para los otros 15 eventos sin enrutar**, así que ①b alinea
+este evento con la norma en vez de estrenar un riesgo. Pero la frase «sin rollback del reset» era falsa y está
+corregida.
+
+### A-4 (MEDIA) — ④ desarma el único observable de `failed`. **ABIERTO — es una decisión, no una tarea.**
+
+Medido: `ReportDeadLetterBacklogMessage` nace con `maxBacklog = 0` y `maxAgeHours = 24`, y el handler solo calla
+si `total <= maxBacklog` **y** `oldestAgeHours <= maxAgeHours` (`ReportDeadLetterBacklogHandler.php:43–45`). Con
+`maxBacklog = 0`, **hoy cualquier mensaje en reposo dispara la alarma**, y esa alarma es la única señal (Sentry
+está deliberadamente sin cablear). Podar `failed` convierte «alarma hasta que un humano haga
+`messenger:failed:retry`» en **pérdida silenciosa del efecto**. La afirmación de AC3c «la alarma horaria
+existente sigue funcionando» es **engañosa**. ④ entró en alcance por decisión de Sergio; este hallazgo dice que
+④ tal como está formulada **degrada un control existente**, así que hay que elegir: retención mucho más larga
+que el umbral de alarma, poda restringida a clases concretas, o alarmar-antes-de-podar. **No implementes ④ sin
+resolver esto por escrito.**
+
+### A-5 (MEDIA) — el runbook se contradecía. **INCORPORADO en la Tarea 6c.**
+
+### A-6 (BAJA-MEDIA) — el correo miente, y con A-2 mal resuelto mentiría siempre.
+
+`SymfonyPasswordChangedEmailSender.php:57,72` afirma *«We signed out all your open sessions for security»*, pero
+`RevokeSessionsBestEffort` **traga el fallo**. Hoy el orden es indeterminado; con el envío antes de la revocación
+el correo precedería **siempre** al hecho que afirma. Resolver A-2 lo mitiga; queda el caso del revoke fallido.
+Decide si el texto se ablanda o si se acepta y se declara.
+
+### A-7 (BAJA-MEDIA) — nadie captura `EventStreamConcurrencyConflict`. **Afecta a la Tarea 6b.**
+
+`git grep` en `api/src` lo encuentra **solo** en `DbalEventStore` (declaración y lanzamiento): **ningún caso de
+uso reintenta**. Activar `NULLS NOT DISTINCT` convierte appends concurrentes al mismo agregado en un 409 crudo
+al cliente por caminos que hoy pasan en silencio. Enumera esos caminos antes de mergear, o añade reintento, o
+saca 6b del PR. **Y ten presente que es un cambio de concurrencia del `event_store` compartido embutido en una
+historia GDPR** — si al enumerarlos aparece más de un camino afectado, sácalo.
+
+### Sospecha no cerrada
+
+AC1 (`0 outbox events … on queue "async"`) **también pasa si el reset falló** y no hubo evento. Escribe la
+aserción en el escenario que ya lleva `password_reset.feature:127` (que exige el evento almacenado), para que no
+pueda leerse verde por ausencia de flujo.
+
+### Detalle que invalida el `LIKE` del runbook
+
+`PhpSerializer::encode()` hace `base64_encode($body)` si el resultado no es UTF-8 válido
+(`vendor/symfony/messenger/Transport/Serialization/PhpSerializer.php:165–167`). En ese caso **ningún `LIKE` de
+texto plano casa**. El runbook debe contemplarlo.
 
 ## Dev Notes
 
