@@ -156,7 +156,7 @@ development_status:
   # por ALCANZABILIDAD (php no declara replicas: en compose.prod.yaml); tripwire de reapertura: réplicas de php
   # o deploy rolling, momento en el que pasa a defecto de DISPONIBILIDAD urgente.
   epic-gdpr-hardening: in-progress
-  g-4a-fuga-passwordresetcompleted-transportes-messenger: review
+  g-4a-fuga-passwordresetcompleted-transportes-messenger: done
   g-1a-eje-declaracion-atributo-registro-generado-gate: backlog
   g-1b-referencias-huerfanas-membership-invitation: backlog
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog

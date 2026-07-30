@@ -4,7 +4,7 @@ baseline_commit: f4dbe4d1
 
 # Story 1.1 (G-4a): Cerrar la fuga de `PasswordResetCompleted` en los transportes Messenger persistidos
 
-Status: review
+Status: done
 
 <!-- Validación opcional: correr `validate-create-story` antes de `dev-story` para un check de calidad. -->
 
