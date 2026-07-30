@@ -338,8 +338,17 @@ de alcance (bloqueada por la pregunta abierta de *ownership de referencias nacid
         así que dos filas `(NULL, x, 1)` **no colisionan**: el control de concurrencia optimista que
         `DbalEventStore:26–27` afirma **no existe hoy**, y su `catch (UniqueConstraintViolationException)` es
         inalcanzable.
-  - [ ] **Antes de tocar nada**, contar duplicados existentes: si hay filas `(NULL, aggregate_id,
-        aggregate_version)` repetidas, la recreación del índice **falla** y esto sale de este PR.
+  - [x] **Semántica CONFIRMADA empíricamente** (2026-07-30, PostgreSQL 18.3, tabla temporal, sin tocar datos
+        reales): con un índice único `(tenant_id, aggregate_id, aggregate_version)` **idéntico al del esquema
+        vivo**, dos filas `(NULL, <mismo uuid>, 1)` **entran las dos**; añadiendo `NULLS NOT DISTINCT`, la
+        segunda es rechazada con `duplicate key value violates unique constraint`. El índice real se leyó de
+        `pg_indexes`, no del fichero de migración, y **no lleva la cláusula**. Deja de ser razonamiento.
+  - [ ] **PENDIENTE Y BLOQUEANTE — contar duplicados en PRODUCCIÓN.** El conteo en la base de desarrollo salió
+        `0`, pero es **vacuo**: `event_store` tiene **0 filas** ahí (la suite Behat la trunca,
+        `FixturesContext.php:131`). Cero duplicados sobre cero filas no autoriza nada. La consulta que decide es
+        `SELECT count(*) FROM (SELECT 1 FROM event_store GROUP BY tenant_id, aggregate_id, aggregate_version
+        HAVING count(*) > 1) d` **contra producción** (acceso remoto en `docs/vps-deployment.md`). Si devuelve
+        > 0, la recreación del índice **falla** y esta tarea sale del PR.
   - [ ] Si está limpio: migración que recrea el índice con `NULLS NOT DISTINCT` (PostgreSQL 18 lo soporta),
         `down()` reversible, más un test que fije el comportamiento nuevo.
   - [ ] **Declarar el cambio de comportamiento en el PR:** appends concurrentes al mismo agregado que hoy pasan
