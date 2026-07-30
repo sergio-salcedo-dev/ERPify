@@ -43,6 +43,16 @@ cerrada) · control (un test que falla si el evento vuelve a un transporte persi
    `AuditActorAnonymiser`, `AuditResourceAnonymiser`, `PurgeUserSessions` y `AuditLogger`. **Cero tablas de
    Messenger.** Tras el erase, el id real sobrevive en `messenger_messages` y en `failed`.
 
+> **Qué significa «fuga viva» aquí, dicho con precisión.** **No existe entorno de producción** — el proyecto
+> sigue en desarrollo (confirmado por Sergio, 2026-07-30). Luego **el dato personal de ninguna persona real ha
+> quedado expuesto**: lo vivo es el **mecanismo**, no un incidente. Esto no rebaja la historia, y conviene ver
+> por qué **con el propio criterio de la épica**: #564 quedó fuera *por alcanzabilidad* —su ventana exige
+> réplicas de `php` que `compose.prod.yaml` no declara, así que es **latente**—, mientras que aquí el camino se
+> ejecuta **cada vez que alguien completa un restablecimiento**, hoy, en desarrollo, sin topología especial. La
+> distinción de la épica se sostiene: G-4a es **alcanzable**, #564 no. Lo que cambia es la redacción del PR: se
+> arregla **antes** de que existan datos reales, que es el momento barato, y **no** se escribe que se contuvo
+> una fuga de datos personales — porque no la hubo.
+
 ### Hechos medidos que el corte de épica NO registra — léelos antes de decidir
 
 **(A) Desenrutar / `sync` no significa «no se entrega»: el reactor pasa a correr DENTRO de la transacción.**
@@ -343,28 +353,40 @@ de alcance (bloqueada por la pregunta abierta de *ownership de referencias nacid
         vivo**, dos filas `(NULL, <mismo uuid>, 1)` **entran las dos**; añadiendo `NULLS NOT DISTINCT`, la
         segunda es rechazada con `duplicate key value violates unique constraint`. El índice real se leyó de
         `pg_indexes`, no del fichero de migración, y **no lleva la cláusula**. Deja de ser razonamiento.
-  - [ ] **PENDIENTE Y BLOQUEANTE — contar duplicados en PRODUCCIÓN.** El conteo en la base de desarrollo salió
-        `0`, pero es **vacuo**: `event_store` tiene **0 filas** ahí (la suite Behat la trunca,
-        `FixturesContext.php:131`). Cero duplicados sobre cero filas no autoriza nada. La consulta que decide es
+  - [x] **La precondición de duplicados NO bloquea: no existe entorno de producción.** El proyecto sigue en
+        desarrollo y no hay despliegue real (confirmado por Sergio, 2026-07-30), así que **no hay base con datos
+        acumulados sobre la que la recreación del índice pueda fallar**. La comprobación en desarrollo dio `0`
+        duplicados y además `event_store` está a **0 filas** (la suite Behat trunca la tabla,
+        `FixturesContext.php:131`). La migración se aplica sobre tablas vacías.
+  - [ ] **Resto de precaución, barata:** cualquier base local de un desarrollador con filas acumuladas podría
+        tener duplicados y hacer fallar el boot (las migraciones corren en el entrypoint). Si el `up()` revienta
+        creando el índice, la causa es esa — cuéntalos con
         `SELECT count(*) FROM (SELECT 1 FROM event_store GROUP BY tenant_id, aggregate_id, aggregate_version
-        HAVING count(*) > 1) d` **contra producción** (acceso remoto en `docs/vps-deployment.md`). Si devuelve
-        > 0, la recreación del índice **falla** y esta tarea sale del PR.
-  - [ ] Si está limpio: migración que recrea el índice con `NULLS NOT DISTINCT` (PostgreSQL 18 lo soporta),
+        HAVING count(*) > 1) d`. **Y si alguna vez sale > 0, no es solo un obstáculo para la migración: es la
+        prueba de que el defecto ya se materializó** y hay streams con versiones repetidas. Merece mirarse por
+        sí mismo.
+  - [ ] Migración que recrea el índice con `NULLS NOT DISTINCT` (PostgreSQL 18.3 confirmado en el stack local),
         `down()` reversible, más un test que fije el comportamiento nuevo.
   - [ ] **Declarar el cambio de comportamiento en el PR:** appends concurrentes al mismo agregado que hoy pasan
         en silencio empezarán a dar `EventStreamConcurrencyConflict`. Es el comportamiento que el docblock ya
         promete, pero es un cambio real y puede destapar carreras latentes.
-- [ ] **Tarea 6c — Runbook de despliegue (las filas de HOY no las arregla el código)**
-  - [ ] `①b` cierra la fuga **futura**; las filas ya escritas siguen ahí. Orden decidido, **sin downtime y sin
-        perder notificaciones**: desplegar → dejar que los workers **drenen `async` solos** (cuenta a 0; esos
-        usuarios sí reciben su correo) → purgar solo lo que quede en `failed`. *No hace falta parar workers:*
-        tras el deploy no se escribe ni una fila más de este tipo.
-  - [ ] **La purga se hace por tipo de mensaje, no enumerando sujetos borrados** — se retira la clase entera y
-        nadie toca un UUID. **Cuidado con el patrón:** el `body` es `addslashes(serialize($envelope))` y
-        `addslashes` **duplica cada backslash**, así que un `LIKE '%Domain\Event\PasswordResetCompleted%'` **no
-        casa**. Usa el nombre corto de clase, sin backslashes: `LIKE '%PasswordResetCompleted%'`. Un
-        `SELECT count(*)` con el mismo `WHERE` **antes** es el inventario.
-  - [ ] Decir explícitamente que el runbook **no toca `event_store`** (ver Tarea 6).
+- [ ] **Tarea 6c — Runbook de migración de datos: NO SE EJECUTA, se documenta**
+  - [ ] **No hay filas que limpiar y por tanto no hay runbook que correr.** El proyecto está en desarrollo y
+        **no existe entorno de producción** (confirmado por Sergio, 2026-07-30): no hay `messenger_messages` ni
+        `failed` desplegados con ids de personas reales. Lo que en un sistema desplegado sería un paso de la
+        entrega, aquí es **vacío**. **No inventes trabajo de limpieza para justificarlo, ni escribas en el PR
+        que «se purgaron las filas existentes»** — no había ninguna.
+  - [ ] Lo que sí hay que hacer: **dejar el procedimiento escrito** en el PR para el día que exista despliegue,
+        porque el conocimiento se pierde y esta historia es donde se midió. Orden correcto —**sin downtime y sin
+        perder notificaciones**— sería: desplegar → dejar que los workers **drenen `async` solos** (cuenta a 0;
+        esos usuarios sí reciben su correo) → purgar solo lo que quede en `failed`. *No hace falta parar
+        workers:* tras el deploy no se escribe ni una fila más de este tipo.
+  - [ ] Y el detalle que hace que el `LIKE` funcione, porque es el que se olvida: la purga va **por tipo de
+        mensaje, no enumerando sujetos** — se retira la clase entera y nadie toca un UUID. El `body` es
+        `addslashes(serialize($envelope))` y `addslashes` **duplica cada backslash**, así que
+        `LIKE '%Domain\Event\PasswordResetCompleted%'` **no casa**; usa el nombre corto de clase, sin
+        backslashes: `LIKE '%PasswordResetCompleted%'`.
+  - [ ] Decir explícitamente que ese procedimiento **no tocaría `event_store`** (ver Tarea 6).
 - [ ] **Tarea 7 — Gates y pase adversarial (AC6 + definición de hecho de la épica)**
   - [ ] `make php.quality`, `make php.unit`, `make php.behat` — frescos, con exit code.
   - [ ] Recorrer la checklist de seguridad de `CLAUDE.md` sobre el diff (ver *Seguridad* abajo).
