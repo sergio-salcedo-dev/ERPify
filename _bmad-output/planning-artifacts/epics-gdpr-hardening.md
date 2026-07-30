@@ -647,6 +647,12 @@ cifra; y la **tabla de correspondencia `id real → pseudónimo` está vetada po
 destruya el secreto de derivación — lo que toca **todos** los eventos, el replay de proyecciones y
 `projection_checkpoint`.
 
+**Encuadre correcto del problema, porque «el crypto-shredding no aplica» se malinterpreta:** el crypto-shredding
+aplica a **secretos** y no aplica a una **clave indexada**, así que esto **no es un problema criptográfico sino
+de modelado de identidad**. La pregunta real no es *«cómo ciframos el `aggregate_id`»* sino *«¿debe el UUID real
+de una persona ser la identidad permanente de su stream de eventos?»*. Formulada así se ve por qué es material
+de ADR y no una tarea: la respuesta cambia el **modelo**, no la infraestructura.
+
 **Dato que acota el debate:** aquí **no hay Event Sourcing** — ningún agregado se rehidrata de eventos (`User`
 es entidad Doctrine); `event_store` es log de negocio + fuente de proyecciones. Sin replay de agregados **no hay
 coartada** para conservar el UUID real; pero **sí** hay replay de proyecciones, así que el id no puede anularse

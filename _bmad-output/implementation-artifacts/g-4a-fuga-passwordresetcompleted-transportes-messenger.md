@@ -113,8 +113,13 @@ cuerpo del PR debe reproducirlo.
 (el pase adversarial de NFR10 sigue siendo obligatorio y lo debe hacer alguien distinto del autor):
 
 - *Arquitectura:* el reactor vive en `Iam/Identity/Infrastructure` y reacciona a un evento de `Iam/Identity`,
-  dependiendo del `UserRepository` y del sender **del mismo módulo**. Cero desacoplamiento ganado, toda la
-  maquinaria de transporte + deduplicación pagada: es la forma cara del acoplamiento directo.
+  dependiendo del `UserRepository` y del sender **del mismo módulo**. **Formulado con precisión, porque esta
+  frase se citará fuera de contexto:** un reactor *sí* aporta desacoplamiento de compilación y de extensión
+  siempre; lo que ocurre **en este caso concreto** es que ese desacoplamiento no es arquitectónicamente
+  relevante —mismo bounded context, mismo módulo, mismo repositorio, mismo caso de uso, mismo despliegue, sin
+  asincronía real y sin consumidores alternativos— y por tanto **no justifica su coste**: transporte persistido
+  + deduplicación + tabla de claims + su poda. No es «el reactor no desacopla»; es «aquí lo que desacopla no
+  paga lo que cuesta, y al desenrutar además rompería la frontera transaccional».
 - *Implementación:* ①a muere por una vía extra — el `claim()` del deduplicador correría en la misma transacción
   que el rollback, así que **el propio guard de idempotencia se revierte mientras el SMTP ya salió**.
 - *Externo:* desenrutar no rompe el diseño, **revela un error de diseño que ya existía**; `async` lo ocultaba.
