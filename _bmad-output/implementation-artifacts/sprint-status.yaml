@@ -155,8 +155,8 @@ development_status:
   # decisión pendiente del usuario, ninguna historia lo presupone. #562/#565 seguimiento operativo. #564 fuera
   # por ALCANZABILIDAD (php no declara replicas: en compose.prod.yaml); tripwire de reapertura: réplicas de php
   # o deploy rolling, momento en el que pasa a defecto de DISPONIBILIDAD urgente.
-  epic-gdpr-hardening: backlog
-  g-4a-fuga-passwordresetcompleted-transportes-messenger: backlog
+  epic-gdpr-hardening: in-progress
+  g-4a-fuga-passwordresetcompleted-transportes-messenger: ready-for-dev
   g-1a-eje-declaracion-atributo-registro-generado-gate: backlog
   g-1b-referencias-huerfanas-membership-invitation: backlog
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
