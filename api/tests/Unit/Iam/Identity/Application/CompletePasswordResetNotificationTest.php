@@ -45,17 +45,17 @@ final class CompletePasswordResetNotificationTest extends TestCase
         // Sending from inside the transaction would announce a credential change a rollback could still undo,
         // and would hold the user row lock across a blocking SMTP round trip.
         $transactions = new InlineTransactionManager();
-        $committedAtSend = null;
-        $emails = new RecordingPasswordChangedEmailSender(observe: static function () use (
-            $transactions,
-            &$committedAtSend,
-        ): void {
-            $committedAtSend = $transactions->committed;
-        });
+        $emails = new RecordingPasswordChangedEmailSender(
+            sample: static fn (): bool => $transactions->committed,
+        );
 
         $this->complete($emails, transactions: $transactions);
 
-        $this->assertTrue($committedAtSend, 'The password-changed notification was sent inside the transaction.');
+        $this->assertSame(
+            [true],
+            $emails->samples,
+            'The password-changed notification was sent inside the transaction.',
+        );
         $this->assertSame([UserMother::DEFAULT_EMAIL], $emails->sentTo);
     }
 
@@ -65,19 +65,15 @@ final class CompletePasswordResetNotificationTest extends TestCase
         // SendEmailMessage is deliberately unrouted). Ahead of the revoke, a hung mail server would keep the
         // sessions of a just-compromised account alive for the whole SMTP timeout.
         $sessions = new InMemorySessionRepository();
-        $revokedAtSend = null;
-        $emails = new RecordingPasswordChangedEmailSender(observe: static function () use (
-            $sessions,
-            &$revokedAtSend,
-        ): void {
-            $revokedAtSend = $sessions->revokeAllCalls;
-        });
+        $emails = new RecordingPasswordChangedEmailSender(
+            sample: static fn (): array => $sessions->revokeAllCalls,
+        );
 
         $this->complete($emails, sessions: $sessions);
 
         $this->assertSame(
-            [UserMother::DEFAULT_ID],
-            $revokedAtSend,
+            [[UserMother::DEFAULT_ID]],
+            $emails->samples,
             'The password-changed notification was sent before the sessions were revoked.',
         );
     }
