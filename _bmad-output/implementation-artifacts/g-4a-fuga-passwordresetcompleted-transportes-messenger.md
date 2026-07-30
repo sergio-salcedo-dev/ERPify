@@ -711,12 +711,32 @@ solo cambia duplicados silenciosos por 409 silenciosos. *Confirmado empíricamen
 declara, y es el valor que la política nombra como destino permitido para un agregado-persona. Retirarlo
 dejaría indeclarable la propia excepción sancionada del gate.
 
-**Deuda propuesta, NO aplicada (queda a decisión de Sergio).** `CompletePasswordReset` sube a acoplamiento 13
-con el colaborador nuevo y lleva `@SuppressWarnings("PHPMD.CouplingBetweenObjects")` **con su argumento en el
-docblock**. El único colaborador retirable honestamente es la muralla de estado: `wallUnlessActive()` le hace
-dos preguntas al agregado y decide por él (Tell-Don't-Ask), así que `User` podría poseerla y llevarse
-`AccountSuspended`/`AccountDeactivated` con ella → acoplamiento 11. Es un cambio a una muralla de seguridad y no
-se cuela en una PR de GDPR.
+**Deuda de Tell-Don't-Ask: RESUELTA** (autorizada por Sergio, 2026-07-30, después del pase adversarial).
+`wallUnlessActive()` le hacía dos preguntas al agregado (`isActive()`, `isSuspended()`) y decidía por él qué
+excepción implicaba su propio estado. Esa decisión es una propiedad del estado, no del flujo de reset, así que
+la posee `User::ensureActive()`.
+
+- **La pista de que estaba mal ubicada la daba el propio agregado:** el docblock de `isSuspended()` decía que
+  era *«el brazo que la muralla graduada del flujo de reset lee»* — un predicado público que admitía existir
+  para alimentar una regla ajena. Retirado: no le quedaba ningún consumidor de producción.
+- **Un solo caller**, así que la Regla de Tres NO la justifica; la justifica la encapsulación. Medido: el otro
+  sitio que lanza estas excepciones (`ProblemDetailsAuthenticationFailureHandler`) mapea excepciones de
+  **Symfony**, no lee el agregado, así que no es el mismo mecanismo y no se toca.
+- **Se aprovechó para cerrar un `else` implícito.** La forma anterior colapsaba «todo lo que no es SUSPENDED»
+  en `AccountDeactivated`. Ahora es un `match` exhaustivo sobre `IdentityStatus`: `INVITED` tiene su arma
+  explícita (con el comentario de por qué es inalcanzable desde el reset — solo se emiten tokens para
+  `ACTIVE` y ninguna transición vuelve a `INVITED`), **preservando el comportamiento exacto**. Un estado nuevo
+  romperá el `match` en vez de ser admitido por omisión.
+- **Riesgo que el método nuevo introduce y que el docblock declara:** la especificidad graduada
+  (`SUSPENDED` ≠ `DEACTIVATED`) es segura *donde el caller ya ha probado control* — un token de un solo uso o
+  credenciales verificadas. En una superficie pre-identidad confirmaría que la cuenta existe y filtraría su
+  estado. Queda escrito en el método, no en el caso de uso que hoy lo llama.
+- **Medido, no supuesto:** `make php.md` deja de reportar `CompletePasswordReset`, así que el
+  `@SuppressWarnings("PHPMD.CouplingBetweenObjects")` **se ha eliminado de verdad**, no silenciado. Los tests
+  de la muralla viven en `UserAdmissionTest` (clase propia: `UserLifecycleTest` habría pasado de 10 métodos
+  públicos, y son preguntas distintas — cómo cambia el estado vs. qué significa).
+- **Falsificado por partida doble:** admitir `SUSPENDED` rompe 3 tests (2 del caso de uso, 1 del agregado);
+  devolver la razón equivocada para `DEACTIVATED`/`INVITED` rompe 2.
 
 **Nota de seguridad honesta, no omitida.** Al retirar el reactor desaparece su resolución del destinatario en
 el momento del handling, que su docblock vendía como garantía anti-resurrección. Con envío post-commit inmediato
@@ -766,6 +786,7 @@ confirmado está arreglado y re-falsificado.
 - `api/tests/Unit/Iam/Identity/Application/CompletePasswordResetNotificationTest.php`
 - `api/tests/Unit/Iam/Identity/Application/SendPasswordChangedEmailBestEffortTest.php`
 - `api/tests/Unit/Iam/Identity/Application/RecordingLogger.php`
+- `api/tests/Unit/Iam/Identity/Domain/Entity/UserAdmissionTest.php`
 
 **Modificados**
 
@@ -778,6 +799,8 @@ confirmado está arreglado y re-falsificado.
 - `api/tests/Unit/Iam/Identity/Application/CompletePasswordResetTest.php`
 - `api/tests/Unit/Iam/Identity/Application/InlineTransactionManager.php`
 - `api/tests/Unit/Iam/Identity/Infrastructure/Mail/SymfonyPasswordChangedEmailSenderTest.php`
+- `api/src/Iam/Identity/Domain/Entity/User.php`
+- `api/tests/Unit/Iam/Identity/Domain/Entity/UserLifecycleTest.php`
 - `make/php-quality.mk`
 - `CLAUDE.md`
 - `PRODUCTION_SECURITY_CHECKLIST.md`
@@ -807,6 +830,7 @@ confirmado está arreglado y re-falsificado.
 | 2026-07-30 | Gate nuevo `php.lint.persistent-transport` + registro `api/.persistent-transport-policy`, cubriendo las seis formas de routing que `SendersLocator` resuelve. |
 | 2026-07-30 | Cuerpo del correo reescrito: deja de afirmar el cierre de sesiones, que es best-effort. |
 | 2026-07-30 | Tarea 6b (UNIQUE de stream) sacada del PR por el criterio de A-7 — 16 de 20 publicadores sin lock de fila sobre su agregado; registrada en `deferred-work.md`. |
+| 2026-07-30 | Deuda de Tell-Don't-Ask resuelta: la muralla de admisión pasa a `User::ensureActive()` (`match` exhaustivo), `isSuspended()` retirado y el `@SuppressWarnings` de acoplamiento eliminado por medición. |
 | 2026-07-30 | Pase adversarial de la implementación: 17 hallazgos. `Iam.Session` reclasificado a `person` (dos de sus eventos llevan el id de usuario como `aggregate_id`), lector de `#[AsMessage]` alineado con Symfony, gate leyendo toda la config y uniendo entornos, resolución por evento en vez de por clave, y el correo reducido a lo que la credencial garantiza. |
 
 

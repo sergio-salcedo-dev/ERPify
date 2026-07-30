@@ -30,9 +30,10 @@ use SensitiveParameter;
  * The heart of the flow, and the ordering is load-bearing:
  *   1. Resolve the token opaquely — a malformed, unknown, expired or already-consumed link all raise the SAME
  *      {@see InvalidResetToken} BEFORE anything mutates, so the three death cases are byte-identical (SI-13).
- *   2. Wall a non-`ACTIVE` identity (suspended/deactivated between request and complete) with the post-identity
- *      wall, WITHOUT consuming the token or mutating (a valid token proves email control → graduated
- *      specificity, SI-14; the token stays live for a later attempt if the account is reactivated).
+ *   2. Ask the identity to admit itself ({@see User::ensureActive()}), WITHOUT consuming the token or
+ *      mutating. The aggregate names the reason its own status implies; a valid token proves email control,
+ *      so that specificity is safe here. The token stays live for a later attempt if the account is
+ *      reactivated within its TTL.
  *   3. In ONE transaction: CONSUME the token (a conditional delete whose affected-row count is the single-use
  *      guard — two concurrent completions serialise on the row lock, only the first deletes a row, the loser
  *      aborts with {@see InvalidResetToken}), THEN fix the new credential and clear any lockout. Consuming first
@@ -50,14 +51,6 @@ use SensitiveParameter;
  * It returns the identity's email so the HTTP adapter can establish the session (programmatic login on the
  * just-set credential, reusing the native id regeneration): a successful reset signs the user in, and every
  * prior session was already revoked above — reset everywhere, then sign in here.
- *
- * The coupling above the PHPMD threshold is the five ordered steps themselves: four ports, the identity
- * aggregate, the token, and the three exception types the two walls raise. The one collaborator that could be
- * removed honestly is the status wall — `wallUnlessActive()` asks the aggregate two questions and decides for
- * it, so `User` could own it and take {@see AccountSuspended}/{@see AccountDeactivated} with it. That is a
- * change to a security wall and belongs in its own change, not folded into an unrelated one.
- *
- * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final readonly class CompletePasswordReset
 {
@@ -91,7 +84,7 @@ final readonly class CompletePasswordReset
 
         // Cheap first sampling of the wall: the common already-walled case is rejected without paying the
         // KDF or opening a transaction. The authoritative sampling is repeated under the row lock below.
-        $this->wallUnlessActive($user);
+        $user->ensureActive();
 
         // The KDF runs outside the transaction (no row lock held for tens of ms); the rare token consumed
         // between here and the conditional delete below is caught by the consume() affected-rows guard.
@@ -103,7 +96,7 @@ final readonly class CompletePasswordReset
             // admin write and a walled identity could still complete. The lock also serialises against the
             // forgot supersede, and the re-read is the fresh row, never the identity map's snapshot.
             $user = $this->users->findByIdForUpdate($resetToken->userId()) ?? throw new InvalidResetToken();
-            $this->wallUnlessActive($user);
+            $user->ensureActive();
 
             if (!$this->tokens->consume($resetToken)) {
                 throw new InvalidResetToken();
@@ -122,23 +115,6 @@ final readonly class CompletePasswordReset
         $this->notifyPasswordChanged->send($email);
 
         return $email;
-    }
-
-    /**
-     * The post-identity wall (a valid token proves email control, so the reason is graduated, not opaque):
-     * a non-`ACTIVE` identity may not complete a reset, and the token is deliberately NOT consumed — it
-     * stays live for a later attempt if the account is reactivated within its TTL.
-     *
-     * @throws AccountSuspended
-     * @throws AccountDeactivated
-     */
-    private function wallUnlessActive(User $user): void
-    {
-        if ($user->isActive()) {
-            return;
-        }
-
-        throw $user->isSuspended() ? new AccountSuspended() : new AccountDeactivated();
     }
 
     /**

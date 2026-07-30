@@ -66,12 +66,11 @@ final class UserLifecycleTest extends TestCase
     public function testSuspendRaisesTheReversibleWallAndRecordsTheEvent(): void
     {
         $user = UserMother::create();
-        $this->assertFalse($user->isSuspended());
+        $this->assertSame(IdentityStatus::ACTIVE, $user->status());
 
         $user->suspend();
 
         $this->assertSame(IdentityStatus::SUSPENDED, $user->status());
-        $this->assertTrue($user->isSuspended());
 
         $events = $user->pullDomainEvents();
         $this->assertCount(1, $events);

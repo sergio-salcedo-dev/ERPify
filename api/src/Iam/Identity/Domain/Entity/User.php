@@ -15,6 +15,8 @@ use Erpify\Iam\Identity\Domain\Event\UserDeactivated;
 use Erpify\Iam\Identity\Domain\Event\UserLocked;
 use Erpify\Iam\Identity\Domain\Event\UserRolesChanged;
 use Erpify\Iam\Identity\Domain\Event\UserSuspended;
+use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
+use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Shared\Access\Domain\Role;
@@ -146,12 +148,29 @@ final class User extends AggregateRoot
     }
 
     /**
-     * Whether the reversible post-active wall is up — the arm the reset flow's graduated wall reads to name
-     * the specific reason (a valid token proves email control, so specificity is safe there).
+     * The post-identity admission wall: refuses a non-`ACTIVE` identity, naming the reason its own status
+     * implies. Which exception a status warrants is a property of the status, so the aggregate owns it —
+     * a caller that reads the predicates and picks the exception itself is deciding on the aggregate's
+     * behalf, and the next caller will pick differently.
+     *
+     * **Only call this where the caller has already proven control of the identity** — a valid single-use
+     * token, or verified credentials. The refusal is deliberately specific (`SUSPENDED` and `DEACTIVATED`
+     * answer differently), so on a pre-identity surface it would confirm an account exists and leak its
+     * status. Where that matters, the uniform path is silence, not a graduated wall.
+     *
+     * @throws AccountSuspended   the reversible wall — the identity may return
+     * @throws AccountDeactivated the terminal wall, and the answer for an identity that never activated
      */
-    public function isSuspended(): bool
+    public function ensureActive(): void
     {
-        return IdentityStatus::SUSPENDED === $this->status;
+        match ($this->status) {
+            IdentityStatus::ACTIVE => null,
+            IdentityStatus::SUSPENDED => throw new AccountSuspended(),
+            // INVITED is unreachable from the reset flow — a token is only minted for an ACTIVE identity and
+            // no transition returns to INVITED — but an unadmitted identity must be refused explicitly
+            // rather than fall through some `else` into whichever reason happens to be last.
+            IdentityStatus::INVITED, IdentityStatus::DEACTIVATED => throw new AccountDeactivated(),
+        };
     }
 
     /**
