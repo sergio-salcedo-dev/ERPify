@@ -4,17 +4,22 @@ baseline_commit: 9310efeb
 
 # Story 1.2 (G-1a): El eje de declaración — atributo hermano, registro generado y gate que rompe el build
 
-Status: ready-for-dev
+Status: blocked
 
 <!-- Validación opcional: correr `validate-create-story` antes de `dev-story` para un check de calidad. -->
 
-> **PARA ANTES DE TOCAR CÓDIGO.** El corte de épica describe esta historia como *aditiva y verde al llegar*, sin
-> decisiones abiertas. **La medición contra `main` encontró tres divergencias** que la convierten en una historia
-> **con precondición de decisión** (misma categoría que 1.4/1.5/1.6). Están en *Estado medido* → hechos (A), (B) y
-> (C), y los forks que abren, en *Decisiones abiertas*. **No empieces por el atributo.** La que más cambia el
-> resultado es (B): *«llega verde»* y *«cada hueco posterior es un gate en rojo»* **no son simultáneamente ciertas**
-> con el mecanismo que la épica describe, y elegir sin verlo produce un gate que **calla** exactamente donde debía
-> hablar.
+> **BLOQUEADA A PROPÓSITO, y el estado es el mecanismo.** `Status: blocked` es lo que leen las herramientas:
+> `bmad-dev-auto` enruta `ready-for-dev` directo a implementar y `blocked` a HALT
+> (`.claude/skills/bmad-dev-auto/step-01-clarify-and-route.md:18-23`). La épica exige que **ninguna
+> implementación empiece antes de que las decisiones abiertas queden registradas por escrito**
+> (`epics-gdpr-hardening.md:345-350`), y esta historia tiene **tres**. El precedente lo confirma: G-4a nunca
+> pasó por `ready-for-dev` — fue `backlog → review → done`, y su artefacto solo avanzó con la decisión **ya
+> tomada**. Registra D1/D2/D3 y voltea a `ready-for-dev` en el mismo commit.
+
+> **Lee *Estado medido* → hechos (A)–(F) antes de tocar el atributo.** El corte de épica describe esta historia
+> como aditiva y sin decisiones; la medición contra `main` abrió tres. La que más cambia el resultado es (B), y
+> **no es la contradicción que parece**: FR4 consigo mismo es coherente (trinquete); lo que choca es FR4 con
+> **FR5 y con el AC formal de la historia siguiente**.
 
 ## Story
 
@@ -24,356 +29,550 @@ para que la obligación no dependa de que alguien se acuerde.
 
 **Eje que instala:** los tres pasos, **sin mezclarlos** — ① atributo hermano en `Shared/Privacy`, ② generador por
 reflexión que produce el registro, ③ gate `make php.lint.person-reference`.
-**Invariantes que consume:** el patrón de la casa (registro revisable + gate obligatorio), NFR8 (el contrato de
-`#[PersonalData]` es de tratamiento y no se reutiliza).
+**Invariantes que consume:** el patrón de la casa (registro revisable + gate obligatorio), NFR8.
 **Invariantes que establece:** SI-21/NFR1, SI-22/NFR2, SI-23/NFR3.
-**Dependencias:** ninguna. Habilita 1.3 (G-1b) y 1.4 (G-2) sin necesitarlas.
+**Dependencias:** ninguna. Habilita 1.3 (G-1b) y 1.4 (G-2).
 
 ## Estado medido (`main` @ `9310efeb`)
 
-`api/` **sí** se ha movido desde el corte de épica (`471ae66f`): el PR #613 (G-4a) aterrizó en `0d2d45d2` y trajo el
-precedente más fresco de registro + gate. Todo lo de abajo se midió contra `9310efeb`, no contra los cuerpos de
-issue ni contra el corte.
+`api/` **sí** se movió desde el corte (`471ae66f`): el PR #613 (G-4a) aterrizó en `0d2d45d2` y trajo el precedente
+más fresco de registro + gate. Todo lo de abajo se midió contra `9310efeb`.
 
 ### La capability que se replica — tres ficheros, medidos
 
 `api/src/Shared/Privacy/` tiene **exactamente tres ficheros** y ninguna otra pieza (ni CLI, ni registro, ni config):
 
 1. **`api/src/Shared/Privacy/Domain/PersonalData.php:16-19`** — `#[Attribute(Attribute::TARGET_PROPERTY)] final class
-   PersonalData {}`. **Cero parámetros, cuerpo vacío, no repetible.** Su docblock (`:9-15`) es literalmente el
-   argumento de FR2: *«infrastructure that handles personal data … only reads it to decide encrypt-vs-clear per
-   column»* — contrato de **tratamiento**.
+   PersonalData {}`. **Cero parámetros, cuerpo vacío, no repetible, `final`.** Su docblock (`:9-15`) es el
+   argumento de FR2: *«infrastructure … only reads it to decide encrypt-vs-clear per column»* — contrato de
+   **tratamiento**.
 2. **`api/src/Shared/Privacy/Application/PersonalDataClassifier.php:11-19`** — un método:
    `personalFieldsOf(object|string $entityOrClass): array`, `list<string>` *«sorted for determinism»*.
 3. **`api/src/Shared/Privacy/Infrastructure/ReflectionPersonalDataClassifier.php`** —
-   `#[AsAlias(PersonalDataClassifier::class)]` (`:12`), caché en memoria por FQCN (`:15,:22`),
-   `getProperties()` sin filtro (`:34`), `getAttributes(PersonalData::class)` (`:35`), `sort()` (`:40`).
+   `#[AsAlias(PersonalDataClassifier::class)]` (`:12`), caché por FQCN (`:15,:22`), `getProperties()` sin filtro
+   (`:34`), `getAttributes(PersonalData::class)` (`:35`), `sort()` (`:40`).
 
 **Consumidor de producción: uno solo.** `api/src/Shared/Audit/Infrastructure/Persistence/PiiDiffSealer.php:49`.
-Anotaciones `#[PersonalData]` vivas: **tres, todas en `BankAccount`**
+Anotaciones `#[PersonalData]` vivas: **tres, todas promovidas en el constructor de `BankAccount`**
 (`api/src/Backoffice/BankAccount/Domain/Entity/BankAccount.php:50,65,72`).
 
 **Cableado DI:** el `#[AsAlias]` basta — `api/config/services.yaml:23-27` autoregistra `../src/` excluyendo
-`Domain/Entity/`. **Un adaptador nuevo en `Shared/Privacy/Infrastructure/` no requiere tocar YAML.**
+`Domain/Entity/`. Un adaptador nuevo con `#[AsAlias]` **no requiere tocar YAML**, y un atributo con parámetro
+escalar requerido **tampoco rompe el contenedor**: los servicios privados sin consumidor se podan antes de
+resolver argumentos, y el repo ya tiene el contraejemplo vivo —
+`api/src/Shared/Validation/Infrastructure/EnumType.php:30-32` es un atributo con `public string $enumClass`
+requerido, dentro del mismo recurso autoregistrado, y el contenedor compila.
 
-**Deptrac:** `api/tools/deptrac/deptrac.yaml:132-138` usa colectores `src/Shared/(.*/)?Domain/.*`, que **auto-pliegan**
-los módulos anidados de `Shared/`. Un atributo nuevo en `Shared/Privacy/Domain/` **no necesita registro propio**, y
-la regla `&domain` (`:192-205`) admite `Shared.Domain` desde los nueve layers `*.Domain`. Es como `BankAccount`
-importa `PersonalData` hoy (`BankAccount.php:23`).
+**Deptrac:** `api/tools/deptrac/deptrac.yaml:132-138` usa colectores `src/Shared/(.*/)?Domain/.*`, que auto-pliegan
+los módulos anidados. Un atributo nuevo en `Shared/Privacy/Domain/` **no necesita registro propio**, y la regla
+`&domain` (`:192-205`) admite `Shared.Domain` desde los nueve layers `*.Domain`.
 
 ### Las dos semillas — quién las borra hoy, medido propiedad a propiedad
 
 | Propiedad | Declaración | Columna | ¿La cadena la borra? | Dueño (el acto) |
 |-----------|-------------|---------|----------------------|-----------------|
-| `PasswordResetToken::$userId` | `api/src/Iam/Identity/Domain/Entity/PasswordResetToken.php:39-40`, `private string`, `Types::GUID`, **no promovida** | `identity_password_reset_token.user_id` | **SÍ** — borra la **fila entera** | `api/src/Iam/Identity/Application/EraseIdentitySubject.php:43` → DQL `DELETE` en `DoctrinePasswordResetTokenRepository.php:66-77` |
-| `Session::$userId` | `api/src/Iam/Session/Domain/Entity/Session.php:37-38`, `private string`, `Types::GUID`, **no promovida** (sus vecinas sí lo son, `:50-57`) | `iam_session.user_id` | **SÍ** — borra la **fila entera** | `api/src/Iam/Session/Application/PurgeUserSessions.php:29`, invocado desde `api/src/Iam/Identity/Application/FulfilIdentityErasure.php:112` → DQL `DELETE` en `DoctrineSessionRepository.php:105-116` |
+| `PasswordResetToken::$userId` | `api/src/Iam/Identity/Domain/Entity/PasswordResetToken.php:39-40`, `private string`, `Types::GUID`, **declarada en el cuerpo** | `identity_password_reset_token.user_id` | **SÍ** — borra la **fila entera** | `api/src/Iam/Identity/Application/EraseIdentitySubject.php:43` → DQL `DELETE` en `DoctrinePasswordResetTokenRepository.php:66-77` |
+| `Session::$userId` | `api/src/Iam/Session/Domain/Entity/Session.php:37-38`, `private string`, `Types::GUID`, **declarada en el cuerpo** (sus vecinas sí son promovidas, `:50-57`) | `iam_session.user_id` | **SÍ** — borra la **fila entera** | `api/src/Iam/Session/Application/PurgeUserSessions.php:29`, invocado desde `api/src/Iam/Identity/Application/FulfilIdentityErasure.php:112` → DQL `DELETE` en `DoctrineSessionRepository.php:105-116` |
 
-Ninguna de las dos lleva `#[PersonalData]` hoy. **Las dos formas de propiedad —promovida y declarada en el cuerpo—
-conviven en la misma entidad**, así que el generador tiene que cubrir ambas (`getProperties()` ya lo hace, medido en
-`api/tests/Unit/Backoffice/BankAccount/Domain/Entity/BankAccountPersonalDataTest.php:24`).
+Ninguna lleva `#[PersonalData]`. **Las dos semillas usan la forma declarada en el cuerpo, y esa forma no la
+ejercita ningún test hoy**: las tres anotaciones vivas de `BankAccount` son promovidas, y
+`ReflectionPersonalDataClassifierTest` tiene 3 tests (clase, instancia, vacío) que no la tocan. Que
+`getProperties()` cubra ambas formas es cierto por semántica de PHP, **no está medido en este repo** — conviértelo
+en fixture (Tarea 3) en vez de asumirlo.
 
-**El universo completo de referencias a persona es de CUATRO propiedades, no nueve.** Medido sobre las 8 entidades
-`#[ORM\Entity]` de `api/src`:
+**Las referencias huérfanas (trabajo de G-1b, contexto aquí):**
 
-| # | Propiedad | Fichero:línea | ¿Erasure? |
-|---|-----------|---------------|-----------|
-| 1 | `PasswordResetToken::$userId` | `PasswordResetToken.php:39` | **SÍ** (semilla) |
-| 2 | `Session::$userId` | `Session.php:37` | **SÍ** (semilla) |
-| 3 | `Membership::$userId` | `api/src/Organization/Membership/Domain/Entity/Membership.php:30-31` | **NO** — `MembershipRepository::remove()` existe (`MembershipRepository.php:21`) y **no tiene ningún llamante en `src/`** |
-| 4 | `Invitation::$invitedUserId` | `api/src/Iam/Invitation/Domain/Entity/Invitation.php:49-50` | **NO**, y peor: `InvitationRepository` **no expone remove/delete** (solo `save`/`findById`/`findByIdForUpdate`, `:19,:21,:29`) — cerrarlo exige método de puerto nuevo |
-
-`User::$id` (trait `Identifiable`, `api/src/Shared/Kernel/Domain/Entity/Identifiable.php:19-22`) es **la persona
-misma, no una referencia**: si entra en el registro es decisión de diseño, y **anotarla en el trait la propagaría a
-todas las entidades** (los traits `Identifiable`/`Timestamped` son `protected` y `getProperties()` los ve en toda
-hija de `AggregateRoot`).
+| Propiedad | Fichero:línea | ¿Erasure? |
+|-----------|---------------|-----------|
+| `Membership::$userId` | `api/src/Organization/Membership/Domain/Entity/Membership.php:30-31` | **NO** — `MembershipRepository::remove()` existe (`MembershipRepository.php:21`) y **no tiene llamante en `src/`** |
+| `Invitation::$invitedUserId` | `api/src/Iam/Invitation/Domain/Entity/Invitation.php:49-50` | **NO**, y peor: `InvitationRepository` **no expone remove/delete** (solo `save`/`findById`/`findByIdForUpdate`, `:19,:21,:29`) |
 
 ### La plantilla exacta del gate y del registro — patrón de la casa, ya medido
 
-- **Colocación del registro:** raíz de `api/`, sin extensión, tracked. Hay **cinco** precedentes:
+- **Colocación del registro:** raíz de `api/`, sin extensión, tracked. Cinco precedentes:
   `.audit-resource-types`, `.bounded-context-allowlist`, `.error-contract-allowlist`, `.event-dispatch-allowlist`,
   `.persistent-transport-policy`.
-- **Vocabulario del dueño, literal** (`api/.audit-resource-types:8-10,24`):
-  `<Clave> => non-person` · `<Clave> => person :: <ruta relativa a api/>`. La única entrada `person` viva es
-  `User => person :: src/Iam/Identity/Application/FulfilIdentityErasure.php`. **El dueño es una RUTA DE FICHERO**,
-  no un FQCN ni un método — y por el hecho (C) eso no es estilo, es obligatorio.
+- **Vocabulario, y es TRI-ESTADO — no binario.** `api/.persistent-transport-policy:10-13` admite tres formas:
+  `<Clave> => non-person`, `<Clave> => person` **sin ruta**, y `<Clave> => person :: <ruta>`. La forma sin ruta
+  **está viva y verde** (`:50`, `Iam.Identity => person`), y el motor la modela explícitamente
+  (`api/tests/Support/PersistentTransportPolicy.php:26-31`: `null` = non-person, constante vacía = persona sin
+  excepción sancionada, cualquier otro string = ruta). `api/.audit-resource-types:8-10` solo declara dos formas.
+  **Esta diferencia es load-bearing para D1** — no la aplanes.
 - **Cómo se valida un dueño** (`api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php:82-105`):
-  `assertFileExists` sobre la ruta, luego, **sobre la fuente sin comentarios** (`codeWithoutComments()`, `:249-262`),
-  exige propiedad del tipo colaborador (`:91`), **la llamada** (`:98`) y el literal del tipo (`:105`). El comentario
-  del método dice por qué se descartan los comentarios: *un docblock que nombra al colaborador es intención, y una
-  intención no sustituye a la llamada*.
-- **Parser de líneas:** `api/tests/Support/AllowlistFile.php:26` (`entries()`) — es lo que usa el gate de #613;
-  `PersonResourceErasureGateTest` aún parsea a mano (`:145`) y **rechaza duplicados** (`:170-173`) y toda
-  clasificación no reconocida (`:181-191`), nunca la degrada a `non-person`.
-- **Forma del test:** `#[CoversNothing]` a nivel de clase (los 12 gates de `api/tests/Unit/Shared/Architecture/` lo
-  llevan; ninguno `#[CoversClass]`), `public const string FAILURE_PREAMBLE` para que CI la greppee
-  (`EventDispatchGateTest.php:33-40`), camino verde con `addToAssertionCount(1)` (`:50-68`), test anti-vacuidad
-  (`testGateScansAtLeastOneApplicationFile`, `:70-82`) y fixture sucio + su gemelo limpio contra falsos positivos
-  (`:84-112`).
-- **Motor fuera del test** cuando hay lógica: `api/tests/Support/PersistentTransportPolicy.php:17-22` explica por qué
-  (*«so the rules are exercisable independently of the assertions»*). Su `eventsInSource()` (`:90-124`) es **el molde
-  literal del generador de FR3**: recorre `ApiSourceFiles::phpFiles()`, reconstruye el FQCN por PSR-4, `class_exists`,
-  descarta abstractas, filtra por herencia y llama al método — *«Reflection rather than a regex»*.
-- **Cableado del target** (`make/php-quality.mk`): bloque de sección + comentario que enuncia qué falla y por qué +
-  una línea `@$(PHP_TEST) bin/phpunit --filter=<Clase>` (`:110-111`, `:120-121`), y **tres** inserciones: `:158`
-  (`php.quality`), `:176` (`php.quality.dry-run`, el que corre CI vía `.github/workflows/ci.yml:115`) y `:178-187`
-  (`.PHONY`).
-- **Cabecera del registro, cinco bloques** (`api/.persistent-transport-policy:1-44` es la versión madura): ① qué es y
-  cuál es la clave; ② la regla en una frase con su porqué material; ③ `Format, one per line:`; ④ la clase del gate
-  **y** el target `make`; ⑤ bloque delimitado por regla de guiones *"What it deliberately does NOT do"*, con la frase
-  que es el contrato con el lector: *«a green build proves what is below the line, and nothing above it»*.
+  ruta existe, y luego, **sobre la fuente sin comentarios** (`codeWithoutComments()`, `:249-262`), exige propiedad
+  del tipo colaborador (`:91`), **la llamada** (`:98`) y el literal del tipo (`:105`). El comentario dice por qué
+  se descartan los comentarios: *un docblock que nombra al colaborador es intención, y una intención no sustituye
+  a la llamada*. **Ese triple check ES la mitad «correctamente cableada» de SI-21** — no es adorno.
+- **`is_file()` y no `assertFileExists()`**: `assertFileExists` es `file_exists`, cierto para un **directorio**, así
+  que `person :: docs` silenciaría la política sin ADR alguno. Corregido en
+  `api/tests/Unit/Shared/Architecture/PersistentTransportPolicyGateTest.php:133-137` (`is_file()` + sufijo `.md`).
+- **Parser de líneas:** `api/tests/Support/AllowlistFile.php:26`. `PersonResourceErasureGateTest` aún parsea a mano
+  (`:145`), **rechaza duplicados** (`:170-173`) y toda clasificación no reconocida (`:181-191`), nunca la degrada.
+- **Forma del test:** `#[CoversNothing]` a nivel de clase (las **11** clases de
+  `api/tests/Unit/Shared/Architecture/` lo llevan; ninguna `#[CoversClass]`), `public const string
+  FAILURE_PREAMBLE` para que CI la greppee (`EventDispatchGateTest.php:33-40`), camino verde con
+  `addToAssertionCount(1)` (`:50-68`), anti-vacuidad (`:70-82`) y fixture sucio + gemelo limpio (`:84-112`).
+- **Motor fuera del test:** `api/tests/Support/PersistentTransportPolicy.php:17-22` (*«so the rules are exercisable
+  independently of the assertions»*). Su `eventsInSource()` (`:90-124`) es el molde del generador: recorre
+  `ApiSourceFiles::phpFiles()`, reconstruye el FQCN por PSR-4, `class_exists`, descarta abstractas, filtra por
+  herencia — *«Reflection rather than a regex»*.
+- **Cableado del target** (`make/php-quality.mk`): sección + comentario + `@$(PHP_TEST) bin/phpunit
+  --filter=<Clase>` (`:110-111`, `:120-121`), y **tres** inserciones: `:158`, `:176` y `.PHONY` (`:178-187`).
+- **Cabecera del registro, cinco bloques** (`api/.persistent-transport-policy:1-44`): qué es y cuál es la clave · la
+  regla con su porqué material · `Format, one per line:` · la clase del gate **y** el target `make` · bloque
+  delimitado por guiones *"What it deliberately does NOT do"* con la frase que es el contrato con el lector:
+  *«a green build proves what is below the line, and nothing above it»*.
 
 ### Hechos medidos que el corte de épica NO registra — léelos antes de decidir
 
-**(A) El justificante de FR2 es FALSO en su último eslabón — y el correcto es más fuerte.**
+**(A) El justificante de FR2 es FALSO en su último eslabón — y el correcto es PROSPECTIVO, no vivo.**
 
 La épica (`epics-gdpr-hardening.md:70-74`) y el addendum (`arch-addendum-gdpr-hardening.md:25`) afirman que anotar
 una clave foránea con `#[PersonalData]` haría que `PiiDiffSealer` *«la cifrara en el diff, rompiendo las búsquedas
-que el propio reconciliador de erasure necesita»*. Medido eslabón a eslabón:
+que el propio reconciliador de erasure necesita»*. Medido:
 
-- **`PiiDiffSealer` solo corre sobre `AuditedEntity`.** Su único invocador es
-  `api/src/Shared/Audit/Infrastructure/Persistence/AuditWriteCaptureListener.php:86`, que filtra en `:77-79`. Implementan
-  `AuditedEntity` **solo** `Bank` (`Bank.php:29`) y `BankAccount` (`BankAccount.php:39`). `User` (`User.php:37`),
-  `Session` (`Session.php:29`) e `Invitation` (`Invitation.php:38`) declaran explícitamente que **no** lo son, y
-  `PasswordResetToken` tampoco. → **Anotar cualquiera de las cuatro referencias sería hoy un no-op literal.**
-- **El sellador nunca toca la columna de la entidad.** Escribe en `audit_log.metadata` (JSONB) y
-  `encryption_scope_id` (`AuditWriteCaptureListener.php:93-100`, `DbalAuditLogWriter.php:37-44`). Prueba viva:
-  `bank_account.iban` **está** marcado `#[PersonalData]` (`BankAccount.php:64-65`) y sigue siendo `unique` y
-  buscable en claro.
-- **El reconciliador no lee ningún valor de diff.** `ReconcileErasedSubjectReferences.php:41-52` lee exactamente dos
-  cosas: `SELECT DISTINCT resource_id FROM audit_log WHERE resource_type = :t AND resource_id IS NOT NULL AND
-  resource_erased = FALSE` (`DbalPersonResourceReferences.php:36-41`) y `identity_user.id` por PK
-  (`DoctrineUserRepository.php:42-45`).
+- **`PiiDiffSealer` solo corre sobre `AuditedEntity`** — filtro en
+  `api/src/Shared/Audit/Infrastructure/Persistence/AuditWriteCaptureListener.php:78`, llamada a `seal()` en `:87`.
+  Lo implementan **solo** `Bank` (`Bank.php:29`) y `BankAccount` (`BankAccount.php:39`); `User` (`:37`), `Session`
+  (`:29`) e `Invitation` (`:38`) declaran que no, y `PasswordResetToken` tampoco.
+- **El sellador nunca toca la columna de la entidad.** Escribe `audit_log.metadata` y `encryption_scope_id`
+  (`AuditWriteCaptureListener.php:87-100`). Prueba viva: `bank_account.iban` **está** marcado
+  (`BankAccount.php:65`) y sigue `unique` y buscable en claro.
+- **El reconciliador no lee ningún valor de diff.** `ReconcileErasedSubjectReferences.php:41-52` lee
+  `SELECT DISTINCT resource_id FROM audit_log …` (`DbalPersonResourceReferences.php:36-41`) y `identity_user.id`
+  por PK (`DoctrineUserRepository.php:42-45`).
 
-**No re-propongas reutilizar `#[PersonalData]`: la conclusión de la épica es correcta, su argumento no.** Los dos que
-sí se sostienen, medidos:
+**No re-propongas reutilizar `#[PersonalData]`: la conclusión de la épica es correcta, su argumento no.** Los dos
+que la sostienen:
 
-1. **Asigna el dueño de borrado EQUIVOCADO.** El scope de cifrado es `<ResourceType>:<id>` del **agregado
-   propietario**, no de la persona (`PiiDiffSealer.php:55-56`). Un id de persona sellado en el diff de otro agregado
-   queda bajo la DEK de *ese* agregado: se destruiría con el borrado del propietario y **sobreviviría al borrado de
-   la persona**. Es exactamente el fallo que SI-21 persigue — y es un argumento de **referencia**, no de tratamiento,
-   coherente con el resto de FR2.
-2. **El puerto no tiene dónde llevar un dueño.** `personalFieldsOf()` devuelve `list<string>` de nombres de propiedad
-   (`PersonalDataClassifier.php:18`). Reutilizarlo obligaría a cambiar la firma del puerto, con `PiiDiffSealer` como
-   único consumidor afectado.
+1. **Asignaría el dueño de borrado equivocado.** El scope de cifrado es `<ResourceType>:<id>` del **agregado
+   propietario** (`PiiDiffSealer.php:55-56`), así que el id de la persona quedaría bajo la DEK de *ese* agregado:
+   destruido con el borrado del propietario, superviviente al de la persona. **Honestidad debida: este argumento
+   es PROSPECTIVO, no vivo** — con ninguna de las cuatro entidades siendo `AuditedEntity`, nada se sella hoy y el
+   fallo tampoco ocurre. Es exactamente la razón por la que el argumento de la épica se declara falso, así que se
+   etiqueta igual en vez de aplicarse doble rasero.
+2. **El puerto no tiene dónde llevar un dueño.** `personalFieldsOf()` devuelve `list<string>`
+   (`PersonalDataClassifier.php:18`). Reutilizarlo obligaría a cambiar la firma, con `PiiDiffSealer` como único
+   consumidor afectado. **Este sí es estructural y vive hoy.**
 
-**Consecuencia directa sobre el AC3 del corte:** *«se sella el diff de auditoría de esa entidad → la clave foránea
-sigue viajando en claro»* **no es ejecutable sobre las semillas** — no producen diff de auditoría. Reformulado en
-AC3 abajo.
+**(B) La contradicción NO es FR4 consigo mismo: es FR4 contra FR5 y contra el AC formal de G-1b.**
 
-**(B) «Llega verde» y «cada hueco posterior es un gate rojo» no son simultáneamente ciertas. Es el fork principal.**
+FR4 dice *«llega verde»* (`epics-gdpr-hardening.md:91`) y *«cada hueco **posterior** es un gate en rojo»*
+(`:93-94`, reforzado en `:314` con *«a partir de ahí»*). Leídas literalmente son **compatibles**: describen un
+**trinquete** —verde al aterrizar, rojo para lo que llegue después—, que es el patrón que el repo ya implementa
+(`api/tools/deptrac/deptrac.baseline.header.txt`: *«They predate the gate; it stays green today and fails on any
+NEW inner-layer leak»*).
 
-La épica promete las dos (`epics-gdpr-hardening.md:85-94` y `:314`). Con los dos checks que describe —(a) generado ≠
-commiteado, (b) referencia **declarada** sin dueño— `Membership::$userId` e `Invitation::$invitedUserId` **no
-producen rojo: producen silencio**. Sin anotación no hay línea generada, luego (a) casa y (b) no tiene nada que
-evaluar. Para que la segunda promesa sea cierta el gate necesita un **tercer check cuya fuente sea independiente de
-la anotación** — que es exactamente lo que hace `everyAggregateTypeInSourceIsClassified` en el gate de #613
-(`PersistentTransportPolicyGateTest`): la completitud es lo que fuerza la decisión a entrar en un diff.
+El choque real está en otras dos frases, y son **más duras que un párrafo de FR**:
 
-Dato que hace viable ese tercer check: **el universo es de 4 propiedades sobre 8 entidades**, cerrado y medido, con
-forma reconocible (`Types::GUID` + nombre `*user*_id`). No es una heurística sobre un espacio abierto.
+- **FR5** (`:97`): *«**con el gate en rojo**, la cadena de erasure … adquiere dueño para `Membership::$userId` e
+  `Invitation::$invitedUserId`»*.
+- **El segundo AC formal de la Story 1.3** (`:488-490`): *«**Given** el gate de 1.2 **en rojo por esas dos
+  referencias**, **When** se cierra la historia, **Then** pasa a verde **porque la cadena las ejecuta**, no porque
+  se hayan declarado (SI-23)»*.
+- **El DAG del addendum** (`arch-addendum-gdpr-hardening.md:44`): *«G-1b (#545 + #561; **el gate se pone rojo** y
+  la historia lo cierra)»*.
 
-**(C) El dueño de borrado NO puede ser una referencia de clase (`::class`). Rompe dos gates a la vez.**
+Es decir: **el contrato ya exige que G-1a aterrice con el gate en rojo sobre esas dos referencias**, y a la vez
+que «llega verde». La decisión de D1 no es *qué mecanismo prefiero* sino **qué frase de la épica es autoritativa**,
+y la opción elegida obliga a corregir la otra **en este mismo PR**.
 
-- `Session` vive en `Iam/Session/Domain`; su dueño es `Erpify\Iam\Identity\Application\FulfilIdentityErasure` → un
-  `use` cross-context desde `Domain/` es fallo **Nivel 1** de `BoundedContextGateTest` y violación deptrac
-  (`Iam.Session.Domain` solo admite `Shared.Domain`, `Vendor.Psr`, `Vendor.SymfonyUid`, `Vendor.PassiveMetadata` —
-  `deptrac.yaml:192-205`).
-- Incluso dentro del mismo contexto: `PasswordResetToken` (`Iam/Identity/Domain`) → `FulfilIdentityErasure`
-  (`Iam/Identity/Application`) es **Domain → Application**, prohibido por la misma regla.
-- El precedente que sí funciona es la ruta-en-string de `.audit-resource-types:24`, validada por lectura de fichero.
+**(C) El dueño de borrado NO puede ser una referencia de clase (`::class`).**
 
-**(D) El clasificador actual NO descubre clases, y su lector de atributos tiene el punto ciego que G-4a ya pagó.**
+`Session` vive en `Iam/Session/Domain` y su dueño es `Erpify\Iam\Identity\Application\FulfilIdentityErasure`: un
+`use` cross-context desde `Domain/` es fallo **Nivel 1** de `BoundedContextGateTest` y violación deptrac
+(`deptrac.yaml:192-205`). Incluso same-context, `PasswordResetToken` → `FulfilIdentityErasure` es **Domain →
+Application**. Va como **ruta en string**, validada por lectura de fichero (`.audit-resource-types:24`).
 
-- `ReflectionPersonalDataClassifier` **recibe** la clase del llamante (`:18-23`); `PiiDiffSealer` ya tiene la entidad
-  en la mano (`PiiDiffSealer.php:49`). En `Shared/Privacy/` **no hay ninguna enumeración de clases**. *«Análogo a
-  `ReflectionPersonalDataClassifier`»* describe solo la mitad barata.
-- Su lectura es `getAttributes(PersonalData::class)` **sin `IS_INSTANCEOF` y sin recorrer padres** (`:35`). Es
-  literalmente el defecto I-2 del pase adversarial de G-4a, que costó cuatro fixtures nuevos: `SendersLocator`
-  recorre `[$clase] + class_parents() + class_implements()` con `IS_INSTANCEOF`. **No copies ese lector tal cual.**
-- Tampoco hay test de herencia ni de traits para el clasificador
-  (`api/tests/Unit/Shared/Privacy/Infrastructure/ReflectionPersonalDataClassifierTest.php` cubre clase, instancia y
-  vacío). Si el generador nuevo depende de esa semántica, el hueco es suyo.
+**(D) El clasificador actual NO descubre clases, y su punto ciego real NO es el de G-4a.**
 
-**(E) NO existe precedente de generador por reflexión que escriba un artefacto commiteado, y el camino obvio está
-vetado por una garantía escrita.**
+- `ReflectionPersonalDataClassifier` **recibe** la clase del llamante (`:18-23`). En `Shared/Privacy/` no hay
+  enumeración de clases: *«análogo a `ReflectionPersonalDataClassifier`»* describe solo la mitad barata.
+- **Cuidado con la analogía fácil.** El defecto I-2 de G-4a (`IS_INSTANCEOF` + `class_parents()`) existe porque
+  **PHP no hereda atributos de CLASE**. Aquí el atributo es `TARGET_PROPERTY`, y `getProperties()` ya devuelve las
+  propiedades heredadas con sus atributos intactos y aplana las de trait. Copiar el recorrido de padres de G-4a
+  **no compra nada**. El hueco real y distinto: `getProperties()` **no ve propiedades `private` de una clase
+  padre** — única en el repo, `AggregateRoot::$domainEvents`
+  (`api/src/Shared/Kernel/Domain/Aggregate/AggregateRoot.php:23`). Y `$id` no lo declara una clase abstracta sino
+  el **trait** `api/src/Shared/Kernel/Domain/Entity/Identifiable.php:19-22`, así que `getDeclaringClass()` devuelve
+  la clase que lo usa: no sirve para filtrarlo.
 
-Medido: los únicos targets que reescriben un artefacto son `php.stan.baseline` (`php-quality.mk:11-12`, cuyo fichero
-**no está tracked**) y `php.deptrac.baseline` (`:147-148`), que es un **script shell**
-(`api/tools/deptrac/regen-baseline.sh`), no reflexión. Ninguno de los 19 comandos Symfony de `api/src` escribe un
-fichero del árbol. `docs/rules/` no tiene ninguna regla sobre artefactos generados.
+**(E) NO existe precedente de generador por reflexión que escriba un artefacto commiteado.**
 
-Y el camino «el propio test con `--update`» **está vetado por una garantía explícita**: `make/php-quality.mk:165-166`
-declara *«Parallel-safe — every prerequisite here is read-only (no src/ writes), so CI can fan them out with `make -j`
-without racing»*. Un gate que escribe rompe esa promesa para toda la lista.
+Los únicos targets que reescriben un artefacto son `php.stan.baseline` (`php-quality.mk:11-12`, fichero **no
+tracked**) y `php.deptrac.baseline` (`:147-148`), que es un **script shell**
+(`api/tools/deptrac/regen-baseline.sh`). Ninguno de los **14** comandos Symfony de `api/src` escribe un fichero del
+árbol. `docs/rules/` no tiene regla sobre artefactos generados.
 
-Lo que sí aporta `regen-baseline.sh` como plantilla: **cabecera en fichero aparte** re-antepuesta por el generador
-(`api/tools/deptrac/deptrac.baseline.header.txt`, con la fórmula `# GENERATED — regenerate with 'make …' (do not
-hand-edit …)`), y la **escritura segura** de `:39-45` — construir a un temporal, `test -s`, y `cat "$out" > destino`
-en vez de `mv`, porque el contenedor corre como root y un `mv` desde `/tmp` dejaría el fichero root-owned en el bind
-mount del host. Ese detalle ya nos ha mordido.
+Lo que aporta `regen-baseline.sh` como plantilla: **cabecera en fichero aparte** re-antepuesta
+(`api/tools/deptrac/deptrac.baseline.header.txt`, fórmula `# GENERATED — regenerate with 'make …' (do not
+hand-edit …)`), y la **escritura segura** de `:39-45` — temporal, `test -s`, y `cat "$out" > destino` en vez de
+`mv`, porque el contenedor corre como root y un `mv` desde `/tmp` dejaría el fichero root-owned en el bind mount.
 
-**(F) El gate de G-4a deja 13 de sus 20 tests fuera de CI. Es el error que esta historia va a repetir si no mira.**
+**Alcance exacto de la garantía read-only**, porque acota mal se convierte en un veto de más:
+`make/php-quality.mk:165-166` compromete a **los prerrequisitos de `php.quality.dry-run`** (`:176`), no a todo el
+fichero. Los dos baselines escriben el árbol y **no están** en `:158` ni en `:176`. Luego: *el gate no escribe
+cuando corre dentro de la lista de calidad* está vetado; *la misma clase corre en modo escritura desde un target
+aparte* no lo está — y es justo el precedente de los dos baselines.
 
-`make/php-quality.mk:121` es `--filter=PersistentTransportPolicyGateTest`. La segunda clase que #613 creó se llama
-`PersistentTransportRoutingShapeGateTest` y **no casa con ese regex**. Medido con ejecución fresca contra el stack
-(`bin/phpunit --filter=… --list-tests`): el filtro actual selecciona **7 tests**; la clase de formas aporta **13** y
-no la selecciona ninguno; `--filter='PersistentTransport.*GateTest'` selecciona los **20**. O sea, la mitad
-*«cubre las cinco vías de routing»* del gate solo corre en `make php.unit`, nunca en `php.quality` ni en
-`php.quality.dry-run`. **Si G-1a parte su gate en dos clases, el filtro tiene que ser un prefijo regex común.**
+**(F) El gate de G-4a está fuera del gate de LINT, no fuera de CI. La distinción importa.**
 
-## Decisiones abiertas (PRECONDICIÓN — ver la definición de hecho de la épica)
+`make/php-quality.mk:121` filtra `PersistentTransportPolicyGateTest`; la segunda clase que #613 creó
+(`PersistentTransportRoutingShapeGateTest`) no casa con ese regex. Medido con ejecución fresca:
+`--filter=PersistentTransportPolicyGateTest --list-tests` → **7 tests**; la clase de formas → **13**;
+`--filter='PersistentTransport.*GateTest'` → **20**.
+
+**Pero esos 13 SÍ corren en CI**: `.github/workflows/ci.yml:122` invoca `make php.unit.coverage`, que en
+`make/php-test.mk:49` es `bin/phpunit` **sin `--filter`** — la suite entera, y el propio comentario del workflow
+declara que sigue siendo el gate de tests. Lo que se pierde es **diagnosticabilidad de frontera**: una
+reintroducción de las cinco vías de routing rompe «PHPUnit», no «la política de transporte persistido», que es lo
+que el cableado uno-a-uno de los `php.lint.*` existe para decir. **Si G-1a parte su gate en dos clases, el
+`--filter` debe ser un prefijo regex común** — por la misma razón, y no por cobertura.
+
+## Decisiones abiertas (PRECONDICIÓN — `Status: blocked` hasta que se registren)
 
 El corte no marcó esta historia con decisión abierta porque las tres nacen de mediciones que el corte no hizo.
-**Ninguna implementación empieza antes de que las tres queden registradas por escrito** (en el PR o en este
-artefacto). Cada una lleva recomendación: **la primera tarea es confirmarla o refutarla, no darla por buena en
-silencio.**
+Cada una lleva recomendación: **la primera tarea es confirmarla o refutarla por escrito**
+(`epics-gdpr-hardening.md:345-350`).
 
-### D1 — ¿El gate detecta huecos, o solo verifica lo declarado? (nace del hecho (B))
+### D1 — ¿Qué frase de la épica es autoritativa? (nace del hecho (B))
 
-| Opción | Qué hace | Coste medido |
-|--------|----------|--------------|
-| **①** *(recomendada)* **Completitud estructural + dueño declarado.** El universo lo deriva el gate del **código** (propiedades de entidad Doctrine con `Types::GUID` y forma de referencia a persona); el atributo aporta **el dueño**. Toda propiedad del universo sin línea → **rojo** | Hace ciertas las dos promesas de la épica. Espeja `everyAggregateTypeInSourceIsClassified` de #613, que es el check que *«fuerza la decisión a entrar en un diff»* | G-1a **NO llega verde**: `Membership` e `Invitation` salen en rojo el día 1. Habría que sancionarlas explícitamente (`person :: <artefacto real>`) o aceptar rojo hasta G-1b. **Reabre FR4** |
-| **②** **Solo lo declarado** (los dos checks del corte, literal) | Llega verde tal como promete FR4 | La segunda promesa (`:314`, *«cada hueco posterior es un gate en rojo»*) **es falsa** y hay que borrarla de la épica. G-1b cierra sus dos referencias sin que nada las hubiera señalado: el eje deja de ser detección y pasa a ser documentación verificada |
-| **③** **Híbrido:** completitud estructural + sanción explícita de las dos referencias conocidas nombrando la historia que las cierra | Verde al llegar **y** detección viva para la referencia *siguiente* | Una entrada que se satisface a sí misma es justo el defecto de #563 (SI-23), salvo que apunte a un artefacto **real y verificable**. `arch-addendum-gdpr-hardening.md` y `epics-gdpr-hardening.md` existen y son ficheros; `assertFileExists` sobre ellos es mecánicamente válido. **Pero** son artefactos `_bmad-output/` (transitorios por regla del repo) — atar un gate de build a un fichero que la higiene BMAD puede borrar es deuda con fecha |
+**Toda opción corrige contrato. La pregunta no es si se toca la épica, sino qué se toca.**
 
-**Recomendada ①**, y con ella **la afirmación «llega verde» de FR4 se corrige en la épica en el mismo PR** en vez de
-implementarse una promesa que la medición ya rompió. Si Sergio prefiere no romper la secuencia del DAG, ③ es
-defendible con un ADR real como ancla (no un artefacto BMAD).
+| Opción | Qué hace | Qué cuesta y qué contrato reescribe |
+|--------|----------|-------------------------------------|
+| **①** **Completitud estructural + dueño declarado.** El universo lo deriva el gate del código; el atributo aporta el dueño. Toda propiedad del universo sin línea → **rojo** | Es el estado que **FR5 (`:97`) y el AC de G-1b (`:488-490`) ya exigen**. Detección viva desde el día 1 | **Deja `main` en rojo entre G-1a y G-1b**, y ése es su coste dominante: el target entra en `php.quality.dry-run` (`:176`), que es lo que CI corre para **todo PR** (`ci.yml:115`), y el DAG abre G-1b **y G-2 en paralelo** (`arch-addendum:43-45`), así que G-2 se desarrollaría contra un `main` rojo. Choca con `CLAUDE.md` → *Finishing substantial work* (*«Gates first»*). **Exige autorización explícita del usuario para romper CI de `main`**, y corregir el *«llega verde»* de FR4 (`:91`, `:418`, `:449`) |
+| **②** **Solo lo declarado** (los dos checks del corte, literal) | Llega verde | **Vetada, y no por gusto:** con ② el universo **es** el conjunto de propiedades anotadas, luego la afirmación verificada tiene como única evidencia las propias declaraciones — que es SI-23 (`una declaración nunca es su propia evidencia`), el invariante que esta historia declara **establecer**. Además obliga a reescribir el AC de G-1b (`:488-490`) y la anotación del DAG |
+| **③** **Completitud estructural + sanción explícita** de las dos referencias conocidas, apuntando a un artefacto real | Verde al llegar **y** detección viva para la referencia siguiente | Necesita **ancla real** (un ADR, no un fichero `_bmad-output/` que la higiene BMAD puede borrar). Y choca con AC1: una línea sancionada necesita **verbo propio** (`deferred :: <ruta>`), porque `person :: <ruta>` significa *«éste es su dueño»* y ahí no hay dueño. Reescribe el AC de G-1b |
+| **④** **Tri-estado del precedente:** `Membership::$userId => person` **sin ruta**, día 1 | Completo, verdadero, verde, sin dueño falso y sin ancla BMAD. Es la gramática que `.persistent-transport-policy:12` ya admite y `:50` ya usa en vivo | **Incumple el AC de G-1b (`:488-490`)**: el gate no está rojo por esas dos referencias, así que G-1b no puede «pasarlo a verde». Y hay que decidir si `person` sin dueño es verde (debilita SI-21: *«tiene un dueño de borrado identificado»*) o rojo (y entonces es ① con otra sintaxis) |
+
+**Recomendada ④ si el usuario no quiere `main` en rojo; ① si acepta el coste** — pero la recomendación es
+secundaria: lo que la historia **no puede** hacer es elegir en silencio y dejar a G-1b con un AC insatisfacible.
+Sea cual sea, **el PR corrige la frase perdedora en la épica y en el DAG del addendum**.
 
 ### D2 — ¿Dónde vive el generador y cómo escribe? (nace de los hechos (D) y (E))
 
+**Restricción ratificada que hay que refutar explícitamente, no rodear:** `epics-gdpr-hardening.md:219-221` —
+*«`Shared/Privacy` ya es una capability de tres piezas —atributo en `Domain/`, puerto en `Application/`, adaptador
+por reflexión en `Infrastructure/`—. **El hermano replica la estructura**, no el contrato»*.
+
 | Opción | Coste medido |
 |--------|--------------|
-| **① Script + comando** — la lógica de descubrimiento en `api/tests/Support/PersonReferences.php` (espejo de `PersistentTransportPolicy`), y un target `make php.lint.person-reference.regen` que la invoque | El descubrimiento vive donde ya viven los seis gates, sin arrancar el kernel. **Pero** `tests/Support` no es invocable desde un target que no sea PHPUnit sin un envoltorio |
-| **② Comando Symfony** bajo `Shared/Privacy/Infrastructure/Cli/` | 19 comandos de precedente de **ubicación y estilo**, cero de escritura de artefacto. Obliga a arrancar el kernel para alimentar un gate que hoy es puro `TestCase`. **Y sería código de producción sin consumidor de producción** — el registro solo lo lee el gate. YAGNI (`docs/project-context.md` → *"Don't abstract for hypothetical futures"*) |
-| **③ El propio test con `--update`** | **Vetado por medición:** rompe el `read-only / parallel-safe` que `php-quality.mk:165-166` declara para toda la lista |
+| **① Motor en `api/tests/Support/PersonReferences.php`** (espejo de `PersistentTransportPolicy`) + target de regeneración propio | Donde ya viven los seis gates, sin arrancar kernel. **Contradice `epics:219-221`**, así que si se elige, ese PR corrige esa viñeta — el mismo tratamiento que se auto-impone para FR4 |
+| **② Adaptador en `Shared/Privacy/Infrastructure/`** + comando bajo `Infrastructure/Cli/` | **Es lo que la épica ratificó.** 14 comandos de precedente de ubicación y estilo, cero de escritura de artefacto. Cuesta arrancar el kernel para alimentar un gate que hoy es puro `TestCase`, y deja código de producción sin consumidor de producción (YAGNI, `docs/project-context.md`) |
+| **③ El propio test con `--update`** | **Vetada por contrato primero:** FR4 y `arch-addendum:33` dicen que *«generar no es verificar, y confundirlos reintroduce el ciclo de #563»*. Y por medición después: rompería el read-only de `php.quality.dry-run`. El orden importa — el veto no depende de un detalle operativo |
 
-**Recomendada ①.** Y la consecuencia que hay que decir en voz alta: **el atributo ① sí es producción** (vive en
-`Domain/`, lo llevan las entidades), pero **el generador ② no tiene por qué serlo**. Que el corte diga *«clasificador
-análogo a `ReflectionPersonalDataClassifier`»* no obliga a ponerlo en `src/`: aquel está en `src/` porque
-`PiiDiffSealer` lo consume en producción, y aquí no hay tal consumidor. **Si se decide ponerlo en `src/`, hace falta
-el argumento, no la analogía.**
+**Nota de alcance del veto de ③:** lo prohibido es que **el gate** escriba. Una **clase distinta** en modo escritura
+invocada desde un target propio (`php.lint.person-reference.regen`) no toca la garantía de `:165-166` — es el
+patrón de los dos baselines.
 
-### D3 — Forma de la clave del registro
+### D3 — Forma de la clave, y qué parte de cada línea es huella
 
-Recomendado: **`<Fqcn>::$<propiedad> => non-person | person :: <ruta relativa a api/>`**. La clave es derivable por
-reflexión (a diferencia del `'User'` de `.audit-resource-types`, que es manual y por eso necesita el segundo testigo
-de 1.5), y el dueño va como **ruta**, obligatorio por el hecho (C). Confírmalo o refútalo por escrito; si eliges una
-clave más gruesa, mide antes qué pasa cuando una clase se renombra — es la trampa que
-`.persistent-transport-policy:26-30` documenta para su propia clave.
+Recomendado: **`<Fqcn>::$<propiedad> => non-person | person [:: <ruta relativa a api/>]`**, tri-estado como el
+precedente. La clave es derivable por reflexión; el dueño va como ruta (hecho (C)).
+
+**Lo que hay que declarar por escrito, porque SI-22 lo exige:** la **clave** es huella del código, pero la
+**clasificación persona/no-persona no lo es** — es juicio humano, porque bajo ① el universo incluye `organizationId`
+y `bankId`, que son `Types::GUID` y no son persona. Di si esa parte manual necesita segundo testigo o por qué no, y
+—si se elige ③— que **sus líneas sancionadas sí lo necesitan y eso no lo cubre la Story 1.5**.
 
 ## Acceptance Criteria
 
-**AC1 — El gate falla cuando una referencia persistida a persona no declara dueño de borrado (FR4).**
-**Given** una propiedad persistida que guarda el identificador de una persona sin dueño declarado,
+**AC1 — El gate falla cuando una referencia persistida a persona no declara dueño, Y cuando el dueño declarado no
+la borra (FR4, SI-21).**
+**Given** una propiedad del universo sin línea en el registro,
 **When** corre `make php.lint.person-reference`,
-**Then** el gate **falla**, nombrando la propiedad (`<Fqcn>::$prop`) y lo que falta.
-*Qué cuenta como «sin dueño» lo fija D1.* Con ① es toda propiedad del universo estructural sin línea; con ② es una
-línea `person` cuya ruta no existe o cuyo fichero no ejecuta el borrado.
+**Then** el gate **falla**, nombrando `<Fqcn>::$prop` y lo que falta.
+**Y Given** una línea `person :: <ruta>` cuyo fichero existe pero **no ejecuta el borrado de esa propiedad**,
+**When** corre el gate,
+**Then** **falla igualmente**. Esta segunda mitad es la parte *«correctamente cableada»* de SI-21
+(`epics-gdpr-hardening.md:158-159`) y **aplica bajo cualquier opción de D1**: sin ella, `person :: <cualquier
+fichero existente>` pasa y el registro degenera en documentación, que es SI-23.
+*Precedente del check:* `PersonResourceErasureGateTest.php:89-109` (propiedad del colaborador + **la llamada** +
+el literal, sobre fuente sin comentarios). Para las semillas, lo que debe probarse ejecutado es
+`deleteAllForUser` en `EraseIdentitySubject.php:43` y `PurgeUserSessions.php:29`.
 
 **AC2 — El registro se valida contra el CÓDIGO, nunca contra sí mismo (FR3, SI-23).**
 **Given** un registro commiteado que ha divergido del código,
 **When** corre el gate,
-**Then** **falla**, derivando la comparación de la fuente. Un registro que se valide contra el registro **es** el
-defecto de #563.
-*Cómo se pinna:* además del check de divergencia, un test que **demuestre** que la comparación no puede leerse verde
-por construcción — fixture con registro sucio → rojo; fixture con código cambiado y registro intacto → rojo.
+**Then** **falla**, derivando la comparación de la fuente.
+*Cómo se pinna, en tres direcciones:* registro sucio → rojo; código cambiado con registro intacto → rojo; y —la que
+distingue detección de documentación— **una propiedad del universo añadida sin anotar, con el registro intacto →
+rojo**. Sin esa tercera, ② pasa vestida de ①.
 
-**AC3 — Declarar una referencia no la arrastra al crypto-shredding (FR2, NFR8). REFORMULADO — ver hecho (A).**
-**Given** el atributo nuevo sobre una propiedad,
-**When** se inspecciona el contrato de `#[PersonalData]`,
-**Then** el atributo nuevo **no** se lee por `personalFieldsOf()` y **no** llega a `PiiDiffSealer`, de modo que la
-clave foránea nunca entra en el ciclo de cifrado.
-*Por qué no se escribe el AC del corte:* *«se sella el diff de esa entidad»* **no es ejecutable** — ninguna de las
-cuatro entidades con referencia a persona implementa `AuditedEntity`, así que nunca se produce diff. Y la razón de
-fondo no es que rompiera búsquedas (falso, medido), sino que **asignaría el dueño de borrado equivocado**: el scope
-es del agregado propietario (`PiiDiffSealer.php:55-56`), no de la persona.
-*Cómo se pinna:* un test de que `personalFieldsOf()` **ignora** el atributo nuevo — la separación de los dos
-contratos, que es lo que NFR8 protege, y lo único que aquí es falsable de verdad.
+**AC3 — El atributo declara referencia + dueño, y no arrastra la FK al crypto-shredding (FR2, NFR8).**
+**Given** una entidad `AuditedEntity` con un campo `#[PersonalData]` y una referencia a persona anotada con el
+atributo nuevo,
+**When** se sella su diff de auditoría,
+**Then** el campo personal viaja cifrado y **la clave foránea viaja en claro**.
+*Sí es ejecutable, y el arnés ya existe:* `api/tests/Unit/Shared/Audit/Infrastructure/Persistence/PiiDiffSealerTest.php:77`
+construye `new PiiDiffSealer(new ReflectionPersonalDataClassifier(), $encryptor)` —el clasificador **real**— y lo
+conduce con fakes `AuditedEntity` (`PlainAuditedFake`, `AuditedSubjectFake`). Un fake nuevo con las dos
+anotaciones cierra el AC del corte tal como estaba escrito.
+*Lo que NO vale como evidencia:* «un test de que `personalFieldsOf()` ignora el atributo nuevo». `PersonalData` es
+`final` (`PersonalData.php:17`) y el lector no usa `IS_INSTANCEOF` (`ReflectionPersonalDataClassifier.php:35`):
+ese test es **verde por construcción del lenguaje** y no puede fallar nunca.
+**Y la mitad positiva de FR2, que también es AC:** el atributo es `TARGET_PROPERTY`, lleva el dueño como `string`
+(hecho (C)), y **la línea generada para una propiedad anotada reproduce ese dueño** — falsable anotando una
+propiedad fixture y regenerando.
 
-**AC4 — El estreno del mecanismo (FR4).**
-**Given** el registro sembrado con `PasswordResetToken::$userId` y `Session::$userId`, cuyo borrado está medido,
-**When** corre `make php.quality`,
-**Then** el resultado es el que D1 haya decidido — **y ese resultado consta por escrito**.
-*Redacción deliberada:* con ① el build **no** llega verde y eso es correcto; escribir *«pasa sin rojo»* como AC
-absoluto obligaría a elegir ② por la puerta de atrás. **No lo re-endurezcas al escribir el PR.**
+**AC4 — El estreno del mecanismo sobre comportamiento correcto (FR4).**
+**Given** el registro commiteado,
+**When** se inspecciona,
+**Then** contiene exactamente las dos líneas semilla con sus dueños medidos —
+`PasswordResetToken::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php` y
+`Session::$userId => person :: src/Iam/Session/Application/PurgeUserSessions.php` — y **ambas superan el check de
+cableado de AC1**.
+**Given** esas dos líneas,
+**When** corre el gate,
+**Then** sale **verde sobre ellas**.
+*Esto es falsable con independencia de D1, porque las dos semillas tienen dueño bajo cualquier opción.* Si
+`Membership`/`Invitation` aparecen además, y en rojo o en verde, lo decide D1 y lo cubre **AC1** — no este AC.
 
 **AC5 — La cabecera del registro declara qué NO detecta (FR3).**
 **Given** el registro nuevo,
 **When** se lee su cabecera,
-**Then** enumera sus puntos ciegos siguiendo `api/.persistent-transport-policy:19-44`, incluyendo **como mínimo** los
-cuatro medidos: no juzga la clasificación; no alcanza referencias nacidas en configuración (FR9/G-4b); **no alcanza
-las tablas que no tienen entidad Doctrine** — `audit_log.actor_id`/`resource_id`/`metadata` y
-`event_store.aggregate_id` existen porque las inyectan listeners `postGenerateSchema`
-(`api/src/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListener.php:44,60`,
-`api/src/Shared/Event/Infrastructure/Persistence/EventStoreSchemaListener.php:42`) y se escriben por SQL crudo, así
-que **ninguna propiedad de dominio las declara y ninguna reflexión sobre propiedades las ve**, sea cual sea el
-mecanismo de descubrimiento; `event_store.aggregate_id` es además **la fuga permanente de 1.7/G-5**. Y si D2 eligiera
-`getAllMetadata()`, súmale un punto ciego propio: `api/config/packages/doctrine.yaml:12-31` fija
-`auto_mapping: false` con solo tres mappings (`Backoffice`, `Iam`, `Organization`), luego `src/Shared/` queda fuera.
+**Then** enumera sus puntos ciegos siguiendo `api/.persistent-transport-policy:19-44`, incluyendo **como mínimo
+los cuatro medidos**:
+
+1. **No juzga la clasificación** — persona/no-persona es decisión humana sometida a revisión.
+2. **No alcanza referencias nacidas en configuración** (FR9/G-4b).
+3. **No alcanza las tablas sin entidad Doctrine** — `audit_log.actor_id` (`AuditLogSchemaListener.php:44`),
+   `resource_id` (`:47`) y `metadata` (`:48`), y `event_store.aggregate_id`
+   (`EventStoreSchemaListener.php:42`): las inyectan listeners `postGenerateSchema` y se escriben por SQL crudo,
+   así que **ninguna propiedad de dominio las declara** y ninguna reflexión sobre propiedades las ve.
+   `event_store.aggregate_id` es además **la fuga permanente de 1.7/G-5**.
+4. **Y el filtro que decida el universo.** Si el universo se acota por **nombre** (`*user*_id`), esa heurística es
+   un punto ciego de primera clase y va en la cabecera con nombre propio: medido, `Types::GUID` decora **16**
+   propiedades en `api/src` — `BankAccount::$bankId` (`:43`), `Invitation::$organizationId` (`:46`),
+   `Session::$organizationId` (`:40`), `Membership::$organizationId` (`:33`) y `Identifiable::$id` (`:20`) en las
+   8 entidades — y el paso de 16 a 4 lo hace **enteramente** el substring. Contraejemplo vivo de referencia a
+   persona sin «user» en el nombre: `audit_log.actor_id`. Un `$actorId`/`$customerId`/`$createdBy` futuro es
+   plenamente alcanzable por reflexión y el gate **callaría** — que es literalmente la *Story* de esta historia.
+   *Alternativa que evita el punto ciego:* clasificación obligatoria de **toda** columna `Types::GUID`, que es la
+   forma de completitud que usa `.persistent-transport-policy`.
+
+*Y hazlo comprobable en presencia:* como la cabecera vive en fichero aparte y la re-antepone el generador
+(Tarea 3), el gate puede aseverar que el registro commiteado **empieza por los bytes de ese fichero**.
 
 **AC6 — Cableado del gate (NFR11).**
 **Given** el gate,
 **When** se inspecciona su cableado,
 **Then** está en `php.quality` **y** en `php.quality.dry-run` **y** en `.PHONY`, porque CI corre el *dry-run*
-(`.github/workflows/ci.yml:115`).
-**Y** si el gate se parte en dos clases, el `--filter` es un **prefijo regex común** que las selecciona todas —
-verificado listando los tests que el target selecciona, no razonándolo (hecho (F)).
+(`ci.yml:115`).
+**Y** si el gate se parte en dos clases, el `--filter` es un **prefijo regex común** que las selecciona todas,
+**verificado listando los tests que el target selecciona** — no razonándolo (hecho (F)).
 
-**AC7 — Sin regresión + gates verdes.**
-`make php.quality` (incluye `php.deptrac`, `php.lint.error-contract`, `.bounded-context`, `.event-bus`,
-`.audit-resource`, `.persistent-transport`), `make php.unit`, `make php.behat`. Cada uno desde una **ejecución
-fresca**, con el exit code impreso — nunca «verde» leído de un log anterior. Con D1=① el rojo del gate nuevo es
-esperado y **se declara**; el resto tiene que estar verde.
+**AC7 — Separación generar / verificar (FR4, SI-22).**
+**Given** el registro commiteado,
+**When** corre `make php.lint.person-reference`,
+**Then** su contenido es **byte-idéntico** antes y después: el gate verifica, no genera. Confundirlos reintroduce
+#563.
+
+**AC8 — Sin regresión + gates verdes.**
+`make php.quality`, `make php.unit`, `make php.behat`, cada uno desde **ejecución fresca con exit code impreso**.
+Si D1 deja el gate nuevo en rojo, ese rojo es esperado, **está autorizado por escrito** y se declara; todo lo
+demás verde.
 
 ## Tasks / Subtasks
 
-- [ ] **Tarea 1 — Registrar las tres decisiones (PRECONDICIÓN, AC4).** D1, D2, D3 por escrito, confirmando o
-      refutando cada recomendación. **Ninguna otra tarea empieza antes.** Si D1 sale ①, este mismo PR corrige
-      `epics-gdpr-hardening.md:85-94,314` — no se deja la promesa rota en el corte.
+- [ ] **Tarea 1 — Registrar D1/D2/D3 y corregir el contrato perdedor (PRECONDICIÓN).** Ninguna otra tarea empieza
+      antes. La corrección de épica que toque **va en este PR**, no diferida:
+  - [ ] D1 → corregir la frase perdedora: o *«llega verde»* de FR4 (`epics:91,418,449`), o el AC de Story 1.3
+        (`epics:488-490`) **más** la anotación del DAG (`arch-addendum:44`).
+  - [ ] D1① exige **autorización explícita del usuario para dejar `main` en rojo** hasta G-1b, y declarar el
+        conflicto con `CLAUDE.md` → *Gates first* en vez de resolverlo en silencio.
+  - [ ] D2① exige corregir `epics:219-221` (*«el hermano replica la estructura»*).
+  - [ ] Corregir la justificación de FR2/NFR8 (`epics:70-74,195-196`; `arch-addendum:25`), que el hecho (A) mide
+        como falsa. NFR8 se declara *«razón medida, no estética»*: dejar en pie una razón medida como falsa es lo
+        que la épica prohíbe. Sustituir por el argumento del puerto (estructural y vivo) y el del scope de
+        cifrado (**etiquetado prospectivo**).
+  - [ ] Voltear `Status:` a `ready-for-dev` y `sprint-status.yaml` a `ready-for-dev` **en el mismo commit**.
 - [ ] **Tarea 2 — El atributo hermano (AC3)**
-  - [ ] `api/src/Shared/Privacy/Domain/<Nombre>.php`, `#[Attribute(Attribute::TARGET_PROPERTY)]`, pasivo, con el
-        parámetro del dueño como **string** (hecho (C)). Docblock que enuncie el contrato de **referencia** y lo
-        distinga del de tratamiento, **sin narrar el cambio ni citar la historia**.
-  - [ ] Test de que `personalFieldsOf()` lo ignora — la separación de contratos es lo falsable de AC3.
+  - [ ] `api/src/Shared/Privacy/Domain/<Nombre>.php`, `#[Attribute(Attribute::TARGET_PROPERTY)]`, pasivo, dueño
+        como **string** (hecho (C)). Docblock que enuncie el contrato de **referencia**, sin narrar el cambio ni
+        citar la historia.
   - [ ] Sembrar `PasswordResetToken::$userId` y `Session::$userId`. **Nunca en el trait `Identifiable`**: se
         propagaría a las 8 entidades.
-- [ ] **Tarea 3 — El generador (AC2)**
+  - [ ] Un atributo puesto **fuera** del universo derivado (propiedad no persistida, estática, DTO) debe
+        **fallar**, nunca caer en silencio — si no, el dev declara un dueño que el registro nunca recoge.
+- [ ] **Tarea 3 — El generador (AC2, AC7)**
   - [ ] Descubrimiento por `ApiSourceFiles::phpFiles()` + reflexión, molde
-        `api/tests/Support/PersistentTransportPolicy.php:90-124`. **No** `getAllMetadata()`: `auto_mapping: false` y
-        `src/Shared/` fuera de los mappings lo dejarían ciego a `event_store` (`doctrine.yaml:12-31`).
-  - [ ] Lector de atributos con `IS_INSTANCEOF` y recorriendo padres — **no** el de
-        `ReflectionPersonalDataClassifier.php:35`, que es el defecto I-2 de G-4a (hecho (D)).
-  - [ ] Escritura segura del registro: temporal → `test -s` → `cat > destino`, **nunca `mv`**
-        (`api/tools/deptrac/regen-baseline.sh:39-45`, con su razón: root-owned en el bind mount).
-  - [ ] Cabecera del generado en fichero aparte y re-antepuesta (precedente
-        `api/tools/deptrac/deptrac.baseline.header.txt`), con la fórmula `# GENERATED — regenerate with …`.
-- [ ] **Tarea 4 — El gate (AC1, AC2, AC5, AC6)**
-  - [ ] Test bajo `api/tests/Unit/Shared/Architecture/`, `#[CoversNothing]`, `public const string FAILURE_PREAMBLE`,
-        camino verde con `addToAssertionCount(1)`.
+        `api/tests/Support/PersistentTransportPolicy.php:90-124`. **No** `getAllMetadata()`: `auto_mapping: false`
+        y `src/Shared/` fuera de los mappings (`doctrine.yaml:12-31`).
+  - [ ] **Orden determinista antes de escribir** (`ksort` por `<Fqcn>::$prop`): el check generado-vs-commiteado es
+        byte a byte, y el orden del `RecursiveDirectoryIterator` no está garantizado entre máquinas. Es la vía más
+        barata a un rojo en CI que en local no reproduce.
+  - [ ] **El generador NO emite línea para una propiedad del universo que no lleve atributo.** Si la emite como
+        placeholder, `make regen` silencia el rojo de completitud y vuelve #563.
+  - [ ] Escritura segura: temporal → `test -s` → `cat > destino`, **nunca `mv`**
+        (`api/tools/deptrac/regen-baseline.sh:39-45`). Y en la **primera** ejecución el fichero destino no existe:
+        créalo host-owned antes o corrige propiedad después, o queda root-owned en el bind mount y ni el host
+        puede editarlo ni `worktree.remove` limpiarlo.
+  - [ ] Cabecera en fichero aparte re-antepuesta (precedente `deptrac.baseline.header.txt`), y **fuera de la
+        comparación de deriva** — si no, editar la cabecera (que AC5 obliga a hacer) pone el check en rojo sin
+        cambio de código.
+  - [ ] Fixture de la forma **declarada en el cuerpo** (la de las dos semillas), que hoy no ejercita ningún test.
+- [ ] **Tarea 4 — El gate (AC1, AC2, AC5, AC6, AC7)**
+  - [ ] Test bajo `api/tests/Unit/Shared/Architecture/`, `#[CoversNothing]`, `public const string
+        FAILURE_PREAMBLE`, camino verde con `addToAssertionCount(1)`.
+  - [ ] Check de **cableado** del dueño (AC1, segunda mitad), sobre fuente sin comentarios.
   - [ ] Rechazar duplicados y clasificación no reconocida, **nunca degradarla a `non-person`**
         (`PersonResourceErasureGateTest.php:170-173,181-191`).
-  - [ ] Validar la ruta del dueño con `is_file()` **y no** `assertFileExists()`: acepta **directorios**, y por eso
-        `person :: docs` silenciaría la política — corregido ya en
-        `api/tests/Support/PersistentTransportPolicy.php:134-137`.
-  - [ ] Anti-vacuidad (`theGateScansAtLeast…`) y fixture sucio + gemelo limpio.
-  - [ ] Evitar el deadlock entre aserciones que #613 pagó (I-7): no exijas a la vez *«existe una persona sin
-        excepción»* y *«todo lo declarado sigue vivo»*.
+  - [ ] Validar la ruta con `is_file()`, **no** `assertFileExists()` (acepta directorios) — precedente
+        `api/tests/Unit/Shared/Architecture/PersistentTransportPolicyGateTest.php:133-137`. Y rechazar rutas con
+        `..` o fuera de `src/`: `is_file()` las acepta encantado.
+  - [ ] Anti-vacuidad **también sobre el árbol de fixtures**: si el FQCN de los fixtures no se reconstruye bien,
+        `class_exists` devuelve `false` para todos y el test del gemelo limpio pasa escaneando cero clases.
+  - [ ] Evitar el deadlock entre aserciones que #613 pagó (I-7).
   - [ ] Target en `make/php-quality.mk` + las tres inserciones (`:158`, `:176`, `.PHONY`). **Verifica el `--filter`
         listando los tests que selecciona.**
-- [ ] **Tarea 5 — Boy-scout propuesto, decide y dilo: cerrar el hueco del filtro de #613 (hecho (F)).**
-      `make/php-quality.mk:121` → prefijo regex común, para que las 13 aserciones de
-      `PersistentTransportRoutingShapeGateTest` entren en CI. Un token en un fichero que esta historia toca de todas
-      formas. **Si no se hace aquí, va a `deferred-work.md` con la medición** — no se calla.
-- [ ] **Tarea 6 — Docs (regla de `CLAUDE.md` → *Keeping docs up to date*).** Los sitios que tocó #613, medidos:
-      `CLAUDE.md` (*Required checks*), `docs/claude-code-quickref.md`, `docs/rules/security.md`,
-      `PRODUCTION_SECURITY_CHECKLIST.md`, `docs/architecture-api.md`. Evalúa `api/CLAUDE.md`, que hoy **no menciona**
-      `Shared/Privacy` en *Rules that bite*.
-- [ ] **Tarea 7 — Gates y pase adversarial (AC7 + definición de hecho de la épica)**
+- [ ] **Tarea 5 — Boy-scout propuesto: cerrar el hueco de diagnosticabilidad del filtro de #613 (hecho (F)).**
+      `make/php-quality.mk:121` → prefijo regex común, para que un fallo de las cinco vías de routing se reporte
+      como frontera rota y no como «PHPUnit». **No es un hueco de cobertura** —esos 13 tests corren en
+      `php.unit.coverage`—, así que es mejora de diagnóstico, no fix de seguridad. Si no entra aquí, va a
+      `deferred-work.md` con la medición.
+- [ ] **Tarea 6 — Docs.** Los **seis** sitios que tocó #613: `CLAUDE.md` (*Required checks*),
+      `docs/claude-code-quickref.md`, `docs/rules/security.md`, `PRODUCTION_SECURITY_CHECKLIST.md` (un ítem
+      cerrado **y uno abierto** por lo que el gate no cierra), `docs/architecture-api.md` y
+      `docs/architecture/event-catalog.md` — este último es el segundo cambio documental más grande de #613;
+      inclúyelo o argumenta por qué no aplica. Evalúa `api/CLAUDE.md` → *Rules that bite*, que hoy no menciona
+      `Shared/Privacy`.
+- [ ] **Tarea 7 — Gates y pase adversarial de la IMPLEMENTACIÓN (AC8 + definición de hecho de la épica)**
   - [ ] `make php.quality`, `make php.unit`, `make php.behat` — frescos, con exit code.
-  - [ ] Checklist de seguridad de `CLAUDE.md` sobre el diff (ver *Seguridad*).
-  - [ ] **Pase adversarial por alguien distinto del autor, REGISTRADO**, declarando dónde quedó. Sin él la historia
-        no llega a `done` (NFR10). Un pase que no encuentra nada cuenta — y también se declara.
+  - [ ] Checklist de seguridad de `CLAUDE.md` sobre el diff.
+  - [ ] **Pase adversarial sobre el código, por alguien distinto del autor, REGISTRADO.** El pase sobre el
+        **contrato** ya está hecho y registrado abajo; éste es el segundo, y ninguno sustituye al otro.
+
+## Pase adversarial — CONTRATO. REGISTRADO (NFR10 / `CLAUDE.md` → *Security review* → **Process**)
+
+**Dónde queda el registro: aquí, y reproducido en el cuerpo del PR #614.** **Cuándo:** 2026-07-31, sobre el
+contrato, **antes de escribir código** — que con tres decisiones abiertas es el pase que más rinde.
+**Quién:** tres lecturas hostiles independientes por revisores **distintos del autor**, en contexto fresco, con
+instrucción explícita de refutar, prohibición de aceptar como cierta ninguna afirmación del artefacto y obligación
+de re-medir contra `main` @ `9310efeb`: un pase adversarial general, un cazador de casos límite y un auditor de
+aceptación contra `epics-gdpr-hardening.md` + `arch-addendum-gdpr-hardening.md`.
+**Alcance declarado:** el artefacto y el código de `api/` que cita. **No cubre:** la implementación (no existe),
+PWA, ni ejecución de gates más allá de los listados en *Debug Log References*.
+**Veredicto: el eje aguanta; el contrato NO aguantaba.** Los hallazgos de abajo están **incorporados arriba**;
+cada uno se re-verificó contra el código antes de aceptarlo, y tres se rechazaron por medición.
+
+### A-1 (ALTA) — el hecho (B) señalaba la contradicción equivocada. **CORREGIDO.**
+
+FR4 consigo mismo es **coherente**: *«llega verde»* + *«cada hueco **posterior** es rojo»* describe un trinquete,
+el patrón de `deptrac.baseline.header.txt`. La contradicción real —que yo no cité— es FR4 contra **FR5 (`:97`)**,
+contra el **AC formal de Story 1.3 (`:488-490`)** y contra el **DAG del addendum (`:44`)**, los tres exigiendo el
+gate **en rojo**. Reescrito el hecho (B) y reencuadrada D1: la pregunta es qué frase manda, y toda opción corrige
+contrato.
+
+### A-2 (ALTA) — a D1 le faltaba la opción del precedente que el propio artefacto manda copiar. **AÑADIDA (④).**
+
+`.persistent-transport-policy` es **tri-estado**: `=> person` sin ruta es forma legal (`:12`) y está viva y verde
+(`:50`). Mis tres opciones asumían la gramática binaria de `.audit-resource-types`. Añadida ④ con lo que
+sacrifica.
+
+### A-3 (ALTA) — D1① se presupuestaba sin su coste dominante. **INCORPORADO.**
+
+El gate entra en `php.quality.dry-run`, que CI corre para **todo PR** (`ci.yml:115`), y el DAG abre G-1b **y G-2 en
+paralelo**: ① deja `main` rojo para trabajo no relacionado y choca con `CLAUDE.md` → *Gates first*. Ahora está en
+la tabla y exige **autorización explícita del usuario**.
+
+### A-4 (ALTA) — mi AC3 no podía fallar. **SUSTITUIDO.**
+
+`PersonalData` es `final` y el lector no usa `IS_INSTANCEOF` (ambos hechos los medía yo mismo): «`personalFieldsOf()`
+ignora el atributo nuevo» es verde por construcción del lenguaje. Era el AC vacío que yo acusaba al corte.
+
+### A-5 (ALTA) — «el AC3 del corte no es ejecutable» era FALSO. **RESTAURADO con fixture.**
+
+`PiiDiffSealerTest.php:77` ya conduce el sellador con el clasificador **real** y fakes `AuditedEntity`. El AC del
+corte es ejecutable de extremo a extremo y **estrictamente más fuerte** que mi reemplazo.
+
+### A-6 (ALTA) — «universo cerrado de 4 propiedades» era la salida de una heurística de nombre. **CORREGIDO.**
+
+Medido: **16** propiedades `Types::GUID`; de 16 a 4 lo hace enteramente `*user*_id`. `audit_log.actor_id` es
+contraejemplo vivo de referencia a persona sin «user». Ahora es punto ciego obligatorio de AC5, con su alternativa.
+
+### A-7 (ALTA) — la mitad *«correctamente cableada»* de SI-21 vivía solo en una rama de AC1. **CORREGIDO.**
+
+Tal como estaba, `person :: <cualquier fichero existente>` pasaba y el registro degeneraba en documentación —
+SI-23. AC1 exige ahora el triple check del precedente en **ambas** ramas.
+
+### A-8 (ALTA) — AC4 no podía fallar. **PARTIDO.**
+
+*«El resultado es el que D1 haya decidido»* lo satisface cualquier cosa. Ahora fija lo que es verdad bajo **toda**
+opción —las dos semillas, con sus dueños, verdes— y manda lo dependiente de D1 a AC1.
+
+### A-9 (ALTA) — D2 refutaba en silencio una línea ratificada. **CITADA.**
+
+`epics:219-221` (*«el hermano replica la estructura»*) manda adaptador en `Infrastructure/`. Mi recomendación la
+contradecía sin nombrarla. Ahora es la restricción explícita de D2, y elegir ① obliga a corregirla en el PR.
+
+### A-10 (ALTA) — el hecho (F) estaba sobredimensionado, y lo publiqué así. **CORREGIDO.**
+
+Yo escribí *«deja 13 de sus 20 tests fuera de CI»*. Medido: `ci.yml:122` corre `make php.unit.coverage` →
+`php-test.mk:49` es `bin/phpunit` **sin `--filter`**, la suite entera. Los 13 **sí** corren en CI. El defecto real
+—y sigue siendo real— es que quedan fuera del **gate de lint**, es decir de la frontera nombrada. Tarea 5
+re-cotizada como diagnosticabilidad. *(La afirmación errónea viajó al cuerpo del PR y a una nota de memoria;
+ambas corregidas.)*
+
+### A-11 (MEDIA) — la opción ② de D1 se ofrecía como neutra siendo SI-23. **VETADA.**
+
+### A-12 (MEDIA) — ③ de D2 se vetaba solo por medición operativa. **RE-ORDENADO:** vetada por contrato
+(FR4/SI-22: generar ≠ verificar) primero, por medición después. Y el veto se acota: los dos baselines escriben el
+árbol desde targets propios sin tocar la garantía de `:165-166`.
+
+### A-13 (MEDIA) — la mitad positiva de FR2 no tenía AC. **AÑADIDA a AC3** (targets, dueño como string, y que la
+línea generada lo reproduzca).
+
+### A-14 (MEDIA) — la analogía con el defecto I-2 no transfiere. **SUSTITUIDA.** I-2 existe porque PHP no hereda
+atributos de **clase**; con `TARGET_PROPERTY`, `getProperties()` ya devuelve heredadas y aplana traits. El hueco
+real es que no ve `private` del padre (`AggregateRoot::$domainEvents`).
+
+### A-15 (MEDIA) — doble rasero en el hecho (A). **ETIQUETADO.** El argumento del scope de cifrado es tan
+prospectivo como el que declaro falso; ahora lo dice.
+
+### A-16 (MEDIA) — la Tarea 1 no corregía la justificación de FR2/NFR8 que el hecho (A) mide como falsa.
+**AÑADIDO.**
+
+### A-17 (MEDIA) — `ready-for-dev` con tres decisiones abiertas entrega la historia a un implementador
+desatendido. **CORREGIDO a `blocked`.** `bmad-dev-auto/step-01-clarify-and-route.md:18-23` enruta `ready-for-dev`
+directo a implementar y `blocked` a HALT; el comentario YAML no lo lee ninguna herramienta. G-4a nunca estuvo en
+`ready-for-dev`.
+
+### A-18 (MEDIA) — AC5 decía «los cuatro medidos» y enumeraba tres. **CORREGIDO** (el cuarto es la heurística de
+nombre, A-6).
+
+### A-19 (MEDIA→BAJA) — casos límite del generador sin cubrir. **INCORPORADOS en la Tarea 3 y 4:** orden no
+determinista (rojo en CI, verde en local), placeholder que silencia la completitud, primera escritura root-owned
+en el bind mount, cabecera dentro de la comparación de deriva, travesía `..` en la ruta del dueño, anti-vacuidad
+del árbol de fixtures, atributo puesto fuera del universo, y el punto ciego de un id de persona persistido como
+`Types::STRING` en vez de `Types::GUID`.
+
+### A-20 (BAJA) — cifras y citas mal. **CORREGIDAS:** 19→**14** comandos, 12→**11** gates, 10→**9** tests,
+5→**6** sitios de docs de #613 (faltaba `docs/architecture/event-catalog.md`); la corrección de `is_file()` está en
+`PersistentTransportPolicyGateTest.php:133-137`, no en `PersistentTransportPolicy.php`; `AuditLogSchemaListener`
+`actor_id`=`:44`, `resource_id`=`:47`, `metadata`=`:48`; `AuditWriteCaptureListener` filtro `:78`, `seal()` `:87`;
+`#[PersonalData]` del `iban` en `BankAccount.php:65`.
+
+### Hallazgos RECHAZADOS por medición (los declaro para que el silencio no se lea como omisión)
+
+- **«Un atributo con `string $owner` requerido rompería el contenedor»** — refutado por contraejemplo vivo:
+  `api/src/Shared/Validation/Infrastructure/EnumType.php:30-32` es un atributo con `public string $enumClass`
+  requerido, dentro del `../src/` autoregistrado, y el contenedor compila. Los privados sin consumidor se podan
+  antes de resolver argumentos.
+- **«Filtrar `$id` con `getDeclaringClass()->isAbstract()`»** — mecanismo equivocado: `$id` vive en el **trait**
+  `Identifiable.php:19-22`, y para una propiedad de trait `getDeclaringClass()` devuelve la clase que la usa. La
+  consecuencia (un universo GUID barre `$id` ×8) es real y se fusionó con A-6.
+- **«El artefacto viola el estilo de enlaces Markdown / prescribe IDs de historia hacia `src`»** — verificado y
+  falso: cero enlaces `[](…)`, todo en código inline, y el anti-patrón 8 prohíbe justo eso.
+
+### Lo que las tres capas verificaron y NO encontró hallazgo
+
+Las mediciones de las semillas y de las huérfanas; la cadena de erasure completa; el cableado de AC6 en las dos
+listas (declarado **más fuerte** que NFR11); la falsabilidad de AC2 en las dos direcciones originales; los cuatro
+eslabones del hecho (A); y las citas de `php-quality.mk`, `ci.yml:115`, `deptrac.yaml`, `services.yaml`,
+`doctrine.yaml`, `regen-baseline.sh`, `PersonResourceErasureGateTest`, `EventDispatchGateTest`, `ApiSourceFiles`,
+`AllowlistFile`, `.audit-resource-types`, `.persistent-transport-policy`, `Identifiable` y `erase.feature:44`.
 
 ## Dev Notes
 
@@ -382,125 +581,97 @@ esperado y **se declara**; el resto tiene que estar verde.
 | Necesidad | Ya existe | Ruta |
 |-----------|-----------|------|
 | Recorrer `api/src` como generador de ficheros PHP | `ApiSourceFiles::phpFiles()` | `api/tests/Support/ApiSourceFiles.php:41` |
-| Descubrir clases por PSR-4 + reflexión y filtrar por herencia | `PersistentTransportPolicy::eventsInSource()` | `api/tests/Support/PersistentTransportPolicy.php:90-124` |
+| Descubrir clases por PSR-4 + reflexión | `PersistentTransportPolicy::eventsInSource()` | `api/tests/Support/PersistentTransportPolicy.php:90-124` |
 | Parsear un registro de la raíz de `api/` | `AllowlistFile::entries()` | `api/tests/Support/AllowlistFile.php:26` |
-| Gate que lee un registro y valida el dueño por fichero | `PersonResourceErasureGateTest` | `api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php` |
+| Validar el **cableado** del dueño, no solo su existencia | `PersonResourceErasureGateTest` | `api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php:89-109` |
+| Rechazar un directorio como ruta de excepción | `PersistentTransportPolicyGateTest` | `api/tests/Unit/Shared/Architecture/PersistentTransportPolicyGateTest.php:133-137` |
 | Gate con preámbulo, anti-vacuidad y fixture sucio | `EventDispatchGateTest` | `api/tests/Unit/Shared/Architecture/EventDispatchGateTest.php` |
+| Conducir `PiiDiffSealer` con el clasificador real y fakes `AuditedEntity` | `PiiDiffSealerTest` | `api/tests/Unit/Shared/Audit/Infrastructure/Persistence/PiiDiffSealerTest.php:66,77,81` |
 | Escribir un artefacto commiteado sin dejarlo root-owned | `regen-baseline.sh` | `api/tools/deptrac/regen-baseline.sh:39-45` |
 | Cabecera de artefacto generado | `deptrac.baseline.header.txt` | `api/tools/deptrac/deptrac.baseline.header.txt` |
-| Leer atributos como los lee Symfony (`IS_INSTANCEOF` + padres) | `PersistentTransportPolicy::attributeTransportsFor()` | `api/tests/Support/PersistentTransportPolicy.php` |
-| Fixtures de gate cuando hay que reflejar atributos/herencia | `Architecture/Fixture/` (7 ficheros de #613) | `api/tests/Unit/Shared/Architecture/Fixture/` |
+| Fixtures de gate con atributos/herencia | `Architecture/Fixture/` (7 ficheros de #613) | `api/tests/Unit/Shared/Architecture/Fixture/` |
 
 ### Anti-patrones concretos que esta historia invita a cometer
 
-1. **Poner el dueño como `::class`.** Rompe `php.lint.bounded-context` y `php.deptrac` a la vez. Hecho (C).
-2. **Copiar el lector de atributos de `ReflectionPersonalDataClassifier.php:35`.** Sin `IS_INSTANCEOF` ni padres: es
-   el defecto I-2 que el pase adversarial de G-4a destapó. Hecho (D).
-3. **Escribir el AC del corte sobre el sellado del diff.** No es ejecutable: ninguna entidad con referencia a persona
-   es `AuditedEntity`. Hecho (A).
-4. **Asumir que el registro «llega verde» sin resolver D1.** Con completitud estructural no llega, y eso puede ser lo
-   correcto. Hecho (B).
-5. **Un `--filter` que solo caza una de las clases del gate.** Ya pasó en #613 y nadie lo vio. Hecho (F).
+1. **Poner el dueño como `::class`.** Rompe `php.lint.bounded-context` y `php.deptrac`. Hecho (C).
+2. **Copiar de G-4a el recorrido de padres con `IS_INSTANCEOF`.** No transfiere a `TARGET_PROPERTY`. Hecho (D).
+3. **Escribir un AC que no puede fallar.** Pasó dos veces en la primera versión de este contrato (A-4, A-8).
+4. **Declarar «universo cerrado» lo que sale de un filtro de nombre.** A-6.
+5. **Elegir en D1 sin corregir la frase perdedora de la épica.** Deja a G-1b con un AC insatisfacible.
 6. **Anotar `$id` en el trait `Identifiable`.** Se propaga a las 8 entidades.
 7. **Validar la ruta del dueño con `assertFileExists()`.** Acepta directorios.
 8. **Comentar el cambio en vez del código.** Nada de «antes esto no existía», ni `G-1a`, ni `FR3`, ni `SI-22` en
    comentarios de `src`. La trazabilidad vive en el PR.
-9. **Meter el generador en `src/` por analogía.** El clasificador está ahí porque tiene consumidor de producción; el
-   generador no lo tiene. Si va a `src/`, que sea con argumento. D2.
+9. **Meter el generador en `src/` (o sacarlo) sin citar `epics:219-221`.** D2.
 
 ### Arquitectura y fronteras
 
-- El atributo vive en `Shared/Privacy/Domain/`, que `deptrac.yaml:132-138` auto-pliega en `Shared.Domain`: **sin
-  registro nuevo en deptrac, sin entrada en `api/.bounded-context-allowlist`** (`Erpify\Shared\…` es siempre
-  importable, `:7`).
+- El atributo vive en `Shared/Privacy/Domain/`, auto-plegado en `Shared.Domain` por `deptrac.yaml:132-138`: sin
+  registro nuevo en deptrac, sin entrada en `api/.bounded-context-allowlist`.
 - Un gate bajo `api/tests/Unit/Shared/Architecture/` es un test, no un módulo: deptrac analiza `api/src`.
-- El atributo **cae dentro** del autoregistro de `services.yaml:23-27` (el `exclude` solo saca `Domain/Entity/`). Se
-  poda en compilación por no tener consumidor; inofensivo, pero conviene saberlo antes de sorprenderse.
 - **Esta historia no toca la cadena de erasure.** Si te ves editando `FulfilIdentityErasure`, para: eso es G-1b.
 
 ### Testing
 
-- Suite unitaria: `api/tools/phpunit/phpunit.dist.xml`, con `failOnDeprecation`/`failOnNotice`/`failOnWarning` en
-  `true`; `<source>` apunta a `api/src`, que es **por qué** los gates llevan `#[CoversNothing]`: reflexionar sobre
-  `src` carga clases y les atribuiría cobertura falsa en el clover.
-- **Tests que no pueden quedar rojos:** los 10 de
-  `api/tests/Unit/Iam/Identity/Application/FulfilIdentityErasureTest.php`, los 6 de
-  `api/tests/Functional/Iam/Identity/Infrastructure/Controller/UserEraseFunctionalTest.php`, los 3 de
-  `api/tests/Unit/Shared/Privacy/Infrastructure/ReflectionPersonalDataClassifierTest.php` y el de
-  `api/tests/Unit/Backoffice/BankAccount/Domain/Entity/BankAccountPersonalDataTest.php`.
-- **El test más frágil del área es el canary de presupuesto de 15 queries** de
-  `api/features/backoffice/users/erase.feature:44` (*«un desplazamiento significa un round-trip añadido: re-mide, no
-  subas el número»*). G-1a es estático y **no debería tocarlo**; si se mueve, algo se ha colado en la cadena.
-- **Behat: esta historia no debería añadir ni un step.** Es sustrato de build, no comportamiento observable por la
-  API. Si crees que hace falta uno, **lista antes el vocabulario** (`make php.behat c='-dl'`,
-  `make php.behat c="-d '<texto>'"`) — `api/CLAUDE.md` lo exige, y más de la mitad de los 205 steps está ocioso.
-- **Hueco de cobertura medido, por si lo quieres cerrar de paso:** el borrado de
-  `PasswordResetToken::$userId` **solo está pinneado con mocks** (`EraseIdentitySubjectTest.php:37`,
-  `FulfilIdentityErasureTest.php:78`); `erase.feature` no consulta `identity_password_reset_token`. Es la semilla más
-  débil de las dos, y el registro va a afirmar que tiene dueño.
+- `api/tools/phpunit/phpunit.dist.xml` con `failOnDeprecation`/`failOnNotice`/`failOnWarning` en `true`; `<source>`
+  apunta a `api/src`, que es **por qué** los gates llevan `#[CoversNothing]`.
+- **Tests que no pueden quedar rojos:** los **9** de `FulfilIdentityErasureTest.php`, los 6 de
+  `UserEraseFunctionalTest.php`, los 3 de `ReflectionPersonalDataClassifierTest.php`, y
+  `BankAccountPersonalDataTest.php` (que solo cubre la forma **promovida** — la declarada en el cuerpo, que es la
+  de las dos semillas, no la mide nadie).
+- **El test más frágil del área** es el canary de 15 queries de `api/features/backoffice/users/erase.feature:44`.
+  G-1a es estático y no debería tocarlo; si se mueve, algo se coló en la cadena.
+- **Behat: esta historia no debería añadir ni un step.** Si crees que hace falta, lista antes el vocabulario
+  (`make php.behat c='-dl'`) — `api/CLAUDE.md` lo exige.
+- **Hueco de cobertura medido:** el borrado de `PasswordResetToken::$userId` **solo está pinneado con mocks**
+  (`EraseIdentitySubjectTest.php:37`, `FulfilIdentityErasureTest.php:78`); `erase.feature` no consulta
+  `identity_password_reset_token`. Es la semilla más débil, y el registro va a afirmar que tiene dueño.
 
 ### Seguridad (checklist de `CLAUDE.md` aplicada a este diff)
 
-- **Superficie HTTP:** ninguna. **Inyección / authz / validación / RFC 9457:** no aplican — decláralo en el PR, no lo
-  omitas en silencio.
+- **Superficie HTTP:** ninguna. **Inyección / authz / validación / RFC 9457 / mass assignment / CORS / Mercure /
+  migraciones:** no aplican — decláralo en el PR, no lo omitas.
 - **Datos personales:** la historia no mueve ni un dato personal; instala el control que declara dónde están. **No
-  escribas en el PR que cierra una fuga** — no cierra ninguna: eso es G-1b, G-2 y G-5.
-- **Secretos:** el registro es un artefacto de revisión con FQCN y rutas. **Ningún valor de dato, ningún id real.**
-- **Migraciones:** ninguna. Si crees que sí, para y explica por qué.
-- **Handlers de Messenger:** no se tocan.
+  escribas que cierra una fuga** — no cierra ninguna: eso es G-1b, G-2 y G-5.
+- **Secretos:** el registro lleva FQCN y rutas. Ningún valor de dato, ningún id real.
 - **Frontend:** cero cambios en `pwa/`.
 
-**UX: no aplica, declarado y no omitido.** La historia no añade, modifica ni retira superficie de UI — la consola de
-borrado GDPR ya se entregó en U-5 (`epics-users-admin.md`). Ningún UX-DR es derivable de los runs existentes y
-ninguno se inventa.
-
-### Docs a actualizar
-
-Los cinco sitios que tocó #613 y su razón: `CLAUDE.md` (*Required checks* — una viñeta con la regla, el registro, el
-gate y «sus puntos ciegos están en la cabecera del registro»), `docs/claude-code-quickref.md` (*Individual linters*),
-`docs/rules/security.md` (checklist pre-commit), `PRODUCTION_SECURITY_CHECKLIST.md` (un ítem cerrado **y uno abierto
-por lo que el gate NO cierra**) y `docs/architecture-api.md`. Evalúa además `api/CLAUDE.md` → *Rules that bite*, que
-hoy no menciona `Shared/Privacy`.
+**UX: no aplica, declarado y no omitido.** No añade, modifica ni retira superficie de UI — la consola de borrado
+GDPR ya se entregó en U-5 (`epics-users-admin.md`).
 
 ### Inteligencia de la historia anterior (G-4a, merged en #613)
 
-- **El contrato no aguantó el pase adversarial: 7 hallazgos antes de escribir código, 17 después.** El eje del gate
-  (registro + política) sobrevivió; los detalles de lectura no. Trata este artefacto igual.
-- **Lo que costó caro allí y aplica igual aquí:** leer atributos como los lee el framework (I-2), leer **toda** la
-  configuración y no un fichero (I-3), no confiar en un nombre sin leer lo que hay detrás (I-6), y no dejar dos
-  aserciones del gate mutuamente insatisfacibles (I-7).
-- **La clave del registro fue el defecto ALTO (I-1):** `aggregateType` resultó **más gruesa que la propiedad que
-  clasificaba**, y una clasificación errónea dio luz verde a la misma fuga. Aquí la clave propuesta
-  (`<Fqcn>::$prop`) es exactamente de la granularidad del hecho — **es la lección aplicada, dilo en el PR** — pero
-  paga rename de clase, y por eso D3 es una decisión y no un detalle.
-- **La honestidad del alcance también fue un hallazgo (I-16):** documentación que seguía prometiendo lo que la propia
-  rama había medido como inexistente. Al escribir la cabecera y los docs, describe lo que el gate hace, no lo que la
-  épica quería que hiciera.
+- **El contrato no aguantó el pase adversarial: 7 hallazgos antes de escribir código, 17 después.** Este contrato
+  tampoco aguantó: 20 incorporados, 3 rechazados por medición. Trátalo igual cuando escribas el código.
+- **Lo que costó caro allí:** leer atributos como los lee el framework (I-2), leer **toda** la configuración
+  (I-3), no confiar en un nombre sin leer lo que hay detrás (I-6), y no dejar dos aserciones mutuamente
+  insatisfacibles (I-7).
+- **La clave del registro fue el defecto ALTO (I-1):** `aggregateType` era **más gruesa que la propiedad que
+  clasificaba**. Aquí la clave propuesta (`<Fqcn>::$prop`) es de la granularidad del hecho — es la lección
+  aplicada — pero paga rename de clase, y por eso D3 es decisión.
+- **I-16:** documentación que seguía prometiendo lo que la propia rama había medido como inexistente. Al escribir
+  la cabecera y los docs, describe lo que el gate hace, no lo que la épica quería que hiciera.
 
 ### Git intelligence
 
-`9310efeb` (cierre de G-4a, chore documental), `0d2d45d2` (**#613 — la implementación de G-4a**: registro
-`api/.persistent-transport-policy`, `PersistentTransportPolicyGateTest`, `PersistentTransportRoutingShapeGateTest`,
-`api/tests/Support/PersistentTransportPolicy.php`, target `php.lint.persistent-transport` y 7 fixtures — 43 ficheros,
-+2945/−326), `009b0756` (#611, solo `pwa/`), `f4dbe4d1` (#609, corte de la épica). **`api/` SÍ se movió desde el corte
-de épica**, y lo que se movió es justo el precedente que esta historia copia: no leas `.audit-resource-types` como
-único modelo, lee `.persistent-transport-policy`, que ya lleva incorporadas las correcciones de dos pases
-adversariales.
+`9310efeb` (cierre de G-4a), `0d2d45d2` (**#613 — implementación de G-4a**: registro
+`api/.persistent-transport-policy`, dos clases de gate, `api/tests/Support/PersistentTransportPolicy.php`, target
+`php.lint.persistent-transport` y 7 fixtures — 43 ficheros, +2945/−326), `009b0756` (#611, solo `pwa/`), `f4dbe4d1`
+(#609, corte de la épica). **`api/` sí se movió desde el corte**, y lo que se movió es el precedente que esta
+historia copia: no leas `.audit-resource-types` como único modelo — lee `.persistent-transport-policy`, que ya
+lleva incorporadas las correcciones de dos pases adversariales, y **cuyo tri-estado es la opción ④ de D1**.
 
 ## References
 
 - `_bmad-output/planning-artifacts/epics-gdpr-hardening.md` — FR2, FR3, FR4; NFR1/SI-21, NFR2/SI-22, NFR3/SI-23,
-  NFR8, NFR10, NFR11; Story 1.2.
-- `_bmad-output/planning-artifacts/arch-addendum-gdpr-hardening.md` — SI-21/SI-22/SI-23, fila **G-1a** de la tabla de
-  localización, DAG safe-first.
+  NFR8, NFR10, NFR11; Story 1.2; y las tres frases que D1 pone en conflicto (`:91`, `:97`, `:488-490`).
+- `_bmad-output/planning-artifacts/arch-addendum-gdpr-hardening.md` — SI-21/22/23, fila **G-1a**, DAG (`:44`).
 - `_bmad-output/implementation-artifacts/g-4a-fuga-passwordresetcompleted-transportes-messenger.md` — el precedente
   completo: contrato, decisión registrada y los dos pases adversariales.
-- `docs/adr/audit-activity-log.md` — D4 (prohibición de crosswalk).
-- `docs/adr/regulatory-audit-trail.md` — D15 y la separación `event_store` (negocio) vs rastro regulatorio.
-- `docs/adr/external-dependencies-in-domain.md` — la excepción de metadatos pasivos en `Domain/`.
-- `CLAUDE.md` — *Security review on every change* → **Process** (pase adversarial registrado); *Code comments*;
-  *Keeping docs up to date*; *Required checks*.
-- `api/CLAUDE.md` — deptrac, gates, y el vocabulario Behat como activo a gastar.
+- `docs/adr/audit-activity-log.md` — D4 · `docs/adr/regulatory-audit-trail.md` — D15 ·
+  `docs/adr/external-dependencies-in-domain.md` — metadatos pasivos en `Domain/`.
+- `CLAUDE.md` — *Security review* → **Process**; *Finishing substantial work* (*Gates first*); *Code comments*;
+  *Keeping docs up to date*. `api/CLAUDE.md` — deptrac, gates, vocabulario Behat.
 
 ## Dev Agent Record
 
@@ -510,13 +681,16 @@ Claude Opus 5 (1M context) — `claude-opus-5[1m]`.
 
 ### Debug Log References
 
-Mediciones de contexto ejecutadas al crear la historia (2026-07-30, stack de dev arriba, checkout primario en
-`9310efeb`):
+Mediciones ejecutadas al crear y al revisar la historia (2026-07-30/31, stack de dev arriba, checkout primario en
+`9310efeb`). **Read-only: no se ejecutó ningún gate ni se escribió nada en `api/`.**
 
-- `bin/phpunit --filter=PersistentTransportPolicyGateTest --list-tests` → **7 tests**, todos de esa clase.
+- `bin/phpunit --filter=PersistentTransportPolicyGateTest --list-tests` → **7 tests**.
 - `bin/phpunit --filter=PersistentTransportRoutingShapeGateTest --list-tests` → **13 tests**.
 - `bin/phpunit --filter='PersistentTransport.*GateTest' --list-tests` → **20 tests**.
-  → sustenta el hecho (F). No se ejecutó ningún gate ni se escribió nada en `api/`.
+- `git grep -c 'Types::GUID' -- api/src` sumado → **16** propiedades.
+- `git grep -l 'AsCommand' -- api/src | wc -l` → **14**. `ls api/tests/Unit/Shared/Architecture/*.php | wc -l` →
+  **11**. `grep -c 'public function test' …/FulfilIdentityErasureTest.php` → **9**.
+- `make bmad.status.audit` → **exit 0**.
 
 ### Completion Notes List
 

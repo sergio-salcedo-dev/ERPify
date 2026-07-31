@@ -157,12 +157,15 @@ development_status:
   # o deploy rolling, momento en el que pasa a defecto de DISPONIBILIDAD urgente.
   epic-gdpr-hardening: in-progress
   g-4a-fuga-passwordresetcompleted-transportes-messenger: done
-  # G-1a arranca con TRES decisiones abiertas que el corte no marcó porque nacen de mediciones que el corte no
-  # hizo: (1) ¿el gate DETECTA huecos o solo verifica lo declarado? — "llega verde" y "cada hueco posterior es un
-  # gate rojo" NO son simultáneamente ciertas; (2) dónde vive el generador y cómo escribe (sin precedente en el
-  # repo, y el camino obvio choca con el read-only/parallel-safe que php.quality.dry-run declara); (3) forma de la
-  # clave. Precondición normativa de la épica: nada se implementa antes de registrarlas por escrito.
-  g-1a-eje-declaracion-atributo-registro-generado-gate: ready-for-dev
+  # G-1a CONTEXTUALIZADA pero BLOQUEADA (artefacto con `Status: blocked`, que es lo que las herramientas leen:
+  # bmad-dev-auto enruta ready-for-dev directo a implementar y blocked a HALT). Tres decisiones abiertas que el
+  # corte no marcó porque nacen de mediciones que no hizo: (1) qué frase de la épica manda — FR4 dice "llega
+  # verde" y FR5 (:97) + el AC formal de G-1b (:488-490) + el DAG del addendum (:44) exigen el gate EN ROJO;
+  # (2) dónde vive el generador — la recomendación contradice epics:219-221, línea ratificada; (3) forma de la
+  # clave y qué parte de cada línea es huella vs juicio humano. Precondición normativa: nada se implementa antes
+  # de registrarlas, y la opción elegida corrige la frase perdedora de la épica EN EL MISMO PR. Volteo a
+  # ready-for-dev en el commit que registre las decisiones. Pase adversarial del CONTRATO: hecho y registrado.
+  g-1a-eje-declaracion-atributo-registro-generado-gate: backlog
   g-1b-referencias-huerfanas-membership-invitation: backlog
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   g-3a-segundo-testigo-del-registro: backlog
