@@ -430,8 +430,8 @@ demás verde.
 - [ ] **Tarea 5 — Boy-scout propuesto: cerrar el hueco de diagnosticabilidad del filtro de #613 (hecho (F)).**
       `make/php-quality.mk:121` → prefijo regex común, para que un fallo de las cinco vías de routing se reporte
       como frontera rota y no como «PHPUnit». **No es un hueco de cobertura** —esos 13 tests corren en
-      `php.unit.coverage`—, así que es mejora de diagnóstico, no fix de seguridad. Si no entra aquí, va a
-      `deferred-work.md` con la medición.
+      `php.unit.coverage`—, así que es mejora de diagnóstico, no fix de seguridad. **Ya está registrado en
+      `deferred-work.md` con su medición**: si entra en este PR, **borra esa bala**; si no, se queda ahí.
 - [ ] **Tarea 6 — Docs.** Los **seis** sitios que tocó #613: `CLAUDE.md` (*Required checks*),
       `docs/claude-code-quickref.md`, `docs/rules/security.md`, `PRODUCTION_SECURITY_CHECKLIST.md` (un ítem
       cerrado **y uno abierto** por lo que el gate no cierra), `docs/architecture-api.md` y
