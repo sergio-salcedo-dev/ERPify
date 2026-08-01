@@ -27,6 +27,14 @@
 #   - optional: Can be completed but not required
 #   - done: Retrospective has been completed
 #
+# INVARIANTE DE NOMBRES (se rompió dos veces; por eso está escrito):
+# ==================================================================
+# La clave de una historia ES el nombre de su fichero: los workflows BMAD resuelven el artefacto como
+# {implementation_artifacts}/{story_key}.md. Si divergen, la historia queda a la vista aquí y es INENCONTRABLE
+# por tooling (bmad-dev-story, bmad-dev-auto, bmad-sprint-status). Al renombrar una, renombra LA OTRA en el
+# mismo commit. Una clave en `backlog` sin fichero NO es una divergencia: backlog significa que la historia
+# solo existe en el fichero de épica.
+
 # WORKFLOW NOTES:
 # ===============
 # - Epic transitions to 'in-progress' automatically when first story is created
