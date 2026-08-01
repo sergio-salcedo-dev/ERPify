@@ -462,10 +462,13 @@ otro rojo, y cualquier rojo del gate nuevo por otra propiedad, es una regresión
         sigue siendo obligatorio y visible en la secuencia de commits, porque es la evidencia del AC de 1.3.
   - [x] D2 → corregido `epics:219-221` (*«el hermano replica la estructura»* → replica **solo el atributo**, con
         la razón medida).
-  - [ ] **Pendiente para el dev:** corregir la justificación de FR2/NFR8 (`epics:70-74,195-196`;
-        `arch-addendum:25`), que el hecho (A) mide como falsa. NFR8 se declara *«razón medida, no estética»*:
-        dejar en pie una razón medida como falsa es lo que la épica prohíbe. Sustituir por el argumento del
-        puerto (estructural y vivo) y el del scope de cifrado (**etiquetado prospectivo**).
+  - [x] Corregida la justificación de FR2 en la épica y la de `#[PersonalData]` en `arch-addendum:25`, que el
+        hecho (A) mide como falsas: sustituidas por el argumento del **dueño de cifrado equivocado** y el de la
+        **firma del puerto**. NFR8 (`epics:220-221`) delega en FR2 (*«razón medida en FR2, no estética»*), así
+        que queda correcta sin tocarla.
+  - [x] Reconciliada la reescritura de **SI-22**: FR3, NFR2, las cláusulas de fallo de FR4, el mapa de cobertura
+        y el paso ② de la fila G-1a del addendum. **Ya no se exige generar**, y esta historia **no construye
+        generador** (hecho (E), D2).
 - [ ] **Tarea 2 — El atributo hermano (AC3)**
   - [ ] `api/src/Shared/Privacy/Domain/<Nombre>.php`, `#[Attribute(Attribute::TARGET_PROPERTY)]`, pasivo, dueño
         como **string** (hecho (C)). Docblock que enuncie el contrato de **referencia**, sin narrar el cambio ni
