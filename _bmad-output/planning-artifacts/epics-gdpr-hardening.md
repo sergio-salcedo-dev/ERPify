@@ -547,6 +547,57 @@ huérfana oculta (FR5).
 **When** corren `make php.lint.bounded-context` y `make php.deptrac`,
 **Then** siguen verdes: se cruza por identidad y puerto publicado, sin importar el `Domain/` ajeno (NFR7).
 
+### Story 1.4-bis (G-1c): El control detective alcanza las dos referencias cross-context
+
+Como **responsable de cumplimiento**,
+quiero que un borrado incompleto de la membresía o de la invitación se **detecte** y no solo se prevenga,
+para que la garantía no dependa de que todo escritor futuro pase por la cadena de erasure.
+
+**Eje que instala:** el control **detective** sobre el eje de referencias a persona — el que dice que la fila
+**se fue**, frente al gate de G-1a, que solo prueba que el borrado está **escrito**.
+**Invariantes que consume:** SI-21/NFR1. **Invariantes que establece:** ninguno nuevo.
+**Dependencias:** G-1b (en `main`, #616). **Bloquea a G-3b** — ver el aviso de orden.
+
+**Estado medido (2026-08-01, pase adversarial de #618).** El gate de G-1a es **estático**: prueba que existe
+una llamada de borrado en el dueño declarado, nunca que la fila desapareciera. La obligación sigue siendo
+distribuida, así que una vía de escritura futura que cree una fila con `user_id` sin pasar por
+`FulfilIdentityErasure` reintroduce el residuo **en silencio**. El hermano del eje de recurso ya responde a
+esto — [`ReconcileErasedSubjectReferences`](../../api/src/Iam/Identity/Application/ReconcileErasedSubjectReferences.php)
+— y su docblock enuncia el patrón: *«divergence surfaced beats divergence assumed away»*, con el veredicto
+como **diferencia de dos hechos que cada lado posee**.
+
+**Lo que la medición SÍ descarta:** el backfill. No existe entorno de producción (`.env.prod.local` ausente),
+así que no hay sujetos borrados reales cuyas filas huérfanas haya que rescatar. **Esta historia es
+prospectiva; no repara datos.** Si alguna vez se despliega antes de cerrarla, el backfill vuelve a la mesa.
+
+**AVISO DE ORDEN — G-3b no debe mergear antes que esta historia, o la deja sin agendar.** G-3b agenda
+`ReconcileErasedSubjectReferences` y le pone alarma. Si G-3b entra primero, agenda un reconciliador que solo
+ve el eje de recurso, y nada obliga a nadie a volver a mirarlo cuando esta historia amplíe su alcance.
+
+**Decisión abierta (precondición).** Dónde vive la detección de las dos referencias nuevas:
+① **ampliar el reconciliador existente** con un puerto listador por contexto dueño (espejo de
+`PersonResourceReferences`), de modo que un comando y un schedule cubran los tres ejes; ② **un reconciliador
+por contexto dueño**, con propiedad más limpia pero tres comandos, tres schedules y una lectura cross-context
+en la dirección contraria (cada contexto preguntando a `Iam/Identity` si el usuario sigue vivo).
+
+**Acceptance Criteria:**
+
+**Given** una fila de `membership` o `iam_invitation` cuyo `user_id`/`invited_user_id` no resuelve a una
+identidad viva,
+**When** corre el control detective,
+**Then** la **reporta**, y el veredicto sale de la diferencia de dos hechos —el contexto dueño lista sus
+referencias, `Iam/Identity` resuelve cuáles ya no son sujetos vivos—, sin que ninguno lea la tabla del otro.
+
+**Given** un borrado completo,
+**When** corre el control,
+**Then** no reporta nada — y un test siembra la divergencia **de verdad** (afirmando que la fila sembrada
+existe) antes de asertar, porque el precedente inmediato de este eje fue un test que no la creaba y pasaba.
+
+**Given** el control,
+**When** se inspecciona,
+**Then** **solo lee**: reparar es un acto deliberado de operador a través del caso de uso de erasure, no algo
+que un chequeo agendado le haga por su cuenta a una tabla de cumplimiento.
+
 ### Story 1.4 (G-2): Ids de persona fuera de `audit_log.metadata`
 
 Como **responsable de cumplimiento**,

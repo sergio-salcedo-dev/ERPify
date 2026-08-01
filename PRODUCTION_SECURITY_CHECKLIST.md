@@ -458,7 +458,11 @@ mitigated state. Accepting one means recording who accepted it and against which
       `identity:gdpr:reconcile-subject-references`, whose docblock states the reasoning
       (*"divergence surfaced beats divergence assumed away"*); the equivalent join for these two columns
       (`membership`/`iam_invitation` LEFT JOIN `identity_user` WHERE the identity is gone) is not built.
-      Close this before claiming the axis is enforced at runtime rather than at build time.
+      Tracked as **G-1c** in the GDPR-hardening epic, which also carries the ordering gate: G-3b schedules
+      that reconciler, so G-3b must not merge first or it schedules one that sees a single axis. The
+      **backfill half is measured away** — no production environment exists, so there are no real erased
+      subjects with surviving orphan rows; the story is prospective. Close it before claiming the axis is
+      enforced at runtime rather than at build time.
 - [ ] **`event_store` retains a person's real id past their own erasure.** Every dispatched event is
       appended with its real `aggregate_id`, and no erasure path touches the table. As the `aggregate_id`:
       `PasswordResetCompleted`, `UserSuspended`, `UserDeactivated`, `UserRolesChanged`, `UserLocked`,
