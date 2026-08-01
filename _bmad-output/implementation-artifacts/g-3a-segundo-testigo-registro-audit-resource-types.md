@@ -223,15 +223,41 @@ fresca con exit code impreso**. Todo verde.
 3. **Coordenadas al día:** el literal `'User'` vive en `FulfilIdentityErasure.php:85` (no `:75`) y el consumidor
    ciego en `ReconcileErasedSubjectReferences.php:45`. El escenario testigo es `erase.feature:49-62`.
 
+### Lectura hostil del autor — NO satisface la Tarea 7
+
+Los tres subagentes adversariales lanzados el 2026-08-01 **murieron al arrancar** por límite de sesión, así
+que no hubo pase independiente. Lo que sigue es una lectura hostil **del propio autor**: encontró cuatro
+defectos reales y todos están cerrados, pero **no cuenta como el pase** que la épica exige (`CLAUDE.md` →
+Security review → Process: el lector tiene que ser otro). La historia **no puede llegar a `done`** con esto.
+
+1. **Un comentario de Gherkin satisfacía el check de escritura.** `# INSERT … 'User'` es texto muerto, y
+   bastaba para que un escenario contase como sembrador de la fila que luego no encuentra — exactamente lo que
+   el check de cableado hermano niega con `codeWithoutComments`. Los pasos se filtran ahora antes de ambas
+   mitades de la regla.
+2. **La query y su conteo cero podían cruzar la frontera de un `Scenario:`**, emparejando una lectura de un
+   escenario con un conteo del siguiente, sobre otra tabla.
+3. **El caso del directorio nunca llegaba a `is_file()`:** `features/backoffice` se rechaza antes por la
+   extensión, así que el único check entre un directorio declarado y una puerta que se autosilencia no lo
+   ejecutaba nada. Un fixture-directorio `witness-directory.feature` sí lo alcanza.
+4. **La cabecera no admitía dos puntos ciegos que tiene:** que el testigo se **lee**, no se ejecuta (que corra
+   es garantía de `BehatSuiteCoverageGateTest`, no de esta puerta), y que una query con predicado imposible
+   satisface la regla igual que un borrado real.
+
+La falsificación se hizo rompiendo la regla a propósito y comprobando **2 rojos por la razón exacta** (el
+testigo comentado pasa a aceptarse y el gemelo limpio cae con él), restaurando por copia de bytes.
+
 ### Puertas (ejecuciones frescas, exit code impreso)
 
 | Gate | Resultado |
 |---|---|
-| `make php.lint.audit-resource` | OK (14 tests, 24 aserciones) — exit 0 |
+| `make php.lint.audit-resource` | OK (16 tests, 28 aserciones) — exit 0 |
 | `make php.quality` | exit 0 |
 | `make php.quality.dry-run` | exit 0 |
-| `make php.unit` | 2135 tests, 9148 aserciones — exit 0 |
+| `make php.unit` | 2137 tests, 9149 aserciones — exit 0 |
 | `make php.behat` | 383 escenarios, 3470 steps — exit 0 |
+
+El filtro `--filter='PersonResourceErasure.*GateTest'` selecciona las **tres** clases; verificado con
+`--list-tests`, no supuesto.
 
 Las 2 *notices* de PHPUnit son preexistentes (`DoctrineSessionRepositoryStoreUnavailableTest`, mocks sin
 expectativas) y no las toca esta historia.
@@ -245,10 +271,14 @@ expectativas) y no las toca esta historia.
 - `api/tests/Support/PersonResourceDeclaration.php` (A)
 - `api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php` (M)
 - `api/tests/Unit/Shared/Architecture/PersonResourceErasureRulesGateTest.php` (A)
+- `api/tests/Unit/Shared/Architecture/PersonResourceErasureWitnessGateTest.php` (A)
 - `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/Source/AuditResourceFixtureWriter.php` (A)
 - `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-complete.feature` (A)
 - `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-without-erasure.feature` (A)
 - `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-without-write.feature` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-write-commented-out.feature` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-count-in-next-scenario.feature` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-directory.feature/.gitkeep` (A)
 - `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/registry.{complete,stale,duplicate,unrecognised,no-witness}` (A)
 - `make/php-quality.mk` (M)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (M)
@@ -256,7 +286,9 @@ expectativas) y no las toca esta historia.
 ### Pendiente
 
 **Tarea 7 — pase adversarial por alguien distinto del autor, REGISTRADO.** Es la definición de hecho de la
-épica y sin él la historia no llega a `done`.
+épica y sin él la historia no llega a `done`. El intento del 2026-08-01 con tres subagentes murió por límite
+de sesión; la lectura hostil del autor que lo sustituyó provisionalmente está arriba y **no vale como pase**.
+Queda pendiente relanzarlo, o correr `/code-review` en contexto fresco sobre la rama ya empujada.
 
 ## References
 
