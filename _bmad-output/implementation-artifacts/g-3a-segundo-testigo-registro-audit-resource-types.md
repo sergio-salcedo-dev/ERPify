@@ -4,7 +4,7 @@ baseline_commit: 9310efeb
 
 # Story 1.5 (G-3a): Segundo testigo del registro — que el check de vigencia deje de autosatisfacerse
 
-Status: ready-for-dev
+Status: in-progress
 
 > **LA DECISIÓN ESTÁ TOMADA Y REGISTRADA** (ver *Decisión registrada*): el testigo es el **escenario de
 > aceptación que ya existe**, declarado como tercer segmento de la línea del registro, y el check de vigencia
@@ -174,14 +174,14 @@ fresca con exit code impreso**. Todo verde.
 ## Tasks / Subtasks
 
 - [x] **Tarea 1 — Registrar la decisión (PRECONDICIÓN).** Hecha: ver *Decisión registrada*. Reprodúcela en el PR.
-- [ ] **Tarea 2 — Demostrar la circularidad (AC1).** Test que fije el comportamiento actual **antes** de tocarlo.
-- [ ] **Tarea 3 — Extraer el motor (AC4).** `api/tests/Support/AuditResourceTypeRegistry.php`, mayormente
+- [x] **Tarea 2 — Demostrar la circularidad (AC1).** Test que fije el comportamiento actual **antes** de tocarlo.
+- [x] **Tarea 3 — Extraer el motor (AC4).** `api/tests/Support/AuditResourceTypeRegistry.php`, mayormente
       **movido** desde el gate. Reutiliza `AllowlistFile::entries()` (el gate hoy parsea a mano) y
       `ApiSourceFiles::phpFiles()`. Raíz inyectable, como `PersistentTransportPolicy::fromGateLocation()`.
-- [ ] **Tarea 4 — Tercer segmento y check de testigo (AC2, AC3, AC5).** Validar la ruta con `is_file()` **y no**
+- [x] **Tarea 4 — Tercer segmento y check de testigo (AC2, AC3, AC5).** Validar la ruta con `is_file()` **y no**
       `assertFileExists()`, que acepta **directorios** — el gate actual (`:84`) tiene ese defecto y **no se copia**.
-- [ ] **Tarea 5 — Fixtures (AC3, AC4).** Registro sintético + testigo sintético, más su gemelo limpio.
-- [ ] **Tarea 6 — Cabecera (AC6).** Corregir la afirmación falsa y ampliar el bloque de puntos ciegos siguiendo
+- [x] **Tarea 5 — Fixtures (AC3, AC4).** Registro sintético + testigo sintético, más su gemelo limpio.
+- [x] **Tarea 6 — Cabecera (AC6).** Corregir la afirmación falsa y ampliar el bloque de puntos ciegos siguiendo
       la versión madura de [`.persistent-transport-policy`](../../api/.persistent-transport-policy).
 - [ ] **Tarea 7 — Gates y pase adversarial (AC7 + definición de hecho de la épica).** Ejecuciones frescas con exit
       code. **Pase adversarial por alguien distinto del autor, REGISTRADO, declarando dónde.** Sin él no hay `done`.
@@ -195,6 +195,68 @@ fresca con exit code impreso**. Todo verde.
 - **El target no cambia de cuerpo**, solo su comentario en `make/php-quality.mk`.
 - **Anti-patrón principal:** «reforzar» el staleness para `person` buscando el literal en más sitios. No arregla
   nada — el problema no es dónde se busca, es **quién puede satisfacerlo**.
+
+## Dev Agent Record
+
+**Rama:** `feat/shared-g3a-segundo-testigo-audit-resource-types-13r9` (worktree aislado, base `main` @ `8f1f853c`).
+
+### Lo que se construyó
+
+- `api/tests/Support/AuditResourceTypeRegistry.php` — motor: parseo del registro, barrido de tipos en `src`,
+  cableado del borrador y staleness. Raíz inyectable (`fromGateLocation()` para el árbol real, constructor de
+  tres rutas para fixtures).
+- `api/tests/Support/AuditWitnessScenario.php` — el testigo, separado del motor. Lee el `.feature` como texto:
+  ¿siembra una fila del tipo y asierta que ninguna sobrevive?
+- `api/tests/Support/DeclaredPath.php` — travesía, forma del artefacto y **`is_file()`** (no `file_exists()`,
+  que acepta directorios). Lo usan los dos.
+- `api/tests/Support/PersonResourceDeclaration.php` — los dos caminos de una línea `person`, con nombre.
+- `PersonResourceErasureRulesGateTest` + `Fixture/PersonResource/` — falsabilidad con fixtures.
+- Registro y cabecera reescritos; `make php.lint.audit-resource` pasa a filtro de **prefijo común**.
+
+### Tres cosas que la medición cambió respecto al artefacto
+
+1. **El check de identidad testigo≠borrador era código muerto.** El borrador exige `src/…php` y el testigo
+   `features/…feature`: nunca pueden coincidir. Se eliminó la comparación y la disyunción queda donde de
+   verdad muerde — la regla de ruta — con su propio caso rojo (`theWitnessCheckRejectsTheErasureOwnerItself`).
+2. **PHPMD tumbó el motor por complejidad 57 (umbral 50).** Se arregló separando responsabilidades
+   (`AuditWitnessScenario` + `DeclaredPath`), no subiendo el umbral ni suprimiendo.
+3. **Coordenadas al día:** el literal `'User'` vive en `FulfilIdentityErasure.php:85` (no `:75`) y el consumidor
+   ciego en `ReconcileErasedSubjectReferences.php:45`. El escenario testigo es `erase.feature:49-62`.
+
+### Puertas (ejecuciones frescas, exit code impreso)
+
+| Gate | Resultado |
+|---|---|
+| `make php.lint.audit-resource` | OK (14 tests, 24 aserciones) — exit 0 |
+| `make php.quality` | exit 0 |
+| `make php.quality.dry-run` | exit 0 |
+| `make php.unit` | 2135 tests, 9148 aserciones — exit 0 |
+| `make php.behat` | 383 escenarios, 3470 steps — exit 0 |
+
+Las 2 *notices* de PHPUnit son preexistentes (`DoctrineSessionRepositoryStoreUnavailableTest`, mocks sin
+expectativas) y no las toca esta historia.
+
+### File List
+
+- `api/.audit-resource-types` (M)
+- `api/tests/Support/AuditResourceTypeRegistry.php` (A)
+- `api/tests/Support/AuditWitnessScenario.php` (A)
+- `api/tests/Support/DeclaredPath.php` (A)
+- `api/tests/Support/PersonResourceDeclaration.php` (A)
+- `api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php` (M)
+- `api/tests/Unit/Shared/Architecture/PersonResourceErasureRulesGateTest.php` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/Source/AuditResourceFixtureWriter.php` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-complete.feature` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-without-erasure.feature` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-without-write.feature` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/registry.{complete,stale,duplicate,unrecognised,no-witness}` (A)
+- `make/php-quality.mk` (M)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (M)
+
+### Pendiente
+
+**Tarea 7 — pase adversarial por alguien distinto del autor, REGISTRADO.** Es la definición de hecho de la
+épica y sin él la historia no llega a `done`.
 
 ## References
 
