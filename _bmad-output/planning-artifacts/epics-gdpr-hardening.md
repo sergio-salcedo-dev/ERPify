@@ -556,7 +556,21 @@ para que la garantía no dependa de que todo escritor futuro pase por la cadena 
 **Eje que instala:** el control **detective** sobre el eje de referencias a persona — el que dice que la fila
 **se fue**, frente al gate de G-1a, que solo prueba que el borrado está **escrito**.
 **Invariantes que consume:** SI-21/NFR1. **Invariantes que establece:** ninguno nuevo.
-**Dependencias:** G-1b (en `main`, #616). **Bloquea a G-3b** — ver el aviso de orden.
+**Dependencias:** G-1b (en `main`, #616). **Precondición dura: la decisión ③ de abajo, que puede vaciar esta historia.**
+
+**CORREGIDO tras el debate Winston/Amelia + consulta externa (2026-08-01) — el corte de esta historia estaba
+mal por dos, y lo hallaron los dos revisores por separado.** Decía «las dos referencias cross-context». Son
+**cuatro**, y las cuatro comparten exactamente la misma clase de defecto: `membership.user_id`,
+`iam_invitation.invited_user_id`, `iam_session.user_id` y `identity_password_reset_token.user_id`. Verificado
+en `pg_constraint`: **ninguna tiene FK** — la base entera tiene dos, `bank_account→bank` y
+`membership→organization`. Yo conté los seams que **añadió G-1b** en vez de la clase de defecto, que es
+justamente el error que esta épica existe para no cometer.
+
+Y las dos que faltaban **no se auto-sanan**: `iam_session` no tiene reaper de ningún tipo (la expiración es un
+predicado de lectura, no una transición persistida — `SessionRepository:13-17`), así que la fila expirada
+conserva `user_id`/`ip`/`device` para siempre; y `PruneExpiredPasswordResetTokensCommand` existe pero **no
+está agendado en ninguna parte**, solo es CLI. Un control que cubra 2 de 4 y se lea como «el eje está
+cerrado» es la familia SI-23 otra vez.
 
 **Estado medido (2026-08-01, pase adversarial de #618).** El gate de G-1a es **estático**: prueba que existe
 una llamada de borrado en el dueño declarado, nunca que la fila desapareciera. La obligación sigue siendo
@@ -570,15 +584,47 @@ como **diferencia de dos hechos que cada lado posee**.
 así que no hay sujetos borrados reales cuyas filas huérfanas haya que rescatar. **Esta historia es
 prospectiva; no repara datos.** Si alguna vez se despliega antes de cerrarla, el backfill vuelve a la mesa.
 
-**AVISO DE ORDEN — G-3b no debe mergear antes que esta historia, o la deja sin agendar.** G-3b agenda
-`ReconcileErasedSubjectReferences` y le pone alarma. Si G-3b entra primero, agenda un reconciliador que solo
-ve el eje de recurso, y nada obliga a nadie a volver a mirarlo cuando esta historia amplíe su alcance.
+**AVISO DE ORDEN, y por qué ① lo vuelve innecesario.** G-3b agenda `ReconcileErasedSubjectReferences` y le
+pone alarma; si entra primero agenda un reconciliador que solo ve el eje de recurso. **Pero la compuerta
+estaba escrita solo en el lado bloqueado:** la cabecera de G-3b (`:690`) declara *«Dependencias: ninguna —
+independiente de 1.1–1.5, paralelizable»*, así que quien la coja por su fichero la mergeará primero. Una
+compuerta que solo existe en un lado no es una compuerta — corregida ahora en ambos. **Bajo ① deja de
+importar:** si G-3b entra antes, G-1c añade sus listers a la colección y el schedule existente los recoge sin
+tocar el handler. Bajo ② el orden sí es irreversible barato. Es un argumento más a favor de ①: **hace la
+compuerta innecesaria en vez de exigir que se respete.**
 
-**Decisión abierta (precondición).** Dónde vive la detección de las dos referencias nuevas:
-① **ampliar el reconciliador existente** con un puerto listador por contexto dueño (espejo de
-`PersonResourceReferences`), de modo que un comando y un schedule cubran los tres ejes; ② **un reconciliador
-por contexto dueño**, con propiedad más limpia pero tres comandos, tres schedules y una lectura cross-context
-en la dirección contraria (cada contexto preguntando a `Iam/Identity` si el usuario sigue vivo).
+**Decisión ③ — PRIMERO, porque puede vaciar esta historia: ¿FK hacia `identity_user`, sí o no?**
+El repo se contradice a sí mismo y nadie lo ha litigado. [`docs/rules/database.md`](../../docs/rules/database.md)
+(`:149-152` y `:197-199`) dice, con esas palabras, que `User` es **shared kernel** y que *«An FK or a
+`ManyToOne` toward it is Level 3 (allowed)»*. El docblock de
+[`MembershipOrganizationForeignKeySchemaListener`](../../api/src/Organization/Membership/Infrastructure/Persistence/Doctrine/MembershipOrganizationForeignKeySchemaListener.php)
+(`:19`) afirma lo contrario: que `membership.user_id` *«deliberately has NO physical FK: it crosses a bounded
+context»*. **Uno de los dos está mal.** Si gana la regla, un `ON DELETE CASCADE` en las cuatro columnas vuelve
+el huérfano **inexpresable** — control preventivo estrictamente más fuerte que cualquier detective, que además
+rechaza un `INSERT` con un id que nunca existió, cosa que ningún reconciliador hace. Coste: una migración,
+cuatro listeners calcados del que ya existe, y reordenar las purgas **antes** del borrado de la identidad
+(o los contadores del resultado se van a 0 y cambia el escenario de `erase.feature`). **Tiene fecha de
+caducidad:** no hay producción y las cuatro tablas están a cero, así que hoy es gratis y el día que haya datos
+con huérfanos, caro. Si ③ entra, el alcance de G-1c se reduce al eje de `audit_log` — que **sí** lo necesita
+igual, porque no tiene entidad Doctrine, sus ids se pseudonimizan en vez de borrarse y las filas se retienen
+cinco años, así que ninguna FK aplica ahí.
+
+**Decisión ①/② — solo si ③ se resuelve en «no FK».** Dónde vive la detección: ① **ampliar el reconciliador
+existente** con un puerto listador por contexto dueño (espejo de `PersonResourceReferences`), un comando y un
+schedule para todos los ejes; ② **un reconciliador por contexto dueño**, tres comandos, tres schedules y una
+lectura cross-context en la dirección contraria. **Winston, Amelia y una consulta externa convergieron
+independientemente en ①**, y los tres por razones distintas: la dirección de dependencia ya está publicada y
+② abre un ciclo `Iam/Identity ↔ Organization/Membership`; G-3b ya midió que **nada comprueba que un
+`#[AsSchedule]` esté consumido**, así que ② triplica un fallo silencioso sin gate; y bajo ② el conjunto de
+ejes no es enumerable contra nada, mientras que bajo ① se puede atar al registro.
+
+**Si se elige ①, dos trampas que hay que cerrar en el diseño, no descubrir después:**
+- **El retorno debe llevar atribución por eje** (`array<string, list<string>>` o un VO), no una lista plana
+  fusionada. Con lista plana, un test que siembre solo el eje de audit y asierte no-vacío pasa **aunque el
+  lister de membership no se haya cableado nunca** — SI-23 reintroducido dentro del control que instala SI-21.
+- **El puerto es un predicado por lotes, no una lista completa.** Hoy `ReconcileErasedSubjectReferences:45`
+  llama `findById()` por id, que hidrata un `User` entero (con `email` y `password_hash`) por cada uno.
+  `existingIds(list<string>): list<string>` se escribe una vez y los ejes lo heredan.
 
 **Acceptance Criteria:**
 
@@ -687,7 +733,9 @@ para que un borrado omitido no espere a que alguien recuerde lanzar un comando.
 **Eje que instala:** **agendado + fallo observable + alertado en la misma entrega** — lo que SI-21 exige cuando
 se admite un control agendado en lugar de un gate de build.
 **Invariantes que consume:** SI-21/NFR1, NFR7.
-**Dependencias:** ninguna — independiente de 1.1–1.5, paralelizable.
+**Dependencias:** ninguna técnica, pero **NO mergees antes de G-1c si ésta elige la opción ②**: G-3b agenda
+`ReconcileErasedSubjectReferences`, y bajo ② agendaría uno que solo ve el eje de recurso sin que nada obligue
+a revisarlo. Bajo ① el orden es indiferente. Ver el aviso de orden en G-1c.
 
 **Estado medido:**
 [`ReconcileErasedSubjectReferences`](../../api/src/Iam/Identity/Application/ReconcileErasedSubjectReferences.php)
