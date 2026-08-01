@@ -96,6 +96,35 @@ final class DoctrineMembershipRepositoryTest extends KernelTestCase
         });
     }
 
+    public function testDeleteAllForUserDropsOnlyTheSubjectsRowAndReturnsTheCount(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $organizationId = $this->provisionOrganization();
+            $userId = Uuid::generate();
+            $other = Uuid::generate();
+            $this->repository->save(Membership::grant(Uuid::generate(), $userId, $organizationId, Role::ADMIN));
+            $this->repository->save(Membership::grant(Uuid::generate(), $other, $organizationId, Role::VIEWER));
+
+            $deleted = $this->repository->deleteAllForUser($userId);
+
+            // A directed bulk DELETE bypasses the identity map, so the assertions read a cleared manager —
+            // otherwise a stale managed entity would answer for a row Postgres no longer has.
+            $this->entityManager->clear();
+
+            $this->assertSame(1, $deleted);
+            $this->assertNotInstanceOf(Membership::class, $this->repository->findByUserId($userId));
+            $this->assertInstanceOf(Membership::class, $this->repository->findByUserId($other));
+        });
+    }
+
+    public function testDeleteAllForUserIsIdempotent(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            // The erasure re-runs safely, so a subject with nothing left must delete nothing rather than fail.
+            $this->assertSame(0, $this->repository->deleteAllForUser(Uuid::generate()));
+        });
+    }
+
     private function saveMembershipWith(string $organizationId, Role $role): void
     {
         $this->repository->save(Membership::grant(Uuid::generate(), Uuid::generate(), $organizationId, $role));
