@@ -2,24 +2,24 @@
 baseline_commit: 9310efeb
 ---
 
-# Story 1.2 (G-1a): El eje de declaración — atributo hermano, registro generado y gate que rompe el build
+# Story 1.2 (G-1a): El eje de declaración — atributo hermano, registro verificado contra el código y gate que rompe el build
 
 Status: ready-for-dev
 
 <!-- Validación opcional: correr `validate-create-story` antes de `dev-story` para un check de calidad. -->
 
-> **LAS TRES DECISIONES ESTÁN TOMADAS Y REGISTRADAS** (ver *Decisiones registradas*): D1=①, D2=híbrido,
-> D3=dos estados + universo completo. Ratificadas por Sergio el 2026-08-01, tras el pase adversarial del
-> contrato. La precondición normativa de la épica queda satisfecha por ese bloque; **no las re-abras**, pero
-> **léelas enteras antes de tocar código** — el argumento que las sostiene es lo que impide implementar por
-> accidente la variante que parece igual y no lo es.
+> **LAS TRES DECISIONES ESTÁN TOMADAS Y REGISTRADAS** (ver *Decisiones registradas*): D1=①, D2=híbrida,
+> D3=dos estados + universo completo. La precondición normativa de la épica queda satisfecha por ese bloque;
+> **no las re-abras**, pero **léelas enteras antes de tocar código** — el argumento que las sostiene es lo que
+> impide implementar por accidente la variante que parece igual y no lo es.
 
-> **Consecuencia que NO puedes olvidar al abrir el PR: este gate ATERRIZA EN ROJO, a propósito.** El rojo
-> proviene solo de `Membership::$userId` e `Invitation::$invitedUserId`, que hoy no tienen dueño de borrado. Es
-> el estado que FR5 y el segundo AC de la Story 1.3 exigen, y la épica ya está corregida en consecuencia. **No
-> lo "arregles" declarando un dueño falso ni ablandando el gate.** `main` queda rojo hasta que G-1b cierre, y
-> eso está **autorizado explícitamente**: G-1b es la historia inmediatamente siguiente y **G-2 espera**. Si esa
-> secuencia cambia, la respuesta correcta no es debilitar el gate — es meter G-1b en esta misma PR.
+> **La entrega es G-1a + G-1b JUNTAS, en una sola PR. El gate aterriza en rojo y sale verde dentro de ella.**
+> El rojo proviene solo de `Membership::$userId` e `Invitation::$invitedUserId`, que hoy no tienen dueño de
+> borrado; es el estado que FR5 y el segundo AC de la Story 1.3 exigen, así que **tiene que existir** y quedar
+> visible en la secuencia de commits: primero el mecanismo con el gate en rojo, después la cadena de erasure
+> ejecutando esas dos referencias y el gate en verde **porque las ejecuta**, no porque se hayan declarado.
+> **No lo "arregles" declarando un dueño falso ni ablandando el gate**, y no lo escondas colapsando ambos pasos
+> en un único commit: el rojo intermedio *es* la evidencia del AC. `main` **nunca** queda roto.
 
 ## Story
 
@@ -27,8 +27,14 @@ Como **desarrollador que añade un contexto nuevo que toca a una persona**,
 quiero que el repositorio me pare si introduzco una referencia persistida a una persona sin dueño de borrado,
 para que la obligación no dependa de que alguien se acuerde.
 
-**Eje que instala:** los tres pasos, **sin mezclarlos** — ① atributo hermano en `Shared/Privacy`, ② generador por
-reflexión que produce el registro, ③ gate `make php.lint.person-reference`.
+**Eje que instala:** los tres pasos, **sin mezclarlos** — ① atributo hermano en `Shared/Privacy`, ② universo
+derivado por reflexión y verificado **en las dos direcciones** contra la fuente, ③ gate
+`make php.lint.person-reference`.
+**Nota de contrato, porque cambió después del corte:** SI-22 ya **no exige generar** el registro
+(`arch-addendum-gdpr-hardening.md`, y FR3/NFR2 reconciliados en el mismo PR). Generar es implementación
+admisible, no exigida — y aquí no compra nada: un generador solo emite la **clave**, que es justo lo que las dos
+direcciones ya clavan, y **no puede aportar el dueño de borrado**, que es el único campo con significado.
+**Esta historia NO construye un generador.**
 **Invariantes que consume:** el patrón de la casa (registro revisable + gate obligatorio), NFR8.
 **Invariantes que establece:** SI-21/NFR1, SI-22/NFR2, SI-23/NFR3.
 **Dependencias:** ninguna. Habilita 1.3 (G-1b) y 1.4 (G-2).
@@ -197,23 +203,26 @@ Application**. Va como **ruta en string**, validada por lectura de fichero (`.au
   el **trait** `api/src/Shared/Kernel/Domain/Entity/Identifiable.php:19-22`, así que `getDeclaringClass()` devuelve
   la clase que lo usa: no sirve para filtrarlo.
 
-**(E) NO existe precedente de generador por reflexión que escriba un artefacto commiteado.**
+**(E) No hay generador, y esta medición es la que lo enterró. Se conserva para que nadie lo reproponga.**
 
-Los únicos targets que reescriben un artefacto son `php.stan.baseline` (`php-quality.mk:11-12`, fichero **no
-tracked**) y `php.deptrac.baseline` (`:147-148`), que es un **script shell**
-(`api/tools/deptrac/regen-baseline.sh`). Ninguno de los **14** comandos Symfony de `api/src` escribe un fichero del
-árbol. `docs/rules/` no tiene regla sobre artefactos generados.
+SI-22 se reescribió (2026-08-01) y ya **no exige generar**; FR3/NFR2 quedaron reconciliados en este mismo PR. Lo
+que sigue es la medición que hace de esa decisión algo firme y no una preferencia:
 
-Lo que aporta `regen-baseline.sh` como plantilla: **cabecera en fichero aparte** re-antepuesta
-(`api/tools/deptrac/deptrac.baseline.header.txt`, fórmula `# GENERATED — regenerate with 'make …' (do not
-hand-edit …)`), y la **escritura segura** de `:39-45` — temporal, `test -s`, y `cat "$out" > destino` en vez de
-`mv`, porque el contenedor corre como root y un `mv` desde `/tmp` dejaría el fichero root-owned en el bind mount.
+- **No existe precedente en el repo.** Los únicos targets que reescriben un artefacto son `php.stan.baseline`
+  (`php-quality.mk:11-12`, fichero **no tracked**) y `php.deptrac.baseline` (`:147-148`), que es un **script
+  shell** (`api/tools/deptrac/regen-baseline.sh`). Ninguno de los **14** comandos Symfony de `api/src` escribe un
+  fichero del árbol, y `docs/rules/` no tiene regla sobre artefactos generados.
+- **El coste que se evita, enumerado, porque es el riesgo que la historia deja de correr:** orden determinista
+  antes de escribir (un `RecursiveDirectoryIterator` sin `ksort` da rojo en CI y verde en local), cabecera en
+  fichero aparte y fuera de la comparación de deriva, escritura segura sin `mv` (el contenedor corre como root y
+  dejaría el fichero root-owned en el bind mount), y la primera ejecución sobre un destino inexistente.
+- **Y lo que decide el asunto no es el coste sino el alcance:** un generador solo puede emitir la **clave**, y la
+  clave ya queda clavada por las dos direcciones de FR3. El **dueño de borrado** —único campo con significado— es
+  juicio humano y **ningún generador puede aportarlo**. Generar compraría la mitad ya comprada.
 
-**Alcance exacto de la garantía read-only**, porque acota mal se convierte en un veto de más:
+**Alcance exacto de la garantía read-only** (queda porque acota el gate, no el generador desaparecido):
 `make/php-quality.mk:165-166` compromete a **los prerrequisitos de `php.quality.dry-run`** (`:176`), no a todo el
-fichero. Los dos baselines escriben el árbol y **no están** en `:158` ni en `:176`. Luego: *el gate no escribe
-cuando corre dentro de la lista de calidad* está vetado; *la misma clase corre en modo escritura desde un target
-aparte* no lo está — y es justo el precedente de los dos baselines.
+fichero. **El gate no escribe, punto**: un control que reescribe lo que comprueba lee verde por construcción.
 
 **(F) El gate de G-4a está fuera del gate de LINT, no fuera de CI. La distinción importa.**
 
@@ -231,9 +240,11 @@ que el cableado uno-a-uno de los `php.lint.*` existe para decir. **Si G-1a parte
 
 ## Decisiones registradas (precondición normativa de la épica: SATISFECHA)
 
-**Decidido:** 2026-08-01. **Quién:** Sergio, tras el pase adversarial del contrato (registrado abajo), que es lo
-que abrió las tres. **Dónde queda el registro:** este bloque, y el cuerpo del PR debe reproducirlo. El corte no
-las marcó porque nacen de mediciones que el corte no hizo.
+**Decidido:** 2026-08-01. **Quién:** Sergio. **Dónde queda el registro:** este bloque, y el cuerpo del PR debe
+reproducirlo. El corte no las marcó porque nacen de mediciones que el corte no hizo, primero por el pase
+adversarial del contrato (registrado abajo) y después por un pase de medición independiente que corroboró D2 y
+D3 por separado y **refutó las alternativas de D1 que llegaban verdes**, por romper el segundo AC de la Story
+1.3 (`epics-gdpr-hardening.md:488-490`), que presupone el gate **en rojo** por esas dos referencias.
 
 ### D1 — ¿Qué frase de la épica es autoritativa? · **ELEGIDA: ①** (el gate aterriza en rojo)
 
@@ -241,7 +252,7 @@ las marcó porque nacen de mediciones que el corte no hizo.
 
 | Opción | Qué hace | Qué cuesta y qué contrato reescribe |
 |--------|----------|-------------------------------------|
-| **①** ✅ **ELEGIDA. Completitud estructural + dueño declarado.** El universo lo deriva el gate del código; el atributo aporta el dueño. Toda propiedad del universo sin línea, o con `person` y sin dueño → **rojo** | Es el estado que **FR5 (`:97`) y el AC de G-1b (`:488-490`) ya exigen**. Detección viva desde el día 1 | **Deja `main` en rojo entre G-1a y G-1b** — coste **aceptado y autorizado** (Sergio, 2026-08-01) bajo una condición de secuencia: **G-1b va inmediatamente después y G-2 espera**. Si esa secuencia cambia, la respuesta no es debilitar el gate sino **meter G-1b en la misma PR**. Obliga a corregir el *«llega verde»* de FR4 (`:91`, `:314`, `:418`, `:449`) — **hecho en este PR** |
+| **①** ✅ **ELEGIDA. Completitud estructural + dueño declarado.** El universo lo deriva el gate del código; el atributo aporta el dueño. Toda propiedad del universo sin línea, o con `person` y sin dueño → **rojo** | Es el estado que **FR5 (`:97`) y el AC de G-1b (`:488-490`) ya exigen**. Detección viva desde el día 1 | El rojo es real y **tiene que existir**, pero **no vive en `main`: vive dentro de la PR.** G-1a y G-1b se entregan **juntas** (Sergio, 2026-08-01), así que el gate aterriza rojo y sale verde en la misma entrega, *porque la cadena ejecuta las dos referencias*. `main` nunca se rompe y `CLAUDE.md` → *Gates first* se sigue pudiendo cumplir. Obliga a corregir el *«llega verde»* de FR4 (`:91`, `:314`, `:418`, `:449`) — **hecho en este PR** |
 | **②** **Solo lo declarado** (los dos checks del corte, literal) | Llega verde | **Vetada, y no por gusto:** con ② el universo **es** el conjunto de propiedades anotadas, luego la afirmación verificada tiene como única evidencia las propias declaraciones — que es SI-23 (`una declaración nunca es su propia evidencia`), el invariante que esta historia declara **establecer**. Además obliga a reescribir el AC de G-1b (`:488-490`) y la anotación del DAG |
 | **③** **Completitud estructural + sanción explícita** de las dos referencias conocidas, apuntando a un artefacto real | Verde al llegar **y** detección viva para la referencia siguiente | Necesita **ancla real** (un ADR, no un fichero `_bmad-output/` que la higiene BMAD puede borrar). Y choca con AC1: una línea sancionada necesita **verbo propio** (`deferred :: <ruta>`), porque `person :: <ruta>` significa *«éste es su dueño»* y ahí no hay dueño. Reescribe el AC de G-1b |
 | **④** **Tri-estado del precedente:** `Membership::$userId => person` **sin ruta**, día 1 | Completo, verde, sin dueño falso. Es la gramática que `.persistent-transport-policy:12` admite y `:50` usa en vivo | **Descartada por mal port del precedente** — ver abajo |
@@ -268,11 +279,15 @@ las marcó porque nacen de mediciones que el corte no hizo.
 como única evidencia las propias declaraciones) y **③ por su ancla**: necesitaría un ADR para sancionar algo
 deliberadamente temporal, que es lo contrario de un ADR.
 
-### D2 — ¿Dónde vive el generador? · **ELEGIDA: híbrida** (atributo en `Domain/`, motor en `tests/Support/`)
+### D2 — ¿Dónde vive el motor de descubrimiento? · **ELEGIDA: híbrida** (atributo en `Domain/`, motor en `tests/Support/`)
+
+> **La pregunta original era «dónde vive el generador», y la reescritura de SI-22 la disolvió a medias: no hay
+> generador.** Lo que queda —y sigue haciendo falta— es el **motor de descubrimiento** que deriva el universo por
+> reflexión para alimentar las dos direcciones de FR3. La respuesta no cambia; el alcance sí, y a menos.
 
 **Lo decidido, en una línea:** el **atributo sí va en `api/src/Shared/Privacy/Domain/`** — metadata pasiva que las
 entidades importan, deptrac la auto-pliega, coste cero. **El puerto y el adaptador NO se construyen**, y el motor
-de descubrimiento vive en `api/tests/Support/PersonReferences.php`.
+de descubrimiento vive en `api/tests/Support/PersonReferences.php`, **en modo solo lectura**.
 
 **El argumento, que no es estilístico:** `PersonalData` tiene forma de tres piezas **porque `PiiDiffSealer` consume
 su puerto en producción**. Este registro **solo lo lee el gate**. Un puerto sin nadie a quien inyectarlo es
@@ -287,9 +302,9 @@ el hermano no tiene consumidor. **Corregida en este PR.**
 
 | Opción | Coste medido |
 |--------|--------------|
-| **① Motor en `api/tests/Support/PersonReferences.php`** (espejo de `PersistentTransportPolicy`) + target de regeneración propio | Donde ya viven los seis gates, sin arrancar kernel. **Contradice `epics:219-221`**, así que si se elige, ese PR corrige esa viñeta — el mismo tratamiento que se auto-impone para FR4 |
-| **② Adaptador en `Shared/Privacy/Infrastructure/`** + comando bajo `Infrastructure/Cli/` | **Es lo que la épica ratificó.** 14 comandos de precedente de ubicación y estilo, cero de escritura de artefacto. Cuesta arrancar el kernel para alimentar un gate que hoy es puro `TestCase`, y deja código de producción sin consumidor de producción (YAGNI, `docs/project-context.md`) |
-| **③ El propio test con `--update`** | **Vetada por contrato primero:** FR4 y `arch-addendum:33` dicen que *«generar no es verificar, y confundirlos reintroduce el ciclo de #563»*. Y por medición después: rompería el read-only de `php.quality.dry-run`. El orden importa — el veto no depende de un detalle operativo |
+| **① Motor solo-lectura en `api/tests/Support/PersonReferences.php`** (espejo de `PersistentTransportPolicy`) | ✅ **ELEGIDA.** Donde ya viven los gates, sin arrancar kernel, sin escribir nada. **Contradice `epics:219-221`**, corregido en este PR |
+| **② Adaptador en `Shared/Privacy/Infrastructure/`** + comando bajo `Infrastructure/Cli/` | **Era lo que la épica ratificó.** Cuesta arrancar el kernel para alimentar un gate que es puro `TestCase`, y deja código de producción sin consumidor de producción (YAGNI, `docs/project-context.md`) |
+| **③ El propio test con `--update`** | **Muerta dos veces.** Ya no hay nada que actualizar (SI-22 no exige generar), y aunque lo hubiera: un control que reescribe lo que comprueba lee verde por construcción — #563 — y rompería el read-only de `php.quality.dry-run` |
 
 **Nota de alcance del veto de ③:** lo prohibido es que **el gate** escriba. Una **clase distinta** en modo escritura
 invocada desde un target propio (`php.lint.person-reference.regen`) no toca la garantía de `:165-166` — es el
@@ -339,13 +354,20 @@ el literal, sobre fuente sin comentarios). Para las semillas, lo que debe probar
 *Estado esperado al aterrizar:* **rojo**, por `Membership::$userId` e `Invitation::$invitedUserId`. Es el
 resultado correcto, no un defecto que arreglar.
 
-**AC2 — El registro se valida contra el CÓDIGO, nunca contra sí mismo (FR3, SI-23).**
-**Given** un registro commiteado que ha divergido del código,
+**AC2 — El registro se verifica contra el código en las DOS direcciones (FR3, SI-22, SI-23).**
+**Given** un miembro del universo derivable **sin línea** en el registro,
 **When** corre el gate,
-**Then** **falla**, derivando la comparación de la fuente.
-*Cómo se pinna, en tres direcciones:* registro sucio → rojo; código cambiado con registro intacto → rojo; y —la que
-distingue detección de documentación— **una propiedad del universo añadida sin anotar, con el registro intacto →
-rojo**. Sin esa tercera, ② pasa vestida de ①.
+**Then** **falla** (dirección 1: completitud).
+**Y Given** una entrada del registro que **ya no corresponde a ningún miembro** del universo,
+**When** corre el gate,
+**Then** **falla** (dirección 2: obsolescencia — el registro es inventario vivo, no cementerio).
+*Con las dos comprobadas, el contenido queda clavado a la fuente por ambos lados y una entrada **no puede
+satisfacerse a sí misma**: es la propiedad de SI-22, y se obtiene **sin generar el fichero**.* Precedente exacto:
+`everyAggregateTypeInSourceIsClassified` + `theRegistryDeclaresNoAggregateTypeThatNothingEmits` en
+`PersistentTransportPolicyGateTest`.
+*Cómo se pinna:* añadir al fixture una propiedad del universo sin línea → rojo; borrar del fixture la propiedad
+que una línea nombra → rojo. **La primera es la que distingue detección de documentación** — sin ella, un gate
+que solo verifica lo declarado pasa vestido de detector.
 
 **AC3 — El atributo declara referencia + dueño, y no arrastra la FK al crypto-shredding (FR2, NFR8).**
 **Given** una entidad `AuditedEntity` con un campo `#[PersonalData]` y una referencia a persona anotada con el
@@ -398,8 +420,10 @@ los cuatro medidos**:
    solo que exista y esté cableada. Ese es el reparto que SI-21 declara (*«el humano clasifica, la automatización
    verifica»*) y **la cabecera lo dice con esas palabras**, junto a que su control es la revisión de arquitectura.
 
-*Y hazlo comprobable en presencia:* como la cabecera vive en fichero aparte y la re-antepone el generador
-(Tarea 3), el gate puede aseverar que el registro commiteado **empieza por los bytes de ese fichero**.
+*La cabecera se escribe a mano, como las de los cinco registros existentes* — no hay generador que la re-anteponga
+(hecho (E)), así que el parser debe **ignorar comentarios y líneas vacías** igual que
+`PersonResourceErasureGateTest.php:145` y `AllowlistFile::entries()`, y ninguna aserción de deriva puede depender
+de sus bytes.
 
 **AC6 — Cableado del gate (NFR11).**
 **Given** el gate,
@@ -409,17 +433,21 @@ los cuatro medidos**:
 **Y** si el gate se parte en dos clases, el `--filter` es un **prefijo regex común** que las selecciona todas,
 **verificado listando los tests que el target selecciona** — no razonándolo (hecho (F)).
 
-**AC7 — Separación generar / verificar (FR4, SI-22).**
+**AC7 — El gate verifica y NO escribe (FR4, SI-23).**
 **Given** el registro commiteado,
 **When** corre `make php.lint.person-reference`,
-**Then** su contenido es **byte-idéntico** antes y después: el gate verifica, no genera. Confundirlos reintroduce
-#563.
+**Then** su contenido es **byte-idéntico** antes y después. Un control que reescribe lo que comprueba lee verde
+por construcción — #563 — y además rompería el `read-only / parallel-safe` que `make/php-quality.mk:165-166`
+declara para toda la lista. *No hay nada que generar (hecho (E)), así que este AC es barato: pínnalo igual, es la
+única aserción que impide que alguien "arregle" un rojo escribiendo el registro desde el gate.*
 
-**AC8 — Sin regresión, y un único rojo esperado.**
+**AC8 — Sin regresión, y el rojo intermedio acotado.**
 `make php.quality`, `make php.unit`, `make php.behat`, cada uno desde **ejecución fresca con exit code impreso**.
-**El único fallo admisible es `php.lint.person-reference`, y solo por `Membership::$userId` e
-`Invitation::$invitedUserId`** — está autorizado por escrito (D1) y se declara en el PR nombrando esas dos
-referencias. Cualquier otro rojo, y cualquier rojo del gate nuevo por otra propiedad, es una regresión.
+Al terminar la entrega **todo está verde**, porque G-1b cierra las dos referencias dentro de la misma PR. En el
+commit intermedio —el que instala el mecanismo antes de que la cadena ejecute— **el único fallo admisible es
+`php.lint.person-reference`, y solo por `Membership::$userId` e `Invitation::$invitedUserId`**; se declara en el
+PR nombrando esas dos referencias, porque ese rojo **es la evidencia** del segundo AC de la Story 1.3. Cualquier
+otro rojo, y cualquier rojo del gate nuevo por otra propiedad, es una regresión.
 
 ## Tasks / Subtasks
 
@@ -428,10 +456,10 @@ referencias. Cualquier otro rojo, y cualquier rojo del gate nuevo por otra propi
   - [x] D1=① → corregido el *«llega verde»* de FR4 en sus cuatro localizaciones (`epics:91`, `:314`, `:418`,
         `:449`); el AC de Story 1.3 (`epics:488-490`) y el DAG (`arch-addendum:44`) **se conservan intactos**,
         que era el punto.
-  - [x] D1① lleva **autorización explícita de Sergio (2026-08-01)** para dejar `main` en rojo hasta G-1b, atada a
-        la condición de secuencia: **G-1b inmediatamente después, G-2 espera**. El conflicto con `CLAUDE.md` →
-        *Gates first* queda **declarado**, no resuelto en silencio: el rojo del gate nuevo es esperado y
-        autorizado; cualquier otro rojo no lo es.
+  - [x] D1① se entrega con **G-1b en la misma PR** (Sergio, 2026-08-01), de modo que el rojo del gate vive
+        **dentro** de la entrega y `main` nunca se rompe. Eso disuelve el conflicto con `CLAUDE.md` → *Gates
+        first* en vez de declararlo: no hay ventana en la que empujar exija saltarse un gate. El rojo intermedio
+        sigue siendo obligatorio y visible en la secuencia de commits, porque es la evidencia del AC de 1.3.
   - [x] D2 → corregido `epics:219-221` (*«el hermano replica la estructura»* → replica **solo el atributo**, con
         la razón medida).
   - [ ] **Pendiente para el dev:** corregir la justificación de FR2/NFR8 (`epics:70-74,195-196`;
@@ -446,22 +474,19 @@ referencias. Cualquier otro rojo, y cualquier rojo del gate nuevo por otra propi
         propagaría a las 8 entidades.
   - [ ] Un atributo puesto **fuera** del universo derivado (propiedad no persistida, estática, DTO) debe
         **fallar**, nunca caer en silencio — si no, el dev declara un dueño que el registro nunca recoge.
-- [ ] **Tarea 3 — El generador (AC2, AC7)**
+- [ ] **Tarea 3 — El motor de descubrimiento, SOLO LECTURA (AC2, AC7)**
+      *Era «el generador». SI-22 dejó de exigirlo (hecho (E)), así que esta tarea encoge a derivar el universo —
+      que es lo que alimenta las dos direcciones de AC2— y **no escribe nada**.*
   - [ ] Descubrimiento por `ApiSourceFiles::phpFiles()` + reflexión, molde
         `api/tests/Support/PersistentTransportPolicy.php:90-124`. **No** `getAllMetadata()`: `auto_mapping: false`
         y `src/Shared/` fuera de los mappings (`doctrine.yaml:12-31`).
-  - [ ] **Orden determinista antes de escribir** (`ksort` por `<Fqcn>::$prop`): el check generado-vs-commiteado es
-        byte a byte, y el orden del `RecursiveDirectoryIterator` no está garantizado entre máquinas. Es la vía más
-        barata a un rojo en CI que en local no reproduce.
-  - [ ] **El generador NO emite línea para una propiedad del universo que no lleve atributo.** Si la emite como
-        placeholder, `make regen` silencia el rojo de completitud y vuelve #563.
-  - [ ] Escritura segura: temporal → `test -s` → `cat > destino`, **nunca `mv`**
-        (`api/tools/deptrac/regen-baseline.sh:39-45`). Y en la **primera** ejecución el fichero destino no existe:
-        créalo host-owned antes o corrige propiedad después, o queda root-owned en el bind mount y ni el host
-        puede editarlo ni `worktree.remove` limpiarlo.
-  - [ ] Cabecera en fichero aparte re-antepuesta (precedente `deptrac.baseline.header.txt`), y **fuera de la
-        comparación de deriva** — si no, editar la cabecera (que AC5 obliga a hacer) pone el check en rojo sin
-        cambio de código.
+  - [ ] **El universo es toda columna `Types::GUID` de entidad** (D3), sin filtro de nombre. Cubre propiedades
+        **promovidas y declaradas en el cuerpo**; excluye lo que no es propiedad persistida.
+  - [ ] **Orden determinista** (`ksort` por `<Fqcn>::$prop`) al comparar y al reportar: el orden del
+        `RecursiveDirectoryIterator` no está garantizado entre máquinas, y un mensaje de fallo que baila entre
+        ejecuciones es la vía más barata a un rojo en CI que en local no reproduce.
+  - [ ] El registro se escribe **a mano**, como los cinco existentes. **Ningún target lo reescribe** — si te ves
+        añadiendo uno, para: eso es lo que SI-22 dejó de exigir y lo que AC7 prohíbe al gate.
   - [ ] Fixture de la forma **declarada en el cuerpo** (la de las dos semillas), que hoy no ejercita ningún test.
 - [ ] **Tarea 4 — El gate (AC1, AC2, AC5, AC6, AC7)**
   - [ ] Test bajo `api/tests/Unit/Shared/Architecture/`, `#[CoversNothing]`, `public const string
@@ -524,8 +549,10 @@ sacrifica.
 ### A-3 (ALTA) — D1① se presupuestaba sin su coste dominante. **INCORPORADO.**
 
 El gate entra en `php.quality.dry-run`, que CI corre para **todo PR** (`ci.yml:115`), y el DAG abre G-1b **y G-2 en
-paralelo**: ① deja `main` rojo para trabajo no relacionado y choca con `CLAUDE.md` → *Gates first*. Ahora está en
-la tabla y exige **autorización explícita del usuario**.
+paralelo**: ① dejaría `main` rojo para trabajo no relacionado y choca con `CLAUDE.md` → *Gates first*. **Resuelto
+entregando G-1a y G-1b juntas** (Sergio, 2026-08-01): el rojo vive dentro de la PR, así que el coste dominante
+desaparece en vez de negociarse. G-2 deja de estar acoplada a la ventana y puede correr en paralelo como el DAG
+preveía.
 
 ### A-4 (ALTA) — mi AC3 no podía fallar. **SUSTITUIDO.**
 
@@ -630,15 +657,15 @@ eslabones del hecho (A); y las citas de `php-quality.mk`, `ci.yml:115`, `deptrac
 
 | Necesidad | Ya existe | Ruta |
 |-----------|-----------|------|
-| Recorrer `api/src` como generador de ficheros PHP | `ApiSourceFiles::phpFiles()` | `api/tests/Support/ApiSourceFiles.php:41` |
+| Iterar los ficheros PHP de `api/src` | `ApiSourceFiles::phpFiles()` | `api/tests/Support/ApiSourceFiles.php:41` |
 | Descubrir clases por PSR-4 + reflexión | `PersistentTransportPolicy::eventsInSource()` | `api/tests/Support/PersistentTransportPolicy.php:90-124` |
 | Parsear un registro de la raíz de `api/` | `AllowlistFile::entries()` | `api/tests/Support/AllowlistFile.php:26` |
 | Validar el **cableado** del dueño, no solo su existencia | `PersonResourceErasureGateTest` | `api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php:89-109` |
 | Rechazar un directorio como ruta de excepción | `PersistentTransportPolicyGateTest` | `api/tests/Unit/Shared/Architecture/PersistentTransportPolicyGateTest.php:133-137` |
 | Gate con preámbulo, anti-vacuidad y fixture sucio | `EventDispatchGateTest` | `api/tests/Unit/Shared/Architecture/EventDispatchGateTest.php` |
 | Conducir `PiiDiffSealer` con el clasificador real y fakes `AuditedEntity` | `PiiDiffSealerTest` | `api/tests/Unit/Shared/Audit/Infrastructure/Persistence/PiiDiffSealerTest.php:66,77,81` |
-| Escribir un artefacto commiteado sin dejarlo root-owned | `regen-baseline.sh` | `api/tools/deptrac/regen-baseline.sh:39-45` |
-| Cabecera de artefacto generado | `deptrac.baseline.header.txt` | `api/tools/deptrac/deptrac.baseline.header.txt` |
+| Verificar las dos direcciones sin generar | `PersistentTransportPolicyGateTest` (`everyAggregateTypeInSourceIsClassified` + `theRegistryDeclaresNoAggregateTypeThatNothingEmits`) | `api/tests/Unit/Shared/Architecture/PersistentTransportPolicyGateTest.php` |
+| Cabecera de registro escrita a mano, con sus puntos ciegos | `.persistent-transport-policy` | `api/.persistent-transport-policy:1-44` |
 | Fixtures de gate con atributos/herencia | `Architecture/Fixture/` (7 ficheros de #613) | `api/tests/Unit/Shared/Architecture/Fixture/` |
 
 ### Anti-patrones concretos que esta historia invita a cometer
@@ -652,7 +679,10 @@ eslabones del hecho (A); y las citas de `php-quality.mk`, `ci.yml:115`, `deptrac
 7. **Validar la ruta del dueño con `assertFileExists()`.** Acepta directorios.
 8. **Comentar el cambio en vez del código.** Nada de «antes esto no existía», ni `G-1a`, ni `FR3`, ni `SI-22` en
    comentarios de `src`. La trazabilidad vive en el PR.
-9. **Meter el generador en `src/` (o sacarlo) sin citar `epics:219-221`.** D2.
+9. **Construir un generador.** SI-22 dejó de exigirlo y aquí no compra nada: solo emitiría la clave, que las dos
+   direcciones ya clavan, y no puede aportar el dueño. Hecho (E), D2.
+10. **Un target que reescriba el registro.** Ni el gate ni ningún otro: el registro se escribe a mano, como los
+    cinco existentes. AC7.
 
 ### Arquitectura y fronteras
 
