@@ -63,7 +63,10 @@ No hay `EntityManager` en `Application/`.
 del auto-audit —*«Counts only. Recording the subject id beside its anonymisation pseudonym would be a reversible
 crosswalk»*— porque esa fila comparte `correlation_id` con `GDPR_SUBJECT_ERASED`. Los conteos nuevos son
 **counts, nunca ids**. El de `:55-60` enumera la cadena para justificar el `SuppressWarnings("PHPMD.CouplingBetweenObjects")`
-de `:62`: **hay que extenderlo**, o el docblock miente mientras el acoplamiento crece.
+de `:62`: **hay que extenderlo**, o el docblock miente mientras el acoplamiento crece. *Es obligación de revisión,
+no gate:* la regla está suprimida entera sobre esta clase, `phpmd.xml:69` incluye `design.xml` sin override (por
+defecto `minimum: 13`) y `ExcessiveParameterList` está en `minimum="12"` (`phpmd.xml:53-58`), así que 10
+parámetros promovidos no rompen nada. Ningún comando lo detecta si se omite — por eso se escribe aquí.
 
 ### Las dos referencias huérfanas, medidas columna a columna
 
@@ -85,7 +88,7 @@ dirigido por esa columna es index scan; no hace falta migración de índice, y *
 mutadores. **Hard delete de la fila es la única vía sin migración.** Anonimizar exigiría mutador de dominio +
 mapping nullable + `ALTER … DROP NOT NULL`: tres cambios para un dato que no es más que un puntero.
 
-Sin FK no hay cascada: hoy `EraseIdentitySubject.php:48` hard-borra la fila de `identity_user` y **las dos filas
+Sin FK no hay cascada: hoy `EraseIdentitySubject.php:49` hard-borra la fila de `identity_user` y **las dos filas
 sobreviven apuntando a un id muerto**. `grep -rin "membership" api/features` → **cero**. El canario de presupuesto
 de queries de [`erase.feature:44`](../../api/features/backoffice/users/erase.feature) (15 round trips, itemizados
 en `:38-43`) fija la omisión.
@@ -150,7 +153,21 @@ una clase que no existe** (`:278`, `:308`) — la entrada nueva tiene que apunta
 **(A) `FulfilIdentityErasureResult` es un DTO de 5 campos** y `erasedAnything()` hace OR de los cinco
 ([`FulfilIdentityErasureResult.php:21-37`](../../api/src/Iam/Identity/Application/FulfilIdentityErasureResult.php)).
 Dos conteos nuevos → **7 campos**, y el array de metadata de `FulfilIdentityErasure.php:127-132` (hoy 4 claves)
-crece. **Tres tests fijan la forma exacta del array** y se ponen rojos por diseño.
+crece. **Una** aserción fija la forma exacta de ese array —`FulfilIdentityErasureTest.php:101-106`— y se pone roja
+por diseño. Las otras dos coincidencias de `assertSame` sobre metadata son **arrays distintos** y no se tocan:
+`EraseIdentitySubjectTest.php:44` fija `GDPR_SUBJECT_ERASED` y
+`EraseActorAuditTrailCommandTest.php:99-101` una fila de otro caso de uso.
+
+**(A-bis) `FulfilIdentityErasure` se construye en DOS sitios, no en uno.** Además de la factoría del test de la
+clase, `EraseIdentitySubjectCommandTest.php:113-136` lo arma posicionalmente. Al insertar los dos parámetros
+nuevos en las posiciones 6 y 7, ese segundo sitio no da `ArgumentCountError` sino **`TypeError` antes**: su 6º
+posicional pasa un `PurgeUserSessions` donde ya se espera un `PurgeUserMembership`.
+
+**(A-ter) El informe de operador del CLI consume los conteos.** `EraseIdentitySubjectCommand.php:129-138` imprime
+los cinco, y el aviso de `:121-124` enumera cuatro artefactos. Con siete conteos —y con el AC5 exigiendo que un
+borrado que solo alcance membresía o invitación produzca evidencia— quedarse corto hace que el operador no vea
+dos de siete resultados y que el copy de «nothing to erase» mienta sobre lo que se comprobó. El docblock del DTO
+(`FulfilIdentityErasureResult.php:11`) dice explícitamente que los conteos *«feed the operator's report»*.
 
 **(B) `InMemoryMembershipRepository::remove()` es un flag no-op**
 ([`InMemoryMembershipRepository.php:31-34`](../../api/tests/Unit/Organization/Membership/Application/InMemoryMembershipRepository.php)):
@@ -189,19 +206,24 @@ WHERE status = :active AND roles::jsonb @> CAST(:adminRole AS jsonb)
 ORDER BY id FOR UPDATE
 ```
 
-Como `EraseIdentitySubject.php:48` hard-borra esa fila, la membresía huérfana es **invisible** al invariante: no
+Como `EraseIdentitySubject.php:49` hard-borra esa fila, la membresía huérfana es **invisible** al invariante: no
 puede satisfacerlo. Tres pruebas independientes:
 
-1. `demoteEveryAdministrator()`
-   ([`AuthenticatesFunctionalRequests.php:71-92`](../../api/tests/Functional/AuthenticatesFunctionalRequests.php))
-   vacía el pool tocando **solo `identity_user`**, y los 409 de `UserPatchStatusFunctionalTest.php:84` y
-   `UserPatchRolesFunctionalTest.php:76` siguen verdes. Si membership fuera lector, `membership_admin` —que
-   conserva `['ADMIN']`— los rescataría y esos tests fallarían.
+1. **El censo de llamadores.** `keepsAnActiveAdminWithout` tiene exactamente tres consumidores —
+   `ChangeUserStatus.php:85`, `ChangeUserRoles.php:128` y (con `holdsAdministratorRole`)
+   `FulfilIdentityErasure.php:100`— y **un solo adaptador de producción**, cuyo `FROM` es `identity_user` y que
+   no menciona `membership` en ninguna de sus dos consultas
+   (`DoctrineActiveAdministratorDirectory.php:45-58`, `:73-86`). **No hay tercer lector.**
+   *Lo que NO sirve como prueba, y hay que no repetirlo:* «los 409 de `UserPatchStatusFunctionalTest.php:84` y
+   `UserPatchRolesFunctionalTest.php:76` siguen verdes tras `demoteEveryAdministrator()`». Esos tests **no cargan
+   fixtures Alice** (`AuthenticatesFunctionalRequests.php:25`) y siembran su administrador sin fila de membresía
+   (`:152-156`), así que `membership_admin` no está en esa BD y su verde es compatible con los dos mundos.
 2. `ActiveAdministratorDirectory.php:13-15` dice explícitamente que se re-apuntará a `Membership` *«only if
    tenancy ever moves the authoritative source»*.
 3. `Membership` **no tiene columna de estado**: no puede expresar liveness. Un lector basado en ella necesitaría
-   `JOIN identity_user`, que es justo la lectura cross-context que la arquitectura prohíbe
-   (`MembershipOrganizationForeignKeySchemaListener.php:17-20`).
+   `JOIN identity_user`, que es la lectura cross-context que `deptrac.yaml:237-243` y
+   `api/.bounded-context-allowlist` gobiernan. (`MembershipOrganizationForeignKeySchemaListener.php:17-20`
+   **no** sirve de cita aquí: justifica la ausencia de FK física, no prohíbe lecturas.)
 
 **Elegida: ① prevención.** G-1b **borra** la membresía, así la referencia huérfana nunca llega a existir, y el AC
 falsable pasa a ser el borrado más un test que **fija quién es hoy el lector** y que nada lo rescata. En el PR se
@@ -232,7 +254,8 @@ promete un respaldo que no existe. Se corrige en esta PR y se nombra en el resum
 huérfanas que salen **0 records**. Es la única evidencia que no depende de dobles.
 
 **AC2 — El gate de G-1a pasa a verde PORQUE la cadena las ejecuta (SI-23).**
-**Given** el gate de la Story 1.2 en rojo por `Membership::$userId` e `Invitation::$invitedUserId`,
+**Given** el gate de la Story 1.2 en rojo porque esas dos propiedades **no tienen línea** en
+`api/.person-reference-policy` (rojo de completitud),
 **When** se cierra esta historia,
 **Then** `make php.lint.person-reference` sale **verde**, y sale verde **por el check de cableado**: la línea
 `person :: <ruta>` de cada referencia nombra un fichero que **ejecuta** su borrado, no uno que se limite a
@@ -240,24 +263,28 @@ existir.
 *Declarar un dueño falso o ablandar el gate satisface la letra y falsea el eje — es exactamente SI-23.*
 
 **AC3 — Un ADMIN huérfano no puede rescatar el invariante, y consta quién lo lee (D1).**
-**Given** el borrado de un sujeto que era ADMIN en `membership`,
-**When** termina el borrado,
-**Then** no queda fila de `membership` con su id — **la referencia huérfana no llega a existir**.
-**Y Given** el invariante «≥1 ADMIN activo»,
+**Given** el invariante «≥1 ADMIN activo»,
 **When** se inspecciona su lector,
 **Then** un test fija que hoy lo resuelve `identity_user` y **que una membresía ADMIN cuyo usuario no es identidad
 viva no lo satisface**. `ChangeUserStatusTest.php:100`
 (`testAPhantomAdminMembershipDoesNotRescueTheLastActiveAdministrator`) ya codifica esa semántica **contra el
 doble**; lo que falta es fijarla contra el adaptador real.
 *El PR declara que esta mitad es **prevención**: la consecuencia es latente hoy y se volvería viva el día que la
-auth se re-apunte a membership (`CreateInitialAdministratorCommand.php:30-32` lo anuncia).*
+auth se re-apunte a membership (`CreateInitialAdministratorCommand.php:31-33` lo anuncia).*
+*Nómbralo por lo que es —un test de caracterización— y di que su único rojo posible es un futuro re-apuntado de
+`DoctrineActiveAdministratorDirectory`: hoy su SQL no menciona `membership`, así que ningún estado sembrado lo
+pone en rojo. Es legítimo, pero no es evidencia que produzca esta historia.*
 
 **AC4 — Se cruza por identidad y puerto publicado, sin importar `Domain/` ajeno (NFR7).**
 **Given** que el borrado lo orquesta un contexto distinto del que posee cada referencia,
 **When** corren `make php.lint.bounded-context` y `make php.deptrac`,
-**Then** siguen **verdes**, con exactamente **una entrada nueva por seam en cada uno de los dos ficheros** —
-`api/.bounded-context-allowlist` y `skip_violations` de `deptrac.yaml`— y su prosa de justificación.
+**Then** siguen **verdes**, con **dos líneas nuevas en `api/.bounded-context-allowlist`** (una por seam, con su
+prosa) y **dos líneas de valor bajo la clave importadora `Erpify\Iam\Identity\Application\FulfilIdentityErasure`
+de `skip_violations`, que YA EXISTE** (`deptrac.yaml:481`) — no es una entrada nueva.
 **Y** `deptrac.baseline.yaml` **no aparece en el diff**.
+*Ojo con lo que este AC NO detecta:* la sincronía entre las dos listas la enforcea `DeptracSeamSyncGateTest`
+(`:23-24`, `:38-56`), que corre bajo **`make php.unit`** — ni bajo `php.lint.bounded-context` (filtra a
+`BoundedContextGateTest`, `make/php-quality.mk:92-93`) ni bajo `php.deptrac`. La deriva la caza AC6, no este.
 
 **AC5 — Los conteos entran en la evidencia sin abrir un crosswalk.**
 **Given** los dos eslabones nuevos entre el 5 y el 6 de la cadena,
@@ -294,10 +321,19 @@ El presupuesto de queries de `erase.feature:44` **se re-mide y se re-itemiza** (
 - [ ] **Tarea 3 — Enganchar la cadena entre el eslabón 5 y el 6.**
       Inyectar ambos casos de uso en `FulfilIdentityErasure`, llamarlos tras `purgeUserSessions` y **antes** del
       ensamblado de `:114-120`. Ampliar `FulfilIdentityErasureResult` a 7 campos y su `erasedAnything()`. Añadir
-      los dos conteos al metadata de `:127-132`. Extender la enumeración del docblock `:55-60`. Actualizar la
-      factoría `useCase()` de `FulfilIdentityErasureTest.php:328-348` (un solo sitio) y las tres aserciones de
-      forma exacta del array.
+      los dos conteos al metadata de `:127-132`. Extender la enumeración del docblock `:55-60`.
+      **Los DOS sitios de construcción** (hecho (A-bis)): la factoría `useCase()` de `FulfilIdentityErasureTest.php`
+      y `EraseIdentitySubjectCommandTest.php:113-136`. Olvidar el segundo es `TypeError`, no un fallo de aserción.
+      **El informe de operador** (hecho (A-ter)): los dos conteos nuevos en el `success()` de
+      `EraseIdentitySubjectCommand.php:129-138` y el aviso de `:121-124` enumerando los seis artefactos.
+      Una sola aserción de forma exacta del metadata se pone roja: `FulfilIdentityErasureTest.php:101-106`.
       Corregir el docblock de `EraseIdentitySubject.php:19-20` (hecho (C)) — **sin narrar el cambio**.
+
+- [ ] **Tarea 3-bis — Declarar las dos referencias en el eje que instala G-1a.** Sin esto el gate sigue rojo por
+      **completitud** y el AC2 no cierra: añadir la línea de cada propiedad a `api/.person-reference-policy`
+      (`… => person :: src/<contexto>/Application/PurgeUser*.php`; `person` a secas no es ortografía válida) **y**
+      el `#[PersonSubjectReference]` en la propiedad, como llevan las dos semillas
+      (`PasswordResetToken.php:41`, `Session.php:39`). Lo exige `CLAUDE.md:97`, no solo el gate.
 
 - [ ] **Tarea 4 — Fronteras.** Una entrada por seam en `api/.bounded-context-allowlist` (forma
       `<ruta> => <Fqcn>`, con prosa) y el par correspondiente en `skip_violations` de `deptrac.yaml`
@@ -305,6 +341,13 @@ El presupuesto de queries de `erase.feature:44` **se re-mide y se re-itemiza** (
 
 - [ ] **Tarea 5 — El testigo de aceptación y el canario.** Escenario en `erase.feature` con la forma de
       `:46-59`: sembrar membresía + invitaciones (una terminal), `DELETE`, comprobar 0 records en ambas columnas.
+      **Trampa medida:** Behat **sí** carga Alice, y el sujeto de `erase.feature:15-44` es `user_mallory`
+      (`…4a5c`), que **ya tiene `membership_mallory`** (`Membership.yaml:10-15`) — un `INSERT` de membresía para
+      él viola `UNIQ_86FFD285A76ED395`. Apunta a un sujeto sin membresía fixture (`user_trent` `…4a5d`,
+      `user_victor` `…4a5e`, `user_edith` `…4a5f`) o siembra solo la invitación. Del lado invitación sí hace
+      falta sembrar: la única fixture es `invitation_iris` (`Invitation.yaml:1-12`), sin escenario de borrado.
+      Nota además que el escenario del canario **empezará a borrar una fila fixture real**, que es parte de lo
+      que AC6 manda re-medir.
       Reutiliza el vocabulario existente (`SqlQueryContext.php:59-60,120`) — `api/CLAUDE.md` prohíbe añadir un
       step casi-duplicado; busca antes con `make php.behat c='-dl'`. **Re-mide** el presupuesto de queries y
       re-itemiza `:38-43`.
@@ -317,6 +360,58 @@ El presupuesto de queries de `erase.feature:44` **se re-mide y se re-itemiza** (
 - [ ] **Tarea 7 — Cierre.** Los tres gates desde ejecución fresca con exit code impreso. Pase adversarial por
       contexto distinto del autor, **registrado**, declarando dónde quedó (`CLAUDE.md` → *Security review* →
       Process). Barrer el diff de IDs de historia y comentarios relativos al cambio.
+
+## Pase adversarial — CONTRATO. REGISTRADO (`CLAUDE.md` → *Security review* → **Process**)
+
+Ejecutado en **contexto fresco por un lector distinto del autor** del artefacto, contra el árbol, con mandato de
+romperlo. Queda registrado **aquí**; el pase sobre el *código* es la Tarea 7 y se declara en el PR. 15 hallazgos.
+
+**Incorporados a este artefacto:**
+
+- **A-1 (CRÍTICO) — ninguna tarea declaraba la referencia en el eje que instala G-1a**, así que seguir las tareas
+  al pie dejaba `php.lint.person-reference` **rojo por completitud** y el AC2 sin cerrar. **Añadida la Tarea 3-bis**
+  (línea en `api/.person-reference-policy` + `#[PersonSubjectReference]`), y corregido el *Given* del AC2: el rojo
+  de partida es de completitud, no de cableado.
+- **A-2 (ALTA) — «un solo sitio» era falso.** `EraseIdentitySubjectCommandTest.php:113-136` es el segundo, y falla
+  con `TypeError`, no con `ArgumentCountError`. **Corregido en la Tarea 3** (hecho (A-bis)).
+- **A-3 (ALTA) — «tres tests fijan la forma del array» era uno.** Las otras dos coincidencias son arrays de otros
+  casos de uso. **Corregido en el hecho (A).**
+- **A-4 (ALTA) — la primera prueba de D1 era insostenible.** Los Functional no cargan Alice, así que el verde de
+  los 409 es compatible con los dos mundos. **Sustituida por el censo de llamadores.** *La conclusión de D1
+  aguanta* — verificada de forma independiente: tres consumidores, un adaptador, `identity_user` y nada más, sin
+  tercer lector.
+- **A-5 (ALTA) — la Tarea 3 no tocaba el informe de operador**, que el docblock del DTO nombra como consumidor.
+  **Añadido** (hecho (A-ter)).
+- **A-6 (MEDIA) — el testigo Behat chocaba con las fixtures.** `user_mallory`, sujeto de `erase.feature`, ya tiene
+  `membership_mallory`: sembrar la suya viola la UNIQUE. **Corregida la Tarea 5** con los sujetos libres.
+- **A-7 (MEDIA) — el AC3 duplicaba el AC1 y vendía como evidencia un test que no puede fallar.** **Reetiquetado**
+  como test de caracterización, con su único rojo posible declarado.
+- **A-8 (MEDIA) — faltaba esta sección**, que el artefacto hermano sí lleva. **Es la que estás leyendo.**
+- **A-10 (MEDIA) — el `SuppressWarnings` se presentaba como si un gate lo enforceara.** Está suprimido entero y
+  ningún umbral se rompe. **Reetiquetado como obligación de revisión.**
+- **A-11 (BAJA) — `EraseIdentitySubject.php:48` es el `if`; el borrado es `:49`.** **Corregidas las dos citas.**
+- **A-12 (BAJA) — la cláusula de `CreateInitialAdministratorCommand` está en `:33`,** fuera del rango citado.
+  **Corregido a `:31-33`.**
+- **A-13 (BAJA) — «dos líneas» eran tres, y la clave importadora de deptrac ya existe.** **Corregido el AC4.**
+- **A-14 (BAJA) — la sincronía allowlist↔deptrac está máquina-enforzada** por `DeptracSeamSyncGateTest`, bajo
+  `php.unit` y no bajo los dos comandos que el AC4 nombra. **Declarado en el AC4.**
+- **A-15 (BAJA) — el listener de FK no prohíbe lecturas**, solo justifica la ausencia de FK física. **Sustituida
+  la cita** por deptrac + allowlist.
+
+**Hallazgo RECHAZADO por medición (lo declaro para que el silencio no se lea como omisión):**
+
+- **A-9 — «`deleteAllForInvitedUser` se desvía de `deleteAllForUser` sin argumento».** El argumento existe y está
+  escrito en el docblock del puerto: la columna es `invited_user_id`, no `user_id`, y a diferencia de su hermana
+  **puede borrar varias filas**. La desviación es argumentada, que es lo que la casa admite. El check de cableado
+  la acepta además por prefijo (`PersonReferences.php:43`).
+
+**Verificado y correcto** (para que la ausencia de hallazgo sea también un dato): los seis eslabones y las dos
+guardas con sus líneas; que los nuevos van entre el 5 y el 6; el DTO de 5 campos; las dos columnas medidas una a
+una (UNIQUE, índice, sin FK, no anulables); la asimetría de puertos y los cuatro implementadores; el hecho (B)
+del `remove()` no-op; el hecho (D) del docblock aspiracional; el precedente `PurgeUserSessions` completo; la
+ausencia de precedente de evento cross-context; las fronteras y el gate; el canario y los pasos Behat a reutilizar;
+y el cableado DI (autowiring de `services.yaml:12-27` basta, sin `#[AsAlias]`, y ninguno de los cuatro nombres
+propuestos colisiona).
 
 ## Dev Notes
 

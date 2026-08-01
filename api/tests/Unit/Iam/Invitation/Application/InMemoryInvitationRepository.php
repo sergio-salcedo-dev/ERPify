@@ -48,6 +48,31 @@ final class InMemoryInvitationRepository implements InvitationRepository
         return $this->byId[$id] ?? null;
     }
 
+    /**
+     * Drops the rows from both views, so "the invitation is gone" is a fact about the store rather than a
+     * flag the double sets about itself.
+     */
+    #[Override]
+    public function deleteAllForInvitedUser(string $userId): int
+    {
+        $deleted = 0;
+
+        foreach ($this->byId as $id => $invitation) {
+            if ($invitation->invitedUserId() !== $userId) {
+                continue;
+            }
+
+            unset($this->byId[$id]);
+            ++$deleted;
+        }
+
+        $this->saved = \array_values(
+            \array_filter($this->saved, static fn (Invitation $i): bool => $i->invitedUserId() !== $userId),
+        );
+
+        return $deleted;
+    }
+
     private function index(Invitation $invitation): void
     {
         $id = $invitation->getId();

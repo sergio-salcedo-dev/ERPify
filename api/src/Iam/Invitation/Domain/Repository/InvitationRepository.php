@@ -27,4 +27,16 @@ interface InvitationRepository
      * status IS the gate, and it must be checked and flipped under a held lock. Must run inside a transaction.
      */
     public function findByIdForUpdate(string $id): ?Invitation;
+
+    /**
+     * Hard-deletes every invitation addressed to the user — whatever its status — and returns how many rows
+     * went. A terminal `ACCEPTED`, `REVOKED` or `EXPIRED` invitation still carries the invited person's id,
+     * so the lifecycle state does not change that the column is personal data and none of them may be spared.
+     * The row is deleted rather than scrubbed: it also holds a single-use credential digest, and there is no
+     * meaning left in a delivery record for somebody who no longer exists.
+     *
+     * Unlike its sibling on the membership port this can remove several rows: nothing constrains a user to
+     * one invitation. Idempotent — a second pass over a user with none deletes nothing and returns 0.
+     */
+    public function deleteAllForInvitedUser(string $userId): int;
 }

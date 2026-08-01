@@ -78,3 +78,9 @@ Erpify\Iam\Identity\Domain\Entity\User::$id => person :: src/Iam/Identity/Applic
 # of these three tables has a business meaning that survives the person it is about.
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
 Erpify\Iam\Session\Domain\Entity\Session::$userId => person :: src/Iam/Session/Application/PurgeUserSessions.php
+
+# The two that cross a bounded context, and the only ones with no physical foreign key at all: deleting the
+# identity row cascades to neither. Each is erased by its owning context's published use case, chained into
+# the erasure transaction — the person's context orchestrates, but never reaches into another's storage.
+Erpify\Organization\Membership\Domain\Entity\Membership::$userId => person :: src/Organization/Membership/Application/PurgeUserMembership.php
+Erpify\Iam\Invitation\Domain\Entity\Invitation::$invitedUserId => person :: src/Iam/Invitation/Application/PurgeUserInvitations.php

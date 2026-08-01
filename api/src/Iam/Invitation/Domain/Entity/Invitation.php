@@ -17,6 +17,7 @@ use Erpify\Iam\Invitation\Domain\Event\InvitationSent;
 use Erpify\Iam\Invitation\Domain\Exception\InvalidInvitationTransition;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
+use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use SensitiveParameter;
@@ -47,6 +48,7 @@ final class Invitation extends AggregateRoot
     private string $organizationId;
 
     #[ORM\Column(name: 'invited_user_id', type: Types::GUID)]
+    #[PersonSubjectReference(erasedBy: 'src/Iam/Invitation/Application/PurgeUserInvitations.php')]
     private string $invitedUserId;
 
     private function __construct(

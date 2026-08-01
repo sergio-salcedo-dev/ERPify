@@ -11,15 +11,20 @@ use Erpify\Iam\Identity\Application\FulfilIdentityErasureResult;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Exception\AdministratorErasureRequiresDemotion;
 use Erpify\Iam\Identity\Domain\Exception\SelfErasureForbidden;
+use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
+use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Organization\Membership\Application\InMemoryMembershipRepository;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
@@ -103,6 +108,8 @@ final class FulfilIdentityErasureTest extends TestCase
             'anonymized_resource_rows' => 2,
             'reset_tokens_deleted' => 1,
             'sessions_deleted' => 1,
+            'memberships_deleted' => 0,
+            'invitations_deleted' => 0,
         ], $audit->records[1]['metadata']);
     }
 
@@ -334,6 +341,8 @@ final class FulfilIdentityErasureTest extends TestCase
         InMemoryActiveAdministratorDirectory $directory,
         ?ActorContext $actor = null,
         ?RecordingAuditResourceAnonymiser $resourceAnonymiser = null,
+        ?InMemoryMembershipRepository $memberships = null,
+        ?InMemoryInvitationRepository $invitations = null,
     ): FulfilIdentityErasure {
         return new FulfilIdentityErasure(
             new EraseIdentitySubject($users, $tokens, $audit, new InlineTransactionManager()),
@@ -341,6 +350,8 @@ final class FulfilIdentityErasureTest extends TestCase
             $resourceAnonymiser ?? new RecordingAuditResourceAnonymiser(matchCount: 0),
             $directory,
             new PurgeUserSessions($sessions),
+            new PurgeUserMembership($memberships ?? new InMemoryMembershipRepository()),
+            new PurgeUserInvitations($invitations ?? new InMemoryInvitationRepository()),
             $audit,
             new FixedActorContextFactory($actor ?? ActorContext::forUser(self::ACTING_ADMIN_ID)),
             new InlineTransactionManager(),

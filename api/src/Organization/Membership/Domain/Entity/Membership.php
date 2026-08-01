@@ -8,6 +8,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
+use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
@@ -28,6 +29,7 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 final class Membership extends AggregateRoot
 {
     #[ORM\Column(name: 'user_id', type: Types::GUID, unique: true)]
+    #[PersonSubjectReference(erasedBy: 'src/Organization/Membership/Application/PurgeUserMembership.php')]
     private string $userId;
 
     #[ORM\Column(name: 'organization_id', type: Types::GUID)]

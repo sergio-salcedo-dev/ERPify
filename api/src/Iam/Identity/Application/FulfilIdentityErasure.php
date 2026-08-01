@@ -7,7 +7,9 @@ namespace Erpify\Iam\Identity\Application;
 use Erpify\Iam\Identity\Domain\Exception\AdministratorErasureRequiresDemotion;
 use Erpify\Iam\Identity\Domain\Exception\SelfErasureForbidden;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
+use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
+use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Audit\Application\ActorContextFactory;
 use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
 use Erpify\Shared\Audit\Application\AuditLogger;
@@ -24,7 +26,13 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * anonymisation across **both** axes — {@see AuditActorAnonymiser} for rows the subject authored and
  * {@see AuditResourceAnonymiser} for rows that name them — whose DBAL runs on the same Connection the
  * EntityManager wraps, so they commit or roll back with the rest, the hard-delete of the subject's sessions
- * ({@see PurgeUserSessions}) and the combined compliance self-audit.
+ * ({@see PurgeUserSessions}), of the membership that admitted them ({@see PurgeUserMembership}) and of every
+ * invitation addressed to them ({@see PurgeUserInvitations}), and the combined compliance self-audit.
+ *
+ * The last two are here for the same reason as the sessions: those columns cross a bounded context by id and
+ * carry no physical foreign key, so deleting the identity row cascades nothing and the subject's real id
+ * would simply stay behind. Each is consumed as its owning context's published use case — the person's
+ * context orchestrates the erasure, but never reaches into how another context stores what it owns.
  *
  * Both axes are erased **here**, by the context that owns the person, rather than inside one shared
  * anonymiser: `docs/adr/audit-activity-log.md` D4 assigns erasure of a person-denoting resource to the
@@ -54,10 +62,11 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  *
  * Its object coupling sits above the default threshold and stays there. Every collaborator is one link of
  * the single atomic act this orchestrates — refuse an administrator, erase the identity, anonymise both
- * trail axes, purge sessions, seal the actor, own the transaction — and the two types the resource axis
- * speaks in are that seam's vocabulary, not extra responsibilities. Splitting the chain would hide, from
- * the one place a reader looks, that the two axes are erased together; that atomicity is the property the
- * whole design rests on.
+ * trail axes, purge sessions, purge the membership, purge the invitations, seal the actor, own the
+ * transaction — and the two types the resource axis speaks in are that seam's vocabulary, not extra
+ * responsibilities. Splitting the chain would hide, from the one place a reader looks, that every place the
+ * subject's id is persisted is erased together; that atomicity is the property the whole design rests on,
+ * and the list grows by one every time a new context comes to hold a person's id.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
@@ -80,6 +89,8 @@ final readonly class FulfilIdentityErasure
         private AuditResourceAnonymiser $auditResourceAnonymiser,
         private ActiveAdministratorDirectory $administrators,
         private PurgeUserSessions $purgeUserSessions,
+        private PurgeUserMembership $purgeUserMembership,
+        private PurgeUserInvitations $purgeUserInvitations,
         private AuditLogger $auditLogger,
         private ActorContextFactory $actorContext,
         private TransactionManager $transactionManager,
@@ -110,6 +121,12 @@ final readonly class FulfilIdentityErasure
                     $anonymisation->pseudonym,
                 );
                 $sessionsDeleted = $this->purgeUserSessions->purge($subjectId);
+                // Neither reference has a physical foreign key — both cross a bounded context, so integrity
+                // is by id — and nothing cascades when the identity row goes. Without these two links the
+                // subject's real id survives their own erasure in the membership that admitted them and in
+                // every invitation addressed to them.
+                $membershipsDeleted = $this->purgeUserMembership->purge($subjectId);
+                $invitationsDeleted = $this->purgeUserInvitations->purge($subjectId);
 
                 $result = new FulfilIdentityErasureResult(
                     $identity->identityErased,
@@ -117,6 +134,8 @@ final readonly class FulfilIdentityErasure
                     $anonymisation->affectedRows,
                     $anonymisedResourceRows,
                     $sessionsDeleted,
+                    $membershipsDeleted,
+                    $invitationsDeleted,
                 );
 
                 if ($result->erasedAnything()) {
@@ -129,6 +148,8 @@ final readonly class FulfilIdentityErasure
                         'anonymized_resource_rows' => $anonymisedResourceRows,
                         'reset_tokens_deleted' => $identity->resetTokensDeleted,
                         'sessions_deleted' => $sessionsDeleted,
+                        'memberships_deleted' => $membershipsDeleted,
+                        'invitations_deleted' => $invitationsDeleted,
                     ]);
                 }
 

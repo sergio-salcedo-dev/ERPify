@@ -42,6 +42,8 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
 
     private const string UNKNOWN_ID = '0190f100-0000-7000-8000-0000000000af';
 
+    private const string ORPHAN_MEMBERSHIP = '0190f100-0000-7000-8000-0000000000b1';
+
     private EntityManagerInterface $entityManager;
 
     private Connection $connection;
@@ -148,6 +150,30 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
             $this->assertTrue($this->directory->holdsAdministratorRole(self::INVITED_ADMIN));
 
             $this->assertFalse($this->directory->holdsAdministratorRole(self::ACTIVE_VIEWER));
+            $this->assertFalse($this->directory->holdsAdministratorRole(self::UNKNOWN_ID));
+        });
+    }
+
+    public function testAnAdministratorMembershipWhoseIdentityIsGoneCannotKeepTheDirectorySatisfied(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
+            // A membership carrying ADMIN whose user is not a live identity — what a demote-then-erase used
+            // to leave behind. This pins WHICH source answers the invariant: roles are read from
+            // identity_user, membership carries no status with which to express liveness, and so a row here
+            // can never rescue a drained administrator pool. If auth is ever re-pointed at membership, this
+            // test is the one that has to be revisited deliberately rather than discovered in production.
+            $this->connection->executeStatement(
+                <<<'SQL'
+                    INSERT INTO membership (id, user_id, organization_id, roles, created_at, updated_at)
+                    SELECT :id, :userId, o.id, to_json(ARRAY['ADMIN']::text[]), NOW(), NOW()
+                    FROM organization o
+                    LIMIT 1
+                    SQL,
+                ['id' => self::ORPHAN_MEMBERSHIP, 'userId' => self::UNKNOWN_ID],
+            );
+
+            $this->assertFalse($this->directory->keepsAnActiveAdminWithout(self::ADMIN_A));
             $this->assertFalse($this->directory->holdsAdministratorRole(self::UNKNOWN_ID));
         });
     }

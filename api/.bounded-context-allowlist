@@ -115,3 +115,14 @@ src/Iam/Identity/Application/RevokeSessionsBestEffort.php => Erpify\Iam\Session\
 # the row); erasure must drop the rows. Same published-Application-service family as the session-minting and
 # reset seams — a use case, never a reach into Session internals.
 src/Iam/Identity/Application/FulfilIdentityErasure.php => Erpify\Iam\Session\Application\PurgeUserSessions
+
+# GDPR erasure → the two references with no physical foreign key. FulfilIdentityErasure (Iam/Identity
+# Application) consumes the published PurgeUserMembership (Organization/Membership) and PurgeUserInvitations
+# (Iam/Invitation) use cases to hard-delete, inside the same transaction, the membership that admitted the
+# subject and every invitation addressed to them. Because those columns cross a context they are referenced by
+# id with no FK, so deleting identity_user cascades to neither and the subject's real id would otherwise
+# survive their own erasure. Same published-Application-service family as the session purge above, and the same
+# recurring Iam → Organization direction the invitation seams already established: the context that owns the
+# person orchestrates, and each owning context erases what it stores.
+src/Iam/Identity/Application/FulfilIdentityErasure.php => Erpify\Organization\Membership\Application\PurgeUserMembership
+src/Iam/Identity/Application/FulfilIdentityErasure.php => Erpify\Iam\Invitation\Application\PurgeUserInvitations

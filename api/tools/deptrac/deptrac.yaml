@@ -480,3 +480,5 @@ deptrac:
             - Erpify\Iam\Session\Application\RevokeAllSessions
         Erpify\Iam\Identity\Application\FulfilIdentityErasure:
             - Erpify\Iam\Session\Application\PurgeUserSessions
+            - Erpify\Organization\Membership\Application\PurgeUserMembership
+            - Erpify\Iam\Invitation\Application\PurgeUserInvitations
