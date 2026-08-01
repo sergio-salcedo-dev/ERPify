@@ -593,7 +593,7 @@ importar:** si G-3b entra antes, G-1c añade sus listers a la colección y el sc
 tocar el handler. Bajo ② el orden sí es irreversible barato. Es un argumento más a favor de ①: **hace la
 compuerta innecesaria en vez de exigir que se respete.**
 
-**Decisión ③ — PRIMERO, porque puede vaciar esta historia: ¿FK hacia `identity_user`, sí o no?**
+**Decisión ③ — TOMADA (Sergio, 2026-08-01): NO hay FK. El aislamiento por id se mantiene, y esta historia conserva sus cuatro columnas.**
 El repo se contradice a sí mismo y nadie lo ha litigado. [`docs/rules/database.md`](../../docs/rules/database.md)
 (`:149-152` y `:197-199`) dice, con esas palabras, que `User` es **shared kernel** y que *«An FK or a
 `ManyToOne` toward it is Level 3 (allowed)»*. El docblock de
@@ -604,10 +604,15 @@ el huérfano **inexpresable** — control preventivo estrictamente más fuerte q
 rechaza un `INSERT` con un id que nunca existió, cosa que ningún reconciliador hace. Coste: una migración,
 cuatro listeners calcados del que ya existe, y reordenar las purgas **antes** del borrado de la identidad
 (o los contadores del resultado se van a 0 y cambia el escenario de `erase.feature`). **Tiene fecha de
-caducidad:** no hay producción y las cuatro tablas están a cero, así que hoy es gratis y el día que haya datos
-con huérfanos, caro. Si ③ entra, el alcance de G-1c se reduce al eje de `audit_log` — que **sí** lo necesita
-igual, porque no tiene entidad Doctrine, sus ids se pseudonimizan en vez de borrarse y las filas se retienen
-cinco años, así que ninguna FK aplica ahí.
+caducidad:** no hay producción y las cuatro tablas están a cero, así que era gratis hoy y caro con datos.
+
+**Resuelta a favor del código:** el acoplamiento a nivel de esquema cruzando frontera de contexto compra
+integridad referencial al precio del aislamiento sobre el que descansa el monolito modular, y la cadena de
+erasure ya posee la garantía de forma explícita. **La que estaba mal era la regla**, y queda corregida en
+[`docs/rules/database.md`](../../docs/rules/database.md): `User` **no** es shared kernel en este código —
+es el agregado de `Iam/Identity`, así que referenciarlo es Level 2 (columna de id, sin FK), y el documento
+decía lo contrario desde antes de esta épica. Con ③ cerrada, el alcance de G-1c son **las cuatro columnas** y
+la opción ① con sus AC1–AC5.
 
 **Decisión ①/② — solo si ③ se resuelve en «no FK».** Dónde vive la detección: ① **ampliar el reconciliador
 existente** con un puerto listador por contexto dueño (espejo de `PersonResourceReferences`), un comando y un

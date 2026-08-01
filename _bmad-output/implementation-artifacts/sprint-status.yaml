@@ -209,7 +209,9 @@ development_status:
   # está agendado). PRECONDICIÓN ③: docs/rules/database.md dice que una FK hacia identity_user es Level 3
   # PERMITIDA y el docblock de MembershipOrganizationForeignKeySchemaListener dice lo contrario — uno miente.
   # Si gana la regla, un ON DELETE CASCADE vuelve el huérfano INEXPRESABLE y G-1c se reduce al eje audit_log.
-  # Decidir ③ ANTES de ①/②. Gratis hoy (sin producción, tablas a cero), caro con datos.
+  # ③ RESUELTA (Sergio, 2026-08-01): NO hay FK — gana el código, y la regla queda corregida en docs/rules/database.md
+  # (User no es shared kernel: es el agregado de Iam/Identity, luego referenciarlo es Level 2, id sin FK).
+  # Alcance de G-1c = las CUATRO columnas, con la opción ① y sus AC1-AC5.
   # El gate de G-1a prueba que el borrado está ESCRITO, nunca que la fila SE FUE. Prospectiva: el backfill queda
   # descartado por medición (no hay entorno de producción), así que no repara datos — previene que una vía de
   # escritura futura reintroduzca el residuo en silencio. DECISIÓN ABIERTA: ampliar ReconcileErasedSubjectReferences
