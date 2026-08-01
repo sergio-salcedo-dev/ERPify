@@ -51,9 +51,13 @@ final class PurgeUserMembershipTest extends TestCase
         $memberships = new InMemoryMembershipRepository();
         $memberships->save($this->membershipFor(Uuid::generate()));
 
-        $this->expectException(InvalidUuidException::class);
-
-        (new PurgeUserMembership($memberships))->purge('not-a-uuid');
+        try {
+            (new PurgeUserMembership($memberships))->purge('not-a-uuid');
+            $this->fail('A malformed id reached the store instead of being refused at the edge.');
+        } catch (InvalidUuidException) {
+            // The store is untouched — the guard runs before it, which is the whole claim of the test name.
+            $this->assertCount(1, $memberships->saved);
+        }
     }
 
     private function membershipFor(string $userId): Membership

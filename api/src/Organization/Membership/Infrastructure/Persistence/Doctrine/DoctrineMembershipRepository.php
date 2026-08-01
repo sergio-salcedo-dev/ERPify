@@ -60,7 +60,10 @@ final readonly class DoctrineMembershipRepository implements MembershipRepositor
             ->execute()
         ;
 
-        return \is_int($affected) ? $affected : 0;
+        // `is_numeric` rather than the siblings' `is_int`: a driver reporting the count as a numeric
+        // STRING would otherwise read as "nothing deleted" for rows that really went, and an erasure
+        // reaching only this table would then skip the compliance record its own mutation requires.
+        return \is_numeric($affected) ? (int) $affected : 0;
     }
 
     #[Override]

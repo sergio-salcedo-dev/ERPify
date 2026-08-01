@@ -183,7 +183,7 @@ development_status:
   # las ejecuta. El rojo intermedio es OBLIGATORIO y visible en la secuencia de commits — es la evidencia del
   # 2º AC de G-1b (epics:488-490) — y `main` NUNCA queda roto, así que G-2 deja de estar bloqueada y puede
   # correr en paralelo como el DAG preveía. No colapses ambos pasos en un commit único: escondería la evidencia.
-  g-1a-eje-declaracion-atributo-registro-verificado-gate: ready-for-dev
+  g-1a-eje-declaracion-atributo-registro-verificado-gate: review
   # G-1b viaja en la PR de G-1a (ver arriba). Su 2º AC presupone el gate de 1.2 en rojo por sus dos referencias, y
   # ese estado ya está garantizado por D1=①. Contexto escrito (2026-08-01) con UNA decisión que el corte no
   # preveía, tomada y registrada por Sergio: D1 = REENCUADRE A PREVENCIÓN del 3er AC. La premisa del corte
@@ -201,7 +201,25 @@ development_status:
   # `membership.user_id` es UNIQUE y `invited_user_id` no; ninguna de las dos referencias es anulable en dominio
   # (hard delete es la única vía sin migración); el metadata del auto-audit admite CONTEOS y nunca ids; y
   # InMemoryMembershipRepository::remove() es un flag no-op que haría pasar en falso un test de «membresía borrada».
-  g-1b-referencias-huerfanas-membership-invitation: ready-for-dev
+  g-1b-referencias-huerfanas-membership-invitation: review
+  # G-1c: control DETECTIVE sobre las referencias a persona, abierto por el pase adversarial de #618 y
+  # CORREGIDO por el debate Winston/Amelia: son CUATRO columnas, no dos (membership.user_id,
+  # iam_invitation.invited_user_id, iam_session.user_id, identity_password_reset_token.user_id — ninguna con
+  # FK, y las dos que faltaban NO se auto-sanan: iam_session no tiene reaper y el prune de reset tokens no
+  # está agendado). PRECONDICIÓN ③: docs/rules/database.md dice que una FK hacia identity_user es Level 3
+  # PERMITIDA y el docblock de MembershipOrganizationForeignKeySchemaListener dice lo contrario — uno miente.
+  # Si gana la regla, un ON DELETE CASCADE vuelve el huérfano INEXPRESABLE y G-1c se reduce al eje audit_log.
+  # ③ RESUELTA (Sergio, 2026-08-01): NO hay FK — gana el código, y la regla queda corregida en docs/rules/database.md
+  # (User no es shared kernel: es el agregado de Iam/Identity, luego referenciarlo es Level 2, id sin FK).
+  # Alcance de G-1c = las CUATRO columnas, con la opción ① y sus AC1-AC5.
+  # El gate de G-1a prueba que el borrado está ESCRITO, nunca que la fila SE FUE. Prospectiva: el backfill queda
+  # descartado por medición (no hay entorno de producción), así que no repara datos — previene que una vía de
+  # escritura futura reintroduzca el residuo en silencio. DECISIÓN ABIERTA: ampliar ReconcileErasedSubjectReferences
+  # con un puerto listador por contexto dueño (① un comando, un schedule) vs un reconciliador por contexto (②).
+  # GATE DE ORDEN: solo muerde bajo ②. Bajo ① el orden es indiferente (los listers se suman a la colección y el
+  # schedule existente los recoge). La compuerta está ahora escrita en AMBOS lados — antes solo en el bloqueado,
+  # mientras G-3b se declaraba «independiente, paralelizable» en su propia cabecera.
+  g-1c-control-detective-referencias-cross-context: backlog
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
   # aceptación que YA EXISTE (features/backoffice/users/erase.feature:46-59), declarado como TERCER segmento de

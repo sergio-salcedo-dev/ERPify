@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineActiveAdministratorDirectory;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -158,21 +159,26 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
     {
         $this->inRolledBackTransaction(function (): void {
             $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
-            // A membership carrying ADMIN whose user is not a live identity — what a demote-then-erase used
-            // to leave behind. This pins WHICH source answers the invariant: roles are read from
+            // A membership carrying ADMIN whose user is not a live identity — what a demote-then-erase
+            // leaves behind. This pins WHICH source answers the invariant: roles are read from
             // identity_user, membership carries no status with which to express liveness, and so a row here
             // can never rescue a drained administrator pool. If auth is ever re-pointed at membership, this
             // test is the one that has to be revisited deliberately rather than discovered in production.
-            $this->connection->executeStatement(
+            $seeded = $this->connection->executeStatement(
                 <<<'SQL'
                     INSERT INTO membership (id, user_id, organization_id, roles, created_at, updated_at)
-                    SELECT :id, :userId, o.id, to_json(ARRAY['ADMIN']::text[]), NOW(), NOW()
-                    FROM organization o
-                    LIMIT 1
+                    VALUES (:id, :userId, :organizationId, to_json(ARRAY['ADMIN']::text[]), NOW(), NOW())
                     SQL,
-                ['id' => self::ORPHAN_MEMBERSHIP, 'userId' => self::UNKNOWN_ID],
+                [
+                    'id' => self::ORPHAN_MEMBERSHIP,
+                    'userId' => self::UNKNOWN_ID,
+                    'organizationId' => $this->provisionOrganization(),
+                ],
             );
 
+            // Without this the whole test is vacuous: both assertions below already hold on the ADMIN_A-only
+            // seed, so a membership that failed to insert would read exactly like one the directory ignores.
+            $this->assertSame(1, $seeded, 'The orphan membership was not seeded — nothing below proves anything.');
             $this->assertFalse($this->directory->keepsAnActiveAdminWithout(self::ADMIN_A));
             $this->assertFalse($this->directory->holdsAdministratorRole(self::UNKNOWN_ID));
         });
@@ -201,15 +207,31 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
     }
 
     /**
-     * @param callable(): void $testBody
+     * The organization a membership must point at — `membership.organization_id` carries a real foreign key,
+     * unlike `user_id`. Created by the test rather than taken from ambient data: the CI database is migrated
+     * and never provisioned, so a seed that depended on an organization already existing would insert nothing
+     * there and pass while proving nothing.
      */
+    private function provisionOrganization(): string
+    {
+        $organizationId = Uuid::generate();
+        $this->connection->executeStatement(
+            'INSERT INTO organization (id, name, created_at, updated_at) VALUES (:id, :name, NOW(), NOW())',
+            ['id' => $organizationId, 'name' => 'ACME Corp'],
+        );
+
+        return $organizationId;
+    }
+
     private function inRolledBackTransaction(callable $testBody): void
     {
         $this->connection->beginTransaction();
 
         try {
             // TRUNCATE is transactional in Postgres, so the rollback below undoes the seeded rows.
-            $this->connection->executeStatement('TRUNCATE identity_user RESTART IDENTITY CASCADE');
+            $this->connection->executeStatement(
+                'TRUNCATE identity_user, membership, organization RESTART IDENTITY CASCADE',
+            );
             $testBody();
         } finally {
             if ($this->connection->isTransactionActive()) {

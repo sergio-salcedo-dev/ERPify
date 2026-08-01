@@ -435,8 +435,9 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [x] **A persisted reference to a person has a named owner of its erasure, and that owner executes it** —
       closed for every `Types::GUID` column an entity declares. No object graph crosses a module boundary, so
       a context needing a person holds their id; `membership.user_id` and `iam_invitation.invited_user_id`
-      cross a context and carry no physical foreign key at all, so deleting `identity_user` cascaded to
-      neither and the subject's real id simply stayed behind. Both are now hard-deleted inside the erasure
+      cross a context by id. No column anywhere in the schema references `identity_user`, so deleting an
+      identity cascades to nothing and every reference owes its erasure to a use case; these two simply had
+      none, and the subject's real id stayed behind. Both are now hard-deleted inside the erasure
       transaction through their owning context's published use case. The rule is declarative:
       `api/.person-reference-policy` classifies every such column as `non-person` or
       `person :: <file that erases it>`, `#[PersonSubjectReference]` declares it at the property, and
@@ -448,6 +449,20 @@ mitigated state. Accepting one means recording who accepted it and against which
       over a person's id passes, and review is the only control on that direction — and it derives from
       entity properties, so references born in configuration and tables with no Doctrine entity
       (`audit_log.*`, `event_store.aggregate_id`) are outside it.
+- [ ] **The person-reference axis has no DETECTIVE control and no backfill.** The gate above is static: it
+      proves a deletion is *written*, never that a row *went*. Two consequences, both open. (1) Any subject
+      erased before this shipped left its `membership.user_id` / `iam_invitation.invited_user_id` row behind,
+      and nothing in the codebase would ever name those rows again — they are not migrated or swept here.
+      (2) A future write path that creates a person-referencing row without going through the erasure chain
+      reintroduces the residue silently. The sibling axis already answers this with
+      `identity:gdpr:reconcile-subject-references`, whose docblock states the reasoning
+      (*"divergence surfaced beats divergence assumed away"*); the equivalent join for these two columns
+      (`membership`/`iam_invitation` LEFT JOIN `identity_user` WHERE the identity is gone) is not built.
+      Tracked as **G-1c** in the GDPR-hardening epic, which also carries the ordering gate: G-3b schedules
+      that reconciler, so G-3b must not merge first or it schedules one that sees a single axis. The
+      **backfill half is measured away** — no production environment exists, so there are no real erased
+      subjects with surviving orphan rows; the story is prospective. Close it before claiming the axis is
+      enforced at runtime rather than at build time.
 - [ ] **`event_store` retains a person's real id past their own erasure.** Every dispatched event is
       appended with its real `aggregate_id`, and no erasure path touches the table. As the `aggregate_id`:
       `PasswordResetCompleted`, `UserSuspended`, `UserDeactivated`, `UserRolesChanged`, `UserLocked`,

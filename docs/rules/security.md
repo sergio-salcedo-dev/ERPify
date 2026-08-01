@@ -101,7 +101,7 @@ Before ANY commit, I MUST perform security checks on all changed files:
 - [ ] File uploads are properly validated
 - [ ] Authentication and authorization checks are in place
 - [ ] CSRF protection is implemented for forms
-- [ ] Every persisted `Types::GUID` entity column is classified in `api/.person-reference-policy`, and one holding a person's id names the file that erases it — cross-context references carry no physical FK, so deleting the identity leaves the id behind in every foreign table nobody was told to clean. `make php.lint.person-reference` gates it; it verifies that a classification exists and is wired, never what the classification means
+- [ ] Every persisted `Types::GUID` entity column is classified in `api/.person-reference-policy`, and one holding a person's id names the file that erases it — nothing in the schema references `identity_user`, so deleting the identity cascades nowhere and leaves the id behind in every table nobody was told to clean. `make php.lint.person-reference` gates it; it verifies that a classification exists and is wired, never what the classification means
 - [ ] No domain event whose aggregate is a natural person is routed to a persisted transport — `async`/`failed` have no TTL, no prune, and no erasure path, so the queued id outlives the subject's erasure. Classify the `aggregateType` in `api/.persistent-transport-policy`; `make php.lint.persistent-transport` gates it
 
 #### Environment/Configuration Files

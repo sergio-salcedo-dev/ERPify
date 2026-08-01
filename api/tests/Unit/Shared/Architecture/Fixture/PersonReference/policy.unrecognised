@@ -1,0 +1,5 @@
+# Fixture registry: `person` with no owner — the shape that must never be a valid spelling, because an
+# unowned person reference IS the violation. A parser that degraded it to non-person would turn the whole
+# axis into documentation; one that degraded a capitalisation slip the same way would do it silently.
+Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonReference\PersonReferenceFixtureEntity::$subjectId => person
+Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonReference\PersonReferenceFixtureEntity::$tenantId => non-person

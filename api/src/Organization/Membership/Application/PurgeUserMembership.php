@@ -9,9 +9,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
  * Hard-deletes the user's membership — the published seam a GDPR identity erasure consumes so the link that
- * brought the person into the organization does not outlive them. `membership.user_id` carries no physical
- * foreign key (the reference crosses a bounded context, so integrity is by id rather than by constraint),
- * which means deleting the identity row cascades nothing and leaves this one pointing at an id that no
+ * brought the person into the organization does not outlive them. `membership.user_id` is an id with no constraint
+ * behind it — the reference crosses a bounded context, so integrity is by id — and nothing in the schema
+ * references `identity_user`, so deleting that row cascades nowhere and leaves this one pointing at an id that no
  * longer resolves.
  *
  * It runs directed through the repository, so when the caller wraps it in a transaction — the erasure does —

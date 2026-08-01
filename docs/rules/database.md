@@ -148,8 +148,12 @@ and the data-modeling strategy in [`../product-roadmap.md`](../product-roadmap.m
 
 **🟢 Level 3 — permitido:**
 
-- **Shared kernel** — identity (`User`), tenant (`company_id`), `Money`, `Uuid`,
-  shared VOs. An FK toward an identity/tenant/shared table is fine.
+- **Shared kernel** — `Money`, `Uuid`, `Role`, `Permission` and the other value
+  objects under `src/Shared/`. An FK toward a genuinely shared table is fine.
+  **`User` is NOT one of them in this codebase**: it is the aggregate of the
+  `Iam/Identity` bounded context, so a reference to it crosses a context and
+  follows Level 2 — a bare UUID column, no `FOREIGN KEY`. Measured: the schema
+  holds exactly two foreign keys and neither points at `identity_user`.
 - **ID-only references** across contexts (`project.leadId`) — no JOIN, no entity
   association, no foreign repository.
 - **Integration via events** — `ProjectCreated → CRM updates its projection`.
@@ -184,20 +188,34 @@ done by **CRM reacting to an event** (`projects.project.created`), not by Projec
   class Project { private string $leadId; }        // ✅ reference by id
   ```
 - **Pragmatic (only toward the Platform / shared kernel):** a controlled
-  `#[ORM\ManyToOne]` is acceptable **only** toward identity/platform, because
-  every context references that core.
+  `#[ORM\ManyToOne]` is acceptable **only** toward the shared kernel proper
+  (`src/Shared/`), because every context references that core. **Not toward a
+  person:** `User` belongs to `Iam/Identity`, so it takes the strict form above.
   ```php
-  class Project {
-      #[ORM\ManyToOne] private User $manager;       // ✅ User ∈ shared kernel
+  class Membership {
+      #[ORM\Column(type: Types::GUID)] private string $userId;  // ✅ id, no FK
   }
   ```
   A `#[ORM\ManyToOne]` toward **another business context's** entity
   (`Project → Lead`) is Level 2 — discouraged; prefer the id.
 
 **Platform / shared kernel** = the special context every context may reference:
-`User`, `Tenant`/`company_id`, `Role`, `Permission`, `FeatureFlag`. An FK or a
-`ManyToOne` toward it is Level 3 (allowed); a business context never gets that
-treatment.
+`Role`, `Permission`, `Money`, `Uuid` and the other value objects under
+`src/Shared/`. An FK or a `ManyToOne` toward one of those is Level 3 (allowed);
+a business context never gets that treatment — **and `User` is a business
+context's aggregate, not platform.** Referencing a person is Level 2: an id
+column with no foreign key.
+
+That choice is what makes erasing a person a **distributed obligation** rather
+than something the database cascades, which is why every persisted person id
+must name the file that erases it in
+[`../../api/.person-reference-policy`](../../api/.person-reference-policy),
+enforced by `make php.lint.person-reference`. Reversing it — an
+`ON DELETE CASCADE` toward `identity_user`, which would make an orphan
+unrepresentable — was **raised and declined** (2026-08-01): schema-level coupling
+across a context boundary buys referential integrity at the price of the
+isolation the modular monolith rests on, and the erasure chain already owns the
+guarantee explicitly.
 
 Don't over-tighten: a dogmatic "zero coupling" gate freezes development, forces
 needless data duplication, and fights the framework. Symfony gives the

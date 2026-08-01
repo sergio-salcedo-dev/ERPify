@@ -30,7 +30,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * The two links of the erasure chain that reach outside the person's own context: the membership that
  * admitted the subject and every invitation addressed to them. Both columns are referenced by id across a
- * bounded context with no physical foreign key, so deleting `identity_user` cascades to neither — these
+ * bounded context, and nothing in the schema references `identity_user`, so deleting it cascades nowhere —
  * tests pin that the chain removes them itself, scoped to the subject, and that reaching only them is still
  * a real mutation with compliance evidence of its own.
  *
@@ -87,6 +87,20 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
             'memberships_deleted' => 1,
             'invitations_deleted' => 2,
         ], $audit->records[1]['metadata']);
+    }
+
+    public function testTheSubjectIsMatchedWhateverTheCasingOfTheIdInHand(): void
+    {
+        // RFC 4122 hex is case-insensitive and the columns are Postgres `uuid`, so one id spelled two ways
+        // is one id. An erasure that missed on casing would answer 204 and leave the reference behind.
+        $memberships = new InMemoryMembershipRepository();
+        $memberships->save($this->membershipFor(UserMother::DEFAULT_ID));
+
+        $result = $this->useCase(new RecordingAuditLogger(), new InMemoryUserRepository(), $memberships)
+            ->execute(\strtoupper(UserMother::DEFAULT_ID))
+        ;
+
+        $this->assertSame(1, $result->membershipsDeleted);
     }
 
     public function testReferenceRowsAloneStillProduceComplianceEvidence(): void

@@ -41,18 +41,32 @@
 #   - It does not reach TABLES WITH NO DOCTRINE ENTITY. `audit_log.actor_id`, `audit_log.resource_id`,
 #     `audit_log.metadata` and `event_store.aggregate_id` are injected by `postGenerateSchema` listeners and
 #     written through raw SQL: no domain property declares them, so this sweep is structurally blind to all
-#     four. They are covered by their own controls — `.audit-resource-types` for the resource axis — except
-#     `event_store.aggregate_id`, which is a standing leak with its own story.
-#   - It only sees `Types::GUID`. A person's id persisted in a plain string column, or in a column whose type
-#     Doctrine infers rather than the property declaring it, is invisible here — a rename of the type is
-#     enough to leave the sweep, and nothing below this line would change.
-#   - The wiring check proves a CALL EXISTS, not that it RUNS. It reads the declared owner's comment-stripped
-#     source for a collaborator naming the entity and a deletion called on it; a call behind a condition that
-#     is never true satisfies it. Runtime reachability is proven by the owning context's acceptance scenario,
-#     not here.
+#     four. Only the resource axis has a control of its own (`.audit-resource-types`). `audit_log.metadata`
+#     and `event_store.aggregate_id` have NONE and are standing leaks with their own stories — the first is
+#     written with the subject's real id by the very use case this file names as the owner of `User::$id`,
+#     deliberately, as the compliance evidence that the erasure happened.
+#   - It only sees `Types::GUID` columns and to-one join columns. A person's id persisted in a plain string
+#     column, or in a column whose type Doctrine infers rather than the property declaring it, is invisible
+#     here — a rename of the type is enough to leave the sweep, and nothing below this line would change.
+#   - It derives from ONE class per file, named after its path. Doctrine discovers entities by including the
+#     file and reading every class declared in it, so a second entity in the same file, or a class whose name
+#     does not match its filename, is mapped by Doctrine and unseen here.
+#   - The wiring check proves a CALL EXISTS, not that it RUNS, and NOT THAT IT IS SCOPED TO THE SUBJECT. It
+#     reads the declared owner's comment-stripped source for a collaborator naming the entity and a deletion
+#     called on it; a call behind a condition that is never true satisfies it, and so does one that deletes by
+#     some other predicate entirely — `deleteExpired($now)` on the right repository passes. Runtime
+#     reachability and correct scoping are proven by the owning context's acceptance scenario, not here.
+#   - The wiring check reads a COLLABORATOR NAMING THE ENTITY, so it resolves at entity granularity while the
+#     key is per property: it cannot tell `Membership::$userId` from `Membership::$organizationId`, and would
+#     accept the same owner for both. Harmless while an owner deletes the whole row; it stops being harmless
+#     the first time a person column is scrubbed in place instead. For the same reason it cannot recognise an
+#     owner that erases through raw DBAL, because a `Connection` names no entity.
 # ---------------------------------------------------------------------------------------------------------
 
-# Surrogate identifiers of aggregates that are not people.
+# Surrogate identifiers of aggregates that are not people. `BankAccount::$id` is the one worth arguing: the
+# account is the codebase's only entity carrying `#[PersonalData]` columns, and it has an erasure use case of
+# its own. It stays non-person because the id denotes the ACCOUNT — what is personal there is the holder's
+# name and IBAN, which is the treatment axis (`#[PersonalData]` + crypto-shredding), not this one.
 Erpify\Backoffice\Bank\Domain\Entity\Bank::$id => non-person
 Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::$id => non-person
 Erpify\Organization\Organization\Domain\Entity\Organization::$id => non-person
@@ -74,13 +88,16 @@ Erpify\Iam\Session\Domain\Entity\Session::$organizationId => non-person
 # annotating it there would propagate the declaration to all eight entities that use it.
 Erpify\Iam\Identity\Domain\Entity\User::$id => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
 
-# References to a person held by another aggregate. Each row is deleted outright rather than scrubbed: none
-# of these three tables has a business meaning that survives the person it is about.
+# References to a person held by another aggregate. Each row is deleted outright rather than scrubbed:
+# neither table has a business meaning that survives the person it is about.
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
 Erpify\Iam\Session\Domain\Entity\Session::$userId => person :: src/Iam/Session/Application/PurgeUserSessions.php
 
-# The two that cross a bounded context, and the only ones with no physical foreign key at all: deleting the
-# identity row cascades to neither. Each is erased by its owning context's published use case, chained into
-# the erasure transaction — the person's context orchestrates, but never reaches into another's storage.
+# The two that cross a bounded context. NO column anywhere in the schema references `identity_user` — the
+# database holds exactly two foreign keys, `bank_account.bank_id` and `membership.organization_id` — so
+# deleting an identity cascades to nothing at all, and every line above owes its erasure to a use case rather
+# than to a constraint. What distinguishes these two is not the absence of a key but that, until now, they
+# had no owner. Each is erased by its owning context's published use case, chained into the erasure
+# transaction — the person's context orchestrates, but never reaches into another's storage.
 Erpify\Organization\Membership\Domain\Entity\Membership::$userId => person :: src/Organization/Membership/Application/PurgeUserMembership.php
 Erpify\Iam\Invitation\Domain\Entity\Invitation::$invitedUserId => person :: src/Iam/Invitation/Application/PurgeUserInvitations.php
