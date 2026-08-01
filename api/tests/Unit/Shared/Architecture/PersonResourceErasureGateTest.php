@@ -137,6 +137,53 @@ final class PersonResourceErasureGateTest extends TestCase
         ));
     }
 
+    #[Test]
+    public function theStalenessOfAPersonTypeIsSatisfiedByItsOwnErasureDeclaration(): void
+    {
+        // The circularity, demonstrated instead of argued: the only file in `src` carrying a person type's
+        // literal is the very file the same registry line names as its erasure owner. So the staleness check
+        // above reads green for that type because its CONSUMER satisfies it, never because anything writes it
+        // — a green that carries no information, which is what a second witness has to supply instead.
+        //
+        // It doubles as a tripwire. The day a production writer of the type appears this goes red, and the
+        // reader decides whether the declared witness is still what establishes the type's liveness.
+        $personTypes = \array_filter($this->registry(), static fn (?string $path): bool => null !== $path);
+
+        // Without this the demonstration is vacuous the moment the registry holds no person line: an empty
+        // loop asserts nothing and reports success, which is the failure mode this whole epic exists against.
+        $this->assertNotEmpty($personTypes, 'No person type is classified, so this demonstration asserts nothing.');
+
+        foreach ($personTypes as $type => $erasurePath) {
+            $this->assertSame([$erasurePath], $this->sourceFilesCarrying($type), \sprintf(
+                'The person type "%s" is carried by files other than its declared erasure owner, so the '
+                . 'staleness check is no longer self-satisfied for it. Revisit whether the declared witness '
+                . 'is still what establishes its liveness.',
+                $type,
+            ));
+        }
+    }
+
+    /**
+     * Files under `src` holding the quoted type literal, relative to `api/` so they compare against the paths
+     * the registry declares.
+     *
+     * @return list<string>
+     */
+    private function sourceFilesCarrying(string $type): array
+    {
+        $carriers = [];
+
+        foreach ($this->sourceFiles() as $file) {
+            if (\str_contains((string) \file_get_contents($file), \sprintf("'%s'", $type))) {
+                $carriers[] = 'src/' . \substr($file, \strlen(self::SOURCE_ROOT) + 1);
+            }
+        }
+
+        \sort($carriers);
+
+        return $carriers;
+    }
+
     /**
      * @return array<string, string|null> type => erasure use-case path, or null when non-person
      */

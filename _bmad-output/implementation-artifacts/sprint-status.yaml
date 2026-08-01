@@ -238,7 +238,7 @@ development_status:
   # era el chore de renombrado de estas mismas claves. Medido contra el CÓDIGO, no contra los commits — el
   # check de vigencia de PersonResourceErasureGateTest conserva su comentario circular (el segundo testigo de
   # G-3a no existe) y solo hay dos #[AsSchedule], ninguno para el reconciliador (G-3b sin empezar).
-  g-3a-segundo-testigo-registro-audit-resource-types: ready-for-dev
+  g-3a-segundo-testigo-registro-audit-resource-types: in-progress
   # G-3b: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. Iam/Identity ESTRENA SU PROPIO
   # schedule. La pregunta de frontera estaba sobredimensionada: Iam.Identity ya está en deptrac y su capa
   # Infrastructure ya admite Vendor.Symfony/Psr, y los transportes de scheduler NO se declaran en messenger.yaml
