@@ -686,15 +686,20 @@ para que el borrado deje de ser cierto solo en las tablas que alguien se acordó
 
 **Estado medido:** ver FR10. El inventario está ahí y no se reenumera.
 
-**Decisión abierta de rango ADR — y es de estrategia de persistencia, luego es del usuario
-([`../../CLAUDE.md`](../../CLAUDE.md) → *Per-aggregate persistence strategy*).** Las dos vías obvias están
-cerradas por medición: el **crypto-shredding** que el repo ya usa en `audit_log` (`Shared/Crypto/`,
-`PiiDiffSealer`, DEK por `EncryptionScopeId`) **no aplica a `aggregate_id`**, que es `UUID NOT NULL` y **clave de
-stream e índice** (`event_store_stream_version_uniq`, `event_store_aggregate_idx`) — una columna clave no se
-cifra; y la **tabla de correspondencia `id real → pseudónimo` está vetada por D4**, en columna y en JSONB. La
-única vía viable identificada es que el `aggregate_id` **nazca** como sustituto derivado por sujeto y la erasure
-destruya el secreto de derivación — lo que toca **todos** los eventos, el replay de proyecciones y
-`projection_checkpoint`.
+**Decisión de rango ADR — de estrategia de persistencia, luego del usuario
+([`../../CLAUDE.md`](../../CLAUDE.md) → *Per-aggregate persistence strategy*): TOMADA (2026-08-01) y registrada
+en D12 de [`../../docs/adr/event-store-and-projections.md`](../../docs/adr/event-store-and-projections.md).**
+El log pasa a ser *append-only con un conjunto cerrado de mutaciones sancionadas* —hoy una: el borrado GDPR—,
+igual que su hermano `audit_log`: un **único `UPDATE`** reescribe el identificador del sujeto con un UUID
+aleatorio nuevo acuñado en el borrado, **en la columna y en las claves de `payload`**, dentro de la transacción
+que `FulfilIdentityErasure` ya posee. **Los dos ejes se cierran en la misma entrega.**
+
+*Corregido tras medir: este bloque afirmaba que «la única vía viable identificada» era que el `aggregate_id`
+naciera como **sustituto derivado** por sujeto. Esa vía está **vetada por el mismo D4** que veta el crosswalk —
+prohíbe la tabla de mapeo **y la derivación determinista**, con esas palabras. Y dos premisas más cedieron al
+medirlas: la `UNIQUE` de stream **no restringe nada hoy** (`tenant_id` se escribe siempre `NULL` y Postgres usa
+`NULLS DISTINCT`), y **ninguna consulta de `src/` lee `aggregate_id` de vuelta** — el índice de agregado no sirve
+a ningún consumidor de producción. La columna era mucho menos intocable de lo que el corte supuso.*
 
 **Encuadre correcto del problema, porque «el crypto-shredding no aplica» se malinterpreta:** el crypto-shredding
 aplica a **secretos** y no aplica a una **clave indexada**, así que esto **no es un problema criptográfico sino
