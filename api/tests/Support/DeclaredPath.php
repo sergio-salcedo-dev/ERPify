@@ -31,7 +31,16 @@ final class DeclaredPath
             return \sprintf('"%s" is not a .%s file under %s', $path, $extension, $prefix);
         }
 
-        if (!\is_file($apiRoot . '/' . $path)) {
+        $absolute = $apiRoot . '/' . $path;
+
+        // Reported apart from plain absence because they are different mistakes with different fixes, and
+        // because a caller that pins the message would otherwise be unable to tell whether its fixture
+        // directory is still there — a check whose input has silently vanished passes for the wrong reason.
+        if (\is_dir($absolute)) {
+            return \sprintf('"%s" is a directory, not a file', $path);
+        }
+
+        if (!\is_file($absolute)) {
             return \sprintf('"%s" does not exist', $path);
         }
 

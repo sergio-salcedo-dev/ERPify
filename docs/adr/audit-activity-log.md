@@ -260,8 +260,12 @@ cada una con semántica definida y disparador propio; cualquier otra escritura e
   marcaría falsamente como actor borrado.
   **Que sea del contexto dueño lo vuelve una obligación distribuida**, así que lleva su control detectivo,
   igual que el crypto-shredding lleva el suyo: `api/.audit-resource-types` clasifica cada `resource_type`
-  como persona o no y el gate `make php.lint.audit-resource` rompe la build ante un tipo sin clasificar o
-  un tipo-persona cuyo caso de uso declarado no cablea el anonimizador;
+  como persona o no, y una línea `person` declara **dos** rutas —quién lo borra y qué lo atestigua—. El gate
+  `make php.lint.audit-resource` rompe la build ante un tipo sin clasificar, ante un tipo-persona cuyo caso
+  de uso declarado no cablea el anonimizador, y ante un testigo que no sea un escenario de aceptación con un
+  solo escenario que siembre una fila del tipo y afirme que ninguna sobrevive. El testigo existe porque el
+  literal del tipo-persona vive en la constante del propio fichero que la línea declara como borrador: sin él
+  la vigencia de la línea se satisface con la declaración que verifica.
   `identity:gdpr:reconcile-subject-references` reporta identidades ya borradas que el rastro siga nombrando
   por su id real.
 - **Sin payload sensible** en `metadata` (IDs y discriminantes, no cuerpos de entidad), invariante en la

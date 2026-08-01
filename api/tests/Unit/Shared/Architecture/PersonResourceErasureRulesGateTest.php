@@ -33,12 +33,14 @@ final class PersonResourceErasureRulesGateTest extends TestCase
 
     private const string TYPE = 'FixtureResource';
 
+    private const string REAL_OWNER = 'src/Iam/Identity/Application/FulfilIdentityErasure.php';
+
     #[Test]
     public function theStalenessCheckReportsTheGraveyardAndSparesThePersonLine(): void
     {
         // One assertion for both halves of the narrowing, because either half alone is satisfiable by the
         // wrong rule: a check that reported neither would look identical to one that spares person lines,
-        // and a check that reported both would be the circular one this story removed.
+        // and a check that reported both would be the circular one this narrowing replaced.
         $this->assertSame(
             ['Ghost'],
             $this->overFixtures('registry.stale')->staleNonPersonTypes(),
@@ -62,7 +64,7 @@ final class PersonResourceErasureRulesGateTest extends TestCase
 
         $this->assertSame([self::TYPE], $registry->resourceTypesInSource());
         $this->assertSame(
-            ['Source/AuditResourceFixtureWriter.php'],
+            ['src/AnonymiserHolderFixture.php', 'src/AuditResourceFixtureWriter.php'],
             $registry->sourceFilesCarrying(self::TYPE),
         );
     }
@@ -82,6 +84,73 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         $this->assertStringContainsString('Unrecognised classification', $this->parseFailureOf('registry.no-witness'));
     }
 
+    #[Test]
+    public function theWiringCheckAcceptsAnOwnerThatAnonymises(): void
+    {
+        $this->assertNull(
+            $this->registry()->erasureDefectIn('User', self::REAL_OWNER),
+            'The wiring rule rejected the owner that genuinely holds the anonymiser, calls it and carries '
+            . 'the type, so the reds below prove nothing.',
+        );
+    }
+
+    #[Test]
+    public function theWiringCheckRejectsAnOwnerThatHoldsNoAnonymiser(): void
+    {
+        // DbalAuditLogWriter names the anonymiser in a DOCBLOCK and nowhere else, so it is also what pins
+        // the comment stripping: read raw, its prose would pass for a collaborator.
+        $defect = $this->registry()->erasureDefectIn(
+            'User',
+            'src/Shared/Audit/Infrastructure/Persistence/DbalAuditLogWriter.php',
+        );
+
+        $this->assertNotNull($defect, 'A file that only mentions the anonymiser was accepted as erasing.');
+        $this->assertStringContainsString('holds no AuditResourceAnonymiser property', $defect);
+    }
+
+    #[Test]
+    public function theWiringCheckRejectsAnOwnerThatHoldsOneButNeverCallsIt(): void
+    {
+        // The middle red, and the one with no counterpart in the real tree — every file there that holds an
+        // anonymiser also calls it. Without the fixture this branch is unreachable, and the whole rule could
+        // be replaced by `return null;` with every gate still green.
+        $defect = $this->overFixtures('registry.complete')
+            ->erasureDefectIn(self::TYPE, 'src/AnonymiserHolderFixture.php')
+        ;
+
+        $this->assertNotNull($defect, 'An owner that holds the anonymiser and never calls it was accepted.');
+        $this->assertStringContainsString('never calls anonymise() on it', $defect);
+    }
+
+    #[Test]
+    public function theWiringCheckRejectsAnOwnerThatDoesNotCarryTheType(): void
+    {
+        // Holding the anonymiser and calling it is not enough: the owner has to name the type it claims to
+        // erase, or the same file would answer for every type declared against it.
+        $defect = $this->registry()->erasureDefectIn('Ghost', self::REAL_OWNER);
+
+        $this->assertNotNull($defect, 'An owner that never names the type was accepted as erasing it.');
+        $this->assertStringContainsString('does not carry the "Ghost" literal', $defect);
+    }
+
+    #[Test]
+    public function theWiringCheckRejectsAPathThatIsNotSourceAndOneThatEscapes(): void
+    {
+        // The directory branch of the shared path helper is pinned once, on the witness side, where a
+        // fixture directory named like a witness exists to reach it. What a directory under `src/` reaches
+        // here is the shape check, which is the earlier and more common rejection.
+        $registry = $this->registry();
+
+        $this->assertStringContainsString(
+            'is not a .php file under src/',
+            (string) $registry->erasureDefectIn('User', 'src/Iam/Identity/Application'),
+        );
+        $this->assertStringContainsString(
+            'escapes the repository',
+            (string) $registry->erasureDefectIn('User', 'src/../' . self::REAL_OWNER),
+        );
+    }
+
     private function parseFailureOf(string $registry): string
     {
         try {
@@ -93,11 +162,16 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         $this->fail(\sprintf('%s parsed without complaint; the parser degraded it instead of rejecting.', $registry));
     }
 
+    private function registry(): AuditResourceTypeRegistry
+    {
+        return AuditResourceTypeRegistry::fromGateLocation(__DIR__);
+    }
+
     private function overFixtures(string $registry): AuditResourceTypeRegistry
     {
         return new AuditResourceTypeRegistry(
             self::FIXTURES,
-            self::FIXTURES . '/Source',
+            self::FIXTURES . '/src',
             self::FIXTURES . '/' . $registry,
         );
     }

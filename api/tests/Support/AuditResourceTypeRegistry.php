@@ -133,8 +133,12 @@ final readonly class AuditResourceTypeRegistry
     }
 
     /**
-     * Files under the source root holding the quoted type literal, relative to `api/` so they compare against
-     * the paths the registry declares.
+     * Files under the source root whose CODE holds the quoted type literal, relative to `api/` so they
+     * compare against the paths the registry declares.
+     *
+     * Comment-stripped, like the wiring check beside it: a type named only in a docblock is described, not
+     * used, so counting it as a carrier would keep a graveyard entry alive on prose alone — and would fire
+     * the tripwire below on a file that merely mentions the type in passing.
      *
      * @return list<string>
      */
@@ -143,7 +147,9 @@ final readonly class AuditResourceTypeRegistry
         $carriers = [];
 
         foreach ($this->sourceFiles() as $file) {
-            if (\str_contains((string) \file_get_contents($this->apiRoot . '/' . $file), $this->literal($type))) {
+            $code = $this->codeWithoutComments((string) \file_get_contents($this->apiRoot . '/' . $file));
+
+            if (\str_contains($code, $this->literal($type))) {
                 $carriers[] = $file;
             }
         }
@@ -168,11 +174,22 @@ final readonly class AuditResourceTypeRegistry
 
         $code = $this->codeWithoutComments((string) \file_get_contents($this->apiRoot . '/' . $erasurePath));
 
-        if (1 !== \preg_match(\sprintf('/%s\s+\$(\w+)/', self::ANONYMISER), $code, $property)) {
+        \preg_match_all(\sprintf('/%s\s+(?:\.\.\.)?\$(\w+)/', self::ANONYMISER), $code, $matches);
+        $collaborators = $matches[1];
+
+        if ([] === $collaborators) {
             return \sprintf('%s holds no %s property, so it cannot erase "%s"', $erasurePath, self::ANONYMISER, $type);
         }
 
-        if (!\str_contains($code, \sprintf('$this->%s->anonymise(', $property[1]))) {
+        // Every candidate, and `\s*\??` on the call: the sibling reference gate paid for both — one property
+        // matched first would hide the collaborator that does the work, and a correct owner would be rejected
+        // for putting the call on the next line or writing it null-safe.
+        if (
+            !\array_any($collaborators, static fn (string $collaborator): bool => 1 === \preg_match(
+                \sprintf('/\$this->%s\s*\??->anonymise\(/', \preg_quote($collaborator, '/')),
+                $code,
+            ))
+        ) {
             return \sprintf(
                 '%s holds a %s but never calls anonymise() on it, so "%s" is declared as erased while nothing '
                 . 'erases it',

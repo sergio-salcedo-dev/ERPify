@@ -109,9 +109,10 @@ php.lint.event-bus: ## Event-dispatch boundary gate
 # context's job (docs/adr/audit-activity-log.md D4), so the classification must be a declared decision
 # rather than something a new type can skip silently.
 #
-# The filter is a COMMON PREFIX, not a class name: the gate is two classes (the assertions over the real
-# tree, and the falsifiability of the rules they assert), and a filter naming one of them would leave the
-# other outside the named boundary — reporting a broken rule as "PHPUnit" instead of as this gate.
+# The filter is a COMMON PREFIX, not a class name: the gate is three classes (the assertions over the real
+# tree, plus the falsifiability of the registry rules and of the witness rule), and a filter naming one of
+# them would leave the others outside the named boundary — reporting a broken rule as "PHPUnit" instead of
+# as this gate. A fourth class has to keep the prefix or nothing selects it.
 php.lint.audit-resource: ## Person-resource erasure classification gate
 	@$(PHP_TEST) bin/phpunit --filter='PersonResourceErasure.*GateTest'
 

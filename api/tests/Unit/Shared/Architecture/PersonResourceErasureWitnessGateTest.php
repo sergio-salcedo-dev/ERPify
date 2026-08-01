@@ -11,17 +11,18 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Falsifiability of the WITNESS rule — the one direction of `api/.audit-resource-types` that reads an
- * artefact outside `src`, and the one that needed pinning most.
+ * artefact outside `src`, and the one that needs pinning most.
  *
  * It is the second witness of a registry whose only manual entry could otherwise satisfy its own liveness
- * check, so a witness rule that silently accepted everything would reinstate exactly the circularity it was
- * introduced to break — and nothing about a green build would say so. The fixtures carry the ways a scenario
- * can name a type and testify to nothing: asserting the row is still there, asserting an absence it never
- * created, seeding it only in a comment, and answering the query with a count from the next scenario.
+ * check, so a witness rule that quietly accepted everything would reinstate the very circularity it was
+ * introduced to break, and nothing about a green build would say so. Each fixture is one way a scenario can
+ * name a type and testify to nothing: asserting the row is still there, asserting an absence it never
+ * created, seeding only in text that never executes, splitting the seed and the assertion across two
+ * scenarios, seeding with a query that inserts nothing, and being about another type entirely.
  *
  * Separate from {@see PersonResourceErasureRulesGateTest} along the seam the production code already has —
- * {@see \Erpify\Tests\Support\AuditWitnessScenario} reads scenarios, the registry engine reads
- * declarations — and the make target selects both through a common prefix rather than naming either.
+ * {@see \Erpify\Tests\Support\AuditWitnessScenario} reads scenarios, the registry engine reads declarations
+ * — and the make target selects both through a common prefix rather than naming either.
  *
  * @internal
  */
@@ -34,12 +35,15 @@ final class PersonResourceErasureWitnessGateTest extends TestCase
 
     private const string ERASURE_OWNER = 'src/Iam/Identity/Application/FulfilIdentityErasure.php';
 
+    private const string NO_SEED = 'so nothing it asserts is about that type';
+
+    private const string NO_PROOF = 'witnesses the write and not the erasure';
+
     #[Test]
     public function theWitnessCheckAcceptsAScenarioThatSeedsTheTypeAndAssertsItIsGone(): void
     {
         $this->assertNull(
-            $this->overFixtures('registry.complete')
-                ->witness()->defectIn(self::TYPE, 'features/witness-complete.feature'),
+            $this->defectIn('features/witness-complete.feature'),
             'The witness rule rejected a scenario that writes the type and asserts none survives, so the '
             . 'reds below prove nothing.',
         );
@@ -48,25 +52,77 @@ final class PersonResourceErasureWitnessGateTest extends TestCase
     #[Test]
     public function theWitnessCheckRejectsAScenarioThatNeverAssertsTheRowIsGone(): void
     {
-        $defect = $this->overFixtures('registry.complete')
-            ->witness()->defectIn(self::TYPE, 'features/witness-without-erasure.feature')
-        ;
+        $defect = $this->defectIn('features/witness-without-erasure.feature');
 
         $this->assertNotNull($defect, 'A scenario that only watches the write was accepted as a witness.');
-        $this->assertStringContainsString('never asserts that no row of it survives', $defect);
+        $this->assertStringContainsString(self::NO_PROOF, $defect);
     }
 
     #[Test]
     public function theWitnessCheckRejectsAScenarioThatNeverWritesTheType(): void
     {
         // The vacuous half: asserting an absence over a row that was never created holds with the erasure
-        // deleted entirely, which is the precedent this epic already paid for once.
-        $defect = $this->overFixtures('registry.complete')
-            ->witness()->defectIn(self::TYPE, 'features/witness-without-write.feature')
-        ;
+        // deleted entirely.
+        $defect = $this->defectIn('features/witness-without-write.feature');
 
         $this->assertNotNull($defect, 'A scenario that never seeds the type was accepted as a witness.');
-        $this->assertStringContainsString('never writes a row of', $defect);
+        $this->assertStringContainsString(self::NO_SEED, $defect);
+    }
+
+    #[Test]
+    public function theWitnessCheckCountsOnlyExecutableSteps(): void
+    {
+        // Dead text must not stand in for the write, and there are two kinds of it. A commented-out step is
+        // the obvious one; a scenario TITLE or a description line naming the type beside the word INSERT
+        // reads as documentation and executes just as little.
+        foreach (['witness-write-commented-out', 'witness-write-in-a-title'] as $fixture) {
+            $defect = $this->defectIn(\sprintf('features/%s.feature', $fixture));
+
+            $this->assertNotNull($defect, \sprintf('%s: text that never runs was accepted as a write.', $fixture));
+            $this->assertStringContainsString(self::NO_SEED, $defect);
+        }
+    }
+
+    #[Test]
+    public function theWitnessCheckRequiresOneScenarioToBothSeedAndAssert(): void
+    {
+        // Matched over the whole file, the seed can live in a scenario that asserts nothing and the
+        // assertion in a scenario that seeds nothing — two honest halves that together say nothing. The
+        // second fixture is the same defect one step down: the count answering the query belongs to the
+        // next scenario.
+        $this->assertStringContainsString(
+            self::NO_PROOF,
+            (string) $this->defectIn('features/witness-write-in-another-scenario.feature'),
+            'A seed in one scenario was read as backing an assertion in another.',
+        );
+        $this->assertStringContainsString(
+            self::NO_PROOF,
+            (string) $this->defectIn('features/witness-count-in-next-scenario.feature'),
+            'A count belonging to the next scenario was read as answering the query.',
+        );
+    }
+
+    #[Test]
+    public function theWitnessCheckRejectsASeedThatInsertsNothing(): void
+    {
+        // `INSERT … SELECT` over an empty table inserts zero rows, so the absence asserted afterwards was
+        // never created — the vacuous seed this repository has already shipped once.
+        $defect = $this->defectIn('features/witness-insert-select.feature');
+
+        $this->assertNotNull($defect, 'A seed that inserts whatever a query returns was accepted.');
+        $this->assertStringContainsString(self::NO_SEED, $defect);
+    }
+
+    #[Test]
+    public function theWitnessCheckRejectsAScenarioAboutAnotherType(): void
+    {
+        // A complete, well-formed seed-then-vanish pair — for a different type. It separates a rule that
+        // checks "some INSERT and some SELECT exist" from one that checks they are about the type being
+        // declared: drop either literal test from the rule and this is the only fixture that notices.
+        $defect = $this->defectIn('features/witness-other-type.feature');
+
+        $this->assertNotNull($defect, 'A witness entirely about another type was accepted.');
+        $this->assertStringContainsString(self::NO_SEED, $defect);
     }
 
     #[Test]
@@ -82,51 +138,33 @@ final class PersonResourceErasureWitnessGateTest extends TestCase
     }
 
     #[Test]
-    public function theWitnessCheckRejectsAScenarioWhoseOnlyWriteIsCommentedOut(): void
+    public function theWitnessCheckRejectsADirectoryATraversalAndAnAbsentFile(): void
     {
-        // Dead text must not stand in for the write, which is the rule the sibling wiring check already
-        // applies to PHP source. Without it a `# INSERT … 'FixtureResource'` line satisfies the write check
-        // and the vacuous absence below it reads as an erasure the scenario witnessed.
-        $defect = $this->overFixtures('registry.complete')
-            ->witness()->defectIn(self::TYPE, 'features/witness-write-commented-out.feature')
-        ;
+        // A directory is the case `file_exists()` would accept, and it is reported apart from absence so
+        // this assertion cannot pass because the fixture quietly disappeared.
+        $this->assertDirectoryExists(self::FIXTURES . '/features/witness-directory.feature');
+        $this->assertStringContainsString(
+            'is a directory, not a file',
+            (string) $this->defectIn('features/witness-directory.feature'),
+        );
 
-        $this->assertNotNull($defect, 'A commented-out write was accepted as seeding the type.');
-        $this->assertStringContainsString('never writes a row of', $defect);
+        // The traversal input has to survive the prefix and extension checks, or it is refused for its shape
+        // and the `..` guard is never reached — which is how the directory case used to pass while testing
+        // nothing. This one resolves to a real, readable witness.
+        $this->assertStringContainsString(
+            'escapes the repository',
+            (string) $this->defectIn('features/../features/witness-complete.feature'),
+        );
+
+        $this->assertStringContainsString(
+            'does not exist',
+            (string) $this->defectIn('features/witness-that-was-deleted.feature'),
+        );
     }
 
-    #[Test]
-    public function theWitnessCheckDoesNotPairAQueryWithACountInTheNextScenario(): void
+    private function defectIn(string $witnessPath): ?string
     {
-        // What "the very next step" has to mean. The query is the last step of one scenario and the zero
-        // count the first of the next, over another table entirely — a pair that proves nothing.
-        $defect = $this->overFixtures('registry.complete')
-            ->witness()->defectIn(self::TYPE, 'features/witness-count-in-next-scenario.feature')
-        ;
-
-        $this->assertNotNull($defect, 'A count belonging to the next scenario was read as answering the query.');
-        $this->assertStringContainsString('never asserts that no row of it survives', $defect);
-    }
-
-    #[Test]
-    public function theWitnessCheckRejectsADirectoryAndATraversal(): void
-    {
-        $witness = $this->overFixtures('registry.complete')->witness();
-
-        // The path is shaped like a witness in every respect but one: it is a DIRECTORY. `file_exists()`
-        // accepts those, so `is_file()` is the only thing between a declared directory and a check that
-        // silences itself with nothing written at all — and this is the only input that reaches it, since
-        // anything with the wrong extension is refused earlier.
-        $this->assertSame(
-            'the witness declared for "FixtureResource" is unusable: "features/witness-directory.feature" '
-            . 'does not exist',
-            $witness->defectIn(self::TYPE, 'features/witness-directory.feature'),
-            'A directory was accepted as the witness of a person type.',
-        );
-        $this->assertNotNull(
-            $witness->defectIn(self::TYPE, 'features/../../etc/passwd'),
-            'A path escaping the repository was accepted as a witness.',
-        );
+        return $this->overFixtures()->witness()->defectIn(self::TYPE, $witnessPath);
     }
 
     private function registry(): AuditResourceTypeRegistry
@@ -134,12 +172,12 @@ final class PersonResourceErasureWitnessGateTest extends TestCase
         return AuditResourceTypeRegistry::fromGateLocation(__DIR__);
     }
 
-    private function overFixtures(string $registry): AuditResourceTypeRegistry
+    private function overFixtures(): AuditResourceTypeRegistry
     {
         return new AuditResourceTypeRegistry(
             self::FIXTURES,
-            self::FIXTURES . '/Source',
-            self::FIXTURES . '/' . $registry,
+            self::FIXTURES . '/src',
+            self::FIXTURES . '/registry.complete',
         );
     }
 }
