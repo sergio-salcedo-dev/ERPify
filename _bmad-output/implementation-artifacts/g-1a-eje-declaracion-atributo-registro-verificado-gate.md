@@ -4,7 +4,7 @@ baseline_commit: 9310efeb
 
 # Story 1.2 (G-1a): El eje de declaración — atributo hermano, registro verificado contra el código y gate que rompe el build
 
-Status: review
+Status: done
 
 <!-- Validación opcional: correr `validate-create-story` antes de `dev-story` para un check de calidad. -->
 
