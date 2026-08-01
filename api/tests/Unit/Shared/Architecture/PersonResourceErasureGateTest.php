@@ -78,8 +78,8 @@ final class PersonResourceErasureGateTest extends TestCase
     {
         $registry = $this->registry();
 
-        foreach ($this->personTypes() as $type => $declaration) {
-            $defect = $registry->erasureDefectIn($type, $declaration->erasedBy);
+        foreach ($this->personTypes() as $type => $personResourceDeclaration) {
+            $defect = $registry->erasureDefectIn($type, $personResourceDeclaration->erasedBy);
 
             $this->assertNull($defect, (string) $defect);
         }
@@ -88,10 +88,10 @@ final class PersonResourceErasureGateTest extends TestCase
     #[Test]
     public function everyPersonTypeNamesAWitnessThatProvesItsErasure(): void
     {
-        $registry = $this->registry();
+        $witness = $this->registry()->witness();
 
-        foreach ($this->personTypes() as $type => $declaration) {
-            $defect = $registry->witnessDefectIn($type, $declaration->witness);
+        foreach ($this->personTypes() as $type => $personResourceDeclaration) {
+            $defect = $witness->defectIn($type, $personResourceDeclaration->witness);
 
             $this->assertNull($defect, (string) $defect);
         }
@@ -120,8 +120,10 @@ final class PersonResourceErasureGateTest extends TestCase
         //
         // It doubles as a tripwire. The day a production writer of the type appears this goes red, and the
         // reader decides whether the declared witness is still what establishes that type's liveness.
-        foreach ($this->personTypes() as $type => $declaration) {
-            $this->assertSame([$declaration->erasedBy], $this->registry()->sourceFilesCarrying($type), \sprintf(
+        $registry = $this->registry();
+
+        foreach ($this->personTypes() as $type => $personResourceDeclaration) {
+            $this->assertSame([$personResourceDeclaration->erasedBy], $registry->sourceFilesCarrying($type), \sprintf(
                 'The person type "%s" is carried by files other than its declared erasure owner, so the '
                 . 'staleness check would no longer be self-satisfied for it. Revisit whether the declared '
                 . 'witness is still what establishes its liveness.',

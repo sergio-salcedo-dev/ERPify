@@ -40,7 +40,7 @@ final class PersonResourceErasureRulesGateTest extends TestCase
     {
         $this->assertNull(
             $this->overFixtures('registry.complete')
-                ->witnessDefectIn(self::TYPE, 'features/witness-complete.feature'),
+                ->witness()->defectIn(self::TYPE, 'features/witness-complete.feature'),
             'The witness rule rejected a scenario that writes the type and asserts none survives, so the '
             . 'reds below prove nothing.',
         );
@@ -50,7 +50,8 @@ final class PersonResourceErasureRulesGateTest extends TestCase
     public function theWitnessCheckRejectsAScenarioThatNeverAssertsTheRowIsGone(): void
     {
         $defect = $this->overFixtures('registry.complete')
-            ->witnessDefectIn(self::TYPE, 'features/witness-without-erasure.feature');
+            ->witness()->defectIn(self::TYPE, 'features/witness-without-erasure.feature')
+        ;
 
         $this->assertNotNull($defect, 'A scenario that only watches the write was accepted as a witness.');
         $this->assertStringContainsString('never asserts that no row of it survives', $defect);
@@ -62,7 +63,8 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         // The vacuous half: asserting an absence over a row that was never created holds with the erasure
         // deleted entirely, which is the precedent this epic already paid for once.
         $defect = $this->overFixtures('registry.complete')
-            ->witnessDefectIn(self::TYPE, 'features/witness-without-write.feature');
+            ->witness()->defectIn(self::TYPE, 'features/witness-without-write.feature')
+        ;
 
         $this->assertNotNull($defect, 'A scenario that never seeds the type was accepted as a witness.');
         $this->assertStringContainsString('never writes a row of', $defect);
@@ -74,7 +76,7 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         // What keeps the declaration from testifying for itself. It is a path rule rather than a comparison
         // of the two segments: an owner is a `.php` under `src/`, so refusing that shape as a witness is
         // what makes the two disjoint, and this is the case that would notice the prefix being relaxed.
-        $defect = $this->registry()->witnessDefectIn('User', self::ERASURE_OWNER);
+        $defect = $this->registry()->witness()->defectIn('User', self::ERASURE_OWNER);
 
         $this->assertNotNull($defect, 'The erasure owner was accepted as the witness of its own declaration.');
         $this->assertStringContainsString('is not a .feature file under features/', $defect);
@@ -83,16 +85,16 @@ final class PersonResourceErasureRulesGateTest extends TestCase
     #[Test]
     public function theWitnessCheckRejectsADirectoryAndATraversal(): void
     {
-        $registry = $this->registry();
+        $witness = $this->registry()->witness();
 
         // is_file() is what stops the first: file_exists() is true for a directory, so a bare directory
         // would silence every check downstream with nothing written at all.
         $this->assertNotNull(
-            $registry->witnessDefectIn('User', 'features/backoffice'),
+            $witness->defectIn('User', 'features/backoffice'),
             'A directory was accepted as the witness of a person type.',
         );
         $this->assertNotNull(
-            $registry->witnessDefectIn('User', 'features/../../etc/passwd'),
+            $witness->defectIn('User', 'features/../../etc/passwd'),
             'A path escaping the repository was accepted as a witness.',
         );
     }

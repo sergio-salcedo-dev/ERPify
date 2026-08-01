@@ -1,4 +1,8 @@
-# Every `resource_type` written into `audit_log`, classified by whether it denotes a NATURAL PERSON.
+# Every `resource_type` the audit vocabulary knows, classified by whether it denotes a NATURAL PERSON.
+#
+# Writers and consumers alike: `AuditResource` is the vocabulary of the write path AND of the erasure and
+# query paths, so a type can enter this file through a call that only ever READS rows of it. `User` is such
+# a type today. The registry is an inventory of the types the code names, not of the rows it produces.
 #
 # Why this file exists: GDPR erasure of the resource axis is the owning bounded context's job
 # (docs/adr/audit-activity-log.md D4). That assignment only works if "is this type a person?" is a
@@ -7,17 +11,44 @@
 #
 # Format, one per line:
 #   <ResourceType> => non-person
-#   <ResourceType> => person :: <path of the erasure use case that anonymises it>
+#   <ResourceType> => person :: <path of the erasure use case> :: <path of the witness>
 #
-# The gate (PersonResourceErasureGateTest, run by `make php.lint.audit-resource`) fails the build when a
-# type reaches `AuditResource::of(...)` — written at the call or held in a same-class constant — or a
-# route's `_audit_resource_type` default without a line here, and when a `person` line names a file that
-# does not call anonymise() on an AuditResourceAnonymiser it holds.
+# The witness is an acceptance scenario that SEEDS a row of the type and asserts none survives the erasure.
+# It is what stops the person line from establishing its own liveness: the erasure owner cannot testify that
+# its call reaches a row, and the type's only literal in `src` is the constant that owner itself holds.
 #
-# What it does not catch, stated so nobody mistakes a green build for a proof: it cannot judge the
-# classification (calling Contact a non-person passes — that is what review is for), it cannot see a type
-# assembled at runtime from request attributes, and it cannot follow a constant imported from another
-# class. A type introduced by either of those last two forms needs a line here by hand.
+# The gate (PersonResourceErasureGateTest + PersonResourceErasureRulesGateTest, run by
+# `make php.lint.audit-resource`) fails the build when a type reaches `AuditResource::of(...)` — written at
+# the call or held in a same-class constant — or a route's `_audit_resource_type` default without a line
+# here; when a `person` line names a file that does not call anonymise() on an AuditResourceAnonymiser it
+# holds; when its witness does not exist, is not a `.feature` under `features/`, never writes a row of the
+# type, or never asserts none survives; and when a `non-person` type is no longer written anywhere.
+#
+# ---------------------------------------------------------------------------------------------------------
+# What it deliberately does NOT do. Read this list as the specification of the gate's blind spots — a green
+# build proves what is below the line, and nothing above it.
+#
+#   - It cannot judge the classification. Calling `Contact` a non-person passes; the completeness check still
+#     demands a line, so the decision is forced into a diff, which is the point. Review is what judges it.
+#   - NOTHING WRITES `User` IN PRODUCTION TODAY. Its two call sites both consume: an UPDATE predicate in
+#     FulfilIdentityErasure and a SELECT predicate in ReconcileErasedSubjectReferences. The person axis of
+#     `audit_log` is therefore empty in production, and its line here is a seal set on an unfired gun —
+#     legitimate, because it protects the moment `User` becomes audited, but it closes no live hole.
+#   - The witness proves the declared erasure path REACHES a row of the type. It does not prove any such row
+#     is ever produced, and no check here can: liveness of a producer is precisely what this gate is
+#     forbidden to judge.
+#   - The witness and the declaration can die in the same commit. The gate makes that expensive and visible
+#     — deleting the scenario turns the line red, so removing both is a deliberate, reviewable act — not
+#     impossible. A declared registry is chosen over a discovered one for exactly this: it fails loudly.
+#   - The witness seeds its row with hand-written SQL, so it does not detect column drift. A rename of an
+#     `audit_log` column would break the scenario at run time, not here, and this file would still read green.
+#   - It cannot follow a constant imported from another class, and that blind spot is ALIVE, not theoretical:
+#     ReconcileErasedSubjectReferences.php:45 reaches the type through
+#     `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE`, and the completeness check does not see it. The line
+#     for `User` is here by hand for that reason.
+#   - It cannot see a type assembled at runtime from request attributes; the route-default check covers those
+#     inputs instead.
+# ---------------------------------------------------------------------------------------------------------
 
 Bank => non-person
 BankAccount => non-person

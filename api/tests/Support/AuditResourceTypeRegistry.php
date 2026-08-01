@@ -13,26 +13,29 @@ use RuntimeException;
  *
  * Split from the gate test so the rules are exercisable independently of the assertions, the way
  * {@see PersonReferences}, {@see PersistentTransportPolicy}, {@see AllowlistFile} and {@see ApiSourceFiles}
- * already are — and so a fixture tree can drive them against forms the real tree does not contain (a witness
- * that never asserts the row disappears, an owner that holds the anonymiser but never calls it) without a
- * dirty line ever existing in the committed registry. A control whose red cannot be provoked is not a
- * control.
+ * already are — and so a fixture tree can drive them against forms the real tree does not contain (an owner
+ * that holds the anonymiser but never calls it, a type nothing writes) without a dirty line ever existing in
+ * the committed registry. A control whose red cannot be provoked is not a control.
+ *
+ * The second half of a `person` line — what proves the declared erasure reaches a row rather than merely
+ * being written — is {@see AuditWitnessScenario}'s, reachable through {@see witness()}. Reading a registry
+ * and reading an acceptance scenario are different jobs, and the declarations are the only thing they share.
  *
  * Read only. It never writes the registry, and no target regenerates it: a control that rewrites what it
  * checks reads green by construction.
  *
  * @internal test support
  */
-final class AuditResourceTypeRegistry
+final readonly class AuditResourceTypeRegistry
 {
     public const string NON_PERSON = 'non-person';
 
     private const string ANONYMISER = 'AuditResourceAnonymiser';
 
     public function __construct(
-        private readonly string $apiRoot,
-        private readonly string $sourceRoot,
-        private readonly string $registryPath,
+        private string $apiRoot,
+        private string $sourceRoot,
+        private string $registryPath,
     ) {
     }
 
@@ -157,7 +160,7 @@ final class AuditResourceTypeRegistry
      */
     public function erasureDefectIn(string $type, string $erasurePath): ?string
     {
-        $unreadable = $this->pathDefectIn($erasurePath, 'src/', 'php');
+        $unreadable = DeclaredPath::defectIn($this->apiRoot, $erasurePath, 'src/', 'php');
 
         if (null !== $unreadable) {
             return \sprintf('the erasure owner declared for "%s" is unusable: %s', $type, $unreadable);
@@ -187,121 +190,12 @@ final class AuditResourceTypeRegistry
     }
 
     /**
-     * Why the declared witness of `$type` fails to establish that its erasure reaches a row of it, or `null`
-     * when it does.
-     *
-     * The witness answers a question the erasure owner cannot answer about itself: that the declared erasure
-     * path really reaches a row of a type the witness itself seeded. Being a DIFFERENT artefact is the whole
-     * mechanism — a check a declaration can satisfy on its own carries no information — and that disjointness
-     * is structural rather than compared: an owner is a `.php` under `src/` and a witness a `.feature` under
-     * `features/`, so no path can be accepted as both. Relaxing either prefix takes the guarantee with it,
-     * which is why a `src/` path being refused as a witness is pinned as its own case.
+     * The witness reader, with the api root already resolved — the collaborator that answers the one
+     * question a `person` declaration cannot answer about itself.
      */
-    public function witnessDefectIn(string $type, string $witnessPath): ?string
+    public function witness(): AuditWitnessScenario
     {
-        $unreadable = $this->pathDefectIn($witnessPath, 'features/', 'feature');
-
-        if (null !== $unreadable) {
-            return \sprintf('the witness declared for "%s" is unusable: %s', $type, $unreadable);
-        }
-
-        $lines = $this->linesOf($witnessPath);
-
-        if (!$this->writesType($lines, $type)) {
-            return \sprintf('%s never writes a row of "%s", so nothing it asserts is about that type', $witnessPath, $type);
-        }
-
-        if (!$this->assertsTypeIsGone($lines, $type)) {
-            return \sprintf(
-                '%s writes a row of "%s" but never asserts that no row of it survives, so it witnesses the '
-                . 'write and not the erasure',
-                $witnessPath,
-                $type,
-            );
-        }
-
-        return null;
-    }
-
-    /**
-     * A read of the type that is immediately answered with a zero count. Immediacy is what makes the check
-     * mean something: a query and a count separated by other steps could be about different rows, and the
-     * witness would then assert that some unrelated result set was empty.
-     *
-     * @param list<string> $lines
-     */
-    private function assertsTypeIsGone(array $lines, string $type): bool
-    {
-        foreach ($lines as $index => $line) {
-            if (!\str_contains($line, $this->literal($type)) || 1 !== \preg_match('/\bSELECT\b/i', $line)) {
-                continue;
-            }
-
-            if (1 === \preg_match('/\b0\s+(?:records|rows)\b/i', $this->stepAfter($lines, $index))) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param list<string> $lines
-     */
-    private function writesType(array $lines, string $type): bool
-    {
-        return \array_any($lines, fn (string $line): bool => \str_contains($line, $this->literal($type))
-            && 1 === \preg_match('/\bINSERT\b/i', $line));
-    }
-
-    /**
-     * The next line that carries a step, skipping blanks and Gherkin comments — a comment between the query
-     * and its count is idiomatic in this suite and must not read as the absence of an assertion.
-     *
-     * @param list<string> $lines
-     */
-    private function stepAfter(array $lines, int $index): string
-    {
-        foreach (\array_slice($lines, $index + 1) as $line) {
-            $trimmed = \trim($line);
-
-            if ('' !== $trimmed && !\str_starts_with($trimmed, '#')) {
-                return $trimmed;
-            }
-        }
-
-        return '';
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function linesOf(string $path): array
-    {
-        return \preg_split('/\R/', (string) \file_get_contents($this->apiRoot . '/' . $path)) ?: [];
-    }
-
-    /**
-     * Why a declared path cannot be read at all, or `null` when it can.
-     *
-     * `is_file()` rather than `file_exists()`: a DIRECTORY satisfies `file_exists()`, so declaring a bare
-     * directory would silence every check downstream with nothing written at all.
-     */
-    private function pathDefectIn(string $path, string $prefix, string $extension): ?string
-    {
-        if (\str_contains($path, '..')) {
-            return \sprintf('"%s" escapes the repository with ".."', $path);
-        }
-
-        if (!\str_starts_with($path, $prefix) || !\str_ends_with($path, '.' . $extension)) {
-            return \sprintf('"%s" is not a .%s file under %s', $path, $extension, $prefix);
-        }
-
-        if (!\is_file($this->apiRoot . '/' . $path)) {
-            return \sprintf('"%s" does not exist', $path);
-        }
-
-        return null;
+        return new AuditWitnessScenario($this->apiRoot);
     }
 
     /**
