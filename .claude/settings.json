@@ -32,6 +32,12 @@
             "command": "scripts/bmad-status-audit.sh --quiet-when-clean || true",
             "timeout": 15,
             "statusMessage": "Checking BMad sprint-status drift"
+          },
+          {
+            "type": "command",
+            "command": "scripts/worktree-collision-check.sh --quiet-when-clean || true",
+            "timeout": 15,
+            "statusMessage": "Checking for a worktree or branch collision"
           }
         ]
       }
