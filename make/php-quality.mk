@@ -117,8 +117,12 @@ php.lint.audit-resource: ## Person-resource erasure classification gate
 # when an aggregate type declared in src has no line in api/.persistent-transport-policy. `async` and
 # `failed` are Doctrine tables with no TTL and no prune that no erasure path touches, so a queued
 # person aggregate id outlives the erasure the application confirmed to the subject.
+#
+# The filter is a COMMON PREFIX because the gate is two classes: naming one of them left the other
+# outside the named boundary, so a reintroduction of the five routing paths reported as "PHPUnit"
+# rather than as this policy — which is the whole point of wiring a lint target one-to-one.
 php.lint.persistent-transport: ## Persistent-transport person-aggregate policy gate
-	@$(PHP_TEST) bin/phpunit --filter=PersistentTransportPolicyGateTest
+	@$(PHP_TEST) bin/phpunit --filter='PersistentTransport.*GateTest'
 
 ## —— Person-reference erasure gate —————————————————————————————————————————
 

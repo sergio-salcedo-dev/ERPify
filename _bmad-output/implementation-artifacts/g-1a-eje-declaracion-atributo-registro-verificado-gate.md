@@ -663,6 +663,18 @@ eslabones del hecho (A); y las citas de `php-quality.mk`, `ci.yml:115`, `deptrac
 `doctrine.yaml`, `regen-baseline.sh`, `PersonResourceErasureGateTest`, `EventDispatchGateTest`, `ApiSourceFiles`,
 `AllowlistFile`, `.audit-resource-types`, `.persistent-transport-policy`, `Identifiable` y `erase.feature:44`.
 
+## Nota de cierre — `docs/architecture/event-catalog.md` NO aplica, y aquí queda el argumento
+
+La Tarea 6 exige los seis sitios que tocó #613 e **incluye o argumenta** el catálogo de eventos. No aplica, y
+la razón es estructural, no de conveniencia: ese documento cataloga **eventos de dominio** y su enrutado por
+transporte, y este eje **no añade, no retira y no enruta ninguno**. Los dos casos de uso nuevos publican cero
+eventos a propósito —igual que su precedente `PurgeUserSessions`—, precisamente para no abrir la fuga que
+`.persistent-transport-policy` persigue. Un apartado allí describiría un eje que el catálogo no gobierna.
+
+Lo que sí quedó anotado en el catálogo es lo que le corresponde: `Iam.Invitation` sigue clasificado
+`non-person` porque su `aggregate_id` es el de la invitación, y el `invitedUserId` viaja en el **payload** —
+que es el punto ciego declarado de aquel gate y sigue siendo FR9/G-4b, no este eje.
+
 ## Pase adversarial — IMPLEMENTACIÓN. REGISTRADO (`CLAUDE.md` → *Security review* → **Process**)
 
 **Dónde queda el registro: aquí, y reproducido en el cuerpo de la PR #616.** **Cuándo:** 2026-08-01, sobre el
