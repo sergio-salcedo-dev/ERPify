@@ -54,8 +54,13 @@ breaches `maxBacklog` (default 0 → any backlog) or `maxAgeHours` (default 24);
 
 - **Why a log, not Sentry.** The Monolog→Sentry bridge is deliberately left unwired
   (`config/packages/sentry.yaml`); Sentry captures unhandled throwables, not log lines. The scheduled
-  check is the "cron" arm the requirement allows. Throwing to reach Sentry would re-enqueue the tick
-  into `failed` (recursion). Wiring Monolog→Sentry stays a separate, opt-in decision.
+  check is the "cron" arm the requirement allows. Wiring Monolog→Sentry stays a separate, opt-in decision.
+  **A log line is also the only arm that stays silent when nothing is wrong** — an exception is a fault
+  signal, and a healthy backlog check is not a fault.
+- **What throwing would and would not do.** It would *not* recurse: scheduler transports are not among
+  the configured failure transports, so the failure listener short-circuits, and no retry strategy is
+  registered — an uncaught handler exception costs one `critical` line, no re-send and no `failed` row.
+  The reason to prefer a log is therefore the one above, not a recursion hazard.
 - **Why no `/health/dead-letter` endpoint.** `messenger:failed:status --json` already exposes the
   metric and `Backoffice/Health` already owns HTTP health; a third surface for the same data buys
   nothing (YAGNI). Promote to an endpoint only if a scraper needs HTTP.

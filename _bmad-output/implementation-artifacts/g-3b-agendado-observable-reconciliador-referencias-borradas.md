@@ -142,11 +142,13 @@ estáticamente decidible** — que es lo que autoriza un control agendado en vez
 **Then** siguen verdes **sin haber tocado su configuración ni el allowlist**. Si hiciera falta tocarlos, la
 decisión estaría mal implementada.
 
-**AC7 — El transporte está realmente consumido.**
-**Given** el schedule nuevo,
-**When** se inspecciona el despliegue,
-**Then** su transporte aparece en los comandos de consumo de `compose.yaml` **y** `compose.prod.yaml`.
-*Verificado ejecutando `bin/console debug:scheduler` y `debug:messenger` contra el stack, no razonándolo.*
+**AC7 — El transporte está realmente consumido, y un control lo comprueba.**
+**Given** un `#[AsSchedule]` cuyo transporte falte en algún comando de consumo,
+**When** corre `make php.lint.schedule-consumption`,
+**Then** **falla**, nombrando el schedule y el fichero Compose donde falta — y el gate está en `php.quality`
+**y** en `php.quality.dry-run`, porque CI corre el *dry-run* (NFR11).
+*Además, comprobación viva una vez: `bin/console debug:scheduler` y `debug:messenger` contra el stack, con su
+salida — no razonada desde los Makefiles.*
 
 **AC8 — Los dos arreglos plegados, con test.**
 `ReconcileSubjectErasuresHandler` alerta a `error` y **no** loguea ids. Un test por cada cosa.
@@ -166,6 +168,11 @@ decisión estaría mal implementada.
 - [ ] **Tarea 5 — Compose**: añadir el transporte a las dos listas de consumo, y actualizar el bloque de
       comentario de `compose.prod.yaml` que hoy nombra solo dos transportes. (AC7)
 - [ ] **Tarea 6 — Los dos arreglos plegados** en `ReconcileSubjectErasuresHandler`, con test. (AC8)
+- [ ] **Tarea 6 bis — Gate de consumo de schedules** (AC7): test de arquitectura + target `php.lint.*` + sus tres
+      inserciones + el bind mount de solo lectura de los Compose, siguiendo el precedente del gate del contrato
+      de errores. Su cabecera declara qué **no** prueba (presencia del nombre ≠ worker vivo). **Verifica que el
+      `--filter` selecciona la clase listando los tests que el target elige**, no razonándolo — es el defecto
+      que #613 pagó.
 - [ ] **Tarea 7 — Docs**: `docs/deployment-guide.md` y `docs/architecture-api.md` nombran hoy solo los dos
       transportes existentes; y **corregir D3 de [`dead-letter-observability.md`](../../docs/adr/dead-letter-observability.md)**,
       cuya conclusión es correcta pero cuyo motivo es falso — *«lanzar re-encolaría el tick en `failed`
@@ -188,12 +195,24 @@ decisión estaría mal implementada.
   entrega de eventos **localmente**. En prod el `scheduler_worker` consume solo transportes de scheduler, y su
   `replicas: 1` sigue siendo todo el mecanismo anti-tick-duplicado. Un tercer schedule no añade exposición nueva.
 
-**Propuesto, NO incluido — decide y dilo:** un gate que refleje `#[AsSchedule]` sobre `src/`, derive
-`scheduler_<nombre>` y compruebe su presencia en los dos comandos de Compose. Cierra el hueco medido arriba y
-aplica retroactivamente a los dos schedules existentes. Cuesta un test, un target, dos líneas de agregado **y un
-bind mount**, porque los ficheros Compose de la raíz no son visibles dentro del contenedor —el precedente exacto
-es el montaje de solo lectura que ya existe para el gate del contrato de errores—. **Si no entra aquí, va a
-`deferred-work.md` con su medición; no se calla.**
+**El gate de consumo ENTRA en la historia (decidido 2026-08-01).** Refleja `#[AsSchedule]` sobre `src/`, deriva
+`scheduler_<nombre>` y comprueba su presencia en los comandos de consumo de **los dos** ficheros Compose.
+
+*Por qué no es alcance inflado:* SI-21 exige que **agendado, fallo observable y alertado lleguen juntos**, y
+«agendado» **no lo demuestra declarar el atributo** — lo demuestra que alguien consuma el transporte. Sin este
+control, la afirmación central de la historia es **infalsable**: el schedule puede shippear muerto y todos los
+gates siguen verdes. Es el modo de fallo titular, y además ya está vivo retroactivamente sobre los dos schedules
+existentes, que nadie comprueba hoy.
+
+*Coste, con su parte incómoda declarada:* un test (~60 líneas, forma de `tests/Unit/Shared/Architecture/*GateTest.php`),
+un target `php.lint.*`, sus tres inserciones (`php.quality`, `php.quality.dry-run`, `.PHONY`) **y un bind mount de
+solo lectura** de los Compose de la raíz — dentro del contenedor solo hay `api/`, `public/` y `docs/`. El
+precedente exacto es el montaje que ya existe para el gate del contrato de errores, comentario incluido; **eso es
+lo que lo hace aceptable: no se inventa un mecanismo, se reusa uno ya juzgado.**
+
+*Y su punto ciego, para la cabecera:* comprueba **presencia del nombre en un comando**, no que el worker esté
+vivo, ni que el `--time-limit` sea sano, ni que el servicio esté desplegado. Un verde prueba que el transporte
+está cableado, nada más.
 
 ## References
 

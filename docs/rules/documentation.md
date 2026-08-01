@@ -45,9 +45,25 @@ Decision vs. description: an ADR is the only place the discarded alternatives an
 - Filename: topic in kebab-case (see above).
 - First lines: a header blockquote carrying lifecycle —
   `> **Status:** … · **Date:** YYYY-MM-DD · **Scope:** …`, plus
-  `> **Superseded by** [other-adr.md](./other-adr.md)` when a later ADR overrides it.
+  `> **Superseded by** [<title>](./<other-adr>.md)` when a later ADR overrides it.
 - Body: numbered in-file decisions (`D1`, `D2`, …) with discarded alternatives inline, target
   ≤ ~150 lines. Full internal style: root `CLAUDE.md` → *Docs density → ADRs*.
+
+## Correcting a doc: the reason is load-bearing, not just the conclusion
+
+When a measurement contradicts a document, **check the argument, not only the verdict**. A right
+conclusion resting on a false premise reads as verified and is a landmine for whoever cites it forward —
+the next reader inherits the premise, not the outcome.
+
+- **Rewrite the reason; keep the conclusion only if it survives on a true one.** If it does, say which
+  argument replaced which, and why the old one failed. If it does not, the conclusion goes too.
+- **Say it was measured, not reasoned.** Cite `file:line`. A corrected premise asserted from memory is
+  the same defect with a new date.
+- **Do not soften — replace.** Hedging a false reason ("this may cause…") leaves it quotable.
+
+The rule exists because it happened four times in one epic: a justification whose last link did not hold,
+a coverage claim that measurement narrowed, an out-of-scope reason that named the wrong obstacle, and an
+ADR justifying a correct decision with a hazard that cannot occur. Every one of them had shipped review.
 
 ## Where does a new doc go?
 
