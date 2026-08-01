@@ -628,19 +628,43 @@ ejes no es enumerable contra nada, mientras que bajo ① se puede atar al regist
 
 **Acceptance Criteria:**
 
-**Given** una fila de `membership` o `iam_invitation` cuyo `user_id`/`invited_user_id` no resuelve a una
+**AC1 — Detecta el huérfano, con el veredicto repartido como el precedente.**
+**Given** una fila de cualquiera de las **cuatro** columnas del alcance cuyo id de persona no resuelve a una
 identidad viva,
 **When** corre el control detective,
 **Then** la **reporta**, y el veredicto sale de la diferencia de dos hechos —el contexto dueño lista sus
 referencias, `Iam/Identity` resuelve cuáles ya no son sujetos vivos—, sin que ninguno lea la tabla del otro.
 
+**AC2 — El conjunto de fuentes es DEMOSTRABLEMENTE completo (la recomendación de Winston, y la condición
+bajo la que ① merece la pena).**
+**Given** el registro `api/.person-reference-policy`, que ya enumera toda referencia a persona con su dueño,
+**When** corre la suite,
+**Then** un gate falla si **alguna línea `person ::` cuyo dueño no sea `EraseIdentitySubject` carece de un
+lister cableado** en el control detective.
+*Por qué es criterio de aceptación y no mejora:* sin él, olvidar el quinto contexto es **compile-clean**, y
+habríamos construido un control detective que necesita su propio control detective. El parser ya existe
+(`api/tests/Support/PersonReferences.php`), así que el gate es barato. **La prueba de que hace falta es esta
+misma historia: su corte enumeró a mano y se dejó dos de cuatro.**
+
+**AC3 — El veredicto lleva atribución por eje (la trampa que ① introduce).**
+**Given** el control cubriendo varios ejes,
+**When** devuelve su resultado,
+**Then** es por eje (`array<string, list<string>>` o un VO), **no una lista plana fusionada**, y los tests
+asertan la clave.
+*Por qué:* con lista plana, un test que siembre solo el eje de `audit_log` y asierta no-vacío **pasa aunque el
+lister de membership no se haya cableado nunca** — SI-23 reintroducido dentro del control que instala SI-21.
+
+**AC4 — No reporta un borrado correcto, y el test no puede pasar en vacío.**
 **Given** un borrado completo,
 **When** corre el control,
 **Then** no reporta nada — y un test siembra la divergencia **de verdad** (afirmando que la fila sembrada
 existe) antes de asertar, porque el precedente inmediato de este eje fue un test que no la creaba y pasaba.
 
+**AC5 — Solo lee, y no hidrata.**
 **Given** el control,
 **When** se inspecciona,
+**Then** el puerto de existencia es un **predicado por lotes** (`existingIds(list<string>): list<string>`), no
+el `findById()` por id de hoy, que hidrata un `User` entero con `email` y `password_hash` por cada uno; y
 **Then** **solo lee**: reparar es un acto deliberado de operador a través del caso de uso de erasure, no algo
 que un chequeo agendado le haga por su cuenta a una tabla de cumplimiento.
 
