@@ -157,15 +157,18 @@ development_status:
   # o deploy rolling, momento en el que pasa a defecto de DISPONIBILIDAD urgente.
   epic-gdpr-hardening: in-progress
   g-4a-fuga-passwordresetcompleted-transportes-messenger: done
-  # G-1a CONTEXTUALIZADA pero BLOQUEADA (artefacto con `Status: blocked`, que es lo que las herramientas leen:
-  # bmad-dev-auto enruta ready-for-dev directo a implementar y blocked a HALT). Tres decisiones abiertas que el
-  # corte no marcó porque nacen de mediciones que no hizo: (1) qué frase de la épica manda — FR4 dice "llega
-  # verde" y FR5 (:97) + el AC formal de G-1b (:488-490) + el DAG del addendum (:44) exigen el gate EN ROJO;
-  # (2) dónde vive el generador — la recomendación contradice epics:219-221, línea ratificada; (3) forma de la
-  # clave y qué parte de cada línea es huella vs juicio humano. Precondición normativa: nada se implementa antes
-  # de registrarlas, y la opción elegida corrige la frase perdedora de la épica EN EL MISMO PR. Volteo a
-  # ready-for-dev en el commit que registre las decisiones. Pase adversarial del CONTRATO: hecho y registrado.
-  g-1a-eje-declaracion-atributo-registro-generado-gate: backlog
+  # G-1a: pase adversarial del CONTRATO hecho y registrado, y las TRES decisiones que abrió, ratificadas por
+  # Sergio (2026-08-01). D1=① el gate ATERRIZA EN ROJO por Membership.user_id e Invitation.invited_user_id —
+  # es el estado que FR5 (:97) y el 2º AC de G-1b (:488-490) exigen; el "llega verde" de FR4 era la frase
+  # insatisfacible y quedó corregido en epics (:91, :314, :418, :449). D2=híbrida: el atributo va a
+  # Shared/Privacy/Domain, pero NO se construyen puerto ni adaptador (el registro solo lo lee el gate); el motor
+  # va a tests/Support, y epics:219-221 queda corregido. D3=dos estados + universo COMPLETO (toda columna
+  # Types::GUID, ~16 líneas) — sin filtro de nombre, que era el punto ciego; y el check de cableado hace de
+  # segundo testigo de SI-22 refutando sola toda clasificación person falsa-positiva.
+  # CONSECUENCIA DE SECUENCIA, NO NEGOCIABLE: `main` queda con php.quality en ROJO hasta que G-1b cierre.
+  # Autorizado con la condición de que G-1b va INMEDIATAMENTE DESPUÉS y G-2 ESPERA. Si eso cambia, no se
+  # debilita el gate: G-1b entra en la misma PR.
+  g-1a-eje-declaracion-atributo-registro-generado-gate: ready-for-dev
   g-1b-referencias-huerfanas-membership-invitation: backlog
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   g-3a-segundo-testigo-del-registro: backlog

@@ -4,22 +4,22 @@ baseline_commit: 9310efeb
 
 # Story 1.2 (G-1a): El eje de declaración — atributo hermano, registro generado y gate que rompe el build
 
-Status: blocked
+Status: ready-for-dev
 
 <!-- Validación opcional: correr `validate-create-story` antes de `dev-story` para un check de calidad. -->
 
-> **BLOQUEADA A PROPÓSITO, y el estado es el mecanismo.** `Status: blocked` es lo que leen las herramientas:
-> `bmad-dev-auto` enruta `ready-for-dev` directo a implementar y `blocked` a HALT
-> (`.claude/skills/bmad-dev-auto/step-01-clarify-and-route.md:18-23`). La épica exige que **ninguna
-> implementación empiece antes de que las decisiones abiertas queden registradas por escrito**
-> (`epics-gdpr-hardening.md:345-350`), y esta historia tiene **tres**. El precedente lo confirma: G-4a nunca
-> pasó por `ready-for-dev` — fue `backlog → review → done`, y su artefacto solo avanzó con la decisión **ya
-> tomada**. Registra D1/D2/D3 y voltea a `ready-for-dev` en el mismo commit.
+> **LAS TRES DECISIONES ESTÁN TOMADAS Y REGISTRADAS** (ver *Decisiones registradas*): D1=①, D2=híbrido,
+> D3=dos estados + universo completo. Ratificadas por Sergio el 2026-08-01, tras el pase adversarial del
+> contrato. La precondición normativa de la épica queda satisfecha por ese bloque; **no las re-abras**, pero
+> **léelas enteras antes de tocar código** — el argumento que las sostiene es lo que impide implementar por
+> accidente la variante que parece igual y no lo es.
 
-> **Lee *Estado medido* → hechos (A)–(F) antes de tocar el atributo.** El corte de épica describe esta historia
-> como aditiva y sin decisiones; la medición contra `main` abrió tres. La que más cambia el resultado es (B), y
-> **no es la contradicción que parece**: FR4 consigo mismo es coherente (trinquete); lo que choca es FR4 con
-> **FR5 y con el AC formal de la historia siguiente**.
+> **Consecuencia que NO puedes olvidar al abrir el PR: este gate ATERRIZA EN ROJO, a propósito.** El rojo
+> proviene solo de `Membership::$userId` e `Invitation::$invitedUserId`, que hoy no tienen dueño de borrado. Es
+> el estado que FR5 y el segundo AC de la Story 1.3 exigen, y la épica ya está corregida en consecuencia. **No
+> lo "arregles" declarando un dueño falso ni ablandando el gate.** `main` queda rojo hasta que G-1b cierre, y
+> eso está **autorizado explícitamente**: G-1b es la historia inmediatamente siguiente y **G-2 espera**. Si esa
+> secuencia cambia, la respuesta correcta no es debilitar el gate — es meter G-1b en esta misma PR.
 
 ## Story
 
@@ -229,32 +229,61 @@ reintroducción de las cinco vías de routing rompe «PHPUnit», no «la políti
 que el cableado uno-a-uno de los `php.lint.*` existe para decir. **Si G-1a parte su gate en dos clases, el
 `--filter` debe ser un prefijo regex común** — por la misma razón, y no por cobertura.
 
-## Decisiones abiertas (PRECONDICIÓN — `Status: blocked` hasta que se registren)
+## Decisiones registradas (precondición normativa de la épica: SATISFECHA)
 
-El corte no marcó esta historia con decisión abierta porque las tres nacen de mediciones que el corte no hizo.
-Cada una lleva recomendación: **la primera tarea es confirmarla o refutarla por escrito**
-(`epics-gdpr-hardening.md:345-350`).
+**Decidido:** 2026-08-01. **Quién:** Sergio, tras el pase adversarial del contrato (registrado abajo), que es lo
+que abrió las tres. **Dónde queda el registro:** este bloque, y el cuerpo del PR debe reproducirlo. El corte no
+las marcó porque nacen de mediciones que el corte no hizo.
 
-### D1 — ¿Qué frase de la épica es autoritativa? (nace del hecho (B))
+### D1 — ¿Qué frase de la épica es autoritativa? · **ELEGIDA: ①** (el gate aterriza en rojo)
 
-**Toda opción corrige contrato. La pregunta no es si se toca la épica, sino qué se toca.**
+**Toda opción corregía contrato. La pregunta nunca fue qué mecanismo, sino qué frase manda.**
 
 | Opción | Qué hace | Qué cuesta y qué contrato reescribe |
 |--------|----------|-------------------------------------|
-| **①** **Completitud estructural + dueño declarado.** El universo lo deriva el gate del código; el atributo aporta el dueño. Toda propiedad del universo sin línea → **rojo** | Es el estado que **FR5 (`:97`) y el AC de G-1b (`:488-490`) ya exigen**. Detección viva desde el día 1 | **Deja `main` en rojo entre G-1a y G-1b**, y ése es su coste dominante: el target entra en `php.quality.dry-run` (`:176`), que es lo que CI corre para **todo PR** (`ci.yml:115`), y el DAG abre G-1b **y G-2 en paralelo** (`arch-addendum:43-45`), así que G-2 se desarrollaría contra un `main` rojo. Choca con `CLAUDE.md` → *Finishing substantial work* (*«Gates first»*). **Exige autorización explícita del usuario para romper CI de `main`**, y corregir el *«llega verde»* de FR4 (`:91`, `:418`, `:449`) |
+| **①** ✅ **ELEGIDA. Completitud estructural + dueño declarado.** El universo lo deriva el gate del código; el atributo aporta el dueño. Toda propiedad del universo sin línea, o con `person` y sin dueño → **rojo** | Es el estado que **FR5 (`:97`) y el AC de G-1b (`:488-490`) ya exigen**. Detección viva desde el día 1 | **Deja `main` en rojo entre G-1a y G-1b** — coste **aceptado y autorizado** (Sergio, 2026-08-01) bajo una condición de secuencia: **G-1b va inmediatamente después y G-2 espera**. Si esa secuencia cambia, la respuesta no es debilitar el gate sino **meter G-1b en la misma PR**. Obliga a corregir el *«llega verde»* de FR4 (`:91`, `:314`, `:418`, `:449`) — **hecho en este PR** |
 | **②** **Solo lo declarado** (los dos checks del corte, literal) | Llega verde | **Vetada, y no por gusto:** con ② el universo **es** el conjunto de propiedades anotadas, luego la afirmación verificada tiene como única evidencia las propias declaraciones — que es SI-23 (`una declaración nunca es su propia evidencia`), el invariante que esta historia declara **establecer**. Además obliga a reescribir el AC de G-1b (`:488-490`) y la anotación del DAG |
 | **③** **Completitud estructural + sanción explícita** de las dos referencias conocidas, apuntando a un artefacto real | Verde al llegar **y** detección viva para la referencia siguiente | Necesita **ancla real** (un ADR, no un fichero `_bmad-output/` que la higiene BMAD puede borrar). Y choca con AC1: una línea sancionada necesita **verbo propio** (`deferred :: <ruta>`), porque `person :: <ruta>` significa *«éste es su dueño»* y ahí no hay dueño. Reescribe el AC de G-1b |
-| **④** **Tri-estado del precedente:** `Membership::$userId => person` **sin ruta**, día 1 | Completo, verdadero, verde, sin dueño falso y sin ancla BMAD. Es la gramática que `.persistent-transport-policy:12` ya admite y `:50` ya usa en vivo | **Incumple el AC de G-1b (`:488-490`)**: el gate no está rojo por esas dos referencias, así que G-1b no puede «pasarlo a verde». Y hay que decidir si `person` sin dueño es verde (debilita SI-21: *«tiene un dueño de borrado identificado»*) o rojo (y entonces es ① con otra sintaxis) |
+| **④** **Tri-estado del precedente:** `Membership::$userId => person` **sin ruta**, día 1 | Completo, verde, sin dueño falso. Es la gramática que `.persistent-transport-policy:12` admite y `:50` usa en vivo | **Descartada por mal port del precedente** — ver abajo |
 
-**Recomendada ④ si el usuario no quiere `main` en rojo; ① si acepta el coste** — pero la recomendación es
-secundaria: lo que la historia **no puede** hacer es elegir en silencio y dejar a G-1b con un AC insatisfacible.
-Sea cual sea, **el PR corrige la frase perdedora en la épica y en el DAG del addendum**.
+**Por qué ①, en orden de peso:**
 
-### D2 — ¿Dónde vive el generador y cómo escribe? (nace de los hechos (D) y (E))
+1. **El rojo es una afirmación verdadera.** `Membership.user_id` e `Invitation.invited_user_id` **no tienen dueño
+   de borrado hoy**. Un control verde mientras el defecto está vivo es prosa con pasos extra — exactamente lo que
+   la épica existe para eliminar (*«un control que puede ponerse rojo»*).
+2. **④ conserva la gramática del precedente y pierde su semántica.** En `.persistent-transport-policy`,
+   `Iam.Identity => person` es verde **porque la condición peligrosa —estar enrutado— está ausente**, y el tercer
+   estado (`person :: <adr>`) existe justo para cuando *sí* lo está. Portado aquí, la condición peligrosa es **no
+   tener dueño**, y en esas dos referencias **está presente**. El port fiel del precedente es rojo. ④ diría
+   *«esto es una persona, nadie la borra, build verde»*, degradando SI-21 de *«tiene un dueño identificado»* a
+   *«está declarada»*. **No la re-propongas sin refutar esto.**
+3. **El propósito de FR4 sobrevive a ①.** La épica pedía *«llega verde»* por una razón que escribe: *«el mecanismo
+   se estrena sobre comportamiento correcto»*. Bajo ①, **las dos semillas son verdes y demuestran justo eso**; el
+   rojo viene de dos referencias distintas y genuinamente rotas. Lo que ① incumple es la **redacción literal** de
+   FR4, no su intención — mientras que FR5, el AC de G-1b y el DAG piden el rojo de forma **operativa**: sin él,
+   el segundo AC de la Story 1.3 es insatisfacible. Una frase de conveniencia pierde contra un criterio de
+   aceptación de otra historia.
 
-**Restricción ratificada que hay que refutar explícitamente, no rodear:** `epics-gdpr-hardening.md:219-221` —
-*«`Shared/Privacy` ya es una capability de tres piezas —atributo en `Domain/`, puerto en `Application/`, adaptador
-por reflexión en `Infrastructure/`—. **El hermano replica la estructura**, no el contrato»*.
+**② queda vetada por SI-23** (su universo *es* el conjunto de declaraciones, luego la afirmación verificada tiene
+como única evidencia las propias declaraciones) y **③ por su ancla**: necesitaría un ADR para sancionar algo
+deliberadamente temporal, que es lo contrario de un ADR.
+
+### D2 — ¿Dónde vive el generador? · **ELEGIDA: híbrida** (atributo en `Domain/`, motor en `tests/Support/`)
+
+**Lo decidido, en una línea:** el **atributo sí va en `api/src/Shared/Privacy/Domain/`** — metadata pasiva que las
+entidades importan, deptrac la auto-pliega, coste cero. **El puerto y el adaptador NO se construyen**, y el motor
+de descubrimiento vive en `api/tests/Support/PersonReferences.php`.
+
+**El argumento, que no es estilístico:** `PersonalData` tiene forma de tres piezas **porque `PiiDiffSealer` consume
+su puerto en producción**. Este registro **solo lo lee el gate**. Un puerto sin nadie a quien inyectarlo es
+superficie de producción a cambio de nada (YAGNI — `docs/project-context.md`). Y `PersistentTransportPolicy` es el
+precedente **medido** de esta forma exacta: registro consumido solo por un gate, motor en `tests/Support`. El día
+que aparezca un consumidor de producción —la cadena de erasure leyendo el registro para *dirigir* el borrado—
+promoverlo a `Infrastructure/` es un **movimiento, no una reescritura**.
+
+**Restricción ratificada que esto refuta, citada en vez de rodeada:** `epics-gdpr-hardening.md:219-221` — *«El
+hermano replica la estructura»*. Esa viñeta se escribió asumiendo simetría con `PersonalData`, antes de medir que
+el hermano no tiene consumidor. **Corregida en este PR.**
 
 | Opción | Coste medido |
 |--------|--------------|
@@ -266,31 +295,49 @@ por reflexión en `Infrastructure/`—. **El hermano replica la estructura**, no
 invocada desde un target propio (`php.lint.person-reference.regen`) no toca la garantía de `:165-166` — es el
 patrón de los dos baselines.
 
-### D3 — Forma de la clave, y qué parte de cada línea es huella
+### D3 — Forma de la clave y del universo · **ELEGIDA: dos estados, universo completo**
 
-Recomendado: **`<Fqcn>::$<propiedad> => non-person | person [:: <ruta relativa a api/>]`**, tri-estado como el
-precedente. La clave es derivable por reflexión; el dueño va como ruta (hecho (C)).
+- **Clave:** `<Fqcn>::$<propiedad>` — derivable por reflexión, de la granularidad exacta del hecho (es la lección
+  I-1 de G-4a aplicada: allí la clave resultó **más gruesa** que la propiedad que clasificaba y dio luz verde a la
+  fuga).
+- **Dos estados, no tres:** `<Fqcn>::$prop => non-person` | `<Fqcn>::$prop => person :: <ruta relativa a api/>`.
+  Coherente con D1: `person` **sin** dueño *es* la violación, así que no puede ser un estado válido. Si algún día
+  hace falta sancionar una excepción, lleva **verbo propio** (`deferred :: <adr>`), **nunca** `person` sin ruta.
+- **Universo: TODAS las columnas `Types::GUID` de entidad, no las que "suenan" a persona.** Son ~16 líneas, la
+  mayoría `non-person`. Es lo que hace `.persistent-transport-policy` —clasifica *todos* los `aggregateType`, no
+  los sospechosos— y es lo que elimina el punto ciego que el pase adversarial destapó: `$actorId`, `$customerId`,
+  `$createdBy` no casan con `*user*_id` y hoy pasarían en silencio. `audit_log.actor_id` es el contraejemplo vivo.
 
-**Lo que hay que declarar por escrito, porque SI-22 lo exige:** la **clave** es huella del código, pero la
-**clasificación persona/no-persona no lo es** — es juicio humano, porque bajo ① el universo incluye `organizationId`
-y `bankId`, que son `Types::GUID` y no son persona. Di si esa parte manual necesita segundo testigo o por qué no, y
-—si se elige ③— que **sus líneas sancionadas sí lo necesitan y eso no lo cubre la Story 1.5**.
+**Y esto cierra el hueco de SI-22 que el contrato tenía abierto.** La **clave** es huella del código, pero la
+**clasificación persona/no-persona es juicio humano** (`organizationId` y `bankId` también son `Types::GUID`), y
+SI-22 exige segundo testigo para lo manual. **El segundo testigo ya está en el diseño: es el check de cableado de
+AC1.** Clasificar `organizationId` como `person` te obliga a nombrar un fichero que lo borre — y no existe, así que
+el gate se pone rojo: **la clasificación falsa-positiva se refuta sola, sin declaración que la avale.** Lo que
+queda descubierto es la dirección contraria —llamar `non-person` a una persona— y **eso va a la cabecera como punto
+ciego con nombre propio**, no se calla. *(Nota de frontera: esto no invade la Story 1.5, que trata el segundo
+testigo de la entrada **manual** de `.audit-resource-types`; aquí el testigo sale del mecanismo, no de un artefacto
+nuevo.)*
 
 ## Acceptance Criteria
 
 **AC1 — El gate falla cuando una referencia persistida a persona no declara dueño, Y cuando el dueño declarado no
 la borra (FR4, SI-21).**
-**Given** una propiedad del universo sin línea en el registro,
+**Given** una columna `Types::GUID` de entidad sin línea en el registro (**el universo es completo, D3**),
 **When** corre `make php.lint.person-reference`,
 **Then** el gate **falla**, nombrando `<Fqcn>::$prop` y lo que falta.
-**Y Given** una línea `person :: <ruta>` cuyo fichero existe pero **no ejecuta el borrado de esa propiedad**,
+**Y Given** una línea `person` **sin dueño**, o `person :: <ruta>` cuyo fichero existe pero **no ejecuta el
+borrado de esa propiedad**,
 **When** corre el gate,
 **Then** **falla igualmente**. Esta segunda mitad es la parte *«correctamente cableada»* de SI-21
-(`epics-gdpr-hardening.md:158-159`) y **aplica bajo cualquier opción de D1**: sin ella, `person :: <cualquier
-fichero existente>` pasa y el registro degenera en documentación, que es SI-23.
+(`epics-gdpr-hardening.md:158-159`): sin ella, `person :: <cualquier fichero existente>` pasa y el registro
+degenera en documentación, que es SI-23.
 *Precedente del check:* `PersonResourceErasureGateTest.php:89-109` (propiedad del colaborador + **la llamada** +
 el literal, sobre fuente sin comentarios). Para las semillas, lo que debe probarse ejecutado es
 `deleteAllForUser` en `EraseIdentitySubject.php:43` y `PurgeUserSessions.php:29`.
+**Y es además el segundo testigo de SI-22** (D3): una clasificación `person` falsa-positiva —`organizationId`,
+`bankId`— no encuentra fichero que la borre y **se refuta sola**, sin declaración que la avale.
+*Estado esperado al aterrizar:* **rojo**, por `Membership::$userId` e `Invitation::$invitedUserId`. Es el
+resultado correcto, no un defecto que arreglar.
 
 **AC2 — El registro se valida contra el CÓDIGO, nunca contra sí mismo (FR3, SI-23).**
 **Given** un registro commiteado que ha divergido del código,
@@ -325,9 +372,9 @@ propiedad fixture y regenerando.
 cableado de AC1**.
 **Given** esas dos líneas,
 **When** corre el gate,
-**Then** sale **verde sobre ellas**.
-*Esto es falsable con independencia de D1, porque las dos semillas tienen dueño bajo cualquier opción.* Si
-`Membership`/`Invitation` aparecen además, y en rojo o en verde, lo decide D1 y lo cubre **AC1** — no este AC.
+**Then** sale **verde sobre ellas** — el mecanismo se estrena sobre comportamiento correcto.
+*El rojo global del gate proviene **solo** de `Membership`/`Invitation` y lo cubre AC1.* No escribas un AC que
+exija `make php.quality` verde: bajo D1=① es rojo a propósito.
 
 **AC5 — La cabecera del registro declara qué NO detecta (FR3).**
 **Given** el registro nuevo,
@@ -342,15 +389,14 @@ los cuatro medidos**:
    (`EventStoreSchemaListener.php:42`): las inyectan listeners `postGenerateSchema` y se escriben por SQL crudo,
    así que **ninguna propiedad de dominio las declara** y ninguna reflexión sobre propiedades las ve.
    `event_store.aggregate_id` es además **la fuga permanente de 1.7/G-5**.
-4. **Y el filtro que decida el universo.** Si el universo se acota por **nombre** (`*user*_id`), esa heurística es
-   un punto ciego de primera clase y va en la cabecera con nombre propio: medido, `Types::GUID` decora **16**
-   propiedades en `api/src` — `BankAccount::$bankId` (`:43`), `Invitation::$organizationId` (`:46`),
-   `Session::$organizationId` (`:40`), `Membership::$organizationId` (`:33`) y `Identifiable::$id` (`:20`) en las
-   8 entidades — y el paso de 16 a 4 lo hace **enteramente** el substring. Contraejemplo vivo de referencia a
-   persona sin «user» en el nombre: `audit_log.actor_id`. Un `$actorId`/`$customerId`/`$createdBy` futuro es
-   plenamente alcanzable por reflexión y el gate **callaría** — que es literalmente la *Story* de esta historia.
-   *Alternativa que evita el punto ciego:* clasificación obligatoria de **toda** columna `Types::GUID`, que es la
-   forma de completitud que usa `.persistent-transport-policy`.
+4. **La dirección de error que el mecanismo NO refuta: llamar `non-person` a una persona.** Por D3 el universo es
+   toda columna `Types::GUID` de entidad (**16** medidas: `BankAccount::$bankId` `:43`,
+   `Invitation::$organizationId` `:46`, `Session::$organizationId` `:40`, `Membership::$organizationId` `:33` y
+   `Identifiable::$id` `:20` en las 8 entidades, más las cuatro referencias a persona), así que **no hay filtro de
+   nombre y ninguna columna se salta**. Y una clasificación `person` falsa se refuta sola (AC1: no hay fichero que
+   la borre). Pero un `person` escrito como `non-person` **pasa**, porque el gate nunca juzga la clasificación —
+   solo que exista y esté cableada. Ese es el reparto que SI-21 declara (*«el humano clasifica, la automatización
+   verifica»*) y **la cabecera lo dice con esas palabras**, junto a que su control es la revisión de arquitectura.
 
 *Y hazlo comprobable en presencia:* como la cabecera vive en fichero aparte y la re-antepone el generador
 (Tarea 3), el gate puede aseverar que el registro commiteado **empieza por los bytes de ese fichero**.
@@ -369,25 +415,29 @@ los cuatro medidos**:
 **Then** su contenido es **byte-idéntico** antes y después: el gate verifica, no genera. Confundirlos reintroduce
 #563.
 
-**AC8 — Sin regresión + gates verdes.**
+**AC8 — Sin regresión, y un único rojo esperado.**
 `make php.quality`, `make php.unit`, `make php.behat`, cada uno desde **ejecución fresca con exit code impreso**.
-Si D1 deja el gate nuevo en rojo, ese rojo es esperado, **está autorizado por escrito** y se declara; todo lo
-demás verde.
+**El único fallo admisible es `php.lint.person-reference`, y solo por `Membership::$userId` e
+`Invitation::$invitedUserId`** — está autorizado por escrito (D1) y se declara en el PR nombrando esas dos
+referencias. Cualquier otro rojo, y cualquier rojo del gate nuevo por otra propiedad, es una regresión.
 
 ## Tasks / Subtasks
 
-- [ ] **Tarea 1 — Registrar D1/D2/D3 y corregir el contrato perdedor (PRECONDICIÓN).** Ninguna otra tarea empieza
-      antes. La corrección de épica que toque **va en este PR**, no diferida:
-  - [ ] D1 → corregir la frase perdedora: o *«llega verde»* de FR4 (`epics:91,418,449`), o el AC de Story 1.3
-        (`epics:488-490`) **más** la anotación del DAG (`arch-addendum:44`).
-  - [ ] D1① exige **autorización explícita del usuario para dejar `main` en rojo** hasta G-1b, y declarar el
-        conflicto con `CLAUDE.md` → *Gates first* en vez de resolverlo en silencio.
-  - [ ] D2① exige corregir `epics:219-221` (*«el hermano replica la estructura»*).
-  - [ ] Corregir la justificación de FR2/NFR8 (`epics:70-74,195-196`; `arch-addendum:25`), que el hecho (A) mide
-        como falsa. NFR8 se declara *«razón medida, no estética»*: dejar en pie una razón medida como falsa es lo
-        que la épica prohíbe. Sustituir por el argumento del puerto (estructural y vivo) y el del scope de
-        cifrado (**etiquetado prospectivo**).
-  - [ ] Voltear `Status:` a `ready-for-dev` y `sprint-status.yaml` a `ready-for-dev` **en el mismo commit**.
+- [x] **Tarea 1 — Registrar D1/D2/D3 y corregir el contrato perdedor (PRECONDICIÓN).** HECHA: ver *Decisiones
+      registradas*. Reprodúcelas en el cuerpo del PR; **no las re-abras**.
+  - [x] D1=① → corregido el *«llega verde»* de FR4 en sus cuatro localizaciones (`epics:91`, `:314`, `:418`,
+        `:449`); el AC de Story 1.3 (`epics:488-490`) y el DAG (`arch-addendum:44`) **se conservan intactos**,
+        que era el punto.
+  - [x] D1① lleva **autorización explícita de Sergio (2026-08-01)** para dejar `main` en rojo hasta G-1b, atada a
+        la condición de secuencia: **G-1b inmediatamente después, G-2 espera**. El conflicto con `CLAUDE.md` →
+        *Gates first* queda **declarado**, no resuelto en silencio: el rojo del gate nuevo es esperado y
+        autorizado; cualquier otro rojo no lo es.
+  - [x] D2 → corregido `epics:219-221` (*«el hermano replica la estructura»* → replica **solo el atributo**, con
+        la razón medida).
+  - [ ] **Pendiente para el dev:** corregir la justificación de FR2/NFR8 (`epics:70-74,195-196`;
+        `arch-addendum:25`), que el hecho (A) mide como falsa. NFR8 se declara *«razón medida, no estética»*:
+        dejar en pie una razón medida como falsa es lo que la épica prohíbe. Sustituir por el argumento del
+        puerto (estructural y vivo) y el del scope de cifrado (**etiquetado prospectivo**).
 - [ ] **Tarea 2 — El atributo hermano (AC3)**
   - [ ] `api/src/Shared/Privacy/Domain/<Nombre>.php`, `#[Attribute(Attribute::TARGET_PROPERTY)]`, pasivo, dueño
         como **string** (hecho (C)). Docblock que enuncie el contrato de **referencia**, sin narrar el cambio ni

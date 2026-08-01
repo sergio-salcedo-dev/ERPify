@@ -88,10 +88,14 @@ FR4: **Gate `make php.lint.person-reference`** (SI-21, SI-23 · G-1a ③) — co
 casa: test bajo
 [`api/tests/Unit/Shared/Architecture/`](../../api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php),
 target `php.lint.*` en [`../../make/php-quality.mk`](../../make/php-quality.mk), cableado en `php.quality`
-**y** `php.quality.dry-run` (CI). **Llega verde**: se estrena declarando las referencias que la cadena de
+**y** `php.quality.dry-run` (CI). **Se estrena sobre comportamiento correcto**: las referencias que la cadena de
 erasure **ya** borra hoy —[`PasswordResetToken::$userId`](../../api/src/Iam/Identity/Domain/Entity/PasswordResetToken.php)
-y [`Session::$userId`](../../api/src/Iam/Session/Domain/Entity/Session.php)—, de modo que cada hueco posterior
-es un gate en rojo que su propia historia cierra.
+y [`Session::$userId`](../../api/src/Iam/Session/Domain/Entity/Session.php)— quedan **verdes**, demostrando que
+el mecanismo funciona; y **el gate aterriza en rojo por `Membership.user_id` e `Invitation.invited_user_id`**,
+que es el estado que FR5 y el segundo AC de la Story 1.3 exigen. *Corregido tras medir: la redacción anterior
+decía «llega verde» a secas y era insatisfacible junto con FR5 — un control verde mientras el defecto está vivo
+es prosa con pasos extra. El propósito de aquella frase (estrenar sobre comportamiento correcto) lo cumplen las
+dos semillas.*
 
 FR5: **Cerrar las referencias huérfanas — `Membership.user_id` (#545) e `Invitation.invited_user_id` (#561)**
 (SI-21, SI-19 · G-1b) — con el gate en rojo, la cadena de erasure
@@ -214,11 +218,18 @@ que un gate que solo entre en `php.quality` es un gate que CI no ejecuta.
 Requisitos técnicos medidos que condicionan el corte, la secuencia o la implementación:
 
 - **Orden safe-first del DAG:** `G-4a → G-1a → (G-1b · G-2) → G-3`. G-4a primero porque es **la única
-  manifestación viva medida del eje** y no depende de nada; G-1a es aditivo y llega verde; G-3 es independiente
-  y puede paralelizarse.
+  manifestación viva medida del eje** y no depende de nada; G-1a es aditivo y **aterriza con el gate en rojo por
+  las dos referencias que G-1b cierra** (las semillas quedan verdes), luego **G-1b va inmediatamente después y
+  G-2 espera**; G-3 es independiente y puede paralelizarse.
 - **Plantilla exacta del mecanismo (FR2–FR4):** `Shared/Privacy` ya es una capability de tres piezas —atributo
   en `Domain/`, puerto `PersonalDataClassifier` en `Application/`, adaptador por reflexión en
-  `Infrastructure/`—. El hermano replica la estructura, **no** el contrato.
+  `Infrastructure/`—. **El hermano replica solo el atributo**: va en `Domain/` como metadata pasiva. *Corregido
+  tras medir: las tres piezas existen porque `PiiDiffSealer` consume el puerto en producción, y este registro
+  **solo lo lee el gate**. Un puerto sin nadie a quien inyectarlo es superficie de producción a cambio de nada
+  (YAGNI). El motor de descubrimiento vive en `api/tests/Support/`, espejo de `PersistentTransportPolicy`, que
+  es el precedente medido de esta forma exacta: registro consumido solo por un gate. El día que aparezca un
+  consumidor de producción —la cadena de erasure leyendo el registro para dirigir el borrado— promoverlo a
+  `Infrastructure/` es un movimiento, no una reescritura.*
 - **Plantilla exacta del gate:** los seis gates existentes son **tests PHPUnit** bajo
   `api/tests/Unit/Shared/Architecture/` invocados por un target `php.lint.*`; el registro
   `.audit-resource-types` vive en la **raíz de `api/`, fuera de todo contexto** — es un artefacto de revisión,
@@ -271,7 +282,7 @@ su **fallo observable** necesita destino de alerta, y eso es observabilidad, no 
 | FR1 | Épica 1 | **1.1** (G-4a) | Fuga viva de `PasswordResetCompleted` en `messenger_messages` + `failed` |
 | FR2 | Épica 1 | **1.2** (G-1a) | Atributo hermano de declaración en `Shared/Privacy` |
 | FR3 | Épica 1 | **1.2** (G-1a) | Generador por reflexión — registro como huella |
-| FR4 | Épica 1 | **1.2** (G-1a) | Gate `php.lint.person-reference`, verde al llegar |
+| FR4 | Épica 1 | **1.2** (G-1a) | Gate `php.lint.person-reference`; semillas verdes, rojo por las dos sin dueño |
 | FR5 | Épica 1 | **1.3** (G-1b) | `Membership.user_id` + `Invitation.invited_user_id` + invariante ≥1 ADMIN |
 | FR6 | Épica 1 | **1.4** (G-2) | Ids de persona fuera de `audit_log.metadata` |
 | FR7 | Épica 1 | **1.5** (G-3 ①) | Segundo testigo de `.audit-resource-types` |
@@ -311,7 +322,8 @@ declarado y verificado**. Las garantías dejan de vivir en prosa y docblock y pa
 
 - **G-4a** — el id real de un sujeto borrado deja de sobrevivir en los transportes Messenger persistidos. Única
   fuga **viva medida**, sin dependencias: entrega valor legal aunque el resto no llegue.
-- **G-1a** — el eje existe y **llega verde**; a partir de ahí cada hueco es un gate rojo con dueño asignado.
+- **G-1a** — el eje existe: las dos referencias que la cadena ya borra quedan **verdes** y demuestran el
+  mecanismo, y los huecos vivos pasan a ser **gate rojo con dueño asignado** en vez de prosa.
 - **G-1b · G-2** — cierran los tres huecos que el gate destapa; G-1b además tapa el agujero del invariante
   **≥1 ADMIN activo**, que hoy lee satisfecho ante una membership fantasma.
 - **G-3** — las dos garantías que hoy *aparentan* funcionar (un check que se autosatisface, un reconciliador que
@@ -415,7 +427,8 @@ para que la obligación no dependa de que alguien se acuerde.
 reflexión que produce el registro, gate `make php.lint.person-reference`.
 **Invariantes que consume:** el patrón de la casa (registro revisable + gate obligatorio), NFR8.
 **Invariantes que establece:** SI-21/NFR1, SI-22/NFR2, SI-23/NFR3.
-**Dependencias:** ninguna. **Llega verde** — habilita 1.3 y 1.4 sin necesitarlas.
+**Dependencias:** ninguna. Habilita 1.3 y 1.4 sin necesitarlas, y **aterriza con el gate en rojo por las dos
+referencias que 1.3 cierra** — el estado que su segundo AC exige.
 
 **Estado medido:** `Shared/Privacy` es una capability de tres piezas —
 [atributo](../../api/src/Shared/Privacy/Domain/PersonalData.php) en `Domain/`, puerto en `Application/`,
@@ -445,8 +458,10 @@ funcionando — declarar una referencia no la convierte en dato cifrado (FR2, NF
 **Given** el registro sembrado con las referencias que la cadena de erasure ya borra hoy
 ([`PasswordResetToken::$userId`](../../api/src/Iam/Identity/Domain/Entity/PasswordResetToken.php),
 [`Session::$userId`](../../api/src/Iam/Session/Domain/Entity/Session.php)),
-**When** corre `make php.quality`,
-**Then** pasa **sin rojo** — el mecanismo se estrena sobre comportamiento correcto (FR4).
+**When** corre el gate,
+**Then** esas dos líneas salen **verdes** — el mecanismo se estrena sobre comportamiento correcto (FR4).
+El rojo del gate proviene **solo** de las referencias sin dueño, y es el estado que FR5 y el segundo AC de la
+Story 1.3 exigen.
 
 **Given** el registro nuevo,
 **When** se lee su cabecera,
