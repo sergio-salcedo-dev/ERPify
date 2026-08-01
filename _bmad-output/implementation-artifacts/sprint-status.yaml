@@ -27,6 +27,14 @@
 #   - optional: Can be completed but not required
 #   - done: Retrospective has been completed
 #
+# INVARIANTE DE NOMBRES (se rompió dos veces; por eso está escrito):
+# ==================================================================
+# La clave de una historia ES el nombre de su fichero: los workflows BMAD resuelven el artefacto como
+# {implementation_artifacts}/{story_key}.md. Si divergen, la historia queda a la vista aquí y es INENCONTRABLE
+# por tooling (bmad-dev-story, bmad-dev-auto, bmad-sprint-status). Al renombrar una, renombra LA OTRA en el
+# mismo commit. Una clave en `backlog` sin fichero NO es una divergencia: backlog significa que la historia
+# solo existe en el fichero de épica.
+
 # WORKFLOW NOTES:
 # ===============
 # - Epic transitions to 'in-progress' automatically when first story is created
@@ -193,7 +201,7 @@ development_status:
   # Extraer un rule object es CRITERIO DE ACEPTACIÓN, no refactor: los AC de falsabilidad son insatisfacibles
   # mientras todo sean métodos privados sobre constantes fijas.
   # DECLARAR EN EL PR: esta historia no protege ningún dato hoy — nada escribe resource_type='User' todavía.
-  g-3a-segundo-testigo-del-registro: ready-for-dev
+  g-3a-segundo-testigo-registro-audit-resource-types: ready-for-dev
   # G-3b: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. Iam/Identity ESTRENA SU PROPIO
   # schedule. La pregunta de frontera estaba sobredimensionada: Iam.Identity ya está en deptrac y su capa
   # Infrastructure ya admite Vendor.Symfony/Psr, y los transportes de scheduler NO se declaran en messenger.yaml
@@ -210,7 +218,7 @@ development_status:
   # INCLUIDO el gate de consumo de schedules: sin él "agendado" es infalsable — un schedule puede shippear muerto
   # con todos los gates verdes. Cuesta un bind mount de solo lectura de los Compose (precedente: gate del
   # contrato de errores). Aplica retroactivamente a los dos schedules existentes.
-  g-3b-schedule-observable-alertado-del-reconciliador: ready-for-dev
+  g-3b-agendado-observable-reconciliador-referencias-borradas: ready-for-dev
   # G-5 (FR10) NO estaba en el corte original: se descubrió midiendo al contextualizar G-4a. El `event_store`
   # conserva el id real del sujeto a perpetuidad (aggregate_id de 6 eventos + payload de SessionStarted y los
   # seis Invitation*), ningún routing lo cambia y la cadena de erasure no toca la tabla — luego G-4a persigue la
