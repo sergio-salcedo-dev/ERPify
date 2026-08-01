@@ -50,6 +50,20 @@ final readonly class DoctrineMembershipRepository implements MembershipRepositor
     }
 
     #[Override]
+    public function deleteAllForUser(string $userId): int
+    {
+        $affected = $this->entityManager->createQueryBuilder()
+            ->delete(Membership::class, 'm')
+            ->where('m.userId = :userId')
+            ->setParameter('userId', $userId)
+            ->getQuery()
+            ->execute()
+        ;
+
+        return \is_int($affected) ? $affected : 0;
+    }
+
+    #[Override]
     public function findByUserId(string $userId): ?Membership
     {
         return $this->entityManager->getRepository(Membership::class)->findOneBy(['userId' => $userId]);

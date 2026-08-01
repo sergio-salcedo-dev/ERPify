@@ -289,6 +289,20 @@ Full reference (mapping table, header rules, observability, code map, test surfa
   resolving each event to the transports it would really be sent through rather than reading routing keys as
   class names. Its blind spots are enumerated in the registry header. It says nothing about `event_store`, which keeps the real
   `aggregate_id` regardless of routing.
+- **A persisted reference to a person needs a named owner of its erasure.** Because no object graph crosses a
+  module boundary, a context that needs a person holds their id — and the two cross-context cases carry no
+  physical foreign key at all, so nothing cascades when the identity row is deleted. Every `Types::GUID` column
+  an entity declares is classified in [`api/.person-reference-policy`](../api/.person-reference-policy) as
+  `non-person` or `person :: <file that erases it>`, and declared at the property with
+  `#[PersonSubjectReference]`
+  ([`api/src/Shared/Privacy/Domain/PersonSubjectReference.php`](../api/src/Shared/Privacy/Domain/PersonSubjectReference.php))
+  — the reference sibling of `#[PersonalData]`, whose contract is treatment.
+  `make php.lint.person-reference` derives the universe by reflection and checks it four ways: every column
+  classified, every line still backed by a column, every `person` line naming a file that holds a collaborator
+  for the entity and calls a deletion on it (matched on comment-stripped source, so a docblock cannot stand in
+  for the call), and the attribute agreeing with the registry. It never judges the classification — a false
+  `person` refutes itself because nothing erases it, but `non-person` over a person's id passes. That
+  asymmetry and the rest of its blind spots are enumerated in the registry header.
 
 ## Configuration
 

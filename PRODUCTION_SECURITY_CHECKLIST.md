@@ -432,6 +432,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       *aggregate*, not the payload — a non-person aggregate carrying a person's id (`Iam.Session`'s
       `userId`, `Iam.Invitation`'s `invitedUserId`) is out of its reach — and it says nothing about
       `event_store`, which keeps the real `aggregate_id` forever regardless of routing (below).
+- [x] **A persisted reference to a person has a named owner of its erasure, and that owner executes it** —
+      closed for every `Types::GUID` column an entity declares. No object graph crosses a module boundary, so
+      a context needing a person holds their id; `membership.user_id` and `iam_invitation.invited_user_id`
+      cross a context and carry no physical foreign key at all, so deleting `identity_user` cascaded to
+      neither and the subject's real id simply stayed behind. Both are now hard-deleted inside the erasure
+      transaction through their owning context's published use case. The rule is declarative:
+      `api/.person-reference-policy` classifies every such column as `non-person` or
+      `person :: <file that erases it>`, `#[PersonSubjectReference]` declares it at the property, and
+      `make php.lint.person-reference` fails the build when a column is unclassified, a line matches no
+      column, a declared owner does not execute the deletion, or the attribute and the registry disagree.
+      Verify when adding an entity column that holds someone's id: classify it, and name what erases it.
+      **Two limits, stated so a green build is not read as more than it is:** the gate cannot judge the
+      classification — a false `person` refutes itself because nothing erases it, but `non-person` written
+      over a person's id passes, and review is the only control on that direction — and it derives from
+      entity properties, so references born in configuration and tables with no Doctrine entity
+      (`audit_log.*`, `event_store.aggregate_id`) are outside it.
 - [ ] **`event_store` retains a person's real id past their own erasure.** Every dispatched event is
       appended with its real `aggregate_id`, and no erasure path touches the table. As the `aggregate_id`:
       `PasswordResetCompleted`, `UserSuspended`, `UserDeactivated`, `UserRolesChanged`, `UserLocked`,

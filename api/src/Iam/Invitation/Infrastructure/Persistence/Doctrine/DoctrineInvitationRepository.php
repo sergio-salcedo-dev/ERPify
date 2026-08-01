@@ -42,4 +42,22 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
     {
         return $this->entityManager->find(Invitation::class, $id, LockMode::PESSIMISTIC_WRITE);
     }
+
+    /**
+     * A directed bulk DELETE rather than load-then-remove: it spares a round trip per row, and the caller
+     * needs the count, not the aggregates. `invited_user_id` is indexed, so the predicate is an index scan.
+     */
+    #[Override]
+    public function deleteAllForInvitedUser(string $userId): int
+    {
+        $affected = $this->entityManager->createQueryBuilder()
+            ->delete(Invitation::class, 'i')
+            ->where('i.invitedUserId = :userId')
+            ->setParameter('userId', $userId)
+            ->getQuery()
+            ->execute()
+        ;
+
+        return \is_int($affected) ? $affected : 0;
+    }
 }

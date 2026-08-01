@@ -1,0 +1,5 @@
+# Fixture registry: the clean twin. Both derived columns are classified and nothing is classified that is not
+# derived, so both directions pass. Its job is to prove the dirty fixtures below fail for the reason claimed
+# and not because the fixture sweep is broken.
+Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonReference\PersonReferenceFixtureEntity::$subjectId => person :: src/Iam/Session/Application/PurgeUserSessions.php
+Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonReference\PersonReferenceFixtureEntity::$tenantId => non-person

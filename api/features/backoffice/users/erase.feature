@@ -5,7 +5,8 @@ Feature: Erase an identity (GDPR right to erasure)
 
   # ADMIN-only (users.erase). One DELETE chains, in a single transaction: the identity hard-delete (the module's
   # PII — email and credential hash), the anonymisation of every audit row the subject authored, the hard-delete
-  # of the subject's sessions, and the combined compliance self-audit — all attributed to the acting admin, never
+  # of the subject's sessions, of the membership that admitted them and of every invitation addressed to them,
+  # and the combined compliance self-audit — all attributed to the acting admin, never
   # the subject. Success is a 204. An admin may not erase themselves (409 self-erasure-forbidden) nor a peer who
   # still carries the role (409 administrator-erasure-requires-demotion) — which subsumes the ≥1-active-admin
   # invariant here, since the last active admin necessarily carries it.
@@ -35,13 +36,15 @@ Feature: Erase an identity (GDPR right to erasure)
     And there should have 1 records in SQL result
     And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '0190f200-0000-7000-8000-00000000ee51' AND action = 'GDPR_ERASURE_EXECUTED' AND actor_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
     And there should have 1 records in SQL result
-    # Budget canary (15 on "default"). In one transaction (+2 BEGIN/COMMIT): the administrator-role EXISTS
+    # Budget canary (17 on "default"). In one transaction (+2 BEGIN/COMMIT): the administrator-role EXISTS
     # probe, the reset-token delete, the identity find and delete, the GDPR_SUBJECT_ERASED insert, the two
     # trail-anonymisation UPDATEs — actor axis and resource axis, one round trip each even when the second
-    # matches nothing — the session delete and the GDPR_ERASURE_EXECUTED insert (= 11). The remaining reads
-    # resolve the acting admin and its permissions before the controller. A shift means an added round trip —
-    # re-measure, don't just bump the number.
-    And 15 requests got executed for doctrine connection "default"
+    # matches nothing — the session delete, the membership delete, the invitation delete and the
+    # GDPR_ERASURE_EXECUTED insert (= 13). The remaining reads resolve the acting admin and its permissions
+    # before the controller. The two reference deletes are one directed DELETE each, which is why they cost
+    # exactly one round trip apiece and not one per row. A shift means an added round trip — re-measure,
+    # don't just bump the number.
+    And 17 requests got executed for doctrine connection "default"
 
   Scenario: Erasure forgets the subject where the trail NAMES them, not only where they acted
     # The crosswalk row: the subject is both actor and resource, which is what a self-service role change
@@ -56,6 +59,31 @@ Feature: Erase an identity (GDPR right to erasure)
     And there should have 0 records in SQL result
     # Both axes collapsed onto the SAME pseudonym — one person must not become two anonymous identities.
     And I execute the SQL query "SELECT id FROM audit_log WHERE id = '0190f200-0000-7000-8000-00000000ef01' AND actor_id = resource_id AND resource_erased = TRUE"
+    And there should have 1 records in SQL result
+
+  Scenario: Erasure reaches the references no foreign key would have cascaded
+    # membership.user_id and iam_invitation.invited_user_id cross a bounded context, so they are referenced by
+    # id with NO physical FK: deleting identity_user cascades to neither, and each has to be erased by the
+    # context that owns it. A terminal invitation is seeded beside a live one — a retired delivery record
+    # still carries the invited person's id, so the lifecycle state buys it no exemption.
+    #
+    # The subject is seeded here rather than taken from the fixtures because the scenarios above erase theirs,
+    # and its membership carries ADMIN while its identity does not — the divergence a demote-then-erase leaves
+    # behind, and the only shape in which an orphan ADMIN membership is reachable at all.
+    Given I execute the SQL query "INSERT INTO identity_user (id, email, password_hash, roles, status, failed_attempts, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fa01', 'demoted@erpify.test', 'x', to_json(ARRAY[]::text[]), 'ACTIVE', 0, NOW(), NOW())" on connection "seed"
+    And I execute the SQL query "INSERT INTO membership (id, user_id, organization_id, roles, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fa11', '0190f200-0000-7000-8000-00000000fa01', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', to_json(ARRAY['ADMIN']::text[]), NOW(), NOW())" on connection "seed"
+    And I execute the SQL query "INSERT INTO iam_invitation (id, organization_id, invited_user_id, token_hash, expires_at, status, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fa21', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', '0190f200-0000-7000-8000-00000000fa01', '70f0759d523f100bb31c67201828646721d77adfb44ce75ab59d9c6c5bf99b29', '2099-01-01 00:00:00', 'SENT', NOW(), NOW())" on connection "seed"
+    And I execute the SQL query "INSERT INTO iam_invitation (id, organization_id, invited_user_id, token_hash, expires_at, status, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fa31', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', '0190f200-0000-7000-8000-00000000fa01', '70f0759d523f100bb31c67201828646721d77adfb44ce75ab59d9c6c5bf99b29', '2099-01-01 00:00:00', 'ACCEPTED', NOW(), NOW())" on connection "seed"
+    And I am logged in as an administrator
+    When I send a "DELETE" request to "/backoffice/users/0190f200-0000-7000-8000-00000000fa01"
+    Then the response status code should be 204
+    # Neither reference outlives the identity it pointed at.
+    And I execute the SQL query "SELECT id FROM membership WHERE user_id = '0190f200-0000-7000-8000-00000000fa01'"
+    And there should have 0 records in SQL result
+    And I execute the SQL query "SELECT id FROM iam_invitation WHERE invited_user_id = '0190f200-0000-7000-8000-00000000fa01'"
+    And there should have 0 records in SQL result
+    # Scoped to the subject: the acting administrator's own membership is untouched.
+    And I execute the SQL query "SELECT id FROM membership WHERE user_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
     And there should have 1 records in SQL result
 
   @anonymous

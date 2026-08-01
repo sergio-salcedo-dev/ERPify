@@ -27,10 +27,30 @@ final class InMemoryMembershipRepository implements MembershipRepository
         $this->saved[] = $membership;
     }
 
+    /**
+     * Drops the row as well as recording the call. A double that only flipped the flag would let "the
+     * membership is gone" pass against a store that still holds it — the assertion and the fact would have
+     * nothing to do with each other.
+     */
     #[Override]
     public function remove(Membership $membership): void
     {
         $this->removeCalled = true;
+        $this->saved = \array_values(
+            \array_filter($this->saved, static fn (Membership $m): bool => $m !== $membership),
+        );
+    }
+
+    #[Override]
+    public function deleteAllForUser(string $userId): int
+    {
+        $remaining = \array_values(
+            \array_filter($this->saved, static fn (Membership $m): bool => $m->userId() !== $userId),
+        );
+        $deleted = \count($this->saved) - \count($remaining);
+        $this->saved = $remaining;
+
+        return $deleted;
     }
 
     #[Override]

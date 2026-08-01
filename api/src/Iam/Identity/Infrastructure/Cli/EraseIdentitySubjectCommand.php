@@ -120,7 +120,8 @@ final class EraseIdentitySubjectCommand extends Command
 
         if (!$result->erasedAnything()) {
             $io->warning(
-                'Nothing to erase — the subject has no live identity, pending reset tokens, audit trail or sessions.',
+                'Nothing to erase — the subject has no live identity, pending reset tokens, audit trail, '
+                . 'sessions, membership or invitations.',
             );
 
             return Command::SUCCESS;
@@ -128,13 +129,16 @@ final class EraseIdentitySubjectCommand extends Command
 
         $io->success(\sprintf(
             'Erased subject %s (identity removed: %s, reset tokens deleted: %d, audit rows authored '
-            . 'anonymised: %d, audit rows naming the subject anonymised: %d, sessions removed: %d).',
+            . 'anonymised: %d, audit rows naming the subject anonymised: %d, sessions removed: %d, '
+            . 'memberships removed: %d, invitations removed: %d).',
             $userId,
             $result->identityErased ? 'yes' : 'no',
             $result->resetTokensDeleted,
             $result->anonymizedAuditRows,
             $result->anonymizedResourceRows,
             $result->sessionsDeleted,
+            $result->membershipsDeleted,
+            $result->invitationsDeleted,
         ));
 
         return Command::SUCCESS;

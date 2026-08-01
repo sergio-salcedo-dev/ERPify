@@ -7,14 +7,18 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Cli;
 use Erpify\Iam\Identity\Application\EraseIdentitySubject;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Infrastructure\Cli\EraseIdentitySubjectCommand;
+use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
+use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryActiveAdministratorDirectory;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryPasswordResetTokenRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
+use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Organization\Membership\Application\InMemoryMembershipRepository;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
@@ -127,6 +131,8 @@ final class EraseIdentitySubjectCommandTest extends TestCase
             new RecordingAuditResourceAnonymiser(matchCount: 0),
             $directory ?? new InMemoryActiveAdministratorDirectory([self::OTHER_ADMIN_ID => true]),
             new PurgeUserSessions(new InMemorySessionRepository()),
+            new PurgeUserMembership(new InMemoryMembershipRepository()),
+            new PurgeUserInvitations(new InMemoryInvitationRepository()),
             $audit,
             new FixedActorContextFactory(ActorContext::system()),
             new InlineTransactionManager(),

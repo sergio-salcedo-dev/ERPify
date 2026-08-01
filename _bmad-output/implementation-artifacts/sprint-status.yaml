@@ -1,5 +1,5 @@
 # generated: 2026-06-23
-# last_updated: 2026-07-30
+# last_updated: 2026-08-01
 # project: ERPify
 # project_key: NOKEY
 # tracking_system: file-system
@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-07-30
+last_updated: 2026-08-01
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -184,9 +184,24 @@ development_status:
   # 2º AC de G-1b (epics:488-490) — y `main` NUNCA queda roto, así que G-2 deja de estar bloqueada y puede
   # correr en paralelo como el DAG preveía. No colapses ambos pasos en un commit único: escondería la evidencia.
   g-1a-eje-declaracion-atributo-registro-verificado-gate: ready-for-dev
-  # G-1b viaja en la PR de G-1a (ver arriba). Sigue en backlog porque aún no tiene artefacto de contexto: su
-  # 2º AC presupone el gate de 1.2 en rojo por sus dos referencias, y ese estado ya está garantizado por D1=①.
-  g-1b-referencias-huerfanas-membership-invitation: backlog
+  # G-1b viaja en la PR de G-1a (ver arriba). Su 2º AC presupone el gate de 1.2 en rojo por sus dos referencias, y
+  # ese estado ya está garantizado por D1=①. Contexto escrito (2026-08-01) con UNA decisión que el corte no
+  # preveía, tomada y registrada por Sergio: D1 = REENCUADRE A PREVENCIÓN del 3er AC. La premisa del corte
+  # (epics:541-544, «hoy una membresía ADMIN huérfana lee satisfecho el invariante ≥1 ADMIN») se midió FALSA: el
+  # único lector es ActiveAdministratorDirectory sobre `identity_user` y SOLO esa tabla
+  # (DoctrineActiveAdministratorDirectory:46-53), y EraseIdentitySubject:48 hard-borra esa fila, así que la
+  # membresía huérfana es INVISIBLE al invariante. Prueba: demoteEveryAdministrator() toca solo identity_user y los
+  # 409 siguen verdes — con un lector de membership, membership_admin los rescataría. Además findByOrganizationId
+  # tiene CERO llamadores de producción: su docblock (MembershipRepository:13-15) es prosa aspiracional de #460, y
+  # se corrige por boy-scout. La consecuencia de seguridad es LATENTE, no viva; se DECLARA ASÍ EN EL PR, como G-3a.
+  # Descartado construir ya el lector basado en membership (cruza contexto en el hot path de auth, rompe los 5
+  # casos de DoctrineActiveAdministratorDirectoryTest y dos Functional, y exigiría un JOIN que la arquitectura veta).
+  # Otros hechos que el corte NO registra y el contexto sí: la cadena son 6 eslabones + 2 guardas, no 4, y los dos
+  # nuevos van ENTRE el 5 y el 6 (después, erasedAnything() no los vería); `invited_user_id` YA está indexado;
+  # `membership.user_id` es UNIQUE y `invited_user_id` no; ninguna de las dos referencias es anulable en dominio
+  # (hard delete es la única vía sin migración); el metadata del auto-audit admite CONTEOS y nunca ids; y
+  # InMemoryMembershipRepository::remove() es un flag no-op que haría pasar en falso un test de «membresía borrada».
+  g-1b-referencias-huerfanas-membership-invitation: ready-for-dev
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
   # aceptación que YA EXISTE (features/backoffice/users/erase.feature:46-59), declarado como TERCER segmento de

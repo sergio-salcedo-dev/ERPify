@@ -17,7 +17,12 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * {@see \Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject} (kept per-module: each context
  * owns forgetting its own subject data). It hard-deletes the identity aggregate (the module's PII is the
  * user row itself — email and credential hash) AND every pending password-reset token, in one transaction,
- * so no `user_id` linkage or credential-recovery artefact outlives the subject.
+ * so no credential-recovery artefact outlives the subject.
+ *
+ * It answers for this module's rows alone. A `user_id` held by another context carries no foreign key, so
+ * nothing here cascades to it: each such reference is erased by the context that owns it, chained by
+ * {@see FulfilIdentityErasure}, and the inventory of every persisted person identifier — with the file
+ * obliged to erase each one — is `api/.person-reference-policy`.
  *
  * The compliance record is a `GDPR_SUBJECT_ERASED` security audit entry committed in the same transaction —
  * its metadata carries only the pseudonymous subject id, never the erased email. Idempotent: a re-run finds

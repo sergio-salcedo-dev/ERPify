@@ -1,0 +1,86 @@
+# Every persisted identifier column an entity declares, classified by whether it holds the identifier of a
+# NATURAL PERSON — and, when it does, naming the file obliged to erase it.
+#
+# The key is `<Fqcn>::$<property>`, the granularity of the fact itself. A coarser key (the entity, the table)
+# averages over columns with different meanings and hands a green light to whatever the average hides.
+#
+# The rule this file exists to enforce: a persisted reference to a person must have an identified owner of its
+# erasure, and that owner must actually execute it. Cross-context references are by id and never by mapped
+# association, so nothing physical drags a person's id out of a foreign table when their identity is deleted —
+# `membership.user_id` and `iam_invitation.invited_user_id` deliberately carry no foreign key. That makes the
+# obligation distributed, and a distributed obligation is only safe when the moment it arises is impossible to
+# pass in silence. Every bounded context that comes to touch a person will mint another one of these columns.
+#
+# Format, one per line:
+#   <Fqcn>::$<property> => non-person
+#   <Fqcn>::$<property> => person :: <path, relative to api/, of the file that erases it>
+#
+# There is deliberately no `person` without an owner. An unowned person reference IS the violation this file
+# exists to catch, so it cannot also be a spelling that passes. If a sanctioned exception is ever needed it
+# gets a verb of its own, never a silent `person`.
+#
+# The gate (PersonReferenceGateTest, run by `make php.lint.person-reference`) fails the build when a
+# `Types::GUID` column reaches an entity without a line here, when a line no longer matches any column, when a
+# `person` line names a file that does not erase that reference, and when a `#[PersonSubjectReference]`
+# declared at a property disagrees with the line here.
+#
+# ---------------------------------------------------------------------------------------------------------
+# What it deliberately does NOT do. Read this list as the specification of the gate's blind spots — a green
+# build proves what is below the line, and nothing above it.
+#
+#   - IT CANNOT JUDGE THE CLASSIFICATION, AND THE TWO DIRECTIONS OF ERROR ARE NOT SYMMETRIC. Calling a
+#     non-person a `person` refutes itself: the line then has to name a file that erases it, and for
+#     `organizationId` or `bankId` no such file exists, so the build stops. The opposite direction — writing
+#     `non-person` over a column that does hold a person's id — PASSES, because the gate only checks that a
+#     classification exists and is wired, never what it means. That is the division of labour the axis is
+#     built on: the human classifies, the automation verifies. Architecture review is the control on the
+#     half the automation cannot reach.
+#   - It does not reach references born in CONFIGURATION. A person id that arrives through a route default, a
+#     service argument or a YAML parameter is declared by no property, so no reflection over properties sees
+#     it. Closing that is FR9 of the GDPR-hardening epic, deferred with the ownership question it opens.
+#   - It does not reach TABLES WITH NO DOCTRINE ENTITY. `audit_log.actor_id`, `audit_log.resource_id`,
+#     `audit_log.metadata` and `event_store.aggregate_id` are injected by `postGenerateSchema` listeners and
+#     written through raw SQL: no domain property declares them, so this sweep is structurally blind to all
+#     four. They are covered by their own controls — `.audit-resource-types` for the resource axis — except
+#     `event_store.aggregate_id`, which is a standing leak with its own story.
+#   - It only sees `Types::GUID`. A person's id persisted in a plain string column, or in a column whose type
+#     Doctrine infers rather than the property declaring it, is invisible here — a rename of the type is
+#     enough to leave the sweep, and nothing below this line would change.
+#   - The wiring check proves a CALL EXISTS, not that it RUNS. It reads the declared owner's comment-stripped
+#     source for a collaborator naming the entity and a deletion called on it; a call behind a condition that
+#     is never true satisfies it. Runtime reachability is proven by the owning context's acceptance scenario,
+#     not here.
+# ---------------------------------------------------------------------------------------------------------
+
+# Surrogate identifiers of aggregates that are not people.
+Erpify\Backoffice\Bank\Domain\Entity\Bank::$id => non-person
+Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::$id => non-person
+Erpify\Organization\Organization\Domain\Entity\Organization::$id => non-person
+Erpify\Organization\Membership\Domain\Entity\Membership::$id => non-person
+Erpify\Iam\Invitation\Domain\Entity\Invitation::$id => non-person
+Erpify\Iam\Session\Domain\Entity\Session::$id => non-person
+Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$id => non-person
+
+# References between aggregates that are not people.
+Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::$bankId => non-person
+Erpify\Organization\Membership\Domain\Entity\Membership::$organizationId => non-person
+Erpify\Iam\Invitation\Domain\Entity\Invitation::$organizationId => non-person
+Erpify\Iam\Session\Domain\Entity\Session::$organizationId => non-person
+
+# The person's own identifier. `identity_user.id` IS the subject, so classifying it non-person would be the
+# most consequential false statement this file could carry. Its owner hard-deletes the row: the whole
+# aggregate is the personal datum, so there is nothing left to scrub afterwards. It carries no
+# `#[PersonSubjectReference]` because the property is declared in the shared `Identifiable` trait, and
+# annotating it there would propagate the declaration to all eight entities that use it.
+Erpify\Iam\Identity\Domain\Entity\User::$id => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
+
+# References to a person held by another aggregate. Each row is deleted outright rather than scrubbed: none
+# of these three tables has a business meaning that survives the person it is about.
+Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
+Erpify\Iam\Session\Domain\Entity\Session::$userId => person :: src/Iam/Session/Application/PurgeUserSessions.php
+
+# The two that cross a bounded context, and the only ones with no physical foreign key at all: deleting the
+# identity row cascades to neither. Each is erased by its owning context's published use case, chained into
+# the erasure transaction — the person's context orchestrates, but never reaches into another's storage.
+Erpify\Organization\Membership\Domain\Entity\Membership::$userId => person :: src/Organization/Membership/Application/PurgeUserMembership.php
+Erpify\Iam\Invitation\Domain\Entity\Invitation::$invitedUserId => person :: src/Iam/Invitation/Application/PurgeUserInvitations.php
