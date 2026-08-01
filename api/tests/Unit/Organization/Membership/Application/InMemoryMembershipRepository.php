@@ -41,12 +41,18 @@ final class InMemoryMembershipRepository implements MembershipRepository
         );
     }
 
+    /**
+     * Compares case-insensitively, like the column it stands in for: `membership.user_id` is a Postgres
+     * `uuid`, so the real adapter matches one id spelled in either case. A `!==` here would make the double
+     * STRICTER than production — and the divergence would be invisible, because no test can fail on it.
+     */
     #[Override]
     public function deleteAllForUser(string $userId): int
     {
-        $remaining = \array_values(
-            \array_filter($this->saved, static fn (Membership $m): bool => $m->userId() !== $userId),
-        );
+        $remaining = \array_values(\array_filter(
+            $this->saved,
+            static fn (Membership $m): bool => 0 !== \strcasecmp($m->userId(), $userId),
+        ));
         $deleted = \count($this->saved) - \count($remaining);
         $this->saved = $remaining;
 

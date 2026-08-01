@@ -7,7 +7,9 @@ namespace Erpify\Tests\Support;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping\Column;
 use Doctrine\ORM\Mapping\Entity;
+use Doctrine\ORM\Mapping\JoinColumn;
 use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
+use Error;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionProperty;
@@ -173,7 +175,13 @@ final class PersonReferences
         }
 
         foreach ($collaborators as $collaborator) {
-            $call = \sprintf('/\$this->%s->(?:%s)\w*\(/', \preg_quote($collaborator, '/'), self::ERASURE_VERBS);
+            // `\s*` and the optional `?` admit the fluent and null-safe forms the repo already writes; without
+            // them the check rejects a correct owner purely for putting the call on the next line.
+            $call = \sprintf(
+                '/\$this->%s\s*\??->(?:%s)\w*\(/',
+                \preg_quote($collaborator, '/'),
+                self::ERASURE_VERBS,
+            );
 
             if (1 === \preg_match($call, $code)) {
                 return null;
@@ -195,9 +203,22 @@ final class PersonReferences
      */
     public function entityOf(string $key): string
     {
-        $fqcn = \substr($key, 0, (int) \strpos($key, '::'));
+        $separator = \strpos($key, '::');
 
-        return \substr($fqcn, (int) \strrpos($fqcn, '\\') + 1);
+        // A key without the separator would leave an EMPTY entity name, and an empty name turns the
+        // collaborator pattern into one that matches any typed property at all — the wiring check would then
+        // pass on whichever erasure verb the declared owner happens to call, about any entity.
+        if (false === $separator) {
+            throw new RuntimeException(\sprintf(
+                'Malformed registry key "%s": expected `<Fqcn>::$<property>`.',
+                $key,
+            ));
+        }
+
+        $fqcn = \substr($key, 0, $separator);
+        $namespace = \strrpos($fqcn, '\\');
+
+        return false === $namespace ? $fqcn : \substr($fqcn, $namespace + 1);
     }
 
     private function scan(): void
@@ -218,18 +239,16 @@ final class PersonReferences
             }
 
             $reflection = new ReflectionClass($fqcn);
+            // Only the UNIVERSE is restricted to concrete entities — an abstract class backs no table. The
+            // declaration sweep deliberately covers every class, because an attribute on something that is
+            // not a persisted column has to surface as a failure rather than fall silently outside it.
+            $isEntity = !$reflection->isAbstract() && [] !== $reflection->getAttributes(Entity::class);
 
-            if ($reflection->isAbstract()) {
-                continue;
-            }
-
-            $isEntity = [] !== $reflection->getAttributes(Entity::class);
-
-            foreach ($reflection->getProperties() as $property) {
+            foreach ($this->propertiesOf($reflection) as $property) {
                 $key = \sprintf('%s::$%s', $fqcn, $property->getName());
 
                 foreach ($property->getAttributes(PersonSubjectReference::class) as $attribute) {
-                    $declaredOwners[$key] = $attribute->newInstance()->erasedBy;
+                    $declaredOwners[$key] = $this->declaredOwnerOf($attribute, $key);
                 }
 
                 if ($isEntity && $this->isIdentifierColumn($property)) {
@@ -249,6 +268,54 @@ final class PersonReferences
     }
 
     /**
+     * Every property whose column belongs to this class's table, including the ones `getProperties()` will
+     * not return: a PRIVATE property declared on a parent class. Doctrine maps those onto the child's table
+     * all the same — it is the shape a `#[ORM\MappedSuperclass]` takes — so a sweep that trusted
+     * `getProperties()` alone would let a person's id be persisted through a column it never sees.
+     *
+     * @param ReflectionClass<object> $reflection
+     *
+     * @return array<string, ReflectionProperty>
+     */
+    private function propertiesOf(ReflectionClass $reflection): array
+    {
+        $properties = [];
+
+        foreach ($reflection->getProperties() as $reflectionProperty) {
+            $properties[$reflectionProperty->getName()] = $reflectionProperty;
+        }
+
+        for ($parent = $reflection->getParentClass(); false !== $parent; $parent = $parent->getParentClass()) {
+            foreach ($parent->getProperties(ReflectionProperty::IS_PRIVATE) as $reflectionProperty) {
+                $properties[$reflectionProperty->getName()] ??= $reflectionProperty;
+            }
+        }
+
+        return $properties;
+    }
+
+    /**
+     * The owner a declaration carries, with the property named if the attribute cannot be built at all.
+     *
+     * PHP raises a bare `Error` for a repeated non-repeatable attribute, and it names the attribute class but
+     * neither the property nor the file — which would abort every check here with a message nobody can act on.
+     *
+     * @param ReflectionAttribute<PersonSubjectReference> $attribute
+     */
+    private function declaredOwnerOf(ReflectionAttribute $attribute, string $key): string
+    {
+        try {
+            return $attribute->newInstance()->erasedBy;
+        } catch (Error $error) {
+            throw new RuntimeException(
+                \sprintf('Cannot read the erasure owner declared on %s: %s', $key, $error->getMessage()),
+                $error->getCode(),
+                previous: $error,
+            );
+        }
+    }
+
+    /**
      * A persisted `Types::GUID` column. Both declaration forms count — declared in the class body (the form
      * both seeds use) and promoted in the constructor — because `getProperties()` returns them alike and a
      * gate blind to either half would miss whichever the next entity happens to pick.
@@ -257,6 +324,14 @@ final class PersonReferences
     {
         if ($property->isStatic()) {
             return false;
+        }
+
+        // A to-one association persists a foreign key exactly as a scalar `Types::GUID` column does, and it
+        // declares no `#[ORM\Column]` at all — so reading only that attribute would let the most idiomatic
+        // Doctrine mapping there is carry a person's id past this sweep. Cross-MODULE references must stay
+        // by id, but nothing stops an association inside one module, and its column is just as persisted.
+        if ([] !== $property->getAttributes(JoinColumn::class)) {
+            return true;
         }
 
         return \array_any(

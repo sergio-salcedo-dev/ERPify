@@ -10,7 +10,8 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 /**
  * Hard-deletes every invitation addressed to the user — the published seam a GDPR identity erasure consumes
  * so the delivery record that onboarded the person does not outlive them. `iam_invitation.invited_user_id`
- * carries no physical foreign key, so deleting the identity row cascades nothing; and the terminal states
+ * is a plain id with no constraint behind it — nothing in the schema references `identity_user`, so
+ * deleting the identity row cascades nowhere; and the terminal states
  * keep the id just as the pending ones do, because the lifecycle of an invitation has no bearing on whether
  * the column is personal data.
  *

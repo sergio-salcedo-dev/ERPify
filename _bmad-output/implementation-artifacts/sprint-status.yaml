@@ -183,7 +183,7 @@ development_status:
   # las ejecuta. El rojo intermedio es OBLIGATORIO y visible en la secuencia de commits — es la evidencia del
   # 2º AC de G-1b (epics:488-490) — y `main` NUNCA queda roto, así que G-2 deja de estar bloqueada y puede
   # correr en paralelo como el DAG preveía. No colapses ambos pasos en un commit único: escondería la evidencia.
-  g-1a-eje-declaracion-atributo-registro-verificado-gate: ready-for-dev
+  g-1a-eje-declaracion-atributo-registro-verificado-gate: review
   # G-1b viaja en la PR de G-1a (ver arriba). Su 2º AC presupone el gate de 1.2 en rojo por sus dos referencias, y
   # ese estado ya está garantizado por D1=①. Contexto escrito (2026-08-01) con UNA decisión que el corte no
   # preveía, tomada y registrada por Sergio: D1 = REENCUADRE A PREVENCIÓN del 3er AC. La premisa del corte
@@ -201,7 +201,7 @@ development_status:
   # `membership.user_id` es UNIQUE y `invited_user_id` no; ninguna de las dos referencias es anulable en dominio
   # (hard delete es la única vía sin migración); el metadata del auto-audit admite CONTEOS y nunca ids; y
   # InMemoryMembershipRepository::remove() es un flag no-op que haría pasar en falso un test de «membresía borrada».
-  g-1b-referencias-huerfanas-membership-invitation: ready-for-dev
+  g-1b-referencias-huerfanas-membership-invitation: review
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
   # aceptación que YA EXISTE (features/backoffice/users/erase.feature:46-59), declarado como TERCER segmento de

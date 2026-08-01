@@ -16,6 +16,12 @@ trait Identifiable
      * No {@see ORM\GeneratedValue} — Doctrine must not overwrite the app-assigned id (it previously
      * minted a divergent v7 PK, breaking id-based domain-event consumers on creation).
      */
+    /**
+     * Never annotate this with `#[PersonSubjectReference]`: the trait is used by every entity, so one
+     * declaration here would claim the same erasure owner for all of their primary keys at once. Whether an
+     * id denotes a person is decided per entity, in `api/.person-reference-policy` — which is where
+     * `User::$id` is classified.
+     */
     #[ORM\Id]
     #[ORM\Column(type: Types::GUID, unique: true)]
     #[Assert\Uuid(strict: true)]

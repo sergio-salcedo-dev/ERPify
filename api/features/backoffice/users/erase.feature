@@ -62,9 +62,9 @@ Feature: Erase an identity (GDPR right to erasure)
     And there should have 1 records in SQL result
 
   Scenario: Erasure reaches the references no foreign key would have cascaded
-    # membership.user_id and iam_invitation.invited_user_id cross a bounded context, so they are referenced by
-    # id with NO physical FK: deleting identity_user cascades to neither, and each has to be erased by the
-    # context that owns it. A terminal invitation is seeded beside a live one — a retired delivery record
+    # membership.user_id and iam_invitation.invited_user_id cross a bounded context, so they are referenced
+    # by id. Nothing in the schema references identity_user, so deleting it cascades nowhere and each has to
+    # be erased by the context that owns it. A terminal invitation is seeded beside a live one — a retired delivery record
     # still carries the invited person's id, so the lifecycle state buys it no exemption.
     #
     # The subject is seeded here rather than taken from the fixtures because the scenarios above erase theirs,

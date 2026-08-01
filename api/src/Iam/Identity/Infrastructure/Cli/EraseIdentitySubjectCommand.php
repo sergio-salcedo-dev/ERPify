@@ -19,7 +19,8 @@ use Throwable;
 /**
  * GDPR "right to erasure" for an identity subject, run as one chained operation through {@see FulfilIdentityErasure}:
  * it hard-deletes the user row (the module's PII — email and credential hash) and every pending password-reset
- * token, anonymises every audit row the subject authored, and hard-deletes the subject's sessions — atomically —
+ * token, anonymises every audit row the subject authored, and hard-deletes the subject's sessions, the
+ * membership that admitted them and every invitation addressed to them — atomically —
  * leaving `GDPR_SUBJECT_ERASED` and `GDPR_ERASURE_EXECUTED` security entries as the compliance record. Because it
  * shares that use case with the identity console, the CLI also enforces the ≥1-active-administrator guard (erasing
  * the last active admin fails). The `system` actor it runs as carries no id, so the self-erasure refusal never
@@ -48,8 +49,9 @@ final class EraseIdentitySubjectCommand extends Command
             ->setHelp(<<<'HELP'
                 The <info>%command.name%</info> command hard-deletes an identity (its email and credential
                 hash) together with every pending password-reset token, anonymises every audit row the subject
-                authored and hard-deletes its sessions — atomically — so no <comment>user_id</comment> linkage,
-                recovery artefact or residual session PII outlives the subject. The erasure self-audits as
+                authored and hard-deletes its sessions, its organization membership and every invitation
+                addressed to it — atomically — so no <comment>user_id</comment> linkage, recovery artefact or
+                residual session PII outlives the subject. The erasure self-audits as
                 <comment>GDPR_SUBJECT_ERASED</comment> and <comment>GDPR_ERASURE_EXECUTED</comment> security
                 entries, and is refused if the subject is the last active administrator.
 
@@ -96,7 +98,8 @@ final class EraseIdentitySubjectCommand extends Command
             true !== $input->getOption('force')
             && !$io->confirm(
                 'Irreversibly erase this identity (removes the user and its reset tokens, anonymises its audit '
-                . 'trail and drops its sessions)?',
+                . 'trail, and drops its sessions, its organization membership and every invitation addressed '
+                . 'to it)?',
                 false,
             )
         ) {

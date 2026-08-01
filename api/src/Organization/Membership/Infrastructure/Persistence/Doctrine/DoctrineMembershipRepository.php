@@ -10,6 +10,7 @@ use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Membership\Domain\Exception\UserAlreadyMember;
 use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
 use Override;
+use RuntimeException;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
@@ -60,7 +61,18 @@ final readonly class DoctrineMembershipRepository implements MembershipRepositor
             ->execute()
         ;
 
-        return \is_int($affected) ? $affected : 0;
+        // Coerce rather than fall back to 0: a driver reporting the count as a numeric STRING would
+        // otherwise report "nothing deleted" for rows that really went, and an erasure reaching only
+        // this table would then skip the compliance record its own mutation requires.
+        if (!\is_numeric($affected)) {
+            throw new RuntimeException(\sprintf(
+                'Deleting the %s rows of a subject returned a non-numeric affected-row count: %s.',
+                'membership',
+                \get_debug_type($affected),
+            ));
+        }
+
+        return (int) $affected;
     }
 
     #[Override]

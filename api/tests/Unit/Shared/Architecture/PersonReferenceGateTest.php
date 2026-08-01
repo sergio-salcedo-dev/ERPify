@@ -16,8 +16,8 @@ use PHPUnit\Framework\TestCase;
  * {@see PersonReferenceRulesGateTest}; this class is the assertions over the real tree.
  *
  * It exists because no object graph crosses a module boundary in this codebase: a context that needs a person
- * refers to them by id, with no mapped association and, for the cross-context cases, no physical foreign key
- * at all. Nothing therefore drags a person's id out of a foreign table when their identity is deleted, so
+ * refers to them by id, with no mapped association — and nothing in the schema references `identity_user` at
+ * all. Nothing therefore drags a person's id out of another table when their identity is deleted, so
  * every such column is a separate, remembered obligation — and every new context that touches a person mints
  * another one.
  *
@@ -170,6 +170,13 @@ final class PersonReferenceGateTest extends TestCase
         $this->assertNotEmpty(
             \array_filter($references->classification(), static fn (?string $owner): bool => null !== $owner),
             'The registry classifies no column as a person reference, so the wiring check can never fire.',
+        );
+        // Both declaration checks iterate the declarations themselves, so an empty set satisfies each of them
+        // vacuously: delete every #[PersonSubjectReference] in the tree and, without this leg, the build stays
+        // green while the property-side declaration has silently disappeared.
+        $this->assertNotEmpty(
+            $references->declaredOwners(),
+            'No property declares a #[PersonSubjectReference], so the agreement check can never fire.',
         );
     }
 

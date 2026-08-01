@@ -58,7 +58,9 @@ final class InMemoryInvitationRepository implements InvitationRepository
         $deleted = 0;
 
         foreach ($this->byId as $id => $invitation) {
-            if ($invitation->invitedUserId() !== $userId) {
+            // Case-insensitive like the Postgres `uuid` column the real adapter matches on; a `!==` here
+            // would make the double stricter than production, and nothing could ever fail on the difference.
+            if (0 !== \strcasecmp($invitation->invitedUserId(), $userId)) {
                 continue;
             }
 
@@ -66,9 +68,10 @@ final class InMemoryInvitationRepository implements InvitationRepository
             ++$deleted;
         }
 
-        $this->saved = \array_values(
-            \array_filter($this->saved, static fn (Invitation $i): bool => $i->invitedUserId() !== $userId),
-        );
+        $this->saved = \array_values(\array_filter(
+            $this->saved,
+            static fn (Invitation $i): bool => 0 !== \strcasecmp($i->invitedUserId(), $userId),
+        ));
 
         return $deleted;
     }

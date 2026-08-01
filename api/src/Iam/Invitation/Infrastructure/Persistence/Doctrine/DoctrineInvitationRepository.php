@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
 use Override;
+use RuntimeException;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
@@ -58,6 +59,17 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
             ->execute()
         ;
 
-        return \is_int($affected) ? $affected : 0;
+        // Coerce rather than fall back to 0: a driver reporting the count as a numeric STRING would
+        // otherwise report "nothing deleted" for rows that really went, and an erasure reaching only
+        // this table would then skip the compliance record its own mutation requires.
+        if (!\is_numeric($affected)) {
+            throw new RuntimeException(\sprintf(
+                'Deleting the %s rows of a subject returned a non-numeric affected-row count: %s.',
+                'invitation',
+                \get_debug_type($affected),
+            ));
+        }
+
+        return (int) $affected;
     }
 }

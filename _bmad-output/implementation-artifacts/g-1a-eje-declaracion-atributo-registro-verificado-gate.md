@@ -4,7 +4,7 @@ baseline_commit: 9310efeb
 
 # Story 1.2 (G-1a): El eje de declaración — atributo hermano, registro verificado contra el código y gate que rompe el build
 
-Status: ready-for-dev
+Status: review
 
 <!-- Validación opcional: correr `validate-create-story` antes de `dev-story` para un check de calidad. -->
 
@@ -662,6 +662,69 @@ listas (declarado **más fuerte** que NFR11); la falsabilidad de AC2 en las dos 
 eslabones del hecho (A); y las citas de `php-quality.mk`, `ci.yml:115`, `deptrac.yaml`, `services.yaml`,
 `doctrine.yaml`, `regen-baseline.sh`, `PersonResourceErasureGateTest`, `EventDispatchGateTest`, `ApiSourceFiles`,
 `AllowlistFile`, `.audit-resource-types`, `.persistent-transport-policy`, `Identifiable` y `erase.feature:44`.
+
+## Pase adversarial — IMPLEMENTACIÓN. REGISTRADO (`CLAUDE.md` → *Security review* → **Process**)
+
+**Dónde queda el registro: aquí, y reproducido en el cuerpo de la PR #616.** **Cuándo:** 2026-08-01, sobre el
+código ya escrito y con los tres gates en verde — es decir, sobre lo que un build verde NO detecta.
+**Quién:** tres lecturas hostiles independientes, en contexto fresco, por revisores **distintos del autor**,
+con instrucción explícita de refutar, prohibición de aceptar como cierta ninguna afirmación del código, de los
+docblocks o del cuerpo de la PR, y obligación de re-medir contra el árbol: un pase adversarial general, un
+cazador de casos límite sobre el motor, y un auditor de aceptación contra los dos artefactos y la épica.
+**Alcance declarado:** los tres commits de la entrega, **cubriendo las dos historias** — el eje de G-1a y,
+por G-1b, la cadena ejecutando `Membership::$userId` e `Invitation::$invitedUserId`, el método de puerto
+nuevo de `InvitationRepository`, y el invariante ≥1 ADMIN. **No cubre:** ejecución de Behat (prohibida a los
+revisores por resetear la BD; la corrió el autor) ni PWA (cero cambios).
+
+**Veredicto: el eje aguanta; la implementación tenía un agujero grave y varias afirmaciones falsas.**
+
+- **GRAVE — el test del invariante era vacuo, y los tres lo habrían dejado pasar salvo por la medición.** Su
+  `INSERT ... SELECT ... FROM organization LIMIT 1` insertaba **cero filas** (la BD de test se migra y nunca
+  se provisiona), así que la membresía fantasma nunca existía y las dos aserciones ya eran ciertas sin ella.
+  Verde, y sin probar nada — exactamente el anti-patrón 3 de G-1a («un AC que no puede fallar»), cometido por
+  el autor tras haberlo leído. **Corregido:** el test crea su propia organización y **afirma que el INSERT
+  afectó a 1 fila** antes de asertar.
+- **ALTO — dos huecos estructurales en la derivación.** Una columna GUID `private` declarada en un padre
+  abstracto (la forma de un `#[ORM\MappedSuperclass]`) y una asociación to-one con `#[ORM\JoinColumn]`
+  —que persiste una clave foránea sin declarar `#[ORM\Column]` alguno— eran **invisibles** a la barrida.
+  Ambas son la vía idiomática de Doctrine para mintear un `user_id`. **Corregidas ampliando la derivación**;
+  las que no se cierran (varias clases por fichero, nombre ≠ ruta) están ahora **enumeradas en la cabecera**.
+- **ALTO — el registro afirmaba en seis sitios que estas dos referencias eran «las únicas sin FK física».**
+  Medido contra el esquema vivo: la base de datos tiene **dos** claves foráneas y **ninguna** apunta a
+  `identity_user`, así que *ninguna* referencia a persona cascadea. La frase enseñaba justo la lección
+  equivocada («FK ⇒ seguro»). **Corregida en los seis.**
+- **MEDIO — la mitad del atributo era vacua**, demostrado empíricamente: borrar los cuatro
+  `#[PersonSubjectReference]` del árbol dejaba el build verde, porque los dos checks iteran las propias
+  declaraciones. **Corregido** con una pata de anti-vacuidad sobre `declaredOwners()`.
+- **MEDIO — el prompt de consentimiento del CLI entendía mal el alcance del acto irreversible**: enumeraba
+  identidad, tokens, trail y sesiones, no la membresía ni las invitaciones. Para una operación cuyo diseño
+  entero descansa en un consentimiento informado y auditado, eso es un defecto. **Corregido**, junto al
+  `setHelp()`, el docblock de la clase y el del controlador.
+- **MEDIO — `make php.lint.*` salía verde con un `--filter` que no casaba con nada** (`failOnEmptyTestSuite`
+  no estaba puesto). Afectaba a los cuatro gates de lint, no solo al nuevo. **Corregido en la config de
+  PHPUnit**, y verificado: un filtro con typo ahora sale distinto de cero.
+- **MEDIO — los dobles in-memory comparaban UUID con distinción de mayúsculas** mientras las columnas son
+  `uuid` de Postgres, que no la hace. Divergencia en la dirección «el test es más estricto que producción»:
+  ningún test podía fallar por ella. **Corregidos con `strcasecmp`** y fijado con un test que borra pasando
+  el id en mayúsculas.
+- **BAJO, corregidos:** el check de cableado rechazaba el estilo fluido del propio repo; una clave sin `::`
+  degeneraba el regex; un FQCN sin namespace perdía la primera letra; un atributo repetido abortaba con un
+  `Error` que no nombraba la propiedad; los adaptadores reportaban 0 en silencio si el driver devolvía el
+  conteo como string; tres ramales del parser no estaban falsificados; dos tests prometían más de lo que
+  afirmaban; y el trait `Identifiable` no avisaba de la trampa de anotarlo.
+
+**Lo que los tres atacaron y NO pudieron romper** (se declara para que el silencio no se lea como omisión):
+el parser del registro (duplicados, clasificación no reconocida, `person` sin dueño, fichero ausente, comentarios
+en línea — todos fallan cerrado); las guardas de ruta (`..`, directorio, fuera de `src/`); el acotamiento de
+los dos DELETE al sujeto (fuerza bruta sobre los 510 ficheros de `src` aceptó solo los semánticamente
+correctos); su participación en la transacción y su idempotencia; el orden de los eslabones nuevos dentro de
+la cadena; la aritmética del canario de queries; la anti-vacuidad de los fixtures; y la clasificación
+`User::$id => person`.
+
+**Hallazgo aceptado y NO cerrado aquí, declarado en la PR y abierto en el checklist:** el eje no tiene control
+**detective** ni backfill. El gate prueba que el borrado está *escrito*, nunca que la fila *se fue*, y los
+sujetos borrados antes de esta entrega conservan sus filas huérfanas. El hermano ya resuelve esto con
+`identity:gdpr:reconcile-subject-references`; el equivalente para estas dos columnas es trabajo aparte.
 
 ## Dev Notes
 

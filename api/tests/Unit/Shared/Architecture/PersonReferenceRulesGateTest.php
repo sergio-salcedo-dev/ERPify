@@ -8,6 +8,7 @@ use Erpify\Tests\Support\PersonReferences;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 /**
  * Falsifiability of the rules {@see PersonReferenceGateTest} asserts over the real tree: it drives
@@ -138,6 +139,45 @@ final class PersonReferenceRulesGateTest extends TestCase
             $references->erasureDefectIn(self::SESSION_REFERENCE, 'src/../../etc/passwd'),
             'A path escaping the repository was accepted as an erasure owner.',
         );
+    }
+
+    #[Test]
+    public function theRegistryParserRejectsRatherThanDegrades(): void
+    {
+        // A duplicate would let the later line silently shadow the earlier, and `person` with no owner is not
+        // a spelling at all — an unowned person reference is the violation itself. Degrading either to
+        // non-person is the one outcome that must be impossible, because the wiring check skips non-person.
+        $this->assertStringContainsString(
+            'Duplicate registry line',
+            $this->parseFailureOf('policy.duplicate'),
+        );
+        $this->assertStringContainsString(
+            'Unrecognised classification',
+            $this->parseFailureOf('policy.unrecognised'),
+        );
+    }
+
+    #[Test]
+    public function theDeclarationSweepReachesClassesThatBackNoTable(): void
+    {
+        // An abstract carrier holds no columns, so its declaration can never reach the registry. The sweep
+        // must still see it, or an erasure obligation written where nothing reads it passes in silence.
+        $stranded = self::FIXTURE_NAMESPACE . 'AbstractFixtureDeclarationCarrier::$strandedUserId';
+        $references = $this->overFixtures('policy.complete');
+
+        $this->assertArrayHasKey($stranded, $references->declaredOwners());
+        $this->assertNotContains($stranded, $references->universe());
+    }
+
+    private function parseFailureOf(string $registry): string
+    {
+        try {
+            $this->overFixtures($registry)->classification();
+        } catch (RuntimeException $runtimeException) {
+            return $runtimeException->getMessage();
+        }
+
+        $this->fail(\sprintf('%s parsed without complaint; the parser degraded it instead of rejecting.', $registry));
     }
 
     private function references(): PersonReferences

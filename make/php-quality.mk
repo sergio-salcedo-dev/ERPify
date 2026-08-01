@@ -197,6 +197,6 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.gherkin php.gherkin.rules \
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource \
-        php.lint.persistent-transport \
+        php.lint.persistent-transport php.lint.person-reference \
         php.deptrac php.deptrac.baseline \
         php.quality php.quality.dry-run

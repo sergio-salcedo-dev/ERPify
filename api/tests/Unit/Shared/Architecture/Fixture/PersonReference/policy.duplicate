@@ -1,0 +1,6 @@
+# Fixture registry: the same column classified twice. Last-wins would let the second line silently downgrade
+# a person reference to non-person, and the wiring check skips non-person lines — so the shadowed line would
+# take the erasure with it.
+Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonReference\PersonReferenceFixtureEntity::$subjectId => person :: src/Iam/Session/Application/PurgeUserSessions.php
+Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonReference\PersonReferenceFixtureEntity::$subjectId => non-person
+Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonReference\PersonReferenceFixtureEntity::$tenantId => non-person

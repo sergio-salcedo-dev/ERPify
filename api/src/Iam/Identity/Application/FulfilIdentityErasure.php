@@ -29,10 +29,11 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * ({@see PurgeUserSessions}), of the membership that admitted them ({@see PurgeUserMembership}) and of every
  * invitation addressed to them ({@see PurgeUserInvitations}), and the combined compliance self-audit.
  *
- * The last two are here for the same reason as the sessions: those columns cross a bounded context by id and
- * carry no physical foreign key, so deleting the identity row cascades nothing and the subject's real id
- * would simply stay behind. Each is consumed as its owning context's published use case — the person's
- * context orchestrates the erasure, but never reaches into how another context stores what it owns.
+ * The last two are here for the same reason as the sessions: no column in the schema references
+ * `identity_user`, so deleting that row cascades nowhere and every reference owes its removal to a use case
+ * rather than to a constraint. Until now these two had none, so the subject's real id simply stayed
+ * behind. Each is consumed as its owning context's published use case — the person's context
+ * orchestrates the erasure, but never reaches into how another context stores what it owns.
  *
  * Both axes are erased **here**, by the context that owns the person, rather than inside one shared
  * anonymiser: `docs/adr/audit-activity-log.md` D4 assigns erasure of a person-denoting resource to the

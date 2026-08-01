@@ -61,11 +61,17 @@ final class PurgeUserInvitationsTest extends TestCase
 
     public function testRejectsAMalformedUserIdBeforeTouchingTheStore(): void
     {
-        $invitations = new InMemoryInvitationRepository($this->invitationFor(Uuid::generate()));
+        $userId = Uuid::generate();
+        $invitations = new InMemoryInvitationRepository($this->invitationFor($userId));
 
-        $this->expectException(InvalidUuidException::class);
-
-        (new PurgeUserInvitations($invitations))->purge('not-a-uuid');
+        try {
+            (new PurgeUserInvitations($invitations))->purge('not-a-uuid');
+            $this->fail('A malformed id reached the store instead of being refused at the edge.');
+        } catch (InvalidUuidException) {
+            // The row is still there — asserted by deleting it now, which is the only view of the store the
+            // port exposes. Without this the test proves the exception and nothing about what it protected.
+            $this->assertSame(1, $invitations->deleteAllForInvitedUser($userId));
+        }
     }
 
     private function invitationFor(string $userId): Invitation
