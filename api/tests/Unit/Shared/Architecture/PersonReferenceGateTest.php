@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
 use Erpify\Tests\Support\PersonReferences;
+use Erpify\Tests\Support\UndeclaredPersonReferences;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -144,6 +145,21 @@ final class PersonReferenceGateTest extends TestCase
     }
 
     #[Test]
+    public function everyPersonReferenceIsDeclaredAtItsProperty(): void
+    {
+        $references = $this->references();
+        $undeclared = UndeclaredPersonReferences::in($references->classification(), $references->declaredOwners());
+
+        $this->assertSame([], $undeclared, \sprintf(
+            "These columns are classified as person references but carry no #[PersonSubjectReference]:\n  %s\n"
+            . 'The registry is reviewed rarely and the entity is edited often, so the declaration at the '
+            . 'column is what the next author actually sees. Without it the obligation is only in a dotfile '
+            . 'nobody opens while adding a field.',
+            \implode("\n  ", $undeclared),
+        ));
+    }
+
+    #[Test]
     public function noDeclarationSitsOutsideThePersistedUniverse(): void
     {
         $outside = $this->references()->strandedDeclarations();
@@ -173,6 +189,14 @@ final class PersonReferenceGateTest extends TestCase
         $this->assertNotEmpty(
             $references->declaredOwners(),
             'No property declares a #[PersonSubjectReference], so the agreement check can never fire.',
+        );
+        // Every check here needs a leg of its own or it inherits the vacuity the leg above closes. This one
+        // is for the direction that requires the attribute: with the declarations emptied, at least one
+        // column must still be REQUIRED to carry it, or the rule is satisfied by having no subjects.
+        $this->assertNotEmpty(
+            UndeclaredPersonReferences::in($references->classification(), []),
+            'Every person reference is exempt from declaring its owner, so the declaration rule has no '
+            . 'subject left and passes whatever the entities say.',
         );
     }
 

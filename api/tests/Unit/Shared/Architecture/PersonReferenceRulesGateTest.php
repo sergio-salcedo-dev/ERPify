@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
+use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Tests\Support\PersonReferences;
+use Erpify\Tests\Support\UndeclaredPersonReferences;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -34,6 +36,8 @@ final class PersonReferenceRulesGateTest extends TestCase
     private const string FIXTURE_NAMESPACE = 'Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonReference\\';
 
     private const string SESSION_REFERENCE = \Erpify\Iam\Session\Domain\Entity\Session::class . '::$userId';
+
+    private const string OWNER = 'src/Iam/Session/Application/PurgeUserSessions.php';
 
     #[Test]
     public function theGateRejectsAColumnWithNoLine(): void
@@ -186,6 +190,22 @@ final class PersonReferenceRulesGateTest extends TestCase
             'A declaration on the parent of a column a concrete entity inherits was reported as stranded, '
             . 'which leaves that mapping no green state at all.',
         );
+
+        // The opposite direction, over hand-built inputs so all three of its branches are pinned at once: a
+        // person line with no attribute must be reported; one whose attribute sits on the parent that
+        // DECLARES the property must not, because it cannot be written anywhere else; and the subject's own
+        // primary key must not, because erasing it is deleting its own row and no reference is involved.
+        $undeclared = self::FIXTURE_NAMESPACE . 'PersonReferenceFixtureEntity::$tenantId';
+        $inherited = self::FIXTURE_NAMESPACE . 'InheritedColumnFixtureEntity::$inheritedSubjectId';
+        $subjectKey = User::class . '::$id';
+        $reported = UndeclaredPersonReferences::in(
+            [$undeclared => self::OWNER, $inherited => self::OWNER, $subjectKey => self::OWNER],
+            [self::FIXTURE_NAMESPACE . 'AbstractFixtureColumnCarrier::$inheritedSubjectId' => self::OWNER],
+        );
+
+        $this->assertSame([$undeclared], $reported, 'The declaration requirement reported the wrong set: it '
+            . 'must catch the undeclared column, resolve the inherited one through its declaring class, and '
+            . 'exempt the subject own primary key.');
     }
 
     private function parseFailureOf(string $registry): string

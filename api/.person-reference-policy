@@ -21,8 +21,18 @@
 #
 # The gate (PersonReferenceGateTest, run by `make php.lint.person-reference`) fails the build when a
 # `Types::GUID` column reaches an entity without a line here, when a line no longer matches any column, when a
-# `person` line names a file that does not erase that reference, and when a `#[PersonSubjectReference]`
-# declared at a property disagrees with the line here.
+# `person` line names a file that does not erase that reference, when a `#[PersonSubjectReference]` declared
+# at a property disagrees with the line here, and when a `person` line carries no declaration at its property
+# at all.
+#
+# That last direction has ONE exemption, and it is semantic rather than mechanical: the subject's OWN PRIMARY
+# KEY. The attribute is named for a REFERENCE — an id of a person held by a row that is not them, which no
+# foreign key removes, which is the distributed obligation this file exists to make impossible to pass in
+# silence. A primary key carries no such obligation: erasing it IS deleting its own row, and the wiring check
+# already proves that happens. Exempting instead by "the property is inherited" would key the rule to an
+# implementation accident and let any person id dropped into a shared trait escape it. If an aggregate ever
+# appears whose primary key is a person's id but whose erasure is a scrub in place rather than a deletion,
+# this exemption stops being true and the registry needs a verb that separates the two meanings.
 #
 # ---------------------------------------------------------------------------------------------------------
 # What it deliberately does NOT do. Read this list as the specification of the gate's blind spots — a green
