@@ -103,12 +103,17 @@ php.lint.event-bus: ## Event-dispatch boundary gate
 ## —— Person-resource erasure gate ——————————————————————————————————————————
 
 # Fails CI when an audit `resource_type` reaches the code without being classified in
-# api/.audit-resource-types as person-denoting or not, or when a type declared `person` names an
-# erasure use case that does not wire AuditResourceAnonymiser. GDPR erasure of the resource axis is
-# the owning context's job (docs/adr/audit-activity-log.md D4), so the classification must be a
-# declared decision rather than something a new type can skip silently.
+# api/.audit-resource-types as person-denoting or not, when a type declared `person` names an erasure
+# use case that does not wire AuditResourceAnonymiser, or when it names no acceptance scenario that
+# seeds a row of the type and asserts none survives. GDPR erasure of the resource axis is the owning
+# context's job (docs/adr/audit-activity-log.md D4), so the classification must be a declared decision
+# rather than something a new type can skip silently.
+#
+# The filter is a COMMON PREFIX, not a class name: the gate is two classes (the assertions over the real
+# tree, and the falsifiability of the rules they assert), and a filter naming one of them would leave the
+# other outside the named boundary — reporting a broken rule as "PHPUnit" instead of as this gate.
 php.lint.audit-resource: ## Person-resource erasure classification gate
-	@$(PHP_TEST) bin/phpunit --filter=PersonResourceErasureGateTest
+	@$(PHP_TEST) bin/phpunit --filter='PersonResourceErasure.*GateTest'
 
 ## —— Persistent-transport policy gate ——————————————————————————————————————
 

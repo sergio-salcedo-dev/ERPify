@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
-use FilesystemIterator;
+use Erpify\Tests\Support\AuditResourceTypeRegistry;
+use Erpify\Tests\Support\PersonResourceDeclaration;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
-use SplFileInfo;
 
 /**
  * Static gate over `api/.audit-resource-types`, the declared classification of every audit `resource_type`
@@ -23,7 +21,7 @@ use SplFileInfo;
  * their own erasure beside their pseudonym. The gate turns "somebody must remember" into "the build stops
  * until somebody decides".
  *
- * Two directions, both mechanical:
+ * Four directions, all mechanical:
  *
  *   - **Completeness** — every type reaching `AuditResource::of()` or declared as a route's
  *     `_audit_resource_type` default must be classified here, whether the type is written at the call as a
@@ -34,39 +32,43 @@ use SplFileInfo;
  *     *and calls `anonymise()` on it*, so "declared a person, nobody erases it" fails too. Matching is done
  *     on comment-stripped source: a docblock naming the collaborator is prose, not wiring, and must not be
  *     able to satisfy the check on its own.
+ *   - **Witness** — every `person` line must also name an acceptance scenario, distinct from that file,
+ *     which seeds a row of the type and asserts none survives the erasure. Wiring proves the call is
+ *     written; only the witness proves it reaches a row.
+ *   - **Staleness** — a `non-person` type nothing writes any more is a graveyard entry and fails. The check
+ *     stops at `non-person` deliberately, because the two classifications carry different risks: for a
+ *     `person` line the risk is not an entry nobody uses, it is an obligation nobody executes, and the
+ *     witness is what answers that. Reading the type literal out of `src` cannot: a person type's only
+ *     literal is the constant its own declared owner holds, so the check would be satisfied by the
+ *     declaration it is meant to verify — see the demonstration below.
  *
  * What it deliberately cannot do: judge the classification. Calling `Contact` a non-person passes. That is
  * a review decision, and the gate's job is to force it to be *made*, in a diffable file, at the moment the
  * type is introduced. Two source forms also stay out of reach — a type assembled at runtime from request
  * attributes ({@see \Erpify\Shared\Audit\Infrastructure\Http\RequestAuditResourceExtractor}, whose inputs
- * the route-default check covers instead) and a constant imported from another class. Runtime reachability
- * of the anonymiser call is proven by the owning context's Behat scenario, not here.
+ * the route-default check covers instead) and a constant imported from another class.
+ *
+ * The rules themselves live in {@see AuditResourceTypeRegistry} and their falsifiability is pinned by
+ * {@see PersonResourceErasureRulesGateTest}; this class only asserts them over the real tree.
  *
  * @internal
  */
 #[CoversNothing]
 final class PersonResourceErasureGateTest extends TestCase
 {
-    private const string REGISTRY = __DIR__ . '/../../../../.audit-resource-types';
-
-    private const string SOURCE_ROOT = __DIR__ . '/../../../../src';
-
-    private const string ANONYMISER = 'AuditResourceAnonymiser';
-
-    private const string NON_PERSON = 'non-person';
-
     #[Test]
     public function everyResourceTypeInUseIsClassified(): void
     {
-        $declared = \array_keys($this->registry());
-        $inUse = $this->resourceTypesInSource();
-
-        $unclassified = \array_values(\array_diff($inUse, $declared));
+        $registry = $this->registry();
+        $unclassified = \array_values(\array_diff(
+            $registry->resourceTypesInSource(),
+            \array_keys($registry->classification()),
+        ));
 
         $this->assertSame([], $unclassified, \sprintf(
             'These audit resource types are written by the code but not classified in .audit-resource-types: %s. '
-            . 'Declare each as `non-person` or `person :: <erasure use case>` — a person-denoting type with no '
-            . 'erasure leaves the subject named in the trail after their own erasure.',
+            . 'Declare each as `non-person` or `person :: <erasure use case> :: <witness>` — a person-denoting '
+            . 'type with no erasure leaves the subject named in the trail after their own erasure.',
             \implode(', ', $unclassified),
         ));
     }
@@ -74,61 +76,31 @@ final class PersonResourceErasureGateTest extends TestCase
     #[Test]
     public function everyPersonTypeNamesAFileThatAnonymisesIt(): void
     {
-        foreach ($this->registry() as $type => $erasurePath) {
-            if (null === $erasurePath) {
-                continue;
-            }
+        $registry = $this->registry();
 
-            $absolute = self::SOURCE_ROOT . '/../' . $erasurePath;
-            $this->assertFileExists($absolute, \sprintf(
-                'The erasure use case declared for the person type "%s" does not exist: %s',
-                $type,
-                $erasurePath,
-            ));
+        foreach ($this->personTypes() as $type => $declaration) {
+            $defect = $registry->erasureDefectIn($type, $declaration->erasedBy);
 
-            $source = $this->codeWithoutComments((string) \file_get_contents($absolute));
-
-            $held = \preg_match(\sprintf('/%s\s+\$(\w+)/', self::ANONYMISER), $source, $property);
-            $this->assertSame(1, $held, \sprintf(
-                '%s is declared as erasing the person type "%s" but holds no %s property.',
-                $erasurePath,
-                $type,
-                self::ANONYMISER,
-            ));
-            $this->assertStringContainsString(\sprintf('$this->%s->anonymise(', $property[1]), $source, \sprintf(
-                '%s holds a %s but never calls anonymise() on it, so the person type "%s" is declared as '
-                . 'erased while nothing erases it.',
-                $erasurePath,
-                self::ANONYMISER,
-                $type,
-            ));
-            $this->assertStringContainsString(\sprintf("'%s'", $type), $source, \sprintf(
-                '%s does not carry the "%s" type literal, so it cannot be what erases it.',
-                $erasurePath,
-                $type,
-            ));
+            $this->assertNull($defect, (string) $defect);
         }
     }
 
     #[Test]
-    public function theRegistryDeclaresNoTypeThatNothingWrites(): void
+    public function everyPersonTypeNamesAWitnessThatProvesItsErasure(): void
     {
-        // Looser than the completeness check on purpose: it accepts the quoted literal anywhere in `src`,
-        // including a call the completeness regexes cannot attribute to a call site. That looseness is also
-        // its limit — for a type whose only literal is its own erasure declaration, this check is satisfied
-        // by the consumer rather than by any writer, so it cannot report that type as stale.
-        $sources = \implode("\n", \array_map(
-            static fn (string $file): string => (string) \file_get_contents($file),
-            $this->sourceFiles(),
-        ));
+        $registry = $this->registry();
 
-        $stale = [];
+        foreach ($this->personTypes() as $type => $declaration) {
+            $defect = $registry->witnessDefectIn($type, $declaration->witness);
 
-        foreach (\array_keys($this->registry()) as $type) {
-            if (!\str_contains($sources, \sprintf("'%s'", $type))) {
-                $stale[] = $type;
-            }
+            $this->assertNull($defect, (string) $defect);
         }
+    }
+
+    #[Test]
+    public function theRegistryDeclaresNoNonPersonTypeThatNothingWrites(): void
+    {
+        $stale = $this->registry()->staleNonPersonTypes();
 
         $this->assertSame([], $stale, \sprintf(
             'These types are classified but no longer written anywhere: %s. Remove them so the registry '
@@ -140,188 +112,41 @@ final class PersonResourceErasureGateTest extends TestCase
     #[Test]
     public function theStalenessOfAPersonTypeIsSatisfiedByItsOwnErasureDeclaration(): void
     {
-        // The circularity, demonstrated instead of argued: the only file in `src` carrying a person type's
-        // literal is the very file the same registry line names as its erasure owner. So the staleness check
-        // above reads green for that type because its CONSUMER satisfies it, never because anything writes it
-        // — a green that carries no information, which is what a second witness has to supply instead.
+        // Why the check above stops at `non-person`, demonstrated instead of argued: the only file in `src`
+        // carrying a person type's literal is the very file the same registry line names as its erasure
+        // owner. Extended to `person`, the check would read green because its CONSUMER carries the type,
+        // never because anything writes it — a green that carries no information, which is what the witness
+        // supplies instead.
         //
         // It doubles as a tripwire. The day a production writer of the type appears this goes red, and the
-        // reader decides whether the declared witness is still what establishes the type's liveness.
-        $personTypes = \array_filter($this->registry(), static fn (?string $path): bool => null !== $path);
-
-        // Without this the demonstration is vacuous the moment the registry holds no person line: an empty
-        // loop asserts nothing and reports success, which is the failure mode this whole epic exists against.
-        $this->assertNotEmpty($personTypes, 'No person type is classified, so this demonstration asserts nothing.');
-
-        foreach ($personTypes as $type => $erasurePath) {
-            $this->assertSame([$erasurePath], $this->sourceFilesCarrying($type), \sprintf(
+        // reader decides whether the declared witness is still what establishes that type's liveness.
+        foreach ($this->personTypes() as $type => $declaration) {
+            $this->assertSame([$declaration->erasedBy], $this->registry()->sourceFilesCarrying($type), \sprintf(
                 'The person type "%s" is carried by files other than its declared erasure owner, so the '
-                . 'staleness check is no longer self-satisfied for it. Revisit whether the declared witness '
-                . 'is still what establishes its liveness.',
+                . 'staleness check would no longer be self-satisfied for it. Revisit whether the declared '
+                . 'witness is still what establishes its liveness.',
                 $type,
             ));
         }
     }
 
     /**
-     * Files under `src` holding the quoted type literal, relative to `api/` so they compare against the paths
-     * the registry declares.
+     * The person lines, with the empty case rejected: an empty loop asserts nothing and reports success,
+     * which is the failure mode this gate exists against, reproduced inside the gate.
      *
-     * @return list<string>
+     * @return array<string, PersonResourceDeclaration>
      */
-    private function sourceFilesCarrying(string $type): array
+    private function personTypes(): array
     {
-        $carriers = [];
+        $personTypes = \array_filter($this->registry()->classification());
 
-        foreach ($this->sourceFiles() as $file) {
-            if (\str_contains((string) \file_get_contents($file), \sprintf("'%s'", $type))) {
-                $carriers[] = 'src/' . \substr($file, \strlen(self::SOURCE_ROOT) + 1);
-            }
-        }
+        $this->assertNotEmpty($personTypes, 'No person type is classified, so these checks assert nothing.');
 
-        \sort($carriers);
-
-        return $carriers;
+        return $personTypes;
     }
 
-    /**
-     * @return array<string, string|null> type => erasure use-case path, or null when non-person
-     */
-    private function registry(): array
+    private function registry(): AuditResourceTypeRegistry
     {
-        $lines = \file(self::REGISTRY, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        $this->assertIsArray($lines);
-
-        $registry = [];
-
-        foreach ($lines as $line) {
-            $line = \trim($line);
-
-            if ('' === $line) {
-                continue;
-            }
-
-            if (\str_starts_with($line, '#')) {
-                continue;
-            }
-
-            $parts = \array_map(trim(...), \explode('=>', $line, 2));
-            $this->assertCount(2, $parts, \sprintf(
-                'Malformed registry line (expected `Type => classification`): %s',
-                $line,
-            ));
-            [$type, $classification] = $parts;
-
-            // Last-wins would let a duplicate line silently downgrade a person type to non-person, and the
-            // wiring check skips non-person types — so the shadowed line would take the erasure with it.
-            $this->assertArrayNotHasKey($type, $registry, \sprintf(
-                'Duplicate registry line for "%s": the later classification silently shadows the earlier one.',
-                $type,
-            ));
-
-            if (self::NON_PERSON === $classification) {
-                $registry[$type] = null;
-
-                continue;
-            }
-
-            // Anything unrecognised is rejected rather than read as non-person. A silent fall-through would
-            // turn a capitalisation slip (`Person`) into "nobody erases this", which is the whole failure
-            // mode the registry exists to make impossible.
-            $declaresErasure = \preg_match('/^person\s*::\s*(\S.*)$/', $classification, $person);
-            $this->assertSame(1, $declaresErasure, \sprintf(
-                'Unrecognised classification for "%s": "%s". Write exactly `%s`, or `person :: <path of the '
-                . 'erasure use case>`.',
-                $type,
-                $classification,
-                self::NON_PERSON,
-            ));
-
-            $registry[$type] = \trim($person[1]);
-        }
-
-        return $registry;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function resourceTypesInSource(): array
-    {
-        $types = [];
-
-        foreach ($this->sourceFiles() as $file) {
-            $source = (string) \file_get_contents($file);
-
-            \preg_match_all("/AuditResource::of\\(\\s*'([^']+)'/", $source, $constructed);
-            \preg_match_all("/'_audit_resource_type'\\s*=>\\s*'([^']+)'/", $source, $routed);
-
-            $types = [...$types, ...$constructed[1], ...$routed[1], ...$this->typesHeldInConstants($source)];
-        }
-
-        $types = \array_values(\array_unique($types));
-        \sort($types);
-
-        return $types;
-    }
-
-    /**
-     * Resolves `AuditResource::of(self::SOME_TYPE, …)` back to the literal the constant holds, within the
-     * same file. Both non-literal call sites in this codebase take that form — including the person type,
-     * whose literal deliberately lives in the owning context rather than at the call.
-     *
-     * @return list<string>
-     */
-    private function typesHeldInConstants(string $source): array
-    {
-        \preg_match_all('/AuditResource::of\(\s*(?:self|static)::(\w+)/', $source, $references);
-
-        $types = [];
-
-        foreach ($references[1] as $constant) {
-            $declaration = \sprintf("/const\\s+string\\s+%s\\s*=\\s*'([^']+)'/", \preg_quote($constant, '/'));
-
-            if (1 === \preg_match($declaration, $source, $literal) && isset($literal[1])) {
-                $types[] = $literal[1];
-            }
-        }
-
-        return $types;
-    }
-
-    /**
-     * Strips comments so the wiring check reads code only — a docblock that names the anonymiser describes
-     * an intention, and an intention must not be able to stand in for the call.
-     */
-    private function codeWithoutComments(string $source): string
-    {
-        $code = '';
-
-        foreach (\token_get_all($source) as $token) {
-            if (\is_array($token) && \in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
-                continue;
-            }
-
-            $code .= \is_array($token) ? $token[1] : $token;
-        }
-
-        return $code;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function sourceFiles(): array
-    {
-        $files = [];
-        $directory = new RecursiveDirectoryIterator(self::SOURCE_ROOT, FilesystemIterator::SKIP_DOTS);
-
-        foreach (new RecursiveIteratorIterator($directory) as $file) {
-            if ($file instanceof SplFileInfo && 'php' === $file->getExtension()) {
-                $files[] = $file->getPathname();
-            }
-        }
-
-        return $files;
+        return AuditResourceTypeRegistry::fromGateLocation(__DIR__);
     }
 }

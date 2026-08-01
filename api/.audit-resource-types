@@ -21,4 +21,4 @@
 
 Bank => non-person
 BankAccount => non-person
-User => person :: src/Iam/Identity/Application/FulfilIdentityErasure.php
+User => person :: src/Iam/Identity/Application/FulfilIdentityErasure.php :: features/backoffice/users/erase.feature

@@ -1,0 +1,11 @@
+# Fixture registry: two types the fixture source does not write, classified differently, so one assertion
+# separates the two risks. `Ghost` is the graveyard entry the staleness check exists against and must be
+# reported; `Phantom` is uncarried for the ordinary reason a person type is — its literal would live in the
+# constant its own owner holds — and must NOT be, or the check goes back to being satisfied by the very
+# declaration it verifies.
+#
+# The paths on the person line are shaped like real ones but are never resolved: the erasure-owner rule is
+# pinned against the real tree, where a file that genuinely fails to erase exists to point at.
+FixtureResource => non-person
+Ghost => non-person
+Phantom => person :: src/Fixture/PhantomEraser.php :: features/witness-complete.feature

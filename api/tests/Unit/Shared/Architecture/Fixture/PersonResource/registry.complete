@@ -1,0 +1,4 @@
+# Fixture registry: the clean twin. The one type the fixture source writes is classified, and nothing is
+# classified that the fixture source does not write, so every direction passes. Its job is to prove the dirty
+# twins beside it fail for the reason claimed and not because the fixture sweep is broken.
+FixtureResource => non-person
