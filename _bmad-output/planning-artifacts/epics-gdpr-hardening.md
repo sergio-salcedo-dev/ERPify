@@ -68,30 +68,48 @@ un atributo pasivo **nuevo** (p. ej. `#[PersonSubjectReference]`) junto a
 [`PersonalData`](../../api/src/Shared/Privacy/Domain/PersonalData.php), que marca *«esta propiedad guarda el
 identificador de una persona»* **y su dueño de borrado**. **No** se reutiliza `#[PersonalData]`: su contrato es
 de **tratamiento** (*«the property it decorates holds personal data… infrastructure only reads it to decide
-encrypt-vs-clear per column»*), y anotar una clave foránea haría que
-[`PiiDiffSealer`](../../api/src/Shared/Audit/Infrastructure/Persistence/PiiDiffSealer.php) —consumidor de
-`personalFieldsOf()`— **la cifrara en el diff**, rompiendo las búsquedas que el propio reconciliador de erasure
-necesita. Reutilizarlo no enturbia la semántica: **rompe la maquinaria**.
+encrypt-vs-clear per column»*), y el de este es de **referencia**.
 
-FR3: **Generación del registro por reflexión — huella, no afirmación** (SI-22 · G-1a ②) — un clasificador
-análogo a
-[`ReflectionPersonalDataClassifier`](../../api/src/Shared/Privacy/Infrastructure/ReflectionPersonalDataClassifier.php)
-produce el registro de referencias declaradas; el registro **se commitea como huella del código**, no como
-afirmación humana. Es lo que impide el ciclo lógico de #563: una entrada generada **no puede satisfacerse a sí
-misma**. La **generación total es imposible por medición** (los tipos nacen también de `defaults:` de ruta, de
-constantes de clase y de entradas de routing YAML, ninguna alcanzable por reflexión sobre propiedades): la
-arquitectura es **híbrida por fuerza**, no por comodidad — lo derivable se genera, lo manual se justifica.
+*Corregido tras medir — el justificante anterior era falso en su último eslabón.* Decía que anotar una clave
+foránea haría que [`PiiDiffSealer`](../../api/src/Shared/Audit/Infrastructure/Persistence/PiiDiffSealer.php)
+*«la cifrara en el diff, rompiendo las búsquedas del reconciliador»*. **Nada de eso ocurre hoy:** el sellador
+solo corre sobre entidades `AuditedEntity`, y de las cuatro que guardan una referencia a persona **ninguna lo
+es**, así que anotarlas sería un no-op literal; el sellador nunca toca la columna de la entidad (escribe en
+`audit_log.metadata`, y `bank_account.iban` está marcado `#[PersonalData]` y sigue siendo `unique` y buscable en
+claro); y el reconciliador no lee ningún valor de diff. **La conclusión se sostiene, el argumento no.** Los dos
+que sí se sostienen: ① reutilizarlo **asignaría el dueño de borrado equivocado**, porque el scope de cifrado es
+el del **agregado propietario**, no el de la persona — un id de persona sellado bajo la DEK de otro agregado se
+destruiría con el borrado de *ese* agregado y **sobreviviría al de la persona**, que es exactamente el fallo que
+SI-21 persigue; ② el puerto `personalFieldsOf()` devuelve nombres de propiedad y **no tiene dónde llevar un
+dueño**. Ambos son argumentos de **referencia**, no de tratamiento, y por tanto coherentes con el resto de FR2.
+
+FR3: **El registro se verifica contra el código en las DOS direcciones** (SI-22 · G-1a ②) — el **universo** de
+referencias es derivable por reflexión, así que el control comprueba (i) que **todo miembro del universo está
+clasificado** y (ii) que **toda entrada del registro sigue correspondiendo a un miembro**. Con las dos
+direcciones clavadas a la fuente, el contenido **no puede ser una afirmación libre**, que es la propiedad que
+impide el ciclo de #563 — y se obtiene **sin generar el fichero**.
+[`PersistentTransportPolicyGateTest`](../../api/tests/Unit/Shared/Architecture/PersistentTransportPolicyGateTest.php)
+ya la consigue así (`everyAggregateTypeInSourceIsClassified` + `theRegistryDeclaresNoAggregateTypeThatNothingEmits`).
+**Generar es implementación admisible, no exigida** — y aquí no compra nada: un generador solo puede emitir la
+**clave**, que es justo la mitad que las dos direcciones ya clavan, y **no puede aportar el dueño de borrado**,
+que es el único campo con significado y es juicio humano. Lo derivable se verifica, lo manual se atestigua.
 
 FR4: **Gate `make php.lint.person-reference`** (SI-21, SI-23 · G-1a ③) — control que **rompe el build** cuando
-(a) lo generado ≠ lo commiteado, o (b) una referencia persistida a persona no declara dueño de borrado.
-**Generar y verificar son mecanismos distintos** — confundirlos reintroduce #563. Sigue el patrón medido de la
-casa: test bajo
+(a) un miembro del universo derivable **no está clasificado**, (b) una entrada del registro **ya no corresponde
+a ningún miembro**, o (c) una referencia persistida a persona **no declara dueño de borrado, o declara uno que
+no la borra**. (a) y (b) son las dos direcciones de FR3; (c) es la mitad *«correctamente cableada»* de SI-21.
+**El gate verifica y no escribe** — un control que reescribe lo que comprueba lee verde por construcción, que
+es #563. Sigue el patrón medido de la casa: test bajo
 [`api/tests/Unit/Shared/Architecture/`](../../api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php),
 target `php.lint.*` en [`../../make/php-quality.mk`](../../make/php-quality.mk), cableado en `php.quality`
-**y** `php.quality.dry-run` (CI). **Llega verde**: se estrena declarando las referencias que la cadena de
+**y** `php.quality.dry-run` (CI). **Se estrena sobre comportamiento correcto**: las referencias que la cadena de
 erasure **ya** borra hoy —[`PasswordResetToken::$userId`](../../api/src/Iam/Identity/Domain/Entity/PasswordResetToken.php)
-y [`Session::$userId`](../../api/src/Iam/Session/Domain/Entity/Session.php)—, de modo que cada hueco posterior
-es un gate en rojo que su propia historia cierra.
+y [`Session::$userId`](../../api/src/Iam/Session/Domain/Entity/Session.php)— quedan **verdes**, demostrando que
+el mecanismo funciona; y **el gate aterriza en rojo por `Membership.user_id` e `Invitation.invited_user_id`**,
+que es el estado que FR5 y el segundo AC de la Story 1.3 exigen. *Corregido tras medir: la redacción anterior
+decía «llega verde» a secas y era insatisfacible junto con FR5 — un control verde mientras el defecto está vivo
+es prosa con pasos extra. El propósito de aquella frase (estrenar sobre comportamiento correcto) lo cumplen las
+dos semillas.*
 
 FR5: **Cerrar las referencias huérfanas — `Membership.user_id` (#545) e `Invitation.invited_user_id` (#561)**
 (SI-21, SI-19 · G-1b) — con el gate en rojo, la cadena de erasure
@@ -145,10 +163,16 @@ real como `aggregate_id` `PasswordResetCompleted`, `UserSuspended`, `UserDeactiv
 `UserLocked` ([`User`](../../api/src/Iam/Identity/Domain/Entity/User.php), líneas 176/191/206/224/264) y
 `PasswordResetRequested` (grabado sobre el agregado del token pero construido con el id del **usuario**,
 [`PasswordResetToken`](../../api/src/Iam/Identity/Domain/Entity/PasswordResetToken.php) línea 70); y lo llevan en
-el **payload** `SessionStarted` (`['userId' => …]`) y los seis `Invitation*` (`invitedUserId`). **Ninguno está
-enrutado**, luego ninguno pasa por la cola: viven **solo** ahí, para siempre, y
+el **payload** `SessionStarted` (`['userId' => …]`), **`SessionRevoked`** (ídem) y los seis `Invitation*`
+(`invitedUserId`). **Ninguno está enrutado**, luego ninguno pasa por la cola: viven **solo** ahí, para siempre, y
 [`FulfilIdentityErasure`](../../api/src/Iam/Identity/Application/FulfilIdentityErasure.php) no toca la tabla.
 **La fuga que persigue G-4a es la más pequeña y la más transitoria de las dos.**
+
+**El eje de payload no es accesorio, y de él depende que el test falsable de la historia signifique algo.** Una
+historia que solo reescriba `aggregate_id` deja `SELECT aggregate_id FROM event_store` en verde mientras el id
+sigue vivo en el JSONB de la fila de al lado — una declaración cuya única evidencia es la mitad que eligió
+mirar, que es NFR3 fallando dentro de la historia que existe para instalarlo. **Los dos ejes se cierran en la
+misma entrega.**
 
 ### NonFunctional Requirements
 
@@ -164,11 +188,12 @@ fuera de control, **cambia de mecanismo de validación** (revisión de arquitect
 incluye el `aggregateId` de un evento persistido cuyo agregado **es** una persona. *SI-21 no prescribe el
 mecanismo de declaración* — la forma depende del **origen** de la referencia.
 
-NFR2 (Invariante · **SI-22**): **Lo derivable se genera; lo manual se justifica y se atestigua.** Toda
-declaración derivable del código **se genera** y el gate falla si generado ≠ commiteado. Toda declaración
-**manual** se justifica por no ser derivable y exige un **segundo testigo** independiente de la propia
-declaración. Una entrada generada no puede satisfacerse a sí misma —su contenido es huella del código, no
-afirmación—; una manual sí puede, y por eso necesita el testigo.
+NFR2 (Invariante · **SI-22**): **Lo derivable se verifica contra el código; lo manual se justifica y se
+atestigua.** Toda declaración cuyo **universo sea derivable** se verifica **en las dos direcciones contra la
+fuente**: todo miembro del universo está clasificado, y toda entrada sigue correspondiendo a un miembro. Con
+ambas comprobadas, la entrada **no puede satisfacerse a sí misma**. **Generar el registro es una implementación
+admisible de esa propiedad, no la exigida.** Toda declaración **manual** se justifica por no ser derivable y
+exige un **segundo testigo** independiente de la propia declaración.
 
 NFR3 (Invariante · **SI-23**): **Una declaración nunca es su propia evidencia.** Un control cuya evidencia es la
 declaración que debería verificar **lee verde por construcción** y no es un control. *Binds:* todo registro,
@@ -213,23 +238,42 @@ que un gate que solo entre en `php.quality` es un gate que CI no ejecuta.
 
 Requisitos técnicos medidos que condicionan el corte, la secuencia o la implementación:
 
-- **Orden safe-first del DAG:** `G-4a → G-1a → (G-1b · G-2) → G-3`. G-4a primero porque es **la única
-  manifestación viva medida del eje** y no depende de nada; G-1a es aditivo y llega verde; G-3 es independiente
-  y puede paralelizarse.
+- **Orden safe-first del DAG:** `G-4a → (G-1a · G-1b) → G-2 → G-3`. G-4a primero porque es **la única
+  manifestación viva medida del eje** y no depende de nada. **G-1a y G-1b se entregan juntas, en una sola PR**
+  (decisión de 2026-08-01): el gate de G-1a **aterriza en rojo** por las dos referencias que G-1b cierra —estado
+  que FR5 y el segundo AC de la Story 1.3 exigen, y que por tanto tiene que existir y quedar visible en la
+  secuencia de commits— y **sale verde dentro de la misma entrega, porque la cadena las ejecuta**. Entregarlas
+  por separado dejaría `main` rojo para todo PR no relacionado, porque el target entra en `php.quality.dry-run`,
+  que es lo que CI corre siempre; unirlas **disuelve** ese coste en vez de negociarlo. G-2 y G-3 son
+  independientes y pueden paralelizarse.
 - **Plantilla exacta del mecanismo (FR2–FR4):** `Shared/Privacy` ya es una capability de tres piezas —atributo
   en `Domain/`, puerto `PersonalDataClassifier` en `Application/`, adaptador por reflexión en
-  `Infrastructure/`—. El hermano replica la estructura, **no** el contrato.
+  `Infrastructure/`—. **El hermano replica solo el atributo**: va en `Domain/` como metadata pasiva. *Corregido
+  tras medir: las tres piezas existen porque `PiiDiffSealer` consume el puerto en producción, y este registro
+  **solo lo lee el gate**. Un puerto sin nadie a quien inyectarlo es superficie de producción a cambio de nada
+  (YAGNI). El motor de descubrimiento vive en `api/tests/Support/`, espejo de `PersistentTransportPolicy`, que
+  es el precedente medido de esta forma exacta: registro consumido solo por un gate. El día que aparezca un
+  consumidor de producción —la cadena de erasure leyendo el registro para dirigir el borrado— promoverlo a
+  `Infrastructure/` es un movimiento, no una reescritura.*
 - **Plantilla exacta del gate:** los seis gates existentes son **tests PHPUnit** bajo
   `api/tests/Unit/Shared/Architecture/` invocados por un target `php.lint.*`; el registro
   `.audit-resource-types` vive en la **raíz de `api/`, fuera de todo contexto** — es un artefacto de revisión,
   no un módulo. El nuevo registro sigue esa colocación.
 - **Sin precedente de schedule en contexto de negocio** (FR8): decisión de ubicación a tomar en el corte fino,
   no heredable.
-- **Riesgo de construibilidad del segundo testigo (FR7):** **nada en `api/src` escribe hoy una fila con
-  `resource_type = 'User'`** — el gate está deliberadamente por delante de su productor. Si el testigo se define
-  como «existe un escritor real», la historia queda **bloqueada por funcionalidad que aún no existe**.
-  Alternativa a evaluar en el corte: testigo de **fixture o escenario Behat**, distinto de la declaración pero
-  sin exigir un productor de producción.
+- **Riesgo de construibilidad del segundo testigo (FR7) — RESUELTO al medir, y la premisa era falsa por partida
+  doble.** Sigue siendo cierto que **nada en `api/src` escribe hoy una fila con `resource_type = 'User'`**. Lo
+  que no era cierto es lo que se dedujo de ahí. **(a) El testigo ya está en el árbol, commiteado:**
+  [`erase.feature`](../../api/features/backoffice/users/erase.feature) siembra una fila real con ese
+  `resource_type`, ejecuta un borrado real por HTTP y comprueba que **ninguna** fila sigue nombrando a la
+  persona en el eje de recurso — más tres tests funcionales con el mismo tipo contra Postgres real; y hay
+  precedente de leer `api/features` desde un gate unitario, así que el escenario se lee como **corpus de texto**,
+  nunca se ejecuta: evidencia de grado aceptación al precio de un gate unitario. **(b) La opción del «escritor de
+  producción» tampoco estaba bloqueada por falta de planificación**, que era la razón registrada: hacer que
+  `User` implemente `AuditedEntity` son dos métodos. Lo que la deja fuera de alcance es **la cola** — cada
+  `flush` de usuario pasaría por `PiiDiffSealer` estrenando superficie de crypto-shredding y retención, cuatro
+  canarios de presupuesto de queries se moverían, y `ChangeUserRoles` necesitaría un `AuditLogger` que hoy no
+  inyecta. *Decisión y encuadre del testigo: ver el artefacto de la Story 1.5.*
 - **Pregunta abierta que bloquea FR9 — ownership de referencias nacidas en configuración.** *¿Quién posee una
   referencia que no nace en el modelo sino en configuración?* **No es una pregunta de GDPR sino de ownership de
   metadatos arquitectónicos**, y su respuesta afectará también a scheduler, rutas, integraciones y eventos
@@ -270,8 +314,8 @@ su **fallo observable** necesita destino de alerta, y eso es observabilidad, no 
 |----|-------|----------|-----------|
 | FR1 | Épica 1 | **1.1** (G-4a) | Fuga viva de `PasswordResetCompleted` en `messenger_messages` + `failed` |
 | FR2 | Épica 1 | **1.2** (G-1a) | Atributo hermano de declaración en `Shared/Privacy` |
-| FR3 | Épica 1 | **1.2** (G-1a) | Generador por reflexión — registro como huella |
-| FR4 | Épica 1 | **1.2** (G-1a) | Gate `php.lint.person-reference`, verde al llegar |
+| FR3 | Épica 1 | **1.2** (G-1a) | Verificación bidireccional del registro contra la fuente |
+| FR4 | Épica 1 | **1.2** (G-1a) | Gate `php.lint.person-reference`; semillas verdes, rojo por las dos sin dueño |
 | FR5 | Épica 1 | **1.3** (G-1b) | `Membership.user_id` + `Invitation.invited_user_id` + invariante ≥1 ADMIN |
 | FR6 | Épica 1 | **1.4** (G-2) | Ids de persona fuera de `audit_log.metadata` |
 | FR7 | Épica 1 | **1.5** (G-3 ①) | Segundo testigo de `.audit-resource-types` |
@@ -305,13 +349,15 @@ declarado y verificado**. Las garantías dejan de vivir en prosa y docblock y pa
 
 **FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8 (**FR9 diferida** — bloqueada, no cortada).
 
-**Espina de historias (DAG safe-first):** `G-4a → G-1a → (G-1b · G-2) → G-3`.
+**Espina de historias (DAG safe-first):** `G-4a → (G-1a · G-1b) → G-2 → G-3`. G-1a y G-1b **se entregan juntas**:
+el gate aterriza en rojo y sale verde dentro de la misma PR.
 
 **Valor por tramo — cada uno se sostiene solo:**
 
 - **G-4a** — el id real de un sujeto borrado deja de sobrevivir en los transportes Messenger persistidos. Única
   fuga **viva medida**, sin dependencias: entrega valor legal aunque el resto no llegue.
-- **G-1a** — el eje existe y **llega verde**; a partir de ahí cada hueco es un gate rojo con dueño asignado.
+- **G-1a** — el eje existe: las dos referencias que la cadena ya borra quedan **verdes** y demuestran el
+  mecanismo, y los huecos vivos pasan a ser **gate rojo con dueño asignado** en vez de prosa.
 - **G-1b · G-2** — cierran los tres huecos que el gate destapa; G-1b además tapa el agujero del invariante
   **≥1 ADMIN activo**, que hoy lee satisfecho ante una membership fantasma.
 - **G-3** — las dos garantías que hoy *aparentan* funcionar (un check que se autosatisface, un reconciliador que
@@ -405,17 +451,18 @@ anterior.
 **Then** consta que generalizarlo a *«todo evento cuyo agregado sea una persona»* **es** FR9/G-4b y sigue fuera
 del alcance.
 
-### Story 1.2 (G-1a): El eje de declaración — atributo hermano, registro generado y gate que rompe el build
+### Story 1.2 (G-1a): El eje de declaración — atributo hermano, registro verificado contra el código y gate que rompe el build
 
 Como **desarrollador que añade un contexto nuevo que toca a una persona**,
 quiero que el repositorio me pare si introduzco una referencia persistida a una persona sin dueño de borrado,
 para que la obligación no dependa de que alguien se acuerde.
 
-**Eje que instala:** los tres pasos, **sin mezclarlos** — atributo hermano en `Shared/Privacy`, generador por
-reflexión que produce el registro, gate `make php.lint.person-reference`.
+**Eje que instala:** los tres pasos, **sin mezclarlos** — atributo hermano en `Shared/Privacy`, universo derivado
+por reflexión y verificado en las dos direcciones, gate `make php.lint.person-reference`.
 **Invariantes que consume:** el patrón de la casa (registro revisable + gate obligatorio), NFR8.
 **Invariantes que establece:** SI-21/NFR1, SI-22/NFR2, SI-23/NFR3.
-**Dependencias:** ninguna. **Llega verde** — habilita 1.3 y 1.4 sin necesitarlas.
+**Dependencias:** ninguna. Habilita 1.3 y 1.4 sin necesitarlas, y **aterriza con el gate en rojo por las dos
+referencias que 1.3 cierra** — el estado que su segundo AC exige.
 
 **Estado medido:** `Shared/Privacy` es una capability de tres piezas —
 [atributo](../../api/src/Shared/Privacy/Domain/PersonalData.php) en `Domain/`, puerto en `Application/`,
@@ -445,8 +492,10 @@ funcionando — declarar una referencia no la convierte en dato cifrado (FR2, NF
 **Given** el registro sembrado con las referencias que la cadena de erasure ya borra hoy
 ([`PasswordResetToken::$userId`](../../api/src/Iam/Identity/Domain/Entity/PasswordResetToken.php),
 [`Session::$userId`](../../api/src/Iam/Session/Domain/Entity/Session.php)),
-**When** corre `make php.quality`,
-**Then** pasa **sin rojo** — el mecanismo se estrena sobre comportamiento correcto (FR4).
+**When** corre el gate,
+**Then** esas dos líneas salen **verdes** — el mecanismo se estrena sobre comportamiento correcto (FR4).
+El rojo del gate proviene **solo** de las referencias sin dueño, y es el estado que FR5 y el segundo AC de la
+Story 1.3 exigen.
 
 **Given** el registro nuevo,
 **When** se lee su cabecera,
@@ -637,15 +686,20 @@ para que el borrado deje de ser cierto solo en las tablas que alguien se acordó
 
 **Estado medido:** ver FR10. El inventario está ahí y no se reenumera.
 
-**Decisión abierta de rango ADR — y es de estrategia de persistencia, luego es del usuario
-([`../../CLAUDE.md`](../../CLAUDE.md) → *Per-aggregate persistence strategy*).** Las dos vías obvias están
-cerradas por medición: el **crypto-shredding** que el repo ya usa en `audit_log` (`Shared/Crypto/`,
-`PiiDiffSealer`, DEK por `EncryptionScopeId`) **no aplica a `aggregate_id`**, que es `UUID NOT NULL` y **clave de
-stream e índice** (`event_store_stream_version_uniq`, `event_store_aggregate_idx`) — una columna clave no se
-cifra; y la **tabla de correspondencia `id real → pseudónimo` está vetada por D4**, en columna y en JSONB. La
-única vía viable identificada es que el `aggregate_id` **nazca** como sustituto derivado por sujeto y la erasure
-destruya el secreto de derivación — lo que toca **todos** los eventos, el replay de proyecciones y
-`projection_checkpoint`.
+**Decisión de rango ADR — de estrategia de persistencia, luego del usuario
+([`../../CLAUDE.md`](../../CLAUDE.md) → *Per-aggregate persistence strategy*): TOMADA (2026-08-01) y registrada
+en D12 de [`../../docs/adr/event-store-and-projections.md`](../../docs/adr/event-store-and-projections.md).**
+El log pasa a ser *append-only con un conjunto cerrado de mutaciones sancionadas* —hoy una: el borrado GDPR—,
+igual que su hermano `audit_log`: un **único `UPDATE`** reescribe el identificador del sujeto con un UUID
+aleatorio nuevo acuñado en el borrado, **en la columna y en las claves de `payload`**, dentro de la transacción
+que `FulfilIdentityErasure` ya posee. **Los dos ejes se cierran en la misma entrega.**
+
+*Corregido tras medir: este bloque afirmaba que «la única vía viable identificada» era que el `aggregate_id`
+naciera como **sustituto derivado** por sujeto. Esa vía está **vetada por el mismo D4** que veta el crosswalk —
+prohíbe la tabla de mapeo **y la derivación determinista**, con esas palabras. Y dos premisas más cedieron al
+medirlas: la `UNIQUE` de stream **no restringe nada hoy** (`tenant_id` se escribe siempre `NULL` y Postgres usa
+`NULLS DISTINCT`), y **ninguna consulta de `src/` lee `aggregate_id` de vuelta** — el índice de agregado no sirve
+a ningún consumidor de producción. La columna era mucho menos intocable de lo que el corte supuso.*
 
 **Encuadre correcto del problema, porque «el crypto-shredding no aplica» se malinterpreta:** el crypto-shredding
 aplica a **secretos** y no aplica a una **clave indexada**, así que esto **no es un problema criptográfico sino

@@ -142,12 +142,13 @@ development_status:
   # No introduce principio nuevo: extiende el patrón ya institucionalizado (registro declarativo + gate
   # obligatorio, 6 instancias). Unidad = EJE de garantía, no issue: cada historia instala declaración +
   # mecanismo + control capaz de fallar. Orden de merge safe-first (las historias van en ese orden, no en
-  # G-N numérico): G-4a → G-1a → (G-1b · G-2) → G-3a · G-3b. G-1b y G-2 tienen gate en G-1a (el eje, que
-  # llega VERDE); G-4a, G-3a y G-3b son independientes y paralelizables. G-4a primero por ser la única fuga
-  # viva medida — y es la primera instancia de SI-21, no una excepción a él.
-  # G-3a y G-3b arrancan con una DECISIÓN de diseño abierta (qué cuenta como segundo testigo · dónde vive el
-  # schedule de Iam). Precondición normativa de la épica: ninguna implementación empieza antes de que esa
-  # decisión quede registrada por escrito; con recomendación, la primera tarea es confirmarla o refutarla.
+  # G-N numérico): G-4a → (G-1a · G-1b) → G-2 → G-3a · G-3b. G-1a y G-1b SE ENTREGAN JUNTAS en una sola PR, de
+  # modo que el rojo del gate vive dentro de la entrega y `main` nunca se rompe; G-2 deja de estar bloqueada.
+  # G-4a, G-3a y G-3b son independientes y paralelizables. G-4a primero por ser la única fuga viva medida — y es
+  # la primera instancia de SI-21, no una excepción a él.
+  # NINGUNA historia de la épica tiene ya decisión abierta: las tres de G-1a, la de G-3a, la de G-3b y la de G-5
+  # están tomadas y registradas (2026-08-01) en sus artefactos y, para G-5, en un ADR. La precondición normativa
+  # de la épica queda satisfecha; lo que falta es artefacto de contexto en G-1b, G-2 y G-5, no decisión.
   # Definición de hecho de la épica: ninguna historia llega a done sin pase adversarial REGISTRADO por alguien
   # distinto del autor, declarando dónde quedó (CLAUDE.md → Security review → Process).
   # FUERA: G-4b (eje Messenger completo) diferida, bloqueada por el ownership de referencias nacidas en
@@ -157,17 +158,76 @@ development_status:
   # o deploy rolling, momento en el que pasa a defecto de DISPONIBILIDAD urgente.
   epic-gdpr-hardening: in-progress
   g-4a-fuga-passwordresetcompleted-transportes-messenger: done
-  g-1a-eje-declaracion-atributo-registro-generado-gate: backlog
+  # G-1a: pase adversarial del CONTRATO hecho y registrado, y las TRES decisiones que abrió, ratificadas por
+  # Sergio (2026-08-01). D1=① el gate ATERRIZA EN ROJO por Membership.user_id e Invitation.invited_user_id —
+  # es el estado que FR5 (:97) y el 2º AC de G-1b (:488-490) exigen; el "llega verde" de FR4 era la frase
+  # insatisfacible y quedó corregido en epics (:91, :314, :418, :449). D2=híbrida: el atributo va a
+  # Shared/Privacy/Domain, pero NO se construyen puerto ni adaptador (el registro solo lo lee el gate); el motor
+  # va a tests/Support, y epics:219-221 queda corregido. D3=dos estados + universo COMPLETO (toda columna
+  # Types::GUID, ~16 líneas) — sin filtro de nombre, que era el punto ciego; y el check de cableado hace de
+  # segundo testigo de SI-22 refutando sola toda clasificación person falsa-positiva.
+  # SI-22 se reescribió después del corte: lo exigido es VERIFICACIÓN BIDIRECCIONAL contra la fuente, no
+  # generar. Generar es implementación admisible y aquí no compra nada — solo emitiría la clave (lo que las dos
+  # direcciones ya clavan) y NO puede aportar el dueño de borrado. G-1a NO construye generador; el motor de
+  # descubrimiento vive en tests/Support, solo lectura. FR3/NFR2/FR4 y el paso ② del addendum reconciliados.
+  # ENTREGA CONJUNTA G-1a + G-1b EN UNA SOLA PR (Sergio, 2026-08-01): el gate aterriza en ROJO por
+  # Membership.user_id e Invitation.invited_user_id y sale VERDE dentro de la misma entrega, porque la cadena
+  # las ejecuta. El rojo intermedio es OBLIGATORIO y visible en la secuencia de commits — es la evidencia del
+  # 2º AC de G-1b (epics:488-490) — y `main` NUNCA queda roto, así que G-2 deja de estar bloqueada y puede
+  # correr en paralelo como el DAG preveía. No colapses ambos pasos en un commit único: escondería la evidencia.
+  g-1a-eje-declaracion-atributo-registro-verificado-gate: ready-for-dev
+  # G-1b viaja en la PR de G-1a (ver arriba). Sigue en backlog porque aún no tiene artefacto de contexto: su
+  # 2º AC presupone el gate de 1.2 en rojo por sus dos referencias, y ese estado ya está garantizado por D1=①.
   g-1b-referencias-huerfanas-membership-invitation: backlog
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
-  g-3a-segundo-testigo-del-registro: backlog
-  g-3b-schedule-observable-alertado-del-reconciliador: backlog
+  # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
+  # aceptación que YA EXISTE (features/backoffice/users/erase.feature:46-59), declarado como TERCER segmento de
+  # la línea del registro y leído como CORPUS DE TEXTO — evidencia de grado aceptación al precio de un gate
+  # unitario, sin Behat, sin BD. Precedente de leer api/features desde un gate: BehatSuiteCoverageGateTest.
+  # El reencuadre es la decisión: el testigo atestigua que EL CAMINO DE BORRADO DECLARADO BORRA una fila que él
+  # no declaró — no que alguien escriba el tipo. Justificación: cementerio y obligación-sin-ejecutar son modos de
+  # fallo DISTINTOS y un solo check no sirve a los dos; el staleness se estrecha a las líneas non-person.
+  # El riesgo de construibilidad que registró el corte era FALSO por partida doble: el testigo ya estaba
+  # commiteado, y la opción del escritor de producción no estaba bloqueada por planificación sino por la cola de
+  # crypto-shredding/retención que abriría (User implementando AuditedEntity son 2 métodos).
+  # Extraer un rule object es CRITERIO DE ACEPTACIÓN, no refactor: los AC de falsabilidad son insatisfacibles
+  # mientras todo sean métodos privados sobre constantes fijas.
+  # DECLARAR EN EL PR: esta historia no protege ningún dato hoy — nada escribe resource_type='User' todavía.
+  g-3a-segundo-testigo-del-registro: ready-for-dev
+  # G-3b: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. Iam/Identity ESTRENA SU PROPIO
+  # schedule. La pregunta de frontera estaba sobredimensionada: Iam.Identity ya está en deptrac y su capa
+  # Infrastructure ya admite Vendor.Symfony/Psr, y los transportes de scheduler NO se declaran en messenger.yaml
+  # (los crea AddScheduleMessengerPass) — coste real: DOS líneas de Compose, cero de deptrac, cero de allowlist.
+  # Descartada la inversión por puerto: PersonResourceReferences:17-20 ya litiga ese caso en el árbol, y exigiría
+  # un registro de tipos-persona en runtime para una población de UNO.
+  # El trabajo real es la ALARMA y el COSTE POR TICK: logger->error() con CONTEO (nunca ids: un control GDPR que
+  # loguea ids de persona es SI-21 roto por el control que lo hace cumplir), template ReportDeadLetterBacklogHandler
+  # y NO ReconcileSubjectErasuresHandler; y un puerto de existencia en vez del repositorio de agregados, porque
+  # findById() hidrata un User completo (email + password_hash) por cada id, cada tick.
+  # PLEGADOS A PROPÓSITO Y AUTORIZADOS (Sergio, 2026-08-01), declarados en el PR: ReconcileSubjectErasuresHandler
+  # loguea a warning (prod lo DESCARTA: fingers_crossed action_level error) y loguea la lista de ids. Dos
+  # arreglos con un test cada uno. Su alarma no ha sonado nunca en producción.
+  # INCLUIDO el gate de consumo de schedules: sin él "agendado" es infalsable — un schedule puede shippear muerto
+  # con todos los gates verdes. Cuesta un bind mount de solo lectura de los Compose (precedente: gate del
+  # contrato de errores). Aplica retroactivamente a los dos schedules existentes.
+  g-3b-schedule-observable-alertado-del-reconciliador: ready-for-dev
   # G-5 (FR10) NO estaba en el corte original: se descubrió midiendo al contextualizar G-4a. El `event_store`
   # conserva el id real del sujeto a perpetuidad (aggregate_id de 6 eventos + payload de SessionStarted y los
   # seis Invitation*), ningún routing lo cambia y la cadena de erasure no toca la tabla — luego G-4a persigue la
   # fuga MENOR. No se abrió issue (decisión de Sergio, 2026-07-30: el contador ya está saturado); vive aquí y en
-  # epics-gdpr-hardening.md. Bloqueada por una decisión de ESTRATEGIA DE PERSISTENCIA que es del usuario y va a
-  # ADR: crypto-shredding no aplica a una columna clave e indexada, y D4 veta la tabla de correspondencia.
+  # epics-gdpr-hardening.md. La decisión de ESTRATEGIA DE PERSISTENCIA está TOMADA (Sergio, 2026-08-01) y
+  # registrada en D12 de docs/adr/event-store-and-projections.md: el log pasa a append-only CON UN CONJUNTO
+  # CERRADO DE MUTACIONES SANCIONADAS —hoy una, el borrado GDPR—, igual que su hermano audit_log. Un único
+  # UPDATE reescribe el id del sujeto con un UUID aleatorio nuevo acuñado en el borrado, EN LA COLUMNA Y EN LAS
+  # CLAVES DE PAYLOAD, dentro de la transacción que FulfilIdentityErasure ya posee.
+  # Tres premisas del corte cedieron al medirlas: (1) la vía que llamaba "única viable" —aggregate_id nacido
+  # como sustituto DERIVADO— está VETADA por el mismo D4 que veta el crosswalk (prohíbe la tabla de mapeo Y la
+  # derivación determinista, con esas palabras); (2) la UNIQUE de stream no restringe nada mientras tenant_id se
+  # escriba NULL (Postgres usa NULLS DISTINCT); (3) NINGUNA consulta de src/ lee aggregate_id de vuelta.
+  # El inventario de FR10 se dejaba SessionRevoked, corregido.
+  # LOS DOS EJES SE CIERRAN JUNTOS: una historia que solo reescriba aggregate_id deja su propio test falsable en
+  # verde mientras el id sigue vivo en el payload de al lado — NFR3 fallando dentro de la historia que lo instala.
+  # Sigue en backlog por falta de artefacto de contexto, no por decisión abierta.
   # Mientras G-5 no cierre, la épica NO puede declararse completada.
   g-5-ids-de-persona-fuera-del-event-store: backlog
   epic-gdpr-hardening-retrospective: optional

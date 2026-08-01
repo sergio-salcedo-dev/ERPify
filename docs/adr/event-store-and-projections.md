@@ -291,6 +291,63 @@ con backlog (dejaría de ponerse al día con eventos ajenos), así que exigiría
 periódico fuera del hot path** y medir contención real sobre `projection_checkpoint` antes de decidir. Con un solo
 proyector esa maquinaria es puro coste sin beneficio.
 
+### D12 — `event_store` es append-only **con un conjunto cerrado de mutaciones sancionadas**: el borrado GDPR
+
+`PersistDomainEventMiddleware` escribe **todo** evento despachado **antes** de que Messenger decida transporte,
+así que ocurre con `async`, con `sync` y sin enrutar. Para los eventos cuyo agregado **es una persona**, el
+`aggregate_id` **es** el id real del sujeto; y `SessionStarted`, `SessionRevoked` y los seis `Invitation*` lo
+llevan además en el `payload`. Nada en la cadena de erasure toca esta tabla, de modo que el identificador de una
+persona **sobrevive a su propio borrado, para siempre**. Eso es incompatible con SI-21.
+
+**Decisión: el log deja de ser estrictamente inmutable y pasa a ser _append-only con un conjunto cerrado de
+mutaciones de primera clase_ — hoy exactamente una.** Es la misma forma que
+[`audit-activity-log.md`](./audit-activity-log.md) ya adoptó para el log hermano de PII, y **no introduce un
+principio nuevo**: lo extiende al log de negocio.
+
+**La política.** Al ejercerse el derecho de supresión, un **único `UPDATE` parametrizado** reescribe el
+identificador del sujeto con **un UUID aleatorio nuevo acuñado en el borrado** —sin valor original, sin tabla de
+mapeo, sin derivación determinista—, **en la columna y en las claves de `payload`**, dentro de la transacción que
+`FulfilIdentityErasure` ya posee. Es idempotente por construcción: una segunda pasada no encuentra nada.
+
+**Por qué el borrado es por coincidencia de valor y no por enumeración de eventos.** Un `WHERE` sobre el id del
+sujeto alcanza **todo evento presente y futuro** que lo contenga, sin que ningún productor tenga que acordarse de
+nada. Cualquier mecanismo preventivo —que el id nunca llegue a escribirse— depende de la memoria de quien añada
+el próximo evento, y para ser fiable necesitaría **su propio gate**: más maquinaria para una garantía más débil.
+
+**Los dos ejes se cierran juntos, y no es un detalle de alcance.** Una implementación que solo reescriba
+`aggregate_id` deja `SELECT aggregate_id FROM event_store` en verde mientras el id sigue vivo en el `payload` de
+la fila contigua — una declaración cuya única evidencia es la mitad que eligió mirar.
+
+**Alternativas descartadas:**
+
+- **Crypto-shredding del `aggregate_id`.** No aplica: una clave indexada no se cifra. Y es **peor que
+  inaplicable** — el keystore indexa por la cadena de scope y `destroy()` **conserva la fila**, así que un scope
+  por sujeto dejaría el id real ahí para siempre: un no-op con pasos extra.
+- **Tabla de correspondencia `id real → seudónimo`.** Vetada por D4 de [`audit-activity-log.md`](./audit-activity-log.md).
+- **Derivación determinista del seudónimo.** Vetada por el mismo D4, explícitamente.
+- **Que el `aggregate_id` nazca como sustituto** (un `event_stream_id` propio en la fila del sujeto, que muere
+  con ella). Es la alternativa seria, y pierde por alcance: **no toca el eje de `payload`**, luego necesitaría
+  esta misma política igualmente; exige migración, todo constructor de evento y un gate propio; y obligaría a
+  reinterpretar la prohibición de crosswalk para el caso de una columna. *Se reevalúa si se activa el trigger de
+  abajo.*
+- **No persistir esos eventos, o partir la tabla.** No persistirlos destruye la **única** traza de suspensión,
+  desactivación, cambio de rol y bloqueo — de la que depende hoy la regla que exige degradar a un administrador
+  antes de borrarlo. Una segunda tabla borrable exige un `stream()` que una dos orígenes preservando una
+  `sequence` monótona única para un solo checkpoint: estrictamente más caro para el mismo resultado.
+
+**Qué empeora, y la regla que lo acota.** El replay deja de ser **históricamente reproducible**: tras un borrado,
+reproyectar produce un identificador distinto del emitido. Hoy es inocuo —ningún proyector lee `aggregate_id`—,
+pero el día que un proyector claveara un read model de persona por esa columna, un rebuild post-borrado lo
+re-clavearía **en silencio**. **Regla, no código: un proyector nunca clavea un read model de persona por el
+identificador real.** Los docblocks que hoy dicen «append-only» a secas pasan a decir «append-only, con un
+conjunto cerrado de mutaciones sancionadas», como ya hace `audit_log`.
+
+**Trigger de revisita:** (a) que un agregado-persona pase a ser **event-sourced de verdad** —una clave de stream
+reescrita cambiaría la identidad de un agregado vivo—, o (b) que aterrice el **relay externo** de D8: un `UPDATE`
+aguas arriba **no** se propaga a un sumidero ya replicado. Nótese que (b) no exime a la alternativa del
+sustituto: el eje de `payload` se fuga igual, así que un relay necesita su propio dueño de borrado en ambos
+mundos.
+
 ## Flujo completo
 
 ```
