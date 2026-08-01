@@ -521,6 +521,15 @@ otro rojo, y cualquier rojo del gate nuevo por otra propiedad, es una regresión
   - [ ] Checklist de seguridad de `CLAUDE.md` sobre el diff.
   - [ ] **Pase adversarial sobre el código, por alguien distinto del autor, REGISTRADO.** El pase sobre el
         **contrato** ya está hecho y registrado abajo; éste es el segundo, y ninguno sustituye al otro.
+  - [ ] **Su alcance cubre las DOS historias, porque la entrega es conjunta.** Además del eje de G-1a, tiene que
+        atacar lo que G-1b trae y esta historia no: la cadena de erasure ejecutando `Membership::$userId` e
+        `Invitation::$invitedUserId` —incluido que `InvitationRepository` **no expone hoy remove/delete**
+        (`:19,:21,:29`), así que aparece método de puerto nuevo— y el **invariante ≥1 ADMIN activo**, que
+        `keepsAnActiveAdminWithout` lee sobre `identity_user` y **no** sobre membership, de modo que una
+        membership fantasma con rol `ADMIN` lo deja leyendo satisfecho. Ese invariante es de **seguridad**, es
+        el más fácil de romper bajo concurrencia y ya tiene deuda registrada en `deferred-work.md` (#462: la
+        guarda corre **fuera** de la transacción de escritura). **Declara en el PR que el pase lo cubrió**, no
+        solo que cubrió el gate.
 
 ## Pase adversarial — CONTRATO. REGISTRADO (NFR10 / `CLAUDE.md` → *Security review* → **Process**)
 

@@ -165,10 +165,18 @@ development_status:
   # va a tests/Support, y epics:219-221 queda corregido. D3=dos estados + universo COMPLETO (toda columna
   # Types::GUID, ~16 líneas) — sin filtro de nombre, que era el punto ciego; y el check de cableado hace de
   # segundo testigo de SI-22 refutando sola toda clasificación person falsa-positiva.
-  # CONSECUENCIA DE SECUENCIA, NO NEGOCIABLE: `main` queda con php.quality en ROJO hasta que G-1b cierre.
-  # Autorizado con la condición de que G-1b va INMEDIATAMENTE DESPUÉS y G-2 ESPERA. Si eso cambia, no se
-  # debilita el gate: G-1b entra en la misma PR.
-  g-1a-eje-declaracion-atributo-registro-generado-gate: ready-for-dev
+  # SI-22 se reescribió después del corte: lo exigido es VERIFICACIÓN BIDIRECCIONAL contra la fuente, no
+  # generar. Generar es implementación admisible y aquí no compra nada — solo emitiría la clave (lo que las dos
+  # direcciones ya clavan) y NO puede aportar el dueño de borrado. G-1a NO construye generador; el motor de
+  # descubrimiento vive en tests/Support, solo lectura. FR3/NFR2/FR4 y el paso ② del addendum reconciliados.
+  # ENTREGA CONJUNTA G-1a + G-1b EN UNA SOLA PR (Sergio, 2026-08-01): el gate aterriza en ROJO por
+  # Membership.user_id e Invitation.invited_user_id y sale VERDE dentro de la misma entrega, porque la cadena
+  # las ejecuta. El rojo intermedio es OBLIGATORIO y visible en la secuencia de commits — es la evidencia del
+  # 2º AC de G-1b (epics:488-490) — y `main` NUNCA queda roto, así que G-2 deja de estar bloqueada y puede
+  # correr en paralelo como el DAG preveía. No colapses ambos pasos en un commit único: escondería la evidencia.
+  g-1a-eje-declaracion-atributo-registro-verificado-gate: ready-for-dev
+  # G-1b viaja en la PR de G-1a (ver arriba). Sigue en backlog porque aún no tiene artefacto de contexto: su
+  # 2º AC presupone el gate de 1.2 en rojo por sus dos referencias, y ese estado ya está garantizado por D1=①.
   g-1b-referencias-huerfanas-membership-invitation: backlog
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   g-3a-segundo-testigo-del-registro: backlog
