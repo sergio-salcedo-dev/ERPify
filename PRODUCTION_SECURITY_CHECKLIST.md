@@ -456,10 +456,14 @@ mitigated state. Accepting one means recording who accepted it and against which
       (2) A future write path that creates a person-referencing row without going through the erasure chain
       reintroduces the residue silently. The sibling axis already answers this with
       `identity:gdpr:reconcile-subject-references`, whose docblock states the reasoning
-      (*"divergence surfaced beats divergence assumed away"*); the equivalent join for these two columns
-      (`membership`/`iam_invitation` LEFT JOIN `identity_user` WHERE the identity is gone) is not built.
-      Tracked as **G-1c** in the GDPR-hardening epic, which also carries the ordering gate: G-3b schedules
-      that reconciler, so G-3b must not merge first or it schedules one that sees a single axis. The
+      (*"divergence surfaced beats divergence assumed away"*); the equivalent join is not built. Its scope is
+      **four** columns, not the two this axis closed: `membership.user_id`, `iam_invitation.invited_user_id`,
+      `iam_session.user_id` and `identity_password_reset_token.user_id` carry the same defect exactly, and
+      none of them has a foreign key — nothing in the schema references `identity_user` at all.
+      Tracked as **G-1c** in the GDPR-hardening epic. The ordering note against G-3b — which schedules the
+      same reconciler — is **moot under the option G-1c ships**: one reconciler extended with a lister per
+      owning context, so a schedule created first picks the new axis up with no revisit. It bites only if
+      that decision is reopened toward one reconciler per context, and is kept as that tripwire. The
       **backfill half is measured away** — no production environment exists, so there are no real erased
       subjects with surviving orphan rows; the story is prospective. Close it before claiming the axis is
       enforced at runtime rather than at build time.

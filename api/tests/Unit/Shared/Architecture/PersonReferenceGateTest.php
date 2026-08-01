@@ -146,11 +146,7 @@ final class PersonReferenceGateTest extends TestCase
     #[Test]
     public function noDeclarationSitsOutsideThePersistedUniverse(): void
     {
-        $references = $this->references();
-        $outside = \array_values(\array_diff(
-            \array_keys($references->declaredOwners()),
-            $references->universe(),
-        ));
+        $outside = $this->references()->strandedDeclarations();
 
         $this->assertSame([], $outside, \sprintf(
             'These properties carry a #[PersonSubjectReference] but are not persisted identifier columns: %s. '

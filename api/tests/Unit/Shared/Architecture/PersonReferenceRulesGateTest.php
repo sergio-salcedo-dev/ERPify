@@ -81,9 +81,17 @@ final class PersonReferenceRulesGateTest extends TestCase
     public function theFixtureTreeIsActuallyScanned(): void
     {
         // If the fixture FQCNs did not reconstruct, class_exists() would be false for all of them and the
-        // three fixture tests above would pass while scanning nothing at all. Asserting the exact pair also
-        // pins the type filter: `$label` is a column and must stay out.
+        // three fixture tests above would pass while scanning nothing at all. Asserting the exact list also
+        // pins every derivation rule at once: `$label` is a column and must stay out; `$custodian`,
+        // `$delegate` and `$deputy` cover the annotated and plain to-one forms, so keying on the join column
+        // or reading only `ManyToOne` drops one of them; and `$inheritedSubjectId` reaches the universe only
+        // through the child, so removing the parent-property fold removes it. Each rule has a member here
+        // whose absence is a failure — which is the difference between a rule that holds and one nothing runs.
         $this->assertSame([
+            self::FIXTURE_NAMESPACE . 'InheritedColumnFixtureEntity::$inheritedSubjectId',
+            self::FIXTURE_NAMESPACE . 'PersonReferenceFixtureEntity::$custodian',
+            self::FIXTURE_NAMESPACE . 'PersonReferenceFixtureEntity::$delegate',
+            self::FIXTURE_NAMESPACE . 'PersonReferenceFixtureEntity::$deputy',
             self::FIXTURE_NAMESPACE . 'PersonReferenceFixtureEntity::$subjectId',
             self::FIXTURE_NAMESPACE . 'PersonReferenceFixtureEntity::$tenantId',
         ], $this->overFixtures('policy.complete')->universe(), 'The fixture sweep derived the wrong columns.');
@@ -167,6 +175,17 @@ final class PersonReferenceRulesGateTest extends TestCase
 
         $this->assertArrayHasKey($stranded, $references->declaredOwners());
         $this->assertNotContains($stranded, $references->universe());
+        $this->assertContains($stranded, $references->strandedDeclarations());
+
+        // The abstract parent of a mapped column is the opposite case, and telling them apart is the whole
+        // point: the property is declared once on the parent, so it cannot be annotated per child, and a
+        // check reading the key literally would leave that shape with no way to declare at all.
+        $this->assertNotContains(
+            self::FIXTURE_NAMESPACE . 'AbstractFixtureColumnCarrier::$inheritedSubjectId',
+            $references->strandedDeclarations(),
+            'A declaration on the parent of a column a concrete entity inherits was reported as stranded, '
+            . 'which leaves that mapping no green state at all.',
+        );
     }
 
     private function parseFailureOf(string $registry): string

@@ -45,9 +45,15 @@
 #     and `event_store.aggregate_id` have NONE and are standing leaks with their own stories — the first is
 #     written with the subject's real id by the very use case this file names as the owner of `User::$id`,
 #     deliberately, as the compliance evidence that the erasure happened.
-#   - It only sees `Types::GUID` columns and to-one join columns. A person's id persisted in a plain string
-#     column, or in a column whose type Doctrine infers rather than the property declaring it, is invisible
-#     here — a rename of the type is enough to leave the sweep, and nothing below this line would change.
+#   - It only sees `Types::GUID` columns and TO-ONE ASSOCIATIONS (`#[ORM\ManyToOne]`, `#[ORM\OneToOne]` —
+#     read at the association attribute, because `#[ORM\JoinColumn]` is optional and the plainer form is the
+#     one written by default). A person's id persisted in a plain string column, or in a column whose type
+#     Doctrine infers rather than the property declaring it, is invisible here — a rename of the type is
+#     enough to leave the sweep, and nothing below this line would change.
+#   - It does not reach a column that belongs to ANOTHER table than the declaring entity's: a `#[ORM\JoinTable]`
+#     behind a `#[ORM\ManyToMany]` holds both ids in a table no property declares, and an `#[ORM\Embeddable]`
+#     carries its columns into whatever embeds it while declaring no `#[ORM\Entity]` of its own, so neither
+#     side of that pair enters the universe.
 #   - It derives from ONE class per file, named after its path. Doctrine discovers entities by including the
 #     file and reading every class declared in it, so a second entity in the same file, or a class whose name
 #     does not match its filename, is mapped by Doctrine and unseen here.

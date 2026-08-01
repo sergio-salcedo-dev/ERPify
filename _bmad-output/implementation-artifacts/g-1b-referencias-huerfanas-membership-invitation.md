@@ -415,7 +415,9 @@ propuestos colisiona).
 
 ## Pase adversarial — IMPLEMENTACIÓN. REGISTRADO (`CLAUDE.md` → *Security review* → **Process**)
 
-**Dónde queda el registro: aquí, y reproducido en el cuerpo de la PR #616.** **Cuándo:** 2026-08-01, sobre el
+**Dónde queda el registro: aquí, y reproducido en el cuerpo de la PR #618**, que es la que lo aplica. No en
+#616: esa mergeó antes de que los hallazgos existieran en forma empujada, y decir lo contrario haría que el
+propio registro del pase adversarial apuntase a un sitio donde nunca estuvo. **Cuándo:** 2026-08-01, sobre el
 código ya escrito y con los tres gates en verde — es decir, sobre lo que un build verde NO detecta.
 **Quién:** tres lecturas hostiles independientes, en contexto fresco, por revisores **distintos del autor**,
 con instrucción explícita de refutar, prohibición de aceptar como cierta ninguna afirmación del código, de los
@@ -450,9 +452,15 @@ revisores por resetear la BD; la corrió el autor) ni PWA (cero cambios).
   identidad, tokens, trail y sesiones, no la membresía ni las invitaciones. Para una operación cuyo diseño
   entero descansa en un consentimiento informado y auditado, eso es un defecto. **Corregido**, junto al
   `setHelp()`, el docblock de la clase y el del controlador.
-- **MEDIO — `make php.lint.*` salía verde con un `--filter` que no casaba con nada** (`failOnEmptyTestSuite`
-  no estaba puesto). Afectaba a los cuatro gates de lint, no solo al nuevo. **Corregido en la config de
-  PHPUnit**, y verificado: un filtro con typo ahora sale distinto de cero.
+- **MEDIO — el `--filter` por prefijo sale verde con un subconjunto estricto.** Una segunda medición corrige
+  dos afirmaciones del hallazgo tal como se registró primero. Una: `failOnEmptyTestSuite` no cerró nada que
+  no estuviera cerrado — PHPUnit 13.2.4 lo resuelve por defecto a `hasExplicitTestSelection()`
+  (`TextUI/Configuration/Merger.php:177`), cierto en cuanto hay `--filter`, de modo que un filtro con typo ya
+  salía distinto de cero; el atributo solo cambia las corridas SIN filtro. Dos: los gates de lint dirigidos
+  por `--filter` son **seis**, no cuatro. El agujero real es otro y sí estaba abierto: un prefijo que casa dos
+  clases sigue saliendo 0 si una desaparece, porque la otra mantiene la suite no vacía. **Corregido**
+  seleccionando cada clase por su nombre en su propia corrida dentro del mismo target — una clase que se va
+  deja una suite vacía y el target aborta. Medido: filtro a una clase inexistente → exit 1.
 - **MEDIO — los dobles in-memory comparaban UUID con distinción de mayúsculas** mientras las columnas son
   `uuid` de Postgres, que no la hace. Divergencia en la dirección «el test es más estricto que producción»:
   ningún test podía fallar por ella. **Corregidos con `strcasecmp`** y fijado con un test que borra pasando
