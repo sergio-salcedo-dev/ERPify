@@ -11,18 +11,18 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 /**
- * Falsifiability of the rules {@see PersonResourceErasureGateTest} asserts over the real tree: it drives
- * {@see AuditResourceTypeRegistry} across a fixture tree and over real files chosen for the property they
- * lack, so each check is shown to go red for the reason claimed rather than being taken on trust.
+ * Falsifiability of the REGISTRY rules {@see PersonResourceErasureGateTest} asserts over the real tree: it
+ * drives {@see AuditResourceTypeRegistry} across a fixture tree, so each check is shown to go red for the
+ * reason claimed rather than being taken on trust.
  *
- * The witness rule is the one that needed this most. It is the second witness of a registry whose only
- * manual entry could otherwise satisfy its own liveness check, so a witness rule that silently accepted
- * everything would reinstate exactly the circularity it was introduced to break — and nothing about a green
- * build would say so. The fixture twins carry the two ways a scenario can name a type and testify to
- * nothing: asserting the row is still there, and asserting an absence it never created.
+ * Two of them carry the weight. The staleness narrowing has to report a graveyard entry and spare a person
+ * line in the same run, because a rule that did neither and a rule that did both are both wrong and neither
+ * is visible from one half alone. And the parser has to REJECT rather than degrade: every person-only rule
+ * skips whatever is not a person line, so a spelling that quietly falls through to `non-person` takes the
+ * erasure obligation with it.
  *
- * Split from its sibling because one class carrying both would exceed the public-method ceiling, and the
- * make target selects them together through a common prefix rather than naming either.
+ * Separate from {@see PersonResourceErasureWitnessGateTest} along the seam the production code already has,
+ * and the make target selects both through a common prefix rather than naming either.
  *
  * @internal
  */
@@ -32,72 +32,6 @@ final class PersonResourceErasureRulesGateTest extends TestCase
     private const string FIXTURES = __DIR__ . '/Fixture/PersonResource';
 
     private const string TYPE = 'FixtureResource';
-
-    private const string ERASURE_OWNER = 'src/Iam/Identity/Application/FulfilIdentityErasure.php';
-
-    #[Test]
-    public function theWitnessCheckAcceptsAScenarioThatSeedsTheTypeAndAssertsItIsGone(): void
-    {
-        $this->assertNull(
-            $this->overFixtures('registry.complete')
-                ->witness()->defectIn(self::TYPE, 'features/witness-complete.feature'),
-            'The witness rule rejected a scenario that writes the type and asserts none survives, so the '
-            . 'reds below prove nothing.',
-        );
-    }
-
-    #[Test]
-    public function theWitnessCheckRejectsAScenarioThatNeverAssertsTheRowIsGone(): void
-    {
-        $defect = $this->overFixtures('registry.complete')
-            ->witness()->defectIn(self::TYPE, 'features/witness-without-erasure.feature')
-        ;
-
-        $this->assertNotNull($defect, 'A scenario that only watches the write was accepted as a witness.');
-        $this->assertStringContainsString('never asserts that no row of it survives', $defect);
-    }
-
-    #[Test]
-    public function theWitnessCheckRejectsAScenarioThatNeverWritesTheType(): void
-    {
-        // The vacuous half: asserting an absence over a row that was never created holds with the erasure
-        // deleted entirely, which is the precedent this epic already paid for once.
-        $defect = $this->overFixtures('registry.complete')
-            ->witness()->defectIn(self::TYPE, 'features/witness-without-write.feature')
-        ;
-
-        $this->assertNotNull($defect, 'A scenario that never seeds the type was accepted as a witness.');
-        $this->assertStringContainsString('never writes a row of', $defect);
-    }
-
-    #[Test]
-    public function theWitnessCheckRejectsTheErasureOwnerItself(): void
-    {
-        // What keeps the declaration from testifying for itself. It is a path rule rather than a comparison
-        // of the two segments: an owner is a `.php` under `src/`, so refusing that shape as a witness is
-        // what makes the two disjoint, and this is the case that would notice the prefix being relaxed.
-        $defect = $this->registry()->witness()->defectIn('User', self::ERASURE_OWNER);
-
-        $this->assertNotNull($defect, 'The erasure owner was accepted as the witness of its own declaration.');
-        $this->assertStringContainsString('is not a .feature file under features/', $defect);
-    }
-
-    #[Test]
-    public function theWitnessCheckRejectsADirectoryAndATraversal(): void
-    {
-        $witness = $this->registry()->witness();
-
-        // is_file() is what stops the first: file_exists() is true for a directory, so a bare directory
-        // would silence every check downstream with nothing written at all.
-        $this->assertNotNull(
-            $witness->defectIn('User', 'features/backoffice'),
-            'A directory was accepted as the witness of a person type.',
-        );
-        $this->assertNotNull(
-            $witness->defectIn('User', 'features/../../etc/passwd'),
-            'A path escaping the repository was accepted as a witness.',
-        );
-    }
 
     #[Test]
     public function theStalenessCheckReportsTheGraveyardAndSparesThePersonLine(): void
@@ -157,11 +91,6 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         }
 
         $this->fail(\sprintf('%s parsed without complaint; the parser degraded it instead of rejecting.', $registry));
-    }
-
-    private function registry(): AuditResourceTypeRegistry
-    {
-        return AuditResourceTypeRegistry::fromGateLocation(__DIR__);
     }
 
     private function overFixtures(string $registry): AuditResourceTypeRegistry

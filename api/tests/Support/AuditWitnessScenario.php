@@ -15,7 +15,8 @@ namespace Erpify\Tests\Support;
  *
  * Read as TEXT, never executed: the scenario runs in the Behat suite, and none of that suite's costs (a
  * database, a reset, a seed connection) are paid here. `BehatSuiteCoverageGateTest` is the precedent — it
- * reads `api/features` from a unit gate the same way.
+ * reads `api/features` from a unit gate the same way — and it is also what makes reading enough, since it
+ * is the gate that keeps every scenario in the tree collected and unfiltered.
  *
  * @internal test support
  */
@@ -42,10 +43,10 @@ final readonly class AuditWitnessScenario
             return \sprintf('the witness declared for "%s" is unusable: %s', $type, $unreadable);
         }
 
-        $lines = $this->linesOf($witnessPath);
+        $steps = $this->stepsOf($witnessPath);
         $literal = \sprintf("'%s'", $type);
 
-        if (!$this->writes($lines, $literal)) {
+        if (!$this->writes($steps, $literal)) {
             return \sprintf(
                 '%s never writes a row of "%s", so nothing it asserts is about that type',
                 $witnessPath,
@@ -53,7 +54,7 @@ final readonly class AuditWitnessScenario
             );
         }
 
-        if (!$this->assertsNoneSurvives($lines, $literal)) {
+        if (!$this->assertsNoneSurvives($steps, $literal)) {
             return \sprintf(
                 '%s writes a row of "%s" but never asserts that no row of it survives, so it witnesses the '
                 . 'write and not the erasure',
@@ -66,20 +67,20 @@ final readonly class AuditWitnessScenario
     }
 
     /**
-     * A read of the type immediately answered with a zero count. Immediacy is what makes it mean something:
-     * a query and a count separated by other steps could be about different result sets, and the scenario
-     * would then be asserting that some unrelated one was empty.
+     * A read of the type answered by the very next step with a zero count. Adjacency is what makes it mean
+     * something: a query and a count separated by other steps could be about different result sets, and the
+     * scenario would then be asserting that some unrelated one was empty.
      *
-     * @param list<string> $lines
+     * @param list<string> $steps
      */
-    private function assertsNoneSurvives(array $lines, string $literal): bool
+    private function assertsNoneSurvives(array $steps, string $literal): bool
     {
-        foreach ($lines as $index => $line) {
-            if (!$this->reads($line, $literal)) {
+        foreach ($steps as $index => $step) {
+            if (!$this->reads($step, $literal)) {
                 continue;
             }
 
-            if (1 === \preg_match('/\b0\s+(?:records|rows)\b/i', $this->stepAfter($lines, $index))) {
+            if (1 === \preg_match('/\b0\s+(?:records|rows)\b/i', $steps[$index + 1] ?? '')) {
                 return true;
             }
         }
@@ -88,46 +89,47 @@ final readonly class AuditWitnessScenario
     }
 
     /**
-     * @param list<string> $lines
+     * @param list<string> $steps
      */
-    private function writes(array $lines, string $literal): bool
+    private function writes(array $steps, string $literal): bool
     {
         return \array_any(
-            $lines,
-            static fn (string $line): bool => \str_contains($line, $literal)
-                && 1 === \preg_match('/\bINSERT\b/i', $line),
+            $steps,
+            static fn (string $step): bool => \str_contains($step, $literal)
+                && 1 === \preg_match('/\bINSERT\b/i', $step),
         );
     }
 
-    private function reads(string $line, string $literal): bool
+    private function reads(string $step, string $literal): bool
     {
-        return \str_contains($line, $literal) && 1 === \preg_match('/\bSELECT\b/i', $line);
+        return \str_contains($step, $literal) && 1 === \preg_match('/\bSELECT\b/i', $step);
     }
 
     /**
-     * The next line carrying a step, skipping blanks and Gherkin comments — a comment between the query and
-     * its count is idiomatic in this suite and must not read as the absence of an assertion.
+     * The scenario's steps: every non-blank line that is not a Gherkin comment.
      *
-     * @param list<string> $lines
+     * Dropping comments is the same rule the sibling wiring check applies to PHP source, and for the same
+     * reason: a commented-out query naming the type is an intention, and an intention must not be able to
+     * stand in for the write or for the assertion. Without this, a `# INSERT … 'User'` line — dead text —
+     * would satisfy the write check on its own.
+     *
+     * Structural keywords stay in, so a `Scenario:` line separates two scenarios' steps and the adjacency
+     * above cannot pair a query in one with a count in the next.
+     *
+     * @return list<string>
      */
-    private function stepAfter(array $lines, int $index): string
+    private function stepsOf(string $path): array
     {
-        foreach (\array_slice($lines, $index + 1) as $line) {
+        $steps = [];
+
+        foreach (\preg_split('/\R/', (string) \file_get_contents($this->apiRoot . '/' . $path)) ?: [] as $line) {
             $trimmed = \trim($line);
 
             if ('' !== $trimmed && !\str_starts_with($trimmed, '#')) {
-                return $trimmed;
+                $steps[] = $trimmed;
             }
         }
 
-        return '';
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function linesOf(string $path): array
-    {
-        return \preg_split('/\R/', (string) \file_get_contents($this->apiRoot . '/' . $path)) ?: [];
+        return $steps;
     }
 }

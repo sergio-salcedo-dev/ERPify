@@ -42,6 +42,13 @@
 #     impossible. A declared registry is chosen over a discovered one for exactly this: it fails loudly.
 #   - The witness seeds its row with hand-written SQL, so it does not detect column drift. A rename of an
 #     `audit_log` column would break the scenario at run time, not here, and this file would still read green.
+#   - It reads the witness, it does not RUN it. That the scenario is executed at all — collected by a suite
+#     path, not excluded by a tag filter — is BehatSuiteCoverageGateTest's guarantee, not this gate's. Both
+#     have to hold; neither implies the other.
+#   - It cannot tell an assertion that had to be true from one that happened to be. A query whose predicate
+#     could never match anything, answered by a zero count, satisfies the witness rule exactly as a real
+#     erasure does. What the rule can enforce is that the scenario SEEDS the row it later fails to find; what
+#     that row is, and whether the erasure is what removed it, is a review judgement.
 #   - It cannot follow a constant imported from another class, and that blind spot is ALIVE, not theoretical:
 #     ReconcileErasedSubjectReferences.php:45 reaches the type through
 #     `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE`, and the completeness check does not see it. The line
