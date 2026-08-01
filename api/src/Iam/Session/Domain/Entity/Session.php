@@ -13,6 +13,7 @@ use Erpify\Iam\Session\Domain\Event\SessionStarted;
 use Erpify\Iam\Session\Domain\Exception\InvalidSessionTransition;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
+use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
@@ -35,6 +36,7 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 final class Session extends AggregateRoot
 {
     #[ORM\Column(name: 'user_id', type: Types::GUID)]
+    #[PersonSubjectReference(erasedBy: 'src/Iam/Session/Application/PurgeUserSessions.php')]
     private string $userId;
 
     #[ORM\Column(name: 'organization_id', type: Types::GUID)]

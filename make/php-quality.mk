@@ -120,6 +120,21 @@ php.lint.audit-resource: ## Person-resource erasure classification gate
 php.lint.persistent-transport: ## Persistent-transport person-aggregate policy gate
 	@$(PHP_TEST) bin/phpunit --filter=PersistentTransportPolicyGateTest
 
+## —— Person-reference erasure gate —————————————————————————————————————————
+
+# Fails CI when an entity declares a Types::GUID column that api/.person-reference-policy does not
+# classify, when a line there matches no column any more, when a column classified as a person
+# reference names a file that does not erase it, or when a #[PersonSubjectReference] on a property
+# disagrees with that line. Cross-context references are by id with NO physical foreign key, so
+# nothing removes a person's id from a foreign table when their identity is deleted — the obligation
+# is distributed, and every context that comes to touch a person mints another one of these columns.
+#
+# The filter is a COMMON PREFIX, not a class name: the gate is two classes (the assertions over the real
+# tree, and the falsifiability of the rules they assert), and a filter naming one of them would leave the
+# other outside the named boundary — reporting a broken rule as "PHPUnit" instead of as this gate.
+php.lint.person-reference: ## Person-reference erasure-owner gate
+	@$(PHP_TEST) bin/phpunit --filter='PersonReference.*GateTest'
+
 ## —— Deptrac (architectural boundaries) ————————————————————————————————————
 
 # Static, AST-aware gate over api/src enforcing three concerns in one ruleset
@@ -155,7 +170,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.lint.person-reference php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -173,7 +188,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.lint.person-reference php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \

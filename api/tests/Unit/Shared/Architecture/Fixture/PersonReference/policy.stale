@@ -1,0 +1,5 @@
+# Fixture registry: a line naming a property no entity declares any more — the shape a registry takes after a
+# rename, when it starts describing an erasure nothing can contradict.
+Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonReference\PersonReferenceFixtureEntity::$subjectId => person :: src/Iam/Session/Application/PurgeUserSessions.php
+Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonReference\PersonReferenceFixtureEntity::$tenantId => non-person
+Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonReference\PersonReferenceFixtureEntity::$retiredId => non-person

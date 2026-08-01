@@ -9,6 +9,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Iam\Identity\Domain\Event\PasswordResetRequested;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
+use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use SensitiveParameter;
@@ -37,6 +38,7 @@ use SensitiveParameter;
 final class PasswordResetToken extends AggregateRoot
 {
     #[ORM\Column(name: 'user_id', type: Types::GUID)]
+    #[PersonSubjectReference(erasedBy: 'src/Iam/Identity/Application/EraseIdentitySubject.php')]
     private string $userId;
 
     #[ORM\Column(name: 'token_hash')]
