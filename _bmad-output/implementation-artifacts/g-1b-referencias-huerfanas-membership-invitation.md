@@ -4,7 +4,7 @@ baseline_commit: 417b14ab
 
 # Story 1.3 (G-1b): Cerrar las referencias huérfanas de `Membership` e `Invitation` — y el invariante ≥1 ADMIN que ocultan
 
-Status: review
+Status: done
 
 <!-- Validación opcional: correr `validate-create-story` antes de `dev-story` para un check de calidad. -->
 
