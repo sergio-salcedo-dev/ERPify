@@ -4,7 +4,7 @@ baseline_commit: 9310efeb
 
 # Story 1.5 (G-3a): Segundo testigo del registro — que el check de vigencia deje de autosatisfacerse
 
-Status: review
+Status: done
 
 > **LA DECISIÓN ESTÁ TOMADA Y REGISTRADA** (ver *Decisión registrada*): el testigo es el **escenario de
 > aceptación que ya existe**, declarado como tercer segmento de la línea del registro, y el check de vigencia
@@ -337,8 +337,7 @@ expectativas) y no las toca esta historia.
 
 ### Pendiente
 
-Nada. La Tarea 7 está cumplida: puertas verdes en ejecución fresca y **pase adversarial hecho y registrado**
-(ver arriba). Falta solo la decisión de Sergio sobre abrir la PR.
+Nada. Shipped en #621 (merge `8987eb69`, 2026-08-02).
 
 ## References
 

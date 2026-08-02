@@ -1,5 +1,5 @@
 # generated: 2026-06-23
-# last_updated: 2026-08-01
+# last_updated: 2026-08-02
 # project: ERPify
 # project_key: NOKEY
 # tracking_system: file-system
@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-08-01
+last_updated: 2026-08-02
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -224,7 +224,7 @@ development_status:
   g-1c-control-detective-referencias-cross-context: backlog
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
-  # aceptación que YA EXISTE (features/backoffice/users/erase.feature:46-59), declarado como TERCER segmento de
+  # aceptación que YA EXISTE (features/backoffice/users/erase.feature:49-62), declarado como TERCER segmento de
   # la línea del registro y leído como CORPUS DE TEXTO — evidencia de grado aceptación al precio de un gate
   # unitario, sin Behat, sin BD. Precedente de leer api/features desde un gate: BehatSuiteCoverageGateTest.
   # El reencuadre es la decisión: el testigo atestigua que EL CAMINO DE BORRADO DECLARADO BORRA una fila que él
@@ -235,12 +235,14 @@ development_status:
   # crypto-shredding/retención que abriría (User implementando AuditedEntity son 2 métodos).
   # Extraer un rule object es CRITERIO DE ACEPTACIÓN, no refactor: los AC de falsabilidad son insatisfacibles
   # mientras todo sean métodos privados sobre constantes fijas.
-  # DECLARAR EN EL PR: esta historia no protege ningún dato hoy — nada escribe resource_type='User' todavía.
-  # g-3a y g-3b SIGUEN sin empezar, pese a lo que diga `make bmad.status.audit`: cita el asunto de #615, que
-  # era el chore de renombrado de estas mismas claves. Medido contra el CÓDIGO, no contra los commits — el
-  # check de vigencia de PersonResourceErasureGateTest conserva su comentario circular (el segundo testigo de
-  # G-3a no existe) y solo hay dos #[AsSchedule], ninguno para el reconciliador (G-3b sin empezar).
-  g-3a-segundo-testigo-registro-audit-resource-types: review
+  # DECLARADO EN EL PR: esta historia no protege ningún dato hoy — nada escribe resource_type='User' todavía.
+  # SHIPPED en #621, con pase adversarial de tres lectores independientes registrado en el cuerpo del PR y en
+  # el artefacto. El pase cambió la forma del mecanismo, no la decisión: el testigo lee PASOS de Gherkin
+  # —no líneas— PARTICIONADOS POR ESCENARIO, y exige que UN MISMO escenario siembre y demuestre; sin eso, un
+  # título de `Scenario:` valía como siembra y las dos mitades podían vivir en escenarios distintos. Halló
+  # además que la regla de cableado era INFALSIFICABLE (un solo llamador, solo `assertNull`: sustituirla por
+  # `return null;` dejaba todo verde) — lección generalizable a los otros registros declarativos.
+  g-3a-segundo-testigo-registro-audit-resource-types: done
   # G-3b: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. Iam/Identity ESTRENA SU PROPIO
   # schedule. La pregunta de frontera estaba sobredimensionada: Iam.Identity ya está en deptrac y su capa
   # Infrastructure ya admite Vendor.Symfony/Psr, y los transportes de scheduler NO se declaran en messenger.yaml
@@ -261,6 +263,9 @@ development_status:
   # INCLUIDO el gate de consumo de schedules: sin él "agendado" es infalsable — un schedule puede shippear muerto
   # con todos los gates verdes. Cuesta un bind mount de solo lectura de los Compose (precedente: gate del
   # contrato de errores). Aplica retroactivamente a los dos schedules existentes.
+  # G-3b SIGUE sin empezar pese a lo que diga `make bmad.status.audit`: casa la clave contra el ASUNTO de #615,
+  # que era el chore de renombrado de esta misma clave. Medido contra el CÓDIGO: solo hay dos #[AsSchedule] y
+  # ninguno es del reconciliador.
   g-3b-agendado-observable-reconciliador-referencias-borradas: ready-for-dev
   # G-5 (FR10) NO estaba en el corte original: se descubrió midiendo al contextualizar G-4a. El `event_store`
   # conserva el id real del sujeto a perpetuidad (aggregate_id de 6 eventos + payload de SessionStarted y los
