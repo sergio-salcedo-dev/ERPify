@@ -297,7 +297,7 @@ Requisitos técnicos medidos que condicionan el corte, la secuencia o la impleme
 
 ### UX Design Requirements
 
-**No aplica — declarado, no omitido.** Las seis historias son **sustrato de build**: un atributo pasivo, un
+**No aplica — declarado, no omitido.** Todas las historias son **sustrato de build**: un atributo pasivo, un
 generador por reflexión, un gate de CI, un redactor de `metadata`, un schedule y una corrección de routing de
 Messenger. **Ninguna añade, modifica ni retira superficie de UI**, así que ningún UX-DR es derivable de los runs
 UX existentes (`ux-ERPify-2026-06-26`, `ux-ERPify-2026-07-06`) y ninguno se inventa.
@@ -383,7 +383,9 @@ persistida**; y el repositorio pierde la capacidad de crear una referencia nueva
 declarado y verificado**. Cada historia instala un **eje de garantía completo** —declaración de propiedad,
 mecanismo de ejecución, control capaz de fallar— y ninguna depende de una historia posterior.
 
-**Definición de hecho de la épica — aplica a las seis historias y por eso no se repite en cada una:** ninguna
+**Definición de hecho de la épica — aplica a TODA historia de esta épica, incluidas las que se abran después,
+y por eso no se repite en cada una** (enumerar un número dejaba fuera de la cláusula a la historia añadida más
+tarde, que es justo la que menos ojos ha tenido)**:** ninguna
 llega a `done` sin **pase adversarial registrado** por alguien distinto del autor, declarando **dónde** quedó
 el registro (PR, hilo de review o artefacto de historia). Un pase que no encuentra nada cuenta, y también se
 declara (NFR10).
@@ -556,7 +558,9 @@ para que la garantía no dependa de que todo escritor futuro pase por la cadena 
 **Eje que instala:** el control **detective** sobre el eje de referencias a persona — el que dice que la fila
 **se fue**, frente al gate de G-1a, que solo prueba que el borrado está **escrito**.
 **Invariantes que consume:** SI-21/NFR1. **Invariantes que establece:** ninguno nuevo.
-**Dependencias:** G-1b (en `main`, #616). **Precondición dura: la decisión ③ de abajo, que puede vaciar esta historia.**
+**Dependencias:** G-1b (en `main`, #616). **La decisión ③ de abajo —la que podía vaciar esta historia— está
+RESUELTA a favor del código: no hay FK, la regla era lo que estaba mal.** Con ella cerrada, el alcance son las
+cuatro columnas y la forma es ①; nada queda como precondición.
 
 **CORREGIDO tras el debate Winston/Amelia + consulta externa (2026-08-01) — el corte de esta historia estaba
 mal por dos, y lo hallaron los dos revisores por separado.** Decía «las dos referencias cross-context». Son
@@ -644,8 +648,15 @@ referencias, `Iam/Identity` resuelve cuáles ya no son sujetos vivos—, sin que
 bajo la que ① merece la pena).**
 **Given** el registro `api/.person-reference-policy`, que ya enumera toda referencia a persona con su dueño,
 **When** corre la suite,
-**Then** un gate falla si **alguna línea `person ::` cuyo dueño no sea `EraseIdentitySubject` carece de un
-lister cableado** en el control detective.
+**Then** un gate falla si **alguna línea `person ::` salvo `User::$id` carece de un lister cableado** en el
+control detective.
+*La exclusión es `User::$id` y nada más*, porque esa columna **es** la identidad contra la que se resuelve el
+veredicto: no es una referencia que alguien deba listar, es el lado que responde. Excluir por *fichero dueño*
+—«cuyo dueño no sea `EraseIdentitySubject`»— parece lo mismo y no lo es: ese fichero es también el dueño de
+`PasswordResetToken::$userId`, que **sí** está en las cuatro columnas del alcance, de modo que la redacción
+por dueño sacaba del gate a una cuarta parte de su propio alcance y volvía a dejar compile-clean justo el
+olvido que el AC existe para impedir. Contra el registro de hoy, la exclusión correcta deja exactamente las
+cuatro.
 *Por qué es criterio de aceptación y no mejora:* sin él, olvidar el quinto contexto es **compile-clean**, y
 habríamos construido un control detective que necesita su propio control detective. El parser ya existe
 (`api/tests/Support/PersonReferences.php`), así que el gate es barato. **La prueba de que hace falta es esta

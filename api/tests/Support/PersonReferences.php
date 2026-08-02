@@ -7,7 +7,6 @@ namespace Erpify\Tests\Support;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping\Column;
 use Doctrine\ORM\Mapping\Entity;
-use Doctrine\ORM\Mapping\JoinColumn;
 use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Error;
 use ReflectionAttribute;
@@ -43,6 +42,17 @@ final class PersonReferences
      * anybody.
      */
     private const string ERASURE_VERBS = 'delete|remove|purge|erase|anonymise';
+
+    /**
+     * Attributes that map a to-one association, matched BY NAME and never constructed. `#[ORM\JoinColumn]` is
+     * deliberately absent: it is optional, so it identifies only the annotated half of the shape.
+     *
+     * @var list<string>
+     */
+    private const array TO_ONE_ASSOCIATIONS = [
+        \Doctrine\ORM\Mapping\ManyToOne::class,
+        \Doctrine\ORM\Mapping\OneToOne::class,
+    ];
 
     /** @var list<string>|null */
     private ?array $universe = null;
@@ -99,6 +109,19 @@ final class PersonReferences
         $this->scan();
 
         return $this->declaredOwners ?? [];
+    }
+
+    /**
+     * Declarations the registry can never carry, so the owner they name is invisible to every other check.
+     * The rule, including the inherited case that only looks stranded, lives in {@see StrandedDeclarations}.
+     *
+     * @return list<string>
+     */
+    public function strandedDeclarations(): array
+    {
+        $this->scan();
+
+        return StrandedDeclarations::in($this->declaredOwners ?? [], $this->universe ?? []);
     }
 
     /**
@@ -326,11 +349,16 @@ final class PersonReferences
             return false;
         }
 
-        // A to-one association persists a foreign key exactly as a scalar `Types::GUID` column does, and it
-        // declares no `#[ORM\Column]` at all — so reading only that attribute would let the most idiomatic
+        // A to-one association persists a foreign key exactly as a scalar `Types::GUID` column does while
+        // declaring no `#[ORM\Column]` at all, so reading only that attribute would let the most idiomatic
         // Doctrine mapping there is carry a person's id past this sweep. Cross-MODULE references must stay
         // by id, but nothing stops an association inside one module, and its column is just as persisted.
-        if ([] !== $property->getAttributes(JoinColumn::class)) {
+        $declared = \array_map(
+            static fn (ReflectionAttribute $attribute): string => $attribute->getName(),
+            $property->getAttributes(),
+        );
+
+        if ([] !== \array_intersect(self::TO_ONE_ASSOCIATIONS, $declared)) {
             return true;
         }
 

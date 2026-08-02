@@ -214,11 +214,13 @@ development_status:
   # Alcance de G-1c = las CUATRO columnas, con la opción ① y sus AC1-AC5.
   # El gate de G-1a prueba que el borrado está ESCRITO, nunca que la fila SE FUE. Prospectiva: el backfill queda
   # descartado por medición (no hay entorno de producción), así que no repara datos — previene que una vía de
-  # escritura futura reintroduzca el residuo en silencio. DECISIÓN ABIERTA: ampliar ReconcileErasedSubjectReferences
-  # con un puerto listador por contexto dueño (① un comando, un schedule) vs un reconciliador por contexto (②).
-  # GATE DE ORDEN: solo muerde bajo ②. Bajo ① el orden es indiferente (los listers se suman a la colección y el
-  # schedule existente los recoge). La compuerta está ahora escrita en AMBOS lados — antes solo en el bloqueado,
-  # mientras G-3b se declaraba «independiente, paralelizable» en su propia cabecera.
+  # escritura futura reintroduzca el residuo en silencio. FORMA DECIDIDA: ① ampliar ReconcileErasedSubjectReferences
+  # con un puerto listador por contexto dueño (un comando, un schedule) — convergieron Winston, Amelia y una
+  # consulta externa por razones distintas. ② (un reconciliador por contexto) queda solo como alternativa
+  # descartada, NO como decisión abierta: escrito como abierta cuatro líneas después de fijar el alcance en ①,
+  # se contradecía consigo mismo y con la épica.
+  # GATE DE ORDEN vs G-3b: bajo ① el orden es INDIFERENTE (los listers se suman a la colección y el schedule
+  # existente los recoge), así que hoy no muerde; se conserva como tripwire por si ① se reabriera hacia ②.
   g-1c-control-detective-referencias-cross-context: backlog
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
@@ -252,6 +254,10 @@ development_status:
   # PLEGADOS A PROPÓSITO Y AUTORIZADOS (Sergio, 2026-08-01), declarados en el PR: ReconcileSubjectErasuresHandler
   # loguea a warning (prod lo DESCARTA: fingers_crossed action_level error) y loguea la lista de ids. Dos
   # arreglos con un test cada uno. Su alarma no ha sonado nunca en producción.
+  # RELACIÓN CON G-1c (escrita aquí y no solo en el lado bloqueado, que es lo que una compuerta de un solo lado
+  # no consigue): G-3b agenda el MISMO reconciliador que G-1c amplía. Bajo la forma decidida para G-1c (①, un
+  # reconciliador con un lister por contexto dueño) el orden es indiferente: si G-3b va primero, la ampliación
+  # se recoge sola y nada obliga a revisitar. Solo mordería si G-1c se reabriera hacia ②.
   # INCLUIDO el gate de consumo de schedules: sin él "agendado" es infalsable — un schedule puede shippear muerto
   # con todos los gates verdes. Cuesta un bind mount de solo lectura de los Compose (precedente: gate del
   # contrato de errores). Aplica retroactivamente a los dos schedules existentes.

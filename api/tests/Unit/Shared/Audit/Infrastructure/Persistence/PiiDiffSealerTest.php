@@ -45,6 +45,28 @@ final class PiiDiffSealerTest extends TestCase
     }
 
     #[Test]
+    public function itSealsThePersonalFieldAndLeavesThePersonReferenceInClear(): void
+    {
+        // The two Privacy attributes answer different questions, and the sealer must read only one of them.
+        // Encrypting the reference would bind a person's id to THIS aggregate's key, so shredding that key on
+        // the aggregate's own erasure would destroy the id while the person's erasure never reached it — and
+        // the chain that does erase it looks the id up in clear.
+        $sealed = $this->sealer()->seal(new AuditedSubjectFake(Uuid::generate()), ['changes' => [
+            'secret' => ['old' => 'BBVA', 'new' => 'BBVA S.A.'],
+            'userId' => ['old' => null, 'new' => '018f2b7c-1d4e-7c3a-9f10-2b6d5e8a4c31'],
+        ]], Uuid::generate());
+
+        $json = \json_encode($sealed->metadata, JSON_THROW_ON_ERROR);
+
+        $this->assertStringContainsString(
+            '"new":"018f2b7c-1d4e-7c3a-9f10-2b6d5e8a4c31"',
+            $json,
+            'a #[PersonSubjectReference] is an id to be erased, not a value to be encrypted — it stays clear',
+        );
+        $this->assertStringNotContainsString('BBVA', $json, 'the #[PersonalData] field is still sealed');
+    }
+
+    #[Test]
     public function itKeepsNullValuesVisibleForAddedOrRemovedPersonalFields(): void
     {
         $sealed = $this->sealer()->seal(new AuditedSubjectFake(Uuid::generate()), ['changes' => [

@@ -21,8 +21,18 @@
 #
 # The gate (PersonReferenceGateTest, run by `make php.lint.person-reference`) fails the build when a
 # `Types::GUID` column reaches an entity without a line here, when a line no longer matches any column, when a
-# `person` line names a file that does not erase that reference, and when a `#[PersonSubjectReference]`
-# declared at a property disagrees with the line here.
+# `person` line names a file that does not erase that reference, when a `#[PersonSubjectReference]` declared
+# at a property disagrees with the line here, and when a `person` line carries no declaration at its property
+# at all.
+#
+# That last direction has ONE exemption, and it is semantic rather than mechanical: the subject's OWN PRIMARY
+# KEY. The attribute is named for a REFERENCE — an id of a person held by a row that is not them, which no
+# foreign key removes, which is the distributed obligation this file exists to make impossible to pass in
+# silence. A primary key carries no such obligation: erasing it IS deleting its own row, and the wiring check
+# already proves that happens. Exempting instead by "the property is inherited" would key the rule to an
+# implementation accident and let any person id dropped into a shared trait escape it. If an aggregate ever
+# appears whose primary key is a person's id but whose erasure is a scrub in place rather than a deletion,
+# this exemption stops being true and the registry needs a verb that separates the two meanings.
 #
 # ---------------------------------------------------------------------------------------------------------
 # What it deliberately does NOT do. Read this list as the specification of the gate's blind spots — a green
@@ -45,9 +55,15 @@
 #     and `event_store.aggregate_id` have NONE and are standing leaks with their own stories — the first is
 #     written with the subject's real id by the very use case this file names as the owner of `User::$id`,
 #     deliberately, as the compliance evidence that the erasure happened.
-#   - It only sees `Types::GUID` columns and to-one join columns. A person's id persisted in a plain string
-#     column, or in a column whose type Doctrine infers rather than the property declaring it, is invisible
-#     here — a rename of the type is enough to leave the sweep, and nothing below this line would change.
+#   - It only sees `Types::GUID` columns and TO-ONE ASSOCIATIONS (`#[ORM\ManyToOne]`, `#[ORM\OneToOne]` —
+#     read at the association attribute, because `#[ORM\JoinColumn]` is optional and the plainer form is the
+#     one written by default). A person's id persisted in a plain string column, or in a column whose type
+#     Doctrine infers rather than the property declaring it, is invisible here — a rename of the type is
+#     enough to leave the sweep, and nothing below this line would change.
+#   - It does not reach a column that belongs to ANOTHER table than the declaring entity's: a `#[ORM\JoinTable]`
+#     behind a `#[ORM\ManyToMany]` holds both ids in a table no property declares, and an `#[ORM\Embeddable]`
+#     carries its columns into whatever embeds it while declaring no `#[ORM\Entity]` of its own, so neither
+#     side of that pair enters the universe.
 #   - It derives from ONE class per file, named after its path. Doctrine discovers entities by including the
 #     file and reading every class declared in it, so a second entity in the same file, or a class whose name
 #     does not match its filename, is mapped by Doctrine and unseen here.

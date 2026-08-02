@@ -124,11 +124,14 @@ php.lint.audit-resource: ## Person-resource erasure classification gate
 # `failed` are Doctrine tables with no TTL and no prune that no erasure path touches, so a queued
 # person aggregate id outlives the erasure the application confirmed to the subject.
 #
-# The filter is a COMMON PREFIX because the gate is two classes: naming one of them left the other
-# outside the named boundary, so a reintroduction of the five routing paths reported as "PHPUnit"
-# rather than as this policy — which is the whole point of wiring a lint target one-to-one.
+# The gate is two classes and each is selected BY NAME, in its own run. A common prefix keeps both under
+# this target but goes green on a strict subset: rename or delete one class and the other still matches, the
+# suite is non-empty, and the target reports success with half the boundary gone. One filter per class makes
+# a vanished class an empty suite, which `failOnEmptyTestSuite` turns into exit 1 — so the count is pinned by
+# construction rather than by a number somebody has to remember to update.
 php.lint.persistent-transport: ## Persistent-transport person-aggregate policy gate
-	@$(PHP_TEST) bin/phpunit --filter='PersistentTransport.*GateTest'
+	@$(PHP_TEST) bin/phpunit --filter=PersistentTransportPolicyGateTest
+	@$(PHP_TEST) bin/phpunit --filter=PersistentTransportRoutingShapeGateTest
 
 ## —— Person-reference erasure gate —————————————————————————————————————————
 
@@ -139,11 +142,12 @@ php.lint.persistent-transport: ## Persistent-transport person-aggregate policy g
 # nothing removes a person's id from a foreign table when their identity is deleted — the obligation
 # is distributed, and every context that comes to touch a person mints another one of these columns.
 #
-# The filter is a COMMON PREFIX, not a class name: the gate is two classes (the assertions over the real
-# tree, and the falsifiability of the rules they assert), and a filter naming one of them would leave the
-# other outside the named boundary — reporting a broken rule as "PHPUnit" instead of as this gate.
+# The gate is two classes — the assertions over the real tree, and the falsifiability of the rules they
+# assert — and each is selected BY NAME, in its own run, for the reason spelled out at the sibling target
+# above: a common prefix cannot tell "both ran" from "one of them is gone".
 php.lint.person-reference: ## Person-reference erasure-owner gate
-	@$(PHP_TEST) bin/phpunit --filter='PersonReference.*GateTest'
+	@$(PHP_TEST) bin/phpunit --filter=PersonReferenceGateTest
+	@$(PHP_TEST) bin/phpunit --filter=PersonReferenceRulesGateTest
 
 ## —— Deptrac (architectural boundaries) ————————————————————————————————————
 
