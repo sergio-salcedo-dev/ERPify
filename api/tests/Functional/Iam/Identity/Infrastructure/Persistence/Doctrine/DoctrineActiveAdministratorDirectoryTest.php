@@ -178,7 +178,13 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
 
             // Without this the whole test is vacuous: both assertions below already hold on the ADMIN_A-only
             // seed, so a membership that failed to insert would read exactly like one the directory ignores.
-            $this->assertSame(1, $seeded, 'The orphan membership was not seeded — nothing below proves anything.');
+            // Cast because `Connection::executeStatement()` is the one API here typed `int|string`: a driver
+            // reporting the count as a numeric string would turn the anti-vacuity guard into a spurious red.
+            $this->assertSame(
+                1,
+                (int) $seeded,
+                'The orphan membership was not seeded — nothing below proves anything.',
+            );
             $this->assertFalse($this->directory->keepsAnActiveAdminWithout(self::ADMIN_A));
             $this->assertFalse($this->directory->holdsAdministratorRole(self::UNKNOWN_ID));
         });

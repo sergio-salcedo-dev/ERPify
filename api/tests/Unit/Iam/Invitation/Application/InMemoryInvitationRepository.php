@@ -19,7 +19,13 @@ final class InMemoryInvitationRepository implements InvitationRepository
     /** @var list<Invitation> */
     public array $saved = [];
 
-    /** @var array<string, Invitation> */
+    /**
+     * Keyed by the LOWER-CASED id, and read the same way. `iam_invitation.id` is a Postgres `uuid`, which
+     * matches one id spelled in either case; a map keyed by the raw string would make the double stricter
+     * than production on every lookup, and no test could fail on the difference.
+     *
+     * @var array<string, Invitation>
+     */
     private array $byId = [];
 
     public function __construct(Invitation ...$preset)
@@ -39,13 +45,13 @@ final class InMemoryInvitationRepository implements InvitationRepository
     #[Override]
     public function findById(string $id): ?Invitation
     {
-        return $this->byId[$id] ?? null;
+        return $this->byId[\strtolower($id)] ?? null;
     }
 
     #[Override]
     public function findByIdForUpdate(string $id): ?Invitation
     {
-        return $this->byId[$id] ?? null;
+        return $this->byId[\strtolower($id)] ?? null;
     }
 
     /**
@@ -81,7 +87,7 @@ final class InMemoryInvitationRepository implements InvitationRepository
         $id = $invitation->getId();
 
         if (null !== $id) {
-            $this->byId[$id] = $invitation;
+            $this->byId[\strtolower($id)] = $invitation;
         }
     }
 }

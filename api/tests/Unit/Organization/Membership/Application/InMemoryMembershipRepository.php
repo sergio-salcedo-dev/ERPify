@@ -42,9 +42,11 @@ final class InMemoryMembershipRepository implements MembershipRepository
     }
 
     /**
-     * Compares case-insensitively, like the column it stands in for: `membership.user_id` is a Postgres
-     * `uuid`, so the real adapter matches one id spelled in either case. A `!==` here would make the double
-     * STRICTER than production — and the divergence would be invisible, because no test can fail on it.
+     * Every lookup below compares case-insensitively, like the columns they stand in for: `membership.user_id`
+     * and `membership.organization_id` are Postgres `uuid`, so the real adapter matches one id spelled in
+     * either case. A `!==` would make the double STRICTER than production — and the divergence would be
+     * invisible, because no test can fail on it. Applying it to the delete alone would leave the reads free
+     * to disagree with the delete about which rows exist.
      */
     #[Override]
     public function deleteAllForUser(string $userId): int
@@ -63,7 +65,7 @@ final class InMemoryMembershipRepository implements MembershipRepository
     public function findByUserId(string $userId): ?Membership
     {
         foreach ($this->saved as $membership) {
-            if ($membership->userId() === $userId) {
+            if (0 === \strcasecmp($membership->userId(), $userId)) {
                 return $membership;
             }
         }
@@ -74,8 +76,9 @@ final class InMemoryMembershipRepository implements MembershipRepository
     #[Override]
     public function findByOrganizationId(string $organizationId): array
     {
-        return \array_values(
-            \array_filter($this->saved, static fn (Membership $m): bool => $m->organizationId() === $organizationId),
-        );
+        return \array_values(\array_filter(
+            $this->saved,
+            static fn (Membership $m): bool => 0 === \strcasecmp($m->organizationId(), $organizationId),
+        ));
     }
 }
