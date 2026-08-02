@@ -1,0 +1,5 @@
+# Fixture registry: the same type classified twice. Last-wins would let the later line silently downgrade a
+# person type to non-person, and every person-only rule skips non-person — so the shadowed line would take
+# the erasure obligation with it.
+FixtureResource => person :: src/Fixture/PhantomEraser.php :: features/witness-complete.feature
+FixtureResource => non-person

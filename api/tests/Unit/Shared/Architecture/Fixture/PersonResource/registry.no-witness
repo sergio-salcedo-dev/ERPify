@@ -1,0 +1,4 @@
+# Fixture registry: a person line that names an erasure owner and stops there — the shape every person line
+# had before the witness segment existed. It is not a degraded spelling to tolerate: without the witness the
+# erasure claim is unfalsifiable, so the line declares an obligation nothing checks.
+FixtureResource => person :: src/Fixture/PhantomEraser.php

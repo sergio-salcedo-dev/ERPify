@@ -1,0 +1,6 @@
+# Not a file: a DIRECTORY whose name ends in `.feature`.
+#
+# It exists so the `is_file()` branch of DeclaredPath is genuinely exercised. Every other rejection in that
+# helper fires earlier — a directory called `features/backoffice` is refused for its extension, never for
+# being a directory — so without a path shaped exactly like this, the one check that stops `file_exists()`
+# from accepting a directory would be asserted in a comment and executed by nothing.

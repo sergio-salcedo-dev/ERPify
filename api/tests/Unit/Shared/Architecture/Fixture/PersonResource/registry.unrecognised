@@ -1,0 +1,3 @@
+# Fixture registry: a classification that is neither spelling. Falling through to non-person would turn a
+# capitalisation slip into "nobody has to erase this", which is the failure mode the registry exists against.
+FixtureResource => persona

@@ -4,7 +4,7 @@ baseline_commit: 9310efeb
 
 # Story 1.5 (G-3a): Segundo testigo del registro — que el check de vigencia deje de autosatisfacerse
 
-Status: ready-for-dev
+Status: review
 
 > **LA DECISIÓN ESTÁ TOMADA Y REGISTRADA** (ver *Decisión registrada*): el testigo es el **escenario de
 > aceptación que ya existe**, declarado como tercer segmento de la línea del registro, y el check de vigencia
@@ -174,16 +174,16 @@ fresca con exit code impreso**. Todo verde.
 ## Tasks / Subtasks
 
 - [x] **Tarea 1 — Registrar la decisión (PRECONDICIÓN).** Hecha: ver *Decisión registrada*. Reprodúcela en el PR.
-- [ ] **Tarea 2 — Demostrar la circularidad (AC1).** Test que fije el comportamiento actual **antes** de tocarlo.
-- [ ] **Tarea 3 — Extraer el motor (AC4).** `api/tests/Support/AuditResourceTypeRegistry.php`, mayormente
+- [x] **Tarea 2 — Demostrar la circularidad (AC1).** Test que fije el comportamiento actual **antes** de tocarlo.
+- [x] **Tarea 3 — Extraer el motor (AC4).** `api/tests/Support/AuditResourceTypeRegistry.php`, mayormente
       **movido** desde el gate. Reutiliza `AllowlistFile::entries()` (el gate hoy parsea a mano) y
       `ApiSourceFiles::phpFiles()`. Raíz inyectable, como `PersistentTransportPolicy::fromGateLocation()`.
-- [ ] **Tarea 4 — Tercer segmento y check de testigo (AC2, AC3, AC5).** Validar la ruta con `is_file()` **y no**
+- [x] **Tarea 4 — Tercer segmento y check de testigo (AC2, AC3, AC5).** Validar la ruta con `is_file()` **y no**
       `assertFileExists()`, que acepta **directorios** — el gate actual (`:84`) tiene ese defecto y **no se copia**.
-- [ ] **Tarea 5 — Fixtures (AC3, AC4).** Registro sintético + testigo sintético, más su gemelo limpio.
-- [ ] **Tarea 6 — Cabecera (AC6).** Corregir la afirmación falsa y ampliar el bloque de puntos ciegos siguiendo
+- [x] **Tarea 5 — Fixtures (AC3, AC4).** Registro sintético + testigo sintético, más su gemelo limpio.
+- [x] **Tarea 6 — Cabecera (AC6).** Corregir la afirmación falsa y ampliar el bloque de puntos ciegos siguiendo
       la versión madura de [`.persistent-transport-policy`](../../api/.persistent-transport-policy).
-- [ ] **Tarea 7 — Gates y pase adversarial (AC7 + definición de hecho de la épica).** Ejecuciones frescas con exit
+- [x] **Tarea 7 — Gates y pase adversarial (AC7 + definición de hecho de la épica).** Ejecuciones frescas con exit
       code. **Pase adversarial por alguien distinto del autor, REGISTRADO, declarando dónde.** Sin él no hay `done`.
 
 ## Dev Notes
@@ -195,6 +195,150 @@ fresca con exit code impreso**. Todo verde.
 - **El target no cambia de cuerpo**, solo su comentario en `make/php-quality.mk`.
 - **Anti-patrón principal:** «reforzar» el staleness para `person` buscando el literal en más sitios. No arregla
   nada — el problema no es dónde se busca, es **quién puede satisfacerlo**.
+
+## Dev Agent Record
+
+**Rama:** `feat/shared-g3a-segundo-testigo-audit-resource-types-13r9` (worktree aislado, base `main` @ `8f1f853c`).
+
+### Lo que se construyó
+
+- `api/tests/Support/AuditResourceTypeRegistry.php` — motor: parseo del registro, barrido de tipos en `src`,
+  cableado del borrador y staleness. Raíz inyectable (`fromGateLocation()` para el árbol real, constructor de
+  tres rutas para fixtures).
+- `api/tests/Support/AuditWitnessScenario.php` — el testigo, separado del motor. Lee el `.feature` como texto:
+  ¿siembra una fila del tipo y asierta que ninguna sobrevive?
+- `api/tests/Support/DeclaredPath.php` — travesía, forma del artefacto y **`is_file()`** (no `file_exists()`,
+  que acepta directorios). Lo usan los dos.
+- `api/tests/Support/PersonResourceDeclaration.php` — los dos caminos de una línea `person`, con nombre.
+- `PersonResourceErasureRulesGateTest` + `Fixture/PersonResource/` — falsabilidad con fixtures.
+- Registro y cabecera reescritos; `make php.lint.audit-resource` pasa a filtro de **prefijo común**.
+
+### Tres cosas que la medición cambió respecto al artefacto
+
+1. **El check de identidad testigo≠borrador era código muerto.** El borrador exige `src/…php` y el testigo
+   `features/…feature`: nunca pueden coincidir. Se eliminó la comparación y la disyunción queda donde de
+   verdad muerde — la regla de ruta — con su propio caso rojo (`theWitnessCheckRejectsTheErasureOwnerItself`).
+2. **PHPMD tumbó el motor por complejidad 57 (umbral 50).** Se arregló separando responsabilidades
+   (`AuditWitnessScenario` + `DeclaredPath`), no subiendo el umbral ni suprimiendo.
+3. **Coordenadas al día:** el literal `'User'` vive en `FulfilIdentityErasure.php:85` (no `:75`) y el consumidor
+   ciego en `ReconcileErasedSubjectReferences.php:45`. El escenario testigo es `erase.feature:49-62`.
+
+### Pase adversarial — HECHO Y REGISTRADO (2026-08-01)
+
+**Dónde queda el registro:** este bloque y el cuerpo del PR. **Quién:** tres lectores independientes del
+autor, en paralelo, sobre `HEAD` = `0bd1dd5a`, con lentes distintas: falsabilidad/vacuidad, construcción de
+bypasses, y afirmaciones-contra-código. Un primer intento murió por límite de sesión; el segundo completó.
+Antes de eso el autor hizo su propia lectura hostil (cuatro defectos, cerrados) — **no cuenta como el pase**,
+y se conserva abajo porque uno de sus arreglos resultó describir un defecto inexistente.
+
+#### Bypasses confirmados y cerrados
+
+El testigo leía **líneas**, no **pasos**, y sobre **todo el fichero**, no por escenario. De ahí salían cuatro
+construcciones que dejaban puerta y Behat en verde sin sembrar nada:
+
+1. Un **título de `Scenario:`** o una línea de descripción con `INSERT` y el literal contaba como siembra.
+2. La siembra y la aserción podían vivir en **escenarios distintos** — la forma realista de deriva: mover la
+   siembra a un escenario propio deja la aserción convertida en la ausencia vacua.
+3. El conteo cero podía ser un **encabezado** (`Scenario: 0 rows remain…`).
+4. `INSERT … SELECT` sobre tabla vacía inserta **cero filas** y satisfacía la siembra.
+
+Ahora la regla lee solo pasos (`Given|When|Then|And|But|*`), particionados por escenario, y exige que **un
+mismo escenario** siembre y demuestre; una siembra `INSERT … SELECT` queda excluida. Seis fixtures nuevos, uno
+por forma de mentir.
+
+#### El hallazgo más grave: la regla de cableado era infalsificable
+
+`erasureDefectIn()` se llamaba desde un único sitio y solo con `assertNull`. **Sus tres rojos no los provocaba
+nada**: sustituirla por `return null;` dejaba las 16 pruebas en verde y permitía declarar como borrador un
+fichero que no borra. Cerrado con cuatro casos —dos sobre ficheros reales, uno sobre un fixture que sostiene
+el anonimizador sin llamarlo (no existe tal fichero en el árbol real), y las rutas—. Verificado por mutación:
+stubbear la regla produce ahora **4 rojos**.
+
+#### Afirmaciones falsas corregidas
+
+- **«La línea de `User` está aquí a mano por eso» era FALSA.** El check de completitud la deriva solo,
+  resolviendo `AuditResource::of(self::SUBJECT_RESOURCE_TYPE, …)` contra la constante de la misma clase. El
+  punto ciego de la constante *importada* es real, pero no cuesta esta entrada.
+- **«Lo que la regla puede exigir es que el escenario siembre la fila que luego no encuentra»** prometía una
+  identidad de fila que el código no comprueba. Reescrito a lo que de verdad hace.
+- **«El testigo y la declaración pueden morir en el mismo commit»** exageraba: hoy lo impide la completitud.
+- **«La puerta son dos clases»** (cabecera y `make/php-quality.mk`): son tres desde el split.
+- **Mi commit `f421eafa` describe un defecto que nunca existió.** Afirmé que la query y el conteo podían
+  cruzar una frontera de `Scenario:` y que lo arreglé; trazando el código pre-arreglo, `stepAfter` ya devolvía
+  el encabezado y ya fallaba el match. Ese test es un guardarraíl de regresión, no un arreglo. El commit está
+  empujado y **no se reescribe**: la corrección vive aquí y en el cuerpo del PR.
+
+#### Otros arreglos del pase
+
+- `sourceFilesCarrying()` leía **texto crudo**: un comentario ajeno con `'User'` ponía la puerta roja. Ahora
+  quita comentarios, como el check hermano.
+- El check de `anonymise()` era más estricto que su hermano y rechazaba una llamada partida en dos líneas o
+  null-safe; alineado, y probando **todos** los colaboradores, no el primero.
+- `DeclaredPath` distingue **directorio** de **ausente**: antes un fixture borrado dejaba el test en verde por
+  el motivo equivocado.
+- La aserción de travesía era **vacua** (`features/../../etc/passwd` caía antes por la extensión). Ahora usa
+  una ruta que sobrevive forma y extensión y sí alcanza la guarda.
+- Cabecera ampliada con los puntos ciegos que faltaban: barrido solo de comillas simples y `const string`,
+  alcance `api/src`, y el rechazo deliberado de una siembra en `Background:`.
+- `docs/adr/audit-activity-log.md` describía la puerta con dos direcciones y la línea `person` con dos
+  segmentos: actualizado (obligación de docs que el pase detectó).
+- Higiene de comentarios: fuera las referencias a «esta épica»/«esta historia» en `api/`.
+
+#### Fuera de alcance, declarado
+
+- `typesHeldInConstants()` degrada en silencio ante una constante sin tipo o concatenada (preexistente,
+  heredado al mover el motor). **Declarado en la cabecera**, no arreglado.
+- Rebindear `AuditResourceAnonymiser` a una implementación no-op es invisible a la puerta (nivel contenedor).
+- `PersonReferences` conserva una tercera copia del trío de validación de rutas que aquí se extrajo a
+  `DeclaredPath`; es código de otra puerta y no se amplía sin autorización.
+
+### Lectura hostil previa del autor (no satisface la Tarea 7)
+
+Cuatro defectos, encontrados por el autor y cerrados antes del pase: un comentario de Gherkin satisfacía la
+siembra; el caso del directorio no alcanzaba `is_file()`; la cabecera no admitía dos puntos ciegos; y —el que
+resultó **falso**— la supuesta frontera de `Scenario:` cruzable, ver arriba.
+
+### Puertas (ejecuciones frescas, exit code impreso)### Puertas (ejecuciones frescas, exit code impreso)
+
+| Gate | Resultado |
+|---|---|
+| `make php.lint.audit-resource` | OK (23 tests, 45 aserciones) — exit 0 |
+| `make php.quality` | exit 0 |
+| `make php.quality.dry-run` | exit 0 |
+| `make php.unit` | 2144 tests, 9166 aserciones — exit 0 |
+| `make php.behat` | 383 escenarios, 3470 steps — exit 0 |
+
+El filtro `--filter='PersonResourceErasure.*GateTest'` selecciona las **tres** clases; verificado con
+`--list-tests`, no supuesto.
+
+Las 2 *notices* de PHPUnit son preexistentes (`DoctrineSessionRepositoryStoreUnavailableTest`, mocks sin
+expectativas) y no las toca esta historia.
+
+### File List
+
+- `api/.audit-resource-types` (M)
+- `api/tests/Support/AuditResourceTypeRegistry.php` (A)
+- `api/tests/Support/AuditWitnessScenario.php` (A)
+- `api/tests/Support/DeclaredPath.php` (A)
+- `api/tests/Support/PersonResourceDeclaration.php` (A)
+- `api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php` (M)
+- `api/tests/Unit/Shared/Architecture/PersonResourceErasureRulesGateTest.php` (A)
+- `api/tests/Unit/Shared/Architecture/PersonResourceErasureWitnessGateTest.php` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/Source/AuditResourceFixtureWriter.php` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-complete.feature` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-without-erasure.feature` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-without-write.feature` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-write-commented-out.feature` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-count-in-next-scenario.feature` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/features/witness-directory.feature/.gitkeep` (A)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/registry.{complete,stale,duplicate,unrecognised,no-witness}` (A)
+- `make/php-quality.mk` (M)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (M)
+
+### Pendiente
+
+Nada. La Tarea 7 está cumplida: puertas verdes en ejecución fresca y **pase adversarial hecho y registrado**
+(ver arriba). Falta solo la decisión de Sergio sobre abrir la PR.
 
 ## References
 
