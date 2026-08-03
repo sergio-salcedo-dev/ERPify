@@ -125,11 +125,16 @@ membership fantasma con rol `ADMIN` deja «≥1 ADMIN activo» leyendo satisfech
 el invariante van juntos.**
 
 FR6: **`audit_log.metadata` deja de albergar ids de persona** (SI-21, D4 · G-2, #560) —
-el borrado del sujeto escribe su id real en el `metadata` de la fila `GDPR_SUBJECT_ERASED` y **ningún
-anonimizador toca `metadata`**. Hoy no es un crosswalk **solo porque un comentario impide** que un pseudónimo
-comparta esa fila — es decir, **D4 está sostenido por prosa**. Se cierra con un redactor de `metadata` en la
-misma pasada de erasure **o** con un gate que prohíba ids de persona en claves de `metadata`; ninguna de las dos
-opciones introduce tabla de mapeo. *Coordenadas en el `Estado medido` de la historia 1.4.*
+el borrado del sujeto escribía su id real en el `metadata` de la fila `GDPR_SUBJECT_ERASED` y **ningún
+anonimizador toca `metadata`**. *Encuadre corregido tras medir (2026-08-03):* lo que impide hoy el crosswalk
+**no es un comentario** sino una guarda con 409 `self-erasure-forbidden` — prohibido el auto-borrado, el actor
+de esa fila nunca es el sujeto. La premisa «D4 está sostenido por prosa» es más débil de lo que este corte
+afirmaba. **La fuga era real igualmente, y por una razón mejor:** el id crudo vivía en `metadata` con
+independencia de quién fuese el actor, y ninguna mutación del conjunto cerrado entra en el JSON, así que
+sobrevivía al borrado que lo escribió. *Se cerró* sin redactor y sin gate (ver la historia 1.4): el sujeto pasa
+a viajar como **recurso** de la entrada y `metadata` se queda con conteos, con lo que el anonimizador de recurso
+que la cadena ya ejecutaba lo alcanza. Ninguna opción introduce tabla de mapeo. *Coordenadas en el `Estado
+medido` de la historia 1.4.*
 
 FR7: **Segundo testigo del registro `.audit-resource-types` (#563)** (SI-22, SI-23 · G-3 ①) — el check de
 staleness **se satisface con su propia declaración**: el único literal del tipo persona en `api/src` vive en el
@@ -245,7 +250,9 @@ Requisitos técnicos medidos que condicionan el corte, la secuencia o la impleme
   secuencia de commits— y **sale verde dentro de la misma entrega, porque la cadena las ejecuta**. Entregarlas
   por separado dejaría `main` rojo para todo PR no relacionado, porque el target entra en `php.quality.dry-run`,
   que es lo que CI corre siempre; unirlas **disuelve** ese coste en vez de negociarlo. G-2 y G-3 son
-  independientes y pueden paralelizarse.
+  independientes y pueden paralelizarse. **G-2 tampoco depende de G-1a/G-1b:** esa arista era condicional al
+  fork de G-2 y quedó resuelta el 2026-08-03 al cerrarse DA-1 hacia el redactor. La flecha `→ G-2 →` expresa el
+  orden de merge elegido, no una dependencia — el addendum la dibujaba como incondicional y se corrigió.
 - **Plantilla exacta del mecanismo (FR2–FR4):** `Shared/Privacy` ya es una capability de tres piezas —atributo
   en `Domain/`, puerto `PersonalDataClassifier` en `Application/`, adaptador por reflexión en
   `Infrastructure/`—. **El hermano replica solo el atributo**: va en `Domain/` como metadata pasiva. *Corregido
@@ -298,7 +305,9 @@ Requisitos técnicos medidos que condicionan el corte, la secuencia o la impleme
 ### UX Design Requirements
 
 **No aplica — declarado, no omitido.** Todas las historias son **sustrato de build**: un atributo pasivo, un
-generador por reflexión, un gate de CI, un redactor de `metadata`, un schedule y una corrección de routing de
+generador por reflexión, un gate de CI, el traslado del sujeto al eje de recurso de `audit_log` (G-2; esta línea
+decía «un redactor de `metadata`» dando por resuelto un fork que entonces seguía abierto, y la forma que ganó no
+construye redactor), un schedule y una corrección de routing de
 Messenger. **Ninguna añade, modifica ni retira superficie de UI**, así que ningún UX-DR es derivable de los runs
 UX existentes (`ux-ERPify-2026-06-26`, `ux-ERPify-2026-07-06`) y ninguno se inventa.
 
@@ -358,8 +367,13 @@ el gate aterriza en rojo y sale verde dentro de la misma PR.
   fuga **viva medida**, sin dependencias: entrega valor legal aunque el resto no llegue.
 - **G-1a** — el eje existe: las dos referencias que la cadena ya borra quedan **verdes** y demuestran el
   mecanismo, y los huecos vivos pasan a ser **gate rojo con dueño asignado** en vez de prosa.
-- **G-1b · G-2** — cierran los tres huecos que el gate destapa; G-1b además tapa el agujero del invariante
-  **≥1 ADMIN activo**, que hoy lee satisfecho ante una membership fantasma.
+- **G-1b · G-2** — cierran tres huecos, pero **no los tres «que el gate destapa»**: el gate de G-1a aterriza en
+  rojo por **dos** referencias (`Membership.user_id`, `Invitation.invited_user_id`), que son las de G-1b. El
+  hueco de G-2 vive en `audit_log.metadata`, una tabla **sin entidad Doctrine**, y el gate deriva su universo
+  por reflexión sobre entidades: es estructuralmente ciego a él, así que nunca lo destapó. Los dos huecos que
+  destapa y el que no comparten el eje, no el mecanismo que los encuentra. *(G-1b tampoco tapa el invariante
+  **≥1 ADMIN activo**: medido el 2026-08-01, `keepsAnActiveAdminWithout` lee `identity_user` y solo esa tabla,
+  así que una membership fantasma no puede satisfacerlo — la consecuencia era latente, no viva.)*
 - **G-3** — las dos garantías que hoy *aparentan* funcionar (un check que se autosatisface, un reconciliador que
   nadie ejecuta) pasan a fallar de verdad cuando fallan.
 
@@ -710,19 +724,27 @@ quiero que la prohibición de crosswalk deje de depender de un comentario,
 para poder afirmar ante un regulador que ninguna fila de auditoría re-liga un pseudónimo con la persona.
 
 **Eje que instala:** la prohibición D4 pasa de **prosa** a **mecanismo**.
-**Invariantes que consume:** D4/NFR4, SI-21/NFR1.
-**Dependencias:** Story 1.2 si se elige la vía del gate; ninguna si se elige la del redactor. Ninguna posterior.
+**Invariantes que consume:** D4/NFR4, SI-21/NFR1. *(FR6 y la fila del addendum nombran los mismos dos ejes,
+D4 y SI-21; el addendum omitía D4 y se corrigió el 2026-08-03 — omitirlo en la historia que existe para
+convertir D4 en mecanismo era el error.)*
+**Dependencias: ninguna, ni previa ni posterior.** La dependencia de la Story 1.2 era condicional a elegir la
+vía del gate; cerrada DA-1 a favor del redactor, no existe. El DAG del addendum la dibujaba como incondicional
+y se corrigió con esta historia.
 
-**Estado medido:**
-[`EraseIdentitySubject.php:56`](../../api/src/Iam/Identity/Application/EraseIdentitySubject.php) escribe
+**Estado medido (del corte; resuelto):**
+[`EraseIdentitySubject.php:56`](../../api/src/Iam/Identity/Application/EraseIdentitySubject.php) escribía
 `'subject_user_id' => $userId` en el `metadata` de la fila `GDPR_SUBJECT_ERASED`, y **ningún anonimizador toca
-`metadata`**. Hoy no es crosswalk **solo** porque un comentario de `FulfilIdentityErasure` impide que un
-pseudónimo comparta esa fila — que comparte `correlation_id` con ella. Es decir: **D4 está sostenido por
-prosa**.
+`metadata`**. *Encuadre corregido:* lo que impedía el crosswalk no era un comentario sino la guarda 409
+`self-erasure-forbidden`; la fuga era real de todos modos, porque el id crudo estaba ahí con independencia del
+actor y ninguna mutación del conjunto cerrado entra en el JSON.
 
-**Decisión abierta (precondición — ver la definición de hecho de la épica).** El addendum la deja como fork
-explícito: redactor de `metadata` en la misma pasada de erasure **o** gate que prohíba ids de persona en claves
-de `metadata`. Ninguna de las dos introduce tabla de mapeo, en columna ni en JSONB.
+**Decisión TOMADA (Sergio, 2026-08-03), ya no es precondición abierta.** El fork del addendum —redactor **o**
+gate de claves— se resolvió a favor del **redactor**, y al medir la cadena su forma concreta resultó ser **A2**:
+el sujeto viaja como **recurso** de la entrada y `metadata` se queda con conteos, de modo que el
+`AuditResourceAnonymiser` que `FulfilIdentityErasure` ya ejecutaba reescribe `resource_id` en la misma
+transacción. Sin redactor, sin statement nuevo, sin cuarta política de mutación y sin tabla de mapeo. El gate
+declarativo queda como **alternativa descartada** con condición de reapertura escrita: un **segundo** camino de
+escritura que meta un id de persona en `metadata`. Argumento completo en el artefacto de la historia.
 
 **Acceptance Criteria:**
 

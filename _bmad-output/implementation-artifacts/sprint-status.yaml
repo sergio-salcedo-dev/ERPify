@@ -155,8 +155,11 @@ development_status:
   # G-4a, G-3a y G-3b son independientes y paralelizables. G-4a primero por ser la única fuga viva medida — y es
   # la primera instancia de SI-21, no una excepción a él.
   # NINGUNA historia de la épica tiene ya decisión abierta: las tres de G-1a, la de G-3a, la de G-3b y la de G-5
-  # están tomadas y registradas (2026-08-01) en sus artefactos y, para G-5, en un ADR. La precondición normativa
-  # de la épica queda satisfecha; lo que falta es artefacto de contexto en G-1b, G-2 y G-5, no decisión.
+  # están tomadas y registradas (2026-08-01) en sus artefactos y, para G-5, en un ADR; la de G-2 (DA-1) el
+  # 2026-08-03, a favor del redactor, y su FORMA se concretó el mismo día en A2 — el sujeto viaja como RECURSO de
+  # la entrada y `metadata` se queda con conteos, sin redactor, sin statement nuevo y sin política de mutación
+  # nueva. La precondición normativa de la épica queda satisfecha; lo que falta es artefacto de contexto en G-1b
+  # y G-5, no decisión.
   # Definición de hecho de la épica: ninguna historia llega a done sin pase adversarial REGISTRADO por alguien
   # distinto del autor, declarando dónde quedó (CLAUDE.md → Security review → Process).
   # FUERA: G-4b (eje Messenger completo) diferida, bloqueada por el ownership de referencias nacidas en
@@ -249,11 +252,14 @@ development_status:
   # ningún documento de G-2 lo cita. (4) Un gate no puede discriminar POR FORMA: `metadata.anonymized_actor_id`
   # es contractual (D4.1) y es un UUID indistinguible de un id real, así que prohibir «UUIDs en metadata» rompe
   # el contrato y prohibir por nombre de clave se lee verde por construcción — SI-23. (5) B no sustituye a A: un
-  # gate no repara la fila viva, se le SUMA. La recomendación registrada es (A) el redactor, con el control de
-  # AC3 como testigo de aceptación falsable y no como gate de forma; falta que Sergio la confirme o la refute.
+  # gate no repara la fila viva, se le SUMA. DA-1 CERRADA (Sergio, 2026-08-03): gana (A) el redactor, con el
+  # control de AC3 como testigo de aceptación falsable y no como gate de forma. Al medir la cadena, la FORMA de
+  # (A) resultó ser A2 y no un redactor: el sujeto viaja como RECURSO de la entrada y `metadata` se queda con
+  # conteos, porque el anonimizador de recurso que FulfilIdentityErasure ya ejecuta reescribe `resource_id` en la
+  # misma transacción. Sin statement nuevo, sin política de mutación nueva, sin redactor que testear.
   # Trampa de datos para cualquier SQL de esta historia: `metadata` vacía se persiste como `[]`, no `{}`, así que
   # `jsonb_object_keys` ABORTA y `metadata ? 'x'` silencia filas — filtrar por `jsonb_typeof(metadata)='object'`.
-  g-2-ids-de-persona-fuera-de-audit-log-metadata: ready-for-dev
+  g-2-ids-de-persona-fuera-de-audit-log-metadata: in-progress
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
   # aceptación que YA EXISTE (features/backoffice/users/erase.feature:49-62), declarado como TERCER segmento de
   # la línea del registro y leído como CORPUS DE TEXTO — evidencia de grado aceptación al precio de un gate

@@ -196,8 +196,9 @@ Dos niveles (`activity`, `security`); el tercer eje (cambios de datos) **ya** lo
 y **no se duplica**. `audit_log` es **append-only**: la ruta caliente sólo inserta.
 
 `audit_log` **es PII** (`actor_id`, `ip`, `user_agent`). Las mutaciones no-append **no** son scripts
-operativos sueltos: el log admite un **conjunto cerrado de dos políticas de mutación de primera clase**,
-cada una con semántica definida y disparador propio; cualquier otra escritura es append.
+operativos sueltos: el log admite un **conjunto cerrado de tres políticas de mutación de primera clase**
+—la poda, el borrado GDPR del eje **actor** y el del eje **recurso**—, cada una con semántica definida y
+disparador propio; cualquier otra escritura es append.
 
 - **Política de retención (la poda) — la *única* `DELETE`.** Retención **por nivel** (`security` >
   `activity`), expresada como dato por una `AuditRetentionPolicy` de dominio (`thresholdsAt(now)` → un
@@ -269,8 +270,18 @@ cada una con semántica definida y disparador propio; cualquier otra escritura e
   `identity:gdpr:reconcile-subject-references` reporta identidades ya borradas que el rastro siga nombrando
   por su id real.
 - **Sin payload sensible** en `metadata` (IDs y discriminantes, no cuerpos de entidad), invariante en la
-  que se apoya el erasure: por eso **no** redige `metadata`. Trigger de revisita: el día que una acción
-  guarde PII ahí, esta política debe crecer un redactor de `metadata`.
+  que se apoya el erasure: por eso **no** redige `metadata`. **Y ningún id de persona** — que es el caso
+  que el trigger de revisita anticipaba. Se disparó: el borrado de identidad escribía ahí el id real del
+  sujeto. Se resolvió **sin** redactor y **sin** cuarta política, moviendo ese id al eje `resource_id`, que
+  ya tiene anonimizador. La asimetría es la razón: ninguna mutación de este conjunto entra en el JSON, así
+  que un id de persona en `metadata` sobrevive al borrado que lo escribió, mientras que en el eje de recurso
+  lo reescribe el anonimizador que ese mismo borrado ya ejecuta, en la misma transacción.
+  **Lo que sostiene la invariante no es un gate**, y la elección está argumentada: un pseudónimo es un UUID
+  indistinguible por forma de un id real, luego prohibir «UUIDs en `metadata`» rompería el contrato de
+  `anonymized_actor_id` (D4.1), y prohibir **por nombre de clave** sería una declaración que se comprueba a
+  sí misma. Lo sostiene un testigo de aceptación falsable en `api/features/backoffice/users/erase.feature`.
+  **Trigger de revisita vigente:** un **segundo** camino de escritura que meta un id de persona en
+  `metadata` — con uno solo, un registro declarativo de claves cuesta más de lo que compra.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
 `X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando
