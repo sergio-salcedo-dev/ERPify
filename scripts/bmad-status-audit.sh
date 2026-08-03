@@ -15,7 +15,25 @@
 #   A. Epic consistency  — an epic marked `in-progress` whose stories are all
 #      `done`. Pure bookkeeping, needs nothing but the file itself.
 #   B. Shipped story     — a story at `review`/`in-progress` whose tag (RM-6,
-#      U-4, II-5, AF-1.1…) appears in a commit subject on the base branch.
+#      U-4, II-5, AF-1.1…) appears in a commit subject on the base branch AND
+#      that commit changed something other than documentation.
+#
+# The second half of B is not a refinement, it is what makes B mean anything. A
+# tag in a subject is a REFERENCE, not evidence: a story is named by the commit
+# that writes its context, by the chore that closes its siblings, and by the one
+# that argues this audit is wrong about it — none of which ship it. All three
+# happened, and each reported a story as shipped while its code did not exist.
+# So the subject selects the candidates and the file list decides, which is the
+# difference between "somebody wrote the tag" and "the work is on the branch".
+#
+# Documentation means `*.md` anywhere, `docs/` and `_bmad-output/`. Everything
+# else counts — a registry file, a Make target and a config are how some stories
+# ship, and an allow-list of source directories would quietly stop seeing them.
+#
+# The blind spot that buys: a story whose whole deliverable IS documentation now
+# passes check B forever, because nothing distinguishes shipping it from merely
+# naming it. Check A still catches its epic once every sibling is done, and the
+# markers of such a story are the reviewer's to move.
 #
 # Check B only sees stories whose key carries a letter prefix, because that is
 # what the commit convention puts in the subject: `feat(iam): … (U-4) (#508)`.
@@ -138,10 +156,37 @@ flush_group
 story_drift=()
 unchecked=()
 
-subjects=""
+commits=""
 if [[ -n "$BASE_REF" ]]; then
-	subjects="$(git -C "$REPO_ROOT" log --format=%s "$BASE_REF" 2>/dev/null)"
+	commits="$(git -C "$REPO_ROOT" log --format=$'%H\t%s' "$BASE_REF" 2>/dev/null)"
 fi
+
+# Whether a path is documentation rather than something that ships.
+is_documentation_path() {
+	case "$1" in
+		*.md|docs/*|_bmad-output/*) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+# Whether the commit changed anything that is not documentation. One `git log`
+# per candidate, and candidates are the handful of commits whose subject already
+# named the tag — the scan over every subject stays the single cheap pass it was,
+# which matters because this runs from a SessionStart hook.
+#
+# `--diff-merges=first-parent` so a merge commit reports the change it brought in
+# rather than nothing. Squash merges are the norm here and need no such handling;
+# this is what keeps a history that also carries real merges from reading as an
+# empty file list, which would silently count as "no code".
+commit_touches_code() {
+	local sha="$1" path
+	while IFS= read -r path; do
+		[[ -z "$path" ]] && continue
+		is_documentation_path "$path" || return 0
+	done < <(git -C "$REPO_ROOT" log -1 --format= --name-only --diff-merges=first-parent "$sha" 2>/dev/null)
+
+	return 1
+}
 
 # `rm-6-gate-ocp…` → RM-6 · `u-5a-cerrar…` → U-5a · `af-1-1-user…` → AF-1.1
 story_tag() {
@@ -167,10 +212,19 @@ for i in "${!keys[@]}"; do
 		continue
 	fi
 
-	if [[ -n "$subjects" ]] && grep -qiE "(^|[^A-Za-z0-9])${tag}([^A-Za-z0-9]|$)" <<<"$subjects"; then
-		subject="$(grep -iE "(^|[^A-Za-z0-9])${tag}([^A-Za-z0-9]|$)" <<<"$subjects" | head -1)"
+	[[ -z "$commits" ]] && continue
+
+	# Matched against the whole `<sha>\t<subject>` line, which is safe because
+	# every tag this derives carries a `-` and a sha is hex: the sha field cannot
+	# produce a hit on its own.
+	candidates="$(grep -iE "(^|[^A-Za-z0-9])${tag}([^A-Za-z0-9]|$)" <<<"$commits")"
+	[[ -z "$candidates" ]] && continue
+
+	while IFS=$'\t' read -r sha subject; do
+		commit_touches_code "$sha" || continue
 		story_drift+=("${key}|${status}|${tag}|${subject}")
-	fi
+		break
+	done <<<"$candidates"
 done
 
 # --- Report -------------------------------------------------------------------
