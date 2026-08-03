@@ -64,8 +64,8 @@ final class ReconcileErasedSubjectReferencesTest extends TestCase
     #[Test]
     public function itAttributesEachDivergenceToItsOwnPlaceRatherThanMergingThem(): void
     {
-        // The assertion AC3 exists for: with one merged list, a fixture seeding only the audit axis would
-        // satisfy "something was reported" while the membership source was never wired at all.
+        // What the per-axis verdict exists for: with one merged list, a fixture seeding only the audit axis
+        // would satisfy "something was reported" while the membership source was never wired at all.
         $verdict = $this->reconciler([self::GONE_ID], [
             self::MEMBERSHIP_AXIS => [self::OTHER_GONE_ID],
             self::SESSION_AXIS => [],

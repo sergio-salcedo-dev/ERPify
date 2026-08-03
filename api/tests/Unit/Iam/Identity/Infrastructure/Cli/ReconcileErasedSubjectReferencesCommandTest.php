@@ -70,6 +70,21 @@ final class ReconcileErasedSubjectReferencesCommandTest extends TestCase
         $this->assertStringContainsString('identity:gdpr:erase-subject <id> --force', $display);
     }
 
+    #[Test]
+    public function itNamesEveryAxisItCheckedEvenWhenOnlySomeOfThemDiverge(): void
+    {
+        // The axis that RECONCILES is the one at stake: it appears nowhere among the findings, so unless the
+        // failure report names the axes it checked, an operator reading a real divergence cannot tell a
+        // five-axis sweep from a control that lost a source — the ambiguity the clean run already refuses.
+        $tester = $this->tester([self::DANGLING_ID], []);
+
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertSame(Command::FAILURE, $tester->getStatusCode());
+        $this->assertStringContainsString(self::MEMBERSHIP_AXIS, $display);
+    }
+
     /**
      * Driven through the real reconciler over in-memory doubles: an empty
      * {@see InMemoryLiveIdentityDirectory} resolves every referenced id to a gone identity, so what the

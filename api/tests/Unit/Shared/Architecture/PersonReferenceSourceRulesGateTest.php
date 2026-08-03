@@ -61,6 +61,16 @@ final class PersonReferenceSourceRulesGateTest extends TestCase
     }
 
     #[Test]
+    public function theScanSkipsAnEnumCarryingTheContract(): void
+    {
+        // Its own guard, not a corollary of the abstract one: an enum is concrete, so only the enum check
+        // keeps it out. Without it the scan reaches reflection's refusal to instantiate an enum, an `Error`
+        // the axis read catches and relabels "cannot be read without constructing it" — a message about a
+        // different mistake entirely.
+        $this->assertSame([], $this->overFixtures('BackedByEnum')->declaredAxes());
+    }
+
+    #[Test]
     public function theScanReportsAnAxisTwoSourcesClaim(): void
     {
         $declared = $this->overFixtures('Duplicated')->declaredAxes();

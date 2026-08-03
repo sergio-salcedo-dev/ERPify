@@ -241,9 +241,11 @@ uno desde **ejecución fresca con exit code impreso**. Si añades una clase de g
       identificador no puede ser parámetro ligado, así que el helper sería interpolación en SQL.
 - [x] **Tarea 4 — Atribución por eje, en un VO (AC3, Enmienda 2).** `UnreconciledPersonReferences` (clave
       interna `string`) + `PersonReferenceFinding`. Los ejes **limpios se conservan contadas** (`axesChecked()`):
-      «comprobado y limpio» y «nunca cableado» no pueden deletrearse igual. La etiqueta se **deriva** de la
-      clave — pero en el **presentador**, no en el VO: `DomainPresentationSeparationGateTest` prohíbe `label()`
-      en `Domain/` (ADR DPS1/DPS4) y tenía razón, así que vive en `headingFor()` del comando.
+      «comprobado y limpio» y «nunca cableado» no pueden deletrearse igual. El encabezado por eje vive en el
+      **presentador**, no en el VO: `DomainPresentationSeparationGateTest` prohíbe `label()` en `Domain/`
+      (ADR DPS1/DPS4) y tenía razón. El pase adversarial cerró luego *qué* imprime ese presentador — la clave
+      completa del registro, no una etiqueta corta, porque dos módulos pueden compartir nombre de clase (ver
+      *Colisión de encabezados*), así que el comando pasa `$finding->axis->key()` sin derivación intermedia.
 - [x] **Tarea 5 — Gate de completitud de listers (AC2).** Motor `PersonReferenceSources` (raíz inyectable, lee
       el eje por reflexión sin construir la clase) + reglas puras `PersonReferenceSourceCoverage` en las dos
       direcciones y la colisión, con la exención extraída a `PersonReferenceKeys` **compartida** con
@@ -261,7 +263,7 @@ uno desde **ejecución fresca con exit code impreso**. Si añades una clase de g
       **conteo de la fila sembrada ANTES de asertar el veredicto**; y un testigo de colección que afirma
       `axesChecked() === 5` a través del contenedor real.
 - [x] **Tarea 8 — Documentación obligatoria.** Bloque de puntos ciegos **del control detective** en la cabecera
-      de `api/.person-reference-policy` (seis, incluido «prueba que el lister existe y se recoge, nunca que su
+      de `api/.person-reference-policy` (ocho, incluido «prueba que el lister existe y se recoge, nunca que su
       consulta lee la columna correcta»); bullets de [`CLAUDE.md`](../../CLAUDE.md) y
       [`api/CLAUDE.md`](../../api/CLAUDE.md) ampliados, y la entrada del gate en
       [`docs/claude-code-quickref.md`](../../docs/claude-code-quickref.md).
@@ -513,6 +515,7 @@ las tres comparaciones; que los fixtures no se barran; `autoconfigure: false` de
 - `api/tests/Unit/Shared/Architecture/Fixture/PersonReferenceSource/Duplicated/FirstDuplicateSourceFixture.php`
 - `api/tests/Unit/Shared/Architecture/Fixture/PersonReferenceSource/Duplicated/SecondDuplicateSourceFixture.php`
 - `api/tests/Unit/Shared/Architecture/Fixture/PersonReferenceSource/ConstructorBound/ConstructorBoundSourceFixture.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonReferenceSource/BackedByEnum/EnumSourceFixture.php`
 - `api/tests/Unit/Shared/Privacy/Infrastructure/Double/FixedPersonReferenceSource.php`
 - `api/tests/Unit/Iam/Identity/Application/InMemoryLiveIdentityDirectory.php`
 - `api/tests/Unit/Iam/Identity/Application/UnreconciledPersonReferencesTest.php`
@@ -536,9 +539,26 @@ las tres comparaciones; que los fixtures no se barran; `autoconfigure: false` de
 - `make/php-quality.mk`
 - `CLAUDE.md`
 - `api/CLAUDE.md`
+- `docs/architecture-api.md` *(boy scout: el reconciliador y la cadena de `FulfilIdentityErasure`)*
 - `docs/claude-code-quickref.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - `_bmad-output/implementation-artifacts/g-1c-control-detective-referencias-cross-context.md`
+
+### Review Findings
+
+> Revisión de código sobre el PR #634 (`349e0b54`, base `6a2aaace`), 2026-08-03. Tres capas hostiles en
+> paralelo (Blind Hunter, Edge Case Hunter, Acceptance Auditor), independientes y de solo lectura. Cada
+> hallazgo fue re-verificado contra el árbol antes de puntuarlo; cuatro puertas se re-ejecutaron en fresco
+> (`php.lint.person-reference` 0, `php.lint.bounded-context` 0, `php.deptrac` 0 violaciones / 0 uncovered,
+> y los cuatro `--filter` comprobados con `--list-tests`). **0 bloqueantes.**
+
+- [x] [Review][Patch] La rama de fallo del comando cuenta los ejes pero no los nombra, mientras la rama de éxito sí — el mismo invariante que el pase adversarial arregló, aplicado solo a la mitad [`api/src/Iam/Identity/Infrastructure/Cli/ReconcileErasedSubjectReferencesCommand.php:89`]
+- [x] [Review][Patch] Comentario con identificador de criterio de aceptación en un test enviado; `CLAUDE.md` («Code comments») obliga a barrerlos del diff propio antes del commit final [`api/tests/Unit/Iam/Identity/Application/ReconcileErasedSubjectReferencesTest.php:67`]
+- [x] [Review][Patch] La guarda `isEnum()` no tiene fixture que la ponga en rojo, a diferencia de su hermana `isAbstract()`; borrarla no da un verde falso, da un rojo con mensaje engañoso (verificado: reflexión sobre un enum lanza `Error`, que el `catch (Error)` reetiqueta como «cannot be read without constructing it») [`api/tests/Support/PersonReferenceSources.php:100`]
+- [x] [Review][Patch] La Tarea 4 describe un `headingFor()` en el comando que no existe en ninguna parte de `api/`; lo sustituyó la corrección de «Colisión de encabezados» del pase adversarial y el texto de la tarea no se reconcilió [`_bmad-output/implementation-artifacts/g-1c-control-detective-referencias-cross-context.md:246`]
+- [x] [Review][Patch] La Tarea 8 dice «seis» viñetas nuevas de puntos ciegos; el bloque del registro tiene ocho [`_bmad-output/implementation-artifacts/g-1c-control-detective-referencias-cross-context.md:264`]
+- [x] [Review][Patch] El File List omite `docs/architecture-api.md`, que sí está en el diff y que el cuerpo del PR declara como boy scout [`_bmad-output/implementation-artifacts/g-1c-control-detective-referencias-cross-context.md:539`]
+- [x] [Review][Defer] El exit code no distingue un fallo de la sonda de existencia de una divergencia real de cumplimiento [`api/src/Iam/Identity/Application/ReconcileErasedSubjectReferences.php:82`] — deferido, preexistente: verificado que en `6a2aaace` ni el comando ni el reconciliador tenían `try/catch` y cualquier error de DBAL ya salía por excepción no capturada con exit ≠ 0. Este PR añade **un** disparador nuevo (el techo de 65535 parámetros) que él mismo documenta.
 
 ## Change Log
 

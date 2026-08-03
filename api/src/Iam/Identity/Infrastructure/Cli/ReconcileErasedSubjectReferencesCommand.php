@@ -93,6 +93,13 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
             $verdict->axesChecked(),
         ));
 
+        // The denominator BY NAME, for the same reason the clean run lists them: a count cannot say WHICH
+        // place stopped being checked. A collection that quietly loses a source while another axis diverges
+        // would otherwise show only a smaller denominator beside a real finding — the moment an operator is
+        // least likely to audit the control itself, because they are already acting on its output.
+        $io->section('Axes checked');
+        $io->listing($verdict->axesCheckedKeys());
+
         foreach ($findings as $finding) {
             // The registry key verbatim, not a short name. Readable text is the presenter's job, never the
             // value object's (`docs/adr/domain-presentation-separation.md`) — but the shortest readable
