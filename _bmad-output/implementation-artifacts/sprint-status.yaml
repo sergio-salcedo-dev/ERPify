@@ -233,6 +233,23 @@ development_status:
   # nombres. El argumento completo vive en el contexto de la historia; épica y AC3 quedan sincronizados.
   # CONTEXTO ESCRITO Y EN REVISIÓN: PR #631 (rama feat/shared-g1c-control-detective-referencias-persona-exp9).
   g-1c-control-detective-referencias-cross-context: done
+  # G-2: CONTEXTO ESCRITO (2026-08-03), y la clave se queda en `backlog` A PROPÓSITO: la historia tiene una
+  # DECISIÓN ABIERTA —el fork redactor-vs-gate de epics:723-725— y la épica prohíbe implementar antes de
+  # registrarla (epics:393-398), así que `ready-for-dev` mentiría y `bmad-dev-story` la recogería con el fork sin
+  # cerrar. La frase de :157-159 («NINGUNA historia tiene ya decisión abierta») es FALSA para G-2 y su propia
+  # enumeración lo delata: lista G-1a, G-3a, G-3b y G-5, y no lista G-2. Corregirla es tarea de la historia.
+  # Lo que la medición añadió al corte, y que decide el fork: (1) la fuga es UNA sola clave —`subject_user_id`
+  # en EraseIdentitySubject:61— y la escribe el PROPIO borrado GDPR dentro de su misma transacción; los otros
+  # siete caminos de escritura de `metadata` no meten ids de persona. (2) Es dato VIVO, no prospectiva: en la BD
+  # de dev hay una fila cuyo `subject_user_id` ya no hace JOIN con `identity_user` —la persona se fue, su id no.
+  # (3) El hermano YA resolvió este mismo fork a favor del redactor en D12 de event-store-and-projections.md, y
+  # ningún documento de G-2 lo cita. (4) Un gate no puede discriminar POR FORMA: `metadata.anonymized_actor_id`
+  # es contractual (D4.1) y es un UUID indistinguible de un id real, así que prohibir «UUIDs en metadata» rompe
+  # el contrato y prohibir por nombre de clave se lee verde por construcción — SI-23. (5) B no sustituye a A: un
+  # gate no repara la fila viva, se le SUMA. La recomendación registrada es (A) el redactor, con el control de
+  # AC3 como testigo de aceptación falsable y no como gate de forma; falta que Sergio la confirme o la refute.
+  # Trampa de datos para cualquier SQL de esta historia: `metadata` vacía se persiste como `[]`, no `{}`, así que
+  # `jsonb_object_keys` ABORTA y `metadata ? 'x'` silencia filas — filtrar por `jsonb_typeof(metadata)='object'`.
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
   # aceptación que YA EXISTE (features/backoffice/users/erase.feature:49-62), declarado como TERCER segmento de
