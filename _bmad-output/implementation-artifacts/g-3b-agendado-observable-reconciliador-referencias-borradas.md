@@ -4,7 +4,7 @@ baseline_commit: 93befb7c
 
 # Story 1.6 (G-3b): El control detective del eje de recursos se ejecuta, falla de forma observable y alerta
 
-Status: ready-for-dev
+Status: review
 
 > **LA DECISIÓN ESTÁ TOMADA Y REGISTRADA** (ver *Decisión registrada*): **`Iam/Identity` estrena su propio
 > schedule**. La precondición normativa de la épica queda satisfecha por ese bloque. **No la re-abras.**
@@ -189,23 +189,23 @@ salida — no razonada desde los Makefiles.*
       pasa a usarlo. (AC4) — **la entregó G-1c (#634), no esta historia**: `LiveIdentityDirectory::existingIdsAmong()`
       + `DoctrineLiveIdentityDirectory`, una sentencia sin hidratación, ya consumido en `:82`. Aquí se **verifica**
       con `make php.unit`; no se escribe código. Se declara así en el PR para que el revisor no lo busque en el diff.
-- [ ] **Tarea 3 — Mensaje de tick + handler** bajo `src/Iam/Identity/Infrastructure/Messenger/Maintenance/`,
+- [x] **Tarea 3 — Mensaje de tick + handler** bajo `src/Iam/Identity/Infrastructure/Messenger/Maintenance/`,
       copiando `ReportDeadLetterBacklogHandler` —**no** `ReconcileSubjectErasuresHandler`—. (AC2, AC3)
-- [ ] **Tarea 4 — `IdentityMaintenanceSchedule`** con `#[AsSchedule('identity_maintenance')]` y su
+- [x] **Tarea 4 — `IdentityMaintenanceSchedule`** con `#[AsSchedule('identity_maintenance')]` y su
       `RecurringMessage`. Test de existencia al estilo `AuditLogMaintenanceScheduleTest` (`:21-24`). (AC1)
-- [ ] **Tarea 5 — Compose**: añadir el transporte a las dos listas de consumo, y actualizar el bloque de
+- [x] **Tarea 5 — Compose**: añadir el transporte a las dos listas de consumo, y actualizar el bloque de
       comentario de `compose.prod.yaml` que hoy nombra solo dos transportes. (AC7)
-- [ ] **Tarea 6 — Los dos arreglos plegados** en `ReconcileSubjectErasuresHandler`, con test. (AC8)
-- [ ] **Tarea 6 bis — Gate de consumo de schedules** (AC7): test de arquitectura + target `php.lint.*` + sus tres
+- [x] **Tarea 6 — Los dos arreglos plegados** en `ReconcileSubjectErasuresHandler`, con test. (AC8)
+- [x] **Tarea 6 bis — Gate de consumo de schedules** (AC7): test de arquitectura + target `php.lint.*` + sus tres
       inserciones + el bind mount de solo lectura de los Compose, siguiendo el precedente del gate del contrato
       de errores. Su cabecera declara qué **no** prueba (presencia del nombre ≠ worker vivo). **Verifica que el
       `--filter` selecciona la clase listando los tests que el target elige**, no razonándolo — es el defecto
       que #613 pagó.
-- [ ] **Tarea 6 ter — Tercer exit code en el CLI** (AC3, autorizado por Sergio 2026-08-03): un fallo de la sonda
+- [x] **Tarea 6 ter — Tercer exit code en el CLI** (AC3, autorizado por Sergio 2026-08-03): un fallo de la sonda
       sale hoy con el mismo código que una divergencia real, así que un check de monitorización no puede separar
       «una referencia sobrevivió a su borrado» de «la sonda reventó». Capturar y devolver un código distinto de
       `FAILURE`, con test. Al resolverlo, **borrar su bala** del top de `deferred-work.md` (registro solo-pendientes).
-- [ ] **Tarea 7 — Docs**: son **tres** ficheros, no dos — `docs/deployment-guide.md` (`:32`),
+- [x] **Tarea 7 — Docs**: son **tres** ficheros, no dos — `docs/deployment-guide.md` (`:32`),
       `docs/architecture-api.md` (`:266`) y **`docs-info/production-deployment.md`** (`:17`, git-trackeado y que el
       corte no nombraba) citan hoy solo `scheduler_maintenance`. **D3 de
       [`dead-letter-observability.md`](../../docs/adr/dead-letter-observability.md) NO se toca: ya está corregido
@@ -254,3 +254,77 @@ está cableado, nada más.
 - `docs/adr/dead-letter-observability.md` — D3 (a corregir en su motivo, no en su conclusión).
 - `docs/adr/maintenance-job-execution-contract.md` — contrato de ejecución de trabajos de mantenimiento.
 - `docs/adr/audit-activity-log.md` — D4 y la obligación distribuida que este control vigila.
+
+## Dev Agent Record
+
+### Gates — ejecuciones frescas, exit code impreso (`93befb7c` + esta rama)
+
+| Gate | Exit | Nota |
+|---|---|---|
+| `make php.stan` | **0** | 1178 ficheros, `level: max` |
+| `make php.quality` | **0** | incluye `php.lint.person-reference` (4 filtros), `php.lint.bounded-context`, `php.lint.persistent-transport`, `php.lint.audit-resource`, `php.lint.schedule-consumption`, `php.deptrac` |
+| `make php.quality.dry-run` | **0** | paridad CI; deptrac 0 violaciones / 0 uncovered |
+| `make php.unit` | **0** | 2200 tests, 9309 aserciones |
+| `make php.behat` | **0** | 383 escenarios, 3470 pasos |
+| `make php.lint.schedule-consumption` | **0** | 5 + 7 tests; selección de cada `--filter` verificada con `--list-tests` |
+
+### Comprobación viva contra el stack (AC7), no razonada desde los Makefiles
+
+`bin/console debug:scheduler` lista `identity_maintenance` con
+`ReconcilePersonReferencesMessage` cada 1 día; `debug:messenger` lo resuelve a
+`ReconcilePersonReferencesHandler`. Los otros dos schedules siguen intactos.
+
+### Falsificaciones ejecutadas (un gate que no puede ponerse rojo no prueba nada)
+
+- **Gate de consumo:** quitado `scheduler_identity_maintenance` de `compose.yaml` → **1 rojo**,
+  nombrando el transporte y el fichero. Bytes restaurados por copia, no por `git checkout`.
+- **Gate de consumo sin su mount:** corrido antes de recrear el stack → **4 rojos** con el mensaje
+  que nombra el bind mount. Es el guardarraíl anti-inerte: sin fuente, falla en vez de saltarse.
+- **Estrechez del `catch` del CLI:** ensanchado a `Throwable` → **1 rojo**. Prueba que el
+  `LogicException` de doble eje sigue siendo un bug de cableado ruidoso y no una «avería».
+- **Los dos arreglos plegados:** rojo previo de **2 fallos**, uno por arreglo (nivel y conteo).
+
+### Pase adversarial
+
+**PENDIENTE.** Es trabajo de superficie GDPR, así que `CLAUDE.md` exige una lectura hostil por
+alguien distinto del autor y que se declare dónde queda registrada. No se autocertifica.
+
+## File List
+
+**Nuevos**
+
+- `api/src/Iam/Identity/Application/PersonReferenceProbeFailed.php`
+- `api/src/Iam/Identity/Infrastructure/Messenger/Maintenance/IdentityMaintenanceSchedule.php`
+- `api/src/Iam/Identity/Infrastructure/Messenger/Maintenance/ReconcilePersonReferencesHandler.php`
+- `api/src/Iam/Identity/Infrastructure/Messenger/Maintenance/ReconcilePersonReferencesMessage.php`
+- `api/tests/Support/ScheduleConsumption.php`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Messenger/Maintenance/IdentityMaintenanceScheduleTest.php`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Messenger/Maintenance/ReconcilePersonReferencesHandlerTest.php`
+- `api/tests/Unit/Shared/Architecture/ScheduleConsumptionGateTest.php`
+- `api/tests/Unit/Shared/Architecture/ScheduleConsumptionRulesGateTest.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/ScheduleConsumption/` (4 Compose de fixture + 1 fuente)
+
+**Modificados**
+
+- `api/src/Iam/Identity/Application/ReconcileErasedSubjectReferences.php`
+- `api/src/Iam/Identity/Infrastructure/Cli/ReconcileErasedSubjectReferencesCommand.php`
+- `api/src/Shared/Audit/Infrastructure/Messenger/Maintenance/ReconcileSubjectErasuresHandler.php`
+- `api/tests/Unit/Iam/Identity/Application/ReconcileErasedSubjectReferencesTest.php`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Cli/ReconcileErasedSubjectReferencesCommandTest.php`
+- `api/tests/Unit/Shared/Audit/Infrastructure/Messenger/Maintenance/ReconcileSubjectErasuresHandlerTest.php`
+- `compose.yaml`, `compose.dev.yaml`, `compose.prod.yaml`
+- `make/php-quality.mk`
+- `api/.person-reference-policy`
+- `CLAUDE.md`, `api/CLAUDE.md`
+- `docs/architecture-api.md`, `docs/claude-code-quickref.md`, `docs/deployment-guide.md`,
+  `docs-info/production-deployment.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md` (bala del exit code borrada al resolverse)
+
+## Change Log
+
+- **2026-08-03** — «Estado medido» reescrito contra `main @ 93befb7c`; `baseline_commit` movido de
+  `9310efeb` a `93befb7c` porque un review diffeando desde el viejo habría leído todo G-1c como
+  parte de esta historia. Tarea 2 marcada hecha-por-G-1c y Tarea 7 reducida (la corrección de D3 del
+  ADR ya estaba en `main`, `417b14ab`).
+- **2026-08-03** — Implementación completa; AC3 ampliado a los dos brazos y Tarea 6 ter añadida tras
+  autorizar Sergio plegar el item diferido del exit code.
