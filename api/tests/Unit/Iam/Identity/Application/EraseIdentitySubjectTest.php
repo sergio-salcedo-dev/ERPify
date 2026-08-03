@@ -66,8 +66,10 @@ final class EraseIdentitySubjectTest extends TestCase
         // assertion below reads an undefined offset, encodes `null` and passes without having tested a thing.
         $this->assertCount(1, $audit->records);
         // Asserted over the serialised metadata rather than over its keys: a future key holding the id under
-        // any name is the defect, so pinning one key name would leave the next one through.
-        $this->assertStringNotContainsString(
+        // any name is the defect, so pinning one key name would leave the next one through. Case-insensitively,
+        // because the id reaches this use case as the caller spelled it — `Uuid::ensure()` validates without
+        // normalising — and RFC 4122 hex is case-insensitive, so a mixed-case id is the same identifier.
+        $this->assertStringNotContainsStringIgnoringCase(
             UserMother::DEFAULT_ID,
             \json_encode($audit->records[0]['metadata'], JSON_THROW_ON_ERROR),
         );

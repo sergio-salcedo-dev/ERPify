@@ -156,7 +156,8 @@ development_status:
   # la primera instancia de SI-21, no una excepción a él.
   # NINGUNA historia de la épica tiene ya decisión abierta: las tres de G-1a, la de G-3a, la de G-3b y la de G-5
   # están tomadas y registradas (2026-08-01) en sus artefactos y, para G-5, en un ADR; la de G-2 (DA-1) el
-  # 2026-08-03, a favor del redactor, y su FORMA se concretó el mismo día en A2 — el sujeto viaja como RECURSO de
+  # 2026-08-03, a favor de reparar el dato (no de declarar claves), y su FORMA se concretó el mismo día en A2 —
+  # que no construye redactor alguno: el sujeto viaja como RECURSO de
   # la entrada y `metadata` se queda con conteos, sin redactor, sin statement nuevo y sin política de mutación
   # nueva. La precondición normativa de la épica queda satisfecha; lo que falta es artefacto de contexto en G-1b
   # y G-5, no decisión.
@@ -236,11 +237,14 @@ development_status:
   # nombres. El argumento completo vive en el contexto de la historia; épica y AC3 quedan sincronizados.
   # CONTEXTO ESCRITO Y EN REVISIÓN: PR #631 (rama feat/shared-g1c-control-detective-referencias-persona-exp9).
   g-1c-control-detective-referencias-cross-context: done
-  # G-2: CONTEXTO ESCRITO y DECISIÓN TOMADA (Sergio, 2026-08-03): gana (A) EL REDACTOR — un único statement en
-  # la pasada de erasure deja de conservar el id real, y el control de AC3 es un TESTIGO DE ACEPTACIÓN FALSABLE,
-  # no un gate de forma. (B), el gate declarativo de claves de metadata, es ALTERNATIVA DESCARTADA, no decisión
-  # abierta; su condición de reapertura está escrita en el artefacto (un SEGUNDO camino de escritura con id de
-  # persona, hoy hay exactamente uno). Con eso la precondición de epics:393-398 queda satisfecha.
+  # G-2: CONTEXTO ESCRITO y DECISIÓN TOMADA (Sergio, 2026-08-03): gana (A), la vía de REPARAR EL DATO en la
+  # pasada de erasure en vez de declarar claves; y el control de AC3 es un TESTIGO DE ACEPTACIÓN FALSABLE, no
+  # un gate de forma. La forma concreta de (A) se midió después y resultó ser A2: el sujeto viaja como RECURSO
+  # de la entrada, así que NO hay statement nuevo y NO se construye redactor — el anonimizador de recurso que
+  # la cadena ya ejecutaba lo alcanza. (B), el gate declarativo de claves de metadata, es ALTERNATIVA
+  # DESCARTADA, no decisión abierta; su condición de reapertura está escrita en el artefacto (CUALQUIER camino
+  # de escritura que vuelva a meter un id de persona — hoy hay CERO). Con eso la precondición de epics:393-398
+  # queda satisfecha.
   # OJO: la frase de :157-159 («NINGUNA historia tiene ya decisión abierta») era FALSA para G-2 cuando se
   # escribió —su propia enumeración lista G-1a, G-3a, G-3b y G-5, y omite G-2—. Corregirla es tarea de la
   # historia; hoy ya no describe un hueco, pero sigue siendo una afirmación que no se sostuvo.

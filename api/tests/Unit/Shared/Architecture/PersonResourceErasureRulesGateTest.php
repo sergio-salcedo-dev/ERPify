@@ -33,6 +33,8 @@ final class PersonResourceErasureRulesGateTest extends TestCase
 
     private const string TYPE = 'FixtureResource';
 
+    private const string IMPORTED_TYPE = 'ImportedFixtureResource';
+
     private const string REAL_OWNER = 'src/Iam/Identity/Application/FulfilIdentityErasure.php';
 
     #[Test]
@@ -56,13 +58,29 @@ final class PersonResourceErasureRulesGateTest extends TestCase
     }
 
     #[Test]
+    public function theSweepResolvesATypeNamedOnlyThroughAnotherClassesConstant(): void
+    {
+        // The writer that matters most in the real tree spells no literal at all: the erasure of a natural
+        // person reaches its resource type through the constant the owning context declares. A sweep that
+        // only understood `self::` would see no writer, demand no line, and therefore name nobody as obliged
+        // to erase it — the registry would be complete and empty of the one obligation it exists for.
+        $types = $this->overFixtures('registry.complete')->resourceTypesInSource();
+
+        $this->assertContains(self::IMPORTED_TYPE, $types, \sprintf(
+            'The sweep did not resolve %s::IMPORTED_TYPE, so a type named only through an imported constant '
+            . 'never enters the universe and no line is ever demanded for it.',
+            'ImportedConstantHolderFixture',
+        ));
+    }
+
+    #[Test]
     public function theFixtureSourceIsActuallyScanned(): void
     {
         // If the fixture source root resolved to nothing, every fixture check above would pass while
         // scanning an empty tree — including the staleness one, whose whole point is a type that IS written.
         $registry = $this->overFixtures('registry.complete');
 
-        $this->assertSame([self::TYPE], $registry->resourceTypesInSource());
+        $this->assertSame([self::TYPE, self::IMPORTED_TYPE], $registry->resourceTypesInSource());
         $this->assertSame(
             ['src/AnonymiserHolderFixture.php', 'src/AuditResourceFixtureWriter.php'],
             $registry->sourceFilesCarrying(self::TYPE),

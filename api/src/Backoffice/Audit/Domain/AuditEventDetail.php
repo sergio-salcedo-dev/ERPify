@@ -18,6 +18,12 @@ use DateTimeImmutable;
  * bank name reaches it through the diff): treat it as tainted downstream — escape it on render, never
  * use it in a trust decision. `ip`/`user_agent` are deliberately absent — both are PII,
  * withheld by this diff-only projection.
+ *
+ * One constructor parameter per column it reads back, which is what a row projection is: grouping any of
+ * them into an object to satisfy a parameter count would put a shape between the query and the row it
+ * hydrates, for a metric's sake.
+ *
+ * @SuppressWarnings("PHPMD.ExcessiveParameterList")
  */
 final readonly class AuditEventDetail
 {
@@ -35,6 +41,7 @@ final readonly class AuditEventDetail
         public ?string $resourceType,
         public ?string $resourceId,
         public bool $actorErased,
+        public bool $resourceErased,
         public array $metadata,
     ) {
     }

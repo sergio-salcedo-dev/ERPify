@@ -728,7 +728,7 @@ para poder afirmar ante un regulador que ninguna fila de auditoría re-liga un p
 D4 y SI-21; el addendum omitía D4 y se corrigió el 2026-08-03 — omitirlo en la historia que existe para
 convertir D4 en mecanismo era el error.)*
 **Dependencias: ninguna, ni previa ni posterior.** La dependencia de la Story 1.2 era condicional a elegir la
-vía del gate; cerrada DA-1 a favor del redactor, no existe. El DAG del addendum la dibujaba como incondicional
+vía del gate; cerrada DA-1 a favor de reparar el dato en vez de declarar claves, no existe. El DAG del addendum la dibujaba como incondicional
 y se corrigió con esta historia.
 
 **Estado medido (del corte; resuelto):**

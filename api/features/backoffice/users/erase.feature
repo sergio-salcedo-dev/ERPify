@@ -39,7 +39,18 @@ Feature: Erase an identity (GDPR right to erasure)
     # The subject's real id survives in NO metadata of any row. Matched over the whole column as text, not by
     # key name: a key holding the id under a different name is the same defect, and `metadata` is `[]` — an
     # ARRAY, not an object — in most rows, so the jsonb key operators would abort or skip them silently.
-    And I execute the SQL query "SELECT id FROM audit_log WHERE metadata::text LIKE '%0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c%'"
+    # ILIKE, not LIKE: `resource_id` is a `uuid` and Postgres normalises its case on both sides, but `metadata`
+    # is jsonb TEXT and does not, while the route hands the client's exact spelling down uncanonicalised — so a
+    # mixed-case request id (proven live further down this file) would hide the same leak from a LIKE.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE metadata::text ILIKE '%0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c%'"
+    And there should have 0 records in SQL result
+    # …and no OTHER person's id is in there either, which the assertion above cannot see: it names one subject,
+    # so an id belonging to somebody still alive — the administrator who executed this erasure, say — would
+    # pass it. This one declares nothing and reads real rows, so it covers every write path the suite exercises,
+    # including the change-data-capture one whose content is a property of the entity model rather than of any
+    # reviewed call site. The two are complementary: the erased subject is gone from `identity_user`, so only
+    # the query above can catch them, and only this one can catch everybody else.
+    And I execute the SQL query "SELECT a.id FROM audit_log a JOIN identity_user u ON a.metadata::text ILIKE '%' || u.id::text || '%'"
     And there should have 0 records in SQL result
     # …and the compliance row is still USABLE evidence: it names the subject as its resource, anonymised in
     # place to the pseudonym, so it is still answerable which subject was erased and when. Erasing the

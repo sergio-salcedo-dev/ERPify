@@ -140,10 +140,12 @@ final readonly class FulfilIdentityErasure
                 );
 
                 if ($result->erasedAnything()) {
-                    // Counts only. Recording the subject id beside its anonymisation pseudonym would be a
-                    // reversible crosswalk — this row shares the request's correlation id with GDPR_SUBJECT_ERASED
-                    // (which carries the subject id), so a pseudonym here re-links the anonymised trail to the
-                    // person, defeating the anonymisation. Which subject was erased lives in GDPR_SUBJECT_ERASED.
+                    // Counts only, and the reason is no longer that the sibling row carries the subject id —
+                    // it carries the pseudonym, anonymised in place a few lines above. What holds now is that
+                    // the two rows share the request's correlation id, so anything identifying written here is
+                    // written about the same subject twice: a second copy to erase, on an axis no mutation
+                    // policy reaches, buying nothing. Which subject was erased lives in GDPR_SUBJECT_ERASED,
+                    // on the resource axis, where the anonymiser can reach it.
                     $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
                         'affected_rows' => $anonymisation->affectedRows,
                         'anonymized_resource_rows' => $anonymisedResourceRows,

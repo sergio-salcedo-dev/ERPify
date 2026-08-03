@@ -31,6 +31,7 @@ final readonly class AuditEventDetailResourceMapper
             $detail->resourceType,
             $detail->resourceId,
             $detail->actorErased,
+            $detail->resourceErased,
             $detail->metadata,
         );
     }

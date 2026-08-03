@@ -30,6 +30,7 @@ final readonly class AuditTimelineEntry
         public ?string $resourceType,
         public ?string $resourceId,
         public bool $actorErased,
+        public bool $resourceErased,
     ) {
     }
 }

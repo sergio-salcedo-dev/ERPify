@@ -4,7 +4,7 @@ baseline_commit: 9dce7355
 
 # Story 1.4 (G-2): Ids de persona fuera de `audit_log.metadata`
 
-Status: ready-for-dev
+Status: review
 
 > **DA-1 ESTÁ TOMADA Y NO SE REABRE** (Sergio, 2026-08-03): gana **(A) el redactor** — un único statement en la
 > pasada de erasure deja de conservar el id real, y el control de AC3 se resuelve como **testigo de aceptación
@@ -45,7 +45,7 @@ gate (`arch-addendum-gdpr-hardening.md` `:16`: *binds* todo registro, gate o con
 `User::$id => person`. Es un camino **VIVO**:
 [`FulfilIdentityErasure`](../../api/src/Iam/Identity/Application/FulfilIdentityErasure.php) `:116` lo invoca
 **dentro de la misma transacción** que después borra la fila de `identity_user` y anonimiza los dos ejes, y sus
-llamadores son [`UserEraseController`](../../api/src/Iam/Identity/Infrastructure/Http/UserEraseController.php)
+llamadores son [`UserEraseController`](../../api/src/Iam/Identity/Infrastructure/Controller/UserEraseController.php)
 `:27` (`DELETE /backoffice/users/{id}`, `IsGranted('users.erase')`) y el CLI `identity:gdpr:erase-subject`.
 
 **Los otros siete caminos de escritura NO meten ids de persona.** Medido uno a uno, no supuesto:
@@ -268,10 +268,10 @@ Los tres del corte, verbatim (`epics-gdpr-hardening.md:727-741`), con lo que los
 - [x] **Tarea 7** — Corregir las seis contradicciones de planificación listadas arriba (o declarar por escrito
       cuál se deja abierta y por qué). HECHA: las **seis** corregidas, ninguna se deja abierta. Detalle en
       *Contradicciones de planificación: cómo quedó cada una*.
-- [ ] **Tarea 8 — Pase adversarial por alguien distinto del autor, registrado, declarando dónde quedó**
+- [x] **Tarea 8 — Pase adversarial por alguien distinto del autor, registrado, declarando dónde quedó**
       (definición de hecho de la épica; `CLAUDE.md` → *Security review on every change* → *Process*). Un pase
       que no encuentra nada también cuenta: se registra y se dice.
-- [ ] **Tarea 9** — Puertas con **ejecución fresca y exit code impreso** en el artefacto: `make php.stan`,
+- [x] **Tarea 9** — Puertas con **ejecución fresca y exit code impreso** en el artefacto: `make php.stan`,
       `make php.quality`, y la suite que ejerza el camino tocado.
 
 ## Dev Notes
@@ -470,29 +470,147 @@ vacío. **Nunca `git checkout --`**, que se llevaría ediciones sin commitear.
 
 Verde de base recuperado al terminar: **exit 0**, 12 escenarios, 99 pasos.
 
-### Estado: PARCIAL — verde hasta donde llega
+### Pase adversarial (Tarea 8) — DÓNDE quedó y qué encontró
 
-Tareas 2 y 3 hechas y verdes. **`main` se movió a `93befb7c` mientras se trabajaba** (#634/G-1c mergeó), así
-que: (a) el `Estado medido` de este artefacto, fijado a `9dce7355`, hay que re-verificarlo; (b) la rama necesita
-rebase; (c) el bullet de `.person-reference-policy` que G-2 debe retirar sigue en `main` (línea 61, «standing
-leaks»), y G-3b edita **el mismo bloque de puntos ciegos** — esperar conflicto trivial ahí.
+**Registrado aquí y en el cuerpo de la PR.** Autorizado por Sergio (2026-08-04); ejecutado por **tres lectores
+hostiles independientes del autor**, en paralelo, solo lectura, con rutas absolutas al worktree (los subagentes
+leen el checkout primario, que está en `main`, no esta rama). Lentes distintas a propósito, no tres pasadas del
+mismo prompt: **(A)** ¿sobrevive un id de persona por algún camino no medido? · **(B)** ¿son falsables los
+controles o hay verde por construcción? · **(C)** ¿miente algún documento tras las enmiendas?
 
-Puertas corridas (frescas, exit code impreso):
+**Ninguno encontró fuga de PII.** (A) intentó romper la cadena por el ordenamiento INSERT→UPDATE, por el
+case-folding de UUID y por el rollback, y las tres aguantan: `security` escribe síncrono y sin Messenger, ambos
+statements hacen `CAST(:… AS UUID)` (Postgres normaliza los dos lados), y si el anonimizador lanza, el `finally`
+del `wrapInTransaction` externo hace `ROLLBACK` completo. Lo que sí encontraron es que **el pase no había
+terminado la barrida** y que **los controles eran más débiles de lo que este artefacto afirmaba**.
+
+**Seis hallazgos convergieron entre dos o tres pases**, lo que los hace fiables. Todos corregidos:
+
+| # | Sev | Hallazgo | Corregido en |
+|---|---|---|---|
+| 1 | Alta | El barrido del registro **no ve constantes importadas**, y este cambio convirtió ese bypass en estilo de la casa. Un contexto nuevo que escriba `AuditResource::of(Otro::TYPE, $personId)` no entra en el universo → ninguna línea exigida → nadie obligado a borrarlo | `AuditResourceTypeRegistry` resuelve `Fqcn::CONST` entre ficheros, con fixtures que lo pinean |
+| 2 | Alta | `metadata` con **cero controles mecanizados**: el testigo solo busca el id del sujeto borrado, así que el id de OTRA persona pasa; `Membership implements AuditedEntity` mete `userId` en claro por diseño de los dos atributos; y el testigo es borrable con build verde | Paso de población (JOIN contra `identity_user`) + regla de contención en `PersonReferenceGateTest` |
+| 3 | Media | **Bypass por mayúsculas**: `metadata` es texto jsonb y no normaliza caso; la ruta pasa la grafía del cliente sin canonicalizar. `LIKE` no veía la fuga en mayúsculas | `ILIKE` + `assertStringNotContainsStringIgnoringCase` |
+| 4 | Media | `resourceErased` **no viajaba en el contrato**, y el drawer ofrecía «seguir recurso» sobre el pseudónimo sin guarda, mientras sí la tiene para el actor | Campo en ambos DTOs + guarda simétrica + tests de los dos lados |
+| 5 | Media | Dos docblocks de producción y la cabecera de `.audit-resource-types` seguían afirmando la fuga que este cambio retira | Barrida documental |
+| 6 | Media | El trigger de reapertura decía «un **segundo** camino» cuando tras el cambio hay **cero**: leído literalmente se negaba a dispararse ante la primera regresión | «**cualquier** camino»; la cuenta que importa es cuántos existen a la vez |
+
+**Lo que el pase corrigió del expediente, no del código:** el argumento de `nest_transactions_with_savepoints`
+que el ADR usaba está **obsoleto** — `doctrine/dbal` 4.4.4 usa savepoints en toda transacción anidada y
+`setNestTransactionsWithSavepoints(false)` lanza. La regla se mantiene por su otra razón; la premisa se corrigió
+donde estaba escrita. Y el conteo «ocho caminos de escritura» era un artefacto de agrupar filas de una tabla:
+son **diez** (nueve `AuditLogger->log()` más el listener CDC), **siete** con `metadata` no vacía, **uno** con id
+de persona. Re-medido a mano antes de escribirlo, porque va a un registro cuyo valor está en ser comprobable.
+
+**Lo que NO se cerró, dicho en abierto.** El testigo de aceptación sigue siendo **borrable en un diff de una
+línea con todos los gates en verde**: de los tres controles del eje `metadata`, solo la regla de contención
+tiene propiedad anti-borrado mecánica. Está escrito así en `.person-reference-policy`, sin adornos.
+
+**Una decisión de diseño que el pase levantó y NO se toma aquí:** `EraseIdentitySubject` escribe el id real en
+`resource_id` y depende de que **su llamador** ejecute el anonimizador después. Hoy tiene un solo llamador y el
+orden está pinneado de punta a punta por el testigo, pero un segundo llamador (un «borra mi cuenta»
+self-service, un handler) reintroduciría el defecto sin rojo en ninguna parte. Los dos registros ya lo delatan:
+`.person-reference-policy` nombra `EraseIdentitySubject` como dueño del borrado de `User::$id`, y
+`.audit-resource-types` nombra `FulfilIdentityErasure` como dueño de la copia que ese mismo caso emite. Es una
+cuestión de frontera de agregado/caso de uso, que en este repo es decisión del usuario, no del implementador.
+
+### Estado: COMPLETA — verde con las puertas frescas
+
+Las nueve tareas hechas. `main` se movió a `93befb7c` mientras se trabajaba (#634/G-1c mergeó) y la rama está
+rebasada sobre él, así que el `Estado medido` de arriba —fijado a `9dce7355`— es historia, no estado actual.
+
+Puertas finales, **cada una una ejecución fresca con su exit code**:
 
 | Puerta | Resultado |
 |---|---|
-| `make php.unit c='--filter EraseIdentitySubjectTest'` | 4 tests, 14 aserciones, **exit 0** |
-| `make php.unit` (suite completa, 2147 tests) | **exit 0** |
-| `make php.behat c='features/backoffice/users/erase.feature'` | 12 escenarios, 99 pasos, **exit 0** |
-| `make php.stan`, `make php.quality` | **PENDIENTES** |
+| `make php.stan` | **exit 0** |
+| `make php.quality` | **exit 0** (PHPMD sin baseline: solo este target lo pilla) |
+| `make php.quality.dry-run` | **exit 0** — es lo que corre CI, y es *check-only*: `php.quality` ARREGLA y enmascara |
+| `make php.unit` | 2180 tests, 9279 aserciones, **exit 0** |
+| `make php.behat c='features/backoffice/users/erase.feature'` | 12 escenarios, 101 pasos, **exit 0** |
+| `make php.behat c='features/backoffice/audit/'` | 20 escenarios, 147 pasos, **exit 0** |
+| `make php.lint.person-reference` | **exit 0** |
+| `make php.lint.audit-resource` | **exit 0** |
+| `make pwa.quality` | **exit 0** |
+| `make pwa.test.unit` | 221 ficheros, 1136 tests, **exit 0** |
+
+Dos rojos aparecieron en el camino y **ninguno era del código de la historia**, pero los dos se arreglaron aquí
+porque los provocó este cambio: PHPMD marcó 12 parámetros en el DTO de detalle y su read model al añadir
+`resourceErased` (suprimido con su argumento, siguiendo el precedente ya existente en `AuditLogEntry` y
+`BankAccountCollectionRow`), y los pins de forma del contrato —`should have 10 children` en Behat y la lista
+exacta de campos en el test funcional— mordieron al crecer la fila, que es exactamente su trabajo.
+
+Un aviso de entorno, no de código: la suite completa dio **227 errores** una vez con el contenedor `database`
+caído (`could not translate host name "database"`). Con el stack levantado, exit 0. No confundir eso con una
+regresión.
 
 ### Completion Notes List
 
-- Pendiente: M2, y las Tareas 4 a 9 (control falsable con todos sus rojos, corrección del comentario del
-  tripwire, enmiendas documentales, contradicciones de planificación, pase adversarial, puertas finales).
+- **Tareas 4–9 completas.** El control de AC3 tiene tres mutaciones con tres rojos distintos; el comentario del
+  tripwire de G-3a dice ahora lo que el check compra y no lo que no puede dar; cuatro enmiendas documentales;
+  las seis contradicciones de planificación resueltas; pase adversarial registrado.
+- **El pase adversarial cambió el alcance de la historia, con autorización explícita de Sergio (2026-08-04).**
+  Tres hallazgos altos y medios se cerraron dentro de esta PR en vez de diferirse: la resolución de constantes
+  importadas en el barrido del registro, los controles del eje `metadata` (población + contención), el bypass
+  por mayúsculas y `resourceErased` en el contrato de lectura con su guarda en el drawer.
+- **Queda dicho lo que no se cerró:** el testigo de aceptación es borrable en un diff de una línea con todo en
+  verde, y `EraseIdentitySubject` depende de su llamador para su propio cumplimiento. Lo primero está escrito
+  en `.person-reference-policy`; lo segundo es una decisión de frontera que corresponde al usuario.
 
 ### File List
 
-- `api/src/Iam/Identity/Application/EraseIdentitySubject.php` (modificado)
-- `api/tests/Unit/Iam/Identity/Application/EraseIdentitySubjectTest.php` (modificado)
+- `_bmad-output/implementation-artifacts/g-2-ids-de-persona-fuera-de-audit-log-metadata.md` (nuevo)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modificado)
+- `_bmad-output/planning-artifacts/arch-addendum-gdpr-hardening.md` (modificado)
+- `_bmad-output/planning-artifacts/epics-gdpr-hardening.md` (modificado)
+- `api/.audit-resource-types` (modificado)
+- `api/.person-reference-policy` (modificado)
+- `api/features/backoffice/audit/timeline.feature` (modificado)
 - `api/features/backoffice/users/erase.feature` (modificado)
+- `api/src/Backoffice/Audit/Application/Resource/AuditEventDetailResource.php` (modificado)
+- `api/src/Backoffice/Audit/Application/Resource/AuditTimelineResource.php` (modificado)
+- `api/src/Backoffice/Audit/Domain/AuditEventDetail.php` (modificado)
+- `api/src/Backoffice/Audit/Domain/AuditTimelineEntry.php` (modificado)
+- `api/src/Backoffice/Audit/Infrastructure/Http/AuditEventDetailResourceMapper.php` (modificado)
+- `api/src/Backoffice/Audit/Infrastructure/Http/AuditTimelineResourceMapper.php` (modificado)
+- `api/src/Backoffice/Audit/Infrastructure/Persistence/Dbal/DbalAuditTimelineRepository.php` (modificado)
+- `api/src/Iam/Identity/Application/EraseIdentitySubject.php` (modificado)
+- `api/src/Iam/Identity/Application/FulfilIdentityErasure.php` (modificado)
+- `api/src/Iam/Identity/Application/ReconcileErasedSubjectReferences.php` (modificado)
+- `api/src/Iam/Identity/Infrastructure/Cli/ReconcileErasedSubjectReferencesCommand.php` (modificado)
+- `api/tests/Functional/Backoffice/Audit/Infrastructure/Controller/AuditEventDetailFunctionalTest.php` (modificado)
+- `api/tests/Support/AuditResourceTypeRegistry.php` (modificado)
+- `api/tests/Unit/Backoffice/Audit/Application/AuditTimelineSearcherTest.php` (modificado)
+- `api/tests/Unit/Backoffice/Audit/Infrastructure/Http/AuditEventDetailResourceMapperTest.php` (modificado)
+- `api/tests/Unit/Backoffice/Audit/Infrastructure/Http/AuditTimelineResourceMapperTest.php` (modificado)
+- `api/tests/Unit/Iam/Identity/Application/EraseIdentitySubjectTest.php` (modificado)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/registry.complete` (modificado)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/src/ImportedConstantHolderFixture.php` (nuevo)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/src/ImportedConstantWriterFixture.php` (nuevo)
+- `api/tests/Unit/Shared/Architecture/PersonReferenceGateTest.php` (modificado)
+- `api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php` (modificado)
+- `api/tests/Unit/Shared/Architecture/PersonResourceErasureRulesGateTest.php` (modificado)
+- `docs/adr/audit-activity-log.md` (modificado)
+- `docs/architecture-api.md` (modificado)
+- `docs/architecture-pwa.md` (modificado)
+- `pwa/src/context/backoffice/audit/domain/AuditEntry.ts` (modificado)
+- `pwa/src/context/backoffice/audit/infrastructure/ApiAuditEventDetailRepository.ts` (modificado)
+- `pwa/src/context/backoffice/audit/infrastructure/ApiAuditTimelineRepository.ts` (modificado)
+- `pwa/src/context/backoffice/audit/infrastructure/ui/AuditEntryDrawer.tsx` (modificado)
+- `pwa/tests/app/backoffice/audit/auditDayGroups.test.ts` (modificado)
+- `pwa/tests/app/backoffice/audit/auditInvestigationScreen.test.tsx` (modificado)
+- `pwa/tests/app/backoffice/audit/auditJourneyGroups.test.ts` (modificado)
+- `pwa/tests/context/backoffice/audit/application/useAuditTimeline.test.tsx` (modificado)
+- `pwa/tests/context/backoffice/audit/infrastructure/ApiAuditEventDetailRepository.test.ts` (modificado)
+- `pwa/tests/context/backoffice/audit/infrastructure/ApiAuditTimelineRepository.test.ts` (modificado)
+- `pwa/tests/context/backoffice/audit/infrastructure/ui/AuditEntryDrawer.test.tsx` (modificado)
+- `pwa/tests/context/backoffice/audit/infrastructure/ui/AuditTimelineTable.test.tsx` (modificado)
+
+### Change Log
+
+| Fecha | Qué |
+|---|---|
+| 2026-08-03 | DA-1 cerrada (Tarea 0); Tareas 1–3: el sujeto pasa a viajar como RECURSO de la entrada (A2) |
+| 2026-08-04 | Tareas 4–7: control falsable con tres rojos, premisa del tripwire corregida, cuatro enmiendas documentales, seis contradicciones resueltas |
+| 2026-08-04 | Tarea 8: pase adversarial de tres lentes; seis hallazgos convergentes, todos corregidos en esta PR |
+| 2026-08-04 | Tarea 9: puertas finales verdes; historia a `review` |

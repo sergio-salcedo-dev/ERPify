@@ -75,8 +75,13 @@ function AuditEntryDrawerBody({
   onFollowResource,
 }: Readonly<Omit<AuditEntryDrawerProps, "open" | "onClose"> & { entry: AuditEntry }>) {
   const followActor = onFollowActor && entry.actorId !== null && !entry.actorErased;
+  // Symmetrical to the actor guard above, and for the same reason: once an axis is erased its id is an
+  // anonymisation pseudonym, so following it filters the trail by an identity that denotes nobody while
+  // presenting it as a live reference. The compliance row of an identity erasure is exactly this case.
   const followResource =
-    onFollowResource && (entry.resourceType !== null || entry.resourceId !== null);
+    onFollowResource &&
+    (entry.resourceType !== null || entry.resourceId !== null) &&
+    !entry.resourceErased;
 
   return (
     <div className="audit-entry-drawer flex flex-col gap-4">

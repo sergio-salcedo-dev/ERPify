@@ -2,3 +2,4 @@
 # classified that the fixture source does not write, so every direction passes. Its job is to prove the dirty
 # twins beside it fail for the reason claimed and not because the fixture sweep is broken.
 FixtureResource => non-person
+ImportedFixtureResource => non-person

@@ -35,6 +35,7 @@ final class AuditTimelineResourceMapperTest extends TestCase
                 'resourceType',
                 'resourceId',
                 'actorErased',
+                'resourceErased',
             ],
             \array_keys(\get_object_vars($resource)),
         );
@@ -46,6 +47,7 @@ final class AuditTimelineResourceMapperTest extends TestCase
         $this->assertSame('11111111-1111-7111-8111-111111111111', $resource->actorId);
         $this->assertSame('Bank', $resource->resourceType);
         $this->assertFalse($resource->actorErased);
+        $this->assertFalse($resource->resourceErased);
     }
 
     public function testToListResourcePassesNullableFieldsThrough(): void
@@ -61,12 +63,16 @@ final class AuditTimelineResourceMapperTest extends TestCase
             null,
             null,
             true,
+            true,
         ));
 
         $this->assertNull($resource->actorId);
         $this->assertNull($resource->resourceType);
         $this->assertNull($resource->resourceId);
         $this->assertTrue($resource->actorErased, 'an erased subject surfaces as such in the row');
+        // Without this the row hands a consumer an anonymisation pseudonym it cannot tell from a live
+        // identifier, and every affordance built on `resourceId` treats it as one.
+        $this->assertTrue($resource->resourceErased, 'an erased resource surfaces as such in the row');
     }
 
     public function testToListPagePreservesNavigationAndMapsItemsInOrder(): void
@@ -103,6 +109,7 @@ final class AuditTimelineResourceMapperTest extends TestCase
             '0190abcd-1234-7abc-8def-001122330000',
             'Bank',
             '22222222-2222-7222-8222-222222222222',
+            false,
             false,
         );
     }

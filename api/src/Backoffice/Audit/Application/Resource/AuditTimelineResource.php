@@ -7,8 +7,11 @@ namespace Erpify\Backoffice\Audit\Application\Resource;
 /**
  * Wire contract of one audit timeline row (`GET /audit/timeline`). Plain, flat, scalar-only: the
  * serialized object is this DTO, never an entity. Every field is a string the mapper pre-formats,
- * except `actorErased` — a boolean carrying the materialised GDPR-erasure state, surfaced in the slim
- * row so an erased subject reads as such without lifting the more sensitive `ip`/`user_agent`.
+ * except the two erasure booleans — the materialised GDPR-erasure state of each axis, surfaced in the
+ * slim row so an erased subject reads as such without lifting the more sensitive `ip`/`user_agent`.
+ * Both axes travel because both can be anonymised independently, and a consumer that cannot tell a
+ * pseudonym from a live identifier will offer the pseudonym as one: `resourceErased` is what lets it
+ * refuse, exactly as `actorErased` already does on the other axis.
  * `occurredOn` is an ISO-8601 string at microsecond precision (forensic instant);
  * `actorId`/`resourceType`/`resourceId` are null when the record carries no actor/resource.
  *
@@ -28,6 +31,7 @@ final readonly class AuditTimelineResource
         public ?string $resourceType,
         public ?string $resourceId,
         public bool $actorErased,
+        public bool $resourceErased,
     ) {
     }
 }

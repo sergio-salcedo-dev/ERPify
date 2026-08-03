@@ -1,8 +1,10 @@
 # Every `resource_type` the audit vocabulary knows, classified by whether it denotes a NATURAL PERSON.
 #
 # Writers and consumers alike: `AuditResource` is the vocabulary of the write path AND of the erasure and
-# query paths, so a type can enter this file through a call that only ever READS rows of it. `User` is such
-# a type today. The registry is an inventory of the types the code names, not of the rows it produces.
+# query paths, so a type can enter this file through a call that only ever READS rows of it. The registry is
+# an inventory of the types the code names, not of the rows it produces. `User` entered that way and no
+# longer sits there: the identity erasure names its subject as its compliance entry's resource, so the type
+# is written in production and this line closes a live hole rather than reserving one.
 #
 # Why this file exists: GDPR erasure of the resource axis is the owning bounded context's job
 # (docs/adr/audit-activity-log.md D4). That assignment only works if "is this type a person?" is a
@@ -20,7 +22,8 @@
 # The gate is three classes — PersonResourceErasureGateTest over the real tree, plus
 # PersonResourceErasureRulesGateTest and PersonResourceErasureWitnessGateTest for the falsifiability of the
 # rules — run together by `make php.lint.audit-resource`. It fails the build when a type reaches
-# `AuditResource::of(...)` — written at the call or held in a same-class constant — or a route's
+# `AuditResource::of(...)` — written as a literal at the call, or held in a constant the call resolves,
+# whether declared in the calling class or in another one it imports — or a route's
 # `_audit_resource_type` default without a line here; when a `person` line names a file that does not call
 # anonymise() on an AuditResourceAnonymiser it holds; when its witness does not exist, is not a `.feature`
 # under `features/`, or has no single scenario that both seeds a row of the type and asserts none survives;
@@ -32,14 +35,14 @@
 #
 #   - It cannot judge the classification. Calling `Contact` a non-person passes; the completeness check still
 #     demands a line, so the decision is forced into a diff, which is the point. Review is what judges it.
-#   - `User` IS WRITTEN IN PRODUCTION, and the gate did not notice. EraseIdentitySubject names the erased
-#     subject as its compliance entry's resource, so the person axis of `audit_log` is no longer empty and
-#     this line closes a live hole rather than sealing an unfired gun. The completeness sweep stayed green
-#     throughout, because that writer reaches the type through `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE`
-#     and the sweep matches the quoted literal — the imported-constant blind spot stated further down, whose
-#     cost was priced as nothing while the only carrier was the declaring class itself. It is not nothing:
-#     a green here has never meant "no writer exists", and PersonResourceErasureGateTest says so at the one
-#     assertion that used to promise otherwise.
+#   - `User` IS WRITTEN IN PRODUCTION. EraseIdentitySubject names the erased subject as its compliance
+#     entry's resource, so the person axis of `audit_log` is not empty and this line closes a live hole
+#     rather than reserving one. That writer spells no literal — it reaches the type through
+#     `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE` — and for a while the sweep could not see it at all,
+#     which is the worst shape this registry can fail in: an unseen writer means no type in the universe,
+#     so no line demanded, so nobody named as obliged to erase it. The sweep now resolves that form; what
+#     does NOT follow is that a green here means "no unseen writer exists", and
+#     PersonResourceErasureGateTest says so at the one assertion that used to promise otherwise.
 #   - The witness proves the declared erasure path REACHES a row of the type. It does not prove any such row
 #     is ever produced, and no check here can: liveness of a producer is precisely what this gate is
 #     forbidden to judge.
@@ -61,12 +64,16 @@
 #   - Witness and declaration can be removed in the same commit. Deleting the scenario alone turns the line
 #     red, so the pair has to go together — a deliberate, reviewable act rather than an impossible one. Today
 #     even that is caught, because dropping the `User` line leaves the type still derived from `src` and the
-#     completeness check demands it back; that protection lapses for any type `src` does not name.
-#   - It cannot follow a constant imported from another class. ReconcileErasedSubjectReferences.php:45 reaches
-#     the type through `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE` and the completeness check does not see
-#     that call. `User` is nonetheless derived — from `AuditResource::of(self::SUBJECT_RESOURCE_TYPE, …)` in
-#     the class that declares the constant — so this blind spot costs nothing HERE, and would cost the whole
-#     entry for a type reached only through an imported constant.
+#     completeness check demands it back; that protection lapses for any type `src` does not name. Note what
+#     it rests on: derivation, not deletion — the type survives a refactor of any ONE call site only because
+#     two independent ones now derive it (the anonymiser call holding the constant, and the erasure that
+#     imports it). One call site is one refactor away from taking the line and its witness with it.
+#   - It resolves a constant imported from another class, and does so on the ONE-CLASS-PER-FILE assumption
+#     below: `Holder::CONST` is looked up by the holder's SHORT name, which is what a call site spells once
+#     the class is imported. Two classes of that short name in different namespaces collapse onto one key,
+#     so a lookup can resolve to the wrong sibling's literal and over-include a type. Over-inclusion fails
+#     loudly — a line is demanded for a type nothing writes, and the staleness check then refuses it — which
+#     is the direction this gate must err in. Resolving imports properly would need a parser.
 #   - The source sweep is textual and narrow: single-quoted literals only (double quotes are ruled out by
 #     cs-fixer's `single_quote`, not by this gate), `const string NAME = '…'` only for the constant form, and
 #     `api/src` only — a writer in a migration, a fixture or a console command outside `src` is not seen.

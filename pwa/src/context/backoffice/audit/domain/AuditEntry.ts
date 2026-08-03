@@ -8,9 +8,12 @@
  * below drive presentation (badge variant, actor icon) with a graceful fallback for anything else.
  *
  * `occurredOn` is an ISO-8601 string at microsecond precision (the forensic instant). `actorErased`
- * materialises the GDPR-erasure state (a boolean, never derived at read time): an erased subject
- * reads as such from the slim row without lifting the more sensitive `ip`/`userAgent`, which belong
- * to the (deferred) detail read model and are absent here.
+ * and `resourceErased` materialise the GDPR-erasure state of each axis (booleans, never derived at
+ * read time): an erased subject reads as such from the slim row without lifting the more sensitive
+ * `ip`/`userAgent`, which belong to the (deferred) detail read model and are absent here. Both axes
+ * are carried because both can be anonymised independently, and an identifier left over from an
+ * erasure is a pseudonym: indistinguishable by shape from a live one, so only the flag says which
+ * it is, and any affordance that would treat it as a live reference has to consult the flag first.
  */
 export interface AuditEntry {
   id: string;
@@ -23,6 +26,7 @@ export interface AuditEntry {
   resourceType: string | null;
   resourceId: string | null;
   actorErased: boolean;
+  resourceErased: boolean;
 }
 
 /** Audit classification axis. The stored value may be anything; these are the values we style. */
