@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Support;
 
-use Doctrine\ORM\Mapping\Id;
-use ReflectionProperty;
-
 /**
  * Which `person ::` lines of the registry carry no `#[PersonSubjectReference]` at their property.
  *
@@ -15,14 +12,10 @@ use ReflectionProperty;
  * the rule that says the obligation must be visible where the column is declared went unenforced for every
  * column, and deleting an attribute left the build green.
  *
- * The exemption is the SUBJECT'S OWN PRIMARY KEY, and it is semantic rather than mechanical. The attribute
- * is named for a REFERENCE: an id of a person held by a row that is not them, which no foreign key removes
- * because cross-context references carry none — that is the distributed obligation the axis exists to make
- * impossible to pass in silence. A primary key carries no such obligation: erasing it IS deleting its own
- * row, which the wiring check already proves. Exempting by "the property is inherited" instead would key
- * the rule to an implementation accident and let any person id dropped into any shared trait escape it.
+ * Which keys the rule applies to — every person reference except the subject's own primary key — is
+ * {@see PersonReferenceKeys}, shared with the source-coverage gate so the exemption has one definition.
  *
- * A declaration IS resolved through inheritance, which is a different question from the exemption: a column
+ * A declaration IS resolved through inheritance, which is a different question from that exemption: a column
  * a concrete entity inherits is classified under the child's key while the attribute can only be written on
  * the parent that declares the property, so reading the key literally would report a properly declared
  * column as undeclared.
@@ -39,25 +32,10 @@ final class UndeclaredPersonReferences
      */
     public static function in(array $classification, array $declaredOwners): array
     {
-        $personReferences = \array_keys(
-            \array_filter($classification, static fn (?string $owner): bool => null !== $owner),
-        );
-
         return \array_values(\array_filter(
-            $personReferences,
-            static fn (string $key): bool => !self::isTheSubjectItself($key)
-                && !self::isDeclared($key, $declaredOwners),
+            PersonReferenceKeys::referencesIn($classification),
+            static fn (string $key): bool => !self::isDeclared($key, $declaredOwners),
         ));
-    }
-
-    /**
-     * Whether the column is the primary key of the aggregate that IS the person.
-     */
-    private static function isTheSubjectItself(string $key): bool
-    {
-        $property = self::propertyOf($key);
-
-        return $property instanceof ReflectionProperty && [] !== $property->getAttributes(Id::class);
     }
 
     /**
@@ -87,21 +65,5 @@ final class UndeclaredPersonReferences
             static fn (string $declared): bool => \str_ends_with($declared, $property)
                 && \is_subclass_of($entity, (string) \strstr($declared, '::$', true)),
         );
-    }
-
-    /**
-     * The reflected property behind a registry key, or `null` when the key resolves to nothing — a state the
-     * staleness check already fails on, so it is not this rule's job to report it a second time.
-     */
-    private static function propertyOf(string $key): ?ReflectionProperty
-    {
-        $class = \strstr($key, '::$', true);
-        $name = \substr((string) \strstr($key, '::$'), 3);
-
-        if (false === $class || '' === $name || !\class_exists($class) || !\property_exists($class, $name)) {
-            return null;
-        }
-
-        return new ReflectionProperty($class, $name);
     }
 }

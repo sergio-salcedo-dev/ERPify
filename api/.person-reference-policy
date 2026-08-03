@@ -25,14 +25,20 @@
 # at a property disagrees with the line here, and when a `person` line carries no declaration at its property
 # at all.
 #
-# That last direction has ONE exemption, and it is semantic rather than mechanical: the subject's OWN PRIMARY
-# KEY. The attribute is named for a REFERENCE — an id of a person held by a row that is not them, which no
-# foreign key removes, which is the distributed obligation this file exists to make impossible to pass in
-# silence. A primary key carries no such obligation: erasing it IS deleting its own row, and the wiring check
-# already proves that happens. Exempting instead by "the property is inherited" would key the rule to an
-# implementation accident and let any person id dropped into a shared trait escape it. If an aggregate ever
-# appears whose primary key is a person's id but whose erasure is a scrub in place rather than a deletion,
-# this exemption stops being true and the registry needs a verb that separates the two meanings.
+# That last direction has ONE exemption, and it is that one KEY rather than a shape: `User::$id`, and only
+# while it is still a primary key. The attribute is named for a REFERENCE — an id of a person held by a row
+# that is not them, which no foreign key removes, which is the distributed obligation this file exists to
+# make impossible to pass in silence. `identity_user`'s own key carries no such obligation: erasing it IS
+# deleting its own row, and the wiring check already proves that happens.
+#
+# Reading "carries #[ORM\Id]" alone would NOT say that, and the gap is not theoretical: a join table with a
+# composite `(userId, organizationId)` key, or a one-to-one extension table keyed by the subject, holds a
+# person's id in a row that is not the person. Its orphan is exactly the residue the detective control below
+# exists to find, and under the mechanical reading it would need neither the attribute nor a source while the
+# build stayed green — one exemption switching off two rules at once. So the rule names the key, and keeps
+# `#[ORM\Id]` as a second conjunct: if the person aggregate ever stops being keyed by that property, the
+# exemption lifts and the build says so. Exempting by "the property is inherited" instead would key the rule
+# to an implementation accident and let any person id dropped into a shared trait escape it.
 #
 # ---------------------------------------------------------------------------------------------------------
 # What it deliberately does NOT do. Read this list as the specification of the gate's blind spots — a green
@@ -77,6 +83,46 @@
 #     accept the same owner for both. Harmless while an owner deletes the whole row; it stops being harmless
 #     the first time a person column is scrubbed in place instead. For the same reason it cannot recognise an
 #     owner that erases through raw DBAL, because a `Connection` names no entity.
+# ---------------------------------------------------------------------------------------------------------
+# THE DETECTIVE CONTROL, and what IT does not see. Every `person ::` line above EXCEPT THE SUBJECT'S OWN
+# PRIMARY KEY is also enumerated against the reconciler that reads the rows back
+# (`identity:gdpr:reconcile-subject-references`): each such column must have a
+# `Shared\Privacy\Application\PersonReferenceSource` declaring its key, and no source may declare a key this
+# file does not carry. That comparison is the only thing separating "the erasure is WRITTEN" — which is all
+# the checks above prove — from "the row is GONE". Its own limits:
+#
+#   - IT INHERITS EVERY BLIND SPOT ABOVE, because it is enumerated against THIS FILE. A person id in a column
+#     no entity declares, or born in configuration, is missing from the registry and therefore missing from
+#     the control, in exactly the same silence. Concretely, and worth naming because the exception below
+#     invites the opposite reading: `audit_log.actor_id`, `audit_log.metadata` and `event_store.aggregate_id`
+#     hold person ids, have no entity, and are OUTSIDE the control. It reaches four columns plus one.
+#   - IT PROVES THE WIRING IS DECLARED, NOT THAT THE COLLECTION WAS BUILT. The coverage gate compares declared
+#     keys against these lines and reads `config/services.yaml` for the tag and the tagged iterator — all
+#     static. Whether the compiled container actually holds one source per line is pinned by
+#     `tests/Functional/Shared/Privacy/PersonReferenceCollectionFunctionalTest.php`, which runs under
+#     `make php.unit` and NOT under `make php.lint.person-reference`. A green gate alone leaves an `exclude:`
+#     in the `Erpify\` service resource undetected.
+#   - IT PROVES A SOURCE EXISTS, NEVER THAT IT READS THE RIGHT COLUMN. A source whose SQL pointed at another
+#     table would satisfy every check here and report an empty axis for ever. That the query matches the
+#     column is proven by each source's functional test against real Postgres.
+#   - THE READS ARE NOT ONE SNAPSHOT. Each source queries its own table, then one probe resolves which of the
+#     collected ids are live; an erasure committing inside that window is reported as a divergence it is not.
+#     It self-corrects on the next run and the repair is idempotent, so the cost is a transient false
+#     positive — but a finding is not proof that the state was ever wrong.
+#   - IT DETECTS ERASURE RESIDUE, NOT ILLEGITIMATE REFERENCES. A finding is an id that resolves to no live
+#     identity. A row that names a person who still exists but should no longer be referenced is a correct
+#     row to this control, whatever the business rule says.
+#   - IT CANNOT TELL AN ERASURE THAT NEVER RAN FROM ONE A LATER WRITE UNDID. Both leave the same dangling id,
+#     and nothing here dates it or attributes it, so a finding says WHAT is wrong and never HOW it got there.
+#   - IT ONLY READS, AND NOTHING SCHEDULES IT YET. Repair is a deliberate operator act through the erasure use
+#     case; a green run therefore means somebody repaired, never that the write path which created the
+#     residue was fixed. Until a schedule runs it, a control nobody invokes detects nothing.
+#   - `audit_log.resource_id` IS IN THE CONTROL BUT NOT IN THIS FILE, and that carve-out has EXACTLY ONE SLOT.
+#     It has no entity, so it can never be a key here; the reconciler holds it as a hardcoded collaborator
+#     instead, and its presence is pinned by the reconciler's own tests rather than by the coverage gate.
+#     A second no-entity axis cannot simply be added as a source — the gate would reject a key this file does
+#     not carry — so it needs the registry to grow a verb for no-entity columns first. That is a conscious
+#     decision, not a line to add in passing.
 # ---------------------------------------------------------------------------------------------------------
 
 # Surrogate identifiers of aggregates that are not people. `BankAccount::$id` is the one worth arguing: the

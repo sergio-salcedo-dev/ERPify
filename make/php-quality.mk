@@ -142,12 +142,20 @@ php.lint.persistent-transport: ## Persistent-transport person-aggregate policy g
 # nothing removes a person's id from a foreign table when their identity is deleted — the obligation
 # is distributed, and every context that comes to touch a person mints another one of these columns.
 #
-# The gate is two classes — the assertions over the real tree, and the falsifiability of the rules they
-# assert — and each is selected BY NAME, in its own run, for the reason spelled out at the sibling target
-# above: a common prefix cannot tell "both ran" from "one of them is gone".
-php.lint.person-reference: ## Person-reference erasure-owner gate
+# It also fails when a person reference has no source in the detective control that verifies the row is
+# GONE (and when a source covers a key the registry does not carry, or two sources cover one key): the
+# checks above prove the erasure is WRITTEN, never that it happened.
+#
+# The gate is four classes — for each half, the assertions over the real tree plus the falsifiability of the
+# rules they assert — and each is selected BY NAME, in its own run, for the reason spelled out at the sibling
+# target above: a common prefix cannot tell "all four ran" from "one of them is gone". Note the names nest
+# (`PersonReference…` is a prefix of `PersonReferenceSource…`), so the filters are anchored by being exact
+# class names and each one's selection is verified with `--list-tests`, never assumed.
+php.lint.person-reference: ## Person-reference erasure-owner + detective-coverage gate
 	@$(PHP_TEST) bin/phpunit --filter=PersonReferenceGateTest
 	@$(PHP_TEST) bin/phpunit --filter=PersonReferenceRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=PersonReferenceSourceGateTest
+	@$(PHP_TEST) bin/phpunit --filter=PersonReferenceSourceRulesGateTest
 
 ## —— Deptrac (architectural boundaries) ————————————————————————————————————
 
