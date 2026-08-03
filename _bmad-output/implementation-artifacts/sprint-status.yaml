@@ -221,6 +221,17 @@ development_status:
   # se contradecía consigo mismo y con la épica.
   # GATE DE ORDEN vs G-3b: bajo ① el orden es INDIFERENTE (los listers se suman a la colección y el schedule
   # existente los recoge), así que hoy no muerde; se conserva como tripwire por si ① se reabriera hacia ②.
+  # FORMA DEL PUERTO dentro de ① — CERRADA (Sergio, 2026-08-03) sobre revisión externa contrastada contra el
+  # árbol: (a) contrato en Shared/Privacy/Application recogido por iterador etiquetado, implementación por
+  # contexto dueño; descartada (b) cuatro puertos. Lo decide un hecho que el corte no registra: bajo (a) NO hay
+  # import cross-context, luego cero entradas de allowlist y de deptrac frente a tres y tres. Tres enmiendas:
+  # (1) el eje de audit_log queda FUERA de la colección — Shared/Audit no declara entidad Doctrine, así que
+  # AuditLog::$resourceId no puede ser clave del registro y exigirla pondría el gate rojo por construcción;
+  # (2) el veredicto es un VO con clave interna `string` (array<VO, …> no es expresable en PHP y PHPStan max lo
+  # rechaza), adoptado por dos razones firmes y NO por «métricas futuras», que YAGNI descarta; (3) el lister
+  # declara la clave del registro que cubre y el gate compara en las dos direcciones — nunca por similitud de
+  # nombres. El argumento completo vive en el contexto de la historia; épica y AC3 quedan sincronizados.
+  # CONTEXTO ESCRITO Y EN REVISIÓN: PR #631 (rama feat/shared-g1c-control-detective-referencias-persona-exp9).
   g-1c-control-detective-referencias-cross-context: ready-for-dev
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
