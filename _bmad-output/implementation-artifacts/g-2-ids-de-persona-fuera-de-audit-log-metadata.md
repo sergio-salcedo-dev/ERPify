@@ -238,13 +238,13 @@ Los tres del corte, verbatim (`epics-gdpr-hardening.md:727-741`), con lo que los
 
 - [x] **Tarea 0 — Cerrar DA-1 por escrito.** HECHA: (A) el redactor, confirmada por Sergio el 2026-08-03 y
       registrada arriba con su alternativa descartada y su condición de reapertura. Reproducirla en el PR.
-- [ ] **Tarea 1 — Re-medir el estado contra el árbol del día.** En especial: si #634 mergeó y si la fila
+- [x] **Tarea 1 — Re-medir el estado contra el árbol del día.** En especial: si #634 mergeó y si la fila
       huérfana sigue existiendo. **No heredar las cifras de este artefacto** — son de `9dce7355`.
-- [ ] **Tarea 2 (AC1, AC2)** — Que la pasada de erasure deje de conservar el id real: eliminar o sustituir
+- [x] **Tarea 2 (AC1, AC2)** — Que la pasada de erasure deje de conservar el id real: eliminar o sustituir
       `subject_user_id` **sin introducir pseudónimo en esa fila**. Un solo statement, dentro de la transacción
       que `FulfilIdentityErasure` ya posee, enrutado por `TransactionManager` — nunca una transacción DBAL
       cruda anidada bajo `wrapInTransaction`, que degradaría a rollback-only.
-- [ ] **Tarea 3 (AC1)** — Testigo de aceptación en
+- [x] **Tarea 3 (AC1)** — Testigo de aceptación en
       [`features/backoffice/users/erase.feature`](../../api/features/backoffice/users/erase.feature) que siembre
       y demuestre **en el mismo escenario** (trampa F7 de G-3a: siembra y aserción en escenarios distintos
       pasaban en verde) y que **afirme el conteo de filas sembradas** antes del veredicto (trampa F5). Ojo: ese
@@ -319,8 +319,65 @@ que el redactor viva ahí y no en `Shared/Audit`.
 
 ### Agent Model Used
 
-### Debug Log References
+claude-opus-5[1m]
+
+### La forma de (A) cambió al medir: A2, el sujeto como RECURSO
+
+**Decidido por Sergio (2026-08-03)** tras medir la cadena, y es distinto de lo que la Tarea 2 decía al escribirse.
+`AuditLogger::log()` admite un **recurso** como tercer argumento, `EraseIdentitySubject` pasaba `null`, y su
+**único llamador** es `FulfilIdentityErasure` (el CLI inyecta la cadena, no el caso de uso), que en `:120-123`
+ya corre `DbalAuditResourceAnonymiser` con `AuditResource::of('User', $subjectId)` y el mismo pseudónimo. El
+nivel `SECURITY` escribe **síncrono**, así que el INSERT es visible al UPDATE en la misma transacción.
+
+Por tanto: la fila se escribe con el sujeto como recurso y **conteos** en `metadata`, y la maquinaria existente
+la anonimiza sola. **Sin statement nuevo, sin política de mutación nueva, sin redactor que testear** — con lo
+que el «conjunto cerrado» del ADR no se amplía y la regla del segundo statement (`TransactionManager`) no se
+dispara. La Tarea 6 encoge a la retirada del bullet del registro y a la nota de revisita de D4.
+
+### Dos predicciones de este artefacto que la medición REFUTÓ
+
+1. **`AuditActorAnonymiserFunctionalTest` NO se rompe.** El artefacto decía que un redactor lo rompería «por
+   diseño»; cierto del redactor que A2 no construye. A2 no toca el anonimizador, así que la aserción de
+   `metadata` byte-a-byte intacta sigue siendo verdad y sigue verde.
+2. **El tripwire de G-3a NO se disparó.** `PersonResourceErasureGateTest::theStalenessOfAPersonTypeIs…`
+   promete ponerse rojo «el día que aparezca un escritor de producción del tipo». Ese día es hoy y siguió
+   verde, porque el escritor referencia `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE` en vez del literal
+   `'User'` — y el check cuenta ficheros que llevan el **literal**. Se eligió la constante por DRY (una sola
+   fuente del vocabulario), no para esquivar el gate; **el comentario del tripwire queda falso en su premisa y
+   hay que corregirlo** (pendiente, Tarea 5). Dejarlo pasar en silencio sería exactamente el modo de fallo que
+   G-3a documentó.
+
+### Falsificación ejecutada (evidencia de AC3, parcial)
+
+- **M1 — devolver `subject_user_id` a `metadata`** (conservando el recurso): `make php.behat
+  c='features/backoffice/users/erase.feature'` → **exit 2**, rojo. El testigo muerde.
+- **M2 — pasar `null` como recurso** (conservando metadata de conteos): **PENDIENTE**.
+- Restaurado copiando los bytes desde `tmp/g2-falsify/`, verificado por `md5sum` idéntico y `grep -c
+  subject_user_id` = 0. Nunca `git checkout --`.
+
+### Estado: PARCIAL — verde hasta donde llega
+
+Tareas 2 y 3 hechas y verdes. **`main` se movió a `93befb7c` mientras se trabajaba** (#634/G-1c mergeó), así
+que: (a) el `Estado medido` de este artefacto, fijado a `9dce7355`, hay que re-verificarlo; (b) la rama necesita
+rebase; (c) el bullet de `.person-reference-policy` que G-2 debe retirar sigue en `main` (línea 61, «standing
+leaks»), y G-3b edita **el mismo bloque de puntos ciegos** — esperar conflicto trivial ahí.
+
+Puertas corridas (frescas, exit code impreso):
+
+| Puerta | Resultado |
+|---|---|
+| `make php.unit c='--filter EraseIdentitySubjectTest'` | 4 tests, 14 aserciones, **exit 0** |
+| `make php.unit` (suite completa, 2147 tests) | **exit 0** |
+| `make php.behat c='features/backoffice/users/erase.feature'` | 12 escenarios, 99 pasos, **exit 0** |
+| `make php.stan`, `make php.quality` | **PENDIENTES** |
 
 ### Completion Notes List
 
+- Pendiente: M2, y las Tareas 4 a 9 (control falsable con todos sus rojos, corrección del comentario del
+  tripwire, enmiendas documentales, contradicciones de planificación, pase adversarial, puertas finales).
+
 ### File List
+
+- `api/src/Iam/Identity/Application/EraseIdentitySubject.php` (modificado)
+- `api/tests/Unit/Iam/Identity/Application/EraseIdentitySubjectTest.php` (modificado)
+- `api/features/backoffice/users/erase.feature` (modificado)

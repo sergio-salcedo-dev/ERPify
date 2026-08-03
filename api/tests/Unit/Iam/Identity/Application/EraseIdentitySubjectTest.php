@@ -6,8 +6,10 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\EraseIdentitySubject;
+use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
@@ -38,10 +40,29 @@ final class EraseIdentitySubjectTest extends TestCase
         $this->assertCount(1, $audit->records);
         $this->assertSame('GDPR_SUBJECT_ERASED', $audit->records[0]['action']);
         $this->assertSame(AuditLevel::SECURITY, $audit->records[0]['level']);
-        // Evidence carries only the pseudonymous id — never the erased email.
-        $this->assertSame(
-            ['subject_user_id' => UserMother::DEFAULT_ID, 'reset_tokens_deleted' => 1],
-            $audit->records[0]['metadata'],
+        // Counts only. The subject travels as the entry's RESOURCE, never as a metadata key: no anonymiser
+        // reaches inside `metadata`, so an id written there outlives the erasure that wrote it, while
+        // `resource_id` is rewritten to the pseudonym by the anonymiser the erasure chain already runs.
+        $this->assertSame(['reset_tokens_deleted' => 1], $audit->records[0]['metadata']);
+        $this->assertEquals(
+            AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, UserMother::DEFAULT_ID),
+            $audit->records[0]['resource'],
+        );
+    }
+
+    public function testTheSubjectIdNeverTravelsAsAMetadataValue(): void
+    {
+        $users = new InMemoryUserRepository(UserMother::create());
+        $tokens = new InMemoryPasswordResetTokenRepository($this->tokenFor(UserMother::DEFAULT_ID));
+        $audit = new RecordingAuditLogger();
+
+        $this->useCase($users, $tokens, $audit)->execute(UserMother::DEFAULT_ID);
+
+        // Asserted over the serialised metadata rather than over its keys: a future key holding the id under
+        // any name is the defect, so pinning one key name would leave the next one through.
+        $this->assertStringNotContainsString(
+            UserMother::DEFAULT_ID,
+            json_encode($audit->records[0]['metadata'], JSON_THROW_ON_ERROR),
         );
     }
 
