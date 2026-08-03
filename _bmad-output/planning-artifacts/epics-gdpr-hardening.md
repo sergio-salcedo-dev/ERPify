@@ -618,7 +618,7 @@ es el agregado de `Iam/Identity`, así que referenciarlo es Level 2 (columna de 
 decía lo contrario desde antes de esta épica. Con ③ cerrada, el alcance de G-1c son **las cuatro columnas** y
 la opción ① con sus AC1–AC5.
 
-**Decisión ①/② — solo si ③ se resuelve en «no FK».** Dónde vive la detección: ① **ampliar el reconciliador
+**Decisión ①/② — RESUELTA en ①** (③ se resolvió en «no FK»). Dónde vive la detección: ① **ampliar el reconciliador
 existente** con un puerto listador por contexto dueño (espejo de `PersonResourceReferences`), un comando y un
 schedule para todos los ejes; ② **un reconciliador por contexto dueño**, tres comandos, tres schedules y una
 lectura cross-context en la dirección contraria. **Winston, Amelia y una consulta externa convergieron
@@ -627,13 +627,32 @@ independientemente en ①**, y los tres por razones distintas: la dirección de 
 `#[AsSchedule]` esté consumido**, así que ② triplica un fallo silencioso sin gate; y bajo ② el conjunto de
 ejes no es enumerable contra nada, mientras que bajo ① se puede atar al registro.
 
-**Si se elige ①, dos trampas que hay que cerrar en el diseño, no descubrir después:**
+**Bajo ①, dos trampas que hay que cerrar en el diseño, no descubrir después:**
 - **El retorno debe llevar atribución por eje** (`array<string, list<string>>` o un VO), no una lista plana
   fusionada. Con lista plana, un test que siembre solo el eje de audit y asierte no-vacío pasa **aunque el
   lister de membership no se haya cableado nunca** — SI-23 reintroducido dentro del control que instala SI-21.
 - **El puerto es un predicado por lotes, no una lista completa.** Hoy `ReconcileErasedSubjectReferences:45`
   llama `findById()` por id, que hidrata un `User` entero (con `email` y `password_hash`) por cada uno.
   `existingIds(list<string>): list<string>` se escribe una vez y los ejes lo heredan.
+
+**Forma del puerto dentro de ① — CERRADA (Sergio, 2026-08-03), con tres enmiendas que el corte no preveía.**
+La épica dejaba abierta la forma; la decide el contexto de la historia
+([`g-1c-…-cross-context.md`](../implementation-artifacts/g-1c-control-detective-referencias-cross-context.md)),
+que es donde vive el argumento completo. **(a)** un contrato en `Shared/Privacy/Application` recogido por
+iterador etiquetado, con una implementación por contexto dueño; descartada **(b)** cuatro puertos distintos.
+Lo decide un hecho medido que el corte no registra: **bajo (a) no hay ningún import cross-context**, luego son
+**cero** entradas de allowlist y de deptrac frente a tres y tres bajo (b). Las enmiendas:
+- **El eje de `audit_log` queda FUERA de la colección.** `Shared/Audit` no declara entidad Doctrine alguna, así
+  que `AuditLog::$resourceId` **no puede ser** una clave del registro —la cabecera de
+  [`.person-reference-policy`](../../api/.person-reference-policy) ya lo declara punto ciego estructural— y un
+  contrato que la exigiera pondría el propio gate rojo por construcción. `PersonResourceReferences` sigue
+  siendo colaborador propio. **Esto acota el «espejo de `PersonResourceReferences`» de arriba:** el patrón se
+  copia, el eje no se absorbe.
+- **El veredicto es un VO con clave interna `string`.** `array<PersonReferenceKey, list<string>>` no es
+  expresable: las claves de array en PHP son `int|string`, y PHPStan en `level: max` rechaza el `@var`. Esto
+  **estrecha la disyunción del primer bullet y de AC3**, que admitían array o VO.
+- **Una sola identidad por eje:** el lister declara la clave del registro que cubre y el gate compara en las dos
+  direcciones. Nunca emparejamiento por similitud de nombres, y la etiqueta del CLI se **deriva** de la clave.
 
 **Acceptance Criteria:**
 
@@ -665,8 +684,8 @@ misma historia: su corte enumeró a mano y se dejó dos de cuatro.**
 **AC3 — El veredicto lleva atribución por eje (la trampa que ① introduce).**
 **Given** el control cubriendo varios ejes,
 **When** devuelve su resultado,
-**Then** es por eje (`array<string, list<string>>` o un VO), **no una lista plana fusionada**, y los tests
-asertan la clave.
+**Then** es por eje (`array<string, list<string>>` o un VO — **fijado en el VO** por la decisión de forma de
+arriba), **no una lista plana fusionada**, y los tests asertan la clave.
 *Por qué:* con lista plana, un test que siembre solo el eje de `audit_log` y asierta no-vacío **pasa aunque el
 lister de membership no se haya cableado nunca** — SI-23 reintroducido dentro del control que instala SI-21.
 
