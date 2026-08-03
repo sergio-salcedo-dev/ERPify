@@ -4,7 +4,7 @@ baseline_commit: 885ec3da
 
 # Story 1.4-bis (G-1c): El control detective alcanza las cuatro referencias del eje
 
-Status: review
+Status: done
 
 > **TRES DECISIONES ESTÁN TOMADAS Y NO SE REABREN** (ver *Decisiones registradas*): ③ **no hay FK** —resuelta a
 > favor del código, y la corrección de la regla **ya está en el árbol**, no es tarea tuya—; la forma es **①**,
@@ -566,3 +566,4 @@ las tres comparaciones; que los fixtures no se barran; `autoconfigure: false` de
 |---|---|
 | 2026-08-03 | Tareas 2–8 implementadas: predicado de existencia por lotes, contrato compartido + cuatro listers, veredicto por eje en VO, gate de cobertura con fixtures, seams verificados en cero, boy scout, tests y documentación. Puertas en verde; pase adversarial pendiente de autorización. |
 | 2026-08-03 | Tarea 9: pase adversarial de tres revisores hostiles. 1 blocker (la exención eximía cualquier PK, no la del sujeto), 8 should-fix y 8 nits aplicados; 1 rechazado con razón y 1 propuesto como seguimiento a G-3b. Puertas re-ejecutadas en verde. Estado → `review`. |
+| 2026-08-03 | Revisión de código sobre el PR #634 (tres capas hostiles en paralelo). 0 bloqueantes; 6 parches aplicados —el mayor, que la rama de fallo nombre los ejes comprobados y no solo los cuente, falsificado anulando el arreglo—, 1 diferido a `deferred-work.md` (exit code preexistente) y 1 descartado. Puertas re-ejecutadas en verde, `php.unit` 2177 tests. Estado → `done` por decisión de Sergio, con el PR aún OPEN. |
