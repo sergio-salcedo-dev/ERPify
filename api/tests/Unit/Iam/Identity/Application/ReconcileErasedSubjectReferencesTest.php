@@ -71,9 +71,12 @@ final class ReconcileErasedSubjectReferencesTest extends TestCase
             self::SESSION_AXIS => [],
         ])->unreconciledReferences();
 
+        // Sorted by axis key, not by the order the places were asked: the asking order is the container's
+        // filesystem walk and may reshuffle across a redeploy, which would make a diffing alert fire on
+        // nothing. `Erpify\…` sorts before `audit_log.…`.
         $this->assertSame([
-            self::AUDIT_AXIS => [self::GONE_ID],
             self::MEMBERSHIP_AXIS => [self::OTHER_GONE_ID],
+            self::AUDIT_AXIS => [self::GONE_ID],
         ], $this->reported($verdict->findings()));
         $this->assertSame(2, $verdict->total());
     }

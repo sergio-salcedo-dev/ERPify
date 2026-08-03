@@ -10,8 +10,15 @@ use Erpify\Shared\Privacy\Application\PersonReferenceSource;
 use Erpify\Shared\Privacy\Domain\PersonReferenceAxis;
 
 /**
- * Detective control over every place a person's identifier is persisted: surfaces the ids those places still
- * hold although no live identity backs them.
+ * Detective control over the places `api/.person-reference-policy` classifies as holding a person's
+ * identifier, plus the audit trail's resource axis: it surfaces the ids those places still hold although no
+ * live identity backs them.
+ *
+ * That scope is narrower than "everywhere a person id is persisted", and the difference must not be blurred:
+ * `audit_log.actor_id`, `audit_log.metadata` and `event_store.aggregate_id` also hold person ids, none of
+ * them has a Doctrine entity, and none is reachable from here. The registry's blind-spot block names all
+ * three; only the resource axis is in this control, and only because a control of its own already exists for
+ * it (`api/.audit-resource-types`).
  *
  * Erasing each of those places is a distributed obligation — nothing in the schema references
  * `identity_user`, so deleting an identity cascades nowhere and every reference owes its removal to a use
@@ -34,6 +41,18 @@ use Erpify\Shared\Privacy\Domain\PersonReferenceAxis;
  * registry key: `audit_log` has no Doctrine entity, so no property declares `resource_id` and the registry's
  * reflection sweep is structurally blind to it. Folding it into the collection would make the gate's
  * "every declared key has a registry line" direction red by construction.
+ *
+ * Liveness is resolved ONCE, over the union of every place's ids, rather than per place. Two reasons, and
+ * the first is correctness: with a probe per place, an erasure committing mid-run is seen by the places
+ * probed after it and not by those probed before, so one report could name a subject under one axis and
+ * clear them under another — a verdict true of no single state of the database. One probe also collapses
+ * five expanded `IN` lists into one over the deduplicated union, which matters because a person typically
+ * appears in several of these places at once.
+ *
+ * The reads are still NOT one snapshot: each source queries its own table before the union probe runs, so an
+ * erasure that commits inside that window can be reported as a divergence it is not. It self-corrects on the
+ * next run and the suggested repair is idempotent, so the cost is a transient false positive rather than a
+ * wrong action — but it is a real limit, and the registry's blind-spot block states it.
  *
  * It reads only. Repairing is a deliberate operator act through the erasure use case, not something a
  * scheduled check does to a compliance table on its own.
@@ -59,21 +78,14 @@ final readonly class ReconcileErasedSubjectReferences
 
     public function unreconciledReferences(): UnreconciledPersonReferences
     {
-        $verdict = UnreconciledPersonReferences::none()->withAxis(
-            PersonReferenceAxis::of(self::AUDIT_RESOURCE_AXIS),
-            // The port returns only rows still holding the real id: an anonymised reference carries a
-            // pseudonym that resolves to no live identity by design, so including those would report every
-            // correct erasure as a divergence. The other places have no equivalent — there the row is
-            // deleted rather than pseudonymised, so any surviving id that does not resolve IS the divergence.
-            $this->danglingAmong($this->auditReferences->unerasedIdsOfType(
-                FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE,
-            )),
-        );
+        $places = $this->placesHoldingPersonIds();
+        $live = $this->identities->existingIdsAmong($this->distinctIdsAcross($places));
+        $verdict = UnreconciledPersonReferences::none();
 
-        foreach ($this->personReferenceSources as $personReferenceSource) {
+        foreach ($places as $place) {
             $verdict = $verdict->withAxis(
-                $personReferenceSource->axis(),
-                $this->danglingAmong($personReferenceSource->retainedPersonIds()),
+                $place['axis'],
+                \array_values(\array_diff($place['ids'], $live)),
             );
         }
 
@@ -81,14 +93,53 @@ final readonly class ReconcileErasedSubjectReferences
     }
 
     /**
-     * @param list<string> $referencedIds
+     * @return non-empty-list<array{axis: PersonReferenceAxis, ids: list<string>}>
+     */
+    private function placesHoldingPersonIds(): array
+    {
+        $places = [[
+            'axis' => PersonReferenceAxis::of(self::AUDIT_RESOURCE_AXIS),
+            // The port returns only rows still holding the real id: an anonymised reference carries a
+            // pseudonym that resolves to no live identity by design, so including those would report every
+            // correct erasure as a divergence. The other places have no equivalent — there the row is
+            // deleted rather than pseudonymised, so any surviving id that does not resolve IS the divergence.
+            'ids' => $this->distinct($this->auditReferences->unerasedIdsOfType(
+                FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE,
+            )),
+        ]];
+
+        foreach ($this->personReferenceSources as $personReferenceSource) {
+            $places[] = [
+                'axis' => $personReferenceSource->axis(),
+                'ids' => $this->distinct($personReferenceSource->retainedPersonIds()),
+            ];
+        }
+
+        return $places;
+    }
+
+    /**
+     * @param non-empty-list<array{axis: PersonReferenceAxis, ids: list<string>}> $places
      *
      * @return list<string>
      */
-    private function danglingAmong(array $referencedIds): array
+    private function distinctIdsAcross(array $places): array
     {
-        $live = $this->identities->existingIdsAmong($referencedIds);
+        return $this->distinct(\array_merge(...\array_column($places, 'ids')));
+    }
 
-        return \array_values(\array_diff($referencedIds, $live));
+    /**
+     * Deduplicates rather than trusting: every port here promises a distinct list and every implementation
+     * says `DISTINCT`, but nothing enforces it, and `array_diff` keeps duplicates in its left operand — so
+     * one forgetful source would report a person once per row, which is the noise those promises exist to
+     * prevent. It also shrinks the union probe for the common case of one person held in several places.
+     *
+     * @param list<string> $ids
+     *
+     * @return list<string>
+     */
+    private function distinct(array $ids): array
+    {
+        return \array_values(\array_unique($ids));
     }
 }

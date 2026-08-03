@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Support;
 
 use Doctrine\ORM\Mapping\Id;
+use Erpify\Iam\Identity\Domain\Entity\User;
 use ReflectionProperty;
 
 /**
@@ -15,19 +16,36 @@ use ReflectionProperty;
  * to be covered by a source of the detective control ({@see PersonReferenceSources}). Writing the exemption
  * twice is how a quarter of a gate gets switched off while staying compile-clean.
  *
- * The exemption is the SUBJECT'S OWN PRIMARY KEY, and it is semantic rather than mechanical. A reference is
- * an id of a person held by a row that is not them, which no foreign key removes because cross-context
- * references carry none — the distributed obligation the axis exists to make impossible to pass in silence.
- * A primary key carries no such obligation: erasing it IS deleting its own row.
+ * The exemption is the SUBJECT'S OWN PRIMARY KEY, and it is that ONE key rather than "a primary key". A
+ * reference is an id of a person held by a row that is not them, which no foreign key removes because
+ * cross-context references carry none — the distributed obligation the axis exists to make impossible to
+ * pass in silence. Only `identity_user`'s own key escapes it, because erasing that row IS the erasure.
  *
- * It must not be written as "whose owner is not the identity erasure use case". That reads like the same
- * thing and is not: `PasswordResetToken::$userId` names exactly that owner and IS a reference, so the
+ * Reading `#[ORM\Id]` ALONE would not say that. It says "is a primary key", and the two diverge the first
+ * time a person's id is a key of something that is not the person — a join table with a composite
+ * `(userId, organizationId)` key, or a one-to-one extension table keyed by the subject. Such a row is not
+ * the person, its orphan IS the residue this control exists to find, and under the mechanical reading it
+ * would need neither the attribute nor a source while the build stayed green. Both rules would be off for
+ * that column at once, which is exactly the failure the shared definition above is meant to prevent.
+ *
+ * The `#[ORM\Id]` half is kept as the second conjunct, as a tripwire rather than as the rule: if the person
+ * aggregate ever stops being keyed by that property, the exemption lifts and the build says so, instead of
+ * exempting a key that is no longer a key.
+ *
+ * It must not be written as "whose owner is not the identity erasure use case" either. That reads like the
+ * same thing and is not: `PasswordResetToken::$userId` names exactly that owner and IS a reference, so the
  * by-owner spelling silently drops it from every rule built on this.
  *
  * @internal test support
  */
 final class PersonReferenceKeys
 {
+    /**
+     * The one key whose column is the person rather than a reference to them. Named, not inferred: the
+     * codebase has exactly one person aggregate, and the registry says so at the line it classifies.
+     */
+    private const string SUBJECT_PRIMARY_KEY = User::class . '::$id';
+
     /**
      * @param array<string, string|null> $classification `<Fqcn>::$<property>` => owner path, null when non-person
      *
@@ -46,10 +64,15 @@ final class PersonReferenceKeys
     }
 
     /**
-     * Whether the column is the primary key of the aggregate that IS the person.
+     * Whether the column is the primary key of the aggregate that IS the person — that one key, and still
+     * a primary key.
      */
     private static function isTheSubjectItself(string $key): bool
     {
+        if (self::SUBJECT_PRIMARY_KEY !== $key) {
+            return false;
+        }
+
         $property = self::propertyOf($key);
 
         return $property instanceof ReflectionProperty && [] !== $property->getAttributes(Id::class);

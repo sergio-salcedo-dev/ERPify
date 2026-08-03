@@ -29,8 +29,10 @@ use Erpify\Shared\Privacy\Domain\PersonReferenceAxis;
  *   - {@see axis()} must be a CONSTANT fact of the class, readable without a database. The coverage gate
  *     reads it by reflection over the source tree — it constructs the implementation without its
  *     constructor — so an axis derived from injected state breaks that read loudly rather than leaving the
- *     column silently unenumerated. (A test double is outside that sweep and may take its axis as an
- *     argument; nothing reads doubles against the registry.)
+ *     column silently unenumerated. That check reaches the UNINITIALISED form only: an axis read from a
+ *     property with a default, or behind a `??`, answers the gate with one value and the reconciler with
+ *     another, and nothing notices. Write the key as a literal. (A test double is outside the sweep
+ *     entirely and may take its axis as an argument; nothing reads doubles against the registry.)
  *   - {@see retainedPersonIds()} returns IDS, never rows. A source that returned aggregates would drag
  *     `iam_session`'s `ip`/`device` or `iam_invitation`'s credential digest into an operator's console the
  *     first time the control reported anything.

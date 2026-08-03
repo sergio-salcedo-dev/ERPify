@@ -64,9 +64,14 @@ final class DoctrineLiveIdentityDirectoryTest extends KernelTestCase
 
     public function testItAnswersAnEmptyBatchWithoutQuerying(): void
     {
-        // An expanded `IN ()` is not valid SQL, so the empty batch has to short-circuit rather than reach
-        // the connection at all.
-        $this->assertSame([], $this->directory->existingIdsAmong([]));
+        // Asserted on the ABSENCE OF THE QUERY, not on the return value. DBAL expands an empty array
+        // parameter to the literal `NULL`, so `… IN (NULL)` is valid SQL that returns nothing: an assertion
+        // on the result alone stays green with the short-circuit deleted, and would be a test that cannot
+        // fail for the reason its name gives.
+        $connection = $this->createMock(Connection::class);
+        $connection->expects($this->never())->method('fetchFirstColumn');
+
+        $this->assertSame([], (new DoctrineLiveIdentityDirectory($connection))->existingIdsAmong([]));
     }
 
     public function testItReturnsTheCallersOwnSpellingOfAnIdentityItFound(): void

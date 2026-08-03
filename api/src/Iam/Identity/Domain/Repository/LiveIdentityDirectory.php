@@ -25,9 +25,13 @@ interface LiveIdentityDirectory
      * The subset of `$ids` that resolves to a row in `identity_user`, in the spelling given.
      *
      * One statement per call rather than one per id: the caller holds every identifier some other table
-     * still names, which is bounded by the number of people the installation has ever had. Returning the
-     * caller's own spelling keeps the comparison exact for the caller — UUID hex is case-insensitive, so an
-     * adapter echoing the database's canonical form would make a correct id look absent to a `===`.
+     * still names, which is bounded by the number of people the installation has ever had. That bound is
+     * also the limit — an implementation binding one parameter per id meets PostgreSQL's 65535-parameter
+     * ceiling there and fails outright rather than degrading, so a caller far past that scale must chunk.
+     *
+     * Returning the caller's own spelling keeps the comparison exact for the caller — UUID hex is
+     * case-insensitive, so an adapter echoing the database's canonical form would make a correct id look
+     * absent to a `===`.
      *
      * @param list<string> $ids
      *

@@ -20,8 +20,14 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * database wrote them — a caller diffing with `===` would otherwise read a differently-cased but present id
  * as a missing one, and this port's whole output feeds such a difference.
  *
- * The empty batch returns before touching the connection: an expanded `IN ()` is not valid SQL, and "no ids
- * to ask about" has an answer that needs no query.
+ * The empty batch returns before touching the connection — "no ids to ask about" has an answer that needs no
+ * query. It is an optimisation and nothing more: DBAL expands an empty array parameter to the literal `NULL`,
+ * so the statement would be valid `… IN (NULL)` and would correctly return nothing.
+ *
+ * The batch is one statement, so it is bounded by the PostgreSQL wire protocol's 65535 bound parameters —
+ * a hard ceiling, not a soft one: past it the reconciliation fails with a driver error instead of degrading.
+ * That is roughly the number of distinct people the installation has ever held across all its axes, so it is
+ * far from the current scale; chunking is the change to make when a measurement says it is close, not before.
  */
 #[AsAlias(LiveIdentityDirectory::class)]
 final readonly class DoctrineLiveIdentityDirectory implements LiveIdentityDirectory
@@ -46,11 +52,15 @@ final readonly class DoctrineLiveIdentityDirectory implements LiveIdentityDirect
             ['ids' => ArrayParameterType::STRING],
         );
 
-        $live = \array_map(\strtolower(...), \array_filter($found, \is_string(...)));
+        // Flipped to a lookup set rather than scanned: `in_array` inside the filter is a linear scan per
+        // candidate, so the pair is quadratic in the number of people the installation has ever had — the
+        // very size this batch exists to handle in one go. UUIDs always contain hyphens, so none of them can
+        // be coerced into an integer array key.
+        $live = \array_flip(\array_map(\strtolower(...), \array_filter($found, \is_string(...))));
 
         return \array_values(\array_filter(
             $ids,
-            static fn (string $id): bool => \in_array(\strtolower($id), $live, true),
+            static fn (string $id): bool => isset($live[\strtolower($id)]),
         ));
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
+use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Session\Domain\Entity\Session;
@@ -109,19 +110,26 @@ final class PersonReferenceSourceRulesGateTest extends TestCase
     #[Test]
     public function theComparisonExemptsTheSubjectsOwnPrimaryKeyAndNothingElse(): void
     {
-        // Both directions of the exemption in one input: `User::$id` is the person's own row, so no source
-        // owes it coverage; the reset token names the very same owner file and IS a reference, so a
-        // by-owner spelling of the exemption would drop it here and the assertion would go red.
+        // Every direction of the exemption in one input, because each is a different way to get it wrong:
+        //   - `User::$id` is the person's own row, so no source owes it coverage;
+        //   - the reset token names the very same owner file and IS a reference, so a by-owner spelling of
+        //     the exemption would drop it here;
+        //   - `Bank::$id` is a PRIMARY KEY that is not the subject's. Reading `#[ORM\Id]` alone — "is a
+        //     primary key" rather than "is the person's key" — exempts it, and with it every future person
+        //     id that happens to key its own row: a composite join key, a one-to-one extension table. That
+        //     column would then need neither a source nor an attribute, compile-clean, which is the exact
+        //     claim this gate makes impossible.
         $uncovered = PersonReferenceSourceCoverage::uncoveredIn(
             [
                 User::class . '::$id' => self::IDENTITY_OWNER,
                 self::RESET_TOKEN_REFERENCE => self::IDENTITY_OWNER,
+                Bank::class . '::$id' => self::IDENTITY_OWNER,
                 Session::class . '::$organizationId' => null,
             ],
             [],
         );
 
-        $this->assertSame([self::RESET_TOKEN_REFERENCE], $uncovered);
+        $this->assertSame([self::RESET_TOKEN_REFERENCE, Bank::class . '::$id'], $uncovered);
     }
 
     #[Test]

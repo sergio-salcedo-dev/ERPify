@@ -42,11 +42,13 @@ final class ReconcileErasedSubjectReferencesCommandTest extends TestCase
 
         $tester->execute([]);
 
+        $display = $tester->getDisplay();
         $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
-        // The count, not just the all-clear: a control silently reduced to one place would otherwise print
-        // exactly what a full clean sweep prints. Asserted without the trailing word, because SymfonyStyle
-        // hard-wraps the block at the terminal width and would split the phrase across two lines.
-        $this->assertStringContainsString('2 reference axis(es)', $tester->getDisplay());
+        // The axes BY NAME, not just the all-clear and not just a count: a control silently reduced to one
+        // place would otherwise print exactly what a full clean sweep prints, and the exit code — all a
+        // monitoring check reads — would stay zero.
+        $this->assertStringContainsString('audit_log.resource_id', $display);
+        $this->assertStringContainsString(self::MEMBERSHIP_AXIS, $display);
     }
 
     #[Test]
@@ -60,10 +62,12 @@ final class ReconcileErasedSubjectReferencesCommandTest extends TestCase
         $this->assertSame(Command::FAILURE, $tester->getStatusCode());
         $this->assertStringContainsString('2 person reference(s)', $display);
         $this->assertStringContainsString('audit_log.resource_id', $display);
-        $this->assertStringContainsString('Membership::$userId', $display);
+        // The FULL key, because two modules can hold a `Membership` and a short heading would merge them.
+        $this->assertStringContainsString(self::MEMBERSHIP_AXIS, $display);
         $this->assertStringContainsString(self::DANGLING_ID, $display);
         $this->assertStringContainsString(self::OTHER_DANGLING_ID, $display);
-        $this->assertStringContainsString('identity:gdpr:erase-subject', $display);
+        // `--force` included: without it the repair prompts, and a non-interactive run declines silently.
+        $this->assertStringContainsString('identity:gdpr:erase-subject <id> --force', $display);
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 use Erpify\Iam\Identity\Application\PersonReferenceFinding;
 use Erpify\Iam\Identity\Application\UnreconciledPersonReferences;
 use Erpify\Shared\Privacy\Domain\PersonReferenceAxis;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -69,6 +70,34 @@ final class UnreconciledPersonReferencesTest extends TestCase
         $this->assertSame([self::FIRST_ID], $findings[0]->subjectIds);
         $this->assertSame('Some\Namespace\Second::$userId', $findings[1]->axis->key());
         $this->assertSame([self::SECOND_ID], $findings[1]->subjectIds);
+    }
+
+    #[Test]
+    public function itNamesEveryPlaceItWasAskedAboutInAStableOrder(): void
+    {
+        // The evidence behind the count: a clean run has to be able to show WHICH places were checked, or
+        // a control that quietly lost a source prints what a full sweep prints.
+        $verdict = UnreconciledPersonReferences::none()
+            ->withAxis(PersonReferenceAxis::of('z.last'), [])
+            ->withAxis(PersonReferenceAxis::of('a.first'), [self::FIRST_ID])
+        ;
+
+        $this->assertSame(['a.first', 'z.last'], $verdict->axesCheckedKeys());
+    }
+
+    #[Test]
+    public function itRefusesTwoSourcesReportingTheSamePlace(): void
+    {
+        // Assignment would keep the later findings and drop the earlier ones — one whole place unreported
+        // while both sources look wired — and would decrement the count an operator reads to notice it.
+        $verdict = UnreconciledPersonReferences::none()
+            ->withAxis(PersonReferenceAxis::of('a.first'), [self::FIRST_ID])
+        ;
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageMatches('/Two sources reported the person-reference axis "a\.first"/');
+
+        $verdict->withAxis(PersonReferenceAxis::of('a.first'), [self::SECOND_ID]);
     }
 
     #[Test]

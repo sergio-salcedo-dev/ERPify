@@ -11,6 +11,8 @@ use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Support\PersonReferenceKeys;
+use Erpify\Tests\Support\PersonReferences;
 use Override;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -57,7 +59,14 @@ final class PersonReferenceCollectionFunctionalTest extends KernelTestCase
 
             $verdict = $this->reconciler()->unreconciledReferences();
 
-            $this->assertSame(5, $verdict->axesChecked(), 'the tagged collection lost a source');
+            // Derived from the registry, not a literal: one axis per classified person reference plus the
+            // audit collaborator. A hard-coded number would go red when a fifth person column legitimately
+            // arrives, and would say "the collection lost a source" about the opposite of what happened.
+            $this->assertSame(
+                $this->expectedAxisCount(),
+                $verdict->axesChecked(),
+                'the tagged collection does not hold one source per classified person reference',
+            );
 
             $reported = [];
 
@@ -97,6 +106,17 @@ final class PersonReferenceCollectionFunctionalTest extends KernelTestCase
         $this->assertSame(1, (int) $count, 'the orphan membership really exists');
 
         return $orphanId;
+    }
+
+    /**
+     * One tagged source per `person ::` line the registry carries (bar the subject's own primary key), plus
+     * the audit resource axis, which is a collaborator of its own because `audit_log` has no entity.
+     */
+    private function expectedAxisCount(): int
+    {
+        $references = PersonReferences::fromGateLocation(__DIR__);
+
+        return \count(PersonReferenceKeys::referencesIn($references->classification())) + 1;
     }
 
     private function reconciler(): ReconcileErasedSubjectReferences

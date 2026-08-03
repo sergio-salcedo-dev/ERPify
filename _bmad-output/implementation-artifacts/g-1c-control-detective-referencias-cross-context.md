@@ -4,7 +4,7 @@ baseline_commit: 885ec3da
 
 # Story 1.4-bis (G-1c): El control detective alcanza las cuatro referencias del eje
 
-Status: in-progress
+Status: review
 
 > **TRES DECISIONES ESTÁN TOMADAS Y NO SE REABREN** (ver *Decisiones registradas*): ③ **no hay FK** —resuelta a
 > favor del código, y la corrección de la regla **ya está en el árbol**, no es tarea tuya—; la forma es **①**,
@@ -265,10 +265,11 @@ uno desde **ejecución fresca con exit code impreso**. Si añades una clase de g
       consulta lee la columna correcta»); bullets de [`CLAUDE.md`](../../CLAUDE.md) y
       [`api/CLAUDE.md`](../../api/CLAUDE.md) ampliados, y la entrada del gate en
       [`docs/claude-code-quickref.md`](../../docs/claude-code-quickref.md).
-- [ ] **Tarea 9 — Puertas y pase adversarial (AC6 + definición de hecho de la épica).** Puertas **en verde con
-      ejecución fresca y exit code impreso** (ver *Completion Notes*). **Pase adversarial pendiente de
-      autorización de Sergio**: es obligatorio por CLAUDE.md y esta sesión prohíbe lanzar subagentes sin que lo
-      pida el usuario. Sin él no hay `done`.
+- [x] **Tarea 9 — Puertas y pase adversarial (AC6 + definición de hecho de la épica).** Puertas **en verde con
+      ejecución fresca y exit code impreso** (ver *Debug Log*). **Pase adversarial hecho y REGISTRADO** — tres
+      revisores hostiles independientes, autorizados por Sergio el 2026-08-03, con lentes distintas y
+      estrictamente de solo lectura; el registro es la sección *Pase adversarial* de abajo y se reproduce en el
+      cuerpo del PR.
 
 ## Dev Notes
 
@@ -403,8 +404,81 @@ prefijo de `PersonReferenceSource…`): cada uno de los cuatro selecciona **exac
   reales, nunca seudónimos, y no escribe nada.
 - **La historia es PROSPECTIVA y el PR lo dirá:** no hay entorno de producción (`.env.prod.local` ausente),
   así que no repara datos — instala la detección de que una vía de escritura futura reintroduzca el residuo.
-- **Pendiente para `done`:** el pase adversarial por alguien distinto del autor, registrado. Requiere
-  autorización explícita de Sergio para lanzar el subagente.
+- **Seguimiento propuesto, NO plegado aquí (decisión de alcance):** el comando imprime todos los ids
+  divergentes por stdout, y su docblock anuncia el uso por cron — en esa vía los ids acaban en el almacén de
+  logs, con su propia retención, que ningún camino de borrado toca. Es **comportamiento preexistente** (el
+  comando ya hacía `listing($dangling)`), amplificado ahora a cinco ejes, y el artefacto de **G-3b** ya lo
+  registra contra el handler hermano. Cambiar la interfaz de operador pertenece a la historia que instala el
+  schedule, no a esta.
+
+### Pase adversarial (definición de hecho de la épica)
+
+**Cuándo y quién:** 2026-08-03, autorizado explícitamente por Sergio. **Tres revisores hostiles
+independientes**, distintos del autor, con lentes ortogonales y mandato de **solo lectura** (prohibidas
+escrituras de fichero, de git y de BD, y prohibidos los targets que aplican fixers):
+
+1. **Completitud del gate** — vacuidad, la trampa de los `--filter` anidados, la exención, el barrido por
+   reflexión, el testigo de cableado y los fixtures.
+2. **GDPR / confidencialidad** — fuga de PII por cualquier vía, crosswalk D4, inyección, y si el consejo de
+   reparación que imprime el comando es cierto en los cinco ejes.
+3. **Corrección de SQL y tipos** — el diff, la lista `IN`, los cuatro adaptadores, el VO y los tests.
+
+**Dónde queda el registro:** esta sección y el cuerpo del PR.
+
+**Resultado: 1 blocker, 8 should-fix, 8 nits.** Lo aplicado:
+
+- **BLOCKER — la exención eximía CUALQUIER clave primaria, no la del sujeto.** `isTheSubjectItself()` leía
+  `#[ORM\Id]` a secas. Medido por el revisor dentro del contenedor: con `Bank::$id => person :: …` y cero
+  listers, **las dos** direcciones salían verdes. Cae en este commit porque **yo dupliqué el radio**
+  promoviendo el predicado a regla compartida, y porque escribí en cuatro sitios la afirmación «un quinto
+  contexto no puede entrar al registro y saltarse el control» — falsa para una tabla de unión con clave
+  compuesta o una extensión 1:1 tecleada por el sujeto. **Arreglado**: la exención nombra la clave
+  (`User::$id`) y conserva `#[ORM\Id]` como segundo conjunto, de forma que si el agregado de persona deja de
+  estar tecleado así la exención se levanta y el build lo dice. El test ganó la tercera dirección que su
+  nombre prometía y no ejercitaba. **Falsificado**: revertido el predicado a la forma mecánica → rojo con
+  `Bank::$id`; restaurado → verde.
+- **Alcance sobredeclarado** (convergen los pases 2 y 3): el comando decía «any table that references one» y
+  el reconciliador «every place a person's identifier is persisted». `audit_log.actor_id`,
+  `audit_log.metadata` y `event_store.aggregate_id` guardan ids de persona y están FUERA. Corregidos comando,
+  docblock y registro; el bloque de puntos ciegos los nombra uno a uno.
+- **Nada falla en runtime si la colección encoge**: el éxito imprimía un número. Ahora imprime **los ejes por
+  nombre**, así una alerta que diffea la salida ve la caída sin que nadie mantenga un conteo esperado.
+- **`withAxis()` era last-write-wins silencioso** — dos listers en un eje se pisaban y además decrementaban
+  `axesChecked()`, justo el número que delata un control encogido. Ahora **lanza**.
+- **Orden no determinista**: `findings()` y `axesCheckedKeys()` van ordenados por clave; el orden de llegada
+  era el paseo de ficheros del contenedor y podía reordenarse entre despliegues.
+- **Resolución de vivos, una sola vez sobre la unión** en vez de una por eje: con una sonda por eje, un
+  borrado que commitea a media corrida lo ven los ejes sondeados después y no los de antes — un veredicto que
+  no fue cierto de ningún estado de la base. Además deduplica y colapsa cinco listas `IN` en una.
+- **`existingIdsAmong()` era O(n·m)** (`in_array` dentro del filtro). Ahora `array_flip` + `isset`.
+- **Un test que no podía fallar**: `testItAnswersAnEmptyBatchWithoutQuerying` asertaba el retorno, y DBAL
+  expande un array vacío a `IN (NULL)` —SQL válido— así que pasaba con el corto-circuito borrado. Verificado
+  en `vendor/doctrine/dbal/src/ExpandArrayParameters.php:96-99`; ahora asierta la **ausencia de la consulta**
+  con un mock. La justificación del docblock («`IN ()` no es SQL válido») era falsa y está corregida.
+- **El consejo de reparación estaba incompleto**: `identity:gdpr:erase-subject` pregunta sin `--force`, y una
+  corrida no interactiva declina y sale cero habiendo borrado nada. La nota ahora lo dice.
+- **Colisión de encabezados**: `PersonReferenceFinding` existe porque dos ejes pueden derivar la misma
+  etiqueta, y el presentador derivaba justo esa etiqueta corta. Ahora imprime la **clave completa**, que es
+  además lo que se grepea en el registro.
+- **El `5` hardcodeado** del testigo funcional se deriva del registro, y el límite de 65535 parámetros se
+  documenta donde las notas decían que estaba y no estaba.
+- **`api/.person-reference-policy`**: el bloque de puntos ciegos gana la exención en la frase de apertura, la
+  no-atomicidad de las lecturas, la separación entre «el cableado está declarado» y «la colección se
+  construyó», los tres hermanos sin entidad que quedan fuera, y que el hueco de `audit_log.resource_id` tiene
+  **una sola plaza**.
+- **`docs/architecture-api.md`** describía el reconciliador con su alcance viejo y a `FulfilIdentityErasure`
+  encadenando solo `PurgeUserSessions` (obsoleto desde G-1b). Corregido — boy scout, declarado.
+
+**Rechazado con razón:** `array_filter(is_string(...))` en los cuatro adaptadores no es código muerto aunque
+las columnas sean `NOT NULL` — `fetchFirstColumn()` devuelve `list<mixed>` y es lo que da el tipo a PHPStan.
+
+**Lo que los tres intentaron y no rompieron** (esto también es evidencia): fuga de `ip`/`device`/`token_hash`/
+`email` por cualquier vía, incluida la excepción de DBAL y el bloque `debug`; crosswalk D4 (el filtro
+`resource_erased = FALSE` sobrevive intacto y el control no escribe nada); inyección en cualquier sentencia
+nueva; que leer cree retención, fila de auditoría o de `event_store`; que el consejo de reparación sea falso
+en alguno de los cinco ejes; la trampa de los `--filter` anidados (verificada con `--list-tests`); vacuidad de
+las tres comparaciones; que los fixtures no se barran; `autoconfigure: false` desactivando el tag; llegar a
+`axesChecked() === 5` con el conjunto equivocado; y siembra vacua en los cinco funcionales.
 
 ### File List
 
@@ -471,3 +545,4 @@ prefijo de `PersonReferenceSource…`): cada uno de los cuatro selecciona **exac
 | Fecha | Cambio |
 |---|---|
 | 2026-08-03 | Tareas 2–8 implementadas: predicado de existencia por lotes, contrato compartido + cuatro listers, veredicto por eje en VO, gate de cobertura con fixtures, seams verificados en cero, boy scout, tests y documentación. Puertas en verde; pase adversarial pendiente de autorización. |
+| 2026-08-03 | Tarea 9: pase adversarial de tres revisores hostiles. 1 blocker (la exención eximía cualquier PK, no la del sujeto), 8 should-fix y 8 nits aplicados; 1 rechazado con razón y 1 propuesto como seguimiento a G-3b. Puertas re-ejecutadas en verde. Estado → `review`. |
