@@ -4,14 +4,14 @@ baseline_commit: 9dce7355
 
 # Story 1.4 (G-2): Ids de persona fuera de `audit_log.metadata`
 
-Status: backlog
+Status: ready-for-dev
 
-> **ESTA HISTORIA TIENE UNA DECISIÓN ABIERTA Y ES PRECONDICIÓN NORMATIVA.** El corte deja un fork explícito
-> —*redactor de `metadata` en la pasada de erasure* **o** *gate que prohíba ids de persona en claves de
-> `metadata`*— y la épica prohíbe empezar a implementar antes de que la elección quede registrada por escrito
-> ([`epics-gdpr-hardening.md`](../planning-artifacts/epics-gdpr-hardening.md) `:393-398`). El artefacto queda en
-> `backlog`, no en `ready-for-dev`, precisamente para que `bmad-dev-story` no lo recoja con el fork sin cerrar.
-> **La recomendación está en *La decisión abierta*, y la épica exige confirmarla o refutarla por escrito.**
+> **DA-1 ESTÁ TOMADA Y NO SE REABRE** (Sergio, 2026-08-03): gana **(A) el redactor** — un único statement en la
+> pasada de erasure deja de conservar el id real, y el control de AC3 se resuelve como **testigo de aceptación
+> falsable, no como gate de forma**. (B), el gate declarativo de claves de `metadata`, queda como **alternativa
+> descartada, no como decisión abierta**. Con esto la precondición normativa de la épica
+> ([`epics-gdpr-hardening.md`](../planning-artifacts/epics-gdpr-hardening.md) `:393-398`) queda satisfecha y la
+> implementación puede empezar. El argumento completo y lo que (B) costaba están en *Decisión registrada*.
 
 > **`sprint-status.yaml` afirma que ninguna historia de la épica tiene decisión abierta (`:157-159`) — es falso
 > para G-2**, y su propia enumeración lo delata: lista G-1a, G-3a, G-3b y G-5, y **no** lista G-2. Épica y
@@ -131,11 +131,12 @@ texto** y necesita o el verbo nuevo o un registro propio. Si elige el redactor, 
   `actor_id`), así que desde aceptación nada impide que `subject_user_id` desaparezca — eso es un hueco a
   cerrar, y el sitio natural del testigo de AC1.
 
-## La decisión abierta (DA-1) — redactor vs gate
+## Decisión registrada (NO reabrir)
 
-**Recomendación: (A) el redactor, con el control de AC3 resuelto como testigo de aceptación falsable y no como
-gate de forma.** La épica exige confirmarla o refutarla por escrito antes de implementar. Los tres argumentos,
-con su coste y su alternativa descartada:
+**DA-1 — TOMADA (Sergio, 2026-08-03): (A) el redactor**, con el control de AC3 resuelto como testigo de
+aceptación falsable y no como gate de forma. La recomendación se emitió con los tres argumentos de abajo y fue
+**confirmada**, que es lo que la épica exige (`:393-398`). Los tres argumentos, con su coste y su alternativa
+descartada:
 
 **1. Solo el redactor satisface AC1, porque AC1 es una propiedad del DATO.** «Ninguna fila conserva su id real
 en `metadata`» habla de filas existentes. Hay una fila así, medida. Un gate no reescribe nada: dejaría AC1 sin
@@ -179,10 +180,18 @@ repo ya bendijo dos veces es **conteos, nunca ids** (`sprint-status.yaml:202` y 
 también satisface AC2, porque la fila sigue teniendo `action`, `correlation_id`, `occurred_on` y el `actor_id`
 del admin que ejecutó el borrado.
 
-**Si Sergio elige el gate (B)**, cambian estas cosas y hay que reescribir los AC en consecuencia: aparece
-dependencia de #634 (verbo nuevo para columnas sin entidad, o registro propio), aplica NFR11 (`php.quality` +
-`php.quality.dry-run`), y **sigue haciendo falta reparar la fila viva** — es decir, B no sustituye a A, se le
-suma. Esa asimetría es el argumento más fuerte contra presentar el fork como simétrico.
+**Por qué se descartó (B), el gate declarativo de claves.** Habría traído dependencia de #634 (el hueco para
+columnas sin entidad tiene una sola plaza, ocupada por `audit_log.resource_id`: necesitaría un verbo nuevo o un
+registro propio), habría activado NFR11, y **aun así habría que reparar la fila viva** — B no sustituye a A, se
+le suma. A eso se añade que es maquinaria de la talla de G-1a para **una** clave, lo que incumple la Regla de
+Tres, y que ninguna de sus dos formas posibles es honesta: por forma rompe D4.1, por nombre de clave se lee
+verde por construcción (SI-23). Esa asimetría es el argumento más fuerte contra presentar el fork como
+simétrico, y es lo que decidió DA-1.
+
+**Condición de reapertura** (escrita para que la decisión sea revisable y no dogma): si aparece un **segundo**
+camino de escritura que meta un id de persona en `metadata` —hoy hay exactamente uno—, la Regla de Tres deja de
+proteger a (B) y el registro declarativo pasa a valer lo que cuesta. El trigger es observable: cualquier PR que
+añada una clave nueva a `metadata` con un id de persona dentro.
 
 ### Contradicciones de la planificación que la decisión debe resolver
 
@@ -227,46 +236,36 @@ Los tres del corte, verbatim (`epics-gdpr-hardening.md:727-741`), con lo que los
 
 ## Tasks / Subtasks
 
-- [ ] **Tarea 0 — Cerrar DA-1 por escrito (precondición; ninguna otra tarea empieza antes).** Confirmar o
-      refutar la recomendación (A) en este artefacto y en el cuerpo del PR, con el argumento y la alternativa
-      descartada. Si gana (B), reescribir AC y tareas antes de tocar código.
-- [ ] **Tarea 1 — Re-medir el estado contra el árbol del día.** En especial: si #634 mergeó (cambia las reglas
-      del registro) y si la fila huérfana sigue existiendo. No heredar las cifras de este artefacto.
-
-**Rama A — redactor** *(borrar el bloque B si gana A)*
-
-- [ ] **A1 (AC1, AC2)** — Que la pasada de erasure deje de conservar el id real: eliminar/sustituir
-      `subject_user_id` sin introducir pseudónimo en esa fila. Un solo statement, dentro de la transacción que
-      `FulfilIdentityErasure` ya posee, enrutado por `TransactionManager`.
-- [ ] **A2 (AC1)** — Testigo de aceptación en `features/backoffice/users/erase.feature` que siembre y demuestre
-      **en el mismo escenario** (trampa F7 de G-3a: siembra y aserción en escenarios distintos pasaban en
-      verde). Ojo: el fichero es el testigo declarado de `.audit-resource-types`; verificar que
-      `make php.lint.audit-resource` sigue verde.
-- [ ] **A3 (AC3)** — Control falsable sobre el camino de escritura + verificación por mutación con el conteo de
-      rojos anotado.
-- [ ] **A4** — Reescribir `AuditActorAnonymiserFunctionalTest:76,196` (afirma `metadata` intacta) con la razón
-      del cambio, y actualizar `EraseIdentitySubjectTest:42-45`.
-- [ ] **A5 — Enmiendas documentales, que aquí no son cosmética**: `docs/adr/audit-activity-log.md` (contrato de
-      `metadata` en D4 `:271-273`, y el conjunto cerrado de mutaciones `:198-200`), `docs/architecture-api.md`
-      `:264` (dos vs tres políticas), y el párrafo de `.person-reference-policy:51-57` que declara este agujero.
-
-**Rama B — gate declarativo** *(borrar el bloque A si gana B)*
-
-- [ ] **B1** — Resolver la colisión con #634 (verbo para columnas sin entidad, o registro propio) y con D4.1
-      (`anonymized_actor_id` es contractual y form-idéntico a un id real).
-- [ ] **B2** — Registro + gate siguiendo el patrón de la casa: cabecera de puntos ciegos literal, dos clases
-      (árbol real + falsabilidad con fixtures), gemelo limpio, `--filter` por **nombre exacto de clase, una
-      línea por clase**, y alta en `php.quality` **y** `php.quality.dry-run`.
-- [ ] **B3** — **Aun con B, reparar la fila viva**: B no satisface AC1 por sí solo.
-
-**Comunes**
-
-- [ ] **C1** — Corregir las seis contradicciones de planificación listadas arriba (o declarar por escrito cuál
-      se deja abierta y por qué).
-- [ ] **C2 — Pase adversarial por alguien distinto del autor, registrado, declarando dónde quedó** (definición
-      de hecho de la épica; `CLAUDE.md` → *Security review on every change* → *Process*). Un pase que no
-      encuentra nada también cuenta: se registra y se dice.
-- [ ] **C3** — Puertas con **ejecución fresca y exit code impreso** en el artefacto: `make php.stan`,
+- [x] **Tarea 0 — Cerrar DA-1 por escrito.** HECHA: (A) el redactor, confirmada por Sergio el 2026-08-03 y
+      registrada arriba con su alternativa descartada y su condición de reapertura. Reproducirla en el PR.
+- [ ] **Tarea 1 — Re-medir el estado contra el árbol del día.** En especial: si #634 mergeó y si la fila
+      huérfana sigue existiendo. **No heredar las cifras de este artefacto** — son de `9dce7355`.
+- [ ] **Tarea 2 (AC1, AC2)** — Que la pasada de erasure deje de conservar el id real: eliminar o sustituir
+      `subject_user_id` **sin introducir pseudónimo en esa fila**. Un solo statement, dentro de la transacción
+      que `FulfilIdentityErasure` ya posee, enrutado por `TransactionManager` — nunca una transacción DBAL
+      cruda anidada bajo `wrapInTransaction`, que degradaría a rollback-only.
+- [ ] **Tarea 3 (AC1)** — Testigo de aceptación en
+      [`features/backoffice/users/erase.feature`](../../api/features/backoffice/users/erase.feature) que siembre
+      y demuestre **en el mismo escenario** (trampa F7 de G-3a: siembra y aserción en escenarios distintos
+      pasaban en verde) y que **afirme el conteo de filas sembradas** antes del veredicto (trampa F5). Ojo: ese
+      fichero es el testigo declarado de `.audit-resource-types` — verificar que `make php.lint.audit-resource`
+      sigue verde.
+- [ ] **Tarea 4 (AC3)** — Control falsable sobre el camino de escritura, **verificado por mutación**: quitar la
+      regla, contar los rojos, anotar el número, y restaurar **copiando los bytes** (nunca `git checkout --`).
+      Toda rama de la regla necesita su propio caso rojo.
+- [ ] **Tarea 5** — Reescribir `AuditActorAnonymiserFunctionalTest:76,196` (hoy afirma que `metadata` queda
+      byte a byte intacta) **con la razón del cambio**, y actualizar `EraseIdentitySubjectTest:43`.
+- [ ] **Tarea 6 — Enmiendas documentales, que aquí no son cosmética**:
+      [`docs/adr/audit-activity-log.md`](../../docs/adr/audit-activity-log.md) (contrato de `metadata` en D4
+      `:271-273`, y el conjunto cerrado de mutaciones `:198-200`),
+      [`docs/architecture-api.md`](../../docs/architecture-api.md) `:264` (dos vs tres políticas), y el párrafo
+      de [`api/.person-reference-policy`](../../api/.person-reference-policy) `:51-57` que declara este agujero.
+- [ ] **Tarea 7** — Corregir las seis contradicciones de planificación listadas arriba (o declarar por escrito
+      cuál se deja abierta y por qué).
+- [ ] **Tarea 8 — Pase adversarial por alguien distinto del autor, registrado, declarando dónde quedó**
+      (definición de hecho de la épica; `CLAUDE.md` → *Security review on every change* → *Process*). Un pase
+      que no encuentra nada también cuenta: se registra y se dice.
+- [ ] **Tarea 9** — Puertas con **ejecución fresca y exit code impreso** en el artefacto: `make php.stan`,
       `make php.quality`, y la suite que ejerza el camino tocado.
 
 ## Dev Notes

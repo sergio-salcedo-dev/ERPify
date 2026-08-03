@@ -233,11 +233,14 @@ development_status:
   # nombres. El argumento completo vive en el contexto de la historia; épica y AC3 quedan sincronizados.
   # CONTEXTO ESCRITO Y EN REVISIÓN: PR #631 (rama feat/shared-g1c-control-detective-referencias-persona-exp9).
   g-1c-control-detective-referencias-cross-context: done
-  # G-2: CONTEXTO ESCRITO (2026-08-03), y la clave se queda en `backlog` A PROPÓSITO: la historia tiene una
-  # DECISIÓN ABIERTA —el fork redactor-vs-gate de epics:723-725— y la épica prohíbe implementar antes de
-  # registrarla (epics:393-398), así que `ready-for-dev` mentiría y `bmad-dev-story` la recogería con el fork sin
-  # cerrar. La frase de :157-159 («NINGUNA historia tiene ya decisión abierta») es FALSA para G-2 y su propia
-  # enumeración lo delata: lista G-1a, G-3a, G-3b y G-5, y no lista G-2. Corregirla es tarea de la historia.
+  # G-2: CONTEXTO ESCRITO y DECISIÓN TOMADA (Sergio, 2026-08-03): gana (A) EL REDACTOR — un único statement en
+  # la pasada de erasure deja de conservar el id real, y el control de AC3 es un TESTIGO DE ACEPTACIÓN FALSABLE,
+  # no un gate de forma. (B), el gate declarativo de claves de metadata, es ALTERNATIVA DESCARTADA, no decisión
+  # abierta; su condición de reapertura está escrita en el artefacto (un SEGUNDO camino de escritura con id de
+  # persona, hoy hay exactamente uno). Con eso la precondición de epics:393-398 queda satisfecha.
+  # OJO: la frase de :157-159 («NINGUNA historia tiene ya decisión abierta») era FALSA para G-2 cuando se
+  # escribió —su propia enumeración lista G-1a, G-3a, G-3b y G-5, y omite G-2—. Corregirla es tarea de la
+  # historia; hoy ya no describe un hueco, pero sigue siendo una afirmación que no se sostuvo.
   # Lo que la medición añadió al corte, y que decide el fork: (1) la fuga es UNA sola clave —`subject_user_id`
   # en EraseIdentitySubject:61— y la escribe el PROPIO borrado GDPR dentro de su misma transacción; los otros
   # siete caminos de escritura de `metadata` no meten ids de persona. (2) Es dato VIVO, no prospectiva: en la BD
@@ -250,7 +253,7 @@ development_status:
   # AC3 como testigo de aceptación falsable y no como gate de forma; falta que Sergio la confirme o la refute.
   # Trampa de datos para cualquier SQL de esta historia: `metadata` vacía se persiste como `[]`, no `{}`, así que
   # `jsonb_object_keys` ABORTA y `metadata ? 'x'` silencia filas — filtrar por `jsonb_typeof(metadata)='object'`.
-  g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
+  g-2-ids-de-persona-fuera-de-audit-log-metadata: ready-for-dev
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
   # aceptación que YA EXISTE (features/backoffice/users/erase.feature:49-62), declarado como TERCER segmento de
   # la línea del registro y leído como CORPUS DE TEXTO — evidencia de grado aceptación al precio de un gate
