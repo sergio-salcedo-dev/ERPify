@@ -226,6 +226,10 @@ The rule exists because the silent failure is expensive and asymmetric: a code r
 
 [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>` — subject lower-case, imperative, no trailing period. Types: `feat | fix | docs | style | refactor | perf | test | build | ci | chore | revert`. Full pre-commit hook setup in [`docs/contribution-guide.md`](docs/contribution-guide.md).
 
+### Dependency updates (dependabot)
+
+Dependabot opens **one PR per dependency** across four weekly ecosystems (`.github/dependabot.yaml`: npm, github-actions, composer, docker). That shape is wrong whenever one bump spans several pin sites: `github/codeql-action` is used by `init` and `analyze` in `codeql.yml` and `upload-sarif` in `ci.yml`, so each single-step PR leaves the others behind and the job dies with `Loaded a configuration file for version 'X', but running version 'Y'`. **Such a red is the split itself, not a regression to investigate** — the sites only go green moving together in one commit. Batch with `/deps-update` (`--dry-run` to inventory only); it classifies by the path segment after `dependabot/` (never by substring — `dependabot/github_actions/docker/bake-action-…` is an *actions* bump), never merges the dependabot branches for npm/composer (each rewrites the whole lockfile and they conflict pairwise) but re-resolves the ranges in one install, and stops for branch authorization before creating anything.
+
 ### Code comments (`api/src`, `pwa/src`, tests)
 
 A comment must explain the non-obvious *why* of the **current** code, standing on its own with no diff context. Two patterns are banned from anything merged to `main`:

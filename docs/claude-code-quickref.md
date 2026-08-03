@@ -107,6 +107,10 @@ Nothing in the merge path moves a marker in `sprint-status.yaml`: a PR squash-me
 
 A `SessionStart` hook in `.claude/settings.json` runs it with `--quiet-when-clean`, so drift surfaces when a session opens and a clean tree stays silent. It never blocks: exit code is 0 unless `--strict`.
 
+### Dependency batches
+
+`/deps-update` (`.claude/commands/deps-update.md`; `--dry-run` inventories only) consolidates the open `chore: bump` PRs into one branch and one PR. Dependabot's one-PR-per-dependency shape cannot express a bump that spans several pin sites, so those PRs are red by construction — `github/codeql-action` covers three steps across `codeql.yml` and `ci.yml`, and none of the three passes alone (#628/#629/#630 → #632). The command classifies by the path segment after `dependabot/` rather than by substring, since `dependabot/github_actions/docker/bake-action-…` is an actions bump, not a docker one. For npm and composer it re-resolves the ranges in a single install instead of merging the branches, whose whole-lockfile rewrites conflict pairwise; expect the caret to land a patch ahead of what Dependabot pinned and peers to move packages nobody asked for. It stops for branch authorization before creating anything, and never merges.
+
 ---
 
 ## Services
