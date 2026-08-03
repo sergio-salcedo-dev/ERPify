@@ -1,5 +1,5 @@
 # generated: 2026-06-23
-# last_updated: 2026-08-02
+# last_updated: 2026-08-03
 # project: ERPify
 # project_key: NOKEY
 # tracking_system: file-system
@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-08-02
+last_updated: 2026-08-03
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -221,7 +221,7 @@ development_status:
   # se contradecía consigo mismo y con la épica.
   # GATE DE ORDEN vs G-3b: bajo ① el orden es INDIFERENTE (los listers se suman a la colección y el schedule
   # existente los recoge), así que hoy no muerde; se conserva como tripwire por si ① se reabriera hacia ②.
-  g-1c-control-detective-referencias-cross-context: backlog
+  g-1c-control-detective-referencias-cross-context: ready-for-dev
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
   # aceptación que YA EXISTE (features/backoffice/users/erase.feature:49-62), declarado como TERCER segmento de
