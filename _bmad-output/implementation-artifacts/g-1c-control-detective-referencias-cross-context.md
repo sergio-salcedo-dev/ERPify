@@ -6,10 +6,12 @@ baseline_commit: 885ec3da
 
 Status: ready-for-dev
 
-> **DOS DECISIONES ESTÁN TOMADAS Y NO SE REABREN** (ver *Decisiones registradas*): ③ **no hay FK** —resuelta a
-> favor del código, y la corrección de la regla **ya está en el árbol**, no es tarea tuya— y la forma es **①**:
-> ampliar `ReconcileErasedSubjectReferences` con un listador por contexto dueño. ② (un reconciliador por
-> contexto) es **alternativa descartada**, no decisión abierta.
+> **TRES DECISIONES ESTÁN TOMADAS Y NO SE REABREN** (ver *Decisiones registradas*): ③ **no hay FK** —resuelta a
+> favor del código, y la corrección de la regla **ya está en el árbol**, no es tarea tuya—; la forma es **①**,
+> ampliar `ReconcileErasedSubjectReferences` con un listador por contexto dueño (② es alternativa descartada, no
+> decisión abierta); y la forma del puerto es **(a)**, contrato compartido en `Shared/Privacy/Application`
+> recogido por iterador etiquetado, **con tres enmiendas que hay que leer** — el eje de auditoría queda FUERA de
+> la colección, el resultado es un VO, y la clave del VO es `string`.
 
 > **Esta historia es PROSPECTIVA: no repara datos, y el PR tiene que decirlo.** No existe entorno de producción
 > (`.env.prod.local` ausente), así que no hay sujetos borrados reales cuyas filas huérfanas rescatar — el
@@ -112,33 +114,61 @@ reproducirlo.
 - **El alcance son las CUATRO columnas.** El corte original decía dos: contó los seams que **añadió G-1b** en
   vez de la clase de defecto. Las cuatro comparten el defecto exactamente y **ninguna tiene FK**.
 
-### Lo que las decisiones NO fijan, y tienes que resolver tú
+### Forma del puerto — TOMADA: (a), contrato compartido
 
-La **forma del puerto** es implementación dentro de ①, y la épica no la cierra. Dos formas, con el trade-off
-medido; **elige, arguméntalo en el PR, y no lo dejes implícito**:
+**Decidido:** 2026-08-03, Sergio, sobre revisión externa contrastada contra el árbol. La forma del puerto era
+implementación dentro de ① y la épica no la cerraba; ahora está cerrada.
 
-- **(a) Una interfaz común en `Shared/Privacy/Application`** —el eje que declara, más los ids que guarda— con
-  una implementación por contexto dueño, recogidas por **iterador etiquetado**. *A favor:* AC2 se vuelve
-  mecánico (el gate mapea línea del registro → lister cableado sobre una colección enumerable), y el
-  constructor del reconciliador **no crece** — recuerda que `FulfilIdentityErasure` ya carga
-  `@SuppressWarnings("PHPMD.CouplingBetweenObjects")` por exactamente esta presión. *En contra:* `Shared`
-  aprende que existe un vocabulario de ejes.
-- **(b) Cuatro puertos distintos**, uno en el `Application/` de cada contexto dueño, inyectados por nombre.
-  *A favor:* espejo literal de `PersonResourceReferences`, cero vocabulario compartido. *En contra:* el
-  constructor pasa a cinco colaboradores y sube el coupling; y AC2 tiene que enumerar tipos a mano, que es
-  justamente la enumeración manual que este eje existe para no volver a hacer.
+**(a) Un contrato en `Shared/Privacy/Application`** —las claves del registro que cubre, más los ids de persona
+que guarda— con una implementación por contexto dueño, recogidas por **iterador etiquetado**. Descartada **(b)
+cuatro puertos distintos**: el constructor pasa a seis colaboradores sobre una clase cuyo hermano
+`FulfilIdentityErasure` ya carga `@SuppressWarnings("PHPMD.CouplingBetweenObjects")` por esta misma presión, y
+AC2 tendría que enumerar tipos a mano — la enumeración manual que este eje existe para no volver a hacer.
 
-**Recomendación (no decisión):** (a), porque AC2 es criterio de aceptación y (b) lo encarece sin comprar nada
-que ① no tenga ya. Si eliges (b), el gate de AC2 sigue siendo obligatorio: resuélvelo y dilo.
+**El argumento que decide, y es de arquitectura, no de ergonomía: bajo (a) no hay ni un import cross-context
+nuevo.** El reconciliador importa `Shared\Privacy\Application\…`; cada adaptador importa su propio repositorio y
+ese mismo contrato. `Erpify\Shared\…` es Level 3, siempre importable
+([`BoundedContextGateTest`](../../api/tests/Unit/Shared/Architecture/BoundedContextGateTest.php) `:37`). Medido:
+**cero líneas nuevas en el allowlist y cero `skip_violations` en deptrac**; bajo (b) serían tres y tres. `Shared`
+no aprende `Membership`: aprende que existe *fuente de referencias a persona*, que es vocabulario de `Privacy`.
 
-**El puente que AC2 necesita, sea cual sea la forma.** El gate compara dos conjuntos y hay que decidir **sobre
-qué identidad** los compara. La clave del registro es `<Fqcn>::$<propiedad>`; el lister conoce su entidad. La
-forma barata es que **el lister declare la clave (o las claves) del registro que cubre** — así el gate resuelve
-«toda línea `person ::` salvo la PK del sujeto tiene un lister que la nombra» sin heurística de nombres, y esa
-misma clave es la que AC3 usa como clave de eje en el resultado. **Un puente por similitud de nombres
-(`Membership` ↔ `membership`) es exactamente la enumeración frágil que el AC existe para eliminar**: no lo
-escribas. Si el lister declara la clave, la coherencia clave-declarada ↔ entidad-real la comprueba el mismo
-gate, y con eso las tres piezas —registro, lister, eje del veredicto— hablan de un único identificador.
+**La plantilla de cableado ya existe — no inventes una.**
+[`Shared/Event/Application/Projector.php`](../../api/src/Shared/Event/Application/Projector.php) con
+`tags: ['erpify.projector']` ([`services.yaml`](../../api/config/services.yaml) `:21`) consumido por
+`$projectors: !tagged_iterator erpify.projector` (`:31`).
+
+#### Enmienda 1 — el eje de `audit_log` queda FUERA de la colección
+
+**No existe ninguna entidad Doctrine en `Shared/Audit`** (cero `#[ORM\Entity]`), y la cabecera del registro
+declara `audit_log.resource_id` como punto ciego **estructural**: lo inyecta un listener `postGenerateSchema` y
+se escribe por SQL crudo, así que ninguna propiedad lo declara y el barrido por reflexión no puede verlo nunca.
+Luego `AuditLog::$resourceId` **no es ni puede ser una clave del registro**.
+
+Si el contrato obligase a declarar claves del registro, el eje de auditoría no podría implementarlo: declararía
+una clave que el registro no carga y la dirección «toda clave declarada corresponde a una línea» se pondría roja
+por construcción. **Por eso `PersonResourceReferences` sigue siendo un colaborador propio** y el iterador lleva
+solo los listers respaldados por registro. AC2 se lee entonces sin excepciones, y cada registro sigue gobernando
+su eje —el de recurso ya tiene el suyo, `.audit-resource-types` más el testigo de G-3a. El reconciliador queda
+en **tres** colaboradores: el puerto de auditoría, el iterador de listers y el predicado de existencia.
+
+#### Enmienda 2 — el veredicto es un VO, y su clave interna es `string`
+
+`array<PersonReferenceKey, list<string>>` **no es expresable**: las claves de array en PHP son `int|string`, así
+que un VO no puede serlo y PHPStan en `level: max` —única puerta de tipos— rechaza el `@var`. El VO guarda
+internamente clave `string` (la clave del registro) y expone el tipo rico en su API.
+
+Se adopta el VO **por dos razones, y ninguna es especulativa**: hace imposible intercambiar clave y valor, y saca
+al comando de la estructura interna (Tell-Don't-Ask). *«Permite añadir métricas en el futuro»* **no** es
+justificación aquí — YAGNI es puerta explícita en este repo y una abstracción que se apoya en ese argumento no
+está madura. Con las dos primeras basta.
+
+#### Enmienda 3 — una sola identidad para el eje
+
+El puente es que **el lister declare la clave (o las claves) del registro que cubre**. Así el gate resuelve «toda
+línea `person ::` salvo la PK del sujeto tiene un lister que la nombra» sin heurística, y esa misma clave es la
+del VO y la que asertan los tests. **Un puente por similitud de nombres (`Membership` ↔ `membership`) es la
+enumeración frágil que AC2 existe para eliminar**: no lo escribas. Y la etiqueta que imprima el comando se
+**deriva** de la clave — un segundo vocabulario de nombres de tabla nos deja dos nombres por eje al tercer mes.
 
 ## Acceptance Criteria
 
@@ -166,8 +196,8 @@ misma historia: su corte enumeró a mano y se dejó dos de cuatro.**
 **AC3 — El veredicto lleva atribución por eje.**
 **Given** el control cubriendo varios ejes,
 **When** devuelve su resultado,
-**Then** es **por eje** (`array<string, list<string>>` o un VO), **no una lista plana fusionada**, y los tests
-**asertan la clave**.
+**Then** es **por eje** y **no una lista plana fusionada**, y los tests **asertan la clave**. La épica admite
+`array<string, list<string>>` o un VO; **esta historia fija el VO** (Enmienda 2), con clave interna `string`.
 *Por qué:* con lista plana, un test que siembre solo el eje de `audit_log` y asierta no-vacío **pasa aunque el
 lister de membership no se haya cableado nunca** — SI-23 reintroducido dentro del control que instala SI-21.
 
@@ -197,24 +227,36 @@ uno desde **ejecución fresca con exit code impreso**. Si añades una clase de g
 
 ## Tasks / Subtasks
 
-- [ ] **Tarea 1 — Elegir la forma del puerto (precondición de todo lo demás).** (a) o (b) de arriba, con el
-      argumento escrito. Regístralo aquí y en el cuerpo del PR.
+- [x] **Tarea 1 — Forma del puerto.** Hecha: **(a)** con sus tres enmiendas, ver *Forma del puerto — TOMADA*.
+      Reprodúcela en el PR; no la re-argumentes.
 - [ ] **Tarea 2 — Predicado de existencia por lotes (AC5).** Sustituye `findById()` por el predicado. Decide si
       cuelga de `UserRepository` o de un puerto de lectura estrecho propio — el precedente de puerto estrecho en
       este contexto es `ActiveAdministratorDirectory` (`Domain/Repository/`), y es el que respeta ISP.
-- [ ] **Tarea 3 — Listers de los cuatro ejes (AC1).** Uno por contexto dueño, con su adaptador Doctrine/DBAL.
+- [ ] **Tarea 3 — Listers de los cuatro ejes (AC1).** Uno por contexto dueño, implementando el contrato de
+      `Shared/Privacy/Application` y tagueándose para el iterador, con su adaptador Doctrine/DBAL.
       **Solo lectura, sin hidratar**: devuelve ids, no agregados. Sigue a `DbalPersonResourceReferences` —
       `DISTINCT` y `ORDER BY` no son cosméticos ahí (un alerta que diffea la salida dispararía con ruido sin
       ellos), y el mismo argumento aplica aquí.
-- [ ] **Tarea 4 — Atribución por eje (AC3).** Cambia el retorno del reconciliador y **propaga a la salida del
-      comando** (`ReconcileErasedSubjectReferencesCommand`, que hoy imprime una lista plana). El nombre del eje
-      debe ser el mismo string por el que AC2 lo enumera.
-- [ ] **Tarea 5 — Gate de completitud de listers (AC2).** Motor en `api/tests/Support/`, con raíz inyectable
-      (espejo de `PersonReferences::fromGateLocation()`), y **fixtures** para provocar su rojo — no borrando
-      artefactos reales. Registra su ejecución propia en `make/php-quality.mk`.
-- [ ] **Tarea 6 — Seams de arquitectura.** Una línea **por fichero** en `api/.bounded-context-allowlist`
-      (`<path> => <Fqcn>`) por cada import cross-context nuevo, y su espejo en `skip_violations` de
-      `deptrac.yaml`. Verifica con `make php.lint.bounded-context` y `make php.deptrac`, no por lectura.
+- [ ] **Tarea 4 — Atribución por eje, en un VO (AC3, Enmienda 2).** Cambia el retorno del reconciliador y
+      **propaga a la salida del comando** (`ReconcileErasedSubjectReferencesCommand`, que hoy imprime una lista
+      plana), agrupada por eje con la etiqueta **derivada de la clave**. El comando no debe conocer la
+      estructura interna del VO. La clave del eje es el mismo string por el que AC2 lo enumera.
+- [ ] **Tarea 5 — Gate de completitud de listers (AC2).** Compara **las líneas `person ::` del registro** contra
+      **las claves que declaran los listers**, en las dos direcciones (ninguna línea sin lister, ninguna clave
+      declarada sin línea). Motor en `api/tests/Support/`, con raíz inyectable (espejo de
+      `PersonReferences::fromGateLocation()`), y **fixtures** para provocar su rojo — no borrando artefactos
+      reales. Registra su ejecución propia en `make/php-quality.mk`.
+- [ ] **Tarea 6 — Seams de arquitectura: comprobar que NO hacen falta.** Bajo (a) no hay import cross-context
+      nuevo, así que lo esperado es **cero** líneas en `api/.bounded-context-allowlist` y cero `skip_violations`
+      en `deptrac.yaml`. **Verifícalo ejecutando** `make php.lint.bounded-context` y `make php.deptrac`, no por
+      lectura: si alguno pide una entrada, es que un import se ha colado por fuera del contrato compartido y el
+      arreglo es el import, no el allowlist. Si aun así hiciera falta una línea, va **por fichero**
+      (`<path> => <Fqcn>`) y con su espejo en deptrac.
+- [ ] **Tarea 6-bis — Boy scout, nombrado.** `BoundedContextGateTest.php:37` sigue poniendo `User` como ejemplo
+      de shared kernel: es la afirmación que ③ refutó y que ya se corrigió en `docs/rules/database.md`,
+      sobreviviendo en una tercera copia. Mecánicamente inocua (el matcher va por namespace y `User` vive en
+      `Erpify\Iam\Identity`), pero es el fichero que alguien abre justo al decidir si una referencia
+      cross-context vale. Una línea; **decláralo en el PR**, no lo cueles.
 - [ ] **Tarea 7 — Tests (AC1, AC3, AC4).** Unitarios del reconciliador con dobles por eje (patrón
       `FixedPersonResourceReferences`) **asertando la clave del eje**; funcionales de cada adaptador contra
       Postgres real dentro de transacción con rollback, ids generados por ejecución y aserción **por
@@ -271,9 +313,11 @@ persona (D4 prohíbe el crosswalk, y esta historia lee precisamente las dos colu
 
 - El reconciliador y su comando se quedan donde están (`Iam/Identity/{Application,Infrastructure/Cli}`): el
   contexto que posee a la persona es el que orquesta.
-- Los listers de los otros tres ejes viven en **sus** contextos (`Organization/Membership`, `Iam/Invitation`,
-  `Iam/Session`), puerto en `Application/` y adaptador en `Infrastructure/Persistence/Doctrine/`. Es la misma
-  dirección de dependencia que ya publican los tres `PurgeUser*`.
+- **El contrato** vive en `Shared/Privacy/Application/` — junto a los dos atributos del eje, que ya viven en
+  `Shared/Privacy/Domain/`. **Las implementaciones** viven en sus contextos (`Organization/Membership`,
+  `Iam/Invitation`, `Iam/Session`, `Iam/Identity` para los tokens de reset), en
+  `Infrastructure/Persistence/Doctrine/`, tagueadas para el iterador. Ninguna importa a otra.
+- `PersonResourceReferences` (eje de `audit_log`) **no cambia de sitio ni entra en la colección** — Enmienda 1.
 - Motor de gate y dobles en `api/tests/Support/`; fixtures bajo
   `api/tests/Unit/Shared/Architecture/Fixture/`, siguiendo lo que dejó G-3a.
 - Sin migración. Sin cambio de esquema. Sin entidad nueva. Sin dependencia nueva de Composer — todo lo que
