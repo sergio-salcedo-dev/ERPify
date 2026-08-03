@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Cli;
 
 use Erpify\Iam\Identity\Application\ReconcileErasedSubjectReferences;
+use Erpify\Iam\Identity\Application\UnreconciledPersonReferences;
+use Erpify\Shared\Privacy\Domain\PersonReferenceAxis;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -13,14 +15,20 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * Verifies the resource axis of GDPR erasure: no identity may be gone from `identity_user` while the audit
- * trail still names it by its real id. Exits non-zero on divergence, so it serves an operator on demand and
- * a cron / monitoring check alike — the sibling of `audit:gdpr:reconcile-erasures`, which does the same for
- * crypto-shredding evidence.
+ * Verifies every place a person's identifier is persisted: no identity may be gone from `identity_user`
+ * while another table still names it by its real id. Exits non-zero on divergence, so it serves an operator
+ * on demand and a cron / monitoring check alike — the sibling of `audit:gdpr:reconcile-erasures`, which does
+ * the same for crypto-shredding evidence.
  *
- * A finding means some erasure path anonymised the actor axis and not the resource axis, leaving the
- * subject's real id in the trail. The repair is `identity:gdpr:erase-subject <id>`, which anonymises both
- * axes. Its outcome depends on how the divergence arose, and both outcomes are correct:
+ * The report is grouped by place and never merged into one list. Which table still holds the id is what
+ * decides whether an operator is looking at an audit trail whose resource axis went unanonymised or at a
+ * membership that outlived the person it admitted, and a merged list would also let one wired place stand in
+ * for all of them.
+ *
+ * A finding means some erasure path completed partially, leaving the subject's real id behind. The repair is
+ * `identity:gdpr:erase-subject <id>` for every place alike: it is idempotent, so it runs against an identity
+ * that is already gone and discharges the links that were skipped. Its outcome on the audit trail depends on
+ * how the divergence arose, and both outcomes are correct:
  *
  *   - The identity was hard-deleted by a path that left the actor axis intact (a legacy identity-only
  *     delete). The repair's actor pass still matches those rows, so both axes take one pseudonym.
@@ -33,7 +41,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  */
 #[AsCommand(
     name: 'identity:gdpr:reconcile-subject-references',
-    description: 'Verify no erased identity is still named by its real id in the audit trail',
+    description: 'Verify no erased identity is still named by its real id in any table that references one',
 )]
 final class ReconcileErasedSubjectReferencesCommand extends Command
 {
@@ -47,26 +55,62 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $dangling = $this->reconciler->unreconciledSubjectIds();
+        $verdict = $this->reconciler->unreconciledReferences();
 
-        if ([] === $dangling) {
-            $io->success('No erased identity is still named by its real id in the audit trail.');
+        if ($verdict->isEmpty()) {
+            // The count of places checked, not a bare "all clear": it is what tells an operator how much of
+            // the obligation this run actually covered, and a silent drop to one place would otherwise read
+            // exactly like a clean sweep.
+            $io->success(\sprintf(
+                'No erased identity is still named by its real id. %d reference axis(es) checked.',
+                $verdict->axesChecked(),
+            ));
 
             return Command::SUCCESS;
         }
 
+        $this->report($io, $verdict);
+
+        return Command::FAILURE;
+    }
+
+    private function report(SymfonyStyle $io, UnreconciledPersonReferences $verdict): void
+    {
         $io->error(\sprintf(
-            '%d erased identity(ies) still named in the trail — the resource axis was not anonymised:',
-            \count($dangling),
+            '%d person reference(s) survive an erasure, across %d of %d axis(es):',
+            $verdict->total(),
+            \count($verdict->findings()),
+            $verdict->axesChecked(),
         ));
-        $io->listing($dangling);
+
+        foreach ($verdict->findings() as $personReferenceFinding) {
+            $io->section($this->headingFor($personReferenceFinding->axis));
+            $io->listing($personReferenceFinding->subjectIds);
+        }
+
         $io->note([
-            'Repair with `identity:gdpr:erase-subject <id>`, which anonymises both axes.',
+            'Repair with `identity:gdpr:erase-subject <id>`, which discharges every reference of the '
+            . 'subject and anonymises both audit axes. It is idempotent, so it runs against an identity '
+            . 'that is already gone.',
             'If the actor axis was already erased on its own via `audit:gdpr:erase`, the resource axis is '
             . 'completed under a separate pseudonym — the original one is irreversible and cannot be reused. '
             . 'Neither reverts to the person, so this still completes the erasure.',
         ]);
+    }
 
-        return Command::FAILURE;
+    /**
+     * The axis key with its namespace dropped — `Membership::$userId`, `audit_log.resource_id`.
+     *
+     * Readable text is the presenter's job, never the value object's
+     * (`docs/adr/domain-presentation-separation.md`), and it is DERIVED here rather than looked up in a
+     * table of display names: a per-axis name maintained beside the key would be a second vocabulary for
+     * the same column, and the two drift until the operator reading this report and the author reading
+     * `api/.person-reference-policy` are naming different things with the same word.
+     */
+    private function headingFor(PersonReferenceAxis $axis): string
+    {
+        $namespace = \strrpos($axis->key(), '\\');
+
+        return false === $namespace ? $axis->key() : \substr($axis->key(), $namespace + 1);
     }
 }

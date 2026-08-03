@@ -232,7 +232,7 @@ development_status:
   # declara la clave del registro que cubre y el gate compara en las dos direcciones — nunca por similitud de
   # nombres. El argumento completo vive en el contexto de la historia; épica y AC3 quedan sincronizados.
   # CONTEXTO ESCRITO Y EN REVISIÓN: PR #631 (rama feat/shared-g1c-control-detective-referencias-persona-exp9).
-  g-1c-control-detective-referencias-cross-context: ready-for-dev
+  g-1c-control-detective-referencias-cross-context: in-progress
   g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
   # aceptación que YA EXISTE (features/backoffice/users/erase.feature:49-62), declarado como TERCER segmento de

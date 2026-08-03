@@ -78,6 +78,31 @@
 #     the first time a person column is scrubbed in place instead. For the same reason it cannot recognise an
 #     owner that erases through raw DBAL, because a `Connection` names no entity.
 # ---------------------------------------------------------------------------------------------------------
+# THE DETECTIVE CONTROL, and what IT does not see. Every `person ::` line above is also enumerated against the
+# reconciler that reads the rows back (`identity:gdpr:reconcile-subject-references`): each such column must
+# have a `Shared\Privacy\Application\PersonReferenceSource` declaring its key, and no source may declare a key
+# this file does not carry. That comparison is the only thing separating "the erasure is WRITTEN" — which is
+# all the checks above prove — from "the row is GONE". Its own limits:
+#
+#   - IT INHERITS EVERY BLIND SPOT ABOVE, because it is enumerated against THIS FILE. A person id in a column
+#     no entity declares, or born in configuration, is missing from the registry and therefore missing from
+#     the control, in exactly the same silence.
+#   - IT PROVES A SOURCE EXISTS AND IS COLLECTED, NEVER THAT IT READS THE RIGHT COLUMN. The coverage gate
+#     compares declared keys against these lines and asserts the tag wiring; a source whose SQL pointed at
+#     another table would satisfy it and report an empty axis for ever. That the query matches the column is
+#     proven by each source's functional test against real Postgres, not here.
+#   - IT DETECTS ERASURE RESIDUE, NOT ILLEGITIMATE REFERENCES. A finding is an id that resolves to no live
+#     identity. A row that names a person who still exists but should no longer be referenced is a correct
+#     row to this control, whatever the business rule says.
+#   - IT CANNOT TELL AN ERASURE THAT NEVER RAN FROM ONE A LATER WRITE UNDID. Both leave the same dangling id,
+#     and nothing here dates it or attributes it, so a finding says WHAT is wrong and never HOW it got there.
+#   - IT ONLY READS, AND NOTHING SCHEDULES IT YET. Repair is a deliberate operator act through the erasure use
+#     case; a green run therefore means somebody repaired, never that the write path which created the
+#     residue was fixed. Until a schedule runs it, a control nobody invokes detects nothing.
+#   - `audit_log.resource_id` IS IN THE CONTROL BUT NOT IN THIS FILE. It has no entity, so it can never be a
+#     key here (see the blind spot above); the reconciler holds it as a collaborator of its own instead. Its
+#     presence is therefore pinned by the reconciler's own tests, not by the coverage gate.
+# ---------------------------------------------------------------------------------------------------------
 
 # Surrogate identifiers of aggregates that are not people. `BankAccount::$id` is the one worth arguing: the
 # account is the codebase's only entity carrying `#[PersonalData]` columns, and it has an erasure use case of

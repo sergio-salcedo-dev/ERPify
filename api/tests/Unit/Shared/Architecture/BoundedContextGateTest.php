@@ -34,9 +34,11 @@ use PHPUnit\Framework\TestCase;
  *      default is a bare UUID id column; a real cross-context FK is a soft rule
  *      to justify in the PR, not a block. Printed to STDERR for visibility.
  *
- *   🟢 Level 3 (allowed). Shared kernel (`Erpify\Shared\…`: `User`, tenant,
- *      `Money`, `Uuid`, `Media`), ID-only references (plain strings — no import,
- *      naturally invisible to the gate), event integration, and read models.
+ *   🟢 Level 3 (allowed). Shared kernel (`Erpify\Shared\…`: `Money`, `Uuid`,
+ *      `Media`), ID-only references (plain strings — no import, naturally
+ *      invisible to the gate), event integration, and read models. `User` is NOT
+ *      one of them: it is `Iam\Identity`'s aggregate, so referencing it from
+ *      another context is a Level 2 id column (see `docs/rules/database.md`).
  *
  * The matcher walks each `.php` file under `api/src/`, derives the file's owning
  * context from its path, tokenizes its `use Erpify\…;` imports (group-use- and

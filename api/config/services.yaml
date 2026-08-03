@@ -20,6 +20,11 @@ services:
         Erpify\Shared\Event\Application\Projector:
             tags: ['erpify.projector']
 
+        # Same shape for the person-reference sources the detective reconciler enumerates: an owning
+        # context joins the control by implementing the contract, never by editing the reconciler.
+        Erpify\Shared\Privacy\Application\PersonReferenceSource:
+            tags: ['erpify.person_reference_source']
+
     Erpify\:
         resource: '../src/'
         exclude:
@@ -29,6 +34,10 @@ services:
     Erpify\Shared\Event\Application\ProjectionRunner:
         arguments:
             $projectors: !tagged_iterator erpify.projector
+
+    Erpify\Iam\Identity\Application\ReconcileErasedSubjectReferences:
+        arguments:
+            $personReferenceSources: !tagged_iterator erpify.person_reference_source
 
     # The dead-letter reader inspects the failure transport; bind the concrete `failed` transport
     # (autowiring cannot pick one receiver among many).

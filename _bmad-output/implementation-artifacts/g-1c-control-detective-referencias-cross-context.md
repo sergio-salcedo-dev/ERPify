@@ -4,7 +4,7 @@ baseline_commit: 885ec3da
 
 # Story 1.4-bis (G-1c): El control detective alcanza las cuatro referencias del eje
 
-Status: ready-for-dev
+Status: in-progress
 
 > **TRES DECISIONES ESTÁN TOMADAS Y NO SE REABREN** (ver *Decisiones registradas*): ③ **no hay FK** —resuelta a
 > favor del código, y la corrección de la regla **ya está en el árbol**, no es tarea tuya—; la forma es **①**,
@@ -229,46 +229,46 @@ uno desde **ejecución fresca con exit code impreso**. Si añades una clase de g
 
 - [x] **Tarea 1 — Forma del puerto.** Hecha: **(a)** con sus tres enmiendas, ver *Forma del puerto — TOMADA*.
       Reprodúcela en el PR; no la re-argumentes.
-- [ ] **Tarea 2 — Predicado de existencia por lotes (AC5).** Sustituye `findById()` por el predicado. Decide si
-      cuelga de `UserRepository` o de un puerto de lectura estrecho propio — el precedente de puerto estrecho en
-      este contexto es `ActiveAdministratorDirectory` (`Domain/Repository/`), y es el que respeta ISP.
-- [ ] **Tarea 3 — Listers de los cuatro ejes (AC1).** Uno por contexto dueño, implementando el contrato de
-      `Shared/Privacy/Application` y tagueándose para el iterador, con su adaptador Doctrine/DBAL.
-      **Solo lectura, sin hidratar**: devuelve ids, no agregados. Sigue a `DbalPersonResourceReferences` —
-      `DISTINCT` y `ORDER BY` no son cosméticos ahí (un alerta que diffea la salida dispararía con ruido sin
-      ellos), y el mismo argumento aplica aquí.
-- [ ] **Tarea 4 — Atribución por eje, en un VO (AC3, Enmienda 2).** Cambia el retorno del reconciliador y
-      **propaga a la salida del comando** (`ReconcileErasedSubjectReferencesCommand`, que hoy imprime una lista
-      plana), agrupada por eje con la etiqueta **derivada de la clave**. El comando no debe conocer la
-      estructura interna del VO. La clave del eje es el mismo string por el que AC2 lo enumera.
-- [ ] **Tarea 5 — Gate de completitud de listers (AC2).** Compara **las líneas `person ::` del registro** contra
-      **las claves que declaran los listers**, en las dos direcciones (ninguna línea sin lister, ninguna clave
-      declarada sin línea). Motor en `api/tests/Support/`, con raíz inyectable (espejo de
-      `PersonReferences::fromGateLocation()`), y **fixtures** para provocar su rojo — no borrando artefactos
-      reales. Registra su ejecución propia en `make/php-quality.mk`.
-- [ ] **Tarea 6 — Seams de arquitectura: comprobar que NO hacen falta.** Bajo (a) no hay import cross-context
-      nuevo, así que lo esperado es **cero** líneas en `api/.bounded-context-allowlist` y cero `skip_violations`
-      en `deptrac.yaml`. **Verifícalo ejecutando** `make php.lint.bounded-context` y `make php.deptrac`, no por
-      lectura: si alguno pide una entrada, es que un import se ha colado por fuera del contrato compartido y el
-      arreglo es el import, no el allowlist. Si aun así hiciera falta una línea, va **por fichero**
-      (`<path> => <Fqcn>`) y con su espejo en deptrac.
-- [ ] **Tarea 6-bis — Boy scout, nombrado.** `BoundedContextGateTest.php:37` sigue poniendo `User` como ejemplo
-      de shared kernel: es la afirmación que ③ refutó y que ya se corrigió en `docs/rules/database.md`,
-      sobreviviendo en una tercera copia. Mecánicamente inocua (el matcher va por namespace y `User` vive en
-      `Erpify\Iam\Identity`), pero es el fichero que alguien abre justo al decidir si una referencia
-      cross-context vale. Una línea; **decláralo en el PR**, no lo cueles.
-- [ ] **Tarea 7 — Tests (AC1, AC3, AC4).** Unitarios del reconciliador con dobles por eje (patrón
-      `FixedPersonResourceReferences`) **asertando la clave del eje**; funcionales de cada adaptador contra
-      Postgres real dentro de transacción con rollback, ids generados por ejecución y aserción **por
-      contenencia** (la BD dev está sucia — el patrón exacto está en
-      `PersonResourceReferencesFunctionalTest`).
-- [ ] **Tarea 8 — Documentación obligatoria.** La cabecera de `api/.person-reference-policy` gana los puntos
-      ciegos **del control nuevo** (qué NO detecta el detective); el bullet de
-      [`CLAUDE.md`](../../CLAUDE.md) («Persisting a person's id») y el de
-      [`api/CLAUDE.md`](../../api/CLAUDE.md) describen lo que el gate comprueba y **crecen con AC2**.
-- [ ] **Tarea 9 — Puertas y pase adversarial (AC6 + definición de hecho de la épica).** Ejecuciones frescas con
-      exit code. **Pase adversarial por alguien distinto del autor, REGISTRADO, declarando dónde.** Sin él no
-      hay `done`.
+- [x] **Tarea 2 — Predicado de existencia por lotes (AC5).** Puerto estrecho propio `LiveIdentityDirectory`
+      (`Domain/Repository/`, espejo de `ActiveAdministratorDirectory`) con `existingIdsAmong(list<string>)`, y
+      adaptador DBAL `DoctrineLiveIdentityDirectory` — una sola sentencia por lote sobre la PK, sin hidratar.
+      Devuelve la **grafía del llamante** porque el hex RFC 4122 es case-insensitive y el consumidor difiere
+      con `===`.
+- [x] **Tarea 3 — Listers de los cuatro ejes (AC1).** `PersonReferenceSource` en `Shared/Privacy/Application`
+      (`axis()` + `retainedPersonIds()`), con cuatro adaptadores DBAL, uno por contexto dueño, recogidos por
+      `erpify.person_reference_source`. Solo ids, `DISTINCT` + `ORDER BY` como en `DbalPersonResourceReferences`.
+      SQL literal por adaptador y **no** un helper compartido con el nombre de tabla interpolado: un
+      identificador no puede ser parámetro ligado, así que el helper sería interpolación en SQL.
+- [x] **Tarea 4 — Atribución por eje, en un VO (AC3, Enmienda 2).** `UnreconciledPersonReferences` (clave
+      interna `string`) + `PersonReferenceFinding`. Los ejes **limpios se conservan contadas** (`axesChecked()`):
+      «comprobado y limpio» y «nunca cableado» no pueden deletrearse igual. La etiqueta se **deriva** de la
+      clave — pero en el **presentador**, no en el VO: `DomainPresentationSeparationGateTest` prohíbe `label()`
+      en `Domain/` (ADR DPS1/DPS4) y tenía razón, así que vive en `headingFor()` del comando.
+- [x] **Tarea 5 — Gate de completitud de listers (AC2).** Motor `PersonReferenceSources` (raíz inyectable, lee
+      el eje por reflexión sin construir la clase) + reglas puras `PersonReferenceSourceCoverage` en las dos
+      direcciones y la colisión, con la exención extraída a `PersonReferenceKeys` **compartida** con
+      `UndeclaredPersonReferences` (una sola definición). Fixtures por escenario en subdirectorios propios y
+      dos líneas `--filter` nuevas en `make/php-quality.mk`, cada una verificada con `--list-tests`.
+- [x] **Tarea 6 — Seams de arquitectura: comprobar que NO hacen falta.** Verificado **ejecutando**:
+      `make php.lint.bounded-context` OK (8 tests) y `make php.deptrac` 0 violaciones / 0 uncovered.
+      `git diff` sobre `api/.bounded-context-allowlist` y `api/tools/deptrac/` es **vacío** — cero entradas
+      nuevas, como predecía la forma (a).
+- [x] **Tarea 6-bis — Boy scout, nombrado.** `BoundedContextGateTest.php:37` ya no lista `User` como shared
+      kernel; dice explícitamente que es el agregado de `Iam\Identity` y que referenciarlo es Level 2.
+- [x] **Tarea 7 — Tests (AC1, AC3, AC4).** Unitarios con doble parametrizable `FixedPersonReferenceSource`
+      **asertando la clave del eje** (incluido el caso que prueba que dos ejes no se fusionan); funcional por
+      adaptador contra Postgres real en transacción con rollback, ids por ejecución, aserción por contenencia y
+      **conteo de la fila sembrada ANTES de asertar el veredicto**; y un testigo de colección que afirma
+      `axesChecked() === 5` a través del contenedor real.
+- [x] **Tarea 8 — Documentación obligatoria.** Bloque de puntos ciegos **del control detective** en la cabecera
+      de `api/.person-reference-policy` (seis, incluido «prueba que el lister existe y se recoge, nunca que su
+      consulta lee la columna correcta»); bullets de [`CLAUDE.md`](../../CLAUDE.md) y
+      [`api/CLAUDE.md`](../../api/CLAUDE.md) ampliados, y la entrada del gate en
+      [`docs/claude-code-quickref.md`](../../docs/claude-code-quickref.md).
+- [ ] **Tarea 9 — Puertas y pase adversarial (AC6 + definición de hecho de la épica).** Puertas **en verde con
+      ejecución fresca y exit code impreso** (ver *Completion Notes*). **Pase adversarial pendiente de
+      autorización de Sergio**: es obligatorio por CLAUDE.md y esta sesión prohíbe lanzar subagentes sin que lo
+      pida el usuario. Sin él no hay `done`.
 
 ## Dev Notes
 
@@ -337,13 +337,137 @@ persona (D4 prohíbe el crosswalk, y esta historia lee precisamente las dos colu
 
 ## Dev Agent Record
 
-**Rama:** `feat/shared-g1c-control-detective-referencias-persona-exp9` (worktree aislado, base `main` @
-`885ec3da`).
+**Rama:** `feat/shared-g1c-control-detective-referencias-persona` (worktree
+`shared-g1c-control-detective-referencias-persona-exp9`, base `origin/main` @ `6a2aaace`). La rama `…-exp9`
+del contexto **se mergeó como PR #631** a media sesión y GitHub la borró, así que el desarrollo arranca en una
+rama nueva desde `main` (decisión de Sergio, 2026-08-03); el fichero de la historia en `main` es idéntico al
+del worktree (md5 comprobado), luego no se pierde nada.
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`.
+
 ### Debug Log References
+
+**Puertas, ejecución fresca con exit code impreso (worktree, stack propio):**
+
+| Puerta | Resultado |
+|---|---|
+| `make php.stan` | exit 0 — `[OK] No errors` (1164 ficheros) |
+| `make php.quality` | exit 0 |
+| `make php.quality.dry-run` (paridad CI) | exit 0 |
+| `make php.unit` | exit 0 — 2173 tests, 9260 asserts |
+| `make php.behat` | exit 0 — 383 escenarios, 3470 steps |
+| `make php.lint.person-reference` | exit 0 — **cuatro** ejecuciones (8 + 10 + 5 + 7 tests) |
+| `make php.lint.bounded-context` | OK — 8 tests |
+| `make php.deptrac` | 0 violations, 0 uncovered, 2954 allowed |
+
+**Selección de los `--filter` verificada con `--list-tests`** (los nombres anidan: `PersonReference…` es
+prefijo de `PersonReferenceSource…`): cada uno de los cuatro selecciona **exactamente una** clase.
+
+**Falsificaciones ejecutadas y revertidas** (los rojos se provocaron de verdad, no se asumieron):
+
+1. Clave del eje de sesión → `…::$userIdTYPO`: **2 fallos**, uno por dirección (`Session::$userId` sin lister
+   y `…TYPO` sin línea de registro). Restaurado.
+2. `_instanceof` del contrato renombrado: `theCollectionIsWiredIntoTheReconciler` rojo con el mensaje exacto,
+   más 5 errores de los funcionales (el contenedor deja de compilar). Restaurado.
+3. `!tagged_iterator` apuntado a `erpify.projector` (compila, pero la colección es otra): rojo **solo** en las
+   dos aserciones de cableado — el gate unitario y `axesChecked() === 5` del testigo funcional. Restaurado y
+   re-verificado en verde.
 
 ### Completion Notes List
 
+- **Forma (a) confirmada por medición, no por lectura:** cero líneas nuevas en `api/.bounded-context-allowlist`
+  y cero `skip_violations` en `deptrac.yaml`; el `git diff` de ambos ficheros es vacío.
+- **Un desvío argumentado respecto al corte:** la etiqueta por eje se deriva en el **comando**, no en el VO.
+  `DomainPresentationSeparationGateTest` (ADR `domain-presentation-separation.md`, DPS1/DPS4) prohíbe un
+  accesor `label()` en `Domain/`, y el gate tiene razón: texto legible es capa de presentación. La propiedad
+  que la enmienda 3 pedía — **una** derivación, nunca un segundo vocabulario de nombres de tabla — se conserva
+  intacta; solo cambia dónde vive.
+- **`PersonReferenceFinding` en vez de un mapa por etiqueta:** dos ejes pueden derivar la misma etiqueta (un
+  nombre corto de clase es único por módulo, no por árbol) y un informe donde un eje pisa a otro es el defecto
+  del veredicto fusionado trasladado a la salida.
+- **El test funcional monolítico se partió en cinco.** PHPMD lo tumbó por acoplamiento 22 > 13 y la respuesta
+  correcta no era subir el umbral: cada adaptador tiene ahora su funcional **junto a su contexto** y el testigo
+  de la colección queda solo en `Shared/Privacy`.
+- **Deuda que NO se ha tocado, deliberadamente:** el lote de `existingIdsAmong()` es una sola sentencia con la
+  lista expandida, acotada por el número de personas que la instalación haya tenido. Postgres corta en 65535
+  parámetros; a esa escala haría falta trocear. No se trocea hoy (YAGNI, y el rendimiento se mide, no se
+  asume), pero queda dicho aquí y en el docblock del puerto.
+- **Revisión de seguridad (lo que aplica y lo que no):** sin superficie HTTP nueva, sin ruta, sin voter, sin
+  migración y sin cambio de esquema — nada de eso aplica y se dice explícitamente. Sí aplica y se ha
+  verificado: todas las consultas nuevas son literales o con parámetro ligado (`IN (:ids)` va como
+  `ArrayParameterType::STRING`, jamás interpolación); el contrato devuelve **ids y nada más**, que es lo que
+  impide que `ip`/`device` de `iam_session` o el `token_hash` de `iam_invitation` lleguen a una consola; y el
+  control **no** crea crosswalk (D4): lee `audit_log` solo donde `resource_erased = FALSE`, es decir ids
+  reales, nunca seudónimos, y no escribe nada.
+- **La historia es PROSPECTIVA y el PR lo dirá:** no hay entorno de producción (`.env.prod.local` ausente),
+  así que no repara datos — instala la detección de que una vía de escritura futura reintroduzca el residuo.
+- **Pendiente para `done`:** el pase adversarial por alguien distinto del autor, registrado. Requiere
+  autorización explícita de Sergio para lanzar el subagente.
+
 ### File List
+
+**Producción — nuevos**
+
+- `api/src/Shared/Privacy/Domain/PersonReferenceAxis.php`
+- `api/src/Shared/Privacy/Application/PersonReferenceSource.php`
+- `api/src/Iam/Identity/Domain/Repository/LiveIdentityDirectory.php`
+- `api/src/Iam/Identity/Infrastructure/Persistence/Doctrine/DoctrineLiveIdentityDirectory.php`
+- `api/src/Iam/Identity/Application/UnreconciledPersonReferences.php`
+- `api/src/Iam/Identity/Application/PersonReferenceFinding.php`
+- `api/src/Iam/Identity/Infrastructure/Persistence/Doctrine/DbalPasswordResetTokenPersonReferences.php`
+- `api/src/Iam/Invitation/Infrastructure/Persistence/Doctrine/DbalInvitationPersonReferences.php`
+- `api/src/Iam/Session/Infrastructure/Persistence/Doctrine/DbalSessionPersonReferences.php`
+- `api/src/Organization/Membership/Infrastructure/Persistence/Doctrine/DbalMembershipPersonReferences.php`
+
+**Producción — modificados**
+
+- `api/src/Iam/Identity/Application/ReconcileErasedSubjectReferences.php`
+- `api/src/Iam/Identity/Infrastructure/Cli/ReconcileErasedSubjectReferencesCommand.php`
+- `api/config/services.yaml`
+
+**Tests — nuevos**
+
+- `api/tests/Support/PersonReferenceKeys.php`
+- `api/tests/Support/PersonReferenceSourceCoverage.php`
+- `api/tests/Support/PersonReferenceSources.php`
+- `api/tests/Unit/Shared/Architecture/PersonReferenceSourceGateTest.php`
+- `api/tests/Unit/Shared/Architecture/PersonReferenceSourceRulesGateTest.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonReferenceSource/Covered/CoveredSourceFixture.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonReferenceSource/Covered/AbstractSourceCarrier.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonReferenceSource/Duplicated/FirstDuplicateSourceFixture.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonReferenceSource/Duplicated/SecondDuplicateSourceFixture.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonReferenceSource/ConstructorBound/ConstructorBoundSourceFixture.php`
+- `api/tests/Unit/Shared/Privacy/Infrastructure/Double/FixedPersonReferenceSource.php`
+- `api/tests/Unit/Iam/Identity/Application/InMemoryLiveIdentityDirectory.php`
+- `api/tests/Unit/Iam/Identity/Application/UnreconciledPersonReferencesTest.php`
+- `api/tests/Functional/Iam/Identity/DoctrineLiveIdentityDirectoryTest.php`
+- `api/tests/Functional/Iam/Identity/DbalPasswordResetTokenPersonReferencesTest.php`
+- `api/tests/Functional/Iam/Invitation/DbalInvitationPersonReferencesTest.php`
+- `api/tests/Functional/Iam/Session/DbalSessionPersonReferencesTest.php`
+- `api/tests/Functional/Organization/Membership/DbalMembershipPersonReferencesTest.php`
+- `api/tests/Functional/Shared/Privacy/PersonReferenceCollectionFunctionalTest.php`
+
+**Tests — modificados**
+
+- `api/tests/Support/UndeclaredPersonReferences.php`
+- `api/tests/Unit/Iam/Identity/Application/ReconcileErasedSubjectReferencesTest.php`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Cli/ReconcileErasedSubjectReferencesCommandTest.php`
+- `api/tests/Unit/Shared/Architecture/BoundedContextGateTest.php` *(boy scout, Tarea 6-bis)*
+
+**Registro, make y documentación**
+
+- `api/.person-reference-policy`
+- `make/php-quality.mk`
+- `CLAUDE.md`
+- `api/CLAUDE.md`
+- `docs/claude-code-quickref.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/implementation-artifacts/g-1c-control-detective-referencias-cross-context.md`
+
+## Change Log
+
+| Fecha | Cambio |
+|---|---|
+| 2026-08-03 | Tareas 2–8 implementadas: predicado de existencia por lotes, contrato compartido + cuatro listers, veredicto por eje en VO, gate de cobertura con fixtures, seams verificados en cero, boy scout, tests y documentación. Puertas en verde; pase adversarial pendiente de autorización. |
