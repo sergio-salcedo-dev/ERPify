@@ -1,5 +1,5 @@
 ---
-baseline_commit: 9310efeb
+baseline_commit: 93befb7c
 ---
 
 # Story 1.6 (G-3b): El control detective del eje de recursos se ejecuta, falla de forma observable y alerta
@@ -26,13 +26,27 @@ cuando se admite un control agendado en lugar de un gate de build.
 **Invariantes que consume:** SI-21/NFR1, NFR7.
 **Dependencias:** ninguna. Independiente de 1.1–1.5 y paralelizable.
 
-## Estado medido (`main` @ `9310efeb`)
+## Estado medido (`main` @ `93befb7c`)
 
-> *Procedencia:* pase de medición **read-only** (nada ejecutado, nada escrito). Re-verifica las coordenadas.
+> *Procedencia:* pase de medición **read-only** sobre `main @ 93befb7c` (2026-08-03), posterior a G-1c (#634).
+> Sustituye a la medición sobre `9310efeb`, que esa entrega dejó rota en dos puntos concretos, ambos anotados
+> abajo. Re-verifica las coordenadas antes de citarlas.
 
-**El control.** [`ReconcileErasedSubjectReferences`](../../api/src/Iam/Identity/Application/ReconcileErasedSubjectReferences.php)
-inyecta `UserRepository` (`:31-34`) y usa **exactamente una cosa** (`:45-49`): si el id sigue resolviendo a un
-`User` vivo. Tiene CLI y **no aparece en ningún schedule**.
+**El control, tal como G-1c lo dejó.**
+[`ReconcileErasedSubjectReferences`](../../api/src/Iam/Identity/Application/ReconcileErasedSubjectReferences.php)
+ya **no** inyecta `UserRepository`: recibe `PersonResourceReferences`, la colección etiquetada
+`iterable<PersonReferenceSource>` y `LiveIdentityDirectory` (`:72-77`). Su entrada es
+`unreconciledReferences(): UnreconciledPersonReferences` (`:79`) — un objeto de valor con `total()`,
+`axesChecked()`, `axesCheckedKeys()` y `findings()`, **no** la `list<string>` plana que este corte suponía.
+Consecuencia para la alarma: hay más que un conteo disponible (total, ejes comprobados, conteo por eje) y
+**nada de eso obliga a tocar un solo id**. Tiene CLI y **sigue sin aparecer en ningún schedule**.
+
+**La Tarea 2 está HECHA, y no la hizo esta historia.** El puerto de existencia que el corte pedía existe como
+[`LiveIdentityDirectory::existingIdsAmong()`](../../api/src/Iam/Identity/Domain/Repository/LiveIdentityDirectory.php),
+resuelto por [`DoctrineLiveIdentityDirectory`](../../api/src/Iam/Identity/Infrastructure/Persistence/Doctrine/DoctrineLiveIdentityDirectory.php)
+en **una** sentencia (`SELECT id FROM identity_user WHERE id IN (:ids)` por `fetchFirstColumn`, sin hidratar
+ningún agregado), y el control ya lo usa (`:82`). **AC4 se cumple en `main`**: aquí se verifica, no se
+construye. El techo de 65535 parámetros de PostgreSQL queda declarado en el docblock del puerto.
 
 **El coste de frontera es cero, medido.** `Iam.Identity` ya tiene capas en
 [`deptrac.yaml`](../../api/tools/deptrac/deptrac.yaml) (`:85-90`) y ruleset (`:336-349`); su capa
@@ -40,7 +54,7 @@ inyecta `UserRepository` (`:31-34`) y usa **exactamente una cosa** (`:45-49`): s
 (`:342`, `LoggerInterface`) y `Iam.Identity.Application` (`:338`). Los transportes de scheduler **no se declaran
 en [`messenger.yaml`](../../api/config/packages/messenger.yaml)**: `AddScheduleMessengerPass` crea
 `messenger.transport.scheduler_<nombre>` desde `#[AsSchedule]`, y el autoregistro de
-[`services.yaml`](../../api/config/services.yaml) (`:23-27`) hace el resto. **Un schedule + handler bajo
+[`services.yaml`](../../api/config/services.yaml) (`:28-30`) hace el resto. **Un schedule + handler bajo
 `src/Iam/Identity/Infrastructure/Messenger/Maintenance/` no toca ni deptrac ni el allowlist ni `messenger.yaml`.**
 
 **El precedente que íbamos a copiar está roto, dos veces.**
@@ -56,10 +70,19 @@ loguea **la lista completa de ids de sujeto**. El template correcto es
 bajo `when@prod`). Lo que **no** está cableado es el handler **Monolog→Sentry**. Consecuencia operativa:
 **un `logger->error()` NO llega a Sentry; una excepción lanzada desde un handler de Messenger SÍ.**
 
-**Coste por tick, no presupuestado en el corte.** `DoctrineUserRepository::findById()` es un
-`EntityManager::find()`, así que el reconciliador hace **una query y una hidratación completa de `User` por cada
-id de sujeto no borrado** — con `email` y `password_hash` residentes en el worker. Hoy vive detrás de un CLI que
-lanza un operador; agendado sin más, eso corre solo, a diario, creciendo linealmente.
+**Coste por tick: ya acotado, y por eso deja de ser trabajo de esta historia.** El corte lo presupuestaba
+contra `DoctrineUserRepository::findById()` — un `EntityManager::find()` por id, con `email` y `password_hash`
+residentes en el worker. G-1c lo sustituyó por la sonda por lotes: **una sentencia por tick, cero
+hidrataciones**, sea cual sea el número de sujetos. Lo que queda por presupuestar no es la sonda sino **las
+fuentes**: cada `PersonReferenceSource` consulta su propia tabla antes del probe de unión, así que un tick son
+`n+1` sentencias con `n` = número de ejes cableados (hoy 5). Todas son `DISTINCT` sobre una columna indexada y
+ninguna hidrata.
+
+**Lo que la sonda por lotes NO arregló, y AC3 tiene que cubrir.** Nada envuelve `existingIdsAmong()` en
+`ReconcileErasedSubjectReferences:82`: el techo de 65535 parámetros que su propio docblock declara, o un error
+transitorio de DBAL, propagan. En el CLI eso sale con **el mismo código que una divergencia real** (bala viva
+en `deferred-work.md`); agendado, sería una excepción del handler. Los dos caminos —hallazgo y avería— tienen
+que distinguirse en los dos brazos, y esa es la razón por la que el arreglo del exit code entra aquí.
 
 **Hueco de verificación medido:** **nada en el repo comprueba que un `#[AsSchedule]` declarado esté realmente
 consumido.** Un schedule puede shippear con su transporte ausente de los dos comandos de Compose y **todos los
@@ -118,12 +141,15 @@ a los dos schedules existentes.
 ids—, y el handler es **silencioso** cuando no hay divergencia. **Y** el PR declara que, con el handler
 Monolog→Sentry sin cablear, esa línea llega a stderr/JSON **pero no a Sentry**: bajo-declarar es obligatorio.
 
-**AC3 — Camino de hallazgo y camino de avería se distinguen.**
-**Given** el handler,
-**When** falla por avería (excepción) en vez de por hallazgo,
-**Then** el mensaje lo distingue. *Medido: una excepción del handler no reintenta, no crea fila en `failed` y no
-reinicia el worker — deja una línea `critical` y el bucle sigue. Un reconciliador roto de forma persistente
-costaría una `critical` al día, en silencio, para siempre.*
+**AC3 — Camino de hallazgo y camino de avería se distinguen, en los DOS brazos.**
+**Given** el control,
+**When** falla por avería (la sonda de existencia revienta) en vez de por hallazgo,
+**Then** el brazo agendado lo distingue en el mensaje **y** el brazo CLI lo distingue en el **exit code**, con un
+tercer código distinto de `FAILURE`. *Medido: una excepción del handler no reintenta, no crea fila en `failed` y
+no reinicia el worker — deja una línea `critical` y el bucle sigue. Un reconciliador roto de forma persistente
+costaría una `critical` al día, en silencio, para siempre. Y en el CLI, el contrato declarado es el exit code y
+nada más, así que hoy «una persona sobrevivió a su borrado» y «la sonda reventó» son indistinguibles para el
+único consumidor que el comando declara tener.*
 
 **AC4 — El coste por tick es acotado y sin PII en memoria.**
 **Given** el control agendado,
@@ -159,8 +185,10 @@ salida — no razonada desde los Makefiles.*
 ## Tasks / Subtasks
 
 - [x] **Tarea 1 — Registrar la decisión (PRECONDICIÓN).** Hecha: ver *Decisión registrada*. Reprodúcela en el PR.
-- [ ] **Tarea 2 — Puerto de existencia** en `Iam\Identity\Domain\Repository` + adaptador Doctrine, y el control
-      pasa a usarlo. (AC4)
+- [x] **Tarea 2 — Puerto de existencia** en `Iam\Identity\Domain\Repository` + adaptador Doctrine, y el control
+      pasa a usarlo. (AC4) — **la entregó G-1c (#634), no esta historia**: `LiveIdentityDirectory::existingIdsAmong()`
+      + `DoctrineLiveIdentityDirectory`, una sentencia sin hidratación, ya consumido en `:82`. Aquí se **verifica**
+      con `make php.unit`; no se escribe código. Se declara así en el PR para que el revisor no lo busque en el diff.
 - [ ] **Tarea 3 — Mensaje de tick + handler** bajo `src/Iam/Identity/Infrastructure/Messenger/Maintenance/`,
       copiando `ReportDeadLetterBacklogHandler` —**no** `ReconcileSubjectErasuresHandler`—. (AC2, AC3)
 - [ ] **Tarea 4 — `IdentityMaintenanceSchedule`** con `#[AsSchedule('identity_maintenance')]` y su
@@ -173,11 +201,16 @@ salida — no razonada desde los Makefiles.*
       de errores. Su cabecera declara qué **no** prueba (presencia del nombre ≠ worker vivo). **Verifica que el
       `--filter` selecciona la clase listando los tests que el target elige**, no razonándolo — es el defecto
       que #613 pagó.
-- [ ] **Tarea 7 — Docs**: `docs/deployment-guide.md` y `docs/architecture-api.md` nombran hoy solo los dos
-      transportes existentes; y **corregir D3 de [`dead-letter-observability.md`](../../docs/adr/dead-letter-observability.md)**,
-      cuya conclusión es correcta pero cuyo motivo es falso — *«lanzar re-encolaría el tick en `failed`
-      (recursión)»* no ocurre: los transportes de scheduler no están entre los de fallo, así que el listener
-      corta antes. La conclusión (usar una línea de log) se mantiene; el motivo no se cita hacia adelante.
+- [ ] **Tarea 6 ter — Tercer exit code en el CLI** (AC3, autorizado por Sergio 2026-08-03): un fallo de la sonda
+      sale hoy con el mismo código que una divergencia real, así que un check de monitorización no puede separar
+      «una referencia sobrevivió a su borrado» de «la sonda reventó». Capturar y devolver un código distinto de
+      `FAILURE`, con test. Al resolverlo, **borrar su bala** del top de `deferred-work.md` (registro solo-pendientes).
+- [ ] **Tarea 7 — Docs**: son **tres** ficheros, no dos — `docs/deployment-guide.md` (`:32`),
+      `docs/architecture-api.md` (`:266`) y **`docs-info/production-deployment.md`** (`:17`, git-trackeado y que el
+      corte no nombraba) citan hoy solo `scheduler_maintenance`. **D3 de
+      [`dead-letter-observability.md`](../../docs/adr/dead-letter-observability.md) NO se toca: ya está corregido
+      en `main`** (`417b14ab`, #614) — su bloque «What throwing would and would not do» ya dice que no hay
+      recursión porque los transportes de scheduler no están entre los de fallo.
 - [ ] **Tarea 8 — Gates y pase adversarial (AC9 + definición de hecho de la épica).** Ejecuciones frescas con
       exit code. **Pase adversarial por alguien distinto del autor, REGISTRADO, declarando dónde.**
 

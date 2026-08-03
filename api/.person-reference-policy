@@ -114,9 +114,20 @@
 #     row to this control, whatever the business rule says.
 #   - IT CANNOT TELL AN ERASURE THAT NEVER RAN FROM ONE A LATER WRITE UNDID. Both leave the same dangling id,
 #     and nothing here dates it or attributes it, so a finding says WHAT is wrong and never HOW it got there.
-#   - IT ONLY READS, AND NOTHING SCHEDULES IT YET. Repair is a deliberate operator act through the erasure use
-#     case; a green run therefore means somebody repaired, never that the write path which created the
-#     residue was fixed. Until a schedule runs it, a control nobody invokes detects nothing.
+#   - IT ONLY READS. Repair is a deliberate operator act through the erasure use case; a green run therefore
+#     means somebody repaired, never that the write path which created the residue was fixed.
+#   - THE SCHEDULED ARM ALARMS WITH COUNTS AND NEVER IDS. `identity_maintenance` runs it daily and the
+#     divergence line carries the total, the axes checked and the count per axis — the ids stay in the CLI,
+#     because a control enforcing that no person's id outlives its erasure cannot mint copies in log storage,
+#     which has its own retention and no declared owner of its erasure. So the alarm says GO LOOK; the CLI is
+#     where an operator learns which subjects, and its output is ephemeral.
+#   - A FAILED READ IS NOT A CLEAN RUN, and the two arms keep them apart differently: the handler lets
+#     `PersonReferenceProbeFailed` propagate (Messenger logs `critical` and Sentry captures it — a log line
+#     would not reach Sentry), the command exits `INVALID` instead of `FAILURE`. Nothing about any subject is
+#     established on that path, so it is never grounds to repair.
+#   - NOTHING PROVES THE SCHEDULE IS ALIVE. `make php.lint.schedule-consumption` asserts the transport name is
+#     in both compose consume commands; it cannot see whether the worker runs or whether a tick was ever
+#     delivered. A control nobody invokes still detects nothing, and that half stays operational.
 #   - `audit_log.resource_id` IS IN THE CONTROL BUT NOT IN THIS FILE, and that carve-out has EXACTLY ONE SLOT.
 #     It has no entity, so it can never be a key here; the reconciler holds it as a hardcoded collaborator
 #     instead, and its presence is pinned by the reconciler's own tests rather than by the coverage gate.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Cli;
 
+use Erpify\Iam\Identity\Application\PersonReferenceProbeFailed;
 use Erpify\Iam\Identity\Application\ReconcileErasedSubjectReferences;
 use Erpify\Iam\Identity\Application\UnreconciledPersonReferences;
 use Override;
@@ -16,9 +17,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 /**
  * Verifies the places `api/.person-reference-policy` classifies as holding a person's identifier, plus the
  * audit trail's resource axis: no identity may be gone from `identity_user` while one of them still names it
- * by its real id. Exits non-zero on divergence, so it serves an operator on demand and a cron / monitoring
- * check alike — the sibling of `audit:gdpr:reconcile-erasures`, which does the same for crypto-shredding
- * evidence.
+ * by its real id. It serves an operator on demand and a cron / monitoring check alike — the sibling of
+ * `audit:gdpr:reconcile-erasures`, which does the same for crypto-shredding evidence.
+ *
+ * Three exit codes, because a check that reads nothing but the code needs them distinct: `SUCCESS` (every
+ * axis reconciles), `FAILURE` (a person reference survived its erasure — actionable, repair below) and
+ * `INVALID` (a read failed, so no verdict was reached and nothing is known either way).
  *
  * It does NOT cover every person id in the database, and the success message names what it checked rather
  * than counting it so that the difference is visible in the output itself: `audit_log.actor_id`,
@@ -62,7 +66,12 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $verdict = $this->reconciler->unreconciledReferences();
+
+        try {
+            $verdict = $this->reconciler->unreconciledReferences();
+        } catch (PersonReferenceProbeFailed $personReferenceProbeFailed) {
+            return $this->reportBrokenProbe($io, $personReferenceProbeFailed);
+        }
 
         if ($verdict->isEmpty()) {
             // The places checked BY NAME, not a bare "all clear" and not a bare count: nothing at runtime
@@ -80,6 +89,28 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
         $this->report($io, $verdict);
 
         return Command::FAILURE;
+    }
+
+    /**
+     * A third exit code, because the contract of this command IS its exit code and two outcomes sharing one
+     * non-zero value are indistinguishable to the only consumer it declares. `INVALID` is Console's existing
+     * "this run did not produce an answer" — a fourth, project-invented number would mean nothing to the
+     * `messenger:failed:*`-shaped tooling around it.
+     *
+     * The distinction is not cosmetic: `FAILURE` sends someone to `identity:gdpr:erase-subject`, which would
+     * be the wrong act here — nothing was established about any subject, and repairing on the strength of a
+     * failed read would be acting on a verdict that does not exist.
+     */
+    private function reportBrokenProbe(SymfonyStyle $io, PersonReferenceProbeFailed $probeFailed): int
+    {
+        $io->error([
+            'The reconciliation could not be completed, so nothing is known about whether a person '
+            . 'reference survived its erasure. This is NOT a finding: do not repair anything on the '
+            . 'strength of it.',
+            $probeFailed->getMessage(),
+        ]);
+
+        return Command::INVALID;
     }
 
     private function report(SymfonyStyle $io, UnreconciledPersonReferences $verdict): void

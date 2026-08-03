@@ -1,0 +1,4 @@
+# The transport appears only AFTER an option, so it is a value of that option and not a consumed receiver.
+services:
+  messenger_worker:
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "scheduler_alpha"]

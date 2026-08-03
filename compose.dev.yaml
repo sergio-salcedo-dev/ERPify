@@ -36,6 +36,27 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      # The schedule-consumption gate asserts that every #[AsSchedule] in api/src has its derived
+      # `scheduler_*` transport named in a `messenger:consume` command of BOTH root compose files —
+      # without it a schedule ships dead and every other gate stays green. Those files live at the repo
+      # root, which the ./api build context does not contain.
+      #
+      # The DIRECTORY and not the two files, for the reason spelled out on the docs mount above: a
+      # single-file bind mount pins one inode, and every ordinary way of changing a compose file (IDE
+      # safe-write, git checkout, git stash) replaces it by rename — after which the container keeps
+      # serving the pre-edit bytes and the gate passes on wiring the working tree no longer has. The
+      # repo root is the only directory that contains them, so this mount is wider than the gate needs.
+      # Measured before accepting that: nothing under it holds a credential — the datasource and
+      # deployment configs store no passwords, .mcp.json expands its key from the environment, and the
+      # git remote is SSH. It is dev-only, read-only, and sits outside the /app/api/public document root,
+      # so nothing here is reachable over HTTP. What it does expose is the whole working tree, .git
+      # included, to code running in this container.
+      - type: bind
+        source: ./
+        target: /app/repo
+        read_only: true
+        bind:
+          create_host_path: false
       - ./api/frankenphp/Caddyfile:/etc/frankenphp/Caddyfile:ro
       - ./api/frankenphp/worker.Caddyfile:/etc/frankenphp/worker.Caddyfile:ro
       - ./api/frankenphp/conf.d/20-app.dev.ini:/usr/local/etc/php/app.conf.d/20-app.dev.ini:ro
@@ -139,6 +160,12 @@ services:
       - type: bind
         source: ./docs
         target: /app/docs
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./
+        target: /app/repo
         read_only: true
         bind:
           create_host_path: false

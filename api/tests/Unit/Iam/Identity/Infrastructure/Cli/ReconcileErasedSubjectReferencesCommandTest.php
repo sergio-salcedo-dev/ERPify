@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Cli;
 
 use Erpify\Iam\Identity\Application\ReconcileErasedSubjectReferences;
+use Erpify\Iam\Identity\Domain\Repository\LiveIdentityDirectory;
 use Erpify\Iam\Identity\Infrastructure\Cli\ReconcileErasedSubjectReferencesCommand;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryLiveIdentityDirectory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedPersonResourceReferences;
 use Erpify\Tests\Unit\Shared\Privacy\Infrastructure\Double\FixedPersonReferenceSource;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -83,6 +86,53 @@ final class ReconcileErasedSubjectReferencesCommandTest extends TestCase
         $display = $tester->getDisplay();
         $this->assertSame(Command::FAILURE, $tester->getStatusCode());
         $this->assertStringContainsString(self::MEMBERSHIP_AXIS, $display);
+    }
+
+    #[Test]
+    public function itSeparatesABrokenProbeFromARealDivergenceInTheExitCode(): void
+    {
+        // The exit code is the whole contract, so two outcomes sharing one non-zero value means an automated
+        // check cannot tell "a person survived their erasure" — actionable, with a documented repair — from
+        // "the check could not run", which is an infrastructure fault with no compliance meaning at all.
+        $identities = $this->createStub(LiveIdentityDirectory::class);
+        $identities->method('existingIdsAmong')->willThrowException(new RuntimeException('connection lost'));
+
+        $reconciler = new ReconcileErasedSubjectReferences(
+            new FixedPersonResourceReferences([self::DANGLING_ID]),
+            [],
+            $identities,
+        );
+        $tester = new CommandTester(new ReconcileErasedSubjectReferencesCommand($reconciler));
+
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertSame(Command::INVALID, $tester->getStatusCode());
+        $this->assertNotSame(Command::FAILURE, $tester->getStatusCode());
+        // And it must not read as a clean sweep either: silence plus a non-zero code would send an operator
+        // looking for a divergence that was never established.
+        $this->assertStringContainsString('could not be completed', $display);
+    }
+
+    #[Test]
+    public function itLeavesAWiringBugUncaughtRatherThanReportingItAsInfrastructure(): void
+    {
+        // Falsifiability of the catch above: were it `catch (Throwable)`, two sources claiming one axis — a
+        // wiring bug that leaves a whole place unreported — would exit as an infrastructure blip and the
+        // control would go on looking healthy while covering one table fewer.
+        $reconciler = new ReconcileErasedSubjectReferences(
+            new FixedPersonResourceReferences([]),
+            [
+                new FixedPersonReferenceSource(self::MEMBERSHIP_AXIS, []),
+                new FixedPersonReferenceSource(self::MEMBERSHIP_AXIS, []),
+            ],
+            new InMemoryLiveIdentityDirectory(),
+        );
+        $tester = new CommandTester(new ReconcileErasedSubjectReferencesCommand($reconciler));
+
+        $this->expectException(LogicException::class);
+
+        $tester->execute([]);
     }
 
     /**

@@ -1,0 +1,7 @@
+# Names the transport in a comment and in an env var, and consumes it nowhere: the exact shape a
+# name-anywhere grep would pass and a wiring check must not. scheduler_alpha
+services:
+  messenger_worker:
+    environment:
+      NOTE: scheduler_alpha
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600"]
