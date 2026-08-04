@@ -24,6 +24,7 @@ final readonly class FulfilIdentityErasureResult
         public int $resetTokensDeleted,
         public int $anonymizedAuditRows,
         public int $anonymizedResourceRows,
+        public int $anonymizedEventRows,
         public int $sessionsDeleted,
         public int $membershipsDeleted,
         public int $invitationsDeleted,
@@ -36,6 +37,7 @@ final readonly class FulfilIdentityErasureResult
             || $this->resetTokensDeleted > 0
             || $this->anonymizedAuditRows > 0
             || $this->anonymizedResourceRows > 0
+            || $this->anonymizedEventRows > 0
             || $this->sessionsDeleted > 0
             || $this->membershipsDeleted > 0
             || $this->invitationsDeleted > 0;

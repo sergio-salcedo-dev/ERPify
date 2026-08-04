@@ -65,10 +65,12 @@ Feature: Erase an identity (GDPR right to erasure)
     # record worth keeping at all.
     And I execute the SQL query "SELECT c.id FROM audit_log c JOIN audit_log t ON t.actor_id = c.resource_id WHERE c.action = 'GDPR_SUBJECT_ERASED' AND t.id = '0190f200-0000-7000-8000-00000000ee21'"
     And there should have 1 records in SQL result
-    # Budget canary (17 on "default"). In one transaction (+2 BEGIN/COMMIT): the administrator-role EXISTS
+    # Budget canary (18 on "default"). In one transaction (+2 BEGIN/COMMIT): the administrator-role EXISTS
     # probe, the reset-token delete, the identity find and delete, the actor-axis anonymisation UPDATE, the
-    # GDPR_SUBJECT_ERASED insert, the resource-axis anonymisation UPDATE, the session delete, the membership
-    # delete, the invitation delete and the GDPR_ERASURE_EXECUTED insert (= 13). The order of the middle three
+    # GDPR_SUBJECT_ERASED insert, the resource-axis anonymisation UPDATE, the event-store anonymisation UPDATE,
+    # the session delete, the membership delete, the invitation delete and the GDPR_ERASURE_EXECUTED insert
+    # (= 14). The event-store pass is ONE round trip for BOTH of its axes — the column and the JSON — which is
+    # the whole point of erasing by value in a single statement rather than per event type. The order of the middle three
     # is the design and not an accident: the compliance row is written BETWEEN the two UPDATEs, because the
     # actor pass mints the pseudonym the resource pass needs, and the resource pass has to find a row that
     # already exists. Each UPDATE is one round trip regardless of how many rows it matches, and the resource
@@ -77,7 +79,7 @@ Feature: Erase an identity (GDPR right to erasure)
     # before the controller. The two reference deletes are one directed DELETE each, which is why they cost
     # exactly one round trip apiece and not one per row. A shift means an added round trip — re-measure,
     # don't just bump the number.
-    And 17 requests got executed for doctrine connection "default"
+    And 18 requests got executed for doctrine connection "default"
 
   Scenario: Erasure forgets the subject where the trail NAMES them, not only where they acted
     # The crosswalk row: the subject is both actor and resource, which is what a self-service role change

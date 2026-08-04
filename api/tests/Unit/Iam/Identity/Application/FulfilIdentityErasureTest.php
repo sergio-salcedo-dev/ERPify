@@ -29,6 +29,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactor
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
+use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -69,6 +70,8 @@ final class FulfilIdentityErasureTest extends TestCase
         // Deliberately different from the actor count: the two axes are different row sets, so a summing
         // implementation would be invisible if both doubles reported the same number.
         $resourceAnonymiser = new RecordingAuditResourceAnonymiser(matchCount: 2);
+        // A third, independent count: three different row sets, so equal numbers could hide a sum.
+        $eventAnonymiser = new RecordingEventStoreSubjectAnonymiser(matchCount: 5);
 
         $result = $this->useCase(
             $users,
@@ -78,6 +81,7 @@ final class FulfilIdentityErasureTest extends TestCase
             $sessions,
             $directory,
             resourceAnonymiser: $resourceAnonymiser,
+            eventAnonymiser: $eventAnonymiser,
         )->execute(UserMother::DEFAULT_ID);
 
         $this->assertTrue($result->identityErased);
@@ -96,6 +100,13 @@ final class FulfilIdentityErasureTest extends TestCase
             'id' => UserMother::DEFAULT_ID,
             'pseudonym' => $anonymiser->pseudonym,
         ]], $resourceAnonymiser->calls);
+
+        // The business log is reached with the SAME pseudonym as both audit axes: one person must not end up
+        // as three anonymous identities across the three tables that held them.
+        $this->assertSame(
+            [['subjectId' => UserMother::DEFAULT_ID, 'pseudonym' => $anonymiser->pseudonym]],
+            $eventAnonymiser->calls,
+        );
 
         // Two security rows in order: the subject's erasure record, then the orchestrator's combined one.
         $this->assertCount(2, $audit->records);
@@ -118,6 +129,7 @@ final class FulfilIdentityErasureTest extends TestCase
             'affected_rows' => 3,
             'anonymized_actor_id' => $anonymiser->pseudonym,
             'anonymized_resource_rows' => 2,
+            'anonymized_event_rows' => 5,
             'reset_tokens_deleted' => 1,
             'sessions_deleted' => 1,
             'memberships_deleted' => 0,
@@ -382,11 +394,13 @@ final class FulfilIdentityErasureTest extends TestCase
         ?RecordingAuditResourceAnonymiser $resourceAnonymiser = null,
         ?InMemoryMembershipRepository $memberships = null,
         ?InMemoryInvitationRepository $invitations = null,
+        ?RecordingEventStoreSubjectAnonymiser $eventAnonymiser = null,
     ): FulfilIdentityErasure {
         return new FulfilIdentityErasure(
             new EraseIdentitySubject($users, $tokens, new InlineTransactionManager()),
             $anonymiser,
             $resourceAnonymiser ?? new RecordingAuditResourceAnonymiser(matchCount: 0),
+            $eventAnonymiser ?? new RecordingEventStoreSubjectAnonymiser(),
             $directory,
             new PurgeUserSessions($sessions),
             new PurgeUserMembership($memberships ?? new InMemoryMembershipRepository()),

@@ -16,6 +16,7 @@ use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Application\AuditResourceAnonymiser;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
@@ -106,6 +107,7 @@ final readonly class FulfilIdentityErasure
         private EraseIdentitySubject $eraseIdentitySubject,
         private AuditActorAnonymiser $auditActorAnonymiser,
         private AuditResourceAnonymiser $auditResourceAnonymiser,
+        private EventStoreSubjectAnonymiser $eventStoreSubjectAnonymiser,
         private ActiveAdministratorDirectory $administrators,
         private PurgeUserSessions $purgeUserSessions,
         private PurgeUserMembership $purgeUserMembership,
@@ -156,6 +158,13 @@ final readonly class FulfilIdentityErasure
                     $subject,
                     $anonymisation->pseudonym,
                 );
+                // The business log is the third place the subject's identifier is persisted, and the last one
+                // the chain did not reach. Same pseudonym again: one person, one anonymous identity, across
+                // every table that held them.
+                $anonymisedEventRows = $this->eventStoreSubjectAnonymiser->anonymise(
+                    $subjectId,
+                    $anonymisation->pseudonym,
+                );
                 $sessionsDeleted = $this->purgeUserSessions->purge($subjectId);
                 // Neither reference has a physical foreign key — both cross a bounded context, so integrity
                 // is by id — and nothing cascades when the identity row goes. Without these two links the
@@ -169,6 +178,7 @@ final readonly class FulfilIdentityErasure
                     $identity->resetTokensDeleted,
                     $anonymisation->affectedRows,
                     $anonymisedResourceRows,
+                    $anonymisedEventRows,
                     $sessionsDeleted,
                     $membershipsDeleted,
                     $invitationsDeleted,
@@ -200,6 +210,7 @@ final readonly class FulfilIdentityErasure
             'affected_rows' => $result->anonymizedAuditRows,
             'anonymized_actor_id' => $pseudonym,
             'anonymized_resource_rows' => $result->anonymizedResourceRows,
+            'anonymized_event_rows' => $result->anonymizedEventRows,
             'reset_tokens_deleted' => $result->resetTokensDeleted,
             'sessions_deleted' => $result->sessionsDeleted,
             'memberships_deleted' => $result->membershipsDeleted,

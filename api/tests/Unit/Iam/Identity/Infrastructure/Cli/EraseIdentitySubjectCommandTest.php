@@ -23,6 +23,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactor
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
+use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -128,6 +129,7 @@ final class EraseIdentitySubjectCommandTest extends TestCase
             ),
             new RecordingAuditActorAnonymiser(matchCount: 0),
             new RecordingAuditResourceAnonymiser(matchCount: 0),
+            new RecordingEventStoreSubjectAnonymiser(),
             $directory ?? new InMemoryActiveAdministratorDirectory([self::OTHER_ADMIN_ID => true]),
             new PurgeUserSessions(new InMemorySessionRepository()),
             new PurgeUserMembership(new InMemoryMembershipRepository()),

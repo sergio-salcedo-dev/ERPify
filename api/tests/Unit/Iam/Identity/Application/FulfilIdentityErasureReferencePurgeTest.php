@@ -24,6 +24,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactor
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
+use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -83,6 +84,7 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
             'affected_rows' => 0,
             'anonymized_actor_id' => RecordingAuditActorAnonymiser::PSEUDONYM,
             'anonymized_resource_rows' => 0,
+            'anonymized_event_rows' => 0,
             'reset_tokens_deleted' => 0,
             'sessions_deleted' => 0,
             'memberships_deleted' => 1,
@@ -137,6 +139,7 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
             ),
             new RecordingAuditActorAnonymiser(matchCount: 0),
             new RecordingAuditResourceAnonymiser(matchCount: 0),
+            new RecordingEventStoreSubjectAnonymiser(),
             // The subject is not an administrator — the only shape erasure accepts.
             new InMemoryActiveAdministratorDirectory([self::ACTING_ADMIN_ID => true]),
             new PurgeUserSessions(new InMemorySessionRepository()),
