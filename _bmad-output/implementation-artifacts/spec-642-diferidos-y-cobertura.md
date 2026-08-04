@@ -88,46 +88,46 @@ context:
 ## Tasks & Acceptance
 
 **Execution — C: una política, un sitio**
-- [ ] `api/src/Shared/Validation/Infrastructure/PasswordPolicy.php` + `PasswordPolicyValidator.php` — crear constraint reutilizable (min/max en puntos de código + no-blanco vía `mb_trim`), modelada sobre `EnumType`/`EnumTypeValidator` — el duplicado triple ya derivó una vez sin que ningún gate lo notara.
-- [ ] `api/src/Iam/Identity/Infrastructure/Http/ChangeMyPasswordRequest.php` — `newPassword` adopta la constraint; `currentPassword` **intacto**.
-- [ ] `api/src/Iam/Identity/Infrastructure/Http/ResetPasswordRequest.php` — adopta la constraint; techo 255→128 — cierra la divergencia viva.
-- [ ] `api/src/Iam/Invitation/Infrastructure/Http/AcceptInvitationRequest.php` — adopta la constraint.
-- [ ] `api/src/Iam/Identity/Infrastructure/Cli/CreateInitialAdministratorCommand.php` — valida contra la misma política **antes de cualquier operación** (construcción de entidad, hashing, persistencia): no por rendimiento, sino porque deja dicho que la contraseña es validación de entrada. Es la cuenta más privilegiada del sistema.
-- [ ] `pwa/.../schemas/auth/passwordPolicy.ts` — exporta un constructor de esquema: límites sobre `[...value].length`, refine de no-blanco, mensajes compartidos, y `EXISTING_PASSWORD_MAX_LENGTH` movido aquí.
-- [ ] `pwa/.../schemas/auth/{ChangePasswordSchema,ResetPasswordSchema,AcceptInvitationSchema}.ts` — consumen el constructor; mueren los mensajes triplicados.
-- [ ] `pwa/src/app/backoffice/profile/_components/ChangePasswordForm.tsx:208` — el `helper` deja de mentir sobre los límites.
+- [x] `api/src/Shared/Validation/Infrastructure/PasswordPolicy.php` + `PasswordPolicyValidator.php` — crear constraint reutilizable (min/max en puntos de código + no-blanco vía `mb_trim`), modelada sobre `EnumType`/`EnumTypeValidator` — el duplicado triple ya derivó una vez sin que ningún gate lo notara.
+- [x] `api/src/Iam/Identity/Infrastructure/Http/ChangeMyPasswordRequest.php` — `newPassword` adopta la constraint; `currentPassword` **intacto**.
+- [x] `api/src/Iam/Identity/Infrastructure/Http/ResetPasswordRequest.php` — adopta la constraint; techo 255→128 — cierra la divergencia viva.
+- [x] `api/src/Iam/Invitation/Infrastructure/Http/AcceptInvitationRequest.php` — adopta la constraint.
+- [x] `api/src/Iam/Identity/Infrastructure/Cli/CreateInitialAdministratorCommand.php` — valida contra la misma política **antes de cualquier operación** (construcción de entidad, hashing, persistencia): no por rendimiento, sino porque deja dicho que la contraseña es validación de entrada. Es la cuenta más privilegiada del sistema.
+- [x] `pwa/.../schemas/auth/passwordPolicy.ts` — exporta un constructor de esquema: límites sobre `[...value].length`, refine de no-blanco, mensajes compartidos, y `EXISTING_PASSWORD_MAX_LENGTH` movido aquí.
+- [x] `pwa/.../schemas/auth/{ChangePasswordSchema,ResetPasswordSchema,AcceptInvitationSchema}.ts` — consumen el constructor; mueren los mensajes triplicados.
+- [x] `pwa/src/app/backoffice/profile/_components/ChangePasswordForm.tsx:208` — el `helper` deja de mentir sobre los límites.
 
 **Execution — B: el muro de admisión**
-- [ ] `api/src/Iam/Identity/Infrastructure/Security/ReauthenticateDevice.php` — crear: relee el agregado, `ensureActive()`, `Security::login()`. Una política, no tres.
-- [ ] `api/src/Iam/Identity/Infrastructure/Controller/ChangeMyPasswordController.php` — usa el colaborador; **conserva** la contención `critical` de `:95-103`.
-- [ ] `api/src/Iam/Identity/Infrastructure/Http/CompletePasswordResetController.php` + `api/src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php` — mismo colaborador: la ventana del reset es igual de ancha y parchear solo #642 bifurcaría la política.
-- [ ] `api/.bounded-context-allowlist` + `api/tools/deptrac/deptrac.yaml` — una costura para Invitation, misma familia que la entrada `UserProvider` que ya tiene.
-- [ ] `api/src/Iam/Identity/Application/ChangeMyPassword.php` — `ensureActive()` tras el row lock (`:83`) → 403 en vez de 409; y `clearLockout()` **explícito**, espejo de `CompletePasswordReset:106` — el efecto ya ocurría heredado de un listener a dos capas.
-- [ ] `pwa/.../ChangePasswordForm.tsx` — añade `account-suspended` / `account-deactivated` a los tipos que sabe leer.
+- [x] `api/src/Iam/Identity/Infrastructure/Security/ReauthenticateDevice.php` — crear: relee el agregado, `ensureActive()`, `Security::login()`. Una política, no tres.
+- [x] `api/src/Iam/Identity/Infrastructure/Controller/ChangeMyPasswordController.php` — usa el colaborador; **conserva** la contención `critical` de `:95-103`.
+- [x] `api/src/Iam/Identity/Infrastructure/Http/CompletePasswordResetController.php` + `api/src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php` — mismo colaborador: la ventana del reset es igual de ancha y parchear solo #642 bifurcaría la política.
+- [x] `api/.bounded-context-allowlist` + `api/tools/deptrac/deptrac.yaml` — una costura para Invitation, misma familia que la entrada `UserProvider` que ya tiene.
+- [x] `api/src/Iam/Identity/Application/ChangeMyPassword.php` — `ensureActive()` tras el row lock (`:83`) → 403 en vez de 409; y `clearLockout()` **explícito**, espejo de `CompletePasswordReset:106` — el efecto ya ocurría heredado de un listener a dos capas.
+- [x] `pwa/.../ChangePasswordForm.tsx` — añade `account-suspended` / `account-deactivated` a los tipos que sabe leer.
 
 **Execution — D: presupuesto y rastro**
-- [ ] `api/config/packages/rate_limiter.yaml` + `api/.env` — declarar `password_change_per_identity`, `sliding_window`, límite/intervalo por env.
-- [ ] `api/src/Iam/Identity/Infrastructure/Security/PasswordChangeThrottle.php` — crear; **lanza** `RateLimitExceeded` (429 visible), a diferencia del throttle de recuperación.
-- [ ] `api/src/Iam/Identity/Infrastructure/Http/EventListener/InvalidCurrentPasswordAuditListener.php` — crear: fila `SECURITY` sin recurso, metadata solo `{route}`.
+- [x] `api/config/packages/rate_limiter.yaml` + `api/.env` — declarar `password_change_per_identity`, `sliding_window`, límite/intervalo por env.
+- [x] `api/src/Iam/Identity/Infrastructure/Security/PasswordChangeThrottle.php` — crear; **lanza** `RateLimitExceeded` (429 visible), a diferencia del throttle de recuperación.
+- [x] `api/src/Iam/Identity/Infrastructure/Http/EventListener/InvalidCurrentPasswordAuditListener.php` — crear: fila `SECURITY` sin recurso, metadata solo `{route}`.
 
 **Execution — A: que la cobertura mida**
-- [ ] `api/tests/Functional/Iam/Identity/.../ChangeMyPasswordFunctionalTest.php` — crear; `#[CoversClass]` sobre controlador + request DTO + `PasswordHasher`; **fuerza el fallo de acuñación** y afirma 204 + `critical` + cero sesiones — la rama de peor desenlace que nada recorre.
-- [ ] `api/tests/Unit/Iam/Identity/Application/ChangeMyPasswordTest.php` — añadir `CoversClass` de las dos excepciones: sus assertions ya existen, el clover las descarta.
-- [ ] `api/tests/Unit/Iam/Identity/Domain/Event/PasswordChangedTest.php` — crear; `toPrimitives`/`fromPrimitives`/`aggregateType` no los ejecuta nada hoy.
-- [ ] `api/tests/Unit/Shared/Validation/PasswordPolicyValidatorTest.php` — crear; astral, U+00A0, U+3000, fronteras.
-- [ ] `pwa/tests/app/backoffice/backOfficeLayoutClient.test.tsx` — crear; el logout llama a `logout()` y `location.assign("/")`, **no** a `router.push`. Usar el helper de apertura reintentada.
-- [ ] `pwa/tests/app/backoffice/profile/changePasswordForm.test.tsx` — «cambiar otra vez», descarte del banner, fallback a `title`, y re-lanzado de un error que no es `HttpError`.
-- [ ] `pwa/tests/app/backoffice/profile/changePasswordFormSsr.test.tsx` — crear; `renderToString` fija que sin hidratar no hay GET nativo con los dos textos planos en la URL.
-- [ ] `pwa/tests/app/backoffice/profile/page.test.tsx` — sesión con roles y permisos vacíos: el estado vacío no está probado.
-- [ ] `pwa/src/app/.../ChangePasswordForm.tsx:91` — borrar `?? []`: rama inalcanzable, testearla sería fabricar estado.
-- [ ] `api/features/backoffice/identity/{change_password,password_reset,invitation_accept}.feature` — escenarios de no-blanco, cota superior, 429, 403 de identidad no activa y lockout; afirmar **el mensaje**, no solo el campo.
+- [x] `api/tests/Functional/Iam/Identity/.../ChangeMyPasswordFunctionalTest.php` — crear; `#[CoversClass]` sobre controlador + request DTO + `PasswordHasher`; **fuerza el fallo de acuñación** y afirma 204 + `critical` + cero sesiones — la rama de peor desenlace que nada recorre.
+- [x] `api/tests/Unit/Iam/Identity/Application/ChangeMyPasswordTest.php` — añadir `CoversClass` de las dos excepciones: sus assertions ya existen, el clover las descarta.
+- [x] `api/tests/Unit/Iam/Identity/Domain/Event/PasswordChangedTest.php` — crear; `toPrimitives`/`fromPrimitives`/`aggregateType` no los ejecuta nada hoy.
+- [x] `api/tests/Unit/Shared/Validation/PasswordPolicyValidatorTest.php` — crear; astral, U+00A0, U+3000, fronteras.
+- [x] `pwa/tests/app/backoffice/backOfficeLayoutClient.test.tsx` — crear; el logout llama a `logout()` y `location.assign("/")`, **no** a `router.push`. Usar el helper de apertura reintentada.
+- [x] `pwa/tests/app/backoffice/profile/changePasswordForm.test.tsx` — «cambiar otra vez», descarte del banner, fallback a `title`, y re-lanzado de un error que no es `HttpError`.
+- [x] `pwa/tests/app/backoffice/profile/changePasswordFormSsr.test.tsx` — crear; `renderToString` fija que sin hidratar no hay GET nativo con los dos textos planos en la URL.
+- [x] `pwa/tests/app/backoffice/profile/page.test.tsx` — sesión con roles y permisos vacíos: el estado vacío no está probado.
+- [x] `pwa/src/app/.../ChangePasswordForm.tsx:91` — borrar `?? []`: rama inalcanzable, testearla sería fabricar estado.
+- [x] `api/features/backoffice/identity/{change_password,password_reset,invitation_accept}.feature` — escenarios de no-blanco, cota superior, 429, 403 de identidad no activa y lockout; afirmar **el mensaje**, no solo el campo.
 
 **Execution — E, F y registros**
-- [ ] `PRODUCTION_SECURITY_CHECKLIST.md` — §7: aceptar la ventana cross-tab nombrando **también** `CompletePasswordReset`, o el registro queda incoherente; más el limitador nuevo y la excepción a «solo límites globales por IP pueden 429».
-- [ ] `docs/api-error-contract.md` — 429 en este endpoint, 403 del muro, y el 422 del reset (que hoy no documenta su cota).
-- [ ] `docs/rules/security.md` — la política de contraseña, que hoy no existe escrita en ningún sitio.
-- [ ] `_bmad-output/implementation-artifacts/deferred-work.md` — borrar las 8 balas resueltas; **conservar** la de preferencias, afilada con lo medido (traductor apagado por decisión argumentada, cero canal de notificaciones).
-- [ ] `_bmad-output/implementation-artifacts/spec-iam-account-profile.md` — borrar: `status: done`.
+- [x] `PRODUCTION_SECURITY_CHECKLIST.md` — §7: aceptar la ventana cross-tab nombrando **también** `CompletePasswordReset`, o el registro queda incoherente; más el limitador nuevo y la excepción a «solo límites globales por IP pueden 429».
+- [x] `docs/api-error-contract.md` — 429 en este endpoint, 403 del muro, y el 422 del reset (que hoy no documenta su cota).
+- [x] `docs/rules/security.md` — la política de contraseña, que hoy no existe escrita en ningún sitio.
+- [x] `_bmad-output/implementation-artifacts/deferred-work.md` — borrar las 8 balas resueltas; **conservar** la de preferencias, afilada con lo medido (traductor apagado por decisión argumentada, cero canal de notificaciones).
+- [x] `_bmad-output/implementation-artifacts/spec-iam-account-profile.md` — borrar: `status: done`.
 
 **Acceptance Criteria:**
 - Dado un `make php.quality` y un `make pwa.quality` en frío, cuando terminan, entonces ambos salen 0 y ningún gate nuevo se dispara.
@@ -147,6 +147,28 @@ context:
 **El presupuesto no detiene al atacante y hay que decirlo.** Ya tiene la sesión; el límite retrasa la adivinación, no la impide. Vive en caché: un deploy o un segundo worker lo resetea o lo parte, y `lock_factory: null` deja que la cuenta derive bajo concurrencia. Es un atenuador, no el muro que es el lockout persistido en BD. El dueño legítimo también queda bloqueado en esta ruta — pero `/forgot-password` la rodea, que es lo que separa esto de la objeción del lockout.
 
 **Por qué la fila `SECURITY` no cuesta nada de cumplimiento.** `audit_log` no tiene entidad Doctrine: sus columnas las inyecta un listener de `postGenerateSchema` y se escriben por SQL crudo, así que el barrido de `.person-reference-policy` es estructuralmente ciego a ellas. Y `DbalAuditActorAnonymiser` ya reescribe `actor_id` de **todas** las filas del sujeto. Sin recurso nombrado, no entra tipo nuevo en `.audit-resource-types`: cero línea, cero dueño de borrado, cero testigo de aceptación.
+
+## Spec Change Log
+
+- **El listener detectivo vive en `Infrastructure/Http/`, no en `Infrastructure/Http/EventListener/`.** El
+  módulo `Iam/Identity` ya tiene ahí sus dos listeners HTTP (`LoginOriginListener`,
+  `PasswordResetOriginListener`); la ruta del plan copiaba la de `Shared/Audit`. Estrenar un directorio para
+  una clase, además, obliga a actualizar tres documentos por la regla de «nuevos directorios en `src/`».
+- **Un dueño único del snapshot de rate limit (decisión del usuario, medida antes de proponerla).** El 429
+  por identidad salía **sin `Retry-After`** y con `RateLimit-Remaining` contado del presupuesto por IP, porque
+  `RateLimitListener::onResponse` renderiza el snapshot que dejó el listener de `kernel.request`. Contradice el
+  contrato que `anonymous_api.feature:28-38` ya afirma para el 429 por IP. Se extrae
+  `Shared/ErrorContract/Infrastructure/Http/RateLimitSnapshot`, que ambos estampan y el listener renderiza; el
+  limitador por objetivo estampa **solo al rechazar**, para que las cabeceras cambien de sujeto exactamente en
+  la respuesta que el otro presupuesto produjo. De paso mueren las ~40 líneas de estrechamiento defensivo de la
+  forma del array (`readSnapshot`/`hasExpectedSnapshotShape`): un `instanceof` es el chequeo de forma.
+- **Los escenarios Behat del plan seguían abiertos al reanudar.** `git log --stat cc3abb0f..HEAD -- api/features`
+  no devolvía nada: ninguno de los tres commits de C, B y A tocó las features. Entraron aquí, con el 429, la
+  fila forense, el no-blanco (espacio, U+00A0, U+3000), la cota superior en las tres superficies, el muro de
+  identidad suspendida y el lockout que se limpia.
+- **Una aserción del test SSR era vacua y lo dijo el falsificado.** `toContain("disabled")` acertaba siempre:
+  la `className` de Shadcn lleva `disabled:opacity-50`. Corregida a `/\sdisabled=""/`, que sí se pone roja al
+  quitar `|| !hydrated`.
 
 ## Verification
 
