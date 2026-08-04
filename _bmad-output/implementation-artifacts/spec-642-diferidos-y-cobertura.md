@@ -2,7 +2,7 @@
 title: 'Diferidos de #642: una política de contraseña, un re-login que comprueba, un presupuesto que cuenta y una cobertura que mide'
 type: 'feature'
 created: '2026-08-04'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'cc3abb0fca82d7a76d3f2bf438cb6e159d02930c'
 review_loop_iteration: 0
 context:
