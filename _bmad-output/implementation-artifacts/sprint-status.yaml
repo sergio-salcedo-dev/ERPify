@@ -168,7 +168,7 @@ development_status:
   # decisión pendiente del usuario, ninguna historia lo presupone. #562/#565 seguimiento operativo. #564 fuera
   # por ALCANZABILIDAD (php no declara replicas: en compose.prod.yaml); tripwire de reapertura: réplicas de php
   # o deploy rolling, momento en el que pasa a defecto de DISPONIBILIDAD urgente.
-  epic-gdpr-hardening: in-progress
+  epic-gdpr-hardening: done
   g-4a-fuga-passwordresetcompleted-transportes-messenger: done
   # G-1a: pase adversarial del CONTRATO hecho y registrado, y las TRES decisiones que abrió, ratificadas por
   # Sergio (2026-08-01). D1=① el gate ATERRIZA EN ROJO por Membership.user_id e Invitation.invited_user_id —
@@ -335,7 +335,7 @@ development_status:
   # moverse al MISMO pseudónimo o la unicidad se rompe.
   # Mientras G-5 no cierre, la épica NO puede declararse completada.
   g-5-ids-de-persona-fuera-del-event-store: done
-  epic-gdpr-hardening-retrospective: optional
+  epic-gdpr-hardening-retrospective: done
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.
@@ -383,4 +383,32 @@ development_status:
 #     no en SessionAdmissionGate) — es la premisa de la que cuelga toda la evaluación y nada la pinnea.
 #     Descartados: dimensión IP/origen (re-deriva login_throttling y abandona el caso del spray distribuido
 #     que el contador existe para cazar), y MFA como respuesta a esto (el muro es anterior al segundo factor).
-action_items: []
+# Action items — retrospectiva gdpr-hardening (2026-08-04). Mismo principio: resolver, no acumular.
+# Detalle y triaje en epic-gdpr-hardening-retro-2026-08-04.md. Lo ya registrado en deferred-work.md con su
+# trigger (control detective de event_store, scan secuencial del UPDATE, firma anonymise, conjunto cerrado de
+# D12) NO se duplica aquí.
+action_items:
+  - epic: gdpr-hardening
+    action: "Afirmar que la siembra afectó a N filas antes de asertar la ausencia — la contramedida que arregló los dos tests vacuos (G-1b, G-5); candidata a docs/rules/testing.md"
+    owner: "Sergio"
+    status: open
+  - epic: gdpr-hardening
+    action: "Rellenar el Dev Agent Record de G-1a y G-1b, o declarar que el registro vive en los cuerpos de #616/#618/#620 (hoy son encabezados vacios)"
+    owner: "Sergio"
+    status: open
+  - epic: gdpr-hardening
+    action: "Decidir ->stateful() para scheduler_maintenance y scheduler_audit_maintenance, o declarar por que no: misma forma (1 day contra procesos de 1 h) que G-3b arreglo solo para el suyo"
+    owner: "Sergio"
+    status: open
+  - epic: gdpr-hardening
+    action: "Decidir que mueve el pase adversarial antes del merge: requisito para abrir el PR, o basta con que su registro apunte al PR que lo aplica (#616 y #620 mergearon antes de tenerlo empujado)"
+    owner: "Sergio"
+    status: open
+  - epic: gdpr-hardening
+    action: "bmad.status.audit da falsos positivos por tercera vez (casa claves contra asuntos de commit): medir contra codigo/PR, o retirar el comando y dejar de leerlo como control"
+    owner: "Sergio"
+    status: open
+  - epic: gdpr-hardening
+    action: "Decidir si la promesa de conjunto cerrado de mutaciones de D12 (y su gemelo de audit_log) se ablanda o el conjunto se cierra de verdad; hoy git grep es el unico control"
+    owner: "Sergio"
+    status: open
