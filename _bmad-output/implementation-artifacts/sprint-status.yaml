@@ -387,25 +387,27 @@ development_status:
 # Detalle y triaje en epic-gdpr-hardening-retro-2026-08-04.md. Lo ya registrado en deferred-work.md con su
 # trigger (control detective de event_store, scan secuencial del UPDATE, firma anonymise, conjunto cerrado de
 # D12) NO se duplica aquí.
+# NOTA: la lista nació con SEIS y dos eran FALSOS, detectados al ir a implementarlos y removidos:
+#   · "->stateful() para los otros dos schedules" — los TRES ya lo llevan; G-3b los arregló todos. El item se
+#     escribió leyendo el texto de la tarea ("decidir si se arregla aquí para los tres") sin medir el resultado.
+#   · "el audit no vio esta épica con 8/8 en done" — la vio: su check A es lo que abrió la sesión de la retro.
+#     Lo que sí es real quedó reformulado abajo, y va de la convención de commit, no del comando.
+# Los dos resolubles se implementaron en esta misma PR y quedan como done.
 action_items:
   - epic: gdpr-hardening
-    action: "Afirmar que la siembra afectó a N filas antes de asertar la ausencia — la contramedida que arregló los dos tests vacuos (G-1b, G-5); candidata a docs/rules/testing.md"
+    action: "Afirmar que la siembra afectó a N filas antes de asertar la ausencia — la contramedida que arregló los dos tests vacuos (G-1b, G-5)"
+    owner: "Sergio"
+    status: done
+  - epic: gdpr-hardening
+    action: "Declarar dónde vive el registro de la entrega conjunta G-1a + G-1b en vez de reconstruirlo a posteriori desde el diff"
+    owner: "Sergio"
+    status: done
+  - epic: gdpr-hardening
+    action: "Decidir qué mueve el pase adversarial antes del merge: requisito para abrir el PR, o basta con que su registro apunte al PR que lo aplica (#616 y #620 mergearon antes de tenerlo empujado)"
     owner: "Sergio"
     status: open
   - epic: gdpr-hardening
-    action: "Rellenar el Dev Agent Record de G-1a y G-1b, o declarar que el registro vive en los cuerpos de #616/#618/#620 (hoy son encabezados vacios)"
-    owner: "Sergio"
-    status: open
-  - epic: gdpr-hardening
-    action: "Decidir ->stateful() para scheduler_maintenance y scheduler_audit_maintenance, o declarar por que no: misma forma (1 day contra procesos de 1 h) que G-3b arreglo solo para el suyo"
-    owner: "Sergio"
-    status: open
-  - epic: gdpr-hardening
-    action: "Decidir que mueve el pase adversarial antes del merge: requisito para abrir el PR, o basta con que su registro apunte al PR que lo aplica (#616 y #620 mergearon antes de tenerlo empujado)"
-    owner: "Sergio"
-    status: open
-  - epic: gdpr-hardening
-    action: "bmad.status.audit da falsos positivos por tercera vez (casa claves contra asuntos de commit): medir contra codigo/PR, o retirar el comando y dejar de leerlo como control"
+    action: "Decidir si se recupera el tag de historia en el asunto de los commits de CODIGO (hoy solo lo llevan los docs/chore, que el check B descarta, y por eso el check se quedó sin candidatos en las 8 historias) o se declara inerte en su cabecera"
     owner: "Sergio"
     status: open
   - epic: gdpr-hardening
