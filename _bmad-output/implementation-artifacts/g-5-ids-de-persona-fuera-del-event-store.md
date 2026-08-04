@@ -102,16 +102,16 @@ cierre, esos dos párrafos hay que revisitarlos.
 
 ## Tasks / Subtasks
 
-- [ ] **Tarea 1 — Re-medir contra el árbol del día** antes de escribir código: el inventario 8+8 y las dos
+- [x] **Tarea 1 — Re-medir contra el árbol del día** antes de escribir código: el inventario 8+8 y las dos
       correcciones de arriba.
-- [ ] **Tarea 2 (AC1, AC2)** — El `UPDATE` único, parametrizado, **por valor**, sobre columna y payload, dentro
+- [x] **Tarea 2 (AC1, AC2)** — El `UPDATE` único, parametrizado, **por valor**, sobre columna y payload, dentro
       de la transacción que `FulfilIdentityErasure` ya posee. Un solo pseudónimo para todas las filas del
       sujeto (el `UNIQUE` de stream lo exige). Idempotente: una segunda pasada no encuentra nada.
-- [ ] **Tarea 3 (AC1)** — Testigo de aceptación que siembre y demuestre **en el mismo escenario**, cubriendo
+- [x] **Tarea 3 (AC1)** — Testigo de aceptación que siembre y demuestre **en el mismo escenario**, cubriendo
       **los dos ejes**, con `ILIKE` y sin suponer que `payload` es un objeto.
-- [ ] **Tarea 4 (AC3)** — Falsificación por mutación: un rojo **por eje**, provocado de verdad, restaurando por
+- [x] **Tarea 4 (AC3)** — Falsificación por mutación: un rojo **por eje**, provocado de verdad, restaurando por
       copia de bytes (nunca `git checkout --`).
-- [ ] **Tarea 5** — Revisitar los dos docblocks que G-2 dejó diciendo que `event_store.aggregate_id` queda fuera
+- [x] **Tarea 5** — Revisitar los dos docblocks que G-2 dejó diciendo que `event_store.aggregate_id` queda fuera
       del control, y el bullet de `.person-reference-policy` que lo llama *standing leak*.
 - [ ] **Tarea 6** — Pase adversarial por alguien distinto del autor, registrado, declarando dónde quedó.
 - [ ] **Tarea 7** — Puertas con ejecución fresca y exit code impreso.
@@ -133,6 +133,50 @@ cierre, esos dos párrafos hay que revisitarlos.
 - [`docs/adr/event-store-and-projections.md`](../../docs/adr/event-store-and-projections.md) — D12
 - [`docs/adr/audit-activity-log.md`](../../docs/adr/audit-activity-log.md) — D4, y el precedente del conjunto cerrado de mutaciones
 - [`g-2-ids-de-persona-fuera-de-audit-log-metadata.md`](g-2-ids-de-persona-fuera-de-audit-log-metadata.md) — el hermano: forma del testigo, trampas medidas y el pase adversarial
+
+## Consulta a tres voces (ChatGPT → Winston + Amelia), 2026-08-04
+
+Sergio pidió que el externo ayudara a decidir y que Winston y Amelia criticaran **su** respuesta — en ese orden,
+que corrige el fallo de secuencia de G-2 (allí el prompt describía un árbol que la implementación cambió
+mientras el externo respondía). Prompt en `tmp/bmad-md/consult-g5-event-store-controls-20260804-124634.md`.
+
+**Dos hechos en disputa, medidos por mí antes de aceptar ningún veredicto — y Winston tenía razón en los dos:**
+
+1. **D9 NO reserva `metadata` para «actor».** Reserva `correlation_id` y `causation_id`, que identifican un
+   evento y una petición. ChatGPT y Amelia repitieron la premisa falsa; **mi propio docblock también**. Corregido.
+2. **El `UNIQUE` de stream no impone nada.** `tenant_id` se escribe siempre `NULL` y Postgres usa
+   `NULLS DISTINCT`; está medido contra `pg_indexes` en `deferred-work.md`. Mi docblock decía *«the stream UNIQUE
+   is why»* — repetía una garantía que el repo ya había falsificado en su propio registro. Corregido: lo que
+   sostiene el pseudónimo único es que una persona no se parta en varias identidades anónimas.
+
+**D1 — reescribir `metadata`: 3 de 3, mantener.** Con el argumento de Winston, no el de ChatGPT: la garantía está
+definida **sobre la fila**, no sobre una lista de columnas; cubrir la tercera *retira una excepción*. Enmendado
+en D12, junto con su frase «en las **claves** de `payload`», que se contradecía con la decisión por valor doce
+líneas después.
+
+**D2 — 3 de 3 rechazan el registro declarativo.** Y **Winston y Amelia rechazan el hook suite-wide de ChatGPT**,
+por una razón estructural que él no podía ver: el hook de G-2 funciona porque el contenido correcto de
+`audit_log.metadata` es *cero ids de persona*; `event_store` **niega ese invariante por diseño**. Portado,
+dispararía en casi todo escenario que haga login; y el anti-join tampoco vale, porque tras un borrado correcto el
+id es un pseudónimo indistinguible por forma.
+
+**El hook scoped (2′) de Winston se autorizó y NO se construyó, por medición posterior.** Los 11 borrados de la
+suite están todos en `erase.feature`; cinco lo heredarían, y **ninguno siembra eventos**, así que pasaría en
+vacío justo donde añadiría cobertura — la misma vacuidad que #639 acaba de corregir en el hook hermano.
+*Trigger:* el primer escenario que borre a alguien **con eventos suyos**.
+
+**D3 — no en G-5** (Winston y Amelia contra el sí de ChatGPT). El argumento decisivo es de Amelia: sin flag
+`resource_erased`, el reconciliador reportaría **cada borrado correcto** como divergencia. Registrado en
+`deferred-work.md` con su trigger.
+
+**D4 — gana la medición de Amelia** sobre las propuestas de ChatGPT y Winston: hay **un solo** `Projector` y la
+regla ya está **cubierta transitivamente** por `php.lint.person-reference` para todo read model con entidad. El
+hueco real es estrecho y ya está declarado. Dos líneas en el ADR, cero código.
+
+**Lo que Amelia encontró de mi trabajo, y era correcto:** el testigo no existía y el `UPDATE` corría **sobre cero
+filas**, así que AC1/AC2 no estaban probados y AC3 era infalsificable. Yo había presentado el canario `17 → 18`
+como confirmación de que una sentencia cubre los dos ejes — **+1 es también lo que cuesta un `UPDATE` que no casa
+nada**. Cerrado con el testigo sembrado y un rojo por eje.
 
 ## Dev Agent Record
 

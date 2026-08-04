@@ -306,13 +306,24 @@ principio nuevo**: lo extiende al log de negocio.
 
 **La política.** Al ejercerse el derecho de supresión, un **único `UPDATE` parametrizado** reescribe el
 identificador del sujeto con **un UUID aleatorio nuevo acuñado en el borrado** —sin valor original, sin tabla de
-mapeo, sin derivación determinista—, **en la columna y en las claves de `payload`**, dentro de la transacción que
+mapeo, sin derivación determinista—, **en la columna y en el TEXTO SERIALIZADO de `payload` y `metadata`,
+por coincidencia de valor y sin distinguir mayúsculas**, dentro de la transacción que
 `FulfilIdentityErasure` ya posee. Es idempotente por construcción: una segunda pasada no encuentra nada.
 
 **Por qué el borrado es por coincidencia de valor y no por enumeración de eventos.** Un `WHERE` sobre el id del
 sujeto alcanza **todo evento presente y futuro** que lo contenga, sin que ningún productor tenga que acordarse de
 nada. Cualquier mecanismo preventivo —que el id nunca llegue a escribirse— depende de la memoria de quien añada
 el próximo evento, y para ser fiable necesitaría **su propio gate**: más maquinaria para una garantía más débil.
+
+*Enmienda (2026-08-04, al implementarlo).* Esta frase decía «en las **claves** de `payload`», y se
+contradecía con la decisión de borrar **por valor** que el propio párrafo siguiente fija: enumerar claves es
+la declaración que se comprueba a sí misma que SI-23 prohíbe, y ya hay dos nombres distintos
+(`invitedUserId`, `userId`) garantizados por un trait compartido. Se amplía además a `metadata`, que hoy es
+`[]`: **no** porque D9 la reserve para un actor —reserva `correlation_id` y `causation_id`, que identifican
+un evento y una petición, no a una persona— sino porque la garantía de este anonimizador está definida
+sobre la FILA y no sobre una lista de columnas recordada. Cubrir la tercera **retira una excepción** en vez
+de añadir responsabilidad, y como el predicado es por valor, mientras la columna no guarde un id de persona
+la sentencia no reescribe nada. Coste de ejecución: cero (misma sentencia, mismo viaje).
 
 **Los dos ejes se cierran juntos, y no es un detalle de alcance.** Una implementación que solo reescriba
 `aggregate_id` deja `SELECT aggregate_id FROM event_store` en verde mientras el id sigue vivo en el `payload` de
@@ -338,7 +349,13 @@ la fila contigua — una declaración cuya única evidencia es la mitad que elig
 **Qué empeora, y la regla que lo acota.** El replay deja de ser **históricamente reproducible**: tras un borrado,
 reproyectar produce un identificador distinto del emitido. Hoy es inocuo —ningún proyector lee `aggregate_id`—,
 pero el día que un proyector claveara un read model de persona por esa columna, un rebuild post-borrado lo
-re-clavearía **en silencio**. **Regla, no código: un proyector nunca clavea un read model de persona por el
+re-clavearía **en silencio**. **Regla, y hoy ya cubierta por un gate para el caso que importa** (medido 2026-08-04: existe **un** `Projector`
+en el árbol y ninguno lee `aggregate_id`). Un read model de persona **con entidad Doctrine** tendría una
+columna `Types::GUID` que `make php.lint.person-reference` obliga a clasificar, a declarar con
+`#[PersonSubjectReference]` y a dotar de un `PersonReferenceSource`. Lo que queda ciego es estrecho y ya
+está declarado en la cabecera de ese registro: un read model **sin entidad**, inyectado por un
+`postGenerateSchema` listener, que es la forma de `bank_count`. Enunciada como regla: un proyector nunca
+clavea un read model de persona por el
 identificador real.** Los docblocks que hoy dicen «append-only» a secas pasan a decir «append-only, con un
 conjunto cerrado de mutaciones sancionadas», como ya hace `audit_log`.
 
