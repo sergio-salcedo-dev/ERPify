@@ -510,6 +510,42 @@ fallo de un `AfterScenario` **rompe la build (exit ≠ 0) pero no marca ningún 
 con 68 fugas imprimió `69 scenarios (69 passed) · 601 steps (601 passed)` y salió con 2. Quien lea el
 recuento y no el exit code llamaría verde a eso. Queda escrito en el docblock del contexto.
 
+**Tercera voz (ChatGPT, 2026-08-04) — y una advertencia de método sobre cómo llegó tarde.** El prompt se
+generó describiendo el estado ANTERIOR a implementar la Opción 5, y la implementación avanzó mientras el
+externo respondía. Así que juzgó un árbol que ya no existe. **El error de secuencia es mío**, no suyo, y hay
+que decirlo antes de leer su veredicto.
+
+- *Decisión 1:* coincide → Opción 1. **Consenso 3 de 3.** Aporta una asimetría mejor formulada que la mía y la
+  de Winston: el precedente (`AuditWitnessScenario`) protege la **trazabilidad de una línea de registro
+  manual** y la evidencia real sigue siendo correr Behat; el gate propuesto tendría por objeto **la propia
+  aserción**, y la evidencia real seguiría siendo la misma corrida. Luego no añade una segunda evidencia del
+  requisito: añade protección contra borrar texto. *Su condición de reapertura nº1 —«¿existe ya un patrón
+  consolidado de gates textuales?»— se midió y es **sí**: hay dos (`AuditWitnessScenario` y
+  `BehatSuiteCoverageGateTest`). El hecho contradice su premisa y la conclusión sobrevive igual, porque el
+  argumento de «no añade evidencia» no depende de cuántos precedentes haya.*
+- *Decisión 2:* recomienda la **Opción 4** (llamador único estructural), en desacuerdo con Winston y con lo ya
+  implementado. **No se reabre, y la razón la escribe él mismo en su cláusula de auto-duda nº5:** *«si las dos
+  registries no describen el mismo ownership sino obligaciones distintas —quién escribe frente a quién
+  anonimiza—, la aparente contradicción sería intencionada y mi argumento a favor de un único owner perdería
+  fuerza»*. Eso es exactamente lo que la Opción 5 produjo, y está medido:
+  `.person-reference-policy:168` nombra a `EraseIdentitySubject` como dueño de borrar la **fila** de
+  `identity_user` —que es lo que hace—, y `.audit-resource-types:88` nombra a `FulfilIdentityErasure` como
+  dueño de borrar la **copia de auditoría** del id —que ahora escribe *y* borra—. Dos obligaciones, dos
+  dueños, ninguna contradicción.
+- **Y la Opción 4 hoy compraría menos de lo que costaba.** Su valor era impedir que un segundo llamador dejara
+  PII; la Opción 5 ya eliminó esa consecuencia — un segundo llamador borra del todo y solo carece de
+  evidencia. Winston lo había anticipado (*«sigue dejando un caso de uso que escribe un id que no borra; solo
+  lo hace difícil de alcanzar»*) y Amelia había medido su coste: la variante «fusionar» lleva
+  `FulfilIdentityErasure` a ~12 colaboradores sobre un `@SuppressWarnings` de acoplamiento **ya existente** y
+  disuelve una unidad testeable, y la «no autowired» se pelea con `_defaults: autowire: true`. Su argumento
+  KISS —«hacer un servicio interno es más sencillo que introducir nuevas coordinaciones»— parte de una premisa
+  falsa: la Opción 5 **no introdujo coordinación**, movió una llamada y **quitó** un colaborador (4 → 3).
+- Medido tras el cambio: `EraseIdentitySubject` tiene **una sola inyección** en todo `api/src`
+  (`FulfilIdentityErasure.php:106`) y **cero** referencias a auditoría.
+
+**Veredicto final: se mantiene la Opción 5, sin añadir la 4.** Si algún día aparece un segundo llamador
+legítimo, el coste de no haberla pagado es una entrada de cumplimiento ausente, no un id de persona vivo.
+
 **Decisión 2 — la dependencia del llamador: DISCREPAN, y la discrepancia está sin resolver.** Amelia
 recomienda dejarlo con un pin de emparejamiento (un llamador, ninguna historia planificada que añada el
 segundo, el orden ya lo impone el flujo de datos). Winston reencuadra: el eje no es *quién ejecuta el
