@@ -29,6 +29,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactor
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
+use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -118,6 +119,7 @@ final class FulfilIdentityErasureTest extends TestCase
             'affected_rows' => 3,
             'anonymized_actor_id' => $anonymiser->pseudonym,
             'anonymized_resource_rows' => 2,
+            'anonymized_event_rows' => 0,
             'reset_tokens_deleted' => 1,
             'sessions_deleted' => 1,
             'memberships_deleted' => 0,
@@ -382,11 +384,13 @@ final class FulfilIdentityErasureTest extends TestCase
         ?RecordingAuditResourceAnonymiser $resourceAnonymiser = null,
         ?InMemoryMembershipRepository $memberships = null,
         ?InMemoryInvitationRepository $invitations = null,
+        ?RecordingEventStoreSubjectAnonymiser $eventAnonymiser = null,
     ): FulfilIdentityErasure {
         return new FulfilIdentityErasure(
             new EraseIdentitySubject($users, $tokens, new InlineTransactionManager()),
             $anonymiser,
             $resourceAnonymiser ?? new RecordingAuditResourceAnonymiser(matchCount: 0),
+            $eventAnonymiser ?? new RecordingEventStoreSubjectAnonymiser(),
             $directory,
             new PurgeUserSessions($sessions),
             new PurgeUserMembership($memberships ?? new InMemoryMembershipRepository()),

@@ -18,7 +18,9 @@ use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
- * {@link EventStore} on the permanent append-only `event_store` table via plain DBAL on the **default**
+ * {@link EventStore} on the permanent `event_store` table — append-only, with a closed set of sanctioned
+ * mutations, of which the GDPR erasure ({@see DbalEventStoreSubjectAnonymiser}) is the only one today — via
+ * plain DBAL on the **default**
  * connection, so {@see append()} joins the use-case write transaction (aggregate row + this row +
  * outbox commit atomically). It is a log of infrastructure with no domain invariants and no ORM
  * entity — the `IDENTITY` sequence and the `aggregate_version` sub-select sit outside the ORM unit of

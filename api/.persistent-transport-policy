@@ -40,7 +40,10 @@
 #   - Config written in PHP is executed, not parsed. The gate fails loudly if a PHP config file mentions
 #     Messenger at all, rather than pretending to understand it.
 #   - It says nothing about `event_store`. Every dispatched event is appended there with its real
-#     `aggregate_id` regardless of routing, and no erasure path touches that table.
+#     `aggregate_id` regardless of routing. That table IS reached by the identity erasure, which rewrites
+#     the subject's identifier by value across the aggregate column and both JSON columns — but only for a
+#     subject whose identity was live, and with no detective control behind it, so a green here says
+#     nothing about whether a row escaped.
 # ---------------------------------------------------------------------------------------------------------
 
 Backoffice.Bank => non-person
