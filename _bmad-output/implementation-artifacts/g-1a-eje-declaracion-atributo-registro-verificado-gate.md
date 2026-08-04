@@ -869,4 +869,17 @@ Mediciones ejecutadas al crear y al revisar la historia (2026-07-30/31, stack de
 
 ### Completion Notes List
 
+**El registro de esta entrega vive en los cuerpos de #616, #618 y #620, y no se reconstruye aquí.** G-1a y G-1b
+se entregaron juntas, así que las notas y la lista de ficheros son las de la entrega conjunta: #616 instala el
+eje (atributo, registro, motor y gate) con el rojo intermedio por `Membership::$userId` e
+`Invitation::$invitedUserId`; #618 aplica el pase adversarial de la implementación —que #616 mergeó sin él— y
+#620 la segunda vuelta de review sobre ese pase. El pase completo, con su veredicto y sus hallazgos, sí está
+transcrito arriba en *Pase adversarial — IMPLEMENTACIÓN*.
+
+Rellenar estas dos secciones ahora sería reconstruirlas a posteriori desde el diff, que es precisamente la
+clase de afirmación que esta épica aprendió a no escribir: quedaría un registro con la forma de una medición y
+el contenido de una lectura tardía. Se declara dónde está el registro real en vez de fabricar uno.
+
 ### File List
+
+Ver el diff de #616, #618 y #620. La lista canónica es la del PR, no una copia que pueda divergir de él.

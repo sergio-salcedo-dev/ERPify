@@ -571,8 +571,22 @@ tocando `api/src/Iam/`: `0d2d45d2` (#613, G-4a) y `080faa16` (#558, eje de recur
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`.
+
 ### Debug Log References
+
+Las gates de la entrega conjunta se corrieron sobre la rama de G-1a, que es donde vivía el árbol completo: ver
+`g-1a-eje-declaracion-atributo-registro-verificado-gate.md` → *Debug Log References*.
 
 ### Completion Notes List
 
+**El registro de esta entrega vive en los cuerpos de #616, #618 y #620, y no se reconstruye aquí.** G-1b se
+entregó junto con G-1a en una sola PR —de modo que el rojo del gate viviera dentro de la entrega y `main` nunca
+quedara roto—, así que las notas y la lista de ficheros son las de la entrega conjunta. Lo específico de esta
+historia (la cadena ejecutando `Membership::$userId` e `Invitation::$invitedUserId`, el método de puerto nuevo
+de `InvitationRepository`, y el invariante ≥1 ADMIN) está cubierto por el pase adversarial transcrito arriba,
+que declara explícitamente cubrir **las dos** historias.
+
 ### File List
+
+Ver el diff de #616, #618 y #620. La lista canónica es la del PR, no una copia que pueda divergir de él.

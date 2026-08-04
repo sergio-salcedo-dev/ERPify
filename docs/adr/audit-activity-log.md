@@ -200,6 +200,13 @@ operativos sueltos: el log admite un **conjunto cerrado de tres políticas de mu
 —la poda, el borrado GDPR del eje **actor** y el del eje **recurso**—, cada una con semántica definida y
 disparador propio; cualquier otra escritura es append.
 
+**«Cerrado» significa cerrado por revisión, no por gate.** Nada automatizado impide una cuarta política:
+`git grep` sobre la tabla es el único control y no está cableado a ninguna puerta, de modo que una mutación
+nueva entra si el diff pasa desapercibido. Se declara porque la frase se lee como una garantía mecánica y no
+lo es. El hueco es **idéntico y simétrico** al de D12 en
+[`event-store-and-projections.md`](./event-store-and-projections.md), con el mismo trigger: la primera
+propuesta de una mutación adicional sobre cualquiera de las dos tablas es cuando el gate compra algo.
+
 - **Política de retención (la poda) — la *única* `DELETE`.** Retención **por nivel** (`security` >
   `activity`), expresada como dato por una `AuditRetentionPolicy` de dominio (`thresholdsAt(now)` → un
   plan de cutoffs por nivel) y ejecutada por un pruner idempotente que **borra en lotes** (acota duración
