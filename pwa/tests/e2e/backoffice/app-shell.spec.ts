@@ -1,5 +1,6 @@
 import { test, expect } from "../fixtures/authenticatedTest";
 import { VIEWPORT_DESKTOP } from "../constants";
+import { clickUntilVisible } from "../helpers/click-until-visible";
 
 test.describe("BackOffice - App Shell", () => {
   test.describe.configure({ mode: "parallel" });
@@ -15,10 +16,33 @@ test.describe("BackOffice - App Shell", () => {
     await expect(page.getByTestId("bo-layout__topbar-title")).toHaveText("Banks");
   });
 
-  test("shows the (placeholder) search, notifications and account controls", async ({ page }) => {
+  test("shows the (placeholder) search and notifications controls", async ({ page }) => {
     await expect(page.getByTestId("bo-layout__topbar-search")).toBeEnabled();
     await expect(page.getByTestId("bo-layout__topbar-notifications")).toBeEnabled();
-    await expect(page.getByTestId("bo-layout__topbar-account")).toBeEnabled();
+  });
+
+  // Logout is asserted present but never clicked: the worker's session is shared by the
+  // rest of this file, and signing out would strand every test that follows.
+  test("opens the account menu and navigates to the profile page", async ({ page }) => {
+    await clickUntilVisible(
+      page.getByTestId("bo-layout__topbar-account"),
+      page.getByTestId("bo-layout__account-menu"),
+    );
+    await expect(page.getByTestId("bo-layout__sidebar-logout--menu")).toBeVisible();
+
+    await page.getByTestId("bo-layout__sidebar-profile--menu").click();
+
+    await expect(page).toHaveURL(/\/backoffice\/profile$/);
+    await expect(page.getByTestId("account-profile__title")).toBeVisible();
+  });
+
+  test("closes the account menu with Escape", async ({ page }) => {
+    const menu = page.getByTestId("bo-layout__account-menu");
+    await clickUntilVisible(page.getByTestId("bo-layout__topbar-account"), menu);
+
+    await page.keyboard.press("Escape");
+
+    await expect(menu).toBeHidden();
   });
 
   test("persists the sidebar collapse state across reload", async ({ page }) => {

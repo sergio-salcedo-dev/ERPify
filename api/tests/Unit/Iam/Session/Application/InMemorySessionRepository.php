@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Session\Application;
 
+use Closure;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
@@ -34,6 +35,13 @@ final class InMemorySessionRepository implements SessionRepository
 {
     /** @var list<Session> */
     public array $saved = [];
+
+    /**
+     * Invoked inside {@see revokeAllForUser()}, so a test can observe the surrounding state at that exact
+     * instant instead of inferring it from a later effect. It is a property rather than a constructor
+     * parameter for the same reason the clock is not one: the constructor is variadic over the presets.
+     */
+    public ?Closure $onRevokeAll = null;
 
     /** @var list<string> userIds passed to revokeOthersForUser */
     public array $revokeOthersCalls = [];
@@ -100,6 +108,10 @@ final class InMemorySessionRepository implements SessionRepository
     public function revokeAllForUser(string $userId): void
     {
         $this->revokeAllCalls[] = $userId;
+
+        if ($this->onRevokeAll instanceof Closure) {
+            ($this->onRevokeAll)();
+        }
     }
 
     #[Override]

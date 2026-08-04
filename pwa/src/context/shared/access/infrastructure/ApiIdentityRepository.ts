@@ -6,7 +6,7 @@ import type { HttpClient, ResponseGuard } from "@/context/shared/http-client/dom
 import { UserStatus } from "../domain/UserStatus";
 import { ALL_PERMISSIONS, type HeldPermission, type Permission } from "../domain/Permission";
 import type { Identity } from "../domain/Identity";
-import type { IdentityRepository } from "../domain/IdentityRepository";
+import type { ChangePasswordCommand, IdentityRepository } from "../domain/IdentityRepository";
 
 interface MeResponse {
   id: string;
@@ -52,7 +52,10 @@ function knownPermissionsOf(permissions: string[]): HeldPermission[] {
 }
 
 /**
- * Resolves the signed-in identity from the gated `/me` endpoint.
+ * HTTP adapter over the signed-in identity: reads it from the gated `/me` endpoint and
+ * changes its credential through `POST /me/password`.
+ *
+ * `me()`:
  *
  *  - 200 → the live identity. A 200 is only returned for an admitted session, so
  *    the user is ACTIVE by construction. Roles are the backend names, stored
@@ -86,5 +89,18 @@ export class ApiIdentityRepository implements IdentityRepository {
       }
       throw error;
     }
+  }
+
+  /**
+   * The 204 carries no body, so no response guard applies. Failures propagate as the
+   * transport's `HttpError`: the caller distinguishes them by the problem `type`, which
+   * is the contract — a wrong current password is a 403, not a 401, so the transport
+   * never mistakes it for an expired session.
+   */
+  async changePassword(command: ChangePasswordCommand): Promise<void> {
+    await this.httpClient.post<ChangePasswordCommand, void>(
+      API_ENDPOINTS.IDENTITY.CHANGE_PASSWORD,
+      command,
+    );
   }
 }

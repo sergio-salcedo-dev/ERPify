@@ -2,9 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { User, Menu, Bell, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
-import { Logo, SidebarItem, ThemeToggle } from "@/components/erpify";
+import { Menu, Bell, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { Logo, MonogramAvatar, SidebarItem, ThemeToggle } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { sectionTitleFor } from "./_lib/sectionTitle";
@@ -28,7 +37,7 @@ export default function BackOfficeLayoutClient({
   const router = useRouter();
   const pathname = usePathname();
   const sectionTitle = sectionTitleFor(pathname);
-  const { logout } = useSession();
+  const { logout, session } = useSession();
 
   useEffect(() => {
     if (globalThis.window === undefined) return;
@@ -68,6 +77,14 @@ export default function BackOfficeLayoutClient({
   };
 
   const navigateTo = (path: string) => () => handleNavigation(path);
+
+  // The top-bar menu mirrors the sidebar's Account group rather than declaring its own
+  // entries, so the two can never drift. Logout is split out: it is the only entry whose
+  // target leaves the back office, and it reads as destructive.
+  const accountEntries = accountMenuItem.subItems ?? [];
+  const accountLinks = accountEntries.filter((entry) => entry.path !== Routes.HOME);
+  const accountLogout = accountEntries.find((entry) => entry.path === Routes.HOME);
+  const accountEmail = session?.user.email ?? "";
 
   const isItemActive = (item: NavItem) => {
     if (pathname === item.path) return true;
@@ -266,6 +283,7 @@ export default function BackOfficeLayoutClient({
                               key={subItem.name}
                               onClick={() => handleNavigation(subItem.path)}
                               title={subItem.name}
+                              data-testid={subItem.testId ? `${subItem.testId}--mobile` : undefined}
                               className={`w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-semibold transition-all ${
                                 pathname === subItem.path
                                   ? "text-primary bg-primary/10"
@@ -345,18 +363,71 @@ export default function BackOfficeLayoutClient({
                   />
                   <span className="sr-only">Notifications</span>
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Account"
-                  title="Account"
-                  data-testid="bo-layout__topbar-account"
-                  className="bo-layout__topbar-account"
-                >
-                  <User className="size-4" aria-hidden />
-                  <span className="sr-only">Account</span>
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Account menu"
+                        title="Account menu"
+                        data-testid="bo-layout__topbar-account"
+                        className="bo-layout__topbar-account"
+                      >
+                        {/* The monogram is aria-hidden by contract, so the trigger keeps its
+                          own static name in aria-label and the sr-only fallback. It is fed the
+                          local part because `initials()` reads a single-word input as a name and
+                          takes its first two characters — on a whole address that yields "A@". */}
+                        <MonogramAvatar
+                          name={accountEmail.split("@")[0]}
+                          className="size-6 rounded-md text-[10px]"
+                        />
+                        <span className="sr-only">Account menu</span>
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-56"
+                    data-testid="bo-layout__account-menu"
+                  >
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel className="truncate" title={accountEmail}>
+                        {accountEmail}
+                      </DropdownMenuLabel>
+                      {accountLinks.map((entry) => (
+                        <DropdownMenuItem
+                          key={entry.name}
+                          onClick={navigateTo(entry.path)}
+                          title={entry.name}
+                          data-testid={entry.testId ? `${entry.testId}--menu` : undefined}
+                        >
+                          {entry.icon ? <entry.icon className="size-4" aria-hidden /> : null}
+                          {entry.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuGroup>
+                    {accountLogout ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={navigateTo(accountLogout.path)}
+                          title={accountLogout.name}
+                          data-testid={
+                            accountLogout.testId ? `${accountLogout.testId}--menu` : undefined
+                          }
+                        >
+                          {accountLogout.icon ? (
+                            <accountLogout.icon className="size-4" aria-hidden />
+                          ) : null}
+                          {accountLogout.name}
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </header>
 
