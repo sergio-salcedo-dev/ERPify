@@ -516,7 +516,35 @@ segundo, el orden ya lo impone el flujo de datos). Winston reencuadra: el eje no
 anonimizador* sino **quién escribe el id**, y propone mover la escritura de `GDPR_SUBJECT_ERASED` a
 `FulfilIdentityErasure`, de modo que el mismo `AuditResource` alimente el `log()` y el `anonymise()` y la
 divergencia deje de ser representable. Los dos coinciden en descartar las Opciones 2, 3 y 4 — y Winston
-demuestra que la 3 está **bloqueada por D4 y D15 a la vez**, no solo es cara. **Pendiente de Sergio.**
+demuestra que la 3 está **bloqueada por D4 y D15 a la vez**, no solo es cara.
+
+**RESUELTA (Sergio, 2026-08-04): gana Winston, con mitigación.** `EraseIdentitySubject` deja de escribir
+`GDPR_SUBJECT_ERASED` y pierde su colaborador de auditoría (4 → 3 en el constructor); la entrada la escribe
+`FulfilIdentityErasure` una sentencia antes del `anonymise()` que la limpia, **desde el mismo valor**. El
+argumento que decide: SI-21 no dice «que alguien lo borre», dice que la referencia tenga dueño **y que ese
+dueño la ejecute**, y hasta ahora escritor ≠ dueño. Ahora un segundo llamador de `EraseIdentitySubject`
+borraría **sin dejar ningún id de persona atrás** — le faltaría la evidencia, que es lo que sí ve quien revise
+ese llamador nuevo. El peligro degrada de «sobrevive PII» a «falta evidencia».
+
+Medido, no supuesto: el canario de consultas **sigue en 17** (mismo número, otro orden — la fila de
+cumplimiento se escribe ahora ENTRE los dos `UPDATE`, porque la pasada de actor acuña el pseudónimo que la de
+recurso necesita y ésta tiene que encontrar una fila que ya exista). El comentario del canario lo dice.
+
+**La mitigación que Winston propuso no encajaba, y la sustituí por otra que da un rojo independiente.** Él
+sugería que `ReconcileErasedSubjectReferences` construyera su `AuditResource` para devolver a 2 los sitios de
+derivación; pero ese puerto recibe un **tipo**, no un recurso, así que forzarlo sería retorcer una firma para
+satisfacer un barrido. En su lugar hay una regla nueva sobre el árbol real: **un tipo `person` debe ser
+CONSTRUIDO por el fichero declarado como su borrador**. Con un solo sitio de derivación, esa regla es la que
+enrojece si alguien refactoriza la construcción — antes incluso de que el check de completitud note que el
+tipo salió del universo. Su rojo aislado está en fixtures (`ReceivingEraserFixture`, un dueño que anonimiza un
+recurso que construye otro: pasa la regla de cableado y falla la de derivación), y el rojo sobre el árbol real
+se verificó stubeando `filesDerivingType()` a `[]` → 2 fallos, exit 2.
+
+**Tres violaciones de PHPMD aparecieron al crecer el código y se arreglaron reestructurando, no suprimiendo:**
+el `execute()` del orquestador pasó de 70 líneas (extraído `recordCombinedErasure()`), el test de orquestación
+también (separado el invariante de `metadata` a su propio caso), y el rules-gate pasó de 10 métodos públicos
+(fusionadas las dos mitades de la regla de staleness, que es como el propio fichero ya trata las reglas de dos
+caras).
 
 ### Pase adversarial (Tarea 8) — DÓNDE quedó y qué encontró
 

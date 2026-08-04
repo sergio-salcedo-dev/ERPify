@@ -38,10 +38,20 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * Both axes are erased **here**, by the context that owns the person, rather than inside one shared
  * anonymiser: `docs/adr/audit-activity-log.md` D4 assigns erasure of a person-denoting resource to the
  * owning context, and `docs/adr/regulatory-audit-trail.md` D15 keeps the actor and subject erasures from
- * being merged into one operation. Erasing only the actor axis would leave the fresh pseudonym beside the
- * real id in any row where the subject is both — a user changing their own roles — which is a reversible
- * crosswalk, not a cosmetic gap. A failure in any link rolls everything
- * back — no half-erased identity, no half-anonymised trail, no orphaned session PII — and re-running is safe.
+ * being merged into one operation.
+ *
+ * Erasing only the actor axis would leave the fresh pseudonym beside the real id in any row where the subject
+ * is both — a user changing their own roles — which is a reversible crosswalk, not a cosmetic gap. A failure
+ * in any link rolls everything back — no half-erased identity, no half-anonymised trail, no orphaned session
+ * PII — and re-running is safe.
+ *
+ * Both compliance entries are written **here**, including the identity module's own `GDPR_SUBJECT_ERASED`,
+ * and that placement is the point rather than a convenience. That entry names the subject as its resource, so
+ * writing it persists the person's real id a second time; the only thing that removes that copy is the
+ * resource anonymiser three lines below, which needs the pseudonym the actor pass mints. Written from inside
+ * {@see EraseIdentitySubject} it would be an identifier that use case cannot erase, left to whichever caller
+ * remembers — the distributed obligation `api/.person-reference-policy` exists against. Here the write and
+ * the erasure share one `AuditResource` value, so they cannot name different resources.
  *
  * Two guards run before the transaction opens: the id shape ({@see Uuid::ensure} → 400 on a malformed id) and
  * the self-erasure refusal — an actor may not erase their own identity, because a subject cannot both cease to
@@ -74,6 +84,14 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 final readonly class FulfilIdentityErasure
 {
     private const string ERASURE_ACTION = 'GDPR_ERASURE_EXECUTED';
+
+    /**
+     * The identity module's own compliance entry. It is written here rather than inside
+     * {@see EraseIdentitySubject} because it names the subject as its audit resource, and the statement
+     * that clears that identifier is three lines below — a use case must not persist an id it has no way
+     * of erasing.
+     */
+    private const string SUBJECT_ERASURE_ACTION = 'GDPR_SUBJECT_ERASED';
 
     /**
      * The audit `resource_type` under which this context's subject appears. It lives here, not in
@@ -115,10 +133,27 @@ final readonly class FulfilIdentityErasure
 
                 $identity = $this->eraseIdentitySubject->execute($subjectId);
                 $anonymisation = $this->auditActorAnonymiser->anonymise($subjectId);
+
+                // One value, two uses, three lines apart: whoever writes the subject's real id into the trail
+                // is the one that clears it, and they cannot disagree about which resource that is because
+                // there is only one to disagree about. The write has to come first — the anonymiser's UPDATE
+                // matches rows that already exist — and it is a `security` entry, so it is inserted
+                // synchronously on this connection rather than deferred past the statement that clears it.
+                $subject = AuditResource::of(self::SUBJECT_RESOURCE_TYPE, $subjectId);
+
+                if ($identity->erasedAnything()) {
+                    $this->auditLogger->log(
+                        self::SUBJECT_ERASURE_ACTION,
+                        AuditLevel::SECURITY,
+                        $subject,
+                        ['reset_tokens_deleted' => $identity->resetTokensDeleted],
+                    );
+                }
+
                 // Same pseudonym for both axes: one person must not split into two anonymous identities.
                 // It re-links nothing, because the original id is gone from both columns.
                 $anonymisedResourceRows = $this->auditResourceAnonymiser->anonymise(
-                    AuditResource::of(self::SUBJECT_RESOURCE_TYPE, $subjectId),
+                    $subject,
                     $anonymisation->pseudonym,
                 );
                 $sessionsDeleted = $this->purgeUserSessions->purge($subjectId);
@@ -139,26 +174,34 @@ final readonly class FulfilIdentityErasure
                     $invitationsDeleted,
                 );
 
-                if ($result->erasedAnything()) {
-                    // Counts only, and the reason is no longer that the sibling row carries the subject id —
-                    // it carries the pseudonym, anonymised in place a few lines above. What holds now is that
-                    // the two rows share the request's correlation id, so anything identifying written here is
-                    // written about the same subject twice: a second copy to erase, on an axis no mutation
-                    // policy reaches, buying nothing. Which subject was erased lives in GDPR_SUBJECT_ERASED,
-                    // on the resource axis, where the anonymiser can reach it.
-                    $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
-                        'affected_rows' => $anonymisation->affectedRows,
-                        'anonymized_resource_rows' => $anonymisedResourceRows,
-                        'reset_tokens_deleted' => $identity->resetTokensDeleted,
-                        'sessions_deleted' => $sessionsDeleted,
-                        'memberships_deleted' => $membershipsDeleted,
-                        'invitations_deleted' => $invitationsDeleted,
-                    ]);
-                }
+                $this->recordCombinedErasure($result);
 
                 return $result;
             },
         );
+    }
+
+    /**
+     * Counts only, and the reason is no longer that the sibling row carries the subject id — it carries the
+     * pseudonym, anonymised in place. What holds now is that the two rows share the request's correlation id,
+     * so anything identifying written here is written about the same subject twice: a second copy to erase, on
+     * an axis no mutation policy reaches, buying nothing. Which subject was erased lives in
+     * `GDPR_SUBJECT_ERASED`, on the resource axis, where the anonymiser can reach it.
+     */
+    private function recordCombinedErasure(FulfilIdentityErasureResult $result): void
+    {
+        if (!$result->erasedAnything()) {
+            return;
+        }
+
+        $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
+            'affected_rows' => $result->anonymizedAuditRows,
+            'anonymized_resource_rows' => $result->anonymizedResourceRows,
+            'reset_tokens_deleted' => $result->resetTokensDeleted,
+            'sessions_deleted' => $result->sessionsDeleted,
+            'memberships_deleted' => $result->membershipsDeleted,
+            'invitations_deleted' => $result->invitationsDeleted,
+        ]);
     }
 
     private function refuseSelfErasure(string $subjectId): void

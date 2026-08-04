@@ -49,12 +49,35 @@ final class PersonResourceErasureRulesGateTest extends TestCase
             'The staleness check no longer separates a graveyard entry from a person line whose literal '
             . 'lives in the constant its own owner holds.',
         );
+        // The clean twin belongs in the same case: reporting `Ghost` proves nothing about the rule if the
+        // check also reports types that ARE written, and only a registry with none can show that.
+        $this->assertSame([], $this->overFixtures('registry.complete')->staleNonPersonTypes());
     }
 
     #[Test]
-    public function theCleanFixtureTwinIsStaleFree(): void
+    public function theDerivationRuleRejectsAnOwnerThatErasesATypeItNeverBuilds(): void
     {
-        $this->assertSame([], $this->overFixtures('registry.complete')->staleNonPersonTypes());
+        // ReceivingEraserFixture holds the anonymiser, calls it and names the type, so the wiring rule is
+        // satisfied — and the resource it erases arrives as a parameter, so whoever writes the identifier is
+        // named nowhere. Green on every earlier check is exactly what makes this the shape worth refusing.
+        $registry = $this->overFixtures('registry.owner-not-deriving');
+
+        $this->assertNotContains(
+            'src/ReceivingEraserFixture.php',
+            $registry->filesDerivingType(self::TYPE),
+            "An owner that never builds the resource it erases was accepted as the type's deriving file.",
+        );
+        $this->assertNull(
+            $registry->erasureDefectIn(self::TYPE, 'src/ReceivingEraserFixture.php'),
+            'The fixture no longer passes the wiring rule, so the derivation rule is no longer isolated.',
+        );
+        // Both halves in one case, because either alone is satisfiable by the wrong rule: a check that
+        // accepted nothing would look identical to one that rejects receivers, and a check that accepted
+        // everything would be no rule at all.
+        $this->assertContains(
+            'src/AuditResourceFixtureWriter.php',
+            $this->overFixtures('registry.complete')->filesDerivingType(self::TYPE),
+        );
     }
 
     #[Test]
@@ -82,7 +105,7 @@ final class PersonResourceErasureRulesGateTest extends TestCase
 
         $this->assertSame([self::TYPE, self::IMPORTED_TYPE], $registry->resourceTypesInSource());
         $this->assertSame(
-            ['src/AnonymiserHolderFixture.php', 'src/AuditResourceFixtureWriter.php'],
+            ['src/AnonymiserHolderFixture.php', 'src/AuditResourceFixtureWriter.php', 'src/ReceivingEraserFixture.php'],
             $registry->sourceFilesCarrying(self::TYPE),
         );
     }

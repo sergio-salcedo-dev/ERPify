@@ -63,11 +63,14 @@ Feature: Erase an identity (GDPR right to erasure)
     And I execute the SQL query "SELECT c.id FROM audit_log c JOIN audit_log t ON t.actor_id = c.resource_id WHERE c.action = 'GDPR_SUBJECT_ERASED' AND t.id = '0190f200-0000-7000-8000-00000000ee21'"
     And there should have 1 records in SQL result
     # Budget canary (17 on "default"). In one transaction (+2 BEGIN/COMMIT): the administrator-role EXISTS
-    # probe, the reset-token delete, the identity find and delete, the GDPR_SUBJECT_ERASED insert, the two
-    # trail-anonymisation UPDATEs — actor axis and resource axis, one round trip each regardless of how many
-    # rows each matches; the resource one always matches at least the GDPR_SUBJECT_ERASED row just written,
-    # which is how that row's identifier gets anonymised — the session delete, the membership delete, the invitation delete and the
-    # GDPR_ERASURE_EXECUTED insert (= 13). The remaining reads resolve the acting admin and its permissions
+    # probe, the reset-token delete, the identity find and delete, the actor-axis anonymisation UPDATE, the
+    # GDPR_SUBJECT_ERASED insert, the resource-axis anonymisation UPDATE, the session delete, the membership
+    # delete, the invitation delete and the GDPR_ERASURE_EXECUTED insert (= 13). The order of the middle three
+    # is the design and not an accident: the compliance row is written BETWEEN the two UPDATEs, because the
+    # actor pass mints the pseudonym the resource pass needs, and the resource pass has to find a row that
+    # already exists. Each UPDATE is one round trip regardless of how many rows it matches, and the resource
+    # one always matches at least that just-written row — which is how its identifier gets anonymised at all.
+    # The remaining reads resolve the acting admin and its permissions
     # before the controller. The two reference deletes are one directed DELETE each, which is why they cost
     # exactly one round trip apiece and not one per row. A shift means an added round trip — re-measure,
     # don't just bump the number.

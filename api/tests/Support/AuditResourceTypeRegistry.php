@@ -101,21 +101,59 @@ final readonly class AuditResourceTypeRegistry
         $types = [];
 
         foreach ($sources as $source) {
-            \preg_match_all("/AuditResource::of\\(\\s*'([^']+)'/", $source, $constructed);
-            \preg_match_all("/'_audit_resource_type'\\s*=>\\s*'([^']+)'/", $source, $routed);
-
-            $types = [
-                ...$types,
-                ...$constructed[1],
-                ...$routed[1],
-                ...$this->typesHeldInConstants($source, $constants),
-            ];
+            $types = [...$types, ...$this->typesDerivedFrom($source, $constants)];
         }
 
         $types = \array_values(\array_unique($types));
         \sort($types);
 
         return $types;
+    }
+
+    /**
+     * Files the source tree derives `$type` FROM, relative to `api/`.
+     *
+     * The completeness check only needs the type to be derivable from somewhere; this answers where, which is
+     * what lets a `person` line be pinned to a file rather than to the tree as a whole. A type nothing derives
+     * yields an empty list — the same silence the completeness check is there to break.
+     *
+     * @return list<string>
+     */
+    public function filesDerivingType(string $type): array
+    {
+        $sources = [];
+
+        foreach ($this->sourceFiles() as $file) {
+            $sources[$file] = (string) \file_get_contents($this->apiRoot . '/' . $file);
+        }
+
+        $constants = $this->constantLiterals($sources);
+        $files = [];
+
+        foreach ($sources as $file => $source) {
+            if (\in_array($type, $this->typesDerivedFrom($source, $constants), true)) {
+                $files[] = $file;
+            }
+        }
+
+        \sort($files);
+
+        return $files;
+    }
+
+    /**
+     * The audit resource types ONE file names, by any of the three forms the sweep understands.
+     *
+     * @param array<string, string> $constants
+     *
+     * @return list<string>
+     */
+    private function typesDerivedFrom(string $source, array $constants): array
+    {
+        \preg_match_all("/AuditResource::of\\(\\s*'([^']+)'/", $source, $constructed);
+        \preg_match_all("/'_audit_resource_type'\\s*=>\\s*'([^']+)'/", $source, $routed);
+
+        return [...$constructed[1], ...$routed[1], ...$this->typesHeldInConstants($source, $constants)];
     }
 
     /**

@@ -97,9 +97,18 @@ final class FulfilIdentityErasureTest extends TestCase
             'pseudonym' => $anonymiser->pseudonym,
         ]], $resourceAnonymiser->calls);
 
-        // Two security rows in order: the identity erasure's own, then the orchestrator's combined record.
+        // Two security rows in order: the subject's erasure record, then the orchestrator's combined one.
         $this->assertCount(2, $audit->records);
+        $this->assertCount(1, $resourceAnonymiser->resources);
         $this->assertSame('GDPR_SUBJECT_ERASED', $audit->records[0]['action']);
+        // The subject's real id is written and cleared from ONE value, so the two cannot name different
+        // resources. Asserted by identity, not equality: two objects that merely compare equal would let a
+        // future refactor rebuild them apart, and the drift this guards against is exactly a compliance row
+        // whose identifier the anonymise call never covers.
+        $this->assertSame($audit->records[0]['resource'], $resourceAnonymiser->resources[0]);
+        // Counts only beside it — nothing identifying the subject travels in the JSON no anonymiser reaches.
+        $this->assertSame(['reset_tokens_deleted' => 1], $audit->records[0]['metadata']);
+
         $this->assertSame('GDPR_ERASURE_EXECUTED', $audit->records[1]['action']);
         $this->assertSame(AuditLevel::SECURITY, $audit->records[1]['level']);
         // Counts only — never the subject id beside its pseudonym, which would re-link the anonymised trail.
@@ -111,6 +120,33 @@ final class FulfilIdentityErasureTest extends TestCase
             'memberships_deleted' => 0,
             'invitations_deleted' => 0,
         ], $audit->records[1]['metadata']);
+    }
+
+    public function testNeitherComplianceRowCarriesTheSubjectIdInItsMetadata(): void
+    {
+        // Both rows at once, and over the serialised JSON rather than over key names: a future key holding
+        // the id under any name is the same defect. Case-insensitively, because the id arrives spelled as the
+        // caller spelled it — `Uuid::ensure()` validates without normalising — and `metadata` is jsonb TEXT,
+        // the one column Postgres does not case-fold for us.
+        $audit = new RecordingAuditLogger();
+
+        $this->useCase(
+            new InMemoryUserRepository(UserMother::create()),
+            new InMemoryPasswordResetTokenRepository($this->tokenFor(UserMother::DEFAULT_ID)),
+            $audit,
+            new RecordingAuditActorAnonymiser(matchCount: 3),
+            new InMemorySessionRepository($this->sessionFor(UserMother::DEFAULT_ID)),
+            new InMemoryActiveAdministratorDirectory([self::ACTING_ADMIN_ID => true]),
+        )->execute(UserMother::DEFAULT_ID);
+
+        $this->assertCount(2, $audit->records);
+
+        foreach ($audit->records as $record) {
+            $this->assertStringNotContainsStringIgnoringCase(
+                UserMother::DEFAULT_ID,
+                \json_encode($record['metadata'], JSON_THROW_ON_ERROR),
+            );
+        }
     }
 
     public function testResourceRowsAloneStillProduceComplianceEvidence(): void
@@ -345,7 +381,7 @@ final class FulfilIdentityErasureTest extends TestCase
         ?InMemoryInvitationRepository $invitations = null,
     ): FulfilIdentityErasure {
         return new FulfilIdentityErasure(
-            new EraseIdentitySubject($users, $tokens, $audit, new InlineTransactionManager()),
+            new EraseIdentitySubject($users, $tokens, new InlineTransactionManager()),
             $anonymiser,
             $resourceAnonymiser ?? new RecordingAuditResourceAnonymiser(matchCount: 0),
             $directory,

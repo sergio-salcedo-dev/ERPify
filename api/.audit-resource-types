@@ -65,9 +65,11 @@
 #     red, so the pair has to go together — a deliberate, reviewable act rather than an impossible one. Today
 #     even that is caught, because dropping the `User` line leaves the type still derived from `src` and the
 #     completeness check demands it back; that protection lapses for any type `src` does not name. Note what
-#     it rests on: derivation, not deletion — the type survives a refactor of any ONE call site only because
-#     two independent ones now derive it (the anonymiser call holding the constant, and the erasure that
-#     imports it). One call site is one refactor away from taking the line and its witness with it.
+#     it rests on: derivation, not deletion. Exactly one file derives `User` — the erasure owner this line
+#     names — so that file's `AuditResource::of(...)` is load-bearing twice over, and a second rule says so
+#     rather than leaving it to luck: a `person` type must be BUILT by the file declared to erase it. Refactor
+#     that construction away and the build goes red at the owner rule before the completeness one even
+#     notices the type has left the universe.
 #   - It resolves a constant imported from another class, and does so on the ONE-CLASS-PER-FILE assumption
 #     below: `Holder::CONST` is looked up by the holder's SHORT name, which is what a call site spells once
 #     the class is imported. Two classes of that short name in different namespaces collapse onto one key,

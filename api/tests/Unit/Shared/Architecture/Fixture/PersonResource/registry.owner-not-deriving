@@ -1,0 +1,4 @@
+# Fixture registry: a person line whose declared erasure owner ERASES the type but never builds it. The owner
+# holds the anonymiser, calls it, and names the type, so every earlier rule reads green — and the file that
+# would actually persist the identifier is named nowhere. That is the split the derivation rule refuses.
+FixtureResource => person :: src/ReceivingEraserFixture.php :: features/witness-complete.feature
