@@ -19,7 +19,7 @@ An event is observed on three independent surfaces; do not conflate their shapes
 
 | Surface | What it is | Contract owner |
 |---------|-----------|----------------|
-| **`event_store`** | The permanent, append-only domain-event log (replay, projections, integrations). | `DomainEvent::toPrimitives()` + the row envelope (§ Domain events, § Stored event row). |
+| **`event_store`** | The permanent domain-event log (replay, projections, integrations) — append-only, with a closed set of sanctioned mutations, the GDPR erasure being the only one today. | `DomainEvent::toPrimitives()` + the row envelope (§ Domain events, § Stored event row). |
 | **Mercure** | The real-time wire message pushed to connected PWA clients. | A per-aggregate reactor (`RefreshRealtimeOnBankChanged`, `RefreshRealtimeOnBankAccountChanged`) — a **different** shape from the stored payload (§ Realtime wire contract). |
 | **Audit log** | Durable access-audit rows in `audit_log` (the operational / actor audit axis), written through the `AuditLogger` seam. | Non-`DomainEvent` messages (§ Non-domain signals). |
 

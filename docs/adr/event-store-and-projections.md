@@ -306,13 +306,40 @@ principio nuevo**: lo extiende al log de negocio.
 
 **La política.** Al ejercerse el derecho de supresión, un **único `UPDATE` parametrizado** reescribe el
 identificador del sujeto con **un UUID aleatorio nuevo acuñado en el borrado** —sin valor original, sin tabla de
-mapeo, sin derivación determinista—, **en la columna y en las claves de `payload`**, dentro de la transacción que
+mapeo, sin derivación determinista—, **en la columna y en el TEXTO SERIALIZADO de `payload` y `metadata`,
+por coincidencia de valor y sin distinguir mayúsculas**, dentro de la transacción que
 `FulfilIdentityErasure` ya posee. Es idempotente por construcción: una segunda pasada no encuentra nada.
 
 **Por qué el borrado es por coincidencia de valor y no por enumeración de eventos.** Un `WHERE` sobre el id del
-sujeto alcanza **todo evento presente y futuro** que lo contenga, sin que ningún productor tenga que acordarse de
-nada. Cualquier mecanismo preventivo —que el id nunca llegue a escribirse— depende de la memoria de quien añada
-el próximo evento, y para ser fiable necesitaría **su propio gate**: más maquinaria para una garantía más débil.
+sujeto alcanza **todo evento** que lo contenga, presente y futuro, sin que ningún productor tenga que acordarse
+de nada. Cualquier mecanismo preventivo —que el id nunca llegue a escribirse— depende de la memoria de quien
+añada el próximo evento, y para ser fiable necesitaría **su propio gate**: más maquinaria para una garantía más
+débil.
+
+*Enmienda (2026-08-04, al implementarlo).* Esta frase decía «en las **claves** de `payload`», y se
+contradecía con la decisión de borrar **por valor** que el propio párrafo siguiente fija: enumerar claves es
+una declaración que solo se comprueba a sí misma —quedaría verde justo sobre los eventos que nadie recordó
+listar—, y ya hay dos nombres distintos (`invitedUserId`, `userId`) garantizados por un trait compartido. Se
+amplía además a `metadata`, que hoy se escribe `[]`, porque la garantía de este anonimizador está definida
+sobre la FILA y no sobre una lista de columnas recordada: cubrir la tercera **retira una excepción** en vez de
+añadir responsabilidad, y como el predicado es por valor, mientras la columna no guarde un id de persona la
+sentencia no reescribe nada. Coste de ejecución: cero (misma sentencia, mismo viaje). La razón **no** es que
+D9 reserve la columna para un actor: el cuerpo de D9 reserva `correlation_id` y `causation_id`, que
+identifican un evento y una petición, no a una persona. Dicho eso, el bloque de esquema de este mismo ADR
+apunta un `actor` futuro, y ese sí sería un id de persona — de modo que cubrir `metadata` no es solo higiene,
+es anticiparse a un campo ya previsto.
+
+*Enmienda (2026-08-04, tras la lectura hostil).* La garantía de arriba se estrecha, y hay que decirlo en vez
+de dejarla escrita más ancha de lo que el código entrega: la sentencia alcanza todo evento que contenga el
+identificador **de un sujeto cuya condición de persona estableció el caso de uso de borrado** —en concreto,
+cuya fila de identidad estaba viva—, no de cualquier UUID que se le pase. El motivo es que el predicado por
+valor no distingue clases de agregado: es lo que le permite alcanzar cualquier evento y, con la misma
+indiferencia, reescribir el stream entero de un banco si alguien teclea su id, de forma irreversible (D4 veta
+la tabla de mapeo que lo desharía) y silenciosa (la rama del id ausente se decide después del commit). La cota
+vive en `FulfilIdentityErasure`, no en el SQL ni en el módulo compartido: clasificar personas es conocimiento
+del contexto que las posee, la misma asignación que
+[`audit-activity-log.md`](./audit-activity-log.md) D4 hace para el eje de recurso. La prohibición de enumerar
+queda intacta — la sentencia no cambia. Lo que se acota es *cuándo* corre, nunca *qué* casa.
 
 **Los dos ejes se cierran juntos, y no es un detalle de alcance.** Una implementación que solo reescriba
 `aggregate_id` deja `SELECT aggregate_id FROM event_store` en verde mientras el id sigue vivo en el `payload` de
@@ -339,8 +366,15 @@ la fila contigua — una declaración cuya única evidencia es la mitad que elig
 reproyectar produce un identificador distinto del emitido. Hoy es inocuo —ningún proyector lee `aggregate_id`—,
 pero el día que un proyector claveara un read model de persona por esa columna, un rebuild post-borrado lo
 re-clavearía **en silencio**. **Regla, no código: un proyector nunca clavea un read model de persona por el
-identificador real.** Los docblocks que hoy dicen «append-only» a secas pasan a decir «append-only, con un
-conjunto cerrado de mutaciones sancionadas», como ya hace `audit_log`.
+identificador real.** Sigue siendo una regla y no un gate, porque ninguno la comprueba: lo medido el
+2026-08-04 es que hoy no puede violarse por accidente —existe **un** `Projector` en el árbol y ninguno lee
+`aggregate_id`—, y que `make php.lint.person-reference` obligaría a un read model de persona **con entidad
+Doctrine** a clasificar su columna `Types::GUID`, a declararla con `#[PersonSubjectReference]` y a dotarla de
+un `PersonReferenceSource`. Eso es un control **adyacente**, no el de esta regla: fuerza a que la columna
+tenga dueño de borrado, nunca a que el proyector no la clavee por el id real, ni detecta el re-claveado tras
+un rebuild. Un read model que pase ese gate sigue expuesto al fallo que este párrafo describe. Los docblocks
+que decían «append-only» a secas dicen «append-only, con un conjunto cerrado de mutaciones sancionadas»,
+como ya hace `audit_log`.
 
 **Trigger de revisita:** (a) que un agregado-persona pase a ser **event-sourced de verdad** —una clave de stream
 reescrita cambiaría la identidad de un agregado vivo—, o (b) que aterrice el **relay externo** de D8: un `UPDATE`
