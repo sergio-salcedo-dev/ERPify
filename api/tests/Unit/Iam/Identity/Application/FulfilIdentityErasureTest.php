@@ -111,9 +111,12 @@ final class FulfilIdentityErasureTest extends TestCase
 
         $this->assertSame('GDPR_ERASURE_EXECUTED', $audit->records[1]['action']);
         $this->assertSame(AuditLevel::SECURITY, $audit->records[1]['level']);
-        // Counts only — never the subject id beside its pseudonym, which would re-link the anonymised trail.
+        // Counts and the pseudonym — never the subject id, which is what would re-link the anonymised trail.
+        // The pseudonym is this entry's contract (D4.1): it is what lets a row marked `actor_erased` be
+        // matched back to the compliance entry that erased it, and the same value the resource axis carries.
         $this->assertSame([
             'affected_rows' => 3,
+            'anonymized_actor_id' => $anonymiser->pseudonym,
             'anonymized_resource_rows' => 2,
             'reset_tokens_deleted' => 1,
             'sessions_deleted' => 1,

@@ -97,7 +97,7 @@ final readonly class AuditResourceTypeRegistry
             $sources[$file] = (string) \file_get_contents($this->apiRoot . '/' . $file);
         }
 
-        $constants = $this->constantLiterals($sources);
+        $constants = AuditResourceConstants::literalsIn($sources);
         $types = [];
 
         foreach ($sources as $source) {
@@ -127,7 +127,7 @@ final readonly class AuditResourceTypeRegistry
             $sources[$file] = (string) \file_get_contents($this->apiRoot . '/' . $file);
         }
 
-        $constants = $this->constantLiterals($sources);
+        $constants = AuditResourceConstants::literalsIn($sources);
         $files = [];
 
         foreach ($sources as $file => $source) {
@@ -150,10 +150,15 @@ final readonly class AuditResourceTypeRegistry
      */
     private function typesDerivedFrom(string $source, array $constants): array
     {
-        \preg_match_all("/AuditResource::of\\(\\s*'([^']+)'/", $source, $constructed);
-        \preg_match_all("/'_audit_resource_type'\\s*=>\\s*'([^']+)'/", $source, $routed);
+        // Over the code alone, like its two siblings. A docblock citing the call it used to make would
+        // otherwise satisfy "the declared owner builds this type" with prose, which is the one thing this
+        // sweep must not accept as a writer.
+        $code = $this->codeWithoutComments($source);
 
-        return [...$constructed[1], ...$routed[1], ...$this->typesHeldInConstants($source, $constants)];
+        \preg_match_all("/AuditResource::of\\(\\s*'([^']+)'/", $code, $constructed);
+        \preg_match_all("/'_audit_resource_type'\\s*=>\\s*'([^']+)'/", $code, $routed);
+
+        return [...$constructed[1], ...$routed[1], ...AuditResourceConstants::typesHeldIn($code, $constants)];
     }
 
     /**
@@ -262,82 +267,6 @@ final readonly class AuditResourceTypeRegistry
     public function witness(): AuditWitnessScenario
     {
         return new AuditWitnessScenario($this->apiRoot);
-    }
-
-    /**
-     * Resolves `AuditResource::of(SomeHolder::SOME_TYPE, …)` back to the literal the constant holds, whether
-     * the holder is the calling class itself (`self` / `static`) or another class the file imports.
-     *
-     * The cross-file half is what keeps the sweep honest about the form this codebase actually writes. A type
-     * whose literal lives in the context that owns the vocabulary — so that one declaration serves the
-     * writer, the anonymiser and the reconciler — is reached from the writer as `Owner::TYPE`, and a sweep
-     * that only understood `self::` would classify a writer as no writer at all: the type would never enter
-     * the universe, so nothing would demand a registry line for it, so nobody would be named as obliged to
-     * erase it. That is not a hypothetical shape — it is the house style, and the erasure of a natural person
-     * is written in it.
-     *
-     * @param array<string, string> $constants `<ShortClassName>::<CONSTANT>` => the literal it holds
-     *
-     * @return list<string>
-     */
-    private function typesHeldInConstants(string $source, array $constants): array
-    {
-        \preg_match_all('/AuditResource::of\(\s*(\w+)::(\w+)/', $source, $references, PREG_SET_ORDER);
-
-        $types = [];
-
-        foreach ($references as [, $holder, $constant]) {
-            if ('self' === $holder || 'static' === $holder) {
-                $declaration = \sprintf("/const\\s+string\\s+%s\\s*=\\s*'([^']+)'/", \preg_quote($constant, '/'));
-
-                if (1 === \preg_match($declaration, $source, $literal) && isset($literal[1])) {
-                    $types[] = $literal[1];
-                }
-
-                continue;
-            }
-
-            $types[] = $constants[$holder . '::' . $constant] ?? null;
-        }
-
-        return \array_values(\array_filter($types));
-    }
-
-    /**
-     * Every `const string NAME = '…'` the tree declares, keyed by the short name of the class holding it.
-     *
-     * Keyed on the short name rather than the FQCN because that is what a call site spells once the class is
-     * imported, and because this gate already derives one class per file named after its path — the same
-     * assumption its registry header states. The trade is deliberate: two classes of the same short name in
-     * different namespaces collapse onto one key, so a lookup may resolve to the wrong sibling's literal and
-     * over-include a type. Over-inclusion fails loudly (the completeness check demands a line for a type
-     * nothing writes, and the staleness check then refuses it), which is the direction this gate must err in;
-     * resolving imports properly would need a parser, and the failure it would prevent is a noisy one.
-     *
-     * @param array<string, string> $sources path relative to `api/` => file contents
-     *
-     * @return array<string, string>
-     */
-    private function constantLiterals(array $sources): array
-    {
-        $literals = [];
-
-        foreach ($sources as $file => $source) {
-            $holder = \basename($file, '.php');
-
-            \preg_match_all(
-                "/const\\s+string\\s+(\\w+)\\s*=\\s*'([^']+)'/",
-                $source,
-                $declarations,
-                PREG_SET_ORDER,
-            );
-
-            foreach ($declarations as [, $constant, $literal]) {
-                $literals[$holder . '::' . $constant] = $literal;
-            }
-        }
-
-        return $literals;
     }
 
     /**

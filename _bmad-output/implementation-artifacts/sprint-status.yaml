@@ -263,7 +263,7 @@ development_status:
   # misma transacción. Sin statement nuevo, sin política de mutación nueva, sin redactor que testear.
   # Trampa de datos para cualquier SQL de esta historia: `metadata` vacía se persiste como `[]`, no `{}`, así que
   # `jsonb_object_keys` ABORTA y `metadata ? 'x'` silencia filas — filtrar por `jsonb_typeof(metadata)='object'`.
-  g-2-ids-de-persona-fuera-de-audit-log-metadata: in-progress
+  g-2-ids-de-persona-fuera-de-audit-log-metadata: done
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
   # aceptación que YA EXISTE (features/backoffice/users/erase.feature:49-62), declarado como TERCER segmento de
   # la línea del registro y leído como CORPUS DE TEXTO — evidencia de grado aceptación al precio de un gate

@@ -743,8 +743,10 @@ gate de claves— se resolvió a favor del **redactor**, y al medir la cadena su
 el sujeto viaja como **recurso** de la entrada y `metadata` se queda con conteos, de modo que el
 `AuditResourceAnonymiser` que `FulfilIdentityErasure` ya ejecutaba reescribe `resource_id` en la misma
 transacción. Sin redactor, sin statement nuevo, sin cuarta política de mutación y sin tabla de mapeo. El gate
-declarativo queda como **alternativa descartada** con condición de reapertura escrita: un **segundo** camino de
-escritura que meta un id de persona en `metadata`. Argumento completo en el artefacto de la historia.
+declarativo queda como **alternativa descartada** con condición de reapertura escrita: **cualquier** camino de
+escritura que vuelva a meter un id de persona en `metadata` — hoy hay cero, así que un trigger redactado sobre
+«el segundo» se negaría a dispararse ante la primera regresión. Lo que decide si un registro declarativo de
+claves compensa su coste es cuántos existen **a la vez**. Argumento completo en el artefacto de la historia.
 
 **Acceptance Criteria:**
 

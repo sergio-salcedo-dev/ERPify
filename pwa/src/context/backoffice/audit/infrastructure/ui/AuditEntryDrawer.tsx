@@ -10,6 +10,7 @@ import type { AuditEventDetail } from "@/context/backoffice/audit/domain/AuditCh
 import { humanizeAuditAction } from "@/context/backoffice/audit/application/humanizeAuditAction";
 import { AuditLevelBadge } from "./AuditLevelBadge";
 import { ActorChip } from "./ActorChip";
+import { ErasedResource } from "./ErasedResource";
 import { AuditChangeDiff } from "./AuditChangeDiff";
 import { MetadataBlock } from "./MetadataBlock";
 
@@ -232,11 +233,15 @@ function nonDiffMetadata(metadata: Record<string, unknown>): Record<string, unkn
   return rest;
 }
 
-/** `resourceType · resourceId` (id copyable, never a deep-link), or «—» when the entry references neither. */
+/**
+ * `resourceType · resourceId` (id copyable, never a deep-link), the anonymized state when the axis has
+ * been erased, or «—» when the entry references neither.
+ */
 function ResourceValue({ entry }: Readonly<{ entry: AuditEntry }>) {
   if (!entry.resourceType && !entry.resourceId) {
     return <span className="text-text-subtle">—</span>;
   }
+  if (entry.resourceErased) return <ErasedResource resourceType={entry.resourceType} />;
   return (
     <span className="inline-flex items-center gap-1">
       {entry.resourceType ? <span>{entry.resourceType}</span> : null}
