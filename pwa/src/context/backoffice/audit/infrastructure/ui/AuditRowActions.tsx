@@ -24,8 +24,10 @@ interface AuditRowActionsProps extends AuditPivotHandlers {
  * The per-row `⋯` overflow holding the investigation **pivots** — each re-filters the same
  * `audit_log` (a safe query), never a write. Copy lives on the inline chips (actor id, resource id,
  * correlation), so the menu stays pivots-only and clipboard stays inside `<CopyButton>`. A pivot is
- * offered only when it has a target: no follow-actor for an anonymized actor (its random UUID is not
- * identity), no follow-resource without a resource. Renders nothing when no pivot applies.
+ * offered only when it has a target, and an erased axis has none: no follow-actor for an anonymized
+ * actor and no follow-resource for an anonymized resource — the random UUID left on either column is
+ * not identity, so filtering by it would present a reference denoting nobody as a live one — and no
+ * follow-resource without a resource at all. Renders nothing when no pivot applies.
  */
 export function AuditRowActions({
   entry,
@@ -36,7 +38,9 @@ export function AuditRowActions({
   const canFollowActor = Boolean(onFollowActor) && entry.actorId !== null && !entry.actorErased;
   const canFollowCorrelation = Boolean(onFollowCorrelation);
   const canFollowResource =
-    Boolean(onFollowResource) && (entry.resourceType !== null || entry.resourceId !== null);
+    Boolean(onFollowResource) &&
+    (entry.resourceType !== null || entry.resourceId !== null) &&
+    !entry.resourceErased;
 
   if (!canFollowActor && !canFollowCorrelation && !canFollowResource) return null;
 

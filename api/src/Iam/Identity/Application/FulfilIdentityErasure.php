@@ -174,7 +174,7 @@ final readonly class FulfilIdentityErasure
                     $invitationsDeleted,
                 );
 
-                $this->recordCombinedErasure($result);
+                $this->recordCombinedErasure($result, $anonymisation->pseudonym);
 
                 return $result;
             },
@@ -182,13 +182,15 @@ final readonly class FulfilIdentityErasure
     }
 
     /**
-     * Counts only, and the reason is no longer that the sibling row carries the subject id — it carries the
-     * pseudonym, anonymised in place. What holds now is that the two rows share the request's correlation id,
-     * so anything identifying written here is written about the same subject twice: a second copy to erase, on
-     * an axis no mutation policy reaches, buying nothing. Which subject was erased lives in
-     * `GDPR_SUBJECT_ERASED`, on the resource axis, where the anonymiser can reach it.
+     * Counts, plus the one identifier this entry is contractually required to carry: the pseudonym the actor
+     * pass minted. `docs/adr/audit-activity-log.md` D4.1 makes it part of this event's contract and builds a
+     * detectable integrity check on it — a row marked `actor_erased` whose pseudonym appears in no compliance
+     * entry is a violation — so omitting it here left that check unsatisfiable for every erasure this path
+     * fulfils, while the CLI sibling honoured it. It is not a second copy to erase: it is a fresh UUID with no
+     * original behind it, which is exactly what D4 requires a pseudonym to be. The subject's real id is what
+     * stays out, on both axes.
      */
-    private function recordCombinedErasure(FulfilIdentityErasureResult $result): void
+    private function recordCombinedErasure(FulfilIdentityErasureResult $result, string $pseudonym): void
     {
         if (!$result->erasedAnything()) {
             return;
@@ -196,6 +198,7 @@ final readonly class FulfilIdentityErasure
 
         $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
             'affected_rows' => $result->anonymizedAuditRows,
+            'anonymized_actor_id' => $pseudonym,
             'anonymized_resource_rows' => $result->anonymizedResourceRows,
             'reset_tokens_deleted' => $result->resetTokensDeleted,
             'sessions_deleted' => $result->sessionsDeleted,

@@ -53,9 +53,12 @@ Feature: Erase an identity (GDPR right to erasure)
     And I execute the SQL query "SELECT a.id FROM audit_log a JOIN identity_user u ON a.metadata::text ILIKE '%' || u.id::text || '%'"
     And there should have 0 records in SQL result
     # …and the compliance row is still USABLE evidence: it names the subject as its resource, anonymised in
-    # place to the pseudonym, so it is still answerable which subject was erased and when. Erasing the
-    # identifier is not the same as destroying the record.
-    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'GDPR_SUBJECT_ERASED' AND resource_type = 'User' AND resource_erased = TRUE AND resource_id <> '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c'"
+    # place to the pseudonym, so the record survives the identifier. Scoped by correlation id like the two
+    # assertions above it: an exact count over the whole table is a claim about the suite's history rather
+    # than about this erasure, and goes red the day a second scenario erases anybody before this one runs.
+    # What the pseudonym buys is a LINK, not an attribution — `audit_log` does not answer WHICH person by
+    # design (D4 bans the crosswalk), and the link itself is only as long-lived as the trail it points into.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '0190f200-0000-7000-8000-00000000ee51' AND action = 'GDPR_SUBJECT_ERASED' AND resource_type = 'User' AND resource_erased = TRUE AND resource_id <> '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c'"
     And there should have 1 records in SQL result
     # The evidence is LINKED to the trail it explains: the pseudonym on the compliance row is the same one the
     # subject's anonymised audit row carries. One person, one anonymous identity — which is what makes the

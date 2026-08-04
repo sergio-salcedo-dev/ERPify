@@ -242,9 +242,10 @@ disparador propio; cualquier otra escritura es append.
   ya no describe esta versión — DBAL usa savepoints en toda transacción anidada y
   `setNestTransactionsWithSavepoints(false)` lanza. La regla se mantiene por su otra razón, que sigue en
   pie: el borrado a medias es un estado observable, y una sola frontera de transacción es lo que lo impide.
-- **`resource_id` no es identidad del sujeto borrado.** El erasure anonimiza al *actor*; `resource_id` no
-  se toca. Si un recurso representa **directamente** a una persona física, su borrado GDPR es
-  responsabilidad de la política del bounded context dueño del recurso, no de esta política de auditoría.
+- **`resource_id` no es identidad del sujeto borrado, y su borrado es del contexto dueño.** Esta política
+  de auditoría anonimiza el eje de *actor* y aporta el `UPDATE` del eje de recurso, pero no decide qué
+  tipos denotan personas: si un recurso representa **directamente** a una persona física, su borrado GDPR
+  es responsabilidad del bounded context dueño del recurso, que es quien lo encadena.
   **Consecuencia, de obligada lectura antes de auditar un recurso-persona:** una fila cuyo actor pueda ser
   *la misma persona* que su recurso queda, tras el borrado, con el seudónimo fresco en `actor_id` y el id
   real en `resource_id` — un **crosswalk reversible** que re-atribuye todas las demás filas anonimizadas de
@@ -354,6 +355,12 @@ incidental—, con `actor_type = system` (el actor del borrado es el proceso ope
 nunca el id original). Esto habilita un *cross-check* reconciliable: todo `actor_erased = true` ⟺
 existe un `GDPR_ERASURE_EXECUTED` con ese pseudónimo; una divergencia es una violación de integridad
 **detectable** (p. ej. desde un job de mantenimiento), no un acoplamiento (la UI no deriva del evento).
+
+**La clave la escriben las DOS rutas**, y decirlo aquí es la mitad que faltaba: el CLI operador
+(`EraseActorAuditTrailCommand`) y la supresión por HTTP (`FulfilIdentityErasure`). Mientras la segunda
+escribía solo conteos, el ⟺ de arriba era insatisfacible para toda identidad borrada por la ruta
+principal, y nada lo señalaba: el contrato vivía en este documento y en un solo llamador. El *cross-check*
+sigue sin implementarse como job — lo que existe es la clave sobre la que construirlo.
 
 **Invariante (protegido por test).** Tras el erasure debe cumplirse **siempre**:
 `actor_erased = true ∧ actor_id ≠ original ∧ ip = '[REDACTED]' ∧ user_agent = '[REDACTED]'`.

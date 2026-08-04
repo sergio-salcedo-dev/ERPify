@@ -17,7 +17,10 @@ use Override;
  */
 final class RecordingAuditActorAnonymiser implements AuditActorAnonymiser
 {
-    public string $pseudonym = 'a1b2c3d4-0000-7000-8000-000000000000';
+    /** Named so a test with no handle on the instance can still assert the value the double will mint. */
+    public const string PSEUDONYM = 'a1b2c3d4-0000-7000-8000-000000000000';
+
+    public string $pseudonym = self::PSEUDONYM;
 
     public int $countForCalls = 0;
 

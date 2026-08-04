@@ -13,6 +13,7 @@ import { AuditLevel, type AuditEntry } from "@/context/backoffice/audit/domain/A
 import { humanizeAuditAction } from "@/context/backoffice/audit/application/humanizeAuditAction";
 import { AuditLevelBadge } from "./AuditLevelBadge";
 import { ActorChip } from "./ActorChip";
+import { ErasedResource } from "./ErasedResource";
 import { AuditRowActions, type AuditPivotHandlers } from "./AuditRowActions";
 
 const COLUMN_COUNT = 7;
@@ -246,7 +247,11 @@ export function AuditTimelineTable({
                       />
                     </td>
                     <td className="text-muted-foreground px-3 text-xs">
-                      <ResourceCell type={entry.resourceType} id={entry.resourceId} />
+                      <ResourceCell
+                        type={entry.resourceType}
+                        id={entry.resourceId}
+                        erased={entry.resourceErased}
+                      />
                     </td>
                     <td className="px-3">
                       <CorrelationIdChip id={entry.correlationId} />
@@ -277,9 +282,17 @@ function levelAccent(level: string): string {
   return "";
 }
 
-/** `resourceType · resourceId` (id copyable, never a deep-link), or «—» when the record has neither. */
-function ResourceCell({ type, id }: Readonly<{ type: string | null; id: string | null }>) {
+/**
+ * `resourceType · resourceId` (id copyable, never a deep-link), the anonymized state when the axis has
+ * been erased, or «—» when the record references neither.
+ */
+function ResourceCell({
+  type,
+  id,
+  erased,
+}: Readonly<{ type: string | null; id: string | null; erased: boolean }>) {
   if (!type && !id) return <span className="text-text-subtle">—</span>;
+  if (erased) return <ErasedResource resourceType={type} />;
   return (
     <span className="inline-flex items-center gap-1">
       {type ? <span>{type}</span> : null}

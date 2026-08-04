@@ -112,4 +112,25 @@ describe("AuditTimelineTable", () => {
     renderTable();
     expect(screen.queryByTestId("audit-row-actions__trigger-a")).toBeNull();
   });
+
+  it("offers no follow-resource pivot for an anonymized resource", () => {
+    // Symmetrical to the drawer, and the row menu is the primary path to the pivot rather than the
+    // secondary one. With follow-resource the only handler and the axis erased, no pivot is left, so
+    // the whole trigger goes — asserted on the trigger rather than on the opened item because a
+    // just-opened popup can close before its content mounts.
+    renderTable({
+      groups: groupsOf([{ ...SECURITY, resourceErased: true }]),
+      onFollowResource: vi.fn(),
+    });
+    expect(screen.queryByTestId("audit-row-actions__trigger-a")).toBeNull();
+  });
+
+  it("renders an erased resource as its legal state, never as an id", () => {
+    // The pseudonym left on the column is a fresh UUID denoting nobody: showing it as an id — or
+    // letting it be copied into a ticket — fabricates a reference. Same decision the actor axis takes.
+    renderTable({ groups: groupsOf([{ ...SECURITY, resourceErased: true }]) });
+    expect(screen.getByText("anonimizado (GDPR)")).toBeInTheDocument();
+    expect(screen.queryByText(/019f0360/)).toBeNull();
+    expect(screen.queryByTitle("Copiar id de recurso")).toBeNull();
+  });
 });

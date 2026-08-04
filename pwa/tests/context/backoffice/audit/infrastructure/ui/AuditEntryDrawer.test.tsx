@@ -104,6 +104,15 @@ describe("AuditEntryDrawer", () => {
     expect(screen.queryByTestId("audit-entry-drawer__follow-resource")).toBeNull();
   });
 
+  it("renders an erased resource as its legal state, never as an id", () => {
+    // Suppressing the pivot is not enough on its own: the field still rendered the pseudonym in a
+    // `<code>` beside a copy button, so the id an operator pastes into a ticket denotes nobody.
+    render(<AuditEntryDrawer entry={{ ...ENTRY, resourceErased: true }} open onClose={vi.fn()} />);
+    expect(screen.getByText("anonimizado (GDPR)")).toBeInTheDocument();
+    expect(screen.queryByText(ENTRY.resourceId as string)).toBeNull();
+    expect(screen.queryByTitle("Copiar id de recurso")).toBeNull();
+  });
+
   it("copies the entry id", () => {
     render(<AuditEntryDrawer entry={ENTRY} open onClose={vi.fn()} />);
     expect(screen.getByTestId("audit-entry-drawer__copy-id")).toBeInTheDocument();

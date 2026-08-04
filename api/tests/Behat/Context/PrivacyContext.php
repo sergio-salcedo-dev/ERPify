@@ -33,6 +33,14 @@ use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
  * What it does NOT buy, said plainly: it is as deletable as any other test, so it widens coverage rather than
  * conferring immunity, and it proves nothing about a write path no scenario exercises. It also runs after the
  * scenario's own steps, so a query-budget assertion inside a scenario is measured before this ever executes.
+ * And it is **vacuous whenever `identity_user` is empty** — the JOIN then returns nothing whatever `metadata`
+ * holds, so a scenario that seeds no identity is not a witness at all, only a scenario that does not object.
+ *
+ * `audit_log` is not truncated between scenarios, so a single leak would otherwise be re-reported by every
+ * scenario that follows it — 68 failures for one seeded row, none of them naming the scenario responsible.
+ * Rows already reported are therefore remembered and excluded, which makes the FIRST failure the culprit's.
+ * The memory is static because Behat builds a fresh context per scenario; it is scoped to one process and
+ * dies with it, and its only effect is on which run reports a row, never on whether the row is a defect.
  *
  * **Read the exit code, not the tally.** Measured on Behat 4: when this hook fails, the run exits non-zero —
  * so CI gates on it correctly — but the summary still prints every scenario and step as passed, because a
@@ -43,15 +51,28 @@ use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 final class PrivacyContext extends AbstractContext
 {
     /**
-     * Bounded because the count is not the point — one surviving row is the whole finding, and the ids are
-     * printed so the failure names the rows to look at instead of only asserting that some exist.
+     * Unbounded on purpose, unlike the assertion it feeds: a `LIMIT` here could fill with rows a previous
+     * scenario already reported and hide the new one behind them. The green case returns nothing, so the
+     * cost only grows once there is a defect to pay it for; what the failure PRINTS is bounded instead.
      */
     private const string LEAKED_PERSON_IDS = <<<'SQL'
         SELECT a.id, u.id AS person_id
         FROM audit_log a
         JOIN identity_user u ON a.metadata::text ILIKE '%' || u.id::text || '%'
-        LIMIT 5
         SQL;
+
+    /** How many rows a failure names — one is the finding, the rest are only there to give it a shape. */
+    private const int REPORTED = 5;
+
+    /**
+     * Findings already reported by an earlier scenario of this process, so the failure lands on the scenario
+     * that introduced the leak rather than on all of its successors. Keyed by the whole `{audit row, person}`
+     * pair rather than by the row alone: one row can leak two people's identifiers, and each is its own
+     * finding.
+     *
+     * @var array<string, true>
+     */
+    private static array $alreadyReported = [];
 
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
@@ -64,7 +85,21 @@ final class PrivacyContext extends AbstractContext
     #[AfterScenario]
     public function noLivePersonIdSurvivesInAuditMetadata(): void
     {
-        $leaked = $this->entityManager->getConnection()->executeQuery(self::LEAKED_PERSON_IDS)->fetchAllAssociative();
+        $rows = $this->entityManager->getConnection()->executeQuery(self::LEAKED_PERSON_IDS)->fetchAllAssociative();
+        $leaked = [];
+
+        foreach ($rows as $row) {
+            $finding = \json_encode($row, JSON_THROW_ON_ERROR);
+
+            if (isset(self::$alreadyReported[$finding])) {
+                continue;
+            }
+
+            self::$alreadyReported[$finding] = true;
+            $leaked[] = $row;
+        }
+
+        $leaked = \array_slice($leaked, 0, self::REPORTED);
 
         self::assertSame([], $leaked, \sprintf(
             'A person this database still knows has their identifier inside `audit_log.metadata`: %s. No '

@@ -21,13 +21,19 @@ use PHPUnit\Framework\TestCase;
  * their own erasure beside their pseudonym. The gate turns "somebody must remember" into "the build stops
  * until somebody decides".
  *
- * Four directions, all mechanical:
+ * Five directions, all mechanical:
  *
  *   - **Completeness** — every type reaching `AuditResource::of()` or declared as a route's
  *     `_audit_resource_type` default must be classified here, whether the type is written at the call as a
- *     literal or held in a same-class constant. The constant form is not an exotic case to tolerate: it is
- *     the form the person type itself uses, so a regex that only saw literals would be blind to the one
- *     type this gate exists for.
+ *     literal or held in a constant — in the calling class or in another one it imports. The constant form
+ *     is not an exotic case to tolerate: it is the form the person type itself uses, so a regex that only
+ *     saw literals would be blind to the one type this gate exists for. A constant reference the sweep
+ *     cannot resolve raises rather than yielding no type, because yielding no type IS the failure this
+ *     whole direction exists to prevent, reached quietly.
+ *   - **Derivation** — the file a `person` line names as its eraser must also be one of the files that
+ *     BUILD the type. Whoever persists a person's identifier has to be the one obliged to remove it, or the
+ *     obligation is handed to a caller nobody checks; and it is what keeps the type derivable at all, so the
+ *     anti-deletion property of the line does not reduce to a coincidence somebody may refactor away.
  *   - **Wiring** — every `person` line must name a file that holds an `AuditResourceAnonymiser` property
  *     *and calls `anonymise()` on it*, so "declared a person, nobody erases it" fails too. Matching is done
  *     on comment-stripped source: a docblock naming the collaborator is prose, not wiring, and must not be
@@ -44,9 +50,12 @@ use PHPUnit\Framework\TestCase;
  *
  * What it deliberately cannot do: judge the classification. Calling `Contact` a non-person passes. That is
  * a review decision, and the gate's job is to force it to be *made*, in a diffable file, at the moment the
- * type is introduced. Two source forms also stay out of reach — a type assembled at runtime from request
+ * type is introduced. One source form stays out of reach — a type assembled at runtime from request
  * attributes ({@see \Erpify\Shared\Audit\Infrastructure\Http\RequestAuditResourceExtractor}, whose inputs
- * the route-default check covers instead) and a constant imported from another class.
+ * the route-default check covers instead). And one ambiguity remains by construction: constants are keyed by
+ * the holder's SHORT name, so two same-named classes in different namespaces collapse onto one key. When
+ * their literals agree that over-includes, which fails loudly; when they disagree the sweep now raises,
+ * because resolving a call site to its namesake's literal would drop the type it really writes.
  *
  * The rules themselves live in {@see AuditResourceTypeRegistry} and their falsifiability is pinned by
  * {@see PersonResourceErasureRulesGateTest}; this class only asserts them over the real tree.
@@ -89,8 +98,18 @@ final class PersonResourceErasureGateTest extends TestCase
     public function everyPersonTypeIsBuiltByTheFileDeclaredToEraseIt(): void
     {
         $registry = $this->registry();
+        $personTypes = $this->personTypes();
 
-        foreach ($this->personTypes() as $type => $personResourceDeclaration) {
+        // The only assertion below lives inside the loop, so an empty registry side satisfies it vacuously:
+        // reclassifying the one `person` type as `non-person` would leave this executing zero assertions and
+        // reporting green, which is the shape a rule must not be allowed to fail in.
+        $this->assertNotEmpty(
+            $personTypes,
+            'The registry declares no person-denoting resource type, so this rule has no subject left and '
+            . 'passes whatever the source tree does.',
+        );
+
+        foreach ($personTypes as $type => $personResourceDeclaration) {
             $deriving = $registry->filesDerivingType($type);
 
             $this->assertContains($personResourceDeclaration->erasedBy, $deriving, \sprintf(
@@ -140,12 +159,11 @@ final class PersonResourceErasureGateTest extends TestCase
         // supplies instead.
         //
         // It is NOT a tripwire on production writers, and reading a green here as evidence that none exists
-        // would be wrong. `User` IS written in production — the GDPR erasure names its subject as the
-        // entry's resource — and this check does not see that writer, because it reaches the type through
-        // the constant its owner declares while this sweep matches the quoted literal alone. What the
-        // assertion still buys is narrower and worth keeping: the literal has not spread beyond the class
-        // that declares it, which is exactly what the self-satisfaction argument above rests on. A second
-        // class spelling the literal turns this red.
+        // would be wrong: this sweep matches the quoted literal alone, so a writer reaching the type through
+        // a constant it imports is invisible to it — the completeness direction is what resolves those, not
+        // this one. What the assertion buys is narrower and worth keeping: the literal has not spread beyond
+        // the class that declares it, which is exactly what the self-satisfaction argument above rests on.
+        // A second class spelling the literal turns this red.
         $registry = $this->registry();
 
         foreach ($this->personTypes() as $type => $personResourceDeclaration) {

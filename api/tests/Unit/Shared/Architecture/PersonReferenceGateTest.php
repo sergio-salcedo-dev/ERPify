@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
-use Erpify\Shared\Audit\Domain\AuditedEntity;
+use Erpify\Tests\Support\CapturedPersonReferences;
 use Erpify\Tests\Support\PersonReferences;
 use Erpify\Tests\Support\UndeclaredPersonReferences;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -181,15 +181,7 @@ final class PersonReferenceGateTest extends TestCase
     #[Test]
     public function noPersonReferenceSitsOnAnEntityWhoseWritesTheTrailCaptures(): void
     {
-        $captured = [];
-
-        foreach ($this->references()->classification() as $key => $owner) {
-            $entity = \substr($key, 0, (int) \strpos($key, '::'));
-
-            if (null !== $owner && \is_a($entity, AuditedEntity::class, true)) {
-                $captured[] = $key;
-            }
-        }
+        $captured = CapturedPersonReferences::in($this->references()->classification());
 
         $this->assertSame([], $captured, \sprintf(
             'These person references live on an aggregate that opts into write change-data-capture, so every '

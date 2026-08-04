@@ -76,11 +76,12 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
         $this->assertInstanceOf(Membership::class, $memberships->findByUserId($other));
         $this->assertSame(1, $invitations->deleteAllForInvitedUser($other));
 
-        // Two rows in order: the identity erasure's own, then the orchestrator's combined record. Counts
-        // only — an id here would sit beside the anonymisation pseudonym and re-link the trail.
+        // Two rows in order: the identity erasure's own, then the orchestrator's combined record. Counts and
+        // the pseudonym — the subject's own id is what would re-link the trail, and it appears in neither.
         $this->assertCount(2, $audit->records);
         $this->assertSame([
             'affected_rows' => 0,
+            'anonymized_actor_id' => RecordingAuditActorAnonymiser::PSEUDONYM,
             'anonymized_resource_rows' => 0,
             'reset_tokens_deleted' => 0,
             'sessions_deleted' => 0,

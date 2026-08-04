@@ -35,13 +35,18 @@
 #
 #   - It cannot judge the classification. Calling `Contact` a non-person passes; the completeness check still
 #     demands a line, so the decision is forced into a diff, which is the point. Review is what judges it.
-#   - `User` IS WRITTEN IN PRODUCTION. EraseIdentitySubject names the erased subject as its compliance
+#   - `User` IS WRITTEN IN PRODUCTION. FulfilIdentityErasure names the erased subject as its compliance
 #     entry's resource, so the person axis of `audit_log` is not empty and this line closes a live hole
-#     rather than reserving one. That writer spells no literal — it reaches the type through
-#     `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE` — and for a while the sweep could not see it at all,
-#     which is the worst shape this registry can fail in: an unseen writer means no type in the universe,
-#     so no line demanded, so nobody named as obliged to erase it. The sweep now resolves that form; what
-#     does NOT follow is that a green here means "no unseen writer exists", and
+#     rather than reserving one. It is the orchestrator and not the identity use case it records, because
+#     the statement that clears that identifier is the resource anonymiser it runs next: a use case must
+#     not persist an id it has no way of erasing. That writer declares the literal itself and reaches it
+#     through `self::`, so this sweep sees it by the same path as any other in-class constant.
+#   - The sweep ALSO resolves `OtherClass::CONSTANT` across files, and today nothing in `src` is written
+#     that way — the capability is prevention, not description. It earns its cost because the failure it
+#     prevents is the worst shape this registry can fail in: an unseen writer means no type in the
+#     universe, so no line demanded, so nobody named as obliged to erase it. It no longer fails that way
+#     silently either — a constant reference this sweep cannot resolve now raises instead of yielding no
+#     type. What does NOT follow is that a green here means "no unseen writer exists", and
 #     PersonResourceErasureGateTest says so at the one assertion that used to promise otherwise.
 #   - The witness proves the declared erasure path REACHES a row of the type. It does not prove any such row
 #     is ever produced, and no check here can: liveness of a producer is precisely what this gate is

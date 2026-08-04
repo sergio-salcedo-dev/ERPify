@@ -7,13 +7,13 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\EraseIdentitySubject;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
+use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
+use Erpify\Tests\Support\ConstructorCollaboratorTypes;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
-use ReflectionParameter;
 
 /**
  * @internal
@@ -42,16 +42,16 @@ final class EraseIdentitySubjectTest extends TestCase
         // person's real id — and clearing that copy needs the pseudonym the actor pass mints, which is not
         // reachable from here. The absence of the collaborator is what makes "this use case leaves no
         // identifier behind for someone else to remember" a property of the type rather than of its callers.
-        $collaborators = (new ReflectionClass(EraseIdentitySubject::class))
-            ->getConstructor()?->getParameters() ?? []
-        ;
+        // Over the type NAMES rather than over the string form of the type, because the string form of a
+        // nullable parameter is `?Fqcn` and no equality with the FQCN matches it — so adding the collaborator
+        // back as an optional `?AuditLogger $logger = null`, the ordinary way a dependency arrives without
+        // breaking callers, would leave this green while the class could once again persist an identifier it
+        // has no way of erasing.
+        $collaborators = ConstructorCollaboratorTypes::of(EraseIdentitySubject::class);
 
-        $types = \array_map(
-            static fn (ReflectionParameter $parameter): string => (string) $parameter->getType(),
-            $collaborators,
-        );
-
-        $this->assertNotContains(\Erpify\Shared\Audit\Application\AuditLogger::class, $types);
+        $this->assertNotContains(AuditLogger::class, $collaborators);
+        // The sweep has to have found something, or a constructor read as empty passes this whatever it takes.
+        $this->assertNotEmpty($collaborators, 'No constructor parameter type resolved, so the rule has no subject.');
     }
 
     public function testARerunWithNothingLeftErasesNothing(): void
