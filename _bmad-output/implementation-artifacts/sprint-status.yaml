@@ -392,7 +392,8 @@ development_status:
 #     escribió leyendo el texto de la tarea ("decidir si se arregla aquí para los tres") sin medir el resultado.
 #   · "el audit no vio esta épica con 8/8 en done" — la vio: su check A es lo que abrió la sesión de la retro.
 #     Lo que sí es real quedó reformulado abajo, y va de la convención de commit, no del comando.
-# Los dos resolubles se implementaron en esta misma PR y quedan como done.
+# Los cinco items se implementaron en esta misma PR: los dos resolubles y las tres decisiones, tomadas por
+# Sergio el 2026-08-04. Detalle y argumento de cada decision en el fichero de la retro.
 action_items:
   - epic: gdpr-hardening
     action: "Afirmar que la siembra afectó a N filas antes de asertar la ausencia — la contramedida que arregló los dos tests vacuos (G-1b, G-5)"
@@ -403,14 +404,14 @@ action_items:
     owner: "Sergio"
     status: done
   - epic: gdpr-hardening
-    action: "Decidir qué mueve el pase adversarial antes del merge: requisito para abrir el PR, o basta con que su registro apunte al PR que lo aplica (#616 y #620 mergearon antes de tenerlo empujado)"
+    action: "El pase adversarial pasa a ser requisito para ABRIR el PR, no para llegar a done; un PR que necesita ojos antes es un draft"
     owner: "Sergio"
-    status: open
+    status: done
   - epic: gdpr-hardening
-    action: "Decidir si se recupera el tag de historia en el asunto de los commits de CODIGO (hoy solo lo llevan los docs/chore, que el check B descarta, y por eso el check se quedó sin candidatos en las 8 historias) o se declara inerte en su cabecera"
+    action: "Vuelve el tag de historia al asunto de los commits que llevan CODIGO — es la unica entrada del check B del audit; descartado el hook de commit-msg"
     owner: "Sergio"
-    status: open
+    status: done
   - epic: gdpr-hardening
-    action: "Decidir si la promesa de conjunto cerrado de mutaciones de D12 (y su gemelo de audit_log) se ablanda o el conjunto se cierra de verdad; hoy git grep es el unico control"
+    action: "La promesa de conjunto cerrado de D12 y su gemelo de audit_log se ablanda: cerrado por revision, no por gate, con el trigger del gate explicito"
     owner: "Sergio"
-    status: open
+    status: done

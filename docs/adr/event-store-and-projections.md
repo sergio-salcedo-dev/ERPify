@@ -376,6 +376,19 @@ un rebuild. Un read model que pase ese gate sigue expuesto al fallo que este pá
 que decían «append-only» a secas dicen «append-only, con un conjunto cerrado de mutaciones sancionadas»,
 como ya hace `audit_log`.
 
+**Qué cierra el conjunto, dicho con precisión: la revisión, no un gate — y la palabra «cerrado» se lee así.**
+No existe control automatizado que impida una segunda mutación: `git grep "UPDATE event_store"` es todo lo que
+hay, y no lo ejecuta nadie más que quien se acuerde. El conjunto es cerrado **por decisión**, y una propuesta
+de ampliarlo se detecta leyendo el diff, no rompiendo el build. Se declara aquí porque la frase anterior
+—«conjunto cerrado»— se lee con naturalidad como una garantía mecánica, y prometer un control que no existe es
+el defecto que esta épica entera se dedicó a eliminar. El hueco es **simétrico** con
+[`audit-activity-log.md`](./audit-activity-log.md), que tiene el mismo conjunto declarado y el mismo control
+ausente, así que ampliarlo a un gate es un trabajo para las dos tablas o para ninguna.
+
+**Trigger para construir ese gate:** la primera propuesta de una **segunda** mutación sobre cualquiera de las
+dos tablas. Mientras el conjunto tenga un solo miembro por tabla, un gate cuesta registro, fixtures y su propia
+cabecera de puntos ciegos para vigilar una lista que no ha cambiado nunca — y la Regla de Tres no se cumple.
+
 **Trigger de revisita:** (a) que un agregado-persona pase a ser **event-sourced de verdad** —una clave de stream
 reescrita cambiaría la identidad de un agregado vivo—, o (b) que aterrice el **relay externo** de D8: un `UPDATE`
 aguas arriba **no** se propaga a un sumidero ya replicado. Nótese que (b) no exime a la alternativa del
