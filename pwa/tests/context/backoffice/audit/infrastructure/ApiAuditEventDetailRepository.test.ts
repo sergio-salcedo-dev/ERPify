@@ -16,6 +16,7 @@ const DETAIL = {
   resourceType: "Bank",
   resourceId: "019f0360-f3a4-7864-b0cc-0d41a56bf855",
   actorErased: false,
+  resourceErased: false,
   metadata: { changes: { name: { old: "BBVA", new: "BBVA España" } } },
 };
 
@@ -99,6 +100,7 @@ describe("ApiAuditEventDetailRepository response guard", () => {
     // Drift: slim-field type mismatches.
     expect(isAuditEventDetailResponse({ ...DETAIL, id: 1 })).toBe(false);
     expect(isAuditEventDetailResponse({ ...DETAIL, actorErased: "false" })).toBe(false);
+    expect(isAuditEventDetailResponse({ ...DETAIL, resourceErased: "false" })).toBe(false);
     expect(isAuditEventDetailResponse(null)).toBe(false);
     expect(isAuditEventDetailResponse(undefined)).toBe(false);
   });

@@ -25,6 +25,17 @@ final class RecordingAuditResourceAnonymiser implements AuditResourceAnonymiser
     /** @var list<array{type: string, id: string, pseudonym: string}> */
     public array $calls = [];
 
+    /**
+     * The resource VALUES as received, kept beside the flattened calls so a test can assert that the object
+     * the caller erased is the very one it logged — not merely one that compares equal. That distinction is
+     * the design: when the write and the erasure share a single value, naming different resources stops
+     * being expressible, and a test that only compared type and id would still pass if they were rebuilt
+     * apart and later drifted.
+     *
+     * @var list<AuditResource>
+     */
+    public array $resources = [];
+
     public function __construct(
         private readonly int $matchCount,
     ) {
@@ -34,6 +45,7 @@ final class RecordingAuditResourceAnonymiser implements AuditResourceAnonymiser
     public function anonymise(AuditResource $resource, string $pseudonym): int
     {
         $this->calls[] = ['type' => $resource->type, 'id' => $resource->id, 'pseudonym' => $pseudonym];
+        $this->resources[] = $resource;
 
         return $this->matchCount;
     }

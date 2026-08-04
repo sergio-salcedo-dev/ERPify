@@ -24,6 +24,7 @@ use Erpify\Tests\Behat\Context\MercureContext;
 use Erpify\Tests\Behat\Context\MessengerConsumerContext;
 use Erpify\Tests\Behat\Context\NotificationContext;
 use Erpify\Tests\Behat\Context\OutboxContext;
+use Erpify\Tests\Behat\Context\PrivacyContext;
 use Erpify\Tests\Behat\Context\RateLimitContext;
 use Erpify\Tests\Behat\Context\SecurityContext;
 use Erpify\Tests\Behat\Context\SqlQueryContext;
@@ -94,6 +95,7 @@ return (new Config())->withProfile(
                     NotificationContext::class,
                     MercureContext::class,
                     LoggerContext::class,
+                    PrivacyContext::class,
                 ),
         )
         ->withExtension(new Extension(SymfonyExtension::class, [

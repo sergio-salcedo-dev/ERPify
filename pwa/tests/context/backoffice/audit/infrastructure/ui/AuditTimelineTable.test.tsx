@@ -18,6 +18,7 @@ function entryOf(patch: Partial<AuditEntry> & { id: string }): AuditEntry {
     resourceType: null,
     resourceId: null,
     actorErased: false,
+    resourceErased: false,
     ...patch,
   };
 }

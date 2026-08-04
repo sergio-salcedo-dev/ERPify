@@ -57,10 +57,27 @@
 #   - It does not reach TABLES WITH NO DOCTRINE ENTITY. `audit_log.actor_id`, `audit_log.resource_id`,
 #     `audit_log.metadata` and `event_store.aggregate_id` are injected by `postGenerateSchema` listeners and
 #     written through raw SQL: no domain property declares them, so this sweep is structurally blind to all
-#     four. Only the resource axis has a control of its own (`.audit-resource-types`). `audit_log.metadata`
-#     and `event_store.aggregate_id` have NONE and are standing leaks with their own stories — the first is
-#     written with the subject's real id by the very use case this file names as the owner of `User::$id`,
-#     deliberately, as the compliance evidence that the erasure happened.
+#     four. Only the resource axis has a control of its own (`.audit-resource-types`);
+#     `event_store.aggregate_id` has NONE and is a standing leak with its own story. `audit_log.metadata`
+#     holds no person id. Ten paths write a row — nine `AuditLogger->log()` call sites plus the
+#     change-data-capture listener — of which seven pass a non-empty `metadata`, and exactly one of those
+#     ever held a person id: the compliance entry of the identity erasure, which now names its subject as
+#     the entry's RESOURCE instead, where the anonymiser that same erasure already runs rewrites it.
+#     THREE THINGS HOLD THAT, AND NONE OF THEM IS A GATE OVER KEY NAMES — a pseudonym is a UUID
+#     indistinguishable by shape from a real id, so a shape rule would break the `anonymized_actor_id`
+#     contract, and a key-name rule would verify its own declaration:
+#       (a) an acceptance assertion that the erased subject's id appears in no row's `metadata`, matched
+#           case-insensitively because `metadata` is jsonb TEXT and Postgres normalises no case there;
+#       (b) beside it, one that joins `audit_log` against `identity_user`, so an id belonging to somebody
+#           still alive is caught too — the assertion in (a) names one subject and cannot see that;
+#       (c) the containment rule in PersonReferenceGateTest: no `person` column may sit on an aggregate
+#           that opts into change-data-capture, which is the one write path whose content is a property of
+#           the entity model rather than of a reviewed call site.
+#     Both acceptance halves live in one scenario of `api/features/backoffice/users/erase.feature`, and
+#     that scenario is deletable in a one-line diff with every gate still green — (c) is the only half with
+#     a mechanical anti-deletion property. The trigger to revisit is ANY write path that puts a person id
+#     in `metadata` again; the count that decides whether a declarative key registry earns its cost is how
+#     many exist at once, which today is zero.
 #   - It only sees `Types::GUID` columns and TO-ONE ASSOCIATIONS (`#[ORM\ManyToOne]`, `#[ORM\OneToOne]` —
 #     read at the association attribute, because `#[ORM\JoinColumn]` is optional and the plainer form is the
 #     one written by default). A person's id persisted in a plain string column, or in a column whose type
@@ -94,8 +111,8 @@
 #   - IT INHERITS EVERY BLIND SPOT ABOVE, because it is enumerated against THIS FILE. A person id in a column
 #     no entity declares, or born in configuration, is missing from the registry and therefore missing from
 #     the control, in exactly the same silence. Concretely, and worth naming because the exception below
-#     invites the opposite reading: `audit_log.actor_id`, `audit_log.metadata` and `event_store.aggregate_id`
-#     hold person ids, have no entity, and are OUTSIDE the control. It reaches four columns plus one.
+#     invites the opposite reading: `audit_log.actor_id` and `event_store.aggregate_id` hold person ids,
+#     have no entity, and are OUTSIDE the control. It reaches four columns plus one.
 #   - IT PROVES THE WIRING IS DECLARED, NOT THAT THE COLLECTION WAS BUILT. The coverage gate compares declared
 #     keys against these lines and reads `config/services.yaml` for the tag and the tagged iterator — all
 #     static. Whether the compiled container actually holds one source per line is pinned by

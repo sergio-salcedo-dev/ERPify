@@ -36,6 +36,7 @@ final class AuditEventDetailResourceMapperTest extends TestCase
                 'resourceType',
                 'resourceId',
                 'actorErased',
+                'resourceErased',
                 'metadata',
             ],
             \array_keys(\get_object_vars($resource)),
@@ -47,6 +48,7 @@ final class AuditEventDetailResourceMapperTest extends TestCase
         $this->assertSame('user', $resource->actorType);
         $this->assertSame('Bank', $resource->resourceType);
         $this->assertFalse($resource->actorErased);
+        $this->assertFalse($resource->resourceErased);
         // The structured diff reaches the wire unaltered — the mapper formats time, never the payload.
         $this->assertSame($changes, $resource->metadata);
     }
@@ -64,6 +66,7 @@ final class AuditEventDetailResourceMapperTest extends TestCase
             null,
             null,
             true,
+            true,
             [],
         ));
 
@@ -71,6 +74,7 @@ final class AuditEventDetailResourceMapperTest extends TestCase
         $this->assertNull($resource->resourceType);
         $this->assertNull($resource->resourceId);
         $this->assertTrue($resource->actorErased, 'an erased subject surfaces as such in the detail');
+        $this->assertTrue($resource->resourceErased, 'an erased resource surfaces as such in the detail');
         $this->assertSame([], $resource->metadata, 'a non-change record carries no diff');
     }
 
@@ -94,6 +98,7 @@ final class AuditEventDetailResourceMapperTest extends TestCase
             '0190abcd-1234-7abc-8def-001122330000',
             'Bank',
             '22222222-2222-7222-8222-222222222222',
+            false,
             false,
             $metadata,
         );

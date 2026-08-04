@@ -17,6 +17,13 @@ Status: done
 > es un seguro echado sobre un arma sin disparar. Protege el momento en que `User` pase a ser auditado. Es valor
 > legítimo — pero si no se declara, el PR se lee como si cerrara un hueco vivo, que es el hallazgo I-16 de G-4a
 > repitiéndose.
+>
+> **PREMISA EXPIRADA (2026-08-04, G-2).** El arma se disparó: `EraseIdentitySubject` nombra al sujeto borrado
+> como recurso de su fila de cumplimiento, así que `User` **sí** se escribe en producción y el eje de persona ya
+> no está vacío. El seguro que esta historia echó es hoy el control de un hueco vivo. El párrafo de arriba se
+> conserva porque explica por qué el PR de G-3a se enmarcó como se enmarcó, no porque siga describiendo el
+> estado. Y el momento en que dejó de ser cierto pasó **sin ningún rojo**: el escritor llega al tipo por una
+> constante importada y el barrido casaba el literal entrecomillado — corregido también en G-2.
 
 ## Story
 

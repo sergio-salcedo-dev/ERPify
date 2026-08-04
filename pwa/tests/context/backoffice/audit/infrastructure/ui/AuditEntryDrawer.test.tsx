@@ -14,6 +14,7 @@ const ENTRY: AuditEntry = {
   resourceType: "BankAccount",
   resourceId: "019f0360-f3a4-7864-b0cc-0d41a56bf855",
   actorErased: false,
+  resourceErased: false,
 };
 
 describe("AuditEntryDrawer", () => {
@@ -86,6 +87,21 @@ describe("AuditEntryDrawer", () => {
       />,
     );
     expect(screen.queryByTestId("audit-entry-drawer__follow-actor")).toBeNull();
+  });
+
+  it("offers no follow-resource pivot for an anonymized resource (random UUID is not identity)", () => {
+    // The compliance row of an identity erasure is exactly this shape: it names the erased subject as its
+    // resource and the anonymiser rewrites that id to a pseudonym in the same transaction. Offering the
+    // pivot would filter the trail by an identity that denotes nobody, presented as a live reference.
+    render(
+      <AuditEntryDrawer
+        entry={{ ...ENTRY, resourceErased: true }}
+        open
+        onClose={vi.fn()}
+        onFollowResource={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("audit-entry-drawer__follow-resource")).toBeNull();
   });
 
   it("copies the entry id", () => {

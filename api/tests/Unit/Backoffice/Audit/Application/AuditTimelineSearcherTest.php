@@ -66,6 +66,7 @@ final class AuditTimelineSearcherTest extends TestCase
             null,
             null,
             false,
+            false,
         );
     }
 }

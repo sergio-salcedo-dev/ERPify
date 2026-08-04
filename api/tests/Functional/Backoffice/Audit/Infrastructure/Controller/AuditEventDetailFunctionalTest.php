@@ -74,6 +74,7 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
                 'resourceType',
                 'resourceId',
                 'actorErased',
+                'resourceErased',
                 'metadata',
             ],
             \array_keys($data),
@@ -84,6 +85,10 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
         $this->assertSame('Bank', $this->stringField($data, 'resourceType'));
         $this->assertArrayHasKey('actorErased', $data);
         $this->assertFalse($data['actorErased']);
+        // Both axes travel: without this one the wire cannot tell an anonymisation pseudonym from a live
+        // identifier, and every affordance built on `resourceId` treats it as one.
+        $this->assertArrayHasKey('resourceErased', $data);
+        $this->assertFalse($data['resourceErased']);
         $this->assertMicrosecondInstant('2026-03-02T10:11:12.123456+00:00', $data);
 
         // The diff travels under metadata.changes; JSONB drops key order, so assert the leaves.

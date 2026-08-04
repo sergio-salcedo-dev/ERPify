@@ -17,10 +17,9 @@ use Throwable;
  * live identity backs them.
  *
  * That scope is narrower than "everywhere a person id is persisted", and the difference must not be blurred:
- * `audit_log.actor_id`, `audit_log.metadata` and `event_store.aggregate_id` also hold person ids, none of
- * them has a Doctrine entity, and none is reachable from here. The registry's blind-spot block names all
- * three; only the resource axis is in this control, and only because a control of its own already exists for
- * it (`api/.audit-resource-types`).
+ * `audit_log.actor_id` and `event_store.aggregate_id` also hold person ids, neither has a Doctrine entity,
+ * and neither is reachable from here. The registry's blind-spot block names both; only the resource axis is
+ * in this control, and only because a control of its own already exists for it (`api/.audit-resource-types`).
  *
  * Erasing each of those places is a distributed obligation — nothing in the schema references
  * `identity_user`, so deleting an identity cascades nowhere and every reference owes its removal to a use

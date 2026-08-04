@@ -14,6 +14,7 @@ function entryOf(id: string, correlationId: string, occurredOn: string): AuditEn
     resourceType: null,
     resourceId: null,
     actorErased: false,
+    resourceErased: false,
   };
 }
 

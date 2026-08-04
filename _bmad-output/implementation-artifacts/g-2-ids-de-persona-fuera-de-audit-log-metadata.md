@@ -1,0 +1,728 @@
+---
+baseline_commit: 9dce7355
+---
+
+# Story 1.4 (G-2): Ids de persona fuera de `audit_log.metadata`
+
+Status: review
+
+> **DA-1 ESTÁ TOMADA Y NO SE REABRE** (Sergio, 2026-08-03): gana **(A) el redactor** — un único statement en la
+> pasada de erasure deja de conservar el id real, y el control de AC3 se resuelve como **testigo de aceptación
+> falsable, no como gate de forma**. (B), el gate declarativo de claves de `metadata`, queda como **alternativa
+> descartada, no como decisión abierta**. Con esto la precondición normativa de la épica
+> ([`epics-gdpr-hardening.md`](../planning-artifacts/epics-gdpr-hardening.md) `:393-398`) queda satisfecha y la
+> implementación puede empezar. El argumento completo y lo que (B) costaba están en *Decisión registrada*.
+
+> **`sprint-status.yaml` afirma que ninguna historia de la épica tiene decisión abierta (`:157-159`) — es falso
+> para G-2**, y su propia enumeración lo delata: lista G-1a, G-3a, G-3b y G-5, y **no** lista G-2. Épica y
+> addendum mantienen el fork vivo. Corregir esa frase es tarea de esta historia.
+
+> **A diferencia de G-1c, esta historia SÍ repara un dato vivo.** Medido contra la BD de desarrollo (solo
+> `SELECT`): existe una fila `GDPR_SUBJECT_ERASED` cuyo `metadata->>'subject_user_id'` **no hace JOIN con
+> ninguna fila de `identity_user`** — la persona ya fue borrada y su id real sigue ahí. No es prospectiva.
+
+## Story
+
+Como **responsable de cumplimiento**,
+quiero que la prohibición de crosswalk deje de depender de un comentario,
+para poder afirmar ante un regulador que ninguna fila de auditoría re-liga un pseudónimo con la persona.
+
+**Eje que instala:** la prohibición D4 pasa de **prosa** a **mecanismo**.
+**Invariantes que consume:** D4/NFR4, SI-21/NFR1. **Y SI-23**, que el corte no cita y que muerde en la opción
+gate (`arch-addendum-gdpr-hardening.md` `:16`: *binds* todo registro, gate o control del repo).
+**Dependencias:** ninguna en `main`. G-1a/G-1b ya shipped; el desbloqueo está declarado en `sprint-status.yaml`
+`:154`. **Ver *Orden vs #634*** más abajo: hay una dependencia de orden que el corte no podía prever.
+
+## Estado medido (`main` @ `9dce7355`)
+
+> *Procedencia:* cuatro pases **read-only** en paralelo (artefactos · código · BD dev solo `SELECT` · patrón de
+> los ejes ya shipped). Nada escrito, nada ejecutado que mute. Las coordenadas se dan para **re-verificarlas**.
+
+**La fuga es exactamente UNA clave, y la escribe el propio borrado GDPR.**
+[`EraseIdentitySubject`](../../api/src/Iam/Identity/Application/EraseIdentitySubject.php) `:60-63` escribe
+`'subject_user_id' => $userId` en el `metadata` de la fila `GDPR_SUBJECT_ERASED`. `$userId` es el PK de
+`identity_user`, que [`api/.person-reference-policy`](../../api/.person-reference-policy) clasifica
+`User::$id => person`. Es un camino **VIVO**:
+[`FulfilIdentityErasure`](../../api/src/Iam/Identity/Application/FulfilIdentityErasure.php) `:116` lo invoca
+**dentro de la misma transacción** que después borra la fila de `identity_user` y anonimiza los dos ejes, y sus
+llamadores son [`UserEraseController`](../../api/src/Iam/Identity/Infrastructure/Controller/UserEraseController.php)
+`:27` (`DELETE /backoffice/users/{id}`, `IsGranted('users.erase')`) y el CLI `identity:gdpr:erase-subject`.
+
+**Los otros siete caminos de escritura NO meten ids de persona.** Medido uno a uno, no supuesto:
+
+| Camino | Claves | Qué denota |
+|---|---|---|
+| `FulfilIdentityErasure.php:147-154` (`GDPR_ERASURE_EXECUTED`) | 6 conteos | ningún id — y `:143-146` **explica por escrito** por qué no lleva el pseudónimo |
+| `EraseActorAuditTrailCommand.php:115-118` | `anonymized_actor_id`, `affected_rows` | pseudónimo **contractual** (D4.1), no id real |
+| `EraseBankAccountSubject.php:64-66` | `encryption_scope_id` | recurso no-persona — **y es join key** de `DbalSubjectErasureReconciler` |
+| `AuditTrailReadAuditListener.php:71-81` | `route`, `auditEventId` | id de una fila de `audit_log`, no de persona |
+| `AccessDeniedAuditListener.php:64` | `route` | nombre de ruta |
+| CDC `AuditWriteCaptureListener.php:47-104` | `changes` | solo `Bank` y `BankAccount` implementan `AuditedEntity` |
+| `AccessLogAuditListener.php:86` y los dos searchers | *(ninguna)* | `[]` |
+
+Lo que hace que la superficie sea de **una clave y no de muchas** es deliberado: `User` (`:37-40`), `Session`
+(`:30-31`) e `Invitation` (`:39-40`) **no** implementan `AuditedEntity`, así que sus referencias a persona nunca
+entran en `metadata.changes`. Ese cierre hay que preservarlo, no redescubrirlo.
+
+**La escritura es un único INSERT y no hay entidad Doctrine.** La tabla se inyecta por
+[`AuditLogSchemaListener`](../../api/src/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListener.php)
+`:40-54` (`metadata` es `Types::JSONB` NOT NULL) y se escribe por DBAL crudo en
+[`DbalAuditLogWriter`](../../api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditLogWriter.php) `:36-60`.
+**No hay ningún UPDATE de `metadata` en el árbol.**
+
+**El borrado no toca `metadata`, y está declarado que no lo hace.**
+[`DbalAuditActorAnonymiser`](../../api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditActorAnonymiser.php)
+`:66-76` reescribe `actor_id`, `ip`, `user_agent`, `actor_erased`;
+[`DbalAuditResourceAnonymiser`](../../api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditResourceAnonymiser.php)
+`:48-57` reescribe `resource_id`, `resource_erased`. Ninguno nombra `metadata`. El docblock de
+`DbalAuditActorAnonymiser` `:24-26` dice que se deja intacta *sobre la invariante ADR de que no lleva PII —
+revisitar el día que una acción guarde datos personales ahí*. **Ese día ya llegó y nadie recogió el trigger:
+G-2 no previene, paga deuda.**
+
+**Evidencia empírica (BD dev, solo `SELECT`).** 1 fila con `metadata->>'subject_user_id'`; **0 coincidencias**
+al hacer `LEFT JOIN identity_user` contra ese valor, 1 sin coincidencia. Es decir: la fila de la persona se fue
+y su id sobrevivió dentro del JSON. Cero filas con email o nombre. Trátese como **evidencia de forma, no como
+censo**: ambas BD son de desarrollo y este proyecto no tiene entorno de producción, así que la cifra «1» no
+mide prevalencia — dimensiona por conjunto de claves posibles.
+
+**Trampa de datos que muerde a cualquier SQL de esta historia:** `metadata` vacía se persiste como **`[]`**, no
+`{}` (es `json_encode([])` en `DbalAuditLogWriter.php:54`) — 33 de 37 filas en una BD y 48 de 54 en la otra.
+`jsonb_object_keys(metadata)` **aborta** con `cannot call jsonb_object_keys on an array`, y `metadata ? 'x'`
+silencia esas filas en vez de fallar. Todo recorrido debe filtrar por `jsonb_typeof(metadata) = 'object'` o
+normalizar antes.
+
+**Ningún registro ni gate alcanza `metadata` hoy.** [`.person-reference-policy`](../../api/.person-reference-policy)
+deriva su universo por reflexión sobre entidades Doctrine → estructuralmente ciego a esta tabla;
+[`.audit-resource-types`](../../api/.audit-resource-types) cubre **solo** el eje `resource_type`;
+[`.persistent-transport-policy`](../../api/.persistent-transport-policy) es otro eje. Los tres entran en
+`php.quality` **y** en `php.quality.dry-run` ([`make/php-quality.mk`](../../make/php-quality.mk) `:187`, `:205`).
+
+**G-2 ya está escrita como agujero declarado, y retirarla es parte del trabajo.**
+`.person-reference-policy:51-57` nombra `audit_log.metadata` como *standing leak* con `NONE` de control, y
+añade que *«la primera está escrita con el id real del sujeto por el mismísimo caso de uso que este fichero
+nombra como propietario de `User::$id`»*. Cuando G-2 cierre, ese párrafo miente.
+
+### Orden vs #634 (G-1c), que el corte no podía prever
+
+PR **#634** (G-1c, abierta y verde, **no** en `main`) añade a `.person-reference-policy` un sub-bloque que fija
+que el hueco para «columnas sin entidad Doctrine» tiene **exactamente una plaza**, ocupada por
+`audit_log.resource_id`, y que *un segundo eje sin entidad no puede añadirse como fuente sin que el registro
+crezca antes un verbo para columnas sin entidad*. Si G-2 elige la vía del gate declarativo, **choca con ese
+texto** y necesita o el verbo nuevo o un registro propio. Si elige el redactor, no lo toca. **Mídelo contra el
+árbol cuando arranques**: si #634 ya mergeó, esa restricción es normativa; si no, todavía es una PR.
+
+### Superficie de rotura
+
+- [`EraseIdentitySubjectTest`](../../api/tests/Unit/Iam/Identity/Application/EraseIdentitySubjectTest.php)
+  `:42-45` afirma **igualdad exacta** del array de `metadata`. Es el único test que fija la clave objetivo.
+- [`AuditActorAnonymiserFunctionalTest`](../../api/tests/Functional/Shared/Audit/AuditActorAnonymiserFunctionalTest.php)
+  `:76`, `:196` afirma que `metadata` queda **byte a byte intacta** tras anonimizar. **Un redactor rompe este
+  test por diseño, y romperlo es la señal de que G-2 hizo su trabajo** — no lo silencies, reescríbelo con su
+  razón.
+- `DbalSubjectErasureReconciler` hace JOIN por `metadata->>'encryption_scope_id'` contra `dek_keystore`: esa
+  clave no se toca. Pinneada además en `EraseBankAccountSubjectFunctionalTest.php:171,192` y
+  `SubjectErasureReconcilerFunctionalTest.php:65`.
+- Features con literales JSON exactos de `metadata`: `backoffice/audit/access_control.feature:61,78`,
+  `backoffice/audit/self_audit.feature:26,45`, `shared/audit/security_denial.feature:27`,
+  `backoffice/bank_account/audit.feature:26,73`, `shared/audit/write_capture.feature:19`.
+- [`features/backoffice/users/erase.feature`](../../api/features/backoffice/users/erase.feature) es el
+  **testigo declarado** de `User => person` en `.audit-resource-types`: tocarlo pone rojo
+  `make php.lint.audit-resource`. Hoy **no asierta nada sobre `metadata`** (solo cuenta filas por `action` +
+  `actor_id`), así que desde aceptación nada impide que `subject_user_id` desaparezca — eso es un hueco a
+  cerrar, y el sitio natural del testigo de AC1.
+
+## Decisión registrada (NO reabrir)
+
+**DA-1 — TOMADA (Sergio, 2026-08-03): (A) el redactor**, con el control de AC3 resuelto como testigo de
+aceptación falsable y no como gate de forma. La recomendación se emitió con los tres argumentos de abajo y fue
+**confirmada**, que es lo que la épica exige (`:393-398`). Los tres argumentos, con su coste y su alternativa
+descartada:
+
+**1. Solo el redactor satisface AC1, porque AC1 es una propiedad del DATO.** «Ninguna fila conserva su id real
+en `metadata`» habla de filas existentes. Hay una fila así, medida. Un gate no reescribe nada: dejaría AC1 sin
+satisfacer el día que se mergea y lo cumpliría solo por vacuidad en instalaciones nuevas.
+
+**2. El hermano ya resolvió el mismo fork por ADR, y a favor del redactor — y ningún documento de G-2 lo cita.**
+[`docs/adr/event-store-and-projections.md`](../../docs/adr/event-store-and-projections.md) D12 (`:294-315`) fija
+para `event_store` *un único `UPDATE` parametrizado… dentro de la transacción que `FulfilIdentityErasure` ya
+posee*, con un argumento **genérico** contra la vía preventiva: *«Cualquier mecanismo preventivo —que el id
+nunca llegue a escribirse— depende de la memoria de quien añada el próximo evento, y para ser fiable
+necesitaría su propio gate: más maquinaria para una garantía más débil»*. Es la decisión de G-5, ya registrada
+(`sprint-status.yaml:285-289`). Elegir el gate aquí y el redactor allí necesitaría un argumento que separe los
+dos logs; no lo veo, y el ADR dice explícitamente *«igual que su hermano `audit_log`»*.
+
+**3. El gate no puede discriminar por forma sin romper un contrato o leerse verde por construcción.** La misma
+tabla lleva `metadata.anonymized_actor_id`, que el ADR declara *parte del contrato de ese evento*
+([`docs/adr/audit-activity-log.md`](../../docs/adr/audit-activity-log.md) `:330-333`) y sobre el que construye
+un cross-check de integridad (`:334-336`). Un pseudónimo es **un UUID indistinguible por forma de un id real**
+(`:298-300`). Luego un gate que prohíba «UUIDs en `metadata`» rompe D4.1, y uno que prohíba **por nombre de
+clave** es una declaración que se comprueba a sí misma — SI-23 exactamente. El gate solo es honesto como
+**registro declarativo de claves de `metadata`** (clave → clasificación, humano clasifica / automatización
+verifica), que es maquinaria de la talla de G-1a para una superficie de **una** clave: falla la Regla de Tres.
+
+**Coste del redactor, que hay que pagar y declarar:**
+
+- **Añade un statement sobre `audit_log`, y el ADR ya fijó la regla que eso dispara**
+  (`audit-activity-log.md:235-239`): enrutar por `TransactionManager`, **nunca** una transacción DBAL cruda
+  anidada bajo `wrapInTransaction` — no hay `nest_transactions_with_savepoints`, así que anidar degradaría a
+  rollback-only. Ninguno de los tres documentos de planificación cita esta regla.
+- **Amplía un «conjunto cerrado» declarado en dos sitios con dos números distintos**: dos políticas de mutación
+  en `audit-activity-log.md:198-200`, tres en [`docs/architecture-api.md`](../../docs/architecture-api.md)
+  `:264`. Ampliarlo es enmienda de ADR, no una línea de código.
+- **Exige enmendar el contrato de `metadata` de D4** (`audit-activity-log.md:271-273`), que hoy admite *«IDs y
+  discriminantes»* como contenido legítimo y por eso justifica no redactar. Bajo su letra, FR6 lo contradice y
+  nadie ha declarado la enmienda.
+
+**Trampa a evitar en la forma del redactor:** **no escribas el pseudónimo en esa fila.** La fila
+`GDPR_SUBJECT_ERASED` comparte `correlation_id` con `GDPR_ERASURE_EXECUTED`, y poner ahí el pseudónimo
+reconstruye justo el crosswalk que `FulfilIdentityErasure.php:143-146` rechazó por escrito. La forma que este
+repo ya bendijo dos veces es **conteos, nunca ids** (`sprint-status.yaml:202` y `:263-264`); eliminar la clave
+también satisface AC2, porque la fila sigue teniendo `action`, `correlation_id`, `occurred_on` y el `actor_id`
+del admin que ejecutó el borrado.
+
+**Por qué se descartó (B), el gate declarativo de claves.** Habría traído dependencia de #634 (el hueco para
+columnas sin entidad tiene una sola plaza, ocupada por `audit_log.resource_id`: necesitaría un verbo nuevo o un
+registro propio), habría activado NFR11, y **aun así habría que reparar la fila viva** — B no sustituye a A, se
+le suma. A eso se añade que es maquinaria de la talla de G-1a para **una** clave, lo que incumple la Regla de
+Tres, y que ninguna de sus dos formas posibles es honesta: por forma rompe D4.1, por nombre de clave se lee
+verde por construcción (SI-23). Esa asimetría es el argumento más fuerte contra presentar el fork como
+simétrico, y es lo que decidió DA-1.
+
+**Condición de reapertura** (escrita para que la decisión sea revisable y no dogma): si aparece un **segundo**
+camino de escritura que meta un id de persona en `metadata` —hoy hay exactamente uno—, la Regla de Tres deja de
+proteger a (B) y el registro declarativo pasa a valer lo que cuesta. El trigger es observable: cualquier PR que
+añada una clave nueva a `metadata` con un id de persona dentro.
+
+### Contradicciones de la planificación que la decisión debe resolver
+
+1. **`sprint-status.yaml:157-159` niega el fork que épica y addendum declaran.** Corregir la frase.
+2. **Los invariantes de G-2 no coinciden entre documentos**: FR6 dice «SI-21, D4»; la historia dice «D4/NFR4,
+   SI-21/NFR1»; la fila del addendum (`:36`) dice **solo SI-21** — omitiendo D4 en la historia que existe para
+   convertir D4 en mecanismo.
+3. **Tres DAG distintos** para el mismo arco: `arch-addendum:48,57` (G-2 espera a G-1a), `epics:241,247-248`
+   (G-2 y G-3 paralelizables), `epics:714` (la dependencia es condicional al fork).
+4. **Qué impide hoy el crosswalk: dos mecanismos incompatibles.** La épica dice «un comentario»; el ADR
+   (`audit-activity-log.md:247-249`) dice que `GDPR_SUBJECT_ERASED` se libra porque **el auto-borrado está
+   prohibido** — y eso no es prosa, es una guarda con 409 `self-erasure-forbidden` (`architecture-api.md:264`).
+   La premisa nuclear de FR6 («D4 está sostenido por prosa») es más débil de lo que el corte afirma. **La fuga
+   sigue siendo real** — el id crudo está en `metadata` con independencia de quién sea el actor — pero el
+   encuadre del PR tiene que ser el medido, no el heredado.
+5. **`epics:301` ya habla del «redactor de `metadata`» como sustrato de la épica**, como si el fork estuviera
+   resuelto.
+6. **`epics:361-362` dice «los tres huecos que el gate destapa»**: el gate de G-1a aterriza en rojo por **dos**
+   referencias, y el eje `audit_log` está estructuralmente fuera de su universo. El hueco de G-2 **no es
+   visible** para el mecanismo de G-1a.
+
+## Acceptance Criteria
+
+Los tres del corte, verbatim (`epics-gdpr-hardening.md:727-741`), con lo que los hace falsables:
+
+1. **Given** un sujeto borrado, **When** se inspecciona `audit_log`, **Then** ninguna fila conserva su id real
+   en `metadata` (FR6, NFR4).
+   → El testigo **siembra su propio dato y afirma que la escritura afectó a 1 fila antes de asertar el
+   veredicto** (trampa F5 de G-1a: la BD de test se migra pero no se provisiona, así que un `INSERT … SELECT`
+   sobre tabla vacía inserta cero y el test pasa en falso).
+2. **Given** ese mismo borrado, **When** se consulta la fila `GDPR_SUBJECT_ERASED`, **Then** sigue siendo
+   evidencia útil de que el borrado ocurrió — la garantía no se compra destruyendo la evidencia.
+   → Afirma explícitamente qué **sí** sobrevive (`action`, `correlation_id`, `occurred_on`, `actor_id`), no
+   solo qué desaparece.
+3. **Given** una escritura futura que vuelva a poner un id de persona en `metadata`, **When** corre la suite,
+   **Then** un control **falla**; y si ese control es un gate, está en `php.quality` y en `php.quality.dry-run`
+   (NFR11).
+   → **AC3 no exige un gate**: exige un control que falle. El control se verifica **por mutación** — se le
+   quita la regla, se cuenta el rojo, se restaura copiando los bytes (**nunca `git checkout --`**, que se
+   llevaría ediciones sin commitear). Toda rama de la regla necesita su propio caso rojo (trampa F1 de G-3a:
+   una regla con un solo llamador y solo `assertNull` resultó infalsable).
+
+## Tasks / Subtasks
+
+- [x] **Tarea 0 — Cerrar DA-1 por escrito.** HECHA: (A) el redactor, confirmada por Sergio el 2026-08-03 y
+      registrada arriba con su alternativa descartada y su condición de reapertura. Reproducirla en el PR.
+- [x] **Tarea 1 — Re-medir el estado contra el árbol del día.** En especial: si #634 mergeó y si la fila
+      huérfana sigue existiendo. **No heredar las cifras de este artefacto** — son de `9dce7355`.
+- [x] **Tarea 2 (AC1, AC2)** — Que la pasada de erasure deje de conservar el id real: eliminar o sustituir
+      `subject_user_id` **sin introducir pseudónimo en esa fila**. Un solo statement, dentro de la transacción
+      que `FulfilIdentityErasure` ya posee, enrutado por `TransactionManager` — nunca una transacción DBAL
+      cruda anidada bajo `wrapInTransaction`, que degradaría a rollback-only.
+- [x] **Tarea 3 (AC1)** — Testigo de aceptación en
+      [`features/backoffice/users/erase.feature`](../../api/features/backoffice/users/erase.feature) que siembre
+      y demuestre **en el mismo escenario** (trampa F7 de G-3a: siembra y aserción en escenarios distintos
+      pasaban en verde) y que **afirme el conteo de filas sembradas** antes del veredicto (trampa F5). Ojo: ese
+      fichero es el testigo declarado de `.audit-resource-types` — verificar que `make php.lint.audit-resource`
+      sigue verde.
+- [x] **Tarea 4 (AC3)** — Control falsable sobre el camino de escritura, **verificado por mutación**: quitar la
+      regla, contar los rojos, anotar el número, y restaurar **copiando los bytes** (nunca `git checkout --`).
+      Toda rama de la regla necesita su propio caso rojo. HECHA: tres mutaciones (M1/M2/M3), tres rojos
+      distintos, matriz en *Falsificación ejecutada*.
+- [x] **Tarea 5** — Reescribir `AuditActorAnonymiserFunctionalTest:76,196` (hoy afirma que `metadata` queda
+      byte a byte intacta) **con la razón del cambio**, y actualizar `EraseIdentitySubjectTest:43`. HECHA,
+      pero **no como decía el corte**: el anonimizador NO se toca (predicción refutada, ver abajo);
+      `EraseIdentitySubjectTest` ya estaba actualizado; y lo que sí había que corregir era el comentario del
+      tripwire de G-3a, que quedó falso en su premisa.
+- [x] **Tarea 6 — Enmiendas documentales, que aquí no son cosmética**:
+      [`docs/adr/audit-activity-log.md`](../../docs/adr/audit-activity-log.md) (contrato de `metadata` en D4
+      `:271-273`, y el conjunto cerrado de mutaciones `:198-200`),
+      [`docs/architecture-api.md`](../../docs/architecture-api.md) `:264` (dos vs tres políticas), y el párrafo
+      de [`api/.person-reference-policy`](../../api/.person-reference-policy) `:51-57` que declara este agujero.
+      HECHA — con **una enmienda más de la que el corte previó** y **una menos**: ver *Enmiendas documentales*.
+- [x] **Tarea 7** — Corregir las seis contradicciones de planificación listadas arriba (o declarar por escrito
+      cuál se deja abierta y por qué). HECHA: las **seis** corregidas, ninguna se deja abierta. Detalle en
+      *Contradicciones de planificación: cómo quedó cada una*.
+- [x] **Tarea 8 — Pase adversarial por alguien distinto del autor, registrado, declarando dónde quedó**
+      (definición de hecho de la épica; `CLAUDE.md` → *Security review on every change* → *Process*). Un pase
+      que no encuentra nada también cuenta: se registra y se dice.
+- [x] **Tarea 9** — Puertas con **ejecución fresca y exit code impreso** en el artefacto: `make php.stan`,
+      `make php.quality`, y la suite que ejerza el camino tocado.
+
+## Dev Notes
+
+### Anti-patrones concretos de esta historia
+
+- **No metas el pseudónimo en la fila `GDPR_SUBJECT_ERASED`.** Comparte `correlation_id` con
+  `GDPR_ERASURE_EXECUTED`; sería el crosswalk que `FulfilIdentityErasure.php:143-146` evitó a propósito.
+- **No borres la fila.** AC2 lo prohíbe explícitamente, y el ADR sostiene que el log solo admite `UPDATE`.
+- **No toques `metadata->>'encryption_scope_id'`**: es join key de un reconciliador vivo.
+- **No amplíes el alcance a `event_store`**: es G-5, con su propia decisión ya registrada en D12.
+- **No supongas que `metadata` es siempre un objeto** — ver la trampa del `[]`.
+
+### Trampas del repo que muerden aquí
+
+- **Siembra vacua** (F5): la BD de tests se migra pero no se provisiona. Afirma el conteo de filas afectadas.
+- **`--filter` por prefijo** sale verde con un subconjunto estricto: una línea por clase, con nombre exacto, y
+  verifica la selección con `--list-tests`.
+- **Restaurar tras falsificar**: copia los bytes; `git checkout --` se lleva ediciones sin commitear.
+- **PHPMD sin baseline** solo lo pilla `make php.quality`, y el límite de acoplamiento ≤13 aplica también a
+  `tests/`.
+- **`bmad.status.audit` da falsos positivos** casando claves contra asuntos de commit: no cierres nada por lo
+  que diga, mide contra el código.
+
+### Revisión de seguridad (declarar en el PR lo que no aplica)
+
+Esta historia **es** superficie GDPR/auditoría, así que el pase adversarial es obligatorio (C2). Aplica además:
+sin PII en logs ni en mensajes de error del control (un control GDPR que loguea ids de persona rompe SI-21 por
+el propio control que lo hace cumplir); SQL parametrizado; y `metadata` se expone por API en el detalle
+(`AuditEventDetailResource.php:33`), así que cualquier cambio de forma es cambio de contrato de lectura.
+
+### Project Structure Notes
+
+`Shared/Audit` **no aprende semántica ajena** (NFR7): posee la forma `(type, id)`, no el vocabulario. Quien sabe
+que `subject_user_id` denota una persona es `Iam/Identity`, que es donde vive el escritor — lo cual favorece
+que el redactor viva ahí y no en `Shared/Audit`.
+
+### References
+
+- [`_bmad-output/planning-artifacts/epics-gdpr-hardening.md`](../planning-artifacts/epics-gdpr-hardening.md) — FR6 `:127-132`, Story 1.4 `:706-741`, precondición `:393-398`, NFR11 `:233-235`, NFR7 `:215-218`
+- [`_bmad-output/planning-artifacts/arch-addendum-gdpr-hardening.md`](../planning-artifacts/arch-addendum-gdpr-hardening.md) — SI-21 `:14`, SI-22 `:15`, SI-23 `:16`, fila G-2 `:36`
+- [`docs/adr/audit-activity-log.md`](../../docs/adr/audit-activity-log.md) — D4 `:198-200`, `:235-249`, `:271-273`; D4.1 `:330-336`, `:362-364`
+- [`docs/adr/event-store-and-projections.md`](../../docs/adr/event-store-and-projections.md) — D12 `:294-315`, `:326-327`
+- [`docs/adr/regulatory-audit-trail.md`](../../docs/adr/regulatory-audit-trail.md) — D15 `:104-108`
+- [`docs/architecture-api.md`](../../docs/architecture-api.md) — políticas de mutación y guarda de auto-borrado `:264`
+- [`api/.person-reference-policy`](../../api/.person-reference-policy) — agujero declarado `:51-57`
+- [`g-3a-segundo-testigo-registro-audit-resource-types.md`](g-3a-segundo-testigo-registro-audit-resource-types.md) — patrón del testigo y sus trampas
+- [`g-1c-control-detective-referencias-cross-context.md`](g-1c-control-detective-referencias-cross-context.md) — patrón del control detective y la plaza única para columnas sin entidad
+
+## Dev Agent Record
+
+### Agent Model Used
+
+claude-opus-5[1m]
+
+### La forma de (A) cambió al medir: A2, el sujeto como RECURSO
+
+**Decidido por Sergio (2026-08-03)** tras medir la cadena, y es distinto de lo que la Tarea 2 decía al escribirse.
+`AuditLogger::log()` admite un **recurso** como tercer argumento, `EraseIdentitySubject` pasaba `null`, y su
+**único llamador** es `FulfilIdentityErasure` (el CLI inyecta la cadena, no el caso de uso), que en `:120-123`
+ya corre `DbalAuditResourceAnonymiser` con `AuditResource::of('User', $subjectId)` y el mismo pseudónimo. El
+nivel `SECURITY` escribe **síncrono**, así que el INSERT es visible al UPDATE en la misma transacción.
+
+Por tanto: la fila se escribe con el sujeto como recurso y **conteos** en `metadata`, y la maquinaria existente
+la anonimiza sola. **Sin statement nuevo, sin política de mutación nueva, sin redactor que testear** — con lo
+que el «conjunto cerrado» del ADR no se amplía y la regla del segundo statement (`TransactionManager`) no se
+dispara. La Tarea 6 encoge a la retirada del bullet del registro y a la nota de revisita de D4.
+
+### Dos predicciones de este artefacto que la medición REFUTÓ
+
+1. **`AuditActorAnonymiserFunctionalTest` NO se rompe.** El artefacto decía que un redactor lo rompería «por
+   diseño»; cierto del redactor que A2 no construye. A2 no toca el anonimizador, así que la aserción de
+   `metadata` byte-a-byte intacta sigue siendo verdad y sigue verde. **Re-medido en la sesión de la Tarea 5,
+   no heredado:** `make php.unit c='--filter AuditActorAnonymiserFunctionalTest'` → 2 tests, 30 aserciones,
+   **exit 0**. El fichero no se toca.
+2. **El tripwire de G-3a NO se disparó.** `PersonResourceErasureGateTest::theStalenessOfAPersonTypeIs…`
+   promete ponerse rojo «el día que aparezca un escritor de producción del tipo». Ese día es hoy y siguió
+   verde, porque el escritor referencia `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE` en vez del literal
+   `'User'` — y el check cuenta ficheros que llevan el **literal**. Se eligió la constante por DRY (una sola
+   fuente del vocabulario), no para esquivar el gate. Dejarlo pasar en silencio sería exactamente el modo de
+   fallo que G-3a documentó.
+
+   **CORREGIDO (Tarea 5).** El comentario ya no promete ser tripwire de escritores: dice que `User` **sí** se
+   escribe en producción, que este check no lo ve, y por qué (constante importada vs literal entrecomillado,
+   punto ciego que [`api/.audit-resource-types`](../../api/.audit-resource-types) ya declaraba). Lo que la
+   aserción sigue comprando —que el literal no se ha esparcido fuera de la clase que lo declara, que es
+   justo en lo que descansa el argumento de auto-satisfacción de arriba— se conserva escrito.
+   `make php.lint.audit-resource` → 23 tests, **exit 0**.
+
+   **NO se amplió el mecanismo para seguir la constante importada, y es una decisión, no un olvido.** Hacerlo
+   general exige, por cada tipo persona, localizar la clase que declara `const string X = '<tipo>'` y barrer
+   `<Clase>::X`: maquinaria para **un** tipo, que falla la Regla de Tres exactamente igual que el gate
+   declarativo descartado en DA-1. Queda como propuesta, no como parte de esta PR.
+
+### Contradicciones de planificación: cómo quedó cada una (Tarea 7)
+
+Las seis se corrigieron; **ninguna se deja abierta**. Dos de ellas cambian lo que la épica *afirma*, no solo
+cómo lo redacta, y por eso van marcadas.
+
+1. **`sprint-status.yaml` negaba el fork.** Dos sitios, no uno. La frase «ninguna historia tiene ya decisión
+   abierta» enumeraba G-1a/G-3a/G-3b/G-5 y **no listaba G-2** — la omisión era el defecto, no la afirmación.
+   Ahora lista G-2 (DA-1, 2026-08-03) y su forma A2, y retira «falta artefacto de contexto en G-2», que ya
+   existe. El bloque de comentario propio de G-2 terminaba en *«falta que Sergio la confirme o la refute»*:
+   sustituido por la decisión cerrada y por la forma que resultó al medir.
+2. **Invariantes discrepantes.** FR6 decía «SI-21, D4»; la historia «D4/NFR4, SI-21/NFR1»; la fila del addendum
+   **solo SI-21**. Los tres nombran ahora los mismos dos ejes. El addendum era el que fallaba: omitía D4 en la
+   historia que existe para convertir D4 en mecanismo.
+3. **Tres DAG para el mismo arco.** El addendum dibujaba `G-1a → G-2` como incondicional; la épica decía que
+   G-2 y G-3 son paralelizables; la Story 1.4 decía que la dependencia era **condicional al fork**. La tercera
+   era la correcta. Cerrada DA-1 hacia el redactor —y concretada en A2, que no toca ningún registro
+   declarativo— **la arista no existe**. Anotado en los tres documentos; la flecha del orden safe-first se
+   declara orden de merge, no dependencia.
+4. **⚠ Qué impide hoy el crosswalk — corrige una AFIRMACIÓN, no una redacción.** La épica sostenía que solo un
+   **comentario** lo impide, y de ahí derivaba «D4 está sostenido por prosa», que es la premisa nuclear de FR6.
+   El ADR dice otra cosa (`audit-activity-log.md:247-249`) y el código la respalda: `GDPR_SUBJECT_ERASED` se
+   libra porque **el auto-borrado está prohibido**, guarda con 409 `self-erasure-forbidden`, no prosa. La
+   premisa era más débil de lo que el corte afirmaba y ahora lo dice. **La fuga seguía siendo real por una
+   razón mejor**, que es la que se escribe en su lugar: el id crudo vivía en `metadata` con independencia de
+   quién fuese el actor, y ninguna mutación del conjunto cerrado entra en el JSON, así que sobrevivía al
+   borrado que lo escribió. Corregido en FR6, en la Story 1.4 y en la fila del addendum.
+5. **`epics:301` daba el fork por resuelto** hacia «un redactor de `metadata`», meses antes de que hubiera
+   decisión. Hoy hay decisión y **tampoco es un redactor**: A2 no construye ninguno. Reescrito a lo que la
+   historia hace de verdad.
+6. **⚠ «Los tres huecos que el gate destapa» — corrige una AFIRMACIÓN.** El gate de G-1a aterriza en rojo por
+   **dos** referencias, y el eje `audit_log` está fuera de su universo por construcción: el gate deriva por
+   reflexión sobre entidades Doctrine y `audit_log` no tiene ninguna. El hueco de G-2 **nunca fue visible**
+   para ese mecanismo. Reescrito: los tres huecos comparten el eje, no el mecanismo que los encuentra.
+
+### Enmiendas documentales (Tarea 6): una más y una menos de las previstas
+
+**Las cuatro que se hicieron**, y por qué cada una era falsa y no cosmética:
+
+1. [`api/.person-reference-policy`](../../api/.person-reference-policy) — el bullet de tablas sin entidad
+   Doctrine declaraba `audit_log.metadata` como *standing leak* con control `NONE`, «escrita con el id real
+   del sujeto por el mismísimo caso de uso que este fichero nombra como propietario de `User::$id`». Ya no
+   lo es. El texto nuevo dice cuántos caminos de escritura había (ocho), cuál metía el id (uno), a dónde se
+   movió, qué lo sostiene (el testigo, no un gate) y **por qué no un gate** — con la condición de reapertura.
+2. [`api/.person-reference-policy`](../../api/.person-reference-policy) — **segunda mención, que el corte no
+   listaba**: la lista de columnas «fuera del control detective» incluía `audit_log.metadata`. Retirada.
+   Quedan `audit_log.actor_id` y `event_store.aggregate_id`.
+3. [`api/.audit-resource-types`](../../api/.audit-resource-types) — **la enmienda que el corte no previó, y
+   es la más importante de las cuatro.** Su cabecera afirmaba en mayúsculas que *NOTHING WRITES `User` IN
+   PRODUCTION TODAY* y que la línea del registro era «un sello sobre un arma sin disparar, que no cierra
+   ningún agujero vivo». Las dos frases son falsas desde esta historia. El texto nuevo dice que `User` **sí**
+   se escribe, que el gate **no lo vio**, y por qué: el punto ciego de la constante importada, cuyo coste el
+   propio fichero valoraba en «nada» mientras el único portador fuese la clase declarante. No era nada.
+4. [`docs/adr/audit-activity-log.md`](../../docs/adr/audit-activity-log.md) D4 — el contrato de `metadata`
+   admitía «IDs y discriminantes» y remataba con un trigger de revisita: *el día que una acción guarde PII
+   ahí, esta política debe crecer un redactor*. Ese día llegó y **se resolvió sin redactor**: el id se movió
+   al eje que ya tiene anonimizador. La enmienda registra el disparo, la resolución, la asimetría que la
+   justifica (ninguna mutación del conjunto entra en el JSON) y el trigger vigente.
+
+**La que NO hizo falta, medida antes de escribirla:** el «conjunto cerrado de políticas de mutación» **no se
+amplía**. A2 no añade statement — la fila se escribe con `AuditLogger::log()` (append) y la reescribe el
+`AuditResourceAnonymiser` que la cadena ya ejecutaba. Con ello **no se dispara** la regla del segundo
+statement (`audit-activity-log.md:235-239`: enrutar por `TransactionManager`, nunca DBAL cruda anidada bajo
+`wrapInTransaction`), que era el coste declarado del redactor en DA-1.
+
+**Boy-scout, declarado porque infla el diff:** el ADR decía «conjunto cerrado de **dos** políticas» y
+[`docs/architecture-api.md`](../../docs/architecture-api.md) `:264` dice **tres**, que es lo correcto (poda,
+eje actor, eje recurso). Ese desajuste es **anterior a G-2** y no lo causa esta historia; se corrige a tres
+porque estaba editándose ese mismo párrafo y porque el argumento de DA-1 se apoyaba en él. `architecture-api.md`
+no se toca: ya era correcto.
+
+### Falsificación ejecutada (evidencia de AC3, COMPLETA)
+
+El control de AC3 es el testigo de aceptación del escenario 1 de
+[`erase.feature`](../../api/features/backoffice/users/erase.feature), y son **tres** aserciones, no una. Cada
+una tiene su propio rojo, provocado de verdad. Las tres mutaciones se corrieron **en esta sesión** (no se
+heredó la cifra de M1), cada una con `make php.behat c='features/backoffice/users/erase.feature'`:
+
+| Mutación | Qué invariante quita | Rojo en | Sigue verde |
+|---|---|---|---|
+| **M1** — devolver `subject_user_id` a `metadata`, conservando el recurso | que `metadata` no lleve el id | **línea 43 (A)**, exit 2 | — (A es la primera) |
+| **M2** — pasar `null` como recurso, conservando metadata de conteos | que el sujeto viaje como recurso | **línea 48 (B)**, exit 2 | A |
+| **M3** — pseudónimo distinto para el eje recurso (`FulfilIdentityErasure:122`) | que ambos ejes compartan pseudónimo | **líneas 53 (C) y 78**, exit 2 | A **y B** |
+
+Lo que hace falsable a cada rama por separado es que **M3 deja verde la 48 y roja la 53**: B («la fila sigue
+siendo evidencia usable») y C («esa evidencia está ligada al rastro que explica») no son la misma aserción
+escrita dos veces — una fila puede tener recurso anonimizado y aun así no enlazar con el rastro de la persona.
+Sin M3, C habría pasado por redundante y nadie habría medido que muerde. M3 además pone roja la línea 78, la
+aserción de crosswalk del escenario 2, que pinnea el mismo invariante desde antes de esta historia.
+
+Trampa medida, no supuesta: Behat **detiene el escenario en el primer paso rojo** (M1 dejó 5 pasos saltados,
+M2 dejó 3). Por eso una sola mutación no puede acreditar tres ramas — hacen falta tres mutaciones, y ese es
+justamente el modo de fallo F1 que G-3a documentó.
+
+El testigo de aceptación no es el único control, y el segundo también se midió en vez de suponerse: bajo M1,
+`make php.unit c='--filter EraseIdentitySubjectTest'` da **exit 2 con 2 de 4 tests rojos**
+(`testErasesTheIdentityItsResetTokensAndSelfAuditsOnce` y `testTheSubjectIdNeverTravelsAsAMetadataValue`).
+Es un control más barato sobre la misma rama A, y enrojece.
+
+Restauración tras cada mutación: **copiando los bytes** desde `tmp/g2-falsify/*.orig`, verificada por `md5sum`
+idéntico (`c2281938…` y `2d7edb2e…`), por `grep -c subject_user_id` = 0 y por `git diff --stat -- api/src`
+vacío. **Nunca `git checkout --`**, que se llevaría ediciones sin commitear.
+
+Verde de base recuperado al terminar: **exit 0**, 12 escenarios, 99 pasos.
+
+### Consulta a tres voces sobre lo que quedaba abierto (2026-08-04)
+
+Sergio pidió decidir con **ChatGPT, Winston (arquitecto) y Amelia (dev)**. El prompt autocontenido para el
+externo está en `tmp/bmad-md/consult-g2-metadata-controls-and-caller-dependency-20260804-024728.md`.
+
+**Decisión 1 — el testigo borrable: Winston y Amelia COINCIDEN en aceptarlo**, con argumentos distintos y
+complementarios, y ninguno de los dos era el mío:
+
+- *Amelia:* el anti-borrado de este repo funciona por **derivación, no declaración**. La línea `User` se pone
+  roja al borrarla porque el tipo se deriva de `src`; las aserciones de `metadata` **no tienen contraparte
+  derivada**, así que un gate de texto sería una segunda declaración custodiando la primera, ambas editables
+  en el mismo diff. Compra «borra dos líneas en dos ficheros en vez de dos en uno»: un badén, no un control.
+- *Winston:* la asimetría con `AuditWitnessScenario` no es léxico-vs-conductual, es **el objeto**. Aquél
+  verifica *otro artefacto* (la línea del registro) con evidencia disjunta por construcción; un gate sobre
+  `erase.feature` verificaría el artefacto **contra sí mismo** — información cero salvo «alguien lo borró»,
+  que es una propiedad de `git blame`, no de comportamiento. Y añade el dilema que lo cierra: para ser
+  legítimo necesitaría una línea declarativa del eje `metadata`, que hoy **no puede existir** (`audit_log` no
+  tiene entidad Doctrine, y `.audit-resource-types` está indexado por tipo, no por columna) — luego o es
+  circular, o presupone un registro que el propio ADR ya midió que no se paga.
+
+**Lo que sí se construyó, propuesto por Amelia y compatible con la objeción de Winston** (que iba contra un
+gate *textual*, no contra una aserción de comportamiento): `PrivacyContext`, un `@AfterScenario` que corre
+tras **cada escenario de la suite** y afirma que ninguna fila de `audit_log.metadata` contiene el id de una
+persona que la base de datos todavía conoce. Complementa la aserción del escenario, no la duplica: aquélla
+nombra un sujeto y es la única que puede verlo una vez borrado de `identity_user`; ésta no nombra a nadie y
+ve a todos los demás.
+
+Medido, no supuesto:
+
+| Medición | Resultado |
+|---|---|
+| Suite Behat completa con el hook activo | 383 escenarios, 3479 pasos, **exit 0**, **cero disparos** — sin rojos falsos |
+| Fuga sembrada en el listener genérico de acceso | **68 disparos**, exit 2 — en escenarios donde ninguna aserción existía |
+| Fuga sembrada en `GDPR_ERASURE_EXECUTED` (id del admin que ejecuta) | disparó, y también la aserción (b) del escenario 1 |
+
+**Hallazgo sobre el propio mecanismo, que hay que leer antes de fiarse de una salida verde:** en Behat 4 el
+fallo de un `AfterScenario` **rompe la build (exit ≠ 0) pero no marca ningún paso ni escenario**. La corrida
+con 68 fugas imprimió `69 scenarios (69 passed) · 601 steps (601 passed)` y salió con 2. Quien lea el
+recuento y no el exit code llamaría verde a eso. Queda escrito en el docblock del contexto.
+
+**Tercera voz (ChatGPT, 2026-08-04) — y una advertencia de método sobre cómo llegó tarde.** El prompt se
+generó describiendo el estado ANTERIOR a implementar la Opción 5, y la implementación avanzó mientras el
+externo respondía. Así que juzgó un árbol que ya no existe. **El error de secuencia es mío**, no suyo, y hay
+que decirlo antes de leer su veredicto.
+
+- *Decisión 1:* coincide → Opción 1. **Consenso 3 de 3.** Aporta una asimetría mejor formulada que la mía y la
+  de Winston: el precedente (`AuditWitnessScenario`) protege la **trazabilidad de una línea de registro
+  manual** y la evidencia real sigue siendo correr Behat; el gate propuesto tendría por objeto **la propia
+  aserción**, y la evidencia real seguiría siendo la misma corrida. Luego no añade una segunda evidencia del
+  requisito: añade protección contra borrar texto. *Su condición de reapertura nº1 —«¿existe ya un patrón
+  consolidado de gates textuales?»— se midió y es **sí**: hay dos (`AuditWitnessScenario` y
+  `BehatSuiteCoverageGateTest`). El hecho contradice su premisa y la conclusión sobrevive igual, porque el
+  argumento de «no añade evidencia» no depende de cuántos precedentes haya.*
+- *Decisión 2:* recomienda la **Opción 4** (llamador único estructural), en desacuerdo con Winston y con lo ya
+  implementado. **No se reabre, y la razón la escribe él mismo en su cláusula de auto-duda nº5:** *«si las dos
+  registries no describen el mismo ownership sino obligaciones distintas —quién escribe frente a quién
+  anonimiza—, la aparente contradicción sería intencionada y mi argumento a favor de un único owner perdería
+  fuerza»*. Eso es exactamente lo que la Opción 5 produjo, y está medido:
+  `.person-reference-policy:168` nombra a `EraseIdentitySubject` como dueño de borrar la **fila** de
+  `identity_user` —que es lo que hace—, y `.audit-resource-types:88` nombra a `FulfilIdentityErasure` como
+  dueño de borrar la **copia de auditoría** del id —que ahora escribe *y* borra—. Dos obligaciones, dos
+  dueños, ninguna contradicción.
+- **Y la Opción 4 hoy compraría menos de lo que costaba.** Su valor era impedir que un segundo llamador dejara
+  PII; la Opción 5 ya eliminó esa consecuencia — un segundo llamador borra del todo y solo carece de
+  evidencia. Winston lo había anticipado (*«sigue dejando un caso de uso que escribe un id que no borra; solo
+  lo hace difícil de alcanzar»*) y Amelia había medido su coste: la variante «fusionar» lleva
+  `FulfilIdentityErasure` a ~12 colaboradores sobre un `@SuppressWarnings` de acoplamiento **ya existente** y
+  disuelve una unidad testeable, y la «no autowired» se pelea con `_defaults: autowire: true`. Su argumento
+  KISS —«hacer un servicio interno es más sencillo que introducir nuevas coordinaciones»— parte de una premisa
+  falsa: la Opción 5 **no introdujo coordinación**, movió una llamada y **quitó** un colaborador (4 → 3).
+- Medido tras el cambio: `EraseIdentitySubject` tiene **una sola inyección** en todo `api/src`
+  (`FulfilIdentityErasure.php:106`) y **cero** referencias a auditoría.
+
+**Veredicto final: se mantiene la Opción 5, sin añadir la 4.** Si algún día aparece un segundo llamador
+legítimo, el coste de no haberla pagado es una entrada de cumplimiento ausente, no un id de persona vivo.
+
+**Decisión 2 — la dependencia del llamador: DISCREPAN, y la discrepancia está sin resolver.** Amelia
+recomienda dejarlo con un pin de emparejamiento (un llamador, ninguna historia planificada que añada el
+segundo, el orden ya lo impone el flujo de datos). Winston reencuadra: el eje no es *quién ejecuta el
+anonimizador* sino **quién escribe el id**, y propone mover la escritura de `GDPR_SUBJECT_ERASED` a
+`FulfilIdentityErasure`, de modo que el mismo `AuditResource` alimente el `log()` y el `anonymise()` y la
+divergencia deje de ser representable. Los dos coinciden en descartar las Opciones 2, 3 y 4 — y Winston
+demuestra que la 3 está **bloqueada por D4 y D15 a la vez**, no solo es cara.
+
+**RESUELTA (Sergio, 2026-08-04): gana Winston, con mitigación.** `EraseIdentitySubject` deja de escribir
+`GDPR_SUBJECT_ERASED` y pierde su colaborador de auditoría (4 → 3 en el constructor); la entrada la escribe
+`FulfilIdentityErasure` una sentencia antes del `anonymise()` que la limpia, **desde el mismo valor**. El
+argumento que decide: SI-21 no dice «que alguien lo borre», dice que la referencia tenga dueño **y que ese
+dueño la ejecute**, y hasta ahora escritor ≠ dueño. Ahora un segundo llamador de `EraseIdentitySubject`
+borraría **sin dejar ningún id de persona atrás** — le faltaría la evidencia, que es lo que sí ve quien revise
+ese llamador nuevo. El peligro degrada de «sobrevive PII» a «falta evidencia».
+
+Medido, no supuesto: el canario de consultas **sigue en 17** (mismo número, otro orden — la fila de
+cumplimiento se escribe ahora ENTRE los dos `UPDATE`, porque la pasada de actor acuña el pseudónimo que la de
+recurso necesita y ésta tiene que encontrar una fila que ya exista). El comentario del canario lo dice.
+
+**La mitigación que Winston propuso no encajaba, y la sustituí por otra que da un rojo independiente.** Él
+sugería que `ReconcileErasedSubjectReferences` construyera su `AuditResource` para devolver a 2 los sitios de
+derivación; pero ese puerto recibe un **tipo**, no un recurso, así que forzarlo sería retorcer una firma para
+satisfacer un barrido. En su lugar hay una regla nueva sobre el árbol real: **un tipo `person` debe ser
+CONSTRUIDO por el fichero declarado como su borrador**. Con un solo sitio de derivación, esa regla es la que
+enrojece si alguien refactoriza la construcción — antes incluso de que el check de completitud note que el
+tipo salió del universo. Su rojo aislado está en fixtures (`ReceivingEraserFixture`, un dueño que anonimiza un
+recurso que construye otro: pasa la regla de cableado y falla la de derivación), y el rojo sobre el árbol real
+se verificó stubeando `filesDerivingType()` a `[]` → 2 fallos, exit 2.
+
+**Tres violaciones de PHPMD aparecieron al crecer el código y se arreglaron reestructurando, no suprimiendo:**
+el `execute()` del orquestador pasó de 70 líneas (extraído `recordCombinedErasure()`), el test de orquestación
+también (separado el invariante de `metadata` a su propio caso), y el rules-gate pasó de 10 métodos públicos
+(fusionadas las dos mitades de la regla de staleness, que es como el propio fichero ya trata las reglas de dos
+caras).
+
+### Pase adversarial (Tarea 8) — DÓNDE quedó y qué encontró
+
+**Registrado aquí y en el cuerpo de la PR.** Autorizado por Sergio (2026-08-04); ejecutado por **tres lectores
+hostiles independientes del autor**, en paralelo, solo lectura, con rutas absolutas al worktree (los subagentes
+leen el checkout primario, que está en `main`, no esta rama). Lentes distintas a propósito, no tres pasadas del
+mismo prompt: **(A)** ¿sobrevive un id de persona por algún camino no medido? · **(B)** ¿son falsables los
+controles o hay verde por construcción? · **(C)** ¿miente algún documento tras las enmiendas?
+
+**Ninguno encontró fuga de PII.** (A) intentó romper la cadena por el ordenamiento INSERT→UPDATE, por el
+case-folding de UUID y por el rollback, y las tres aguantan: `security` escribe síncrono y sin Messenger, ambos
+statements hacen `CAST(:… AS UUID)` (Postgres normaliza los dos lados), y si el anonimizador lanza, el `finally`
+del `wrapInTransaction` externo hace `ROLLBACK` completo. Lo que sí encontraron es que **el pase no había
+terminado la barrida** y que **los controles eran más débiles de lo que este artefacto afirmaba**.
+
+**Seis hallazgos convergieron entre dos o tres pases**, lo que los hace fiables. Todos corregidos:
+
+| # | Sev | Hallazgo | Corregido en |
+|---|---|---|---|
+| 1 | Alta | El barrido del registro **no ve constantes importadas**, y este cambio convirtió ese bypass en estilo de la casa. Un contexto nuevo que escriba `AuditResource::of(Otro::TYPE, $personId)` no entra en el universo → ninguna línea exigida → nadie obligado a borrarlo | `AuditResourceTypeRegistry` resuelve `Fqcn::CONST` entre ficheros, con fixtures que lo pinean |
+| 2 | Alta | `metadata` con **cero controles mecanizados**: el testigo solo busca el id del sujeto borrado, así que el id de OTRA persona pasa; `Membership implements AuditedEntity` mete `userId` en claro por diseño de los dos atributos; y el testigo es borrable con build verde | Paso de población (JOIN contra `identity_user`) + regla de contención en `PersonReferenceGateTest` |
+| 3 | Media | **Bypass por mayúsculas**: `metadata` es texto jsonb y no normaliza caso; la ruta pasa la grafía del cliente sin canonicalizar. `LIKE` no veía la fuga en mayúsculas | `ILIKE` + `assertStringNotContainsStringIgnoringCase` |
+| 4 | Media | `resourceErased` **no viajaba en el contrato**, y el drawer ofrecía «seguir recurso» sobre el pseudónimo sin guarda, mientras sí la tiene para el actor | Campo en ambos DTOs + guarda simétrica + tests de los dos lados |
+| 5 | Media | Dos docblocks de producción y la cabecera de `.audit-resource-types` seguían afirmando la fuga que este cambio retira | Barrida documental |
+| 6 | Media | El trigger de reapertura decía «un **segundo** camino» cuando tras el cambio hay **cero**: leído literalmente se negaba a dispararse ante la primera regresión | «**cualquier** camino»; la cuenta que importa es cuántos existen a la vez |
+
+**Lo que el pase corrigió del expediente, no del código:** el argumento de `nest_transactions_with_savepoints`
+que el ADR usaba está **obsoleto** — `doctrine/dbal` 4.4.4 usa savepoints en toda transacción anidada y
+`setNestTransactionsWithSavepoints(false)` lanza. La regla se mantiene por su otra razón; la premisa se corrigió
+donde estaba escrita. Y el conteo «ocho caminos de escritura» era un artefacto de agrupar filas de una tabla:
+son **diez** (nueve `AuditLogger->log()` más el listener CDC), **siete** con `metadata` no vacía, **uno** con id
+de persona. Re-medido a mano antes de escribirlo, porque va a un registro cuyo valor está en ser comprobable.
+
+**Lo que NO se cerró, dicho en abierto.** El testigo de aceptación sigue siendo **borrable en un diff de una
+línea con todos los gates en verde**: de los tres controles del eje `metadata`, solo la regla de contención
+tiene propiedad anti-borrado mecánica. Está escrito así en `.person-reference-policy`, sin adornos.
+
+**Una decisión de diseño que el pase levantó y NO se toma aquí:** `EraseIdentitySubject` escribe el id real en
+`resource_id` y depende de que **su llamador** ejecute el anonimizador después. Hoy tiene un solo llamador y el
+orden está pinneado de punta a punta por el testigo, pero un segundo llamador (un «borra mi cuenta»
+self-service, un handler) reintroduciría el defecto sin rojo en ninguna parte. Los dos registros ya lo delatan:
+`.person-reference-policy` nombra `EraseIdentitySubject` como dueño del borrado de `User::$id`, y
+`.audit-resource-types` nombra `FulfilIdentityErasure` como dueño de la copia que ese mismo caso emite. Es una
+cuestión de frontera de agregado/caso de uso, que en este repo es decisión del usuario, no del implementador.
+
+### Estado: COMPLETA — verde con las puertas frescas
+
+Las nueve tareas hechas. `main` se movió a `93befb7c` mientras se trabajaba (#634/G-1c mergeó) y la rama está
+rebasada sobre él, así que el `Estado medido` de arriba —fijado a `9dce7355`— es historia, no estado actual.
+
+Puertas finales, **cada una una ejecución fresca con su exit code**:
+
+| Puerta | Resultado |
+|---|---|
+| `make php.stan` | **exit 0** |
+| `make php.quality` | **exit 0** (PHPMD sin baseline: solo este target lo pilla) |
+| `make php.quality.dry-run` | **exit 0** — es lo que corre CI, y es *check-only*: `php.quality` ARREGLA y enmascara |
+| `make php.unit` | 2180 tests, 9279 aserciones, **exit 0** |
+| `make php.behat c='features/backoffice/users/erase.feature'` | 12 escenarios, 101 pasos, **exit 0** |
+| `make php.behat c='features/backoffice/audit/'` | 20 escenarios, 147 pasos, **exit 0** |
+| `make php.lint.person-reference` | **exit 0** |
+| `make php.lint.audit-resource` | **exit 0** |
+| `make pwa.quality` | **exit 0** |
+| `make pwa.test.unit` | 221 ficheros, 1136 tests, **exit 0** |
+
+Dos rojos aparecieron en el camino y **ninguno era del código de la historia**, pero los dos se arreglaron aquí
+porque los provocó este cambio: PHPMD marcó 12 parámetros en el DTO de detalle y su read model al añadir
+`resourceErased` (suprimido con su argumento, siguiendo el precedente ya existente en `AuditLogEntry` y
+`BankAccountCollectionRow`), y los pins de forma del contrato —`should have 10 children` en Behat y la lista
+exacta de campos en el test funcional— mordieron al crecer la fila, que es exactamente su trabajo.
+
+Un aviso de entorno, no de código: la suite completa dio **227 errores** una vez con el contenedor `database`
+caído (`could not translate host name "database"`). Con el stack levantado, exit 0. No confundir eso con una
+regresión.
+
+### Completion Notes List
+
+- **Tareas 4–9 completas.** El control de AC3 tiene tres mutaciones con tres rojos distintos; el comentario del
+  tripwire de G-3a dice ahora lo que el check compra y no lo que no puede dar; cuatro enmiendas documentales;
+  las seis contradicciones de planificación resueltas; pase adversarial registrado.
+- **El pase adversarial cambió el alcance de la historia, con autorización explícita de Sergio (2026-08-04).**
+  Tres hallazgos altos y medios se cerraron dentro de esta PR en vez de diferirse: la resolución de constantes
+  importadas en el barrido del registro, los controles del eje `metadata` (población + contención), el bypass
+  por mayúsculas y `resourceErased` en el contrato de lectura con su guarda en el drawer.
+- **Queda dicho lo que no se cerró:** el testigo de aceptación es borrable en un diff de una línea con todo en
+  verde, y `EraseIdentitySubject` depende de su llamador para su propio cumplimiento. Lo primero está escrito
+  en `.person-reference-policy`; lo segundo es una decisión de frontera que corresponde al usuario.
+
+### File List
+
+- `_bmad-output/implementation-artifacts/g-2-ids-de-persona-fuera-de-audit-log-metadata.md` (nuevo)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modificado)
+- `_bmad-output/planning-artifacts/arch-addendum-gdpr-hardening.md` (modificado)
+- `_bmad-output/planning-artifacts/epics-gdpr-hardening.md` (modificado)
+- `api/.audit-resource-types` (modificado)
+- `api/.person-reference-policy` (modificado)
+- `api/features/backoffice/audit/timeline.feature` (modificado)
+- `api/features/backoffice/users/erase.feature` (modificado)
+- `api/src/Backoffice/Audit/Application/Resource/AuditEventDetailResource.php` (modificado)
+- `api/src/Backoffice/Audit/Application/Resource/AuditTimelineResource.php` (modificado)
+- `api/src/Backoffice/Audit/Domain/AuditEventDetail.php` (modificado)
+- `api/src/Backoffice/Audit/Domain/AuditTimelineEntry.php` (modificado)
+- `api/src/Backoffice/Audit/Infrastructure/Http/AuditEventDetailResourceMapper.php` (modificado)
+- `api/src/Backoffice/Audit/Infrastructure/Http/AuditTimelineResourceMapper.php` (modificado)
+- `api/src/Backoffice/Audit/Infrastructure/Persistence/Dbal/DbalAuditTimelineRepository.php` (modificado)
+- `api/src/Iam/Identity/Application/EraseIdentitySubject.php` (modificado)
+- `api/src/Iam/Identity/Application/FulfilIdentityErasure.php` (modificado)
+- `api/src/Iam/Identity/Application/ReconcileErasedSubjectReferences.php` (modificado)
+- `api/src/Iam/Identity/Infrastructure/Cli/ReconcileErasedSubjectReferencesCommand.php` (modificado)
+- `api/tests/Functional/Backoffice/Audit/Infrastructure/Controller/AuditEventDetailFunctionalTest.php` (modificado)
+- `api/tests/Support/AuditResourceTypeRegistry.php` (modificado)
+- `api/tests/Unit/Backoffice/Audit/Application/AuditTimelineSearcherTest.php` (modificado)
+- `api/tests/Unit/Backoffice/Audit/Infrastructure/Http/AuditEventDetailResourceMapperTest.php` (modificado)
+- `api/tests/Unit/Backoffice/Audit/Infrastructure/Http/AuditTimelineResourceMapperTest.php` (modificado)
+- `api/tests/Unit/Iam/Identity/Application/EraseIdentitySubjectTest.php` (modificado)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/registry.complete` (modificado)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/src/ImportedConstantHolderFixture.php` (nuevo)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/src/ImportedConstantWriterFixture.php` (nuevo)
+- `api/tests/Unit/Shared/Architecture/PersonReferenceGateTest.php` (modificado)
+- `api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php` (modificado)
+- `api/tests/Unit/Shared/Architecture/PersonResourceErasureRulesGateTest.php` (modificado)
+- `docs/adr/audit-activity-log.md` (modificado)
+- `docs/architecture-api.md` (modificado)
+- `docs/architecture-pwa.md` (modificado)
+- `pwa/src/context/backoffice/audit/domain/AuditEntry.ts` (modificado)
+- `pwa/src/context/backoffice/audit/infrastructure/ApiAuditEventDetailRepository.ts` (modificado)
+- `pwa/src/context/backoffice/audit/infrastructure/ApiAuditTimelineRepository.ts` (modificado)
+- `pwa/src/context/backoffice/audit/infrastructure/ui/AuditEntryDrawer.tsx` (modificado)
+- `pwa/tests/app/backoffice/audit/auditDayGroups.test.ts` (modificado)
+- `pwa/tests/app/backoffice/audit/auditInvestigationScreen.test.tsx` (modificado)
+- `pwa/tests/app/backoffice/audit/auditJourneyGroups.test.ts` (modificado)
+- `pwa/tests/context/backoffice/audit/application/useAuditTimeline.test.tsx` (modificado)
+- `pwa/tests/context/backoffice/audit/infrastructure/ApiAuditEventDetailRepository.test.ts` (modificado)
+- `pwa/tests/context/backoffice/audit/infrastructure/ApiAuditTimelineRepository.test.ts` (modificado)
+- `pwa/tests/context/backoffice/audit/infrastructure/ui/AuditEntryDrawer.test.tsx` (modificado)
+- `pwa/tests/context/backoffice/audit/infrastructure/ui/AuditTimelineTable.test.tsx` (modificado)
+
+### Change Log
+
+| Fecha | Qué |
+|---|---|
+| 2026-08-03 | DA-1 cerrada (Tarea 0); Tareas 1–3: el sujeto pasa a viajar como RECURSO de la entrada (A2) |
+| 2026-08-04 | Tareas 4–7: control falsable con tres rojos, premisa del tripwire corregida, cuatro enmiendas documentales, seis contradicciones resueltas |
+| 2026-08-04 | Tarea 8: pase adversarial de tres lentes; seis hallazgos convergentes, todos corregidos en esta PR |
+| 2026-08-04 | Tarea 9: puertas finales verdes; historia a `review` |

@@ -34,9 +34,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * untouched, so it reaches the error tracker as the programming fault it is.
  *
  * It does NOT cover every person id in the database, and the success message names what it checked rather
- * than counting it so that the difference is visible in the output itself: `audit_log.actor_id`,
- * `audit_log.metadata` and `event_store.aggregate_id` hold person ids and are outside this control (the
- * registry's blind-spot block says so, and each has a story of its own).
+ * than counting it so that the difference is visible in the output itself: `audit_log.actor_id` and
+ * `event_store.aggregate_id` hold person ids and are outside this control (the registry's blind-spot block
+ * says so, and each has a story of its own).
  *
  * The report is grouped by place and never merged into one list. Which table still holds the id is what
  * decides whether an operator is looking at an audit trail whose resource axis went unanonymised or at a

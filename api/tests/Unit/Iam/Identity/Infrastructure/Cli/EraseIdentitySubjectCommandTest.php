@@ -124,7 +124,6 @@ final class EraseIdentitySubjectCommandTest extends TestCase
             new EraseIdentitySubject(
                 $users,
                 new InMemoryPasswordResetTokenRepository(),
-                $audit,
                 new InlineTransactionManager(),
             ),
             new RecordingAuditActorAnonymiser(matchCount: 0),

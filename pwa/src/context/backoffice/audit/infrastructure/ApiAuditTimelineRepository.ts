@@ -45,7 +45,8 @@ function isAuditEntry(value: unknown): value is AuditEntry {
     typeof value.correlationId === "string" &&
     isStringOrNull(value.resourceType) &&
     isStringOrNull(value.resourceId) &&
-    typeof value.actorErased === "boolean"
+    typeof value.actorErased === "boolean" &&
+    typeof value.resourceErased === "boolean"
   );
 }
 
@@ -100,6 +101,7 @@ function toAuditEntry(row: AuditEntry): AuditEntry {
     resourceType: row.resourceType,
     resourceId: row.resourceId,
     actorErased: row.actorErased,
+    resourceErased: row.resourceErased,
   };
 }
 
