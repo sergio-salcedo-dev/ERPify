@@ -8,6 +8,8 @@ use Erpify\Iam\Identity\Domain\Repository\LiveIdentityDirectory;
 use Erpify\Shared\Audit\Application\PersonResourceReferences;
 use Erpify\Shared\Privacy\Application\PersonReferenceSource;
 use Erpify\Shared\Privacy\Domain\PersonReferenceAxis;
+use LogicException;
+use Throwable;
 
 /**
  * Detective control over the places `api/.person-reference-policy` classifies as holding a person's
@@ -54,6 +56,12 @@ use Erpify\Shared\Privacy\Domain\PersonReferenceAxis;
  * next run and the suggested repair is idempotent, so the cost is a transient false positive rather than a
  * wrong action — but it is a real limit, and the registry's blind-spot block states it.
  *
+ * A failed read is NOT an empty verdict. Every read here can fail, and "no divergence found" and "the
+ * question could not be asked" are the two answers an unattended consumer must never confuse — so a failure
+ * leaves as {@see PersonReferenceProbeFailed} instead of as a result. The verdict's own
+ * {@see LogicException} stays outside that wrapping on purpose: a place reported twice is a wiring bug, and
+ * dressing it as an outage would let the control quietly stop covering a table.
+ *
  * It reads only. Repairing is a deliberate operator act through the erasure use case, not something a
  * scheduled check does to a compliance table on its own.
  */
@@ -67,6 +75,12 @@ final readonly class ReconcileErasedSubjectReferences
     private const string AUDIT_RESOURCE_AXIS = 'audit_log.resource_id';
 
     /**
+     * How the liveness probe names itself when it fails. Not an axis: the axes are places that HOLD a person
+     * reference, and this is the one read that decides which of those references are stale.
+     */
+    private const string LIVE_IDENTITIES = 'identity_user (liveness probe)';
+
+    /**
      * @param iterable<PersonReferenceSource> $personReferenceSources
      */
     public function __construct(
@@ -76,10 +90,18 @@ final readonly class ReconcileErasedSubjectReferences
     ) {
     }
 
+    /**
+     * @throws PersonReferenceProbeFailed when a read fails, so no verdict is reached — never to be read as
+     *                                    "nothing diverged"
+     * @throws LogicException             when two sources claim one axis, which means some other place is
+     *                                    going unchecked. Deliberately NOT wrapped: an outage and a wiring
+     *                                    bug are repaired by different people, and only the second is a
+     *                                    programming error that should reach an error tracker as one
+     */
     public function unreconciledReferences(): UnreconciledPersonReferences
     {
         $places = $this->placesHoldingPersonIds();
-        $live = $this->identities->existingIdsAmong($this->distinctIdsAcross($places));
+        $live = $this->liveAmong($this->distinctIdsAcross($places));
         $verdict = UnreconciledPersonReferences::none();
 
         foreach ($places as $place) {
@@ -103,19 +125,101 @@ final readonly class ReconcileErasedSubjectReferences
             // pseudonym that resolves to no live identity by design, so including those would report every
             // correct erasure as a divergence. The other places have no equivalent — there the row is
             // deleted rather than pseudonymised, so any surviving id that does not resolve IS the divergence.
-            'ids' => $this->distinct($this->auditReferences->unerasedIdsOfType(
-                FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE,
-            )),
+            'ids' => $this->idsHeldBy(
+                self::AUDIT_RESOURCE_AXIS,
+                fn (): array => $this->auditReferences->unerasedIdsOfType(
+                    FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE,
+                ),
+            ),
         ]];
 
-        foreach ($this->personReferenceSources as $personReferenceSource) {
+        foreach ($this->wiredSources() as $personReferenceSource) {
+            $axis = $this->axisNamedBy($personReferenceSource);
             $places[] = [
-                'axis' => $personReferenceSource->axis(),
-                'ids' => $this->distinct($personReferenceSource->retainedPersonIds()),
+                'axis' => $axis,
+                'ids' => $this->idsHeldBy($axis->key(), $personReferenceSource->retainedPersonIds(...)),
             ];
         }
 
         return $places;
+    }
+
+    /**
+     * The tagged collection, materialised inside the wrapper rather than iterated bare.
+     *
+     * `!tagged_iterator` compiles to a generator that instantiates each source AS THE LOOP REACHES IT, so a
+     * source whose dependencies cannot be resolved throws from the `foreach` statement — not from any read,
+     * and therefore outside every guard below if the loop is left bare. Such a fault would reach the CLI
+     * unwrapped and exit with the code reserved for "a person reference survived its erasure", sending an
+     * operator to repair a subject on a run that established nothing about any.
+     *
+     * @throws PersonReferenceProbeFailed
+     *
+     * @return list<PersonReferenceSource>
+     */
+    private function wiredSources(): array
+    {
+        try {
+            return \iterator_to_array($this->personReferenceSources, false);
+        } catch (Throwable $throwable) {
+            throw PersonReferenceProbeFailed::collectingSources($throwable);
+        }
+    }
+
+    /**
+     * The axis a source covers, asked for inside the wrapper for the same reason as the reads.
+     *
+     * Every implementation in the tree answers from a literal today, so this cannot fail yet — but the
+     * contract does not promise it, and its own gate reaches the uninitialised form only, so a source that
+     * computes its key is admissible and would raise here.
+     *
+     * @throws PersonReferenceProbeFailed
+     */
+    private function axisNamedBy(PersonReferenceSource $personReferenceSource): PersonReferenceAxis
+    {
+        try {
+            return $personReferenceSource->axis();
+        } catch (Throwable $throwable) {
+            throw PersonReferenceProbeFailed::namingAxisOf($personReferenceSource::class, $throwable);
+        }
+    }
+
+    /**
+     * One place's read, with its failure named after the place rather than left to propagate raw.
+     *
+     * Wrapping the reads and NOT the verdict assembly is the whole discipline here: a failed read means no
+     * verdict was reached, while the assembly raises {@see LogicException} for a wiring bug that has to stay
+     * loud. Catching around both would spell them the same way.
+     *
+     * @param callable(): list<string> $read
+     *
+     * @throws PersonReferenceProbeFailed
+     *
+     * @return list<string>
+     */
+    private function idsHeldBy(string $axisKey, callable $read): array
+    {
+        try {
+            return $this->distinct($read());
+        } catch (Throwable $throwable) {
+            throw PersonReferenceProbeFailed::reading($axisKey, $throwable);
+        }
+    }
+
+    /**
+     * @param list<string> $ids
+     *
+     * @throws PersonReferenceProbeFailed
+     *
+     * @return list<string>
+     */
+    private function liveAmong(array $ids): array
+    {
+        try {
+            return $this->identities->existingIdsAmong($ids);
+        } catch (Throwable $throwable) {
+            throw PersonReferenceProbeFailed::reading(self::LIVE_IDENTITIES, $throwable);
+        }
     }
 
     /**

@@ -1,0 +1,8 @@
+# The transport is consumed, and by the wrong service: `messenger_worker` is the horizontally scalable pool,
+# so a scheduler transport here emits one tick per replica. A file-wide scan cannot tell this from correct
+# wiring, which is why consumption is attributed per service.
+services:
+  messenger_worker:
+    command: ["php", "bin/console", "messenger:consume", "async", "scheduler_alpha", "--time-limit=3600"]
+  scheduler_worker:
+    command: ["php", "bin/console", "messenger:consume", "--time-limit=3600"]

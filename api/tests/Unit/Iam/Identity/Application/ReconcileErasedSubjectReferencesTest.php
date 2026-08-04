@@ -5,15 +5,21 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Application\PersonReferenceFinding;
+use Erpify\Iam\Identity\Application\PersonReferenceProbeFailed;
 use Erpify\Iam\Identity\Application\ReconcileErasedSubjectReferences;
+use Erpify\Iam\Identity\Domain\Repository\LiveIdentityDirectory;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
+use Erpify\Shared\Privacy\Application\PersonReferenceSource;
+use Erpify\Shared\Privacy\Domain\PersonReferenceAxis;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedPersonResourceReferences;
 use Erpify\Tests\Unit\Shared\Privacy\Infrastructure\Double\FixedPersonReferenceSource;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 /**
  * The detective control's whole value is which rows it reports and WHERE they are. Three failure modes
@@ -119,6 +125,64 @@ final class ReconcileErasedSubjectReferencesTest extends TestCase
         $verdict = $this->reconciler([], [self::MEMBERSHIP_AXIS => []])->unreconciledReferences();
 
         $this->assertSame([], $verdict->findings());
+    }
+
+    #[Test]
+    public function itWrapsAFailedLivenessProbeSoAFaultIsNeverReadAsACleanRun(): void
+    {
+        // The probe raising is ordinary — the port declares PostgreSQL's parameter ceiling as a hard bound —
+        // and both consumers act on the difference: a finding has a documented repair, a fault has none.
+        $identities = $this->createStub(LiveIdentityDirectory::class);
+        $identities->method('existingIdsAmong')->willThrowException(new RuntimeException('connection lost'));
+
+        $reconciler = new ReconcileErasedSubjectReferences(
+            new FixedPersonResourceReferences([self::GONE_ID]),
+            [],
+            $identities,
+        );
+
+        $this->expectException(PersonReferenceProbeFailed::class);
+        $reconciler->unreconciledReferences();
+    }
+
+    #[Test]
+    public function itWrapsAFailedSourceTheSameWay(): void
+    {
+        // A source query fails exactly as the liveness probe can, and reporting "nothing found" because one
+        // place could not be read is the same lie in both directions.
+        $source = $this->createStub(PersonReferenceSource::class);
+        $source->method('axis')->willReturn(PersonReferenceAxis::of(self::MEMBERSHIP_AXIS));
+        $source->method('retainedPersonIds')->willThrowException(new RuntimeException('deadlock'));
+
+        $reconciler = new ReconcileErasedSubjectReferences(
+            new FixedPersonResourceReferences([]),
+            [$source],
+            new InMemoryLiveIdentityDirectory(),
+        );
+
+        $this->expectException(PersonReferenceProbeFailed::class);
+        $reconciler->unreconciledReferences();
+    }
+
+    #[Test]
+    public function itLeavesAWiringBugLoudInsteadOfDressingItAsAnOutage(): void
+    {
+        // The falsifiability of the wrapper: were it a blanket catch around the whole method, the repeated
+        // axis below — a wiring bug the verdict raises on purpose — would surface as a probe failure, and the
+        // CLI would answer "infrastructure blip" to a control that is silently missing a place.
+        $duplicated = [
+            new FixedPersonReferenceSource(self::MEMBERSHIP_AXIS, []),
+            new FixedPersonReferenceSource(self::MEMBERSHIP_AXIS, []),
+        ];
+
+        $reconciler = new ReconcileErasedSubjectReferences(
+            new FixedPersonResourceReferences([]),
+            $duplicated,
+            new InMemoryLiveIdentityDirectory(),
+        );
+
+        $this->expectException(LogicException::class);
+        $reconciler->unreconciledReferences();
     }
 
     /**

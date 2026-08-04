@@ -1,5 +1,5 @@
 # generated: 2026-06-23
-# last_updated: 2026-08-03
+# last_updated: 2026-08-04
 # project: ERPify
 # project_key: NOKEY
 # tracking_system: file-system
@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-08-03
+last_updated: 2026-08-04
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -274,10 +274,10 @@ development_status:
   # INCLUIDO el gate de consumo de schedules: sin él "agendado" es infalsable — un schedule puede shippear muerto
   # con todos los gates verdes. Cuesta un bind mount de solo lectura de los Compose (precedente: gate del
   # contrato de errores). Aplica retroactivamente a los dos schedules existentes.
-  # G-3b SIGUE sin empezar pese a lo que diga `make bmad.status.audit`: casa la clave contra el ASUNTO de #615,
-  # que era el chore de renombrado de esta misma clave. Medido contra el CÓDIGO: solo hay dos #[AsSchedule] y
-  # ninguno es del reconciliador.
-  g-3b-agendado-observable-reconciliador-referencias-borradas: ready-for-dev
+  # `make bmad.status.audit` casa esta clave contra el ASUNTO de #615, que era el chore de renombrado de la
+  # propia clave, así que su veredicto sobre G-3b no es evidencia: mide contra el CÓDIGO (hoy, tres
+  # #[AsSchedule] bajo api/src, uno de ellos el del reconciliador) y contra git, nunca contra el audit.
+  g-3b-agendado-observable-reconciliador-referencias-borradas: done
   # G-5 (FR10) NO estaba en el corte original: se descubrió midiendo al contextualizar G-4a. El `event_store`
   # conserva el id real del sujeto a perpetuidad (aggregate_id de 6 eventos + payload de SessionStarted y los
   # seis Invitation*), ningún routing lo cambia y la cadena de erasure no toca la tabla — luego G-4a persigue la

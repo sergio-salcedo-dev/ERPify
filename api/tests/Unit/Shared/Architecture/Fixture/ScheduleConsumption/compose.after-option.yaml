@@ -1,0 +1,6 @@
+# A receiver written AFTER an option. `ArgvInput` takes arguments and options in any order and `receivers`
+# is variadic, so this really is consumed — reading it as an option value made a correct wiring look dead
+# and, worse, hid a leftover argument from the stale check.
+services:
+  messenger_worker:
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "scheduler_alpha"]

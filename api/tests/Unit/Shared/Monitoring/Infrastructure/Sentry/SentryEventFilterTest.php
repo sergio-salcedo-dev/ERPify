@@ -87,6 +87,24 @@ final class SentryEventFilterTest extends TestCase
         $this->assertNotInstanceOf(Event::class, (new SentryEventFilter())($event, $hint));
     }
 
+    public function testKeepsAHandlerFaultThatMerelyChainsAConnectionLossInTheWorker(): void
+    {
+        // The same tag, the same DBAL cause in the chain — but the throwable is the handler's own, not
+        // the transport's. `messenger:consume` is also the scheduler worker's command line, so every
+        // maintenance control runs under this tag; a control whose read lost the connection produced no
+        // verdict, and that is the one thing about it worth paging an engineer over. Dropping it here
+        // would make the compliance controls' only fault channel silently unreachable in production,
+        // which is where this filter is the sole thing standing between them and Sentry.
+        $event = Event::createEvent();
+        $event->setTag('console.command', 'messenger:consume');
+
+        $hint = EventHint::fromArray([
+            'exception' => new RuntimeException('the probe could not read', 0, $this->connectionLost()),
+        ]);
+
+        $this->assertSame($event, (new SentryEventFilter())($event, $hint));
+    }
+
     public function testKeepsConnectionLossNotOriginatingFromTheWorker(): void
     {
         // Same DBAL connection-loss class, but no messenger:consume tag and no worker-transport
