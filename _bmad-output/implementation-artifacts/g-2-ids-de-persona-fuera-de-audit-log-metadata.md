@@ -470,6 +470,54 @@ vacío. **Nunca `git checkout --`**, que se llevaría ediciones sin commitear.
 
 Verde de base recuperado al terminar: **exit 0**, 12 escenarios, 99 pasos.
 
+### Consulta a tres voces sobre lo que quedaba abierto (2026-08-04)
+
+Sergio pidió decidir con **ChatGPT, Winston (arquitecto) y Amelia (dev)**. El prompt autocontenido para el
+externo está en `tmp/bmad-md/consult-g2-metadata-controls-and-caller-dependency-20260804-024728.md`.
+
+**Decisión 1 — el testigo borrable: Winston y Amelia COINCIDEN en aceptarlo**, con argumentos distintos y
+complementarios, y ninguno de los dos era el mío:
+
+- *Amelia:* el anti-borrado de este repo funciona por **derivación, no declaración**. La línea `User` se pone
+  roja al borrarla porque el tipo se deriva de `src`; las aserciones de `metadata` **no tienen contraparte
+  derivada**, así que un gate de texto sería una segunda declaración custodiando la primera, ambas editables
+  en el mismo diff. Compra «borra dos líneas en dos ficheros en vez de dos en uno»: un badén, no un control.
+- *Winston:* la asimetría con `AuditWitnessScenario` no es léxico-vs-conductual, es **el objeto**. Aquél
+  verifica *otro artefacto* (la línea del registro) con evidencia disjunta por construcción; un gate sobre
+  `erase.feature` verificaría el artefacto **contra sí mismo** — información cero salvo «alguien lo borró»,
+  que es una propiedad de `git blame`, no de comportamiento. Y añade el dilema que lo cierra: para ser
+  legítimo necesitaría una línea declarativa del eje `metadata`, que hoy **no puede existir** (`audit_log` no
+  tiene entidad Doctrine, y `.audit-resource-types` está indexado por tipo, no por columna) — luego o es
+  circular, o presupone un registro que el propio ADR ya midió que no se paga.
+
+**Lo que sí se construyó, propuesto por Amelia y compatible con la objeción de Winston** (que iba contra un
+gate *textual*, no contra una aserción de comportamiento): `PrivacyContext`, un `@AfterScenario` que corre
+tras **cada escenario de la suite** y afirma que ninguna fila de `audit_log.metadata` contiene el id de una
+persona que la base de datos todavía conoce. Complementa la aserción del escenario, no la duplica: aquélla
+nombra un sujeto y es la única que puede verlo una vez borrado de `identity_user`; ésta no nombra a nadie y
+ve a todos los demás.
+
+Medido, no supuesto:
+
+| Medición | Resultado |
+|---|---|
+| Suite Behat completa con el hook activo | 383 escenarios, 3479 pasos, **exit 0**, **cero disparos** — sin rojos falsos |
+| Fuga sembrada en el listener genérico de acceso | **68 disparos**, exit 2 — en escenarios donde ninguna aserción existía |
+| Fuga sembrada en `GDPR_ERASURE_EXECUTED` (id del admin que ejecuta) | disparó, y también la aserción (b) del escenario 1 |
+
+**Hallazgo sobre el propio mecanismo, que hay que leer antes de fiarse de una salida verde:** en Behat 4 el
+fallo de un `AfterScenario` **rompe la build (exit ≠ 0) pero no marca ningún paso ni escenario**. La corrida
+con 68 fugas imprimió `69 scenarios (69 passed) · 601 steps (601 passed)` y salió con 2. Quien lea el
+recuento y no el exit code llamaría verde a eso. Queda escrito en el docblock del contexto.
+
+**Decisión 2 — la dependencia del llamador: DISCREPAN, y la discrepancia está sin resolver.** Amelia
+recomienda dejarlo con un pin de emparejamiento (un llamador, ninguna historia planificada que añada el
+segundo, el orden ya lo impone el flujo de datos). Winston reencuadra: el eje no es *quién ejecuta el
+anonimizador* sino **quién escribe el id**, y propone mover la escritura de `GDPR_SUBJECT_ERASED` a
+`FulfilIdentityErasure`, de modo que el mismo `AuditResource` alimente el `log()` y el `anonymise()` y la
+divergencia deje de ser representable. Los dos coinciden en descartar las Opciones 2, 3 y 4 — y Winston
+demuestra que la 3 está **bloqueada por D4 y D15 a la vez**, no solo es cara. **Pendiente de Sergio.**
+
 ### Pase adversarial (Tarea 8) — DÓNDE quedó y qué encontró
 
 **Registrado aquí y en el cuerpo de la PR.** Autorizado por Sergio (2026-08-04); ejecutado por **tres lectores
