@@ -300,8 +300,11 @@ jobs:
       matrix:
         # Single source of truth for E2E sharding. To scale, just extend this
         # list (e.g. [1, 2, 3]); the job name and CI_TOTAL_SHARDS both derive
-        # the count from `strategy.job-total` automatically.
-        shard: [1]
+        # the count from `strategy.job-total` automatically. Two shards split the
+        # suite across isolated per-shard stacks (own DB/containers), so the
+        # wall-clock halves without the shared-state flakiness that raising
+        # in-shard workers would risk.
+        shard: [1, 2]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -346,13 +349,16 @@ jobs:
           restore-keys: |
             playwright-${{ runner.os }}-
 
-      - name: Install Playwright Browsers
+      # The ubuntu-latest image ships every Chromium system library (verified:
+      # `playwright install-deps` reports each one already-installed) and the E2E
+      # suite makes no font-dependent visual assertions, so we install the browser
+      # binary alone and skip the apt pass entirely — no `--with-deps`, no separate
+      # install-deps step. On a cache hit nothing runs here at all. If a future
+      # runner image ever drops a required library, chromium launch fails loudly on
+      # the next miss — re-add `--with-deps chromium` to restore the apt install.
+      - name: Install Playwright Browser (deps preinstalled on runner)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: cd pwa && npx playwright install --with-deps chromium
-
-      - name: Install Playwright system deps (cached browsers)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: cd pwa && npx playwright install-deps chromium
+        run: cd pwa && npx playwright install chromium
 
       - name: Run E2E
         env:
@@ -490,13 +496,16 @@ jobs:
           restore-keys: |
             playwright-${{ runner.os }}-
 
-      - name: Install Playwright Browsers
+      # The ubuntu-latest image ships every Chromium system library (verified:
+      # `playwright install-deps` reports each one already-installed) and the E2E
+      # suite makes no font-dependent visual assertions, so we install the browser
+      # binary alone and skip the apt pass entirely — no `--with-deps`, no separate
+      # install-deps step. On a cache hit nothing runs here at all. If a future
+      # runner image ever drops a required library, chromium launch fails loudly on
+      # the next miss — re-add `--with-deps chromium` to restore the apt install.
+      - name: Install Playwright Browser (deps preinstalled on runner)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: cd pwa && npx playwright install --with-deps chromium
-
-      - name: Install Playwright system deps (cached browsers)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: cd pwa && npx playwright install-deps chromium
+        run: cd pwa && npx playwright install chromium
 
       # Use Playwright's --repeat-each to detect flakiness in a single run
       # (avoids per-iteration stack-bring-up cost).
