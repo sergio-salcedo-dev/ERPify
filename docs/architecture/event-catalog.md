@@ -80,11 +80,12 @@ actually send it through — walking class parents, interfaces, namespace wildca
 Its blind spots are enumerated in the registry header; the load-bearing ones are `TransportNamesStamp`, plain
 non-`DomainEvent` messages, and the payload (as opposed to the aggregate id).
 
-The one consumed event today:
+The consumed events today:
 
 | `eventName` | ver | Producer (use case) | Payload | Consumers |
 |-------------|:---:|---------------------|---------|-----------|
 | `erpify.iam.identity.password-reset-completed` | 1 | `CompletePasswordReset` (recorded by `User::resetPassword()`) | *empty* `[]` (user id in envelope — **not** PII-free: the id is the subject) | password-changed email, sent in process |
+| `erpify.iam.identity.password-changed` | 1 | `ChangeMyPassword` (recorded by `User::changePassword()`) | *empty* `[]` (same envelope shape, same subject id) | password-changed email, sent in process |
 
 Being unrouted means the handlers run inside the caller, so `RunProjectionsOnDomainEvent` joins the write
 transaction — the shape every unrouted event in the app already has. The notification is deliberately **not**
@@ -254,16 +255,18 @@ delivered message — so a missed or duplicated delivery cannot corrupt a read m
 
 ### Iam.Identity
 
-| Consumer | Kind | password-reset-completed | Effect |
-|----------|------|:---:|--------|
-| `RunProjectionsOnDomainEvent` | trigger | ● | Fires projector catch-up for any event (no Identity projector today) |
+| Consumer | Kind | password-reset-completed | password-changed | Effect |
+|----------|------|:---:|:---:|--------|
+| `RunProjectionsOnDomainEvent` | trigger | ● | ● | Fires projector catch-up for any event (no Identity projector today) |
 
-The password-changed notification has **no** consumer row: it is not a reactor. `CompletePasswordReset` sends
-it directly, post-commit and best-effort. Without a persisted transport there is no at-least-once redelivery,
+The password-changed notification has **no** consumer row: it is not a reactor. Both producers send it
+directly, post-commit and best-effort. Without a persisted transport there is no at-least-once redelivery,
 so the `(eventId, handler)` dedup claim that an async reactor needs has nothing left to guard — delivery moves
 from at-least-once to at-most-once, which is the right trade for a notification and the one
 `RevokeSessionsBestEffort` already makes beside it. The retry paths that remain (HTTP retry, double submit,
-a replayed use case) all die on the token's single-use `consume()`, not on a claim.
+a replayed use case) die on a guard rather than on a claim: the reset token's single-use `consume()` for
+`CompletePasswordReset`, and for `ChangeMyPassword` the current-password check, which a replay of the same
+body can no longer satisfy once the credential has been replaced.
 
 ## Stored event row
 

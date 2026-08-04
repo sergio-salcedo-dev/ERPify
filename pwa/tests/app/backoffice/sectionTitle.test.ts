@@ -47,7 +47,7 @@ describe("sectionTitleFor", () => {
   it.each([
     ["/backoffice/profile/notifications", "Notifications"],
     ["/backoffice/profile/settings", "Settings"],
-    ["/backoffice/profile", "User Profile"],
+    ["/backoffice/profile", "My profile"],
     ["/backoffice/docs", "Technical Explorer"],
     ["/backoffice/docs/dictionary", "Data Dictionary"],
     ["/backoffice/docs/flow", "How ERPify Works"],

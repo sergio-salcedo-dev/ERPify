@@ -103,6 +103,11 @@ export const API_ENDPOINTS = {
   // prefix): the signed-in user reads their own identity and session registry.
   IDENTITY: {
     ME: `${API_PREFIX_V1}/me`,
+    // Self-service credential change (204 on success). Verifies the current password,
+    // so it needs no CSRF token beyond the same-origin session cookie. A wrong current
+    // password answers 403 `invalid-current-password` — never 401, which the transport
+    // would read as an expired session and bounce to the login page.
+    CHANGE_PASSWORD: `${API_PREFIX_V1}/me/password`,
     SESSIONS: `${API_PREFIX_V1}/sessions`,
     SESSIONS_REVOKE_OTHERS: `${API_PREFIX_V1}/sessions/revoke-others`,
     SESSIONS_REVOKE_CURRENT: `${API_PREFIX_V1}/sessions/revoke-current`,

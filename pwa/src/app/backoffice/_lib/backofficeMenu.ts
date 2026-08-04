@@ -245,17 +245,43 @@ export const backofficeMenuGroups: NavGroup[] = [
 
 /**
  * Account entry pinned to the sidebar footer, rendered apart from the scrolling
- * groups. Logout points at `/` (home) rather than a back-office section.
+ * groups. Logout points at `Routes.HOME` rather than a back-office section, which is
+ * what makes the layout's navigation handler revoke the session and hard-navigate.
+ *
+ * "My profile" repeats the parent's own path on purpose: an expanded desktop sidebar
+ * only toggles the sub-item list when the parent is clicked, so the account landing
+ * page is unreachable from that state without an explicit leaf of its own.
  */
 export const accountMenuItem: NavItem = {
   name: "User Profile",
   icon: User,
-  path: `${BASE}/profile`,
+  path: Routes.PROFILE,
   subItems: [
-    { name: "Notifications", path: `${BASE}/profile/notifications`, icon: Bell },
-    { name: "Active sessions", path: `${BASE}/profile/sessions`, icon: MonitorSmartphone },
-    { name: "Settings", path: `${BASE}/profile/settings`, icon: SettingsIcon },
-    { name: "Logout", path: "/", icon: LogOut },
+    {
+      name: "My profile",
+      path: Routes.PROFILE,
+      icon: User,
+      testId: "bo-layout__sidebar-profile",
+    },
+    {
+      name: "Notifications",
+      path: `${Routes.PROFILE}/notifications`,
+      icon: Bell,
+      testId: "bo-layout__sidebar-notifications",
+    },
+    {
+      name: "Active sessions",
+      path: `${Routes.PROFILE}/sessions`,
+      icon: MonitorSmartphone,
+      testId: "bo-layout__sidebar-sessions",
+    },
+    {
+      name: "Settings",
+      path: `${Routes.PROFILE}/settings`,
+      icon: SettingsIcon,
+      testId: "bo-layout__sidebar-settings",
+    },
+    { name: "Logout", path: Routes.HOME, icon: LogOut, testId: "bo-layout__sidebar-logout" },
   ],
 };
 
