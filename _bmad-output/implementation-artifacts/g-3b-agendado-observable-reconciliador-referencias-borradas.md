@@ -4,7 +4,7 @@ baseline_commit: 93befb7c
 
 # Story 1.6 (G-3b): El control detective del eje de recursos se ejecuta, falla de forma observable y alerta
 
-Status: review
+Status: done
 
 > **LA DECISIÓN ESTÁ TOMADA Y REGISTRADA** (ver *Decisión registrada*): **`Iam/Identity` estrena su propio
 > schedule**. La precondición normativa de la épica queda satisfecha por ese bloque. **No la re-abras.**
@@ -211,8 +211,10 @@ salida — no razonada desde los Makefiles.*
       [`dead-letter-observability.md`](../../docs/adr/dead-letter-observability.md) NO se toca: ya está corregido
       en `main`** (`417b14ab`, #614) — su bloque «What throwing would and would not do» ya dice que no hay
       recursión porque los transportes de scheduler no están entre los de fallo.
-- [ ] **Tarea 8 — Gates y pase adversarial (AC9 + definición de hecho de la épica).** Ejecuciones frescas con
-      exit code. **Pase adversarial por alguien distinto del autor, REGISTRADO, declarando dónde.**
+- [x] **Tarea 8 — Gates y pase adversarial (AC9 + definición de hecho de la épica).** Hecha (2026-08-04):
+      gates re-ejecutados frescos tras aplicar la review, con exit code impreso, y **pase adversarial por
+      contexto fresco distinto del autor, registrado en la sección *Pase adversarial* + *Review Findings* de
+      este artefacto y en el cuerpo del PR #635.**
 
 ## Dev Notes
 
