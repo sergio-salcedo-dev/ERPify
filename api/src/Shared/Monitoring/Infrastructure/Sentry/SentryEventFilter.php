@@ -9,6 +9,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
 use Sentry\Event;
 use Sentry\EventHint;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\PostgreSqlConnection;
+use Symfony\Component\Messenger\Exception\TransportException;
 use Throwable;
 
 /**
@@ -31,10 +32,19 @@ use Throwable;
  *    `ConnectionException`, DNS failure). Both are lifecycle artifacts of a self-healing worker
  *    (`restart: unless-stopped` reconnects on the next boot), not application faults — their real
  *    signal is the container exit status, never Sentry. We drop a DBAL connection-loss ONLY when it
- *    originates from the worker's transport (the `messenger:consume` command tag, or a
- *    `PostgreSqlConnection` frame in the trace — the destructor path carries no command tag).
+ *    originates from the worker's transport: either a `TransportException` raised while the worker
+ *    was polling (the `LISTEN` path, which carries the `messenger:consume` command tag) or a
+ *    `PostgreSqlConnection` frame in the trace (the destructor `UNLISTEN` path, which carries no tag).
  *    A genuine DB outage during HTTP request handling has neither marker and still reaches Sentry.
  *    See docs/troubleshooting/sentry-boot-probe-noise.md.
+ *
+ *    **The command tag alone is not the marker, and the difference is load-bearing.** A worker
+ *    process is not a single tenant: `messenger:consume` is also the command line of the scheduler
+ *    worker, so every handler running under it would inherit the suppression. A maintenance control
+ *    that throws because its own read lost the connection is the opposite of teardown noise — it is
+ *    a control that could not run, which is precisely what must page someone. Discriminating by the
+ *    exception the transport itself raises keeps the drop tied to the origin rather than the process,
+ *    and a process gains tenants while an origin does not.
  */
 final class SentryEventFilter
 {
@@ -74,7 +84,7 @@ final class SentryEventFilter
             return false;
         }
 
-        if ($this->isMessengerConsume($event)) {
+        if ($this->isTransportPollingFailure($throwable, $event)) {
             return true;
         }
 
@@ -105,9 +115,16 @@ final class SentryEventFilter
         return false;
     }
 
-    private function isMessengerConsume(Event $event): bool
+    /**
+     * The `LISTEN` half: the transport's own polling call fails and Messenger surfaces it as a
+     * {@see TransportException}. The command tag scopes it to the worker; the exception type scopes it
+     * to the transport, which is what keeps a handler's own connection loss — a control that could not
+     * run — out of the suppression even though it shares the process and therefore the tag.
+     */
+    private function isTransportPollingFailure(Throwable $throwable, Event $event): bool
     {
-        return ($event->getTags()['console.command'] ?? null) === self::MESSENGER_CONSUME_COMMAND;
+        return $throwable instanceof TransportException
+            && ($event->getTags()['console.command'] ?? null) === self::MESSENGER_CONSUME_COMMAND;
     }
 
     /**

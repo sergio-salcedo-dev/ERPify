@@ -106,6 +106,16 @@ final class ReconcilePersonReferencesHandlerTest extends TestCase
             [self::SESSION_AXIS => 1, self::MEMBERSHIP_AXIS => 2],
             $loggedContext['divergentByAxis'],
         );
+        // The denominator BY NAME as well as by count, matching what the CLI prints in both of its branches.
+        // A number falling from three to two says coverage was lost and cannot say which place stopped being
+        // watched — and it falls in the one line an operator reads while already acting on a finding, which
+        // is the moment they are least likely to audit the control itself. Registry keys, never ids, so this
+        // is the whole reason the assertion above can still hold.
+        $this->assertArrayHasKey('axesCheckedKeys', $loggedContext);
+        $this->assertSame(
+            [self::SESSION_AXIS, self::MEMBERSHIP_AXIS, 'audit_log.resource_id'],
+            $loggedContext['axesCheckedKeys'],
+        );
     }
 
     #[Test]

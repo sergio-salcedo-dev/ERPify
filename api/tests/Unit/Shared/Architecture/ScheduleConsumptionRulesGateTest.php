@@ -15,9 +15,9 @@ use PHPUnit\Framework\TestCase;
  * that works from one that returns "nothing wrong" no matter what it is shown. These fixtures are the states
  * the gate has to go red on.
  *
- * The `messenger:consume` scan is the part that most needs it. A grep for the transport name anywhere in the
- * file would pass on a compose file that only mentions it in a comment, and one that swept every quoted token
- * would count a value handed to `--time-limit` as a consumed receiver. Both shapes are here.
+ * The `messenger:consume` scan is the part that most needs it, and each fixture here is a shape that once
+ * defeated it: a transport named only in a comment or an env var, a whole command parked in a comment, a
+ * command written as a plain string, and consumption by the wrong service.
  *
  * @internal
  */
@@ -27,9 +27,15 @@ final class ScheduleConsumptionRulesGateTest extends TestCase
     private const string FIXTURES = __DIR__ . '/Fixture/ScheduleConsumption';
 
     #[Test]
-    public function itSeesAScheduleNameInAnAttribute(): void
+    public function itSeesEverySpellingOfTheAttributeSymfonyAccepts(): void
     {
-        $this->assertSame(['alpha'], ScheduleConsumption::declaredScheduleNames(self::FIXTURES . '/src'));
+        // Positional, bare (which Symfony resolves to `default`), named-argument and fully qualified. A
+        // sweep that saw only the first would let the other three ship a transport nobody consumes while
+        // this gate stayed green — the exact failure it exists to refuse, one level up.
+        $this->assertSame(
+            ['alpha', 'default', 'fqcn', 'named'],
+            ScheduleConsumption::declaredScheduleNames(self::FIXTURES . '/src'),
+        );
     }
 
     #[Test]
@@ -59,14 +65,53 @@ final class ScheduleConsumptionRulesGateTest extends TestCase
     }
 
     #[Test]
-    public function itStopsReadingArgumentsAtTheFirstOption(): void
+    public function itRefusesAWholeConsumeCommandThatIsCommentedOut(): void
     {
-        // Everything after `--time-limit=3600` is that command's options and their values, not receivers.
-        // Counting them would let an unconsumed transport pass by being named as an option value.
+        // Parking the old command while writing its replacement is ordinary, and the byte-level scan this
+        // replaced read the parked line as live wiring — green gate, dead schedule, no trace.
         $this->assertNotContains(
+            'scheduler_alpha',
+            ScheduleConsumption::consumedTransportsIn(self::FIXTURES . '/compose.commented-out.yaml'),
+        );
+    }
+
+    #[Test]
+    public function itReadsACommandWrittenAsAPlainString(): void
+    {
+        // Compose accepts the string form and nothing in the repo forbids it. A rule that only understood
+        // the flow-sequence form would read this file as consuming nothing — and "consuming nothing" is
+        // indistinguishable from "parsed nothing" to the stale direction.
+        $this->assertContains(
+            'scheduler_alpha',
+            ScheduleConsumption::consumedTransportsIn(self::FIXTURES . '/compose.string-command.yaml'),
+        );
+    }
+
+    #[Test]
+    public function itCountsAReceiverWrittenAfterAnOption(): void
+    {
+        // `ArgvInput` takes arguments and options in any order and `receivers` is variadic, so this IS
+        // consumed. Stopping at the first option modelled the command wrongly in the direction that costs
+        // something: a leftover argument written after an option stayed invisible to the stale check, whose
+        // failure mode is a worker that will not boot on the next restart.
+        $this->assertContains(
             'scheduler_alpha',
             ScheduleConsumption::consumedTransportsIn(self::FIXTURES . '/compose.after-option.yaml'),
         );
+    }
+
+    #[Test]
+    public function itAttributesConsumptionToTheServiceThatDoesIt(): void
+    {
+        // Which service consumes a scheduler transport is the invariant, not that some service does: on the
+        // horizontally scalable pool, an in-process clock emits one tick per replica.
+        $byService = ScheduleConsumption::consumedTransportsByServiceIn(
+            self::FIXTURES . '/compose.wrong-service.yaml',
+        );
+
+        $this->assertArrayHasKey('messenger_worker', $byService);
+        $this->assertContains('scheduler_alpha', $byService['messenger_worker']);
+        $this->assertArrayNotHasKey('scheduler_worker', $byService);
     }
 
     #[Test]

@@ -61,6 +61,11 @@ final readonly class ReconcilePersonReferencesHandler
                 'total' => $verdict->total(),
                 'axes' => \count($verdict->findings()),
                 'axesChecked' => $verdict->axesChecked(),
+                // The denominator BY NAME as well as by count, matching what the CLI prints in both of its
+                // branches. A number that drops from 5 to 4 says coverage was lost and cannot say which place
+                // stopped being watched, and it drops in the one line an operator reads while already acting
+                // on a finding. The keys are registry keys, never ids, so this carries no personal data.
+                'axesCheckedKeys' => $verdict->axesCheckedKeys(),
                 'divergentByAxis' => $this->countsByAxis($verdict->findings()),
                 'repairWith' => 'identity:gdpr:reconcile-subject-references',
             ],

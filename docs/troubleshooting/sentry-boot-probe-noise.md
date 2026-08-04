@@ -119,10 +119,19 @@ originates from the worker transport**. Both conditions must hold:
 1. the throwable chain contains a `Doctrine\DBAL\Exception\ConnectionException`
    (its subclass `ConnectionLost` and a wrapping `TransportException` are covered
    by walking the chain), **and**
-2. the event came from the worker — either the `console.command: messenger:consume`
-   tag (the `LISTEN` path, issue `126426150`) or a `PostgreSqlConnection` frame in
-   the stack trace (the destructor `UNLISTEN` path, issue `126426149`, which
-   carries no command tag).
+2. the throwable came from the transport itself — either a Messenger
+   `TransportException` raised while the worker was polling AND carrying the
+   `console.command: messenger:consume` tag (the `LISTEN` path, issue
+   `126426150`), or a `PostgreSqlConnection` frame in the stack trace (the
+   destructor `UNLISTEN` path, issue `126426149`, which carries no command tag).
+
+   **The command tag alone is not the marker**, and the exception type is what
+   was missing: `messenger:consume` is also the command line of the prod
+   `scheduler_worker`, so every maintenance handler runs under that tag. Without
+   the type check, a GDPR reconciliation whose own read lost the connection —
+   a control that could not run, which is exactly what should page someone —
+   was dropped as teardown noise. Scope a `before_send` predicate by origin
+   (exception type, trace frame), never by process: a process gains tenants.
 
 A genuine DB outage during **HTTP request handling** has neither marker — no
 `messenger:consume` tag, no `PostgreSqlConnection` in its trace — so it is left

@@ -58,7 +58,11 @@ final class ScheduleConsumptionGateTest extends TestCase
     public function everyDeclaredScheduleHasItsTransportConsumed(string $composeFile): void
     {
         $path = $this->composeDirectory() . '/' . $composeFile;
-        $consumed = ScheduleConsumption::consumedTransportsIn($path);
+        // A compose file added to the sweep without naming which service may consume a scheduler transport
+        // would otherwise be checked against nothing at all.
+        $this->assertArrayHasKey($composeFile, ScheduleConsumption::SCHEDULER_CONSUMER);
+        $consumer = ScheduleConsumption::SCHEDULER_CONSUMER[$composeFile];
+        $consumed = ScheduleConsumption::consumedTransportsByServiceIn($path)[$consumer] ?? [];
 
         $missing = [];
 
@@ -71,10 +75,52 @@ final class ScheduleConsumptionGateTest extends TestCase
         }
 
         $this->assertSame([], $missing, self::FAILURE_PREAMBLE . "\n" . \sprintf(
-            "These schedule transports are not consumed in %s:\n  %s\nAdd them to a `messenger:consume` "
-            . 'command there.',
+            "These schedule transports are not consumed by `%s` in %s:\n  %s\nAdd them to its "
+            . '`messenger:consume` command.',
+            $consumer,
             $composeFile,
             \implode("\n  ", $missing),
+        ));
+    }
+
+    #[Test]
+    #[DataProvider('composeFiles')]
+    public function noOtherServiceConsumesASchedulerTransport(string $composeFile): void
+    {
+        // Presence is not the invariant; the pairing is. Every tick comes from an in-process clock, so a
+        // scheduler transport consumed by the horizontally scalable pool emits one per replica — N
+        // reconciliations a day instead of one. `compose.prod.yaml` says exactly this beside `replicas: 1`,
+        // and nothing enforced it: a transport moved onto the wrong service satisfied a file-wide scan just
+        // as well as correct wiring.
+        // A compose file added to the sweep without naming which service may consume a scheduler transport
+        // would otherwise be checked against nothing at all.
+        $this->assertArrayHasKey($composeFile, ScheduleConsumption::SCHEDULER_CONSUMER);
+        $consumer = ScheduleConsumption::SCHEDULER_CONSUMER[$composeFile];
+        $byService = ScheduleConsumption::consumedTransportsByServiceIn(
+            $this->composeDirectory() . '/' . $composeFile,
+        );
+
+        $misplaced = [];
+
+        foreach ($byService as $service => $transports) {
+            if ($service === $consumer) {
+                continue;
+            }
+
+            foreach ($transports as $transport) {
+                if (\str_starts_with($transport, 'scheduler_')) {
+                    $misplaced[] = $service . ' → ' . $transport;
+                }
+            }
+        }
+
+        $this->assertSame([], $misplaced, \sprintf(
+            "These scheduler transports are consumed by a service other than `%s` in %s:\n  %s\n"
+            . 'Scheduler ticks are generated per process, so any service that can run more than one '
+            . 'replica turns one scheduled run into one per replica.',
+            $consumer,
+            $composeFile,
+            \implode("\n  ", $misplaced),
         ));
     }
 

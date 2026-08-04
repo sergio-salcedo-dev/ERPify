@@ -37,4 +37,35 @@ final class PersonReferenceProbeFailed extends RuntimeException
             $cause,
         );
     }
+
+    /**
+     * The wired collection could not be assembled, so the control does not even know which places it was
+     * meant to check. Named after the wiring and not a place because at that point there is no place to
+     * name: `!tagged_iterator` builds each source as the loop reaches it, so a source whose dependencies
+     * cannot be resolved surfaces here rather than from any read.
+     */
+    public static function collectingSources(Throwable $cause): self
+    {
+        return new self(
+            'Could not assemble the person-reference sources, so no verdict was reached.',
+            0,
+            $cause,
+        );
+    }
+
+    /**
+     * A source could not name the axis it covers. Its class is reported and not the axis, because the axis
+     * is precisely what failed to exist — and the class is what an operator greps for.
+     */
+    public static function namingAxisOf(string $sourceClass, Throwable $cause): self
+    {
+        return new self(
+            \sprintf(
+                'The person-reference source "%s" could not name its axis, so no verdict was reached.',
+                $sourceClass,
+            ),
+            0,
+            $cause,
+        );
+    }
 }

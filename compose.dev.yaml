@@ -46,11 +46,28 @@ services:
       # safe-write, git checkout, git stash) replaces it by rename — after which the container keeps
       # serving the pre-edit bytes and the gate passes on wiring the working tree no longer has. The
       # repo root is the only directory that contains them, so this mount is wider than the gate needs.
-      # Measured before accepting that: nothing under it holds a credential — the datasource and
-      # deployment configs store no passwords, .mcp.json expands its key from the environment, and the
-      # git remote is SSH. It is dev-only, read-only, and sits outside the /app/api/public document root,
-      # so nothing here is reachable over HTTP. What it does expose is the whole working tree, .git
-      # included, to code running in this container.
+      #
+      # What that width actually is, by category rather than by a file list that ages in a week: the whole
+      # working tree, plus .git with its history and remotes, plus — because CLAUDE.md requires every
+      # feature to be developed in a linked worktree under .claude/worktrees/ — a complete checkout of
+      # every OTHER branch, each able to carry its own gitignored env files. Plus the agent scratch
+      # directory tmp/, local tool state under .claude/, and the IDE's .idea/ with its shelved patches.
+      # This is stated as an enumeration and not as the absolute "nothing here holds a credential" an
+      # earlier revision carried, because that claim was measured inside a worktree — where most of the
+      # above does not exist — and it does not survive being re-measured in the primary checkout, whose
+      # .idea/shelf/ alone holds several credential-shaped values in never-committed patches.
+      #
+      # Masking those subtrees with empty mounts was tried and does NOT work, which is worth writing down
+      # so nobody pays for the discovery twice: a nested mount needs its mountpoint created inside the
+      # parent, the parent here is read_only, and the subtrees that matter are exactly the ones absent
+      # from the checkout that runs the stack (a worktree has no .idea/). Docker fails the container with
+      # `read-only file system` at create time. Narrowing the source to a compose/ subdirectory is the
+      # option that would actually work, and it is not free: ~21 executable references, ~23 relative paths
+      # inside the compose files themselves, and five CI build jobs whose action resolves contexts against
+      # the compose file's own directory. That is its own change, not a rider on a schedule gate.
+      #
+      # The exposure is accepted, in these terms: dev-only, read-only, outside the /app/api/public
+      # document root, so nothing here is reachable over HTTP and nothing here can be written.
       - type: bind
         source: ./
         target: /app/repo
@@ -146,6 +163,12 @@ services:
       # console.terminate (Sentry ERPIFY-API-DEV-7). Trade-off: the worker no longer
       # hot-reloads code — run `docker compose restart messenger_worker` after handler
       # changes. See docs/troubleshooting/sentry-messenger-worker-dev-cache-crash.md.
+      # A restart is NOT enough when a service's CONSTRUCTOR SIGNATURE changes: the
+      # compiled factory lives in this private volume, so the worker keeps calling the
+      # old signature and dies with ArgumentCountError on a boot loop (exit 255) while
+      # the web container, which shares ./api/var, is perfectly healthy. Recreate the
+      # volume — `docker compose rm -f messenger_worker && docker volume rm
+      # <project>_messenger_cache` — then bring the stack back up.
       APP_DEBUG: "0"
     volumes:
       - ./api:/app/api
