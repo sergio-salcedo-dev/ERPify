@@ -44,6 +44,9 @@ final class FulfilIdentityErasureEventStoreTest extends TestCase
 
     private const string ACTING_ADMIN_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90';
 
+    /** A well-formed UUID that denotes no person — every id in this system comes from the same v7 generator. */
+    private const string FOREIGN_AGGREGATE_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4bb0';
+
     public function testTheBusinessLogIsReachedWithTheSamePseudonymAsBothAuditAxes(): void
     {
         // One person must not end up as three anonymous identities across the three tables that held them, and
@@ -62,6 +65,22 @@ final class FulfilIdentityErasureEventStoreTest extends TestCase
         $this->assertSame(5, $result->anonymizedEventRows);
     }
 
+    public function testTheBusinessLogIsNotReachedForAnIdentifierThatNeverDenotedALiveIdentity(): void
+    {
+        // The shape of a bank id pasted into the console: well formed, admissible everywhere a UUID is
+        // admissible, and denoting nobody. Every other link asks a column that holds only person ids, so it
+        // matches nothing and costs nothing; this one matches by value across every kind of aggregate, so
+        // running it here would rewrite that bank's whole stream — irreversibly, and behind a 404.
+        $eventAnonymiser = new RecordingEventStoreSubjectAnonymiser(matchCount: 5);
+
+        $result = $this->useCaseWithoutTheSubject($eventAnonymiser)->execute(self::FOREIGN_AGGREGATE_ID);
+
+        $this->assertSame([], $eventAnonymiser->calls);
+        $this->assertSame(0, $result->anonymizedEventRows);
+        // And the CLI's "nothing to erase" survives: business-log rows alone must not make it claim otherwise.
+        $this->assertFalse($result->erasedAnything());
+    }
+
     private function useCase(
         RecordingAuditActorAnonymiser $anonymiser,
         RecordingEventStoreSubjectAnonymiser $eventAnonymiser,
@@ -74,6 +93,28 @@ final class FulfilIdentityErasureEventStoreTest extends TestCase
             ),
             $anonymiser,
             new RecordingAuditResourceAnonymiser(matchCount: 2),
+            $eventAnonymiser,
+            new InMemoryActiveAdministratorDirectory([self::ACTING_ADMIN_ID => true]),
+            new PurgeUserSessions(new InMemorySessionRepository()),
+            new PurgeUserMembership(new InMemoryMembershipRepository()),
+            new PurgeUserInvitations(new InMemoryInvitationRepository()),
+            new RecordingAuditLogger(),
+            new FixedActorContextFactory(ActorContext::forUser(self::ACTING_ADMIN_ID)),
+            new InlineTransactionManager(),
+        );
+    }
+
+    private function useCaseWithoutTheSubject(
+        RecordingEventStoreSubjectAnonymiser $eventAnonymiser,
+    ): FulfilIdentityErasure {
+        return new FulfilIdentityErasure(
+            new EraseIdentitySubject(
+                new InMemoryUserRepository(),
+                new InMemoryPasswordResetTokenRepository(),
+                new InlineTransactionManager(),
+            ),
+            new RecordingAuditActorAnonymiser(matchCount: 0),
+            new RecordingAuditResourceAnonymiser(matchCount: 0),
             $eventAnonymiser,
             new InMemoryActiveAdministratorDirectory([self::ACTING_ADMIN_ID => true]),
             new PurgeUserSessions(new InMemorySessionRepository()),

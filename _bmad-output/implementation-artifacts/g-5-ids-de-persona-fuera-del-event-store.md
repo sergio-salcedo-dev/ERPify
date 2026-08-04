@@ -4,14 +4,16 @@ baseline_commit: 8bc9893a
 
 # Story 1.7 (G-5): Ids de persona fuera del `event_store`
 
-Status: review
+Status: done
 
 > **LA DECISIÓN ESTÁ TOMADA Y REGISTRADA EN UN ADR** (Sergio, 2026-08-01):
 > [`docs/adr/event-store-and-projections.md`](../../docs/adr/event-store-and-projections.md) **D12**. El log pasa
 > a *append-only con un conjunto cerrado de mutaciones sancionadas* —hoy una, el borrado GDPR—, igual que su
 > hermano `audit_log`. **Un único `UPDATE` parametrizado** reescribe el id del sujeto con un UUID aleatorio nuevo
-> acuñado en el borrado, **en la columna y en las claves de `payload`**, dentro de la transacción que
-> `FulfilIdentityErasure` ya posee. **No la reabras.** Lo que faltaba era este artefacto, no la decisión.
+> acuñado en el borrado, **en la columna y en el texto serializado de `payload` y `metadata`, por
+> coincidencia de valor**, dentro de la transacción que `FulfilIdentityErasure` ya posee, y **solo para un
+> sujeto cuya identidad estaba viva** — el predicado por valor no distingue clases de agregado, así que la
+> cota vive en el caso de uso. **No la reabras.** Lo que faltaba era este artefacto, no la decisión.
 
 > **Es la última historia de la épica.** Mientras G-5 no cierre, `epic-gdpr-hardening` no puede declararse
 > completada. Todas las demás (G-1a, G-1b, G-1c, G-2, G-3a, G-3b, G-4a) están mergeadas.
@@ -104,19 +106,52 @@ cierre, esos dos párrafos hay que revisitarlos.
 
 - [x] **Tarea 1 — Re-medir contra el árbol del día** antes de escribir código: el inventario 8+8 y las dos
       correcciones de arriba.
-- [x] **Tarea 2 (AC1, AC2)** — El `UPDATE` único, parametrizado, **por valor**, sobre columna y payload, dentro
-      de la transacción que `FulfilIdentityErasure` ya posee. Un solo pseudónimo para todas las filas del
-      sujeto (el `UNIQUE` de stream lo exige). Idempotente: una segunda pasada no encuentra nada.
-- [x] **Tarea 3 (AC1)** — Testigo de aceptación que siembre y demuestre **en el mismo escenario**, cubriendo
-      **los dos ejes**, con `ILIKE` y sin suponer que `payload` es un objeto.
-- [x] **Tarea 4 (AC3)** — Falsificación por mutación: un rojo **por eje**, provocado de verdad, restaurando por
-      copia de bytes (nunca `git checkout --`).
+- [x] **Tarea 2 (AC1, AC2)** — El `UPDATE` único, parametrizado, **por valor**, sobre columna, payload y
+      metadata, dentro de la transacción que `FulfilIdentityErasure` ya posee y gateado en que la identidad
+      estuviera viva. Un solo pseudónimo para todas las filas del sujeto. Idempotente.
+- [x] **Tarea 3 (AC1)** — Testigo de aceptación que siembra y demuestra **en el mismo escenario**, con una fila
+      por columna, `ILIKE` y sin suponer que `payload` es un objeto. Más el test funcional contra Postgres del
+      adaptador, que cubre lo que el escenario no puede afirmar.
+- [x] **Tarea 4 (AC3)** — Falsificación por mutación: **siete mutaciones, siete rojos** —la guarda, y las tres
+      columnas por separado en el `SET` y en el `WHERE`—, provocados de verdad y restaurando por copia de
+      bytes (nunca `git checkout --`), con md5 verificado.
 - [x] **Tarea 5** — Revisitar los dos docblocks que G-2 dejó diciendo que `event_store.aggregate_id` queda fuera
       del control, y el bullet de `.person-reference-policy` que lo llama *standing leak*.
-- [ ] **Tarea 6** — Pase adversarial por alguien distinto del autor, registrado, declarando dónde quedó.
-- [ ] **Tarea 7** — Puertas con ejecución fresca y exit code impreso.
-- [ ] **Tarea 8** — Corregir el marcador de G-2, que se mergeó en `in-progress`: → `done` en `sprint-status.yaml`
-      y `Status: done` en su artefacto. Viaja en esta PR por decisión de Sergio (2026-08-04).
+- [x] **Tarea 6** — Pase adversarial hecho por tres capas independientes sin contexto previo, registrado abajo
+      en *Review Findings* y en el hilo de la PR.
+- [x] **Tarea 7** — Puertas con ejecución fresca y exit code impreso, en el resumen de la PR.
+- [x] **Tarea 8** — Sin trabajo: el marcador de G-2 ya estaba en `done` en la base de esta rama (`ff898534`,
+      PR #639) tanto en `sprint-status.yaml` como en su artefacto. La tarea se escribió contra
+      `baseline_commit: 8bc9893a`, donde aún era cierto.
+
+### Review Findings
+
+> Pase adversarial de la Tarea 6, ejecutado 2026-08-04 sobre PR #640 (`origin/main...HEAD`, merge-base
+> `ff898534`) con tres capas independientes y sin contexto previo: adversarial general, edge-case hunter y
+> auditor de aceptación. Cada hallazgo re-verificado contra el árbol antes de asignar severidad — la capa
+> adversarial declaró «el daño colateral es estructuralmente imposible» y la medición lo desmiente, que es el
+> primer punto de esta lista.
+
+- [x] [Review][Decision] **El `UPDATE` no está acotado al sujeto: borrar un UUID que no es una persona reescribe irreversiblemente el stream de otro agregado** — El `WHERE` es `aggregate_id = :id OR payload::text ILIKE '%id%' OR metadata::text ILIKE '%id%'`, sin discriminador de agregado (`api/src/Shared/Event/Infrastructure/Persistence/DbalEventStoreSubjectAnonymiser.php:66-68`), y se invoca **incondicionalmente**, no tras `$identity->identityErased` (`api/src/Iam/Identity/Application/FulfilIdentityErasure.php:164-167`). `EraseIdentitySubject::execute()` no lanza cuando el id no resuelve a ninguna identidad, y `UserEraseController::__invoke()` corre el borrado **antes** de decidir el 404 y con la transacción ya commiteada (`api/src/Iam/Identity/Infrastructure/Controller/UserEraseController.php:44`, cuyo propio comentario dice «Do not gate the erase on this branch»). Consecuencia medida: un `DELETE /api/v1/backoffice/users/<uuid-de-un-banco>` — o `identity:gdpr:erase-subject <uuid-de-un-banco> --force` — reescribe el `aggregate_id` de **todas** las filas del stream de ese banco y el `bankId` del `payload` de todos los eventos de `BankAccount` (`api/src/Backoffice/BankAccount/Domain/Event/BankAccountSnapshot.php:21,34`), commitea, y **después** devuelve 404. Es irreversible por diseño (D4 veta tabla de mapeo y derivación) y no hay control detective. La asimetría la introduce esta PR: los dos anonimizadores hermanos tienen `WHERE` estrecho (`actor_id = :id`; `resource_type = 'User' AND resource_id = :id`), así que un id no-persona no casa nunca. Efecto colateral en la misma línea: `erasedAnything()` se vuelve cierto solo por filas de `event_store` (`api/src/Iam/Identity/Application/FulfilIdentityErasureResult.php:40`), así que la CLI deja de imprimir «Nothing to erase» y muestra `success('Erased subject …')` con los siete contadores a cero. **Decisión de Sergio:** el fix tiene fork (gatear en `identityErased` vs. exigir que el sujeto fuera una persona vs. acotar por `aggregate_type`, que D12 veta por enumeración).
+- [x] [Review][Patch] **El eje `metadata` no tiene ningún rojo: elimínalo de la sentencia y toda la suite sigue verde** — las dos filas sembradas llevan `metadata = '[]'`, así que la aserción que incluye `OR metadata::text ILIKE …` da 0 con y sin la cláusula. Es el modo de fallo que AC3 fue escrito para prohibir, sobre una columna que la enmienda del ADR declara cubierta. [`api/features/backoffice/users/erase.feature:23`, `api/src/Shared/Event/Infrastructure/Persistence/DbalEventStoreSubjectAnonymiser.php:65,68`]
+- [x] [Review][Patch] **`DbalEventStoreSubjectAnonymiser` no tiene test funcional: 0 % de cobertura y el quality gate del PR en ERROR** — SonarCloud PR 640: `new_coverage` 25,9 % contra umbral 80, y las 20 líneas cubribles del fichero están **todas** sin cubrir; el resto del código nuevo está al 100 %. Sus tres hermanos raw-SQL sí lo tienen. Quedan sin medir: idempotencia, ausencia de daño colateral, los dos `Uuid::ensure()` que son el argumento de seguridad entero, `payload = '[]'`, el eje `metadata` y la pertenencia a la transacción (el test unitario usa `InlineTransactionManager`, que no distingue dentro/fuera). [`api/src/Shared/Event/Infrastructure/Persistence/DbalEventStoreSubjectAnonymiser.php:49-74`]
+- [x] [Review][Patch] **La cadena de borrado creció y ninguna de las seis enumeraciones en prosa lo dice — incluido el prompt de consentimiento del operador y el informe de la CLI** — el operador confirma «removes the user and its reset tokens, anonymises its audit trail, and drops its sessions, its organization membership and every invitation addressed to it» y con eso autoriza además una reescritura irreversible del log de negocio; y el informe de éxito imprime siete contadores omitiendo `anonymizedEventRows`. Es literalmente la deriva que esta misma PR da de alta en `deferred-work.md:7`. [`api/src/Iam/Identity/Infrastructure/Cli/EraseIdentitySubjectCommand.php:100-102,133-145,20-28,50-56`, `api/src/Iam/Identity/Application/FulfilIdentityErasure.php:26-31,76-81`, `api/src/Iam/Identity/Application/FulfilIdentityErasureResult.php:8-18`, `api/src/Iam/Identity/Infrastructure/Controller/UserEraseController.php:18-19`]
+- [x] [Review][Patch] **Tres textos afirman ahora falsedades sobre el `event_store`** — «the stored `payload` is never rewritten» (dos veces, y es la razón por la que existe el seam `Upcaster`) y «no erasure path touches that table», este último en la cabecera de puntos ciegos de un registro que el repo trata como contrato de lo que un verde prueba. [`api/src/Shared/Event/Application/Upcaster.php:9`, `api/src/Shared/Event/Infrastructure/Serialization/PrimitivesDomainEventDeserializer.php:18`, `api/.persistent-transport-policy:42-43`]
+- [x] [Review][Patch] **D12 ordena reescribir los docblocks «append-only» y no se hizo** — el propio ADR (`:359-360`) dice que pasan a decir «append-only, con un conjunto cerrado de mutaciones sancionadas», como ya hace `audit_log`; los cuatro siguen a secas. La PR mergeada dejaría el ADR pidiendo un cambio que no ocurrió. [`api/src/Shared/Event/Application/EventStore.php:10`, `api/src/Shared/Event/Infrastructure/Persistence/DbalEventStore.php:21`, `api/src/Shared/Event/Infrastructure/Persistence/EventStoreSchemaListener.php:14`, `docs/architecture/event-catalog.md:22`]
+- [x] [Review][Patch] **`docs/architecture-api.md` describe el estado anterior en tres sitios** — `:263` «permanent, append-only» sin la mutación sancionada; `:264` enumera la cadena de `FulfilIdentityErasure` sin el eslabón nuevo; `:290-291` afirma que `event_store` «keeps the real `aggregate_id` regardless of routing», que es exactamente lo que esta PR falsifica. `CLAUDE.md` → «Keeping docs up to date» lo exige. [`docs/architecture-api.md:263,264,290-291`]
+- [x] [Review][Patch] **El árbol se contradice sobre si `metadata` reserva un `actor`** — la enmienda dice que D9 no lo reserva, y es cierto para el cuerpo de D9 (`:226`), pero el bloque de esquema del **mismo ADR** (`:105`) y un docblock de producción siguen diciendo «actor (futuro)». Sustantivo: si `actor` va a llevar un id de persona, refuerza cubrir `metadata` — pero el argumento escrito para justificarlo niega su propia premisa. [`docs/adr/event-store-and-projections.md:105,322-323`, `api/src/Shared/Event/Infrastructure/Serialization/PrimitivesDomainEventSerializer.php:14`]
+- [x] [Review][Patch] **La enmienda degrada «regla» a «hoy ya cubierta por un gate» y el gate no cubre esa regla** — `php.lint.person-reference` obliga a clasificar, declarar y dotar de fuente a una columna `Types::GUID`; no impide clavear un read model de persona por el identificador real ni detecta el re-claveado silencioso tras un rebuild, que es el riesgo que D12 describe. Un read model con entidad, clasificado y con su fuente, pasa el gate y sigue expuesto. [`docs/adr/event-store-and-projections.md:352-358`]
+- [x] [Review][Patch] **AC2 no mira el contenido: sustituir el `regexp_replace` por `CAST('{}' AS JSONB)` pasa el escenario entero** — la aserción de supervivencia sólo lee `event_id`, `aggregate_version` y `event_name`, así que «el log sigue siendo reproducible como log» no tiene control sobre el payload que dice preservar. [`api/features/backoffice/users/erase.feature:84-85`]
+- [x] [Review][Patch] **IDs de historia y de ticket en comentarios de `api/src`** — `SI-23` y `#376`; `CLAUDE.md` → «Code comments» los prohíbe por nombre, y el segundo es la única referencia `#NNN` a una issue en todo `api/src`. [`api/src/Shared/Event/Infrastructure/Persistence/DbalEventStoreSubjectAnonymiser.php:24`, `api/src/Shared/Event/Application/EventStoreSubjectAnonymiser.php:37`]
+- [x] [Review][Patch] **Markdown roto en el párrafo enmendado del ADR** — marcadores `**` impares: la edición abrió una negrita en «Regla, y hoy ya cubierta…**» y dejó el `**` de cierre de la frase original, que ahora abre una negrita que nunca cierra. El párrafo se renderiza mal desde la mitad. [`docs/adr/event-store-and-projections.md:352-359`]
+- [x] [Review][Patch] **El docblock del reconciliador dice «both of its axes» y la sentencia cubre tres columnas** [`api/src/Iam/Identity/Application/ReconcileErasedSubjectReferences.php:23-24`]
+- [x] [Review][Patch] **AC2 nombra `sequence` y el testigo no lo afirma** — el comentario dice «with the sequence, the event name and the stream version» y el `SELECT` no incluye `sequence`. Inocuo hoy (`GENERATED ALWAYS AS IDENTITY`), pero es afirmar más de lo que se mide. [`api/features/backoffice/users/erase.feature:83-85`]
+- [x] [Review][Patch] **El comentario del canario 17→18 le atribuye un valor probatorio que la propia historia retiró** — «ONE round trip for BOTH of its axes — which is the whole point» invita a leer el `+1` como evidencia de cobertura, y `+1` es también lo que cuesta cubrir un eje o ninguno. Lo que prueba los dos ejes son las dos aserciones `0 records`. [`api/features/backoffice/users/erase.feature:90-92`]
+- [x] [Review][Patch] **`&` no es back-reference en Postgres; `\&` sí** — el argumento de seguridad (validar el pseudónimo como UUID) sigue en pie; la justificación escrita, no. [`api/src/Shared/Event/Infrastructure/Persistence/DbalEventStoreSubjectAnonymiser.php:31`]
+- [x] [Review][Patch] **Artefacto de la historia incoherente consigo mismo** — `Dev Agent Record` dice «Implementación pendiente» con cinco tareas en `[x]` y `Status: review`; la Tarea 8 describe un trabajo ya resuelto en el merge-base (`sprint-status.yaml` y el artefacto de G-2 ya estaban en `done` en `ff898534`; el `in-progress` sólo era cierto en el `baseline_commit: 8bc9893a`, desfasado); y el banner de este artefacto (`:13`) y `sprint-status.yaml:318-319` siguen repitiendo «en las **claves de `payload`**», la frase que el ADR enmienda en esta misma PR por autocontradictoria. [`_bmad-output/implementation-artifacts/g-5-ids-de-persona-fuera-del-event-store.md:13,118-119,189`, `_bmad-output/implementation-artifacts/sprint-status.yaml:318-319`]
+- [x] [Review][Patch] **Salto de línea partido en el bloque reescrito del registro** — `` `audit_log.metadata` `` queda colgando al final de línea contra el rewrap del resto del bloque. [`api/.person-reference-policy:66`]
+- [x] [Review][Defer] **`anonymise(string $subjectId, string $pseudonym)`: dos `string` consecutivos en una mutación irreversible, y permutarlos es un no-op silencioso** [`api/src/Shared/Event/Application/EventStoreSubjectAnonymiser.php:61`] — diferido, mejora de diseño. El hermano del eje de recurso recibe un `AuditResource` tipado precisamente para que los argumentos no se puedan permutar. Con un solo llamador y el espía fijando el orden, tiparlo hoy es YAGNI; el argumento a favor crece en cuanto haya un segundo llamador.
+- [x] [Review][Defer] **El «conjunto cerrado de mutaciones sancionadas» de D12 es prosa sin gate** [`docs/adr/event-store-and-projections.md:294`] — diferido, preexistente y simétrico con `audit_log`. `git grep "UPDATE event_store"` es el único control y no está automatizado; la palabra «cerrado» promete una garantía que nada cierra.
 
 ## Dev Notes
 
@@ -186,4 +221,10 @@ claude-opus-5[1m]
 
 ### Completion Notes List
 
-- Artefacto de contexto creado. Implementación pendiente.
+- Artefacto de contexto, implementación, testigo de aceptación y test funcional del adaptador.
+- El pase adversarial encontró que el `UPDATE` no estaba acotado al sujeto: por coincidencia de valor alcanza
+  cualquier agregado, así que un UUID de banco tecleado por error reescribía su stream entero de forma
+  irreversible, y detrás de un 404. Resuelto con la guarda en `FulfilIdentityErasure` tras consultar a
+  ChatGPT, Winston y Amelia; el hecho histórico que separaba las dos propuestas (¿existió alguna vez el
+  residuo legacy que la guarda dejaría sin limpiar?) se midió: diez ADR declaran que no hay producción, y el
+  `event_store` de la única BD viva no alcanza la ventana #494→#529.

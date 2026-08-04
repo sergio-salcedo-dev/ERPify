@@ -11,7 +11,8 @@ use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
 
 /**
- * Injects the permanent, append-only `event_store` table into Doctrine's in-memory schema. The table
+ * Injects the permanent `event_store` table — append-only, with a closed set of sanctioned mutations, the
+ * GDPR erasure being the only one today — into Doctrine's in-memory schema. The table
  * is written through plain DBAL ({@see DbalEventStore}) and has no ORM entity, so without this
  * listener `make db.diff` would generate a DROP for it. This listener is the **source of truth** for
  * the table's shape — the baseline migration is generated from it (ADR D4).

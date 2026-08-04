@@ -17,14 +17,17 @@ Feature: Erase an identity (GDPR right to erasure)
     # A live session and a past audit row for the subject, seeded on a side connection the query counter ignores.
     Given I execute the SQL query "INSERT INTO iam_session (id, user_id, organization_id, device, ip, expires_at, status, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000ee11', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', 'Behat device', '203.0.113.9', '2027-01-01 00:00:00+00', 'ACTIVE', NOW(), NOW())" on connection "seed"
     And I execute the SQL query "INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, resource_type, resource_id, metadata, actor_erased, resource_erased, occurred_on) VALUES ('0190f200-0000-7000-8000-00000000ee21', 'change', 'BANK_UPDATED', 'user', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c', '0190f200-0000-7000-8000-00000000ee31', 'Bank', '0190f200-0000-7000-8000-00000000ee41', '{}', false, false, '2026-03-01 12:00:00+00')" on connection "seed"
-    # Two event-store rows, one per axis, because a control that only watches the column reads green while the
-    # identifier is alive in the JSON of the row beside it. The second carries it UPPERCASED and under a key
-    # nobody enumerates: `payload` is jsonb TEXT, the one place Postgres does not case-fold for us.
-    And I execute the SQL query "INSERT INTO event_store (event_id, aggregate_id, aggregate_type, aggregate_version, event_name, event_version, payload, metadata, tenant_id, occurred_on, recorded_on) VALUES ('0190f200-0000-7000-8000-00000000ea01', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c', 'Iam.Identity', 1, 'erpify.iam.identity.suspended', 1, '{}', '[]', NULL, '2026-03-01 12:00:00+00', NOW()), ('0190f200-0000-7000-8000-00000000ea02', '0190f200-0000-7000-8000-00000000ea11', 'Iam.Invitation', 1, 'erpify.iam.invitation.created', 1, jsonb_build_object('invitedUserId', '0190A1B2-C3D4-7E5F-8A9B-0C1D2E3F4A5C'), '[]', NULL, '2026-03-01 12:01:00+00', NOW())" on connection "seed"
+    # Three event-store rows, one per column that can hold the identifier, because a control that watches
+    # only one reads green while the identifier is alive in the column beside it. Each row carries it in
+    # exactly ONE place — the aggregate column, then `payload`, then `metadata` — so removing any single
+    # clause from the statement, in its SET or in its WHERE, reddens an assertion below and no other row
+    # covers for it. The `payload` occurrence is UPPERCASED and under a key nobody enumerates: both JSON
+    # columns are jsonb TEXT, the one place Postgres does not case-fold for us.
+    And I execute the SQL query "INSERT INTO event_store (event_id, aggregate_id, aggregate_type, aggregate_version, event_name, event_version, payload, metadata, tenant_id, occurred_on, recorded_on) VALUES ('0190f200-0000-7000-8000-00000000ea01', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c', 'Iam.Identity', 1, 'erpify.iam.identity.suspended', 1, '{}', '[]', NULL, '2026-03-01 12:00:00+00', NOW()), ('0190f200-0000-7000-8000-00000000ea02', '0190f200-0000-7000-8000-00000000ea11', 'Iam.Invitation', 1, 'erpify.iam.invitation.created', 1, jsonb_build_object('invitedUserId', '0190A1B2-C3D4-7E5F-8A9B-0C1D2E3F4A5C'), '[]', NULL, '2026-03-01 12:01:00+00', NOW()), ('0190f200-0000-7000-8000-00000000ea03', '0190f200-0000-7000-8000-00000000ea12', 'Iam.Invitation', 2, 'erpify.iam.invitation.accepted', 1, '{}', jsonb_build_object('actor', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c'), NULL, '2026-03-01 12:02:00+00', NOW())" on connection "seed"
     # Seeded, not assumed: the test database is migrated but never provisioned, so an insert that matched
     # nothing would leave every assertion below passing over an empty table.
-    And I execute the SQL query "SELECT event_id FROM event_store WHERE event_id IN ('0190f200-0000-7000-8000-00000000ea01', '0190f200-0000-7000-8000-00000000ea02')" on connection "seed"
-    And there should have 2 records in SQL result
+    And I execute the SQL query "SELECT event_id FROM event_store WHERE event_id IN ('0190f200-0000-7000-8000-00000000ea01', '0190f200-0000-7000-8000-00000000ea02', '0190f200-0000-7000-8000-00000000ea03')" on connection "seed"
+    And there should have 3 records in SQL result
     And I am logged in as an administrator
     And I add "X-Correlation-Id" header equal to "0190f200-0000-7000-8000-00000000ee51"
     When I send a "DELETE" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c"
@@ -79,16 +82,20 @@ Feature: Erase an identity (GDPR right to erasure)
     And there should have 0 records in SQL result
     And I execute the SQL query "SELECT event_id FROM event_store WHERE payload::text ILIKE '%0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c%' OR metadata::text ILIKE '%0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c%'"
     And there should have 0 records in SQL result
-    # …and the log survives as a log. The guarantee is not bought by deleting history: both rows are still
-    # there, with the sequence, the event name and the stream version they were appended with.
-    And I execute the SQL query "SELECT event_id FROM event_store WHERE event_id IN ('0190f200-0000-7000-8000-00000000ea01', '0190f200-0000-7000-8000-00000000ea02') AND aggregate_version = 1 AND event_name IN ('erpify.iam.identity.suspended', 'erpify.iam.invitation.created')"
-    And there should have 2 records in SQL result
+    # …and the log survives as a log. The guarantee is not bought by deleting history: each row is still
+    # there, under its own event name and stream version, and each still carries the JSON key the identifier
+    # was rewritten inside — an implementation that emptied the column instead of rewriting it would satisfy
+    # every assertion above while destroying the trace this table exists to keep.
+    And I execute the SQL query "SELECT event_id FROM event_store WHERE (event_id = '0190f200-0000-7000-8000-00000000ea01' AND event_name = 'erpify.iam.identity.suspended' AND aggregate_version = 1) OR (event_id = '0190f200-0000-7000-8000-00000000ea02' AND event_name = 'erpify.iam.invitation.created' AND jsonb_exists(payload, 'invitedUserId')) OR (event_id = '0190f200-0000-7000-8000-00000000ea03' AND event_name = 'erpify.iam.invitation.accepted' AND jsonb_exists(metadata, 'actor'))"
+    And there should have 3 records in SQL result
     # Budget canary (18 on "default"). In one transaction (+2 BEGIN/COMMIT): the administrator-role EXISTS
     # probe, the reset-token delete, the identity find and delete, the actor-axis anonymisation UPDATE, the
     # GDPR_SUBJECT_ERASED insert, the resource-axis anonymisation UPDATE, the event-store anonymisation UPDATE,
     # the session delete, the membership delete, the invitation delete and the GDPR_ERASURE_EXECUTED insert
-    # (= 14). The event-store pass is ONE round trip for BOTH of its axes — the column and the JSON — which is
-    # the whole point of erasing by value in a single statement rather than per event type. The order of the middle three
+    # (= 14). The event-store pass is ONE round trip whatever it matches, which is the cost argument for
+    # erasing by value in a single statement rather than per event type — it is not evidence of coverage, since
+    # a statement reaching one column or none costs the same +1. What proves the columns are reached are the
+    # zero-row assertions above. The order of the middle three
     # is the design and not an accident: the compliance row is written BETWEEN the two UPDATEs, because the
     # actor pass mints the pseudonym the resource pass needs, and the resource pass has to find a row that
     # already exists. Each UPDATE is one round trip regardless of how many rows it matches, and the resource

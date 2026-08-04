@@ -21,7 +21,8 @@ use Throwable;
  * and neither is reachable from here. The registry's blind-spot block names both; only the resource axis is
  * in this control, and only because a control of its own already exists for it (`api/.audit-resource-types`).
  * Both are nonetheless ERASED — the actor axis by its own anonymiser, the event store by the one the identity
- * erasure runs over both of its axes — so what they lack here is detection, not an owner.
+ * erasure runs across the aggregate column and both JSON columns — so what they lack here is detection, not
+ * an owner.
  *
  * Erasing each of those places is a distributed obligation — nothing in the schema references
  * `identity_user`, so deleting an identity cascades nowhere and every reference owes its removal to a use

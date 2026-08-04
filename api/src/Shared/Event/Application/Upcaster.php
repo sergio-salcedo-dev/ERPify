@@ -6,7 +6,9 @@ namespace Erpify\Shared\Event\Application;
 
 /**
  * Schema-evolution seam. A reproducible store must be able to read an event whose payload shape
- * changed after it was written; the stored `payload` is never rewritten, it is transformed on read.
+ * changed after it was written; schema evolution never rewrites the stored `payload`, it transforms it on
+ * read. (The one statement that does write to that column is the GDPR erasure, a sanctioned mutation that
+ * substitutes an identifier and leaves the shape untouched — nothing an upcaster has to know about.)
  * The chain is empty today ({@see \Erpify\Shared\Event\Infrastructure\Serialization\NullUpcaster}); an
  * implementation is added the first time an event's {@see \Erpify\Shared\Event\Domain\DomainEvent::eventVersion()}
  * is bumped.

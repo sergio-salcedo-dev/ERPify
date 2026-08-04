@@ -26,9 +26,11 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * the identity erasure ({@see EraseIdentitySubject} — its own transaction nests and joins), the audit-trail
  * anonymisation across **both** axes — {@see AuditActorAnonymiser} for rows the subject authored and
  * {@see AuditResourceAnonymiser} for rows that name them — whose DBAL runs on the same Connection the
- * EntityManager wraps, so they commit or roll back with the rest, the hard-delete of the subject's sessions
- * ({@see PurgeUserSessions}), of the membership that admitted them ({@see PurgeUserMembership}) and of every
- * invitation addressed to them ({@see PurgeUserInvitations}), and the combined compliance self-audit.
+ * EntityManager wraps, so they commit or roll back with the rest, the anonymisation of the reproducible
+ * business log ({@see EventStoreSubjectAnonymiser}, run only for a subject whose identity was live), the
+ * hard-delete of the subject's sessions ({@see PurgeUserSessions}), of the membership that admitted them
+ * ({@see PurgeUserMembership}) and of every invitation addressed to them ({@see PurgeUserInvitations}), and
+ * the combined compliance self-audit.
  *
  * The last two are here for the same reason as the sessions: no column in the schema references
  * `identity_user`, so deleting that row cascades nowhere and every reference owes its removal to a use case
@@ -74,8 +76,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  *
  * Its object coupling sits above the default threshold and stays there. Every collaborator is one link of
  * the single atomic act this orchestrates — refuse an administrator, erase the identity, anonymise both
- * trail axes, purge sessions, purge the membership, purge the invitations, seal the actor, own the
- * transaction — and the two types the resource axis speaks in are that seam's vocabulary, not extra
+ * trail axes, anonymise the business log, purge sessions, purge the membership, purge the invitations, seal
+ * the actor, own the transaction — and the two types the resource axis speaks in are that seam's vocabulary,
+ * not extra
  * responsibilities. Splitting the chain would hide, from the one place a reader looks, that every place the
  * subject's id is persisted is erased together; that atomicity is the property the whole design rests on,
  * and the list grows by one every time a new context comes to hold a person's id.
@@ -158,10 +161,8 @@ final readonly class FulfilIdentityErasure
                     $subject,
                     $anonymisation->pseudonym,
                 );
-                // The business log is the third place the subject's identifier is persisted, and the last one
-                // the chain did not reach. Same pseudonym again: one person, one anonymous identity, across
-                // every table that held them.
-                $anonymisedEventRows = $this->eventStoreSubjectAnonymiser->anonymise(
+                $anonymisedEventRows = $this->anonymiseBusinessLog(
+                    $identity,
                     $subjectId,
                     $anonymisation->pseudonym,
                 );
@@ -189,6 +190,38 @@ final readonly class FulfilIdentityErasure
                 return $result;
             },
         );
+    }
+
+    /**
+     * The business log is the third place the subject's identifier is persisted, and the last one the chain
+     * came to reach. Same pseudonym as both audit axes: one person, one anonymous identity, across every
+     * table that held them.
+     *
+     * **It is the only link conditioned on the identity having been live, and the asymmetry is the point.**
+     * Every other statement in the chain interrogates a column that holds nothing but person ids, so an
+     * argument denoting a bank matches none of them and costs nothing. This one matches by VALUE across every
+     * kind of aggregate — which is exactly what lets it reach an event carrying the id under a key nobody
+     * enumerated, and equally what would let a mistyped argument rewrite an unrelated aggregate's whole
+     * stream. That mistake is unrecoverable, because `docs/adr/audit-activity-log.md` D4 vetoes the mapping
+     * table that could undo it, and unobservable, because the absent-id branch is decided by the caller after
+     * this transaction has already committed. So the pass runs on the database's own evidence that the
+     * argument denoted a person, never on the argument alone.
+     *
+     * The condition belongs here rather than in the statement: classifying identifiers as people is knowledge
+     * owned by the context that owns people — the same assignment D4 makes for the trail's resource axis — and
+     * pushing it into the shared module would be an inventory of aggregate types, which is the enumeration
+     * `docs/adr/event-store-and-projections.md` D12 rejects and which the payload axis defeats anyway.
+     */
+    private function anonymiseBusinessLog(
+        IdentityErasureResult $identity,
+        string $subjectId,
+        string $pseudonym,
+    ): int {
+        if (!$identity->identityErased) {
+            return 0;
+        }
+
+        return $this->eventStoreSubjectAnonymiser->anonymise($subjectId, $pseudonym);
     }
 
     /**

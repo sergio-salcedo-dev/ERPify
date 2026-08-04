@@ -34,8 +34,15 @@ namespace Erpify\Shared\Event\Application;
  *
  * Idempotent by construction: a second pass matches nothing, because the value it searched for is gone. That
  * is not the same as saying nothing can reintroduce it — a transaction that loaded the subject before this
- * ran can still append afterwards, which is the asynchronous-resurrection defect tracked as #376 and not
- * something this statement can close.
+ * ran can still append afterwards, which is a known asynchronous-resurrection defect of the erasure chain
+ * and not something this statement can close.
+ *
+ * **It never learns which identifiers denote people, and the caller must.** Matching by value is what makes
+ * it reach every event, and equally what makes it reach every aggregate: handed an identifier that denotes a
+ * bank, it rewrites that bank's stream just as willingly. That is deliberate — the shared module has no
+ * business classifying persons, the same assignment `docs/adr/audit-activity-log.md` D4 makes for the audit
+ * trail's resource axis — so establishing that the argument denotes a person is a precondition owned by the
+ * context that owns people, and the erasure that calls this satisfies it before calling.
  */
 interface EventStoreSubjectAnonymiser
 {

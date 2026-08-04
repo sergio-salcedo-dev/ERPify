@@ -20,9 +20,9 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  *
  * **Why the JSON columns are matched as text.** The identifier appears under different key names already
  * (`invitedUserId` in the six invitation events, `userId` in two session ones) and the shared snapshot trait
- * guarantees more will follow, so matching by key name would be a declaration checking itself — the failure
- * mode this repo calls SI-23. Matching the value over the serialised column reaches any key, including one
- * nobody has written yet.
+ * guarantees more will follow, so matching by key name would be a declaration that checks only itself: it
+ * would go green on exactly the events nobody remembered to list. Matching the value over the serialised
+ * column reaches any key, including one nobody has written yet.
  *
  * **Case-insensitively, and that is not defensive programming.** `aggregate_id` is a `uuid` column, so
  * Postgres normalises its case on both sides of a comparison; `payload` and `metadata` are jsonb TEXT and it
@@ -32,8 +32,9 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  *
  * **Both arguments are validated UUIDs, and both have to be.** The pattern needs it because a regular
  * expression would otherwise read metacharacters out of it; the replacement needs it because Postgres gives
- * that string its own syntax too — `\1`…`\9` and `&` are back-references there. `Uuid::ensure()` on each is
- * what makes the pair safe, in code rather than in this comment.
+ * that string its own syntax too, where `\1`…`\9` are back-references and `\&` is the whole match.
+ * `Uuid::ensure()` on each is what makes the pair safe, in code rather than in this comment: the canonical
+ * 36-character form it accepts contains no character either syntax reads.
  *
  * **`metadata` is covered even though it is empty today, and that goes one column beyond D12's letter.** The
  * reason is NOT that the ADR reserves it for an actor id: D9 reserves `correlation_id` and `causation_id`,

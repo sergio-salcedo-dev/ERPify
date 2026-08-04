@@ -15,8 +15,9 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 /**
  * Rebuilds a {@see DomainEvent} from a stored row: upcast the payload to the current schema version,
  * resolve the concrete class via the {@see DomainEventMapper}, then delegate to the event's own
- * {@see DomainEvent::fromPrimitives()}. The stored payload is never rewritten — it is transformed on
- * read (ADR D5).
+ * {@see DomainEvent::fromPrimitives()}. Schema evolution never rewrites the stored payload — it is
+ * transformed on read (ADR D5); the GDPR erasure, which does write that column, only substitutes an
+ * identifier and leaves the shape a deserializer depends on untouched.
  */
 #[AsAlias(DomainEventDeserializer::class)]
 final readonly class PrimitivesDomainEventDeserializer implements DomainEventDeserializer

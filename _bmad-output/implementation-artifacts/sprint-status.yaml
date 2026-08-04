@@ -315,8 +315,10 @@ development_status:
   # epics-gdpr-hardening.md. La decisión de ESTRATEGIA DE PERSISTENCIA está TOMADA (Sergio, 2026-08-01) y
   # registrada en D12 de docs/adr/event-store-and-projections.md: el log pasa a append-only CON UN CONJUNTO
   # CERRADO DE MUTACIONES SANCIONADAS —hoy una, el borrado GDPR—, igual que su hermano audit_log. Un único
-  # UPDATE reescribe el id del sujeto con un UUID aleatorio nuevo acuñado en el borrado, EN LA COLUMNA Y EN LAS
-  # CLAVES DE PAYLOAD, dentro de la transacción que FulfilIdentityErasure ya posee.
+  # UPDATE reescribe el id del sujeto con un UUID aleatorio nuevo acuñado en el borrado, EN LA COLUMNA Y EN EL
+  # TEXTO SERIALIZADO DE PAYLOAD Y METADATA por coincidencia de valor, dentro de la transacción que
+  # FulfilIdentityErasure ya posee, y SOLO para un sujeto cuya identidad estaba viva: el predicado por valor no
+  # distingue clases de agregado, así que sin esa cota un id de banco tecleado por error reescribía su stream.
   # Tres premisas del corte cedieron al medirlas: (1) la vía que llamaba "única viable" —aggregate_id nacido
   # como sustituto DERIVADO— está VETADA por el mismo D4 que veta el crosswalk (prohíbe la tabla de mapeo Y la
   # derivación determinista, con esas palabras); (2) la UNIQUE de stream no restringe nada mientras tenant_id se
@@ -332,7 +334,7 @@ development_status:
   # Identity y los dos revokes masivos del mismo sujeto comparten secuencia de versión — todas tienen que
   # moverse al MISMO pseudónimo o la unicidad se rompe.
   # Mientras G-5 no cierre, la épica NO puede declararse completada.
-  g-5-ids-de-persona-fuera-del-event-store: review
+  g-5-ids-de-persona-fuera-del-event-store: done
   epic-gdpr-hardening-retrospective: optional
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
