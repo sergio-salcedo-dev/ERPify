@@ -10,6 +10,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
+use Erpify\Iam\Identity\Domain\Event\PasswordChanged;
 use Erpify\Iam\Identity\Domain\Event\PasswordResetCompleted;
 use Erpify\Iam\Identity\Domain\Event\UserDeactivated;
 use Erpify\Iam\Identity\Domain\Event\UserLocked;
@@ -43,7 +44,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * lockout behaviour and the read accessors the security adapter needs — so the "too many public methods"
  * count reflects a rich aggregate root, not a class doing several jobs. Its object coupling reads the same
  * way: the collaborators are inherent responsibilities — persistence/validation metadata, the credential and
- * email value objects, the status lifecycle, the role vocabulary and the five facts it records — so the
+ * email value objects, the status lifecycle, the role vocabulary and the six facts it records — so the
  * coupling is deliberately allowed above the default threshold rather than dissolved into anaemic helpers.
  *
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
@@ -185,14 +186,26 @@ final class User extends AggregateRoot
      */
     public function resetPassword(HashedPassword $password): void
     {
-        if (IdentityStatus::ACTIVE !== $this->status) {
-            throw InvalidIdentityTransition::from($this->status, IdentityStatus::ACTIVE);
-        }
-
-        $this->passwordHash = $password->toString();
-        $this->updatedAt = SystemClock::now();
+        $this->replaceCredential($password);
 
         $this->record(new PasswordResetCompleted($this->id()));
+    }
+
+    /**
+     * Replaces the credential at the owner's own request, from a session that already proved the current one —
+     * the self-service change. Deliberately NOT {@see resetPassword()}: both overwrite the credential of an
+     * `ACTIVE` identity, but they record different facts, and reusing the reset would make the durable log claim
+     * a recovery link was consumed whenever a signed-in user simply retyped their password. Guards `ACTIVE`
+     * defensively, like the reset — the use case is expected to wall a non-`ACTIVE` identity first, so reaching
+     * here in any other state is an orchestration bug. Records {@see PasswordChanged} at its source.
+     *
+     * @throws InvalidIdentityTransition when the identity is not `ACTIVE`
+     */
+    public function changePassword(HashedPassword $password): void
+    {
+        $this->replaceCredential($password);
+
+        $this->record(new PasswordChanged($this->id()));
     }
 
     /**
@@ -351,6 +364,23 @@ final class User extends AggregateRoot
     public function roles(): array
     {
         return \array_map(Role::from(...), $this->roles);
+    }
+
+    /**
+     * The credential overwrite both replacement paths share: the `ACTIVE` guard, the new hash and the touch.
+     * Only the fact each path records differs, so keeping the mutation in one place is what guarantees a reset
+     * and a self-service change can never drift apart on the guard or on the timestamp.
+     *
+     * @throws InvalidIdentityTransition when the identity is not `ACTIVE`
+     */
+    private function replaceCredential(HashedPassword $password): void
+    {
+        if (IdentityStatus::ACTIVE !== $this->status) {
+            throw InvalidIdentityTransition::from($this->status, IdentityStatus::ACTIVE);
+        }
+
+        $this->passwordHash = $password->toString();
+        $this->updatedAt = SystemClock::now();
     }
 
     /**

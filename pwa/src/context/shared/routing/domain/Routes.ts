@@ -23,6 +23,12 @@ export const Routes = {
   ACCEPT_INVITATION: "/accept-invitation",
   /** Authenticated BackOffice root — every `/backoffice/*` path lives under this prefix. */
   BACKOFFICE: "/backoffice",
+  /**
+   * The signed-in user's own account view. A top-level entry point in its own
+   * right: the sidebar Account group, the top-bar account menu and the page
+   * itself all address it, so the literal must not drift between them.
+   */
+  PROFILE: "/backoffice/profile",
   /** Public service status page (Atlassian-style). Unauthenticated, like {@link HOME}. */
   STATUS: "/status",
   /**

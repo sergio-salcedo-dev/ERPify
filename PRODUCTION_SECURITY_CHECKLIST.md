@@ -302,6 +302,40 @@ you change anything here.
       invitation wiring. The user row is re-read **under a pessimistic lock** inside the completing transaction:
       concurrent forgots serialise their supersede (only the latest token lives) and an admin suspension committed
       between load and commit still walls the reset (TOCTOU re-check).
+- [ ] **Authenticated password change (`POST /api/v1/me/password`):** the only credential write that starts from
+      a live session, so it is graded post-identity rather than uniformly. **Re-proving the current password is
+      the authorization**, and it is also the CSRF control: the endpoint carries no `#[IsGranted]` (every identity
+      acts on its own — the `^/api` `IS_AUTHENTICATED_FULLY` rule plus the Session Admission Gate are the access
+      decision) and no `#[IsCsrfTokenValid]`, like the other authenticated writes, because a cross-site forgery
+      does not know the current password and `#[StrictRequestPayload(acceptFormat: ['json'])]` refuses a form
+      post. A wrong current password is **403 `invalid-current-password`**, never 401 — a 401 would bounce the
+      caller to the login screen for a typo — and it writes nothing: no hash, no event, no revocation, no email.
+      A new password equal to the stored one is **422 `new-password-must-differ`**, decided inside the
+      transaction (it needs the stored hash) so a no-op change cannot emit a security notice. **Neither plaintext
+      leaves `Infrastructure`:** the use case receives closures over the stored `HashedPassword` and handles only
+      booleans, so no password can reach a log line, an exception `context`, or `event_store` — whose
+      `PasswordChanged` payload is empty. The user row is re-read **under a pessimistic lock** inside the
+      transaction, so a concurrent reset and a concurrent change serialise on it. Post-commit, in this order:
+      **every session is revoked** (`RevokeSessionsBestEffort`, containment first) then the password-changed mail
+      is sent (best-effort, so a hung mailer can neither roll the change back nor hold the revoked sessions open);
+      `Security::login()` afterwards mints a replacement registry session with the anti-fixation `migrate(true)`
+      regeneration, so the device that made the change walks away signed in. That teardown is **best-effort by
+      construction**: it swallows its own failure and the 204 carries no word on it, so "every other device is
+      out" is an intention, not a guarantee the response proves — which is why the UI copy and the notification
+      mail both point at *Active sessions* instead of asserting it. The login is likewise contained (a failure
+      logs `critical` and still answers 204: the credential is already gone, so a 5xx would invite a retry that
+      can no longer succeed) and, because `Security::login()` re-enters only `checkPreAuth`, it does **not**
+      re-run the SUSPENDED/DEACTIVATED/locked walls — an admin action landing between the commit and the mint
+      can leave a fresh session for a walled identity (open, tracked in `deferred-work.md`). `newPassword` is
+      bounded 8–128; `currentPassword` carries no policy (it may predate today's rule) beyond a 255-character
+      DoS ceiling. **No `audit_log` row, and that is two decisions, not one:** keeping `User` out of the
+      `AuditedEntity` CDC suppresses the field-level diff — the only thing that could carry `password_hash` —
+      while an explicit `AuditLogger->log(…, SECURITY, …)` row would carry no entity fields at all and was
+      declined separately, to stay off the `audit_log.resource_id` person axis the GDPR epic is still closing.
+      The cost is explicit: a sustained credential-guessing run against this endpoint leaves **zero** forensic
+      rows (`AuditPolicy` audits `GET` only, and `InvalidCurrentPassword` carries no `AccessDeniedException`,
+      so `AccessDeniedAuditListener` skips the 403), which is the detective half of the missing throttle also
+      tracked in `deferred-work.md`. The durable record of a *successful* change is the `event_store` row.
 - [ ] **Pre-identity cross-cutting hardening (login · invitation accept · forgot/reset):**
       every pre-identity rejection pays the same **constant-time floor** (`PreIdentityTimingFloor`, one password
       verification of the firewall's own hasher) — malformed/unknown login identifiers, the `INVITED` pre-auth

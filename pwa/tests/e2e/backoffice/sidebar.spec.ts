@@ -20,6 +20,22 @@ test.describe("BackOffice - Sidebar Navigation", () => {
         aside.getByRole("button", { name: "User Profile" }),
         aside.getByRole("button", { name: "Logout" }),
       );
+      // The expanded parent only toggles its sub-items, so this leaf is the sole way the
+      // account landing page is reachable from an expanded desktop sidebar.
+      await expect(aside.getByTestId("bo-layout__sidebar-profile")).toBeVisible();
+    });
+
+    test("reaches the profile page from the Account group", async ({ page }) => {
+      const aside = page.locator("aside");
+      await clickUntilVisible(
+        aside.getByRole("button", { name: "User Profile" }),
+        aside.getByTestId("bo-layout__sidebar-profile"),
+      );
+
+      await aside.getByTestId("bo-layout__sidebar-profile").click();
+
+      await expect(page).toHaveURL(/\/backoffice\/profile$/);
+      await expect(page.getByTestId("account-profile__title")).toBeVisible();
     });
 
     test("expands and collapses User Profile sub-items", async ({ page }) => {
@@ -58,6 +74,7 @@ test.describe("BackOffice - Sidebar Navigation", () => {
         page.getByRole("button", { name: "Open navigation menu" }),
         page.getByRole("dialog"),
       );
+      await expect(page.getByRole("button", { name: "My profile" }).first()).toBeVisible();
       await expect(page.getByRole("button", { name: "Notifications" }).first()).toBeVisible();
       await expect(page.getByRole("button", { name: "Settings" }).first()).toBeVisible();
     });

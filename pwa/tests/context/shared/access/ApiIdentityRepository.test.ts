@@ -22,6 +22,10 @@ function httpClientGetting(get: HttpClient["get"]): HttpClient {
   return { get, post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() };
 }
 
+function httpClientPosting(post: HttpClient["post"]): HttpClient {
+  return { get: vi.fn(), post, put: vi.fn(), patch: vi.fn(), delete: vi.fn() };
+}
+
 // Faithful to FetchHttpClient: run the guard against the body, throw a
 // MALFORMED_RESPONSE_ENVELOPE HttpError (carrying the 2xx status) when it fails and
 // return the body when it passes — so these tests exercise the real `isMeEnvelope`
@@ -201,5 +205,49 @@ describe("ApiIdentityRepository.me", () => {
     await expect(new ApiIdentityRepository(httpClientGetting(get)).me()).rejects.toMatchObject({
       problem: { type: MALFORMED_RESPONSE_ENVELOPE },
     });
+  });
+});
+
+describe("ApiIdentityRepository.changePassword", () => {
+  const COMMAND = { currentPassword: "old-password", newPassword: "new-password-1" };
+
+  it("posts both passwords to the credential endpoint and resolves on the 204", async () => {
+    const post = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      new ApiIdentityRepository(httpClientPosting(post)).changePassword(COMMAND),
+    ).resolves.toBeUndefined();
+
+    expect(post).toHaveBeenCalledWith(API_ENDPOINTS.IDENTITY.CHANGE_PASSWORD, COMMAND);
+  });
+
+  // No response guard: the 204 carries no body, so passing one would reject every success.
+  it("applies no response guard to the empty 204 body", async () => {
+    const post = vi.fn().mockResolvedValue(undefined);
+
+    await new ApiIdentityRepository(httpClientPosting(post)).changePassword(COMMAND);
+
+    expect(post).toHaveBeenCalledWith(expect.any(String), expect.any(Object));
+    expect(post.mock.calls[0]).toHaveLength(2);
+  });
+
+  // A wrong current password is a 403, not a 401: mapping it to "no session" (as `me()`
+  // does) would sign the user out for a typo, so every failure propagates verbatim.
+  it("propagates a 403 invalid-current-password instead of swallowing it", async () => {
+    const boom = new HttpError(problem(HttpStatus.FORBIDDEN, "invalid-current-password"));
+    const post = vi.fn().mockRejectedValue(boom);
+
+    await expect(
+      new ApiIdentityRepository(httpClientPosting(post)).changePassword(COMMAND),
+    ).rejects.toBe(boom);
+  });
+
+  it("propagates a 401 rather than resolving as it does for /me", async () => {
+    const boom = new HttpError(problem(HttpStatus.UNAUTHORIZED, "session-expired"));
+    const post = vi.fn().mockRejectedValue(boom);
+
+    await expect(
+      new ApiIdentityRepository(httpClientPosting(post)).changePassword(COMMAND),
+    ).rejects.toBe(boom);
   });
 });
