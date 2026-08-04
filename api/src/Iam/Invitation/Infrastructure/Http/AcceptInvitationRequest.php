@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Invitation\Infrastructure\Http;
 
+use Erpify\Shared\Validation\Infrastructure\PasswordPolicy;
 use SensitiveParameter;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -12,7 +13,8 @@ use Symfony\Component\Validator\Constraints as Assert;
  * (a failure to satisfy these constraints is answered 422 `validation-failed` before the use case runs). The
  * `#[Assert]` attributes are passive validation metadata. The opaque `<invitationId>.<secret>` token is only
  * shape-capped here — its eligibility is the domain's call, uniformly opaque across the five dead-token cases.
- * The password policy mirrors the PWA (`passwordPolicy.ts`: 8..128) so both ends reject identically.
+ * The password carries {@see PasswordPolicy}, the same one the change and reset surfaces carry, so the three
+ * credential-creating endpoints and the PWA reject identically.
  */
 final readonly class AcceptInvitationRequest
 {
@@ -23,12 +25,7 @@ final readonly class AcceptInvitationRequest
         public string $token = '',
         #[SensitiveParameter]
         #[Assert\NotBlank(message: 'A password is required.')]
-        #[Assert\Length(
-            min: 8,
-            max: 128,
-            minMessage: 'The password must be at least {{ limit }} characters.',
-            maxMessage: 'The password must not exceed {{ limit }} characters.',
-        )]
+        #[PasswordPolicy]
         public string $password = '',
     ) {
     }
