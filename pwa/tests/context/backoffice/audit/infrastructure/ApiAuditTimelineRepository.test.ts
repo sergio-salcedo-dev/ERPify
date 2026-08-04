@@ -16,6 +16,7 @@ const entry = {
   resourceType: null,
   resourceId: null,
   actorErased: false,
+  resourceErased: false,
 };
 
 const pagination = {
@@ -94,6 +95,7 @@ describe("ApiAuditTimelineRepository.search", () => {
     expect(page.entries).toHaveLength(1);
     expect(page.entries[0].action).toBe("ROUTE_BACKOFFICE_AUDIT_TIMELINE_SEARCH");
     expect(page.entries[0].actorErased).toBe(false);
+    expect(page.entries[0].resourceErased).toBe(false);
     expect(page.hasNext).toBe(true);
     expect(page.hasPrev).toBe(false);
     expect(page.count).toBeNull();
@@ -130,6 +132,7 @@ describe("ApiAuditTimelineRepository response guard", () => {
     );
     expect(guard({ data: [entry] })).toBe(false); // pagination missing
     expect(guard({ data: [{ ...entry, actorErased: "false" }], pagination })).toBe(false);
+    expect(guard({ data: [{ ...entry, resourceErased: "false" }], pagination })).toBe(false);
     expect(guard({ data: [{ ...entry, id: 1 }], pagination })).toBe(false);
     expect(
       guard({

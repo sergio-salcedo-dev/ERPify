@@ -86,6 +86,27 @@ final class PersonResourceErasureGateTest extends TestCase
     }
 
     #[Test]
+    public function everyPersonTypeIsBuiltByTheFileDeclaredToEraseIt(): void
+    {
+        $registry = $this->registry();
+
+        foreach ($this->personTypes() as $type => $personResourceDeclaration) {
+            $deriving = $registry->filesDerivingType($type);
+
+            $this->assertContains($personResourceDeclaration->erasedBy, $deriving, \sprintf(
+                'The file declared to erase "%s" does not build it: whoever persists a person\'s identifier '
+                . 'has to be the one obliged to remove it, or the obligation is handed to a caller nobody '
+                . 'checks. Files that do build it: %s. This is also what keeps the type derivable at all — '
+                . 'the anti-deletion property of its registry line rests on the sweep still finding it in '
+                . '`src`, and pinning the owner as one of those sites is what stops that reducing to a '
+                . 'coincidence somebody may refactor away.',
+                $type,
+                [] === $deriving ? 'none' : \implode(', ', $deriving),
+            ));
+        }
+    }
+
+    #[Test]
     public function everyPersonTypeNamesAWitnessThatProvesItsErasure(): void
     {
         $witness = $this->registry()->witness();
@@ -118,8 +139,13 @@ final class PersonResourceErasureGateTest extends TestCase
         // never because anything writes it — a green that carries no information, which is what the witness
         // supplies instead.
         //
-        // It doubles as a tripwire. The day a production writer of the type appears this goes red, and the
-        // reader decides whether the declared witness is still what establishes that type's liveness.
+        // It is NOT a tripwire on production writers, and reading a green here as evidence that none exists
+        // would be wrong. `User` IS written in production — the GDPR erasure names its subject as the
+        // entry's resource — and this check does not see that writer, because it reaches the type through
+        // the constant its owner declares while this sweep matches the quoted literal alone. What the
+        // assertion still buys is narrower and worth keeping: the literal has not spread beyond the class
+        // that declares it, which is exactly what the self-satisfaction argument above rests on. A second
+        // class spelling the literal turns this red.
         $registry = $this->registry();
 
         foreach ($this->personTypes() as $type => $personResourceDeclaration) {

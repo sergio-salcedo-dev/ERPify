@@ -36,11 +36,41 @@ Feature: Erase an identity (GDPR right to erasure)
     And there should have 1 records in SQL result
     And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '0190f200-0000-7000-8000-00000000ee51' AND action = 'GDPR_ERASURE_EXECUTED' AND actor_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
     And there should have 1 records in SQL result
+    # The subject's real id survives in NO metadata of any row. Matched over the whole column as text, not by
+    # key name: a key holding the id under a different name is the same defect, and `metadata` is `[]` — an
+    # ARRAY, not an object — in most rows, so the jsonb key operators would abort or skip them silently.
+    # ILIKE, not LIKE: `resource_id` is a `uuid` and Postgres normalises its case on both sides, but `metadata`
+    # is jsonb TEXT and does not, while the route hands the client's exact spelling down uncanonicalised — so a
+    # mixed-case request id (proven live further down this file) would hide the same leak from a LIKE.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE metadata::text ILIKE '%0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c%'"
+    And there should have 0 records in SQL result
+    # …and no OTHER person's id is in there either, which the assertion above cannot see: it names one subject,
+    # so an id belonging to somebody still alive — the administrator who executed this erasure, say — would
+    # pass it. This one declares nothing and reads real rows, so it covers every write path the suite exercises,
+    # including the change-data-capture one whose content is a property of the entity model rather than of any
+    # reviewed call site. The two are complementary: the erased subject is gone from `identity_user`, so only
+    # the query above can catch them, and only this one can catch everybody else.
+    And I execute the SQL query "SELECT a.id FROM audit_log a JOIN identity_user u ON a.metadata::text ILIKE '%' || u.id::text || '%'"
+    And there should have 0 records in SQL result
+    # …and the compliance row is still USABLE evidence: it names the subject as its resource, anonymised in
+    # place to the pseudonym, so it is still answerable which subject was erased and when. Erasing the
+    # identifier is not the same as destroying the record.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'GDPR_SUBJECT_ERASED' AND resource_type = 'User' AND resource_erased = TRUE AND resource_id <> '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c'"
+    And there should have 1 records in SQL result
+    # The evidence is LINKED to the trail it explains: the pseudonym on the compliance row is the same one the
+    # subject's anonymised audit row carries. One person, one anonymous identity — which is what makes the
+    # record worth keeping at all.
+    And I execute the SQL query "SELECT c.id FROM audit_log c JOIN audit_log t ON t.actor_id = c.resource_id WHERE c.action = 'GDPR_SUBJECT_ERASED' AND t.id = '0190f200-0000-7000-8000-00000000ee21'"
+    And there should have 1 records in SQL result
     # Budget canary (17 on "default"). In one transaction (+2 BEGIN/COMMIT): the administrator-role EXISTS
-    # probe, the reset-token delete, the identity find and delete, the GDPR_SUBJECT_ERASED insert, the two
-    # trail-anonymisation UPDATEs — actor axis and resource axis, one round trip each even when the second
-    # matches nothing — the session delete, the membership delete, the invitation delete and the
-    # GDPR_ERASURE_EXECUTED insert (= 13). The remaining reads resolve the acting admin and its permissions
+    # probe, the reset-token delete, the identity find and delete, the actor-axis anonymisation UPDATE, the
+    # GDPR_SUBJECT_ERASED insert, the resource-axis anonymisation UPDATE, the session delete, the membership
+    # delete, the invitation delete and the GDPR_ERASURE_EXECUTED insert (= 13). The order of the middle three
+    # is the design and not an accident: the compliance row is written BETWEEN the two UPDATEs, because the
+    # actor pass mints the pseudonym the resource pass needs, and the resource pass has to find a row that
+    # already exists. Each UPDATE is one round trip regardless of how many rows it matches, and the resource
+    # one always matches at least that just-written row — which is how its identifier gets anonymised at all.
+    # The remaining reads resolve the acting admin and its permissions
     # before the controller. The two reference deletes are one directed DELETE each, which is why they cost
     # exactly one round trip apiece and not one per row. A shift means an added round trip — re-measure,
     # don't just bump the number.

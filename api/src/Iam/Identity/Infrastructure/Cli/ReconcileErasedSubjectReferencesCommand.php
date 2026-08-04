@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Cli;
 
+use Erpify\Iam\Identity\Application\PersonReferenceProbeFailed;
 use Erpify\Iam\Identity\Application\ReconcileErasedSubjectReferences;
 use Erpify\Iam\Identity\Application\UnreconciledPersonReferences;
+use LogicException;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -16,14 +18,25 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 /**
  * Verifies the places `api/.person-reference-policy` classifies as holding a person's identifier, plus the
  * audit trail's resource axis: no identity may be gone from `identity_user` while one of them still names it
- * by its real id. Exits non-zero on divergence, so it serves an operator on demand and a cron / monitoring
- * check alike — the sibling of `audit:gdpr:reconcile-erasures`, which does the same for crypto-shredding
- * evidence.
+ * by its real id. It serves an operator on demand and a cron / monitoring check alike — the sibling of
+ * `audit:gdpr:reconcile-erasures`, which does the same for crypto-shredding evidence.
+ *
+ * Three exit codes, because a check that reads nothing but the code needs them distinct: `SUCCESS` (every
+ * axis reconciles), `FAILURE` (a person reference survived its erasure — actionable, repair below) and
+ * `INVALID` (no verdict was reached, so nothing is known either way).
+ *
+ * `INVALID` covers two causes and that is deliberate rather than a shortcut. A read that failed and a
+ * control that is miswired differ in who repairs them, and the message says which — but they agree on the
+ * only thing the exit code exists to convey: **this run established nothing, so do not repair a subject on
+ * the strength of it.** Splitting them would need a fourth, project-invented number, and Console defines no
+ * constant for it; the two are distinguished where the distinction is acted on, by a human reading the
+ * error. The scheduled arm keeps them apart differently and on purpose — there the wiring bug propagates
+ * untouched, so it reaches the error tracker as the programming fault it is.
  *
  * It does NOT cover every person id in the database, and the success message names what it checked rather
- * than counting it so that the difference is visible in the output itself: `audit_log.actor_id`,
- * `audit_log.metadata` and `event_store.aggregate_id` hold person ids and are outside this control (the
- * registry's blind-spot block says so, and each has a story of its own).
+ * than counting it so that the difference is visible in the output itself: `audit_log.actor_id` and
+ * `event_store.aggregate_id` hold person ids and are outside this control (the registry's blind-spot block
+ * says so, and each has a story of its own).
  *
  * The report is grouped by place and never merged into one list. Which table still holds the id is what
  * decides whether an operator is looking at an audit trail whose resource axis went unanonymised or at a
@@ -62,7 +75,14 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $verdict = $this->reconciler->unreconciledReferences();
+
+        try {
+            $verdict = $this->reconciler->unreconciledReferences();
+        } catch (PersonReferenceProbeFailed $personReferenceProbeFailed) {
+            return $this->reportBrokenProbe($io, $personReferenceProbeFailed);
+        } catch (LogicException $logicException) {
+            return $this->reportMiswiredControl($io, $logicException);
+        }
 
         if ($verdict->isEmpty()) {
             // The places checked BY NAME, not a bare "all clear" and not a bare count: nothing at runtime
@@ -80,6 +100,53 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
         $this->report($io, $verdict);
 
         return Command::FAILURE;
+    }
+
+    /**
+     * A third exit code, because the contract of this command IS its exit code and two outcomes sharing one
+     * non-zero value are indistinguishable to the only consumer it declares. `INVALID` is Console's existing
+     * "this run did not produce an answer" — a fourth, project-invented number would mean nothing to the
+     * `messenger:failed:*`-shaped tooling around it.
+     *
+     * The distinction is not cosmetic: `FAILURE` sends someone to `identity:gdpr:erase-subject`, which would
+     * be the wrong act here — nothing was established about any subject, and repairing on the strength of a
+     * failed read would be acting on a verdict that does not exist.
+     */
+    private function reportBrokenProbe(SymfonyStyle $io, PersonReferenceProbeFailed $probeFailed): int
+    {
+        $io->error([
+            'The reconciliation could not be completed, so nothing is known about whether a person '
+            . 'reference survived its erasure. This is NOT a finding: do not repair anything on the '
+            . 'strength of it.',
+            $probeFailed->getMessage(),
+        ]);
+
+        return Command::INVALID;
+    }
+
+    /**
+     * The same exit code as a failed read, and a different repair. Two sources claiming one axis means a
+     * place stopped being covered, so like a failed probe this run reached no trustworthy verdict — but the
+     * fix is a wiring change by whoever added the source, not an infrastructure repair, and the report has
+     * to say so or an operator will chase a database that is fine.
+     *
+     * Caught here and NOT left to propagate, because an uncaught throwable leaves Console with the code
+     * carried by the exception, and a `LogicException` carries none — Symfony's `Application` then coerces
+     * it to `1`, which is `FAILURE`, the one code that means "a person survived their erasure, go repair
+     * them". Staying loud is worth having; being loud in the shape of a compliance finding is not.
+     */
+    private function reportMiswiredControl(SymfonyStyle $io, LogicException $logicException): int
+    {
+        $io->error([
+            'The control is miswired, so this run reached no verdict. This is NOT a finding and NOT an '
+            . 'infrastructure fault: a place is claimed by more than one source, which means some other '
+            . 'place is going unchecked. Do not repair any subject on the strength of this run.',
+            $logicException->getMessage(),
+            'Fix the duplicate registration, then run `make php.lint.person-reference`, whose one-source-'
+            . 'per-axis direction is what should have caught this before it shipped.',
+        ]);
+
+        return Command::INVALID;
     }
 
     private function report(SymfonyStyle $io, UnreconciledPersonReferences $verdict): void

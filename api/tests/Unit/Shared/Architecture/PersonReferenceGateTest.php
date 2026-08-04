@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
+use Erpify\Shared\Audit\Domain\AuditedEntity;
 use Erpify\Tests\Support\PersonReferences;
 use Erpify\Tests\Support\UndeclaredPersonReferences;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -22,7 +23,7 @@ use PHPUnit\Framework\TestCase;
  * every such column is a separate, remembered obligation — and every new context that touches a person mints
  * another one.
  *
- * Four directions, all mechanical:
+ * Five directions, all mechanical:
  *
  *   - **Completeness** — every `Types::GUID` column an entity declares must be classified, whether it looks
  *     like a person reference or not. A name filter would be the blind spot rather than the gate: `$actorId`
@@ -34,6 +35,11 @@ use PHPUnit\Framework\TestCase;
  *     passes and the registry degenerates into documentation.
  *   - **Agreement** — a `#[PersonSubjectReference]` at a property and the line in the registry must name the
  *     same owner, so the declaration next to the column and the reviewable inventory cannot drift apart.
+ *   - **Containment** — no `person` column may sit on an aggregate that opts into write change-data-capture.
+ *     The two attributes of `Shared/Privacy` leave no third option there: the capture serialises every scalar
+ *     field into `audit_log.metadata`, only `#[PersonalData]` columns are sealed, and filing a person's id
+ *     under the row's encryption scope is exactly the mistake that attribute's own contract forbids — so the
+ *     id would land in the trail as cleartext no mutation policy on that table can reach.
  *
  * What it deliberately cannot do is judge the classification; the registry header states that limit and the
  * rest in full.
@@ -169,6 +175,31 @@ final class PersonReferenceGateTest extends TestCase
             . 'The registry can never carry them, so the declared owner is invisible to every check here — an '
             . 'obligation written where nothing reads it.',
             \implode(', ', $outside),
+        ));
+    }
+
+    #[Test]
+    public function noPersonReferenceSitsOnAnEntityWhoseWritesTheTrailCaptures(): void
+    {
+        $captured = [];
+
+        foreach ($this->references()->classification() as $key => $owner) {
+            $entity = \substr($key, 0, (int) \strpos($key, '::'));
+
+            if (null !== $owner && \is_a($entity, AuditedEntity::class, true)) {
+                $captured[] = $key;
+            }
+        }
+
+        $this->assertSame([], $captured, \sprintf(
+            'These person references live on an aggregate that opts into write change-data-capture, so every '
+            . 'write of the row copies the id into `audit_log.metadata` as cleartext, permanently: %s. The '
+            . 'copy is unreachable — no mutation policy on that table enters the JSON, so it outlives the '
+            . "person's erasure — and the escape of marking the column #[PersonalData] is worse, because it "
+            . 'would file the id under the encryption scope of the aggregate owning the ROW, to die with that '
+            . 'aggregate rather than with the person. Either drop the AuditedEntity marker or stop persisting '
+            . 'the id on that entity.',
+            \implode(', ', $captured),
         ));
     }
 

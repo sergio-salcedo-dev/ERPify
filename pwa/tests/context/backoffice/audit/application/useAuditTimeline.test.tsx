@@ -36,6 +36,7 @@ function pageOf(
         resourceType: null,
         resourceId: null,
         actorErased: false,
+        resourceErased: false,
       },
     ],
     hasNext: links.next !== null,

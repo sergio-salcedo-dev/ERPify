@@ -1,0 +1,6 @@
+# A whole `messenger:consume` command parked in a comment while the live one no longer names the transport.
+# Byte-level scanning counts the commented line as wiring; a YAML parse never sees it.
+services:
+  messenger_worker:
+#    command: ["php", "bin/console", "messenger:consume", "async", "scheduler_alpha", "--time-limit=3600"]
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600"]

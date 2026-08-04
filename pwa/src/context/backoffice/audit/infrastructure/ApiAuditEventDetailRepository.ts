@@ -73,6 +73,7 @@ export function isAuditEventDetailResponse(value: unknown): value is AuditEventD
     isStringOrNull(value.resourceType) &&
     isStringOrNull(value.resourceId) &&
     typeof value.actorErased === "boolean" &&
+    typeof value.resourceErased === "boolean" &&
     isAuditEventMetadata(value.metadata)
   );
 }
@@ -114,6 +115,7 @@ function toAuditEventDetail(detail: AuditEventDetail): AuditEventDetail {
     resourceType: detail.resourceType,
     resourceId: detail.resourceId,
     actorErased: detail.actorErased,
+    resourceErased: detail.resourceErased,
     metadata: toMetadata(detail.metadata),
   };
 }

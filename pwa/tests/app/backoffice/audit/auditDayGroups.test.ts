@@ -14,6 +14,7 @@ function entryOn(occurredOn: string, id: string): AuditEntry {
     resourceType: null,
     resourceId: null,
     actorErased: false,
+    resourceErased: false,
   };
 }
 

@@ -1,0 +1,5 @@
+# The same command as a plain YAML string. Compose accepts it and nothing in the repo forbids it, so a rule
+# that only understood the flow-sequence form would report this file as consuming nothing at all.
+services:
+  scheduler_worker:
+    command: php bin/console messenger:consume scheduler_alpha --time-limit=3600

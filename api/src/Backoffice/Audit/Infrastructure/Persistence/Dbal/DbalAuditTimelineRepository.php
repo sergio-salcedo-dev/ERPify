@@ -64,6 +64,7 @@ final readonly class DbalAuditTimelineRepository implements AuditTimelineReposit
                 'a.resource_type',
                 'a.resource_id',
                 'a.actor_erased',
+                'a.resource_erased',
             )
             ->from(self::TABLE, self::ALIAS)
         ;
@@ -91,7 +92,7 @@ final readonly class DbalAuditTimelineRepository implements AuditTimelineReposit
     {
         $row = $this->connection->fetchAssociative(
             'SELECT id, occurred_on, level, action, actor_type, actor_id, correlation_id, '
-            . 'resource_type, resource_id, actor_erased, metadata '
+            . 'resource_type, resource_id, actor_erased, resource_erased, metadata '
             . 'FROM ' . self::TABLE . ' WHERE id = CAST(:id AS UUID)',
             ['id' => $id],
         );
@@ -156,6 +157,7 @@ final readonly class DbalAuditTimelineRepository implements AuditTimelineReposit
             $this->optionalString($row, 'resource_type'),
             $this->optionalString($row, 'resource_id'),
             $this->requiredBool($row, 'actor_erased'),
+            $this->requiredBool($row, 'resource_erased'),
         );
     }
 
@@ -175,6 +177,7 @@ final readonly class DbalAuditTimelineRepository implements AuditTimelineReposit
             $this->optionalString($row, 'resource_type'),
             $this->optionalString($row, 'resource_id'),
             $this->requiredBool($row, 'actor_erased'),
+            $this->requiredBool($row, 'resource_erased'),
             $this->decodedMetadata($row, 'metadata'),
         );
     }

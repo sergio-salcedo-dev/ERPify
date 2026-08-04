@@ -33,6 +33,8 @@ final class PersonResourceErasureRulesGateTest extends TestCase
 
     private const string TYPE = 'FixtureResource';
 
+    private const string IMPORTED_TYPE = 'ImportedFixtureResource';
+
     private const string REAL_OWNER = 'src/Iam/Identity/Application/FulfilIdentityErasure.php';
 
     #[Test]
@@ -47,12 +49,51 @@ final class PersonResourceErasureRulesGateTest extends TestCase
             'The staleness check no longer separates a graveyard entry from a person line whose literal '
             . 'lives in the constant its own owner holds.',
         );
+        // The clean twin belongs in the same case: reporting `Ghost` proves nothing about the rule if the
+        // check also reports types that ARE written, and only a registry with none can show that.
+        $this->assertSame([], $this->overFixtures('registry.complete')->staleNonPersonTypes());
     }
 
     #[Test]
-    public function theCleanFixtureTwinIsStaleFree(): void
+    public function theDerivationRuleRejectsAnOwnerThatErasesATypeItNeverBuilds(): void
     {
-        $this->assertSame([], $this->overFixtures('registry.complete')->staleNonPersonTypes());
+        // ReceivingEraserFixture holds the anonymiser, calls it and names the type, so the wiring rule is
+        // satisfied — and the resource it erases arrives as a parameter, so whoever writes the identifier is
+        // named nowhere. Green on every earlier check is exactly what makes this the shape worth refusing.
+        $registry = $this->overFixtures('registry.owner-not-deriving');
+
+        $this->assertNotContains(
+            'src/ReceivingEraserFixture.php',
+            $registry->filesDerivingType(self::TYPE),
+            "An owner that never builds the resource it erases was accepted as the type's deriving file.",
+        );
+        $this->assertNull(
+            $registry->erasureDefectIn(self::TYPE, 'src/ReceivingEraserFixture.php'),
+            'The fixture no longer passes the wiring rule, so the derivation rule is no longer isolated.',
+        );
+        // Both halves in one case, because either alone is satisfiable by the wrong rule: a check that
+        // accepted nothing would look identical to one that rejects receivers, and a check that accepted
+        // everything would be no rule at all.
+        $this->assertContains(
+            'src/AuditResourceFixtureWriter.php',
+            $this->overFixtures('registry.complete')->filesDerivingType(self::TYPE),
+        );
+    }
+
+    #[Test]
+    public function theSweepResolvesATypeNamedOnlyThroughAnotherClassesConstant(): void
+    {
+        // The writer that matters most in the real tree spells no literal at all: the erasure of a natural
+        // person reaches its resource type through the constant the owning context declares. A sweep that
+        // only understood `self::` would see no writer, demand no line, and therefore name nobody as obliged
+        // to erase it — the registry would be complete and empty of the one obligation it exists for.
+        $types = $this->overFixtures('registry.complete')->resourceTypesInSource();
+
+        $this->assertContains(self::IMPORTED_TYPE, $types, \sprintf(
+            'The sweep did not resolve %s::IMPORTED_TYPE, so a type named only through an imported constant '
+            . 'never enters the universe and no line is ever demanded for it.',
+            'ImportedConstantHolderFixture',
+        ));
     }
 
     #[Test]
@@ -62,9 +103,9 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         // scanning an empty tree — including the staleness one, whose whole point is a type that IS written.
         $registry = $this->overFixtures('registry.complete');
 
-        $this->assertSame([self::TYPE], $registry->resourceTypesInSource());
+        $this->assertSame([self::TYPE, self::IMPORTED_TYPE], $registry->resourceTypesInSource());
         $this->assertSame(
-            ['src/AnonymiserHolderFixture.php', 'src/AuditResourceFixtureWriter.php'],
+            ['src/AnonymiserHolderFixture.php', 'src/AuditResourceFixtureWriter.php', 'src/ReceivingEraserFixture.php'],
             $registry->sourceFilesCarrying(self::TYPE),
         );
     }

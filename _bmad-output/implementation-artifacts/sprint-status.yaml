@@ -1,5 +1,5 @@
 # generated: 2026-06-23
-# last_updated: 2026-08-03
+# last_updated: 2026-08-04
 # project: ERPify
 # project_key: NOKEY
 # tracking_system: file-system
@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-08-03
+last_updated: 2026-08-04
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -155,8 +155,12 @@ development_status:
   # G-4a, G-3a y G-3b son independientes y paralelizables. G-4a primero por ser la única fuga viva medida — y es
   # la primera instancia de SI-21, no una excepción a él.
   # NINGUNA historia de la épica tiene ya decisión abierta: las tres de G-1a, la de G-3a, la de G-3b y la de G-5
-  # están tomadas y registradas (2026-08-01) en sus artefactos y, para G-5, en un ADR. La precondición normativa
-  # de la épica queda satisfecha; lo que falta es artefacto de contexto en G-1b, G-2 y G-5, no decisión.
+  # están tomadas y registradas (2026-08-01) en sus artefactos y, para G-5, en un ADR; la de G-2 (DA-1) el
+  # 2026-08-03, a favor de reparar el dato (no de declarar claves), y su FORMA se concretó el mismo día en A2 —
+  # que no construye redactor alguno: el sujeto viaja como RECURSO de
+  # la entrada y `metadata` se queda con conteos, sin redactor, sin statement nuevo y sin política de mutación
+  # nueva. La precondición normativa de la épica queda satisfecha; lo que falta es artefacto de contexto en G-1b
+  # y G-5, no decisión.
   # Definición de hecho de la épica: ninguna historia llega a done sin pase adversarial REGISTRADO por alguien
   # distinto del autor, declarando dónde quedó (CLAUDE.md → Security review → Process).
   # FUERA: G-4b (eje Messenger completo) diferida, bloqueada por el ownership de referencias nacidas en
@@ -233,7 +237,33 @@ development_status:
   # nombres. El argumento completo vive en el contexto de la historia; épica y AC3 quedan sincronizados.
   # CONTEXTO ESCRITO Y EN REVISIÓN: PR #631 (rama feat/shared-g1c-control-detective-referencias-persona-exp9).
   g-1c-control-detective-referencias-cross-context: done
-  g-2-ids-de-persona-fuera-de-audit-log-metadata: backlog
+  # G-2: CONTEXTO ESCRITO y DECISIÓN TOMADA (Sergio, 2026-08-03): gana (A), la vía de REPARAR EL DATO en la
+  # pasada de erasure en vez de declarar claves; y el control de AC3 es un TESTIGO DE ACEPTACIÓN FALSABLE, no
+  # un gate de forma. La forma concreta de (A) se midió después y resultó ser A2: el sujeto viaja como RECURSO
+  # de la entrada, así que NO hay statement nuevo y NO se construye redactor — el anonimizador de recurso que
+  # la cadena ya ejecutaba lo alcanza. (B), el gate declarativo de claves de metadata, es ALTERNATIVA
+  # DESCARTADA, no decisión abierta; su condición de reapertura está escrita en el artefacto (CUALQUIER camino
+  # de escritura que vuelva a meter un id de persona — hoy hay CERO). Con eso la precondición de epics:393-398
+  # queda satisfecha.
+  # OJO: la frase de :157-159 («NINGUNA historia tiene ya decisión abierta») era FALSA para G-2 cuando se
+  # escribió —su propia enumeración lista G-1a, G-3a, G-3b y G-5, y omite G-2—. Corregirla es tarea de la
+  # historia; hoy ya no describe un hueco, pero sigue siendo una afirmación que no se sostuvo.
+  # Lo que la medición añadió al corte, y que decide el fork: (1) la fuga es UNA sola clave —`subject_user_id`
+  # en EraseIdentitySubject:61— y la escribe el PROPIO borrado GDPR dentro de su misma transacción; los otros
+  # siete caminos de escritura de `metadata` no meten ids de persona. (2) Es dato VIVO, no prospectiva: en la BD
+  # de dev hay una fila cuyo `subject_user_id` ya no hace JOIN con `identity_user` —la persona se fue, su id no.
+  # (3) El hermano YA resolvió este mismo fork a favor del redactor en D12 de event-store-and-projections.md, y
+  # ningún documento de G-2 lo cita. (4) Un gate no puede discriminar POR FORMA: `metadata.anonymized_actor_id`
+  # es contractual (D4.1) y es un UUID indistinguible de un id real, así que prohibir «UUIDs en metadata» rompe
+  # el contrato y prohibir por nombre de clave se lee verde por construcción — SI-23. (5) B no sustituye a A: un
+  # gate no repara la fila viva, se le SUMA. DA-1 CERRADA (Sergio, 2026-08-03): gana (A) el redactor, con el
+  # control de AC3 como testigo de aceptación falsable y no como gate de forma. Al medir la cadena, la FORMA de
+  # (A) resultó ser A2 y no un redactor: el sujeto viaja como RECURSO de la entrada y `metadata` se queda con
+  # conteos, porque el anonimizador de recurso que FulfilIdentityErasure ya ejecuta reescribe `resource_id` en la
+  # misma transacción. Sin statement nuevo, sin política de mutación nueva, sin redactor que testear.
+  # Trampa de datos para cualquier SQL de esta historia: `metadata` vacía se persiste como `[]`, no `{}`, así que
+  # `jsonb_object_keys` ABORTA y `metadata ? 'x'` silencia filas — filtrar por `jsonb_typeof(metadata)='object'`.
+  g-2-ids-de-persona-fuera-de-audit-log-metadata: in-progress
   # G-3a: DECISIÓN TOMADA Y REGISTRADA (Sergio, 2026-08-01) en su artefacto. El testigo es el escenario de
   # aceptación que YA EXISTE (features/backoffice/users/erase.feature:49-62), declarado como TERCER segmento de
   # la línea del registro y leído como CORPUS DE TEXTO — evidencia de grado aceptación al precio de un gate
@@ -274,10 +304,10 @@ development_status:
   # INCLUIDO el gate de consumo de schedules: sin él "agendado" es infalsable — un schedule puede shippear muerto
   # con todos los gates verdes. Cuesta un bind mount de solo lectura de los Compose (precedente: gate del
   # contrato de errores). Aplica retroactivamente a los dos schedules existentes.
-  # G-3b SIGUE sin empezar pese a lo que diga `make bmad.status.audit`: casa la clave contra el ASUNTO de #615,
-  # que era el chore de renombrado de esta misma clave. Medido contra el CÓDIGO: solo hay dos #[AsSchedule] y
-  # ninguno es del reconciliador.
-  g-3b-agendado-observable-reconciliador-referencias-borradas: ready-for-dev
+  # `make bmad.status.audit` casa esta clave contra el ASUNTO de #615, que era el chore de renombrado de la
+  # propia clave, así que su veredicto sobre G-3b no es evidencia: mide contra el CÓDIGO (hoy, tres
+  # #[AsSchedule] bajo api/src, uno de ellos el del reconciliador) y contra git, nunca contra el audit.
+  g-3b-agendado-observable-reconciliador-referencias-borradas: done
   # G-5 (FR10) NO estaba en el corte original: se descubrió midiendo al contextualizar G-4a. El `event_store`
   # conserva el id real del sujeto a perpetuidad (aggregate_id de 6 eventos + payload de SessionStarted y los
   # seis Invitation*), ningún routing lo cambia y la cadena de erasure no toca la tabla — luego G-4a persigue la

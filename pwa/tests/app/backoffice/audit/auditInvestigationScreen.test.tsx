@@ -30,6 +30,7 @@ const ENTRY: AuditEntry = {
   resourceType: "BankAccount",
   resourceId: "019f0360-f3a4-7864-b0cc-0d41a56bf855",
   actorErased: false,
+  resourceErased: false,
 };
 
 function stateWith(overrides: Partial<AuditTimelineState>): AuditTimelineState {

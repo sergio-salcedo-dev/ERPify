@@ -7,8 +7,6 @@ namespace Erpify\Iam\Identity\Application;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
-use Erpify\Shared\Audit\Application\AuditLogger;
-use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
@@ -24,18 +22,25 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * {@see FulfilIdentityErasure}, and the inventory of every persisted person identifier — with the file
  * obliged to erase each one — is `api/.person-reference-policy`.
  *
- * The compliance record is a `GDPR_SUBJECT_ERASED` security audit entry committed in the same transaction —
- * its metadata carries only the pseudonymous subject id, never the erased email. Idempotent: a re-run finds
- * nothing live, erases nothing and skips the self-audit.
+ * **It writes no compliance record, deliberately, and that is a safety property rather than an omission.**
+ * The `GDPR_SUBJECT_ERASED` entry names the subject as its audit RESOURCE, so writing it means persisting the
+ * person's real identifier a second time — and the only thing that removes that copy is the resource
+ * anonymiser, which needs the pseudonym the actor pass mints and therefore cannot run from in here. A use case
+ * that writes an identifier it cannot itself erase hands the obligation to whoever calls it, which is the
+ * distributed obligation `api/.person-reference-policy` exists to make impossible to pass in silence. So the
+ * entry is written by {@see FulfilIdentityErasure}, one statement before the anonymise that clears it, from
+ * the same value. Invoke this class alone and the identity is still fully erased; what is missing is the
+ * evidence that it happened, which a reviewer of that new call site sees. Idempotent: a re-run finds nothing
+ * live and erases nothing.
+ *
+ * The asymmetry with {@see \Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject}, which does
+ * self-audit, is not an inconsistency: that one is invoked on its own, so nobody else could record it.
  */
 final readonly class EraseIdentitySubject
 {
-    private const string ERASURE_ACTION = 'GDPR_SUBJECT_ERASED';
-
     public function __construct(
         private UserRepository $users,
         private PasswordResetTokenRepository $resetTokens,
-        private AuditLogger $auditLogger,
         private TransactionManager $transactionManager,
     ) {
     }
@@ -54,16 +59,7 @@ final readonly class EraseIdentitySubject
                 $this->users->remove($user);
             }
 
-            $result = new IdentityErasureResult($userId, $identityErased, $tokensDeleted);
-
-            if ($result->erasedAnything()) {
-                $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
-                    'subject_user_id' => $userId,
-                    'reset_tokens_deleted' => $tokensDeleted,
-                ]);
-            }
-
-            return $result;
+            return new IdentityErasureResult($userId, $identityErased, $tokensDeleted);
         });
     }
 }

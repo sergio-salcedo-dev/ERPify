@@ -6,13 +6,20 @@ namespace Erpify\Backoffice\Audit\Application\Resource;
 
 /**
  * Wire contract of the audit-event detail (`GET /audit/events/{id}`). The serialized object is this
- * DTO, never an entity. The first ten fields mirror the timeline row; `metadata` is the extra — the
- * decoded JSONB diff (`change` rows: `{changes: {field: {old, new}}}`), already in normalized form so
- * it emits verbatim as a JSON object.
+ * DTO, never an entity. The leading fields mirror the timeline row — including both erasure booleans,
+ * so a consumer can tell an anonymisation pseudonym from a live identifier on either axis; `metadata`
+ * is the extra — the decoded JSONB diff (`change` rows: `{changes: {field: {old, new}}}`), already in
+ * normalized form so it emits verbatim as a JSON object.
  *
  * `ip`/`userAgent` are intentionally absent — both are PII and the detail payload is diff-only.
  * `metadata` is tainted (it can hold an editable bank name); consumers escape it and never feed it to a
  * trust decision.
+ *
+ * One constructor parameter per field of the row it projects, which is what a flat, scalar-only wire
+ * contract is: grouping any of them into an object to satisfy a parameter count would nest the JSON and
+ * change the contract for a metric's sake.
+ *
+ * @SuppressWarnings("PHPMD.ExcessiveParameterList")
  */
 final readonly class AuditEventDetailResource
 {
@@ -30,6 +37,7 @@ final readonly class AuditEventDetailResource
         public ?string $resourceType,
         public ?string $resourceId,
         public bool $actorErased,
+        public bool $resourceErased,
         public array $metadata,
     ) {
     }

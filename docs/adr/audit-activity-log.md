@@ -196,8 +196,9 @@ Dos niveles (`activity`, `security`); el tercer eje (cambios de datos) **ya** lo
 y **no se duplica**. `audit_log` es **append-only**: la ruta caliente sólo inserta.
 
 `audit_log` **es PII** (`actor_id`, `ip`, `user_agent`). Las mutaciones no-append **no** son scripts
-operativos sueltos: el log admite un **conjunto cerrado de dos políticas de mutación de primera clase**,
-cada una con semántica definida y disparador propio; cualquier otra escritura es append.
+operativos sueltos: el log admite un **conjunto cerrado de tres políticas de mutación de primera clase**
+—la poda, el borrado GDPR del eje **actor** y el del eje **recurso**—, cada una con semántica definida y
+disparador propio; cualquier otra escritura es append.
 
 - **Política de retención (la poda) — la *única* `DELETE`.** Retención **por nivel** (`security` >
   `activity`), expresada como dato por una `AuditRetentionPolicy` de dominio (`thresholdsAt(now)` → un
@@ -235,8 +236,12 @@ cada una con semántica definida y disparador propio; cualquier otra escritura e
   **Un segundo *statement* lo dispara igual que un segundo disparador:** si la decisión de #555 hace que
   `anonymise` ejecute dos `UPDATE`, la ventana deja de ser «borrado sin evidencia» y pasa a ser un borrado
   *a medias* — actor anonimizado y recurso no — sobre un camino hoy correcto. Enrutar entonces por
-  `TransactionManager`, nunca una transacción DBAL cruda anidada bajo `wrapInTransaction`: no hay
-  `nest_transactions_with_savepoints` configurado, así que anidar degradaría a rollback-only.
+  `TransactionManager`, nunca una transacción DBAL cruda anidada bajo `wrapInTransaction`. *Nota sobre la
+  razón, corregida al medir contra `doctrine/dbal` 4.4.4:* la justificación era «no hay
+  `nest_transactions_with_savepoints` configurado, así que anidar degradaría a rollback-only», y esa premisa
+  ya no describe esta versión — DBAL usa savepoints en toda transacción anidada y
+  `setNestTransactionsWithSavepoints(false)` lanza. La regla se mantiene por su otra razón, que sigue en
+  pie: el borrado a medias es un estado observable, y una sola frontera de transacción es lo que lo impide.
 - **`resource_id` no es identidad del sujeto borrado.** El erasure anonimiza al *actor*; `resource_id` no
   se toca. Si un recurso representa **directamente** a una persona física, su borrado GDPR es
   responsabilidad de la política del bounded context dueño del recurso, no de esta política de auditoría.
@@ -244,8 +249,10 @@ cada una con semántica definida y disparador propio; cualquier otra escritura e
   *la misma persona* que su recurso queda, tras el borrado, con el seudónimo fresco en `actor_id` y el id
   real en `resource_id` — un **crosswalk reversible** que re-atribuye todas las demás filas anonimizadas de
   esa persona, porque `resourceId` es filtro indexado del API de lectura y `ADMIN` tiene `auditTrail.read`.
-  `GDPR_SUBJECT_ERASED` se libra solo porque el auto-borrado está prohibido, así que su actor nunca es el
-  sujeto. Se descubrió al intentar auditar `ChangeUserRoles`, donde el auto-cambio de roles hace
+  `GDPR_SUBJECT_ERASED` se libraba **solo** porque el auto-borrado está prohibido, así que su actor nunca es
+  el sujeto. Ya no depende solo de eso: esa fila **nombra** al sujeto como su recurso, y el anonimizador de
+  recurso reescribe su `resource_id` en la misma transacción, así que el crosswalk queda cerrado por los dos
+  lados. Se descubrió al intentar auditar `ChangeUserRoles`, donde el auto-cambio de roles hace
   `actor_id == resource_id`.
   **Mecanismo (la asignación se mantiene, no se revierte).** El eje de recurso lo borra el contexto dueño
   a través de `AuditResourceAnonymiser::anonymise(AuditResource, $pseudonym)`: este módulo aporta el
@@ -269,8 +276,21 @@ cada una con semántica definida y disparador propio; cualquier otra escritura e
   `identity:gdpr:reconcile-subject-references` reporta identidades ya borradas que el rastro siga nombrando
   por su id real.
 - **Sin payload sensible** en `metadata` (IDs y discriminantes, no cuerpos de entidad), invariante en la
-  que se apoya el erasure: por eso **no** redige `metadata`. Trigger de revisita: el día que una acción
-  guarde PII ahí, esta política debe crecer un redactor de `metadata`.
+  que se apoya el erasure: por eso **no** redige `metadata`. **Y ningún id de persona** — que es el caso
+  que el trigger de revisita anticipaba. Se disparó: el borrado de identidad escribía ahí el id real del
+  sujeto. Se resolvió **sin** redactor y **sin** cuarta política, moviendo ese id al eje `resource_id`, que
+  ya tiene anonimizador. La asimetría es la razón: ninguna mutación de este conjunto entra en el JSON, así
+  que un id de persona en `metadata` sobrevive al borrado que lo escribió, mientras que en el eje de recurso
+  lo reescribe el anonimizador que ese mismo borrado ya ejecuta, en la misma transacción.
+  **Lo que sostiene la invariante no es un gate**, y la elección está argumentada: un pseudónimo es un UUID
+  indistinguible por forma de un id real, luego prohibir «UUIDs en `metadata`» rompería el contrato de
+  `anonymized_actor_id` (D4.1), y prohibir **por nombre de clave** sería una declaración que se comprueba a
+  sí misma. Lo sostiene un testigo de aceptación falsable en `api/features/backoffice/users/erase.feature`.
+  **Trigger de revisita vigente:** **cualquier** camino de escritura que vuelva a meter un id de persona en
+  `metadata`. Decía «un segundo», y estaba descontado en uno: tras el cambio no queda ninguno, así que «el
+  segundo» se habría negado a dispararse ante la primera regresión — que es exactamente recrear la fuga que
+  esta decisión cerró. Lo que la Regla de Tres protege es el **registro declarativo de claves**, y para eso
+  la cuenta que importa es cuántos caminos existen a la vez, no cuántos han existido.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
 `X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando

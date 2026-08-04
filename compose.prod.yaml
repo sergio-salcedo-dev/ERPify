@@ -161,11 +161,16 @@ services:
     # rows are written synchronously on kernel.terminate, so no audit queue is consumed here.
     command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
 
-  # Single-replica scheduler. Symfony Scheduler derives the daily maintenance tick
-  # (PruneHandledDomainEventsMessage + the audit retention PruneAuditLogMessage) from an in-process clock, so running it on the scaled
-  # `messenger_worker` pool would emit one tick per replica — N redundant prunes a day.
-  # Isolating the `scheduler_maintenance` + `scheduler_audit_maintenance` transports on this single instance keeps exactly one
-  # clock running. MUST stay at replicas: 1; scaling it reintroduces the duplicate-tick problem.
+  # Single-replica scheduler. Symfony Scheduler derives every maintenance tick
+  # (PruneHandledDomainEventsMessage, the audit retention PruneAuditLogMessage, ReconcileSubjectErasuresMessage
+  # and the person-reference ReconcilePersonReferencesMessage) from an in-process clock, so running it on the
+  # scaled `messenger_worker` pool would emit one tick per replica — N redundant runs a day.
+  # Isolating the `scheduler_maintenance` + `scheduler_audit_maintenance` + `scheduler_identity_maintenance`
+  # transports on this single instance keeps exactly one clock running. Every #[AsSchedule] in src/ owes its
+  # transport a slot in BOTH consume commands (this one and the dev messenger_worker's) — a schedule whose
+  # transport nobody consumes ships dead with every gate green, which is what
+  # `make php.lint.schedule-consumption` exists to refuse.
+  # MUST stay at replicas: 1; scaling it reintroduces the duplicate-tick problem.
   # Lifting that constraint (lock the schedule, then scale freely) needs symfony/lock, which the
   # project deliberately does not install — tracked as a follow-up.
   scheduler_worker:
@@ -217,7 +222,7 @@ services:
         limits:
           cpus: ${SCHEDULER_CPU_LIMIT:-0.25}
           memory: ${SCHEDULER_MEM_LIMIT:-256m}
-    command: ["php", "bin/console", "messenger:consume", "scheduler_maintenance", "scheduler_audit_maintenance", "--time-limit=3600", "--memory-limit=256M"]
+    command: ["php", "bin/console", "messenger:consume", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "--time-limit=3600", "--memory-limit=256M"]
 
 # frontend: host-facing + inter-service. backend: internal-only (no egress,
 # no host port) so the database is fully isolated. mailpit lives in the dev
