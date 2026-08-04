@@ -8,12 +8,11 @@ use Erpify\Iam\Identity\Application\ChangeMyPassword;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Http\ChangeMyPasswordRequest;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
+use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
-use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
 use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
 use LogicException;
 use Psr\Log\LoggerInterface;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
@@ -36,12 +35,13 @@ use Throwable;
  *
  * The programmatic login afterwards is not a convenience: the use case revokes EVERY session of the identity,
  * including the one that made this request, so without it the caller would be signed out by their own password
- * change. {@see Security::login()} re-enters the established login path on the `main` firewall — the anti-fixation
- * id regeneration and the session-minting listener — so the device that changed the password walks away with a
- * freshly minted registry session while every other device is left revoked. Running it AFTER the use case is what
- * makes that ordering work; the new session row is minted once the revoke has already swept the old ones. The
- * identity is reloaded through {@see UserProvider} so the token is built over the credential that was just
- * committed, never the pre-change snapshot the request was authenticated with.
+ * change. {@see ReauthenticateDevice} re-enters the established login path on the `main` firewall — the
+ * anti-fixation id regeneration and the session-minting listener — so the device that changed the password walks
+ * away with a freshly minted registry session while every other device is left revoked, and it re-reads the
+ * aggregate first so a session is never minted for an identity that stopped being admissible while this request
+ * was in flight. Running it AFTER the use case is what makes that ordering work; the new session row is minted
+ * once the revoke has already swept the old ones, over the credential that was just committed rather than the
+ * pre-change snapshot the request was authenticated with.
  *
  * That login is the one step here that cannot be rolled back into a truthful error, so it does not get to
  * decide the status code. The credential is already committed and every session already revoked by the time
@@ -57,13 +57,10 @@ final readonly class ChangeMyPasswordController
 {
     public const string ROUTE_NAME = 'iam_me_change_password';
 
-    private const string FIREWALL = 'main';
-
     public function __construct(
         private ChangeMyPassword $changeMyPassword,
         private PasswordHasher $passwordHasher,
-        private UserProvider $userProvider,
-        private Security $security,
+        private ReauthenticateDevice $reauthenticateDevice,
         private LoggerInterface $logger,
     ) {
     }
@@ -88,10 +85,7 @@ final readonly class ChangeMyPasswordController
         );
 
         try {
-            $this->security->login(
-                $this->userProvider->loadUserByIdentifier($user->getUserIdentifier()),
-                firewallName: self::FIREWALL,
-            );
+            $this->reauthenticateDevice->reauthenticate($user->getUserIdentifier());
         } catch (Throwable $throwable) {
             // The identity is not named in the context on purpose: the id is the subject's own, and a log
             // line is a sink no erasure path reaches. The request's correlation id already ties this entry

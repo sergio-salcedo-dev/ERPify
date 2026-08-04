@@ -157,6 +157,34 @@ describe("<ChangePasswordForm>", () => {
     expect(await screen.findByTestId("change-password-form__mutation-error")).toBeInTheDocument();
   });
 
+  /**
+   * An account-level refusal is nobody's field. It reaches the persistent banner through the generic path,
+   * which renders `detail ?? title` — so the API answering `account-suspended` rather than the aggregate's
+   * `invalid-identity-transition` is the whole fix, and teaching the form the two types would add branches
+   * that do exactly what this already does.
+   */
+  it("surfaces an account-level refusal in the persistent banner, in the account's own words", async () => {
+    changePassword.mockRejectedValue(
+      new HttpError(
+        problem(HttpStatus.FORBIDDEN, "account-suspended", {
+          detail: "Your account has been suspended. Contact an administrator to restore access.",
+        }),
+      ),
+    );
+
+    render(<ChangePasswordForm />);
+    fillAndSubmit();
+
+    expect(await screen.findByTestId("change-password-form__mutation-error")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Your account has been suspended. Contact an administrator to restore access.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("change-password-form")).toBeInTheDocument();
+    expect(screen.queryByTestId("change-password-form__success")).not.toBeInTheDocument();
+  });
+
   it("surfaces any other failure in the persistent banner, keeping the form mounted", async () => {
     changePassword.mockRejectedValue(
       new HttpError(problem(HttpStatus.INTERNAL_SERVER_ERROR, "server-error")),

@@ -10,8 +10,9 @@ use Erpify\Iam\Identity\Application\ChangeMyPassword;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Identity\Application\SendPasswordChangedEmailBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
+use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidCurrentPassword;
-use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\Exception\NewPasswordMustDiffer;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\HashedPassword;
@@ -103,40 +104,66 @@ final class ChangeMyPasswordTest extends TestCase
     }
 
     /**
-     * An identity with no credential cannot re-prove one, so it takes the same refusal as a wrong password
-     * rather than reaching the aggregate — which would answer with a lifecycle transition error and tell a
-     * caller which of the two walls it hit.
+     * The only identity that holds no credential is one still `INVITED`, so it meets the admission wall rather
+     * than the credential comparison — and answers in the vocabulary that describes the actual reason, instead
+     * of telling its owner the password they never set is wrong.
      */
-    public function testACredentiallessIdentityIsRefusedAsAWrongCurrentPassword(): void
+    public function testACredentiallessIdentityIsWalledAsInadmissible(): void
     {
         $this->assertRefusedWithoutEffect(
-            InvalidCurrentPassword::class,
+            AccountDeactivated::class,
             $this->credentialMatches(),
             $this->credentialDoesNotMatch(),
             UserMother::invited(),
+            expectedKdfRuns: 0,
         );
     }
 
     /**
-     * The lifecycle wall is the aggregate's, so it lands after the credential has already been re-proved and
-     * the new one hashed — one KDF run, unlike the two refusals above. That asymmetry is deliberate rather than
-     * an oversight: a walled identity holds no session (the status change revokes them), so nothing can reach
-     * this arm from outside, and buying it a cheaper refusal would mean asking the aggregate for its status
-     * before proving the caller is its owner.
+     * The wall now sits immediately after the row lock, so a walled identity pays no KDF at all and hears the
+     * same 403 the rest of the product speaks — not the aggregate's `InvalidIdentityTransition`, whose title
+     * announces a lifecycle transition nobody asked for. Zero KDF runs is the load-bearing half of this: the
+     * refusal is decided before either comparison closure is invoked.
      */
-    public function testANonActiveIdentityIsWalledByTheAggregateWithoutAnyEffect(): void
+    public function testASuspendedIdentityIsWalledBeforeAnyComparison(): void
     {
         $suspended = UserMother::create();
         $suspended->suspend();
         $suspended->pullDomainEvents();
 
         $this->assertRefusedWithoutEffect(
-            InvalidIdentityTransition::class,
+            AccountSuspended::class,
             $this->credentialMatches(),
             $this->credentialDoesNotMatch(),
             $suspended,
-            expectedKdfRuns: 1,
+            expectedKdfRuns: 0,
         );
+    }
+
+    /**
+     * A live lockout is orthogonal to `ACTIVE`, so it does not wall the change — and the change clears it,
+     * by an explicit decision in the use case rather than as a side effect of the login that follows.
+     */
+    public function testChangingTheCredentialClearsALiveLockout(): void
+    {
+        $now = $this->now();
+        $locked = UserMother::create();
+
+        for ($attempt = 0; $attempt < User::MAX_FAILED_ATTEMPTS; ++$attempt) {
+            $locked->recordFailedAttempt($now);
+        }
+
+        $locked->pullDomainEvents();
+        $this->assertTrue($locked->isLockedAt($now), 'the arrangement must actually leave the identity locked');
+
+        $this->useCase(new InMemoryUserRepository($locked))->change(
+            UserMother::DEFAULT_ID,
+            $this->credentialMatches(),
+            $this->credentialDoesNotMatch(),
+            $this->precomputedHash(),
+        );
+
+        $this->assertFalse($locked->isLockedAt($now));
     }
 
     public function testAnIdThatResolvesToNoIdentityIsANotFound(): void
@@ -246,7 +273,7 @@ final class ChangeMyPasswordTest extends TestCase
         ?RecordingPasswordChangedEmailSender $emails = null,
         ?InlineTransactionManager $transactions = null,
     ): ChangeMyPassword {
-        $clock = new FixedClock(new DateTimeImmutable('2026-08-04T12:00:00+00:00'));
+        $clock = new FixedClock($this->now());
 
         return new ChangeMyPassword(
             $users ?? new InMemoryUserRepository(UserMother::create()),
@@ -274,6 +301,16 @@ final class ChangeMyPasswordTest extends TestCase
      *
      * @return Closure(HashedPassword): bool
      */
+    /**
+     * One instant for the whole fixture. The lockout arithmetic and the clock the revoke path runs on are
+     * independent today; a literal repeated at both is how a pair stops being deliberately independent and
+     * starts being accidentally equal.
+     */
+    private function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable('2026-08-04T12:00:00+00:00');
+    }
+
     private function credentialMatches(): Closure
     {
         return static fn (HashedPassword $stored): bool => UserMother::DEFAULT_HASH === $stored->toString();
