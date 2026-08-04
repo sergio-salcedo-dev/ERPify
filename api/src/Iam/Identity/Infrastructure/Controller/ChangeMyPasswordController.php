@@ -7,6 +7,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Controller;
 use Erpify\Iam\Identity\Application\ChangeMyPassword;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Http\ChangeMyPasswordRequest;
+use Erpify\Iam\Identity\Infrastructure\Security\PasswordChangeThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
@@ -27,6 +28,14 @@ use Throwable;
  * No CSRF token either, matching the other authenticated writes. The control here is stronger than a token: the
  * request must carry the current password, which a cross-site forgery does not know, and the endpoint is
  * JSON-only ({@see StrictRequestPayload}) so no form post can reach it.
+ *
+ * {@see PasswordChangeThrottle} runs before anything else, keyed on the identity rather than the IP or the
+ * session: the attacker this endpoint fears already holds a session, so a budget scoped to either of those is
+ * one they renew at will. It is spent before the payload is even considered, so a saturated identity pays no
+ * KDF. A wrong current password deliberately does not feed the persisted lockout — marking failures from a
+ * route that requires a live session would let a stolen session lock the owner out — so this budget is the only
+ * per-identity ceiling here, and the 403 it does not stop leaves a `SECURITY` audit row behind it
+ * ({@see \Erpify\Iam\Identity\Infrastructure\Http\InvalidCurrentPasswordAuditListener}).
  *
  * Both plaintexts stay inside this adapter. The use case receives three closures over the stored credential —
  * "is this the current one?", "is the new one the current one?", and a deferred supplier of the new hash — so
@@ -61,6 +70,7 @@ final readonly class ChangeMyPasswordController
         private ChangeMyPassword $changeMyPassword,
         private PasswordHasher $passwordHasher,
         private ReauthenticateDevice $reauthenticateDevice,
+        private PasswordChangeThrottle $passwordChangeThrottle,
         private LoggerInterface $logger,
     ) {
     }
@@ -71,8 +81,12 @@ final readonly class ChangeMyPasswordController
         #[StrictRequestPayload(acceptFormat: ['json'])]
         ChangeMyPasswordRequest $request,
     ): Response {
+        $identityId = $user->id() ?? throw new LogicException('An authenticated identity must have an id.');
+
+        $this->passwordChangeThrottle->ensureWithinBudget($identityId);
+
         $this->changeMyPassword->change(
-            $user->id() ?? throw new LogicException('An authenticated identity must have an id.'),
+            $identityId,
             fn (HashedPassword $stored): bool => $this->passwordHasher->verify(
                 $request->currentPassword,
                 $stored->toString(),

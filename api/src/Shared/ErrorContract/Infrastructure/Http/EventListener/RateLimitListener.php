@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener;
 
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\RateLimitSnapshot;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
@@ -13,7 +14,6 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
-use Symfony\Component\RateLimiter\RateLimit;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 
 /**
@@ -44,16 +44,13 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
  *   - `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` are the de-facto
  *     legacy names emitted by GitHub / Stripe / Shopify; many SDKs hard-code these names.
  *     Emitting both costs ~120 bytes per response — a fair trade for compatibility.
- * `Retry-After` is emitted ONLY on the rejected path (per RFC 9110 §10.2.3). The response
- * listener reads the snapshot stamped on the request attribute by the request listener; if
- * the attribute is missing (rate limiting was skipped, e.g. non-/api/ path or sub-request)
- * no headers are added.
- *
- * `Retry-After` value is `\max(1, $retryAfter->getTimestamp() - $now)` — the lower bound of
- * 1 second prevents emitting `Retry-After: 0` when the clock advances exactly to the reset
- * boundary between consume and response. `RateLimit-Reset` / `X-RateLimit-Reset` use the
- * same delta-seconds convention (not an epoch timestamp) so callers do not need to know the
- * server clock to act on it.
+ * `Retry-After` is emitted ONLY on the rejected path (per RFC 9110 §10.2.3). What it renders is a
+ * {@see RateLimitSnapshot} read back off the request attribute; if none is there (rate limiting was
+ * skipped — non-`/api/` path, sub-request, preflight) no headers are added. The snapshot is not
+ * necessarily this listener's: a per-target budget spent at a controller edge stamps its own, and the
+ * response then describes the budget that actually refused rather than the per-IP one it left alone.
+ * `RateLimit-Reset` / `X-RateLimit-Reset` use the delta-seconds convention (not an epoch timestamp)
+ * so callers do not need to know the server clock to act on it.
  *
  * `Reset` semantics follow Symfony's `RateLimit::getRetryAfter()` exactly. For
  * `sliding_window` that yields, in order: (a) `now` for an accepted request that still
@@ -103,8 +100,6 @@ final readonly class RateLimitListener
 
     public const int RESPONSE_PRIORITY = -128;
 
-    public const string ATTRIBUTE_KEY = '_rate_limit_snapshot';
-
     public const string UNKNOWN_CLIENT_KEY = 'unknown';
 
     public function __construct(
@@ -133,17 +128,12 @@ final readonly class RateLimitListener
 
         $limiterKey = $this->resolveLimiterKey($request);
         $limiter = $this->anonymousApiLimiter->create($limiterKey);
-        $rateLimit = $limiter->consume(1);
+        $snapshot = RateLimitSnapshot::of($limiter->consume(1), $limiterKey);
 
-        $request->attributes->set(self::ATTRIBUTE_KEY, $this->snapshot($rateLimit, $limiterKey));
+        $snapshot->stampOn($request);
 
-        if (!$rateLimit->isAccepted()) {
-            throw new RateLimitExceeded(
-                retryAfterSeconds: $this->retryAfterSeconds($rateLimit),
-                limit: $rateLimit->getLimit(),
-                remaining: \max(0, $rateLimit->getRemainingTokens()),
-                limiterKey: $limiterKey,
-            );
+        if (!$snapshot->accepted) {
+            throw $snapshot->refusal();
         }
     }
 
@@ -154,9 +144,9 @@ final readonly class RateLimitListener
             return;
         }
 
-        $snapshot = $this->readSnapshot($event->getRequest()->attributes->get(self::ATTRIBUTE_KEY));
+        $snapshot = RateLimitSnapshot::readFrom($event->getRequest());
 
-        if (null === $snapshot) {
+        if (!$snapshot instanceof RateLimitSnapshot) {
             return;
         }
 
@@ -170,100 +160,20 @@ final readonly class RateLimitListener
         return \is_string($clientIp) && '' !== $clientIp ? $clientIp : self::UNKNOWN_CLIENT_KEY;
     }
 
-    /**
-     * @return array{limit: int, remaining: int, reset: int, retry_after: int, accepted: bool, key: string}
-     */
-    private function snapshot(RateLimit $rateLimit, string $limiterKey): array
-    {
-        $retryAfter = $this->retryAfterSeconds($rateLimit);
-
-        return [
-            'limit' => $rateLimit->getLimit(),
-            'remaining' => \max(0, $rateLimit->getRemainingTokens()),
-            'reset' => $retryAfter,
-            'retry_after' => $retryAfter,
-            'accepted' => $rateLimit->isAccepted(),
-            'key' => $limiterKey,
-        ];
-    }
-
-    private function retryAfterSeconds(RateLimit $rateLimit): int
-    {
-        return \max(1, $rateLimit->getRetryAfter()->getTimestamp() - \time());
-    }
-
-    /**
-     * Defensive shape narrowing of the request attribute. Returns `null` when the attribute is
-     * absent or its shape has drifted (a foreign listener tampered with the bag, a future code
-     * path stored an unrelated value under the same key). PHPStan then sees the narrowed
-     * `array{...}` shape inside the caller without resorting to a runtime cast.
-     *
-     * @return array{limit: int, remaining: int, reset: int, retry_after: int, accepted: bool, key: string}|null
-     */
-    private function readSnapshot(mixed $stored): ?array
-    {
-        if (!$this->hasExpectedSnapshotShape($stored)) {
-            return null;
-        }
-
-        return [
-            'limit' => $stored['limit'],
-            'remaining' => $stored['remaining'],
-            'reset' => $stored['reset'],
-            'retry_after' => $stored['retry_after'],
-            'accepted' => $stored['accepted'],
-            'key' => $stored['key'],
-        ];
-    }
-
-    /**
-     * @phpstan-assert-if-true array{
-     *     limit: int,
-     *     remaining: int,
-     *     reset: int,
-     *     retry_after: int,
-     *     accepted: bool,
-     *     key: string,
-     * } $stored
-     */
-    private function hasExpectedSnapshotShape(mixed $stored): bool
-    {
-        if (!\is_array($stored)) {
-            return false;
-        }
-
-        $expectations = [
-            'limit' => 'is_int',
-            'remaining' => 'is_int',
-            'reset' => 'is_int',
-            'retry_after' => 'is_int',
-            'accepted' => 'is_bool',
-            'key' => 'is_string',
-        ];
-
-        return \array_all(
-            $expectations,
-            static fn (string $check, string $key): bool => \array_key_exists($key, $stored) && $check($stored[$key]),
-        );
-    }
-
-    /**
-     * @param array{limit: int, remaining: int, reset: int, retry_after: int, accepted: bool, key: string} $snapshot
-     */
-    private function stampHeaders(Response $response, array $snapshot): void
+    private function stampHeaders(Response $response, RateLimitSnapshot $snapshot): void
     {
         $headers = $response->headers;
 
-        $headers->set('RateLimit-Limit', (string) $snapshot['limit']);
-        $headers->set('RateLimit-Remaining', (string) $snapshot['remaining']);
-        $headers->set('RateLimit-Reset', (string) $snapshot['reset']);
+        $headers->set('RateLimit-Limit', (string) $snapshot->limit);
+        $headers->set('RateLimit-Remaining', (string) $snapshot->remaining);
+        $headers->set('RateLimit-Reset', (string) $snapshot->retryAfterSeconds);
 
-        $headers->set('X-RateLimit-Limit', (string) $snapshot['limit']);
-        $headers->set('X-RateLimit-Remaining', (string) $snapshot['remaining']);
-        $headers->set('X-RateLimit-Reset', (string) $snapshot['reset']);
+        $headers->set('X-RateLimit-Limit', (string) $snapshot->limit);
+        $headers->set('X-RateLimit-Remaining', (string) $snapshot->remaining);
+        $headers->set('X-RateLimit-Reset', (string) $snapshot->retryAfterSeconds);
 
-        if (!$snapshot['accepted']) {
-            $headers->set('Retry-After', (string) $snapshot['retry_after']);
+        if (!$snapshot->accepted) {
+            $headers->set('Retry-After', (string) $snapshot->retryAfterSeconds);
         }
     }
 }

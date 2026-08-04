@@ -137,6 +137,48 @@ Feature: Accept an invitation
     And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'iris@erpify.test' AND status = 'INVITED'"
     And there should have 1 records in SQL result
 
+  # The third credential-creating surface, refusing on the same policy object as the change and reset ones —
+  # the point of having one: the invited person meets the same rule everywhere, and the PWA mirrors it by
+  # counting code points rather than UTF-16 units.
+  Scenario: A password above the shared policy ceiling is refused before the invitation is read
+    When I send a POST request to "/backoffice/invitations/accept" with body:
+    """
+    {
+      "token": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90.behat-known-invitation-secret",
+      "password": "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678"
+    }
+    """
+    Then the response status code should be 422
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations[0].field" should be equal to "password"
+    And the JSON node "violations[0].message" should be equal to "The password must not exceed 128 characters."
+    # The token is untouched by a refused mapping, so the single-use invitation is still live.
+    And I execute the SQL query "SELECT id FROM iam_invitation WHERE status = 'SENT'"
+    And there should have 1 records in SQL result
+
+  Scenario: A password made only of whitespace is refused, non-breaking spaces included
+    When I send a POST request to "/backoffice/invitations/accept" with body:
+    """
+    {
+      "token": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90.behat-known-invitation-secret",
+      "password": "        "
+    }
+    """
+    Then the response status code should be 422
+    And the JSON node "violations[0].field" should be equal to "password"
+    And the JSON node "violations[0].message" should be equal to "The password must contain at least one non-whitespace character."
+    And I send a POST request to "/backoffice/invitations/accept" with body:
+    """
+    {
+      "token": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90.behat-known-invitation-secret",
+      "password": "        "
+    }
+    """
+    And the response status code should be 422
+    And the JSON node "violations[0].message" should be equal to "The password must contain at least one non-whitespace character."
+    And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'iris@erpify.test' AND status = 'INVITED'"
+    And there should have 1 records in SQL result
+
   Scenario: An accept with no CSRF token header is refused before the token is even read
     Given I remove "X-CSRF-Token" header
     When I send a POST request to "/backoffice/invitations/accept" with body:

@@ -37,12 +37,6 @@ final class RateLimitListenerTest extends TestCase
 
         $rateLimitListener->onRequest($requestEvent);
 
-        $snapshot = $requestEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY);
-        $this->assertIsArray($snapshot);
-        $this->assertTrue($snapshot['accepted'] ?? false);
-        $this->assertSame(self::TEST_LIMIT, $snapshot['limit'] ?? null);
-        $this->assertSame(self::TEST_LIMIT - 1, $snapshot['remaining'] ?? null);
-
         $responseEvent = $this->makeResponseEvent($requestEvent->getRequest());
         $rateLimitListener->onResponse($responseEvent);
 
@@ -77,9 +71,12 @@ final class RateLimitListenerTest extends TestCase
             $this->assertSame(self::CLIENT_IP, $rateLimitExceeded->limiterKey);
         }
 
-        $snapshot = $requestEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY);
-        $this->assertIsArray($snapshot);
-        $this->assertFalse($snapshot['accepted'] ?? true);
+        // The rejection is still recorded for the response: the throw happens after the stamp, which is what
+        // lets the 429 carry its own drained budget instead of the numbers of the request before it.
+        $responseEvent = $this->makeResponseEvent($requestEvent->getRequest(), Response::HTTP_TOO_MANY_REQUESTS);
+        $rateLimitListener->onResponse($responseEvent);
+
+        $this->assertSame('0', $responseEvent->getResponse()->headers->get('RateLimit-Remaining'));
     }
 
     public function testRejectedResponseCarriesRetryAfterHeader(): void
@@ -118,9 +115,12 @@ final class RateLimitListenerTest extends TestCase
 
         $rateLimitListener->onRequest($requestEvent);
 
+        $responseEvent = $this->makeResponseEvent($requestEvent->getRequest());
+        $rateLimitListener->onResponse($responseEvent);
+
         $this->assertNull(
-            $requestEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY),
-            'Listener must not stamp a snapshot on non-/api/ paths.',
+            $responseEvent->getResponse()->headers->get('RateLimit-Limit'),
+            'A non-/api/ path must reach the response with no rate-limit headers.',
         );
     }
 
@@ -134,8 +134,11 @@ final class RateLimitListenerTest extends TestCase
 
         $rateLimitListener->onRequest($requestEvent);
 
+        $responseEvent = $this->makeResponseEvent($requestEvent->getRequest());
+        $rateLimitListener->onResponse($responseEvent);
+
         $this->assertNull(
-            $requestEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY),
+            $responseEvent->getResponse()->headers->get('RateLimit-Limit'),
             'OPTIONS preflights must not consume the per-IP budget (CorsListener short-circuits them).',
         );
     }
@@ -151,8 +154,11 @@ final class RateLimitListenerTest extends TestCase
 
         $rateLimitListener->onRequest($requestEvent);
 
+        $responseEvent = $this->makeResponseEvent($request);
+        $rateLimitListener->onResponse($responseEvent);
+
         $this->assertNull(
-            $request->attributes->get(RateLimitListener::ATTRIBUTE_KEY),
+            $responseEvent->getResponse()->headers->get('RateLimit-Limit'),
             'Sub-requests must not consume the per-IP budget.',
         );
     }
@@ -169,10 +175,12 @@ final class RateLimitListenerTest extends TestCase
         $freshClientRequestEvent = $this->makeRequestEvent('/api/v1/anything', '198.51.100.8');
         $rateLimitListener->onRequest($freshClientRequestEvent);
 
-        $snapshot = $freshClientRequestEvent->getRequest()->attributes->get(RateLimitListener::ATTRIBUTE_KEY);
-        $this->assertIsArray($snapshot);
-        $this->assertTrue($snapshot['accepted'] ?? false);
-        $this->assertSame(self::TEST_LIMIT - 1, $snapshot['remaining'] ?? null);
+        $responseEvent = $this->makeResponseEvent($freshClientRequestEvent->getRequest());
+        $rateLimitListener->onResponse($responseEvent);
+
+        $headers = $responseEvent->getResponse()->headers;
+        $this->assertSame((string) (self::TEST_LIMIT - 1), $headers->get('RateLimit-Remaining'));
+        $this->assertNull($headers->get('Retry-After'), 'The fresh client was admitted, not refused.');
     }
 
     public function testResponseListenerSkipsWhenSnapshotMissing(): void

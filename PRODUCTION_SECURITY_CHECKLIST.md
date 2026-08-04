@@ -324,18 +324,26 @@ you change anything here.
       out" is an intention, not a guarantee the response proves — which is why the UI copy and the notification
       mail both point at *Active sessions* instead of asserting it. The login is likewise contained (a failure
       logs `critical` and still answers 204: the credential is already gone, so a 5xx would invite a retry that
-      can no longer succeed) and, because `Security::login()` re-enters only `checkPreAuth`, it does **not**
-      re-run the SUSPENDED/DEACTIVATED/locked walls — an admin action landing between the commit and the mint
-      can leave a fresh session for a walled identity (open, tracked in `deferred-work.md`). `newPassword` is
-      bounded 8–128; `currentPassword` carries no policy (it may predate today's rule) beyond a 255-character
-      DoS ceiling. **No `audit_log` row, and that is two decisions, not one:** keeping `User` out of the
-      `AuditedEntity` CDC suppresses the field-level diff — the only thing that could carry `password_hash` —
-      while an explicit `AuditLogger->log(…, SECURITY, …)` row would carry no entity fields at all and was
-      declined separately, to stay off the `audit_log.resource_id` person axis the GDPR epic is still closing.
-      The cost is explicit: a sustained credential-guessing run against this endpoint leaves **zero** forensic
-      rows (`AuditPolicy` audits `GET` only, and `InvalidCurrentPassword` carries no `AccessDeniedException`,
-      so `AccessDeniedAuditListener` skips the 403), which is the detective half of the missing throttle also
-      tracked in `deferred-work.md`. The durable record of a *successful* change is the `event_store` row.
+      can no longer succeed). `Security::login()` re-enters only `checkPreAuth`, so it does **not** re-run the
+      SUSPENDED/DEACTIVATED/locked walls on its own; `ReauthenticateDevice` — shared with the reset and
+      invitation-accept flows, which had the identical window — re-reads the aggregate and applies
+      `ensureActive()` before minting, so an admin action landing between the commit and the mint no longer
+      leaves a fresh session for a walled identity. `newPassword` is bounded 8–128 **code points** with at least
+      one non-whitespace character, by the single `PasswordPolicy` constraint the reset, invitation-accept and
+      bootstrap-CLI surfaces also carry (it used to be six literals, and the reset surface had already drifted
+      to 255); `currentPassword` deliberately carries no policy — it may predate today's rule, and asserting it
+      would lock its owner out of the endpoint that would fix it — beyond a 255-character DoS ceiling.
+      **Attempts are budgeted per identity and refusals are recorded.** `password_change_per_identity`
+      (sliding window, 10 / 15 minutes by default, mirroring the persisted lockout) is consumed at the
+      controller edge before the payload is weighed, and exhaustion is a **visible 429** — legitimate only here,
+      where the caller already holds the identity the budget names. A wrong current password writes an
+      `INVALID_CURRENT_PASSWORD` row at `security` level, synchronously, **resource-less** (`actor_id` already
+      seals the subject; naming it as the resource would put `actor_id == resource_id` on the
+      `audit_log.resource_id` person axis) with only the route in `metadata`. The two halves ship together on
+      purpose: a synchronous write per attempt on an unbudgeted endpoint is a write amplifier handed to the
+      attacker it records. Still **no CDC row**: `User` stays out of `AuditedEntity`, because a field-level diff
+      is the one thing that could carry `password_hash` into the trail. The durable record of a *successful*
+      change remains the `event_store` row.
 - [ ] **Pre-identity cross-cutting hardening (login · invitation accept · forgot/reset):**
       every pre-identity rejection pays the same **constant-time floor** (`PreIdentityTimingFloor`, one password
       verification of the firewall's own hasher) — malformed/unknown login identifiers, the `INVITED` pre-auth
@@ -345,7 +353,10 @@ you change anything here.
       from the URL/history on mount, and Caddy's access log **redacts the `token` query parameter** (gate:
       `CaddyfileAccessLogRedactionGateTest`). Recovery rate limits are **neutral per target**: forgot is capped
       per email (`password_recovery_per_email`) and a saturated target still gets the uniform 202 with the work
-      silenced (plus the timing floor); token endpoints are capped per selector; only IP-global limits may 429.
+      silenced (plus the timing floor); token endpoints are capped per selector. **A per-target budget may only
+      429 where the caller has already proved it holds the target** — which is the authenticated password change
+      above and nothing on this pre-identity surface, where a visible refusal would answer "this account exists"
+      to a prober. The rule is about who is asking, not about the limiter's scope.
       Security emails come from `MAILER_SECURITY_FROM` (monitored, replyable — a blank/no-reply value **fails
       loudly** outside dev/test) and refuse to emit a non-HTTPS link outside dev/test; token-bearing emails stay
       **synchronous best-effort** (never routed through a Messenger transport, which would serialise the raw
@@ -559,6 +570,19 @@ mitigated state. Accepting one means recording who accepted it and against which
       the weekly CI cron runs `make composer.check.mercure-pin`, which goes red at the first
       upstream tag newer than `v0.4.2`. Tracking issue:
       [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
+- [ ] **A credential change can sign a second browser tab out of the application, and it is accepted.** Both
+      flows that replace a credential from a live browser — `ChangeMyPassword` and `CompletePasswordReset` —
+      revoke **every** session and mint a replacement onto the requesting tab. A request already in flight from
+      another tab of the same browser carries the old cookie, meets the gate's `401 session-expired`, and
+      `FetchHttpClient` diverts it to `/login?reason=session-expired` irreversibly — so a change that fully
+      succeeded reads, in that tab, as being thrown out. The alternative is `revoke-others`, which needs three
+      new cross-context seams to know which session is the caller's own; the exposure is a stale tab meeting a
+      login screen, never an access leak. **Both flows are named on purpose:** the reset surface has carried the
+      identical window since it shipped, and recording only the change flow would leave the register
+      inconsistent and invite the next reviewer to re-raise the other half as new.
+      **Accepted 2026-08-05 (Sergio):** no customer, and the cost of closing it is three seams across two
+      contexts for a recoverable UX papercut. Re-assess if a session-scoped revoke becomes cheap for another
+      reason, or the first time a user reports it.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

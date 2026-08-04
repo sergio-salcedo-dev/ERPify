@@ -55,8 +55,9 @@ Feature: Change my own password from a live session
     And the response status code should be 204
     And I reload the fixtures
 
-  Scenario: A wrong current password is a 403 that changes nothing and evicts nobody
+  Scenario: A wrong current password is a 403 that changes nothing, evicts nobody and leaves a forensic row
     Given the stored events are cleared
+    And I add "X-Correlation-Id" header equal to "0190dead-beef-7abc-8def-00112233c0de"
     When I send a POST request to "/me/password" with body:
     """
     { "currentPassword": "not-alices-password", "newPassword": "brand-new-strong-password" }
@@ -67,6 +68,25 @@ Feature: Change my own password from a live session
     And there should be 0 events stored named "erpify.iam.identity.password-changed"
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
     And 0 notification emails were sent
+    # The guess is recorded synchronously, and RESOURCE-LESS: the only candidate resource is the caller's own
+    # identity, which `actor_id` already seals — naming it again would write actor_id == resource_id by
+    # construction, onto the person axis of `audit_log.resource_id`. The row survives the refusal because the
+    # use case rolls its transaction back before the exception reaches the listener.
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, metadata FROM audit_log WHERE action = 'INVALID_CURRENT_PASSWORD' AND correlation_id = '0190dead-beef-7abc-8def-00112233c0de'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "INVALID_CURRENT_PASSWORD",
+        "level": "security",
+        "actor_type": "user",
+        "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+        "resource_type": null,
+        "resource_id": null,
+        "metadata": "{\"route\": \"iam_me_change_password\"}"
+      }
+    ]
+    """
     # 403 rather than 401 is the point: a mistyped password must leave the caller inside the application.
     And I execute the SQL query "SELECT id FROM iam_session WHERE id = '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d01' AND status = 'ACTIVE'"
     And there should have 1 records in SQL result
@@ -105,9 +125,82 @@ Feature: Change my own password from a live session
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations" should have 1 element
     And the JSON node "violations[0].field" should be equal to "newPassword"
+    And the JSON node "violations[0].message" should be equal to "The password must be at least 8 characters."
     # Mapping fails before the use case runs, so the aggregate is never reached and no KDF is paid.
     And there should be 0 events stored named "erpify.iam.identity.password-changed"
     And 0 notification emails were sent
+
+  # `NotBlank` admits eight spaces, so the policy owns this refusal on its own. The rule is written with
+  # `mb_trim`, which is why a U+00A0 does not survive it — an ASCII `trim()` would let all eight through and
+  # store a credential nobody can retype.
+  Scenario: A new password made only of whitespace is refused, non-breaking spaces included
+    Given the stored events are cleared
+    When I send a POST request to "/me/password" with body:
+    """
+    { "currentPassword": "alice-password", "newPassword": "        " }
+    """
+    Then the response status code should be 422
+    And the JSON node "violations[0].field" should be equal to "newPassword"
+    And the JSON node "violations[0].message" should be equal to "The password must contain at least one non-whitespace character."
+    And I send a POST request to "/me/password" with body:
+    """
+    { "currentPassword": "alice-password", "newPassword": "        " }
+    """
+    And the response status code should be 422
+    And the JSON node "violations[0].message" should be equal to "The password must contain at least one non-whitespace character."
+    And I send a POST request to "/me/password" with body:
+    """
+    { "currentPassword": "alice-password", "newPassword": "　　　　　　　　" }
+    """
+    And the response status code should be 422
+    And the JSON node "violations[0].message" should be equal to "The password must contain at least one non-whitespace character."
+    And there should be 0 events stored named "erpify.iam.identity.password-changed"
+
+  Scenario: A new password above the policy ceiling is refused at the wire edge
+    Given the stored events are cleared
+    When I send a POST request to "/me/password" with body:
+    """
+    { "currentPassword": "alice-password", "newPassword": "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" }
+    """
+    Then the response status code should be 422
+    And the JSON node "violations[0].field" should be equal to "newPassword"
+    And the JSON node "violations[0].message" should be equal to "The password must not exceed 128 characters."
+    And there should be 0 events stored named "erpify.iam.identity.password-changed"
+
+  # The wall the use case raises from behind the row lock, in the vocabulary the rest of the product uses for a
+  # walled identity — not the lifecycle-transition 409 nobody asked about. The session outlives the suspension
+  # (the firewall refreshes the user, it does not re-run the admission checks), so the request really does
+  # arrive here.
+  Scenario: An identity suspended while its session is alive is walled before any credential work
+    Given the stored events are cleared
+    And I execute the SQL query "UPDATE identity_user SET status = 'SUSPENDED' WHERE email = 'alice@erpify.test'"
+    When I send a POST request to "/me/password" with body:
+    """
+    { "currentPassword": "alice-password", "newPassword": "brand-new-strong-password" }
+    """
+    Then the response status code should be 403
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "account-suspended"
+    And there should be 0 events stored named "erpify.iam.identity.password-changed"
+    And there should be 0 events stored named "erpify.iam.session.all-revoked"
+    And 0 notification emails were sent
+    And I reload the fixtures
+
+  # A live lockout is orthogonal to `ACTIVE`, so it never bars this route — and clearing it is a decision, not
+  # a side effect inherited from the programmatic login: re-proving the current secret and rotating it is
+  # stronger evidence than the reset flow already accepts for the same relief.
+  Scenario: A locked identity that re-proves its password changes it and leaves unlocked
+    Given the stored events are cleared
+    And I execute the SQL query "UPDATE identity_user SET failed_attempts = 10, locked_until = '2099-01-01 00:00:00' WHERE email = 'alice@erpify.test'"
+    When I send a POST request to "/me/password" with body:
+    """
+    { "currentPassword": "alice-password", "newPassword": "brand-new-strong-password" }
+    """
+    Then the response status code should be 204
+    And there should be 1 event stored named "erpify.iam.identity.password-changed"
+    And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'alice@erpify.test' AND failed_attempts = 0 AND locked_until IS NULL"
+    And there should have 1 records in SQL result
+    And I reload the fixtures
 
   Scenario: A missing current password is refused at the wire edge
     When I send a POST request to "/me/password" with body:
@@ -134,6 +227,33 @@ Feature: Change my own password from a live session
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations[0].field" should be equal to "roles"
     And there should be 0 events stored named "erpify.iam.identity.password-changed"
+
+  # The budget is primed in the SAME scenario as the request that observes it: the test cache pool is the array
+  # adapter, reset on every kernel.terminate, so "five succeed and the sixth is refused" cannot be expressed as
+  # six sequential HTTP steps.
+  Scenario: A drained per-identity budget refuses the change out loud, before any credential work
+    Given the stored events are cleared
+    And the password-change budget is exhausted for identity "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+    When I send a POST request to "/me/password" with body:
+    """
+    { "currentPassword": "alice-password", "newPassword": "brand-new-strong-password" }
+    """
+    Then the response status code should be 429
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "rate-limited"
+    # A 429 owes the caller a retry hint (RFC 9110 §10.2.3), and the drained budget must be the one the headers
+    # describe — not the per-IP budget this request left untouched.
+    And the header "Retry-After" should exist
+    And the header "Retry-After" should match "/^[1-9]\d*$/"
+    And the header "RateLimit-Remaining" should be equal to "0"
+    # Refused before the payload is weighed: no KDF, no aggregate, no effects.
+    And there should be 0 events stored named "erpify.iam.identity.password-changed"
+    And there should be 0 events stored named "erpify.iam.session.all-revoked"
+    And 0 notification emails were sent
+    # The visible refusal is legitimate here and nowhere upstream: the caller already holds this identity, so
+    # naming its budget discloses nothing a session did not already prove.
+    And I send a "GET" request to "/me"
+    And the response status code should be 200
 
   @anonymous
   Scenario: The endpoint is closed to a caller with no session
