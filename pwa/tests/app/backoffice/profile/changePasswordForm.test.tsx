@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import type {
@@ -66,6 +66,53 @@ describe("<ChangePasswordForm>", () => {
     );
     expect(await screen.findByTestId("change-password-form__success")).toBeInTheDocument();
     expect(screen.queryByTestId("change-password-form")).not.toBeInTheDocument();
+  });
+
+  it("returns to an empty form when the user chooses to change the password again", async () => {
+    changePassword.mockResolvedValue(undefined);
+
+    render(<ChangePasswordForm />);
+    fillAndSubmit();
+
+    fireEvent.click(await screen.findByTestId("change-password-form__change-again"));
+
+    expect(await screen.findByTestId("change-password-form")).toBeInTheDocument();
+    expect(screen.queryByTestId("change-password-form__success")).not.toBeInTheDocument();
+    // The credential the user just typed must not survive into the next attempt.
+    expect(screen.getByTestId("change-password-form__current-password")).toHaveValue("");
+    expect(screen.getByTestId("change-password-form__new-password")).toHaveValue("");
+  });
+
+  it("lets the user dismiss the persistent banner without leaving the form", async () => {
+    changePassword.mockRejectedValue(
+      new HttpError(problem(HttpStatus.INTERNAL_SERVER_ERROR, "server-error")),
+    );
+
+    render(<ChangePasswordForm />);
+    fillAndSubmit();
+
+    const banner = await screen.findByTestId("change-password-form__mutation-error");
+    fireEvent.click(within(banner).getByRole("button", { name: /dismiss/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("change-password-form__mutation-error")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("change-password-form")).toBeInTheDocument();
+  });
+
+  /**
+   * `detail` is optional in the contract, so the form must fall back to `title` rather than hang an
+   * `undefined` on the field and show the user an empty error.
+   */
+  it("falls back to the problem title when the API sends no detail", async () => {
+    changePassword.mockRejectedValue(
+      new HttpError(problem(HttpStatus.FORBIDDEN, "invalid-current-password")),
+    );
+
+    render(<ChangePasswordForm />);
+    fillAndSubmit();
+
+    expect(await screen.findByText("invalid-current-password")).toBeInTheDocument();
   });
 
   it("rejects a too-short new password before reaching the port", async () => {

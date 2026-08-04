@@ -5,7 +5,10 @@ import { container } from "@/context/shared/dependency-injection/infrastructure/
 import type { IdentityRepository } from "@/context/shared/access/domain/IdentityRepository";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
-import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import type {
+  ProblemDetails,
+  ProblemViolation,
+} from "@/context/shared/error/domain/ProblemDetails";
 import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
   ChangePasswordSchema,
@@ -83,12 +86,15 @@ export function ChangePasswordForm() {
     setProblem(null);
   };
 
-  const failViolations = (problemDetails: ProblemDetails): void => {
+  // The entries arrive already narrowed by the caller's guard rather than being re-widened here: a
+  // `?? []` at the loop would be a branch no input can reach, and the only way to cover it would be to
+  // fabricate a call the code does not make.
+  const failViolations = (problemDetails: ProblemDetails, entries: ProblemViolation[]): void => {
     // Map server-side violations onto the same RHF errors object client validation
     // populates, so both surface via `errors[name]?.message` with no parallel channel.
     let mappedAny = false;
     let unmappedExist = false;
-    for (const violation of problemDetails.violations ?? []) {
+    for (const violation of entries) {
       const field = baseField(violation.field);
       if (isChangePasswordField(field)) {
         setError(field, { type: "server", message: violation.message });
@@ -114,7 +120,7 @@ export function ChangePasswordForm() {
       problemDetails.status === HttpStatus.UNPROCESSABLE_ENTITY &&
       problemDetails.violations?.length
     ) {
-      failViolations(problemDetails);
+      failViolations(problemDetails, problemDetails.violations);
       return;
     }
     setProblem(problemDetails);

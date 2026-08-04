@@ -32,7 +32,11 @@ use Throwable;
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
+// The two refusal types are asserted here and nowhere else, so without naming them the clover discards
+// coverage this suite genuinely produces and reports both classes at zero.
 #[CoversClass(ChangeMyPassword::class)]
+#[CoversClass(InvalidCurrentPassword::class)]
+#[CoversClass(NewPasswordMustDiffer::class)]
 final class ChangeMyPasswordTest extends TestCase
 {
     private const string NEW_HASH = 'new-argon2id-hash';
