@@ -4,7 +4,7 @@ baseline_commit: 8bc9893a
 
 # Story 1.7 (G-5): Ids de persona fuera del `event_store`
 
-Status: ready-for-dev
+Status: review
 
 > **LA DECISIÓN ESTÁ TOMADA Y REGISTRADA EN UN ADR** (Sergio, 2026-08-01):
 > [`docs/adr/event-store-and-projections.md`](../../docs/adr/event-store-and-projections.md) **D12**. El log pasa

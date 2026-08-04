@@ -332,7 +332,7 @@ development_status:
   # Identity y los dos revokes masivos del mismo sujeto comparten secuencia de versión — todas tienen que
   # moverse al MISMO pseudónimo o la unicidad se rompe.
   # Mientras G-5 no cierre, la épica NO puede declararse completada.
-  g-5-ids-de-persona-fuera-del-event-store: in-progress
+  g-5-ids-de-persona-fuera-del-event-store: review
   epic-gdpr-hardening-retrospective: optional
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
