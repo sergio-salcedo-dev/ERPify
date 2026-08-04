@@ -324,9 +324,15 @@ development_status:
   # El inventario de FR10 se dejaba SessionRevoked, corregido.
   # LOS DOS EJES SE CIERRAN JUNTOS: una historia que solo reescriba aggregate_id deja su propio test falsable en
   # verde mientras el id sigue vivo en el payload de al lado — NFR3 fallando dentro de la historia que lo instala.
-  # Sigue en backlog por falta de artefacto de contexto, no por decisión abierta.
+  # Artefacto de contexto escrito (2026-08-04). Al medirlo, DOS afirmaciones del corte cedieron: el eje
+  # aggregate_id son OCHO eventos y no seis (faltaban AllSessionsRevoked y OtherSessionsRevoked, que se
+  # publican con $userId como aggregateId), y `aggregate_id` SÍ se lee de vuelta — en DbalEventStore::append,
+  # para calcular MAX(aggregate_version)+1; lo cierto es que ningún CONSUMIDOR ni proyección lo lee.
+  # Consecuencia no enunciada en el corte: el UNIQUE de stream no incluye aggregate_type, así que las filas
+  # Identity y los dos revokes masivos del mismo sujeto comparten secuencia de versión — todas tienen que
+  # moverse al MISMO pseudónimo o la unicidad se rompe.
   # Mientras G-5 no cierre, la épica NO puede declararse completada.
-  g-5-ids-de-persona-fuera-del-event-store: backlog
+  g-5-ids-de-persona-fuera-del-event-store: in-progress
   epic-gdpr-hardening-retrospective: optional
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
