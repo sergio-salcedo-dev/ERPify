@@ -137,6 +137,30 @@ describe("ChangePasswordSchema", () => {
 
     expect(absent.success).toBe(false);
   });
+
+  it("measures the existing credential's ceiling in code points, like the API does", () => {
+    // 200 astral characters: 200 code points, but 400 UTF-16 units. The API's ceiling on this field is
+    // `Assert\Length(max: 255)`, which counts code points and accepts it — so a client rule written
+    // against `String.length` would refuse at 127 characters a credential the server considers fine.
+    const astral = "😀".repeat(200);
+
+    const accepted = ChangePasswordSchema.safeParse({
+      currentPassword: astral,
+      newPassword: "a-brand-new-password",
+    });
+
+    expect(astral.length).toBe(400);
+    expect(accepted.success).toBe(true);
+  });
+
+  it("still refuses an existing credential past the ceiling the API enforces", () => {
+    const over = ChangePasswordSchema.safeParse({
+      currentPassword: "a".repeat(256),
+      newPassword: "a-brand-new-password",
+    });
+
+    expect(over.success).toBe(false);
+  });
 });
 
 describe("InviteUserSchema", () => {

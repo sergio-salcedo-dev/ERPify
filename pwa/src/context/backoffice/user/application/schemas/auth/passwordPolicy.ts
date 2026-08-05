@@ -54,4 +54,11 @@ export const newPasswordSchema = z
 export const existingPasswordSchema = z
   .string()
   .min(1, "Enter your current password.")
-  .max(EXISTING_PASSWORD_MAX_LENGTH, "The password must not exceed 255 characters.");
+  .refine(
+    // Code points here too, for the same reason the policy above counts them: the API's ceiling on this
+    // field is `Assert\Length`, which counts code points, so a `.max()` written against `String.length`
+    // would refuse at half the real limit for anything outside the BMP — the client rejecting a credential
+    // the server would have accepted, under two rules that both claim to say "255 characters".
+    (value) => codePointLength(value) <= EXISTING_PASSWORD_MAX_LENGTH,
+    "The password must not exceed 255 characters.",
+  );

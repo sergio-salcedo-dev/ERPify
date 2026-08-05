@@ -20,6 +20,12 @@ use Symfony\Bundle\SecurityBundle\Security;
  * mint an `ACTIVE` session for an identity an administrator has just suspended — and `SessionAdmissionGate`
  * cannot catch it, because it reads the session row and never the identity's status.
  *
+ * `ensureActive()` restores **two** of those three arms. It matches on `IdentityStatus` alone, so a live
+ * lockout is not re-applied here, and that is deliberate rather than an omission: the two callers that could
+ * meet one clear it inside their own transaction (re-proving the current secret, or consuming a single-use
+ * link, is stronger evidence than the lock summarises), and the third consumes a token that already proves
+ * control of the mailbox. Adding the lockout arm here would refuse identities those flows just relieved.
+ *
  * The window is not microseconds wide: all three callers revoke sessions and then send a security notice on
  * an unrouted, blocking SMTP path before they get here.
  *

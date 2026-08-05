@@ -25,9 +25,17 @@ use Symfony\Component\HttpFoundation\Response;
  * programmatic login runs but its listeners do not, so no session is minted here whatever the store does —
  * measured, not assumed: a fixture that refused every write recorded zero refusals, which means an
  * assertion of "no session survives" would have been satisfied by a mint that never ran. That is a vacuous
- * green, so it was removed rather than kept. The mint, and the containment when it fails, belong to
- * `features/backoffice/identity/change_password.feature`, which drives real HTTP — at the cost that Behat
- * contributes nothing to the coverage report.
+ * green, so it was removed rather than kept. The mint itself belongs to
+ * `features/backoffice/identity/change_password.feature`, which drives real HTTP and asserts exactly one
+ * surviving session, neither of the two that existed before — at the cost that Behat contributes nothing to
+ * the coverage report.
+ *
+ * The **containment** of a failed re-login — the `catch` that keeps the response 204 and sends the failure to
+ * the log at `critical` — is asserted by NEITHER suite, and saying so here is the point: an earlier version of
+ * this docblock delegated it to that feature file, which contains no such scenario, so the reader was pointed
+ * at an assertion that does not exist. What it would take is recorded as a pending item in
+ * `_bmad-output/implementation-artifacts/deferred-work.md`; the wall that runs before the mint is pinned
+ * separately and falsifiably by `ReauthenticateDeviceTest`.
  *
  * @internal
  */
