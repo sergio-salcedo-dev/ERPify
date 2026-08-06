@@ -72,9 +72,15 @@ estructuralmente incapaz de tocarlo.
   `AuditedEntity` (`User.php:38-41`, deliberado — evita `password_hash` en el trail), así que
   `AuditWriteCaptureListener.php:78` descarta la entidad. **Suspender o degradar a un peer no escribe ninguna
   fila.** Lo confirma el docblock de `AdministratorErasureRequiresDemotion.php:15-18`.
-- `'User'` como `resource_type` aparece **una sola vez** en `api/src`: `FulfilIdentityErasure.php:107`. La única
-  fila de ese tipo en producción **la inserta la propia transacción** en `:150-155`, 10 líneas antes del pase de
-  recurso → ya tiene lock exclusivo sobre ella. **No puede esperar a nadie.**
+- `'User'` como `resource_type` aparece **una sola vez** como literal en `api/src`: `FulfilIdentityErasure.php:107`.
+  **Ojo con la fuerza de esta prueba:** `RequestAuditResourceExtractor.php:27` construye `resource_type` en
+  runtime desde `_audit_resource_type` (hoy sólo `Bank`/`BankAccount`), y `api/.audit-resource-types` declara
+  esa vía como punto ciego del barrido textual. La conclusión vale hoy; el grep de literales no la agota.
+- **El argumento que sostiene la conclusión no es el lock.** La fila que la transacción inserta en `:150-155`
+  lleva `actor_id` = **el admin que actúa**, no el sujeto, así que sí participa en contención cruzada. Lo que
+  hace inalcanzable el par recíproco es que **no puede coexistir**: `EraseIdentitySubject` hace hard-delete, de
+  modo que quien fue borrado nunca vuelve a actuar. Usar «ya tiene lock exclusivo» en el comentario de cierre
+  es refutable en review — usa éste.
 
 **Por qué la sentencia `OR` del issue es un arreglo peor que el defecto:**
 
@@ -83,6 +89,14 @@ estructuralmente incapaz de tocarlo.
 3. **Rompe los contadores de cumplimiento.** Hoy son dos (`affected_rows`, `anonymized_resource_rows`, `FulfilIdentityErasure.php:243-246`); la fila crosswalk cuenta dos veces. `FulfilIdentityErasureTest.php:70-71` existe **precisamente** para que un implementador que sume no pase desapercibido.
 4. **Fuerza refactor de la superficie pública de `Shared/Audit`**: el pseudónimo se acuña dentro de `DbalAuditActorAnonymiser::anonymise()` (`:64`), y `EraseActorAuditTrailCommand.php:112` consume el anonimizador de actor **solo** (CLI, eje actor) y debe seguir funcionando.
 5. **«Funde dos barridos en uno» no está medido.** Los dos predicados caen sobre índices distintos (`audit_log_actor_idx` y `audit_log_resource_idx`, `Version20260623164321.php:20,23`) → requiere `BitmapOr`, un plan que el planner abandona por Seq Scan al degradarse la selectividad. Afirmarlo sin `EXPLAIN` es una asunción.
+
+**La tercera opción, que el issue propone y el descarte no puede omitir: `ORDER BY id` determinista.** El propio
+#565 sugiere «tomar las filas en orden canónico de `id`», y **el repo ya lo practica exactamente para esto**:
+`DoctrineActiveAdministratorDirectory.php:38-44` añade `ORDER BY id … FOR UPDATE` para fijar el orden de
+bloqueo, y lo documenta. **Ninguno de los cinco motivos de arriba le aplica**: no funde ejes, no toca los
+contadores, no altera la superficie pública de `Shared/Audit` y no reordena nada respecto al INSERT. Un
+comentario de cierre que diga «se pesaron las opciones» sin nombrar ésta es refutable. Aceptarla o descartarla
+**con argumento** es parte de AC2.
 
 ### #562 — troceo contra el techo de 65535 · **EL ISSUE YA ESTÁ RESUELTO; la deuda que queda es otra**
 
@@ -148,7 +162,9 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 
 ### AC1 — #389: ningún id de persona alcanza el log de acceso, por ninguna de las dos vías
 
-- La redacción del Caddyfile cubre **ambas**: los nombres directos (`actorId`, `resourceId`, `correlationId`) y los posicionales `filters[0..8][value]` — 8 es el máximo que `toAuditFilters` puede emitir (`auditSearchCriteria.ts:23-56`); verificar ese tope antes de fijar el rango.
+- La redacción del Caddyfile cubre **ambas**: los nombres directos (`actorId`, `resourceId`, `correlationId`) y los posicionales `filters[0..8][value]`. `toAuditFilters` (`auditSearchCriteria.ts:22-55`) emite **9** filtros como máximo — level, actorType, actorId, resourceType, resourceId, correlationId, action, from, to → **índices 0..8**, nueve entradas, no ocho.
+- `buildSearchParams.ts:22-23` emite además la forma `filters[N][value][]` para el operador `in`. Hoy ningún filtro de auditoría lo usa; **queda fuera de alcance y declarado**, porque un `in` futuro sobre `actorId` se des-redactaría en silencio.
+- **Nada ata hoy el rango del Caddyfile al productor**: el gate es un test PHP textual sobre un fichero Caddy y el productor es TypeScript, así que un décimo eje de auditoría des-redacta sin que nada falle. Cerrarlo con margen deliberado o con un assert de longitud del lado PWA — decidir y dejarlo dicho.
 - La pérdida de diagnóstico es **aceptada y declarada**: redactar `filters[N][value]` borra también nivel, tipo de actor, acción y fechas del log de acceso. Anotarlo donde vive la garantía, no solo en el PR.
 - `CaddyfileAccessLogRedactionGateTest.php` asserta cada parámetro nuevo, y **sigue asertando `authorization` y `token`**.
 - Los dos docblocks que hoy se autocontradicen quedan coherentes con el código: `auditUrlState.ts:45-52` y `auditFilter.ts:6-8`.
@@ -158,14 +174,15 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 
 - El comentario de cierre (o de re-encuadre) cita la evidencia: `User.php:38-41`, `AdministratorErasureRequiresDemotion.php:15-18`, y que `'User'` aparece una sola vez en `api/src`.
 - Existe un test que **se pone rojo el día que el ABBA se vuelve alcanzable** — es decir, cuando aparezca un escritor de `resource_type='User'` ajeno a la transacción. Precedente de forma: `DoctrineActiveAdministratorDirectoryTest.php:111-137` interroga `pg_locks` para `pg_backend_pid()` en vez de simular concurrencia.
-- **`40P01` se mapea a un marcador reintentable** del contrato RFC 9457 (hoy sale 500), y `docs/api-error-contract.md` se actualiza — **obligatorio, NFR26**. El mapeo cubre también `event_store`, cuyo `payload::text ILIKE '%S%'` (`DbalEventStoreSubjectAnonymiser.php:68`) sí fuerza seq scan y bloqueo amplio: ahí el deadlock **sí** es plausible, y es la razón de que esto valga más que el ABBA del issue.
+- **`40P01` se mapea a un marcador reintentable** del contrato RFC 9457 (hoy sale 500), y `docs/api-error-contract.md` se actualiza — **obligatorio, NFR26**. La razón de fondo **no es el ABBA** sino `event_store`: `DbalEventStoreSubjectAnonymiser.php:61-69` corre en la **misma** transacción que los dos pases de auditoría y su `payload::text ILIKE` (`:68`) fuerza seq scan sobre filas que cualquier escritura de negocio está insertando por el outbox. Ahí el deadlock **sí** es plausible.
+- **Tres cosas que el mapeo exige decidir y que no se pueden improvisar**: (a) **qué marcador** — no existe ninguno «reintentable» en `api/src/Shared/ErrorContract/Domain/Exception/`, hay que crearlo o reutilizar `Conflict`; (b) **dónde se traduce** — `DeadlockException` es de DBAL, no `DomainException`, así que no entra por la vía habitual; (c) **cómo se reconcilia con `docs/adr/audit-activity-log.md:177-181`**, que decidió explícitamente *no* añadir reintento síncrono aquí. Ignorar ese ADR, no acotarlo, es lo que haría el mapeo insostenible en review.
 - **NO se implementa la sentencia `OR`.** Los cinco motivos están arriba (§#565); el principal es que regresaría GDPR y destruiría evidencia de terceros.
 
 ### AC3 — #562: se cierra con evidencia y la deuda restante queda nombrada correctamente
 
 - El comentario de cierre demuestra que el N+1 descrito no existe: el caso de uso no importa `UserRepository` y hace **una** llamada (`ReconcileErasedSubjectReferences.php:106,221`).
-- Lo que queda se registra por separado: (a) las cinco lecturas sin `LIMIT`, (b) el troceo teórico.
-- **`LiveIdentityDirectory.php:28-30` deja de afirmar que un llamador trocea**, porque ninguno lo hace. Ésta es la corrección obligatoria aunque no se implemente el troceo.
+- Lo que queda se registra: (a) las cinco lecturas sin `LIMIT` — **nuevas**; (b) el troceo teórico **ya está** en `deferred-work.md:11` y registrarlo otra vez violaría la regla pending-only del registro. Lo que sí hay que hacer con esa bala es **actualizar su `Ref:`**, que apunta a `ReconcileErasedSubjectReferences.php:99` y hoy es `:106`.
+- **`LiveIdentityDirectory.php:28-30` deja de afirmar que un llamador trocea**, porque ninguno lo hace. Es la corrección obligatoria aunque no se implemente el troceo. **`DoctrineLiveIdentityDirectory.php:27-30` NO necesita tocarse**: ya es honesto («chunking is the change to make when a measurement says it is close, not before»). Sólo el puerto tiene la frase normativa.
 
 ### AC4 — #564: la clase de defecto se cierra por la vía reachable
 
@@ -179,6 +196,7 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 
 - `make php.quality`, `make pwa.quality` y los tests tocados, **cada uno de una corrida fresca y con su exit code impreso**.
 - `make php.lint.person-reference` y `make php.lint.error-contract` verdes.
+- **`make db.migrate` y `make db.validate`** con exit code impreso. Sin esto la migración de #564 no la verifica **nada**: `php.lint.doctrine` usa `--skip-sync` y no mira `audit_log` (no tiene entidad ORM), y `db.validate` no corre en CI. Además `make db.diff` exige la BD **en head** antes de generar, o el diff sale contaminado.
 - **Pase adversarial recorded ANTES de abrir el PR** (GDPR/seguridad). El PR se abre en **draft**; el pase lo promueve. El cuerpo del PR dice dónde quedó registrado.
 - Ningún issue se cierra sin **evidencia medida contra el código** en el comentario de cierre.
 
@@ -193,12 +211,13 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
   - [ ] Corregir docblocks `auditUrlState.ts:45-52` y `auditFilter.ts:6-8`
   - [ ] `PRODUCTION_SECURITY_CHECKLIST.md` — el residual del path
 - [ ] **T2 — #565 clasificación + tripwire** (AC: 2)
-  - [ ] Test que se pone rojo cuando aparezca un escritor externo de `resource_type='User'`
-  - [ ] Comentario de cierre/re-encuadre con la evidencia
+  - [ ] Extender `api/tests/Support/AuditResourceTypeRegistry.php` + `PersonResourceErasureGateTest` (**no** un sweep nuevo), acotando los sembrados de test
+  - [ ] `DbalAuditResourceAnonymiser.php:23-25` — **lleva la misma premisa falsa que refutamos**: dice que una fila que nombra al sujeto como recurso «very often» la escribió un administrador cambiándole los roles. Si #565 es cierto, ese docblock miente igual que el de `LiveIdentityDirectory`
+  - [ ] Comentario de cierre con la evidencia (usar el argumento del hard-delete, no el del lock)
   - [ ] Mapeo `40P01` → marcador reintentable + `docs/api-error-contract.md` (NFR26)
 - [ ] **T3 — #562 cierre con evidencia + contrato honesto** (AC: 3)
-  - [ ] Corregir `LiveIdentityDirectory.php:28-30` y `DoctrineLiveIdentityDirectory.php:27-30`
-  - [ ] Comentario de cierre; registrar por separado las 5 lecturas sin `LIMIT` y el troceo
+  - [ ] Corregir `LiveIdentityDirectory.php:28-30` (sólo el puerto)
+  - [ ] Comentario de cierre; registrar las 5 lecturas sin `LIMIT`; actualizar la `Ref:` rancia de `deferred-work.md:11`
 - [ ] **T4 — #564 default + listener + doc** (AC: 4)
   - [ ] `AuditLogSchemaListener.php:51-52` (+ `:19-23`) y el mapping ORM de `User`, **luego** `make db.diff`
   - [ ] `docs/deployment-guide.md:193-197`
@@ -222,12 +241,24 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 | `api/src/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListener.php` | #564 | `:51-52` defaults, `:19-23` premisa falsa |
 | `api/migrations/2026/Version<nuevo>.php` | #564 | **nueva**; generar con `make db.diff` |
 | `docs/deployment-guide.md` | #564 | `:193-197` Rollback |
-| `PRODUCTION_SECURITY_CHECKLIST.md` | #389 | residual del path |
+| `PRODUCTION_SECURITY_CHECKLIST.md` | #389 | residual del path — **y `:360-361` ya afirma que Caddy redacta «the `token` query parameter»; ampliar la redacción la deja rancia** |
+| `api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditResourceAnonymiser.php` | #565 | docblock `:23-25`, misma premisa falsa |
+| `api/tests/Support/AuditResourceTypeRegistry.php` + `PersonResourceErasureGateTest` | #565 | extender para el tripwire |
+| `_bmad-output/implementation-artifacts/deferred-work.md` | #562 | `:11`, actualizar la `Ref:` rancia |
+
+**Rutas que no son adivinables** (varias no están donde el nombre sugiere): `api/src/Iam/Identity/Domain/Entity/User.php` ·
+`api/src/Iam/Identity/Domain/Exception/AdministratorErasureRequiresDemotion.php` ·
+`api/src/Shared/Audit/Infrastructure/Cli/EraseActorAuditTrailCommand.php` (**en `Shared/`, no en `Iam/`**) ·
+`pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts` ·
+`api/tests/Functional/Iam/Identity/DoctrineLiveIdentityDirectoryTest.php` (**no** bajo `Infrastructure/Persistence/Doctrine/`) ·
+`api/tests/Functional/Iam/Identity/Infrastructure/Persistence/Doctrine/DoctrineActiveAdministratorDirectoryTest.php`
 
 ### Patrones establecidos a REUTILIZAR (no reinventar)
 
 - **Troceo por lotes en un adaptador DBAL** → `DbalAuditLogPruner.php:40,46,48-52,84,94`: constante privada + parámetro de constructor con default + validación `< 1`. Y su test inyecta un lote pequeño: `AuditLogPrunerFunctionalTest.php:39` (`SMALL_BATCH = 2`), `:57-61`.
-- **Gate estático de fichero** → `api/tests/Unit/Shared/Architecture/` (21 clases hoy: `PersonReferenceRulesGateTest`, `ScheduleConsumptionRulesGateTest`, …). Es el hogar canónico.
+- **Gate estático de fichero** → `api/tests/Unit/Shared/Architecture/` (20 clases hoy: `PersonReferenceRulesGateTest`, `ScheduleConsumptionRulesGateTest`, …). Es el hogar canónico.
+- **⚠️ El tripwire de #565 NO se escribe de cero.** `api/tests/Support/AuditResourceTypeRegistry.php` + `PersonResourceErasureGateTest` **ya barren `api/src`** por todo tipo que llega a `AuditResource::of()` (literal *y* constante resuelta entre ficheros) y por cada `_audit_resource_type` de ruta, con reglas de derivación/wiring/witness/staleness. Es el 90 % de lo que pide AC2: **extender eso, no añadir un segundo sweep.**
+- **Y hay que acotarlo**: `api/features/backoffice/users/erase.feature:113` siembra una fila `resource_type='User'` por SQL, y `AuditActorAnonymiserFunctionalTest.php:113` construye `AuditResource::of('User', …)`. Son test, no producción — pero el tripwire tropezará con ellos.
 - **Assert sobre ausencia de llamada** → `DoctrineLiveIdentityDirectoryTest.php:65-75` (`expects($this->never())`).
 - **Interrogar `pg_locks` en vez de simular concurrencia** → `DoctrineActiveAdministratorDirectoryTest.php:111-137`.
 - **Sacar un secreto de la URL tras leerlo** → `TokenActionScreen.tsx:31,39,44` (`history.replaceState`). **No aplica a auditoría**: allí la URL es la fuente de verdad viva del filtro (`auditUrlState.ts:57-90`).
@@ -246,7 +277,8 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 
 ### Cobertura existente y huecos
 
-- **Sin cobertura de concurrencia** en ningún sitio: `deadlock`/`40P01`/`DeadlockException` → grep vacío en `api/src`, `api/config`, `docs/`.
+- **Concurrencia: sólo `40P01` sale vacío.** `deadlock` **sí** acierta, en tres sitios que hay que leer antes de tocar nada: `DoctrineActiveAdministratorDirectory.php:41,43`, `ProblemDetailsFactory.php:450` y sobre todo **`docs/adr/audit-activity-log.md:177-181`, que ya decidió NO añadir reintento síncrono** sobre esta tabla, argumentando que las clases reintentables «no contienden» en ese write. **Ese ADR hay que reconciliarlo o acotarlo explícitamente, no ignorarlo.**
+- **No existe ningún marcador «reintentable»** en `api/src/Shared/ErrorContract/Domain/Exception/` (hay `ClientError, Conflict, Forbidden, InvalidInput, InvalidSearchCriteria, InvariantViolation, NotFound, RateLimitExceeded, RateLimited, ServiceUnavailable, Unauthenticated`). Y `Doctrine\DBAL\Exception\DeadlockException` **no** es `DomainException`, así que hay que decidir además **dónde se traduce**.
 - **Sin cobertura de la ventana de migración**: ningún test aplica migraciones sobre BD con datos previos ni ejerce «código N-1 contra esquema N». Ningún gate rechaza `ADD COLUMN … NOT NULL` sin default.
 - **Sin `auditUrlState.test.ts`** — ése es el hueco si se toca `FILTER_KEYS`.
 - **Sin spec e2e de auditoría** (`pwa/tests/e2e/backoffice/`, 22 specs, ninguno `audit*`).

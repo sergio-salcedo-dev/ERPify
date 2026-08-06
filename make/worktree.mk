@@ -29,6 +29,15 @@
 #                   copy: .claude/skills/bmad-*/ is gitignored, so a fresh
 #                   checkout lacks it and /bmad-* slash commands would otherwise
 #                   be "Unknown command" inside the worktree.
+#                   It also links _bmad -> the main checkout's install. /_bmad is
+#                   gitignored too, so no worktree ever had it, and every bmad
+#                   skill dies at activation: it resolves the workflow block via
+#                   _bmad/scripts/resolve_customization.py and its config via
+#                   _bmad/bmm/config.yaml. Linked, not copied, so one installed
+#                   version and one config serve every worktree — a copy would
+#                   drift silently the first time the install is updated. The
+#                   link is relative (../../../_bmad), so moving the whole tree
+#                   keeps it resolving.
 #
 # worktree.remove / worktree.remove-all:
 # NAME=<dir|path|branch>  selects the worktree (basename under .claude/worktrees/,
@@ -71,6 +80,10 @@ worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main
 		mkdir -p "$$path/.claude/skills"; \
 		cp -a "$$path"/.agent/skills/bmad-*/ "$$path/.claude/skills/"; \
 		echo "→ seeded .claude/skills/bmad-* from tracked .agent/skills (gitignored, missing from checkout)"; \
+	fi; \
+	if [ -d "$$main/_bmad" ] && [ ! -e "$$path/_bmad" ]; then \
+		ln -s ../../../_bmad "$$path/_bmad"; \
+		echo "→ linked _bmad -> the main checkout's install (gitignored; every bmad skill reads it on activation)"; \
 	fi; \
 	if [ "$(START)" = "true" ]; then \
 		echo "→ bringing up stack erpify-$$dir"; \
