@@ -328,7 +328,14 @@ you change anything here.
       SUSPENDED/DEACTIVATED/locked walls on its own; `ReauthenticateDevice` — shared with the reset and
       invitation-accept flows, which had the identical window — re-reads the aggregate and applies
       `ensureActive()` before minting, so an admin action landing between the commit and the mint no longer
-      leaves a fresh session for a walled identity. `newPassword` is bounded 8–128 **code points** with at least
+      leaves a fresh session for a walled identity. It restores **two** of those three arms: `ensureActive()`
+      matches on `IdentityStatus`, and the lockout arm is deliberately not re-applied because the two flows
+      that could meet one clear it inside their own transaction and the third consumes a token that already
+      proves control of the mailbox. **All three flows contain that refusal identically**
+      (`ReauthenticateDeviceBestEffort`): each reaches the re-login after its own transaction committed, so
+      letting the wall decide the status would deny a mutation that happened and invite a retry the spent
+      credential or single-use token can no longer serve. The refusal is real either way — no session is
+      minted, and the walled identity meets the same wall on its next request, where the answer is truthful. `newPassword` is bounded 8–128 **code points** with at least
       one non-whitespace character, by the single `PasswordPolicy` constraint the reset, invitation-accept and
       bootstrap-CLI surfaces also carry (it used to be six literals, and the reset surface had already drifted
       to 255); `currentPassword` deliberately carries no policy — it may predate today's rule, and asserting it
@@ -570,6 +577,17 @@ mitigated state. Accepting one means recording who accepted it and against which
       the weekly CI cron runs `make composer.check.mercure-pin`, which goes red at the first
       upstream tag newer than `v0.4.2`. Tracking issue:
       [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
+- [ ] **A stolen session can stall self-service password recovery for an hour.** The per-identity budget on
+      `POST /me/password` (10 / 15 min) refuses out loud, and the documented way around it —
+      `/forgot-password` → `/reset-password` — runs on a *different* limiter that the same attacker can also
+      drain: the session reveals the address (`GET /me`), five requests spend `password_recovery_per_email`
+      (5 / hour), and exhaustion there is **silent by contract**, so the owner sees the uniform 202 and no
+      email arrives. Nothing is destroyed — the existing credential keeps working, both budgets refill on
+      sliding windows, and an administrator can suspend the identity or erase its sessions — but the owner
+      cannot self-serve a rotation for up to the longer window while an attacker keeps both buckets drained.
+      Raising or lowering either number does not remove this; closing it means a recovery path the session
+      holder cannot spend (an out-of-band channel, or an operator action). **Weigh it before the first
+      customer**, and do not cite the recovery route as an always-available escape hatch in the meantime.
 - [ ] **A credential change can sign a second browser tab out of the application, and it is accepted.** Both
       flows that replace a credential from a live browser — `ChangeMyPassword` and `CompletePasswordReset` —
       revoke **every** session and mint a replacement onto the requesting tab. A request already in flight from

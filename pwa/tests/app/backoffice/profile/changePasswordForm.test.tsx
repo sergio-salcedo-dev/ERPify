@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { Component, type ReactNode } from "react";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
@@ -45,6 +46,27 @@ function fillAndSubmit(current = "old-password", next = "new-password-1"): void 
     target: { value: next },
   });
   fireEvent.click(screen.getByTestId("change-password-form__submit"));
+}
+
+/**
+ * Stands in for the segment `error.tsx` boundary. Its only job here is to prove the form hands a non-HTTP
+ * failure to a boundary at all — before, the rejection escaped into a promise nobody awaited and the user
+ * saw the button do nothing.
+ */
+class CatchingBoundary extends Component<{ children: ReactNode }, { caught: Error | null }> {
+  public state: { caught: Error | null } = { caught: null };
+
+  public static getDerivedStateFromError(error: Error): { caught: Error } {
+    return { caught: error };
+  }
+
+  public render(): ReactNode {
+    return this.state.caught ? (
+      <p data-testid="boundary">{this.state.caught.message}</p>
+    ) : (
+      this.props.children
+    );
+  }
 }
 
 beforeEach(() => {
@@ -243,5 +265,20 @@ describe("<ChangePasswordForm>", () => {
     expect(await screen.findByTestId("change-password-form__mutation-error")).toBeInTheDocument();
     expect(screen.getByTestId("change-password-form")).toBeInTheDocument();
     expect(screen.queryByTestId("change-password-form__success")).not.toBeInTheDocument();
+  });
+
+  it("hands a failure that is not an HttpError to the error boundary instead of dying silently", async () => {
+    // A broken container binding, not a rejected password: the form must not dress it up as one, and it must
+    // not swallow it either — the submit button appearing inert is a failure mode nobody chose.
+    changePassword.mockRejectedValue(new Error("the container is broken"));
+
+    render(
+      <CatchingBoundary>
+        <ChangePasswordForm />
+      </CatchingBoundary>,
+    );
+    fillAndSubmit();
+
+    expect(await screen.findByTestId("boundary")).toHaveTextContent("the container is broken");
   });
 });

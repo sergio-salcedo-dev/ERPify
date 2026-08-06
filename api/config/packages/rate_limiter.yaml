@@ -83,9 +83,17 @@ framework:
         # What it does and does not buy: an attacker holding the session is delayed, not stopped — the budget
         # lives in the cache pool, so a deploy or a second worker resets or splits it, and `lock_factory: null`
         # lets the count drift under concurrency. It is an attenuator; the wall is the persisted lockout on the
-        # login route. The legitimate owner spends the same bucket on mistyped current passwords and is locked
-        # out of THIS route on exhaustion — /forgot-password → /reset-password is on a different limiter and
-        # goes around it, which is what makes the visible refusal affordable here.
+        # login route.
+        #
+        # The owner pays for it too, and the recovery route is NOT a reliable way out. Spending this bucket on
+        # mistyped current passwords locks the owner out of this route, and the obvious detour —
+        # /forgot-password → /reset-password — runs on `password_recovery_per_email`, which the same attacker
+        # can drain: the session they hold reveals the address (`GET /me`), five requests spend an hour-long
+        # budget, and exhaustion there is SILENT by contract, so the owner meets a 202 and no email. What makes
+        # the refusal affordable is therefore not an always-open detour but that nothing is destroyed: the
+        # credential still works, the budget refills on a sliding window, and an administrator can act. The
+        # residual — an attacker with a live session can stall self-service recovery for the length of the
+        # longer window — is named in PRODUCTION_SECURITY_CHECKLIST.md rather than argued away here.
         password_change_per_identity:
             policy: 'sliding_window'
             limit: '%env(int:RATE_LIMIT_PASSWORD_CHANGE_PER_IDENTITY_LIMIT)%'

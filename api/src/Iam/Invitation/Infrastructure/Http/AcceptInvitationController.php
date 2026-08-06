@@ -6,7 +6,7 @@ namespace Erpify\Iam\Invitation\Infrastructure\Http;
 
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
-use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice;
+use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort;
 use Erpify\Iam\Invitation\Application\AcceptInvitation;
 use Erpify\Iam\Invitation\Domain\Exception\InvalidToken;
 use Erpify\Iam\Invitation\Infrastructure\Security\InvitationAcceptThrottle;
@@ -17,7 +17,8 @@ use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 
 /**
  * `POST /api/v1/backoffice/invitations/accept` — the one public write of the invitation flow. It is a
- * `PUBLIC_ACCESS` route INSIDE the `main` firewall (like `/login`), so {@see ReauthenticateDevice} resolves the
+ * `PUBLIC_ACCESS` route INSIDE the `main` firewall (like `/login`), so
+ * {@see ReauthenticateDeviceBestEffort} resolves the
  * firewall and the established login path — the anti-fixation session `migrate(true)` and
  * {@see \Erpify\Iam\Identity\Infrastructure\Security\SessionMintingSuccessListener} — is reused rather than
  * duplicated.
@@ -55,7 +56,7 @@ final readonly class AcceptInvitationController
     public function __construct(
         private AcceptInvitation $acceptInvitation,
         private PasswordHasher $passwordHasher,
-        private ReauthenticateDevice $reauthenticateDevice,
+        private ReauthenticateDeviceBestEffort $reauthenticateDevice,
         private InvitationAcceptThrottle $throttle,
     ) {
     }

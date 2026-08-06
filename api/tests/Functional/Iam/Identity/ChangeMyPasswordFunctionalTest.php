@@ -30,12 +30,11 @@ use Symfony\Component\HttpFoundation\Response;
  * surviving session, neither of the two that existed before — at the cost that Behat contributes nothing to
  * the coverage report.
  *
- * The **containment** of a failed re-login — the `catch` that keeps the response 204 and sends the failure to
- * the log at `critical` — is asserted by NEITHER suite, and saying so here is the point: an earlier version of
- * this docblock delegated it to that feature file, which contains no such scenario, so the reader was pointed
- * at an assertion that does not exist. What it would take is recorded as a pending item in
- * `_bmad-output/implementation-artifacts/deferred-work.md`; the wall that runs before the mint is pinned
- * separately and falsifiably by `ReauthenticateDeviceTest`.
+ * The **containment** of a failed re-login is no longer this controller's branch to cover: it belongs to
+ * `ReauthenticateDeviceBestEffort`, shared by the three flows that re-authenticate post-commit, and is pinned
+ * there — swallowed, logged `critical`, no session minted — by `ReauthenticateDeviceBestEffortTest`. The wall
+ * that runs before the mint is pinned by `ReauthenticateDeviceTest`. Both are unit tests over real
+ * collaborators, so neither depends on a firewall this harness cannot give them.
  *
  * @internal
  */

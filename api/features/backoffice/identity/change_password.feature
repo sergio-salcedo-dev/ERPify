@@ -186,9 +186,11 @@ Feature: Change my own password from a live session
     And 0 notification emails were sent
     And I reload the fixtures
 
-  # A live lockout is orthogonal to `ACTIVE`, so it never bars this route — and clearing it is a decision, not
-  # a side effect inherited from the programmatic login: re-proving the current secret and rotating it is
-  # stronger evidence than the reset flow already accepts for the same relief.
+  # A live lockout is orthogonal to `ACTIVE`, so it never bars this route, and it is gone by the end of the
+  # request. This scenario asserts that OUTCOME and nothing finer: the post-commit login also fires
+  # `ClearLockoutOnLoginSuccess`, so deleting the explicit `clearLockout()` leaves it green. That the clearing
+  # is a decision of the use case rather than a side effect inherited two layers away is pinned where it can
+  # go red — `ChangeMyPasswordTest`, over doubles that mint no session.
   Scenario: A locked identity that re-proves its password changes it and leaves unlocked
     Given the stored events are cleared
     And I execute the SQL query "UPDATE identity_user SET failed_attempts = 10, locked_until = '2099-01-01 00:00:00' WHERE email = 'alice@erpify.test'"

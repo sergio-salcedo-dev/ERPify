@@ -39,7 +39,6 @@ final readonly class ReauthenticateDevice
 
     public function __construct(
         private UserRepository $users,
-        private UserProvider $userProvider,
         private Security $security,
     ) {
     }
@@ -54,9 +53,10 @@ final readonly class ReauthenticateDevice
 
         $user->ensureActive();
 
-        $this->security->login(
-            $this->userProvider->loadUserByIdentifier($emailIdentifier),
-            firewallName: self::FIREWALL,
-        );
+        // The security adapter is built from the aggregate already in hand rather than re-resolved through
+        // the user provider: that provider's whole body is this same lookup followed by this same wrapping,
+        // so routing through it would run the identity query twice per re-login and give the firewall a
+        // second, unlocked read of a row this method has already decided about.
+        $this->security->login(new SecurityUser($user), firewallName: self::FIREWALL);
     }
 }

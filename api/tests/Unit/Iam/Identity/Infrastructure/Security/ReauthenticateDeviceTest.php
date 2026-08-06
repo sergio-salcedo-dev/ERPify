@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
-use Erpify\Iam\Identity\Application\PreIdentityTimingFloor;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice;
-use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use LogicException;
@@ -100,10 +98,6 @@ final class ReauthenticateDeviceTest extends TestCase
     {
         $users = new InMemoryUserRepository($user);
 
-        return new ReauthenticateDevice(
-            $users,
-            new UserProvider($users, $this->createStub(PreIdentityTimingFloor::class)),
-            $security,
-        );
+        return new ReauthenticateDevice($users, $security);
     }
 }

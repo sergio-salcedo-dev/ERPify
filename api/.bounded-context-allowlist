@@ -88,8 +88,9 @@ src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Er
 # it through GrantMembership (so a user never exists without a membership), and mints the Invitation; on accept,
 # AcceptInvitation loads and activates the identity through its UserRepository port + HashedPassword value
 # object, reading its IdentityStatus to keep a SENT/non-INVITED desync opaque; the HTTP adapter hashes via the
-# Identity PasswordHasher and re-authenticates through its ReauthenticateDevice, which is also what re-reads the
-# aggregate so the admission wall is weighed in full rather than the half a programmatic login runs.
+# Identity PasswordHasher and re-authenticates through its ReauthenticateDeviceBestEffort, which re-reads the
+# aggregate so the admission wall is weighed in full rather than the half a programmatic login runs, and contains
+# the refusal so a walled identity cannot turn an accept that already committed into a 403.
 # Same recurring Iam → Identity/Organization direction that II-1/II-7 established — every entry is a published
 # Application service, a domain port, or a shared value object, never a reach into internals.
 src/Iam/Invitation/Application/AcceptInvitation.php => Erpify\Iam\Identity\Domain\Repository\UserRepository
@@ -100,7 +101,7 @@ src/Iam/Invitation/Application/SendInvitation.php => Erpify\Organization\Members
 src/Iam/Invitation/Application/ResendInvitation.php => Erpify\Iam\Identity\Domain\Repository\UserRepository
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Domain\HashedPassword
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
-src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice
+src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort
 
 # Password reset → revoke every session. RevokeSessionsBestEffort (Iam/Identity Application) consumes the
 # published RevokeAllSessions use case (Iam/Session) to invalidate all of the user's sessions after a credential

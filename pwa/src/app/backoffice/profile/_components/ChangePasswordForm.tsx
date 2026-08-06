@@ -57,6 +57,11 @@ const emptySubscribe = () => () => {};
 export function ChangePasswordForm() {
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [changed, setChanged] = useState(false);
+  // A failure that is not an `HttpError` is not this form's to explain — a broken container binding is not a
+  // rejected password. Throwing it from the submit callback only rejects a promise nobody awaits, so the
+  // button appears to do nothing; parking it here and re-throwing during render hands it to the segment
+  // error boundary, which is the surface this application already built for "something broke".
+  const [fatal, setFatal] = useState<unknown>(null);
 
   // Until React wires the submit handler, a native submit performs a GET that would put
   // both passwords into the URL, history and access logs. Gating the submit button on
@@ -133,10 +138,15 @@ export function ChangePasswordForm() {
       setProblem(null);
       setChanged(true);
     } catch (error) {
-      if (!(error instanceof HttpError)) throw error;
+      if (!(error instanceof HttpError)) {
+        setFatal(() => error);
+        return;
+      }
       handleHttpError(error);
     }
   });
+
+  if (fatal !== null) throw fatal;
 
   // Deliberately not `<SecuritySignal>`: that card owns an `<h1>` it moves focus to and a
   // "Enter the dashboard" link, both of which belong to the token-action screens it was
