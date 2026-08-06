@@ -71,14 +71,45 @@ queda — la retención GDPR-proof.
 
 ### BR-4 · Endurecimiento de identidad — el grafo de recuperación
 
-**Issues:** #435 #436 #505 #602 **+ el residual S1** registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7
-**Toca:** `Iam/Identity`, `Iam/Invitation`
-**Concepto común:** **#602 y el residual S1 son el mismo hueco visto dos veces** — un atacante con sesión
-puede cortar las aristas de recuperación. S1 se midió el 2026-08-05: la sesión revela el email (`GET /me`),
-cinco peticiones agotan `password_recovery_per_email` (5/hora) y su agotamiento es **silencioso por
-contrato**, así que el dueño ve un 202 y ningún correo. Cerrarlo de verdad exige una vía de recuperación que
-el poseedor de la sesión no pueda gastar. #435/#436 son la ruta caliente de auth (datos corruptos → 500;
-canonicalización de email sin NFC).
+**Issues:** #435 #436 #505 #602
+**Toca:** `Iam/Identity`, `Iam/Invitation`, y **NO** `Iam/Session` (ver la trampa, abajo)
+
+**Concepto común:** la ruta caliente de auth (#435 datos corruptos → 500; #436 canonicalización de email sin
+NFC) y el grafo de recuperación (#505 delegación de rol; #602 sus dos aristas).
+
+**Lo que este lote NO es, medido y corregido en #645.** Una versión anterior de este plan decía que un
+atacante con sesión robada puede «estancar la recuperación self-service» y que cerrarlo exige una vía que el
+poseedor de la sesión no pueda gastar. **Eso medía el verbo equivocado.** La rotación de credencial no es el
+objetivo de seguridad; la **expulsión** lo es — y la expulsión ya tiene una vía que ningún presupuesto gatea:
+
+- `POST /sessions/revoke-others` **no lleva limitador de ningún tipo** — todos los throttles del repo viven en
+  `Iam/Identity` o `Iam/Invitation`, ninguno en `Iam/Session` —, solo exige una sesión viva, y ya se entrega
+  en el PWA como *Active sessions*.
+- La ruta del dueño a una sesión viva está intacta: la credencial sigue funcionando, una sesión robada **no
+  alimenta el lockout** (`LoginAttemptRegistrar` se alcanza solo desde el handler de fallo de login, nunca
+  desde el cambio de contraseña), y el lock persistido lo aplica `UserChecker::checkPostAuth`, nunca
+  `SessionAdmissionGate`.
+- La secuencia real es **entrar → `GET /sessions` (la fila del intruso aparece, con su etiqueta de
+  dispositivo) → `revoke-others`**. La rotación retrasada es higiene *después*, contra alguien que ya no tiene
+  nada.
+- La carrera **no es simétrica**: los dos pueden disparar `revoke-others`, pero el dueño vuelve con la
+  credencial y una cookie revocada está muerta sin forma de re-acuñarse. Cada asalto le cuesta un login.
+
+**Lo que sí sobrevive es una composición, y es exactamente #602:** un atacante que *además* dispara el lockout
+por email (10 fallos → `PT15M`, con ≥2 direcciones origen para esquivar el throttle por IP) le niega al dueño
+la sesión que la expulsión necesita. Hasta que #602 cierre, lo que el producto debe es **guía de orden —
+expulsa primero, rota después** — en el copy de la UI y en el correo de contraseña cambiada.
+
+> **TRAMPA — léela antes de tocar nada.** Que `revoke-others` no lleve limitador es **deliberado y
+> load-bearing**: es la única arista que un adversario no puede gastar. Ponerle un throttle «por coherencia»
+> destruiría el remedio del dueño y convertiría #602 en irreparable. **No lo endurezcas.** Está anotado en
+> `PRODUCTION_SECURITY_CHECKLIST.md` §7 y en el propio `RevokeOtherSessionsController`.
+
+**Registro de la corrección:** el residual se midió mal la primera vez (2026-08-05) y lo corrigió #645 el
+2026-08-06 — midiendo *qué remedio existe* en vez de *qué presupuesto se agota*. El error no fue de dato sino
+de pregunta: medí el presupuesto que el atacante puede drenar sin comprobar antes si el remedio dependía de
+él. Vale la pena conservarlo porque es reproducible: un residual redactado desde el mecanismo, y no desde el
+objetivo de seguridad, exagera la exposición.
 
 ### BR-5 · Ciclo de vida de `iam_session`
 
@@ -112,7 +143,7 @@ petición 60 s).
 
 1. **BR-2** — el único con consecuencia legal, los cuatro medidos y confirmados, y su arreglo más barato
    (redacción en el Caddyfile) cierra un sumidero duradero sin tocar UX.
-2. **BR-4** — absorbe el residual S1, que hoy no tiene dueño en ningún issue.
+2. **BR-4** — porque #602 es lo único que queda del residual de sesión robada tras la corrección de #645, y hasta que cierre lo que el producto debe es **guía de orden** en el copy, no código.
 3. **BR-6** — un gate que no corre invalida la confianza en todos los demás; barato y sin producción.
 4. **BR-1**, **BR-3**, **BR-5**, luego **BR-7** y **BR-8**.
 
