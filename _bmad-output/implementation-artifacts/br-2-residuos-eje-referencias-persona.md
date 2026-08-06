@@ -7,19 +7,18 @@ Status: ready-for-dev
 
 ---
 
-## 🚦 BLOQUEO — tres decisiones antes de escribir código
+## Decisiones tomadas (2026-08-06)
 
-**La medición contra el código refuta la disposición planificada en 3 de los 4 issues.** La épica los declaró
-«los cuatro medidos y confirmados»; no lo están. Ningún dev agent debe elegir por su cuenta entre estas
-opciones: cada una cambia qué se entrega y qué se cierra.
+**La medición contra el código refutó la disposición planificada en 3 de los 4 issues.** La épica los declaró
+«los cuatro medidos y confirmados»; no lo estaban. Las tres decisiones que eso abrió están resueltas:
 
-| # | Decisión | Por qué no se puede asumir |
+| # | Decisión | Resuelto |
 |---|---|---|
-| **D1** | **#389** — ¿alcance del arreglo: solo la vía del documento, o también la de la API? | El arreglo «más barato» de la épica (`replace actorId REDACTED` en Caddy) **no cierra el sumidero**: la petición de API lleva el id bajo `filters[N][value]` (`buildSearchParams.ts:17-26`), clave que ningún `replace actorId` alcanza. Cubrirla exige enumerar 9 índices posicionales y **redacta también ejes no-PII** (nivel, acción, fechas) → pérdida real de diagnóstico. Es un intercambio observabilidad↔privacidad, no un detalle técnico. |
-| **D2** | **#565** — ¿cerrar con evidencia, o implementar la sentencia `OR`? | El ABBA **no es alcanzable**: suspender/degradar a un peer no escribe ninguna fila de auditoría (`User` no es `AuditedEntity`, `User.php:38-41`), así que las «dos filas recíprocas» no pueden existir. Y la sentencia `OR` tal como la describe el issue **regresaría GDPR** y destruiría evidencia de terceros (ver §#565). |
-| **D3** | **#564** — ¿alcance: 2 columnas de `audit_log`, o las 4 del repo + un gate? | La «tensión» que el issue pide no re-litigar **descansa sobre un error de hecho** (el schema listener *sí* puede expresar defaults; tres listeners hermanos lo hacen). Caída la premisa, el arreglo es barato — lo que reabre si aplicarlo a las 4 columnas y blindarlo con un gate. |
+| **D1** | **#389** — alcance de la redacción | **Ambas vías: documento + API.** El arreglo «más barato» de la épica no cierra el sumidero — la petición de API lleva el id bajo `filters[N][value]` (`buildSearchParams.ts:17-26`), clave que ningún `replace actorId` alcanza. Se acepta el coste: redactar `filters[N][value]` se lleva también nivel, acción y fechas, y el log de acceso deja de poder responder «qué filtro se aplicó». |
+| **D2** | **#565** — cerrar o implementar | **Cerrar con evidencia + tripwire + mapear `40P01`.** El ABBA no es alcanzable y la sentencia `OR` es un arreglo peor que el defecto. Lo que sí tiene valor es que `40P01` no está mapeado a nada reintentable en todo el repo — y mapearlo cubre además `event_store`, cuyo `payload::text ILIKE` sí fuerza seq scan y bloqueo amplio. |
+| **D3** | **#564** — 2 columnas o 4 + gate | **4 columnas + gate.** El patrón afecta a 4 columnas en 2 tablas, no 2. El issue pide «decidir una vez»; el gate es lo que hace que la decisión sobreviva a la próxima migración. |
 
-**#562 no tiene decisión: tiene un hecho.** El issue describe un N+1 vía `UserRepository::findById()` que **ya no
+**#562 no tenía decisión: tenía un hecho.** El issue describe un N+1 vía `UserRepository::findById()` que **ya no
 existe** (entregado en G-1c/#634). Se cierra con evidencia; lo que queda es otra deuda, ya registrada en
 `deferred-work.md:11`, y **no es #562**.
 
@@ -147,9 +146,10 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 
 ## Acceptance Criteria
 
-### AC1 — #389: ningún id de persona alcanza el log de acceso por la vía elegida en **D1**
+### AC1 — #389: ningún id de persona alcanza el log de acceso, por ninguna de las dos vías
 
-- La redacción del Caddyfile cubre el conjunto de parámetros que **D1** determine.
+- La redacción del Caddyfile cubre **ambas**: los nombres directos (`actorId`, `resourceId`, `correlationId`) y los posicionales `filters[0..8][value]` — 8 es el máximo que `toAuditFilters` puede emitir (`auditSearchCriteria.ts:23-56`); verificar ese tope antes de fijar el rango.
+- La pérdida de diagnóstico es **aceptada y declarada**: redactar `filters[N][value]` borra también nivel, tipo de actor, acción y fechas del log de acceso. Anotarlo donde vive la garantía, no solo en el PR.
 - `CaddyfileAccessLogRedactionGateTest.php` asserta cada parámetro nuevo, y **sigue asertando `authorization` y `token`**.
 - Los dos docblocks que hoy se autocontradicen quedan coherentes con el código: `auditUrlState.ts:45-52` y `auditFilter.ts:6-8`.
 - El id de persona en el **path** (`ApiEndpoints.ts:38`) queda declarado como residual aceptado en `PRODUCTION_SECURITY_CHECKLIST.md`, con su razón (el filtro `query` de Caddy no lo alcanza).
@@ -158,7 +158,8 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 
 - El comentario de cierre (o de re-encuadre) cita la evidencia: `User.php:38-41`, `AdministratorErasureRequiresDemotion.php:15-18`, y que `'User'` aparece una sola vez en `api/src`.
 - Existe un test que **se pone rojo el día que el ABBA se vuelve alcanzable** — es decir, cuando aparezca un escritor de `resource_type='User'` ajeno a la transacción. Precedente de forma: `DoctrineActiveAdministratorDirectoryTest.php:111-137` interroga `pg_locks` para `pg_backend_pid()` en vez de simular concurrencia.
-- Si **D2** elige implementar: `40P01` se mapea a un marcador reintentable del contrato RFC 9457, y `docs/api-error-contract.md` se actualiza (NFR26, obligatorio).
+- **`40P01` se mapea a un marcador reintentable** del contrato RFC 9457 (hoy sale 500), y `docs/api-error-contract.md` se actualiza — **obligatorio, NFR26**. El mapeo cubre también `event_store`, cuyo `payload::text ILIKE '%S%'` (`DbalEventStoreSubjectAnonymiser.php:68`) sí fuerza seq scan y bloqueo amplio: ahí el deadlock **sí** es plausible, y es la razón de que esto valga más que el ABBA del issue.
+- **NO se implementa la sentencia `OR`.** Los cinco motivos están arriba (§#565); el principal es que regresaría GDPR y destruiría evidencia de terceros.
 
 ### AC3 — #562: se cierra con evidencia y la deuda restante queda nombrada correctamente
 
@@ -168,10 +169,11 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 
 ### AC4 — #564: la clase de defecto se cierra por la vía reachable
 
-- Migración **nueva** (jamás editar `Version20260723151422.php` ni `Version20260626215406.php`) con `ALTER COLUMN … SET DEFAULT FALSE` para el conjunto que **D3** determine; `down()` reversible.
-- `AuditLogSchemaListener.php:51-52` declara los defaults, y `:19-23` deja de afirmar lo que sus tres hermanos desmienten.
+- Migración **nueva** (jamás editar `Version20260723151422.php` ni `Version20260626215406.php`, ambas mergeadas) con `ALTER COLUMN … SET DEFAULT` para **las cuatro columnas**: `audit_log.actor_erased`, `audit_log.resource_erased`, `identity_user.status` (`'ACTIVE'`), `identity_user.failed_attempts` (`0`); `down()` reversible.
+- `AuditLogSchemaListener.php:51-52` declara los defaults, y `:19-23` deja de afirmar lo que sus tres hermanos desmienten. El mapping ORM de `User` cubre las dos de `identity_user`.
+- **Generar la migración con `make db.diff` DESPUÉS de tocar el listener y el mapping** — no a mano: el listener es la fuente de verdad de `audit_log`, que no tiene entidad ORM.
 - `docs/deployment-guide.md:193-197` (Rollback) recoge la regla: una columna `NOT NULL` añadida sin `DEFAULT` rompe cada `INSERT` tras un rollback de imagen.
-- Si **D3** elige el gate: un `*RulesGateTest` en `api/tests/Unit/Shared/Architecture/` que falle sobre `ALTER COLUMN \w+ DROP DEFAULT` en `api/migrations/**` cuando la columna es `NOT NULL`.
+- **Gate**: un `*RulesGateTest` en `api/tests/Unit/Shared/Architecture/` que falle sobre `ALTER COLUMN \w+ DROP DEFAULT` en `api/migrations/**` cuando la columna es `NOT NULL`. Debe **provocarse en rojo** antes de darlo por bueno (no basta con que pase): las cuatro migraciones existentes son el caso de prueba, así que el gate necesita una exención explícita para ellas o se corrige el histórico — decidir al escribirlo y dejarlo dicho.
 
 ### AC5 — Gates y proceso
 
@@ -184,23 +186,23 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 
 ## Tasks / Subtasks
 
-- [ ] **T0 — Resolver D1, D2, D3 con Sergio.** Bloquea todo lo demás. (AC: 1,2,4)
+- [x] **T0 — D1/D2/D3 resueltas** (2026-08-06): ambas vías · cerrar+tripwire+`40P01` · 4 columnas + gate
 - [ ] **T1 — #389 redacción del log** (AC: 1)
-  - [ ] `api/frankenphp/Caddyfile:24-29` — añadir los `replace` del alcance D1
+  - [ ] `api/frankenphp/Caddyfile:24-29` — `replace` para los 3 nombres directos **y** `filters[0..8][value]`
   - [ ] Extender `api/tests/Unit/Shared/Architecture/CaddyfileAccessLogRedactionGateTest.php` — **ojo: el regex `[^}]*` (`:27-37`) no cruza `}`; las entradas nuevas deben ser hermanas dentro del mismo `request>uri query { … }`**
   - [ ] Corregir docblocks `auditUrlState.ts:45-52` y `auditFilter.ts:6-8`
   - [ ] `PRODUCTION_SECURITY_CHECKLIST.md` — el residual del path
 - [ ] **T2 — #565 clasificación + tripwire** (AC: 2)
   - [ ] Test que se pone rojo cuando aparezca un escritor externo de `resource_type='User'`
   - [ ] Comentario de cierre/re-encuadre con la evidencia
-  - [ ] (Si D2 = implementar) mapeo `40P01` + `docs/api-error-contract.md`
+  - [ ] Mapeo `40P01` → marcador reintentable + `docs/api-error-contract.md` (NFR26)
 - [ ] **T3 — #562 cierre con evidencia + contrato honesto** (AC: 3)
   - [ ] Corregir `LiveIdentityDirectory.php:28-30` y `DoctrineLiveIdentityDirectory.php:27-30`
   - [ ] Comentario de cierre; registrar por separado las 5 lecturas sin `LIMIT` y el troceo
 - [ ] **T4 — #564 default + listener + doc** (AC: 4)
-  - [ ] `AuditLogSchemaListener.php:51-52` (+ `:19-23`), **luego** `make db.diff` para generar la migración desde el listener
+  - [ ] `AuditLogSchemaListener.php:51-52` (+ `:19-23`) y el mapping ORM de `User`, **luego** `make db.diff`
   - [ ] `docs/deployment-guide.md:193-197`
-  - [ ] (Si D3 = gate) `*RulesGateTest` sobre `api/migrations/**`
+  - [ ] `*RulesGateTest` sobre `api/migrations/**` — **provocarlo en rojo**, y resolver qué hacer con las 4 migraciones históricas que lo violan
 - [ ] **T5 — Gates, pase adversarial, PR draft** (AC: 5)
 
 ---
@@ -224,7 +226,6 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 
 ### Patrones establecidos a REUTILIZAR (no reinventar)
 
-- **`SET` selectivo por columna en un `UPDATE` con `OR`** → `DbalEventStoreSubjectAnonymiser.php:61-75` ya lo hace con `CASE WHEN`. Es la plantilla si D2 = implementar.
 - **Troceo por lotes en un adaptador DBAL** → `DbalAuditLogPruner.php:40,46,48-52,84,94`: constante privada + parámetro de constructor con default + validación `< 1`. Y su test inyecta un lote pequeño: `AuditLogPrunerFunctionalTest.php:39` (`SMALL_BATCH = 2`), `:57-61`.
 - **Gate estático de fichero** → `api/tests/Unit/Shared/Architecture/` (21 clases hoy: `PersonReferenceRulesGateTest`, `ScheduleConsumptionRulesGateTest`, …). Es el hogar canónico.
 - **Assert sobre ausencia de llamada** → `DoctrineLiveIdentityDirectoryTest.php:65-75` (`expects($this->never())`).
