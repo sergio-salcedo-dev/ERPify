@@ -149,7 +149,7 @@ describe("ChangePasswordSchema", () => {
       newPassword: "a-brand-new-password",
     });
 
-    expect(astral.length).toBe(400);
+    expect(astral).toHaveLength(400);
     expect(accepted.success).toBe(true);
   });
 

@@ -1,5 +1,5 @@
 # generated: 2026-06-23
-# last_updated: 2026-08-04
+# last_updated: 2026-08-06
 # project: ERPify
 # project_key: NOKEY
 # tracking_system: file-system
@@ -336,6 +336,28 @@ development_status:
   # Mientras G-5 no cierre, la épica NO puede declararse completada.
   g-5-ids-de-persona-fuera-del-event-store: done
   epic-gdpr-hardening-retrospective: done
+
+  # Épica de resolución del backlog de issues — _bmad-output/planning-artifacts/epics-backlog-resolution.md
+  # Cada clave es UN PR. Agrupan por fichero y concepto compartido, no por etiqueta: el criterio es que un
+  # revisor pueda leer el PR entero con un solo modelo mental.
+  #
+  # NO cuentan para el cierre de esta épica tres grupos reclasificados en el fichero de la épica:
+  #   · épicas disfrazadas (#268 #266 #267 #462 #549 #373) — reetiquetar `epic`, sacar del conteo
+  #   · decisiones, no código (#222 #295 #263 #567) — se resuelven en conversación, no en un PR
+  #   · vigilancias ya automatizadas (#593 #196 #420) — disparadores, no tareas
+  #
+  # El barrido del 2026-08-06 cerró 11 de 65 midiendo cada issue CONTRA EL CÓDIGO, no contra su título, y
+  # corrigió otros 4. Los 11 eran recientes, no viejos: el backlog se pudre por lo que se entrega, no por el
+  # tiempo. Un issue solo se cierra con evidencia medida en el comentario de cierre.
+  epic-backlog-resolution: backlog
+  br-1-behat-vocabulario-falsabilidad: backlog
+  br-2-residuos-eje-referencias-persona: backlog
+  br-3-auditoria-crypto-cierres-eje-3: backlog
+  br-4-endurecimiento-identidad-grafo-recuperacion: backlog
+  br-5-ciclo-de-vida-iam-session: backlog
+  br-6-gates-arquitectura-ci: backlog
+  br-7-listas-backoffice: backlog
+  br-8-operabilidad: backlog
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.
