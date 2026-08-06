@@ -38,6 +38,8 @@ final class RateLimitContext extends AbstractContext implements Context
         private readonly RateLimiterFactoryInterface $perEmailLimiter,
         #[Autowire(service: 'limiter.token_action_per_selector')]
         private readonly RateLimiterFactoryInterface $perSelectorLimiter,
+        #[Autowire(service: 'limiter.password_change_per_identity')]
+        private readonly RateLimiterFactoryInterface $perIdentityLimiter,
     ) {
     }
 
@@ -70,6 +72,16 @@ final class RateLimitContext extends AbstractContext implements Context
     public function theTokenActionBudgetIsExhaustedForSelector(string $selector): void
     {
         $this->exhaust($this->perSelectorLimiter->create($selector), 'token_action_per_selector');
+    }
+
+    /**
+     * Key derivation mirrors {@see \Erpify\Iam\Identity\Infrastructure\Security\PasswordChangeThrottle}: the
+     * bucket is keyed by the signed-in identity's id, which the controller reads off the security token.
+     */
+    #[Given('the password-change budget is exhausted for identity :identityId')]
+    public function thePasswordChangeBudgetIsExhaustedForIdentity(string $identityId): void
+    {
+        $this->exhaust($this->perIdentityLimiter->create($identityId), 'password_change_per_identity');
     }
 
     /**

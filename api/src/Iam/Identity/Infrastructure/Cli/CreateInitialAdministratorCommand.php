@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Application\CreateUser;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
+use Erpify\Iam\Identity\Infrastructure\Security\PasswordPolicyCheck;
 use Erpify\Organization\Membership\Application\GrantMembership;
 use Erpify\Shared\Access\Domain\Role;
 use Override;
@@ -31,6 +32,14 @@ use Throwable;
  * Roles are written to both the identity and the membership: the membership is the authoritative,
  * org-scoped home for roles, while the identity's role list stays the operative source the session firewall
  * reads today (the auth path is re-pointed at the membership in a later story, not here).
+ *
+ * The coupling is the shape of a composition root, not a smell to refactor away. This command is the one
+ * place that joins two bounded contexts — `CreateUser` in Identity and `GrantMembership` in Organization —
+ * around a single transaction, precisely because no Application layer may know both. Lifting the body into
+ * an Application use case would not reduce the coupling; it would move it inward and demand a cross-context
+ * seam to hold it there.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[AsCommand(
     name: 'organization:administrator:create',
@@ -43,6 +52,7 @@ final class CreateInitialAdministratorCommand extends Command
         private readonly GrantMembership $grantMembership,
         private readonly PasswordHasher $passwordHasher,
         private readonly EntityManagerInterface $entityManager,
+        private readonly PasswordPolicyCheck $passwordPolicyCheck,
     ) {
         parent::__construct();
     }
@@ -75,8 +85,13 @@ final class CreateInitialAdministratorCommand extends Command
 
         $plainPassword = $this->resolvePassword($input, $io);
 
-        if ('' === $plainPassword) {
-            $io->error('The password must not be empty.');
+        // The policy is weighed before anything is built, hashed or persisted: this is input validation, and
+        // it is the same policy the three HTTP surfaces enforce. The bootstrap account is the most privileged
+        // one the installation will ever hold, so it is the last place that should admit a weaker credential.
+        $violations = $this->passwordPolicyCheck->violationsFor($plainPassword);
+
+        if ([] !== $violations) {
+            $io->error($violations);
 
             return Command::INVALID;
         }

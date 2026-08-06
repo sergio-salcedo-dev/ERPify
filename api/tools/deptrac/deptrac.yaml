@@ -475,7 +475,7 @@ deptrac:
         Erpify\Iam\Invitation\Infrastructure\Http\AcceptInvitationController:
             - Erpify\Iam\Identity\Domain\HashedPassword
             - Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
-            - Erpify\Iam\Identity\Infrastructure\Security\UserProvider
+            - Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort
         Erpify\Iam\Identity\Application\RevokeSessionsBestEffort:
             - Erpify\Iam\Session\Application\RevokeAllSessions
         Erpify\Iam\Identity\Application\FulfilIdentityErasure:

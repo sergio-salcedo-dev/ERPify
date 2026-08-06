@@ -5,7 +5,10 @@ import { container } from "@/context/shared/dependency-injection/infrastructure/
 import type { IdentityRepository } from "@/context/shared/access/domain/IdentityRepository";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
-import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import type {
+  ProblemDetails,
+  ProblemViolation,
+} from "@/context/shared/error/domain/ProblemDetails";
 import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
   ChangePasswordSchema,
@@ -54,6 +57,11 @@ const emptySubscribe = () => () => {};
 export function ChangePasswordForm() {
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [changed, setChanged] = useState(false);
+  // A failure that is not an `HttpError` is not this form's to explain — a broken container binding is not a
+  // rejected password. Throwing it from the submit callback only rejects a promise nobody awaits, so the
+  // button appears to do nothing; parking it here and re-throwing during render hands it to the segment
+  // error boundary, which is the surface this application already built for "something broke".
+  const [fatal, setFatal] = useState<unknown>(null);
 
   // Until React wires the submit handler, a native submit performs a GET that would put
   // both passwords into the URL, history and access logs. Gating the submit button on
@@ -83,12 +91,15 @@ export function ChangePasswordForm() {
     setProblem(null);
   };
 
-  const failViolations = (problemDetails: ProblemDetails): void => {
+  // The entries arrive already narrowed by the caller's guard rather than being re-widened here: a
+  // `?? []` at the loop would be a branch no input can reach, and the only way to cover it would be to
+  // fabricate a call the code does not make.
+  const failViolations = (problemDetails: ProblemDetails, entries: ProblemViolation[]): void => {
     // Map server-side violations onto the same RHF errors object client validation
     // populates, so both surface via `errors[name]?.message` with no parallel channel.
     let mappedAny = false;
     let unmappedExist = false;
-    for (const violation of problemDetails.violations ?? []) {
+    for (const violation of entries) {
       const field = baseField(violation.field);
       if (isChangePasswordField(field)) {
         setError(field, { type: "server", message: violation.message });
@@ -114,7 +125,7 @@ export function ChangePasswordForm() {
       problemDetails.status === HttpStatus.UNPROCESSABLE_ENTITY &&
       problemDetails.violations?.length
     ) {
-      failViolations(problemDetails);
+      failViolations(problemDetails, problemDetails.violations);
       return;
     }
     setProblem(problemDetails);
@@ -127,10 +138,15 @@ export function ChangePasswordForm() {
       setProblem(null);
       setChanged(true);
     } catch (error) {
-      if (!(error instanceof HttpError)) throw error;
+      if (!(error instanceof HttpError)) {
+        setFatal(() => error);
+        return;
+      }
       handleHttpError(error);
     }
   });
+
+  if (fatal !== null) throw fatal;
 
   // Deliberately not `<SecuritySignal>`: that card owns an `<h1>` it moves focus to and a
   // "Enter the dashboard" link, both of which belong to the token-action screens it was
@@ -141,16 +157,13 @@ export function ChangePasswordForm() {
         className="change-password-form__success border-border bg-card space-y-3 rounded-lg border p-4"
         data-testid="change-password-form__success"
       >
-        <p
-          role="status"
-          className="change-password-form__success-title text-foreground flex items-center gap-2 text-sm font-medium"
-        >
+        <output className="change-password-form__success-title text-foreground flex items-center gap-2 text-sm font-medium">
           <span
             className="change-password-form__success-dot bg-success size-2 shrink-0 rounded-full"
             aria-hidden="true"
           />
           {PASSWORD_CHANGED_TITLE}
-        </p>
+        </output>
         <Button
           type="button"
           variant="outline"

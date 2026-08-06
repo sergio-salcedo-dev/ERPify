@@ -9,9 +9,8 @@ use Erpify\Iam\Identity\Domain\Exception\InvalidResetToken;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordRecoveryThrottle;
-use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
+use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort;
 use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
@@ -23,9 +22,11 @@ use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
  * 400 `invalid-token`; a suspended / deactivated identity → 403.
  *
  * On success it establishes the session: a `PUBLIC_ACCESS` route INSIDE the `main` firewall (like `/login` and
- * the invitation accept), so {@see Security::login()} resolves the firewall and reuses the established login
- * path — the anti-fixation `migrate(true)` regeneration and the session-minting listener — rather than
- * duplicating it. All the identity's prior sessions were revoked inside the use case, so the freshly minted one
+ * the invitation accept), so {@see ReauthenticateDeviceBestEffort} resolves the firewall and reuses the
+ * established login path — the anti-fixation `migrate(true)` regeneration and the session-minting listener —
+ * rather than duplicating it. That collaborator also contains a refused re-login: by the time it runs the token
+ * is spent and the credential replaced, so the wall must not turn a reset that committed into a 403. All the
+ * identity's prior sessions were revoked inside the use case, so the freshly minted one
  * is the only live session (reset everywhere, then sign in here). Answers **204** with the session cookie.
  *
  * CSRF is defence in depth, not the primary control: same-origin is enforced by {@see PasswordResetOriginListener}
@@ -47,13 +48,10 @@ final readonly class CompletePasswordResetController
 
     public const string CSRF_TOKEN_ID = 'password_reset';
 
-    private const string FIREWALL = 'main';
-
     public function __construct(
         private CompletePasswordReset $completePasswordReset,
         private PasswordHasher $passwordHasher,
-        private UserProvider $userProvider,
-        private Security $security,
+        private ReauthenticateDeviceBestEffort $reauthenticateDevice,
         private PasswordRecoveryThrottle $throttle,
     ) {
     }
@@ -72,8 +70,10 @@ final readonly class CompletePasswordResetController
         );
 
         // Post-commit: authenticate the identity with the just-set credential so LoginSuccessEvent fires once,
-        // reusing the native id regeneration and the session-minting listener.
-        $this->security->login($this->userProvider->loadUserByIdentifier($email), firewallName: self::FIREWALL);
+        // reusing the native id regeneration and the session-minting listener. The aggregate is re-read first,
+        // because the two effects above — a session revoke and a blocking SMTP send — are a wide enough window
+        // for an administrator to have walled this identity since the transaction committed.
+        $this->reauthenticateDevice->reauthenticate($email);
 
         return new Response(status: Response::HTTP_NO_CONTENT);
     }

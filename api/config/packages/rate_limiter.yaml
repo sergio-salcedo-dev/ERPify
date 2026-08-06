@@ -66,3 +66,36 @@ framework:
             limit: '%env(int:RATE_LIMIT_TOKEN_ACTION_LIMIT)%'
             interval: '%env(RATE_LIMIT_TOKEN_ACTION_INTERVAL)%'
             lock_factory: null
+
+        # `password_change_per_identity` — per-identity budget on POST /me/password, keyed by the signed-in
+        # identity's id. Exhaustion is a VISIBLE 429, which is the deliberate difference from the two budgets
+        # above: they sit on PRE-identity surfaces where a per-target 429 would answer "this account exists",
+        # while this endpoint is reached only through an established session, so the caller already knows the
+        # identity exists — it is their own. There is nothing left to leak.
+        #
+        # 10 / 15 minutes mirrors the persisted lockout (User::MAX_FAILED_ATTEMPTS / User::LOCK_DURATION),
+        # which is the budget this product already chose for "how many credential attempts before I stop
+        # listening". Reusing it is the point: a wrong `currentPassword` here does NOT feed that counter (by
+        # decision — marking failures from a route reachable only with a live session would turn a stolen
+        # session into a lockout DoS against the owner), so this limiter is the ONLY per-identity budget on
+        # the route and inventing a second number for the same question is how the two drift apart.
+        #
+        # What it does and does not buy: an attacker holding the session is delayed, not stopped — the budget
+        # lives in the cache pool, so a deploy or a second worker resets or splits it, and `lock_factory: null`
+        # lets the count drift under concurrency. It is an attenuator; the wall is the persisted lockout on the
+        # login route.
+        #
+        # The owner pays for it too, and the recovery route is NOT a reliable way out. Spending this bucket on
+        # mistyped current passwords locks the owner out of this route, and the obvious detour —
+        # /forgot-password → /reset-password — runs on `password_recovery_per_email`, which the same attacker
+        # can drain: the session they hold reveals the address (`GET /me`), five requests spend an hour-long
+        # budget, and exhaustion there is SILENT by contract, so the owner meets a 202 and no email. What makes
+        # the refusal affordable is therefore not an always-open detour but that nothing is destroyed: the
+        # credential still works, the budget refills on a sliding window, and an administrator can act. The
+        # residual — an attacker with a live session can stall self-service recovery for the length of the
+        # longer window — is named in PRODUCTION_SECURITY_CHECKLIST.md rather than argued away here.
+        password_change_per_identity:
+            policy: 'sliding_window'
+            limit: '%env(int:RATE_LIMIT_PASSWORD_CHANGE_PER_IDENTITY_LIMIT)%'
+            interval: '%env(RATE_LIMIT_PASSWORD_CHANGE_PER_IDENTITY_INTERVAL)%'
+            lock_factory: null

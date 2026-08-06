@@ -74,6 +74,22 @@ describe("Backoffice profile page", () => {
     expect(screen.getByTestId("change-password-form")).toBeInTheDocument();
   });
 
+  /**
+   * An identity with neither roles nor permissions is reachable — an ACTIVE account an administrator has
+   * stripped — and the surface must say so rather than render two empty rows that read as a loading state.
+   */
+  it("names the empty state when the identity carries no roles and no permissions", () => {
+    // The view reads `session.user`, not the envelope's top-level mirrors, so the emptiness has to be
+    // arranged where it is actually read.
+    session = { ...SESSION, user: { ...SESSION.user, roles: [], permissions: [] } };
+
+    render(<ProfilePage />);
+
+    expect(screen.getByText("No roles assigned")).toBeInTheDocument();
+    expect(screen.getByText("No permissions granted")).toBeInTheDocument();
+    session = SESSION;
+  });
+
   it("renders nothing while there is no resolved session", () => {
     session = null;
 

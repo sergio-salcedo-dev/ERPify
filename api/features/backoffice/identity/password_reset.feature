@@ -183,6 +183,37 @@ Feature: Reset a forgotten password uniformly
     And I execute the SQL query "SELECT id FROM identity_password_reset_token WHERE id = '0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e05'"
     And there should have 1 records in SQL result
 
+  # The ceiling this endpoint enforces used to be 255 while the other two credential-creating surfaces
+  # enforced 128 — a live divergence, in production, that no gate could see. A 200-character password answered
+  # 204 here and 422 everywhere else; it is now one policy, so it answers 422 here too.
+  Scenario: A reset password above the shared policy ceiling is refused, where it used to be accepted
+    When I send a POST request to "/backoffice/reset-password" with body:
+    """
+    { "token": "0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e01.behat-valid-reset-secret", "password": "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345679" }
+    """
+    Then the response status code should be 422
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations[0].field" should be equal to "password"
+    And the JSON node "violations[0].message" should be equal to "The password must not exceed 128 characters."
+    # Mapping fails before the token is read, so the single-use link is not spent by a refused request.
+    And there should be 0 events stored named "erpify.iam.identity.password-reset-completed"
+
+  Scenario: A reset password made only of whitespace is refused, non-breaking spaces included
+    When I send a POST request to "/backoffice/reset-password" with body:
+    """
+    { "token": "0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e01.behat-valid-reset-secret", "password": "        " }
+    """
+    Then the response status code should be 422
+    And the JSON node "violations[0].field" should be equal to "password"
+    And the JSON node "violations[0].message" should be equal to "The password must contain at least one non-whitespace character."
+    And I send a POST request to "/backoffice/reset-password" with body:
+    """
+    { "token": "0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e01.behat-valid-reset-secret", "password": "        " }
+    """
+    And the response status code should be 422
+    And the JSON node "violations[0].message" should be equal to "The password must contain at least one non-whitespace character."
+    And there should be 0 events stored named "erpify.iam.identity.password-reset-completed"
+
   Scenario: A reset with no CSRF token header is refused before the token is even read
     Given I reload the fixtures
     And I execute the SQL query "INSERT INTO identity_password_reset_token (id, user_id, token_hash, expires_at, created_at, updated_at) VALUES ('0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e01', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b', '0b3922c421ab825d3cf5b869305ae41cf748c37316a740c3a70083baa639ab90', NOW() + INTERVAL '1 hour', NOW(), NOW())"

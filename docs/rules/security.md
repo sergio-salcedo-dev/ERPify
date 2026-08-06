@@ -53,8 +53,10 @@
   argon2id amplification vector.
 - **Neutral per-target rate limits:** a per-account/per-selector budget must NEVER change the response shape
   when exhausted — fold saturation into the surface's uniform outcome (forgot keeps its 202 with the work
-  silenced; token endpoints keep the opaque `invalid-token`). Only IP-global limits may answer 429; a
-  per-target 429 is an oracle over which accounts/selectors exist and are under attack.
+  silenced; token endpoints keep the opaque `invalid-token`). A per-target 429 here is an oracle over which
+  accounts/selectors exist and are under attack. **The test is who is asking, not how the budget is keyed:**
+  a per-target budget may answer 429 once the caller has already proved it holds the target, which is why
+  `password_change_per_identity` on `POST /me/password` refuses out loud and nothing on this surface does.
 - **Token hygiene:** a single-use token travels ONLY in the emailed link and the request body — never in a
   log (Caddy redacts the `token` query parameter), never in a Messenger transport (token-bearing emails are
   synchronous best-effort), never left in browser history/`Referer` (token screens send
@@ -62,6 +64,27 @@
 - **Security sender:** user-facing security emails come from `MAILER_SECURITY_FROM` — a monitored, replyable
   mailbox validated fail-loud outside dev/test (`SecuritySenderAddress`); the operational `MAILER_FROM` may
   stay no-reply.
+
+## Password policy
+- **One constraint object, no options.** Every surface that *creates* a credential — the authenticated change,
+  the reset completion, the invitation accept, the bootstrap CLI — carries
+  `Shared\Validation\Infrastructure\PasswordPolicy`, and the PWA mirrors it in
+  `context/backoffice/user/application/schemas/auth/passwordPolicy.ts`. The limits are constants of the class,
+  never attribute arguments: the policy previously lived as six literals across three DTOs and drifted (the
+  reset surface accepted 255 characters while the other two accepted 128, in production, with no gate able to
+  see it), and a configurable `#[PasswordPolicy(max: …)]` puts those literals straight back with better
+  syntax. A caller that needs different numbers is asking for a different policy.
+- **Never on a credential that already exists.** `currentPassword` carries `NotBlank` plus a DoS ceiling and
+  nothing else. It may have been minted under an older or wider rule, so asserting today's policy on it would
+  lock its owner out of the very endpoint that would fix it.
+- **Count code points, on both sides of the wire.** The server measures with `mb_strlen`, the client with
+  `[...value].length` — never JavaScript's `String.length`, which counts UTF-16 units, so five astral
+  characters read as ten on one side and five on the other and the client accepts what the server refuses.
+- **Whitespace-only is refused with `mb_trim`, never `trim` and never `\S`.** `NotBlank` admits eight spaces;
+  an ASCII `trim()` admits eight U+00A0 or U+3000, and a `\S` regex without the `u` modifier matches the bytes
+  those characters are made of. The resulting credential cannot be reliably retyped.
+- **Never trim a password anywhere.** Verification runs through `json_login`, framework-owned, which does not
+  trim. Storing `hash(trim(x))` while verifying `x` is a permanent, irreversible lockout.
 
 ## Security Checklist Maintenance
 - The `PRODUCTION_SECURITY_CHECKLIST.md` file MUST be kept up-to-date at all times

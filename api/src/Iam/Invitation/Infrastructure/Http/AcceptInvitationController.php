@@ -6,19 +6,19 @@ namespace Erpify\Iam\Invitation\Infrastructure\Http;
 
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
-use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
+use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort;
 use Erpify\Iam\Invitation\Application\AcceptInvitation;
 use Erpify\Iam\Invitation\Domain\Exception\InvalidToken;
 use Erpify\Iam\Invitation\Infrastructure\Security\InvitationAcceptThrottle;
 use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 
 /**
  * `POST /api/v1/backoffice/invitations/accept` — the one public write of the invitation flow. It is a
- * `PUBLIC_ACCESS` route INSIDE the `main` firewall (like `/login`), so {@see Security::login()} resolves the
+ * `PUBLIC_ACCESS` route INSIDE the `main` firewall (like `/login`), so
+ * {@see ReauthenticateDeviceBestEffort} resolves the
  * firewall and the established login path — the anti-fixation session `migrate(true)` and
  * {@see \Erpify\Iam\Identity\Infrastructure\Security\SessionMintingSuccessListener} — is reused rather than
  * duplicated.
@@ -53,13 +53,10 @@ final readonly class AcceptInvitationController
 
     public const string CSRF_TOKEN_ID = 'invitation_accept';
 
-    private const string FIREWALL = 'main';
-
     public function __construct(
         private AcceptInvitation $acceptInvitation,
         private PasswordHasher $passwordHasher,
-        private UserProvider $userProvider,
-        private Security $security,
+        private ReauthenticateDeviceBestEffort $reauthenticateDevice,
         private InvitationAcceptThrottle $throttle,
     ) {
     }
@@ -78,11 +75,9 @@ final readonly class AcceptInvitationController
         );
 
         // Post-commit: authenticate the now-ACTIVE identity through the real firewall so LoginSuccessEvent
-        // fires once — reusing the native id regeneration and the session-minting listener.
-        $this->security->login(
-            $this->userProvider->loadUserByIdentifier($accepted->email),
-            firewallName: self::FIREWALL,
-        );
+        // fires once — reusing the native id regeneration and the session-minting listener, and re-reading
+        // the aggregate so the admission wall is weighed in full rather than the half a programmatic login runs.
+        $this->reauthenticateDevice->reauthenticate($accepted->email);
 
         return new Response(status: Response::HTTP_NO_CONTENT);
     }

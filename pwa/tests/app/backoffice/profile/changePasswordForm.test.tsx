@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { Component, type ReactNode } from "react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import type {
@@ -47,6 +48,27 @@ function fillAndSubmit(current = "old-password", next = "new-password-1"): void 
   fireEvent.click(screen.getByTestId("change-password-form__submit"));
 }
 
+/**
+ * Stands in for the segment `error.tsx` boundary. Its only job here is to prove the form hands a non-HTTP
+ * failure to a boundary at all — before, the rejection escaped into a promise nobody awaited and the user
+ * saw the button do nothing.
+ */
+class CatchingBoundary extends Component<{ children: ReactNode }, { caught: Error | null }> {
+  public state: { caught: Error | null } = { caught: null };
+
+  public static getDerivedStateFromError(error: Error): { caught: Error } {
+    return { caught: error };
+  }
+
+  public render(): ReactNode {
+    return this.state.caught ? (
+      <p data-testid="boundary">{this.state.caught.message}</p>
+    ) : (
+      this.props.children
+    );
+  }
+}
+
 beforeEach(() => {
   changePassword.mockReset();
 });
@@ -66,6 +88,57 @@ describe("<ChangePasswordForm>", () => {
     );
     expect(await screen.findByTestId("change-password-form__success")).toBeInTheDocument();
     expect(screen.queryByTestId("change-password-form")).not.toBeInTheDocument();
+    // The confirmation replaces the form rather than appearing beside it, so a screen reader only
+    // learns the change succeeded if the new content is a live region. Asserting the role keeps that
+    // announcement a property of the markup instead of a side effect of whichever element renders it.
+    expect(screen.getByRole("status")).toHaveTextContent("Password updated.");
+  });
+
+  it("returns to an empty form when the user chooses to change the password again", async () => {
+    changePassword.mockResolvedValue(undefined);
+
+    render(<ChangePasswordForm />);
+    fillAndSubmit();
+
+    fireEvent.click(await screen.findByTestId("change-password-form__change-again"));
+
+    expect(await screen.findByTestId("change-password-form")).toBeInTheDocument();
+    expect(screen.queryByTestId("change-password-form__success")).not.toBeInTheDocument();
+    // The credential the user just typed must not survive into the next attempt.
+    expect(screen.getByTestId("change-password-form__current-password")).toHaveValue("");
+    expect(screen.getByTestId("change-password-form__new-password")).toHaveValue("");
+  });
+
+  it("lets the user dismiss the persistent banner without leaving the form", async () => {
+    changePassword.mockRejectedValue(
+      new HttpError(problem(HttpStatus.INTERNAL_SERVER_ERROR, "server-error")),
+    );
+
+    render(<ChangePasswordForm />);
+    fillAndSubmit();
+
+    const banner = await screen.findByTestId("change-password-form__mutation-error");
+    fireEvent.click(within(banner).getByRole("button", { name: /dismiss/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("change-password-form__mutation-error")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("change-password-form")).toBeInTheDocument();
+  });
+
+  /**
+   * `detail` is optional in the contract, so the form must fall back to `title` rather than hang an
+   * `undefined` on the field and show the user an empty error.
+   */
+  it("falls back to the problem title when the API sends no detail", async () => {
+    changePassword.mockRejectedValue(
+      new HttpError(problem(HttpStatus.FORBIDDEN, "invalid-current-password")),
+    );
+
+    render(<ChangePasswordForm />);
+    fillAndSubmit();
+
+    expect(await screen.findByText("invalid-current-password")).toBeInTheDocument();
   });
 
   it("rejects a too-short new password before reaching the port", async () => {
@@ -157,6 +230,34 @@ describe("<ChangePasswordForm>", () => {
     expect(await screen.findByTestId("change-password-form__mutation-error")).toBeInTheDocument();
   });
 
+  /**
+   * An account-level refusal is nobody's field. It reaches the persistent banner through the generic path,
+   * which renders `detail ?? title` — so the API answering `account-suspended` rather than the aggregate's
+   * `invalid-identity-transition` is the whole fix, and teaching the form the two types would add branches
+   * that do exactly what this already does.
+   */
+  it("surfaces an account-level refusal in the persistent banner, in the account's own words", async () => {
+    changePassword.mockRejectedValue(
+      new HttpError(
+        problem(HttpStatus.FORBIDDEN, "account-suspended", {
+          detail: "Your account has been suspended. Contact an administrator to restore access.",
+        }),
+      ),
+    );
+
+    render(<ChangePasswordForm />);
+    fillAndSubmit();
+
+    expect(await screen.findByTestId("change-password-form__mutation-error")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Your account has been suspended. Contact an administrator to restore access.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("change-password-form")).toBeInTheDocument();
+    expect(screen.queryByTestId("change-password-form__success")).not.toBeInTheDocument();
+  });
+
   it("surfaces any other failure in the persistent banner, keeping the form mounted", async () => {
     changePassword.mockRejectedValue(
       new HttpError(problem(HttpStatus.INTERNAL_SERVER_ERROR, "server-error")),
@@ -168,5 +269,20 @@ describe("<ChangePasswordForm>", () => {
     expect(await screen.findByTestId("change-password-form__mutation-error")).toBeInTheDocument();
     expect(screen.getByTestId("change-password-form")).toBeInTheDocument();
     expect(screen.queryByTestId("change-password-form__success")).not.toBeInTheDocument();
+  });
+
+  it("hands a failure that is not an HttpError to the error boundary instead of dying silently", async () => {
+    // A broken container binding, not a rejected password: the form must not dress it up as one, and it must
+    // not swallow it either — the submit button appearing inert is a failure mode nobody chose.
+    changePassword.mockRejectedValue(new Error("the container is broken"));
+
+    render(
+      <CatchingBoundary>
+        <ChangePasswordForm />
+      </CatchingBoundary>,
+    );
+    fillAndSubmit();
+
+    expect(await screen.findByTestId("boundary")).toHaveTextContent("the container is broken");
   });
 });

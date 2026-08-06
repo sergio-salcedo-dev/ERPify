@@ -19,9 +19,14 @@ use Throwable;
  *
  * `retryAfterSeconds` is rounded up to the nearest whole second (an integer suffices for the
  * `Retry-After` HTTP header per RFC 9110 §10.2.3). `limit` is the policy budget; `remaining`
- * is always 0 on this path (the limiter rejected the call); `limiterKey` is included as
- * extension context so SRE can correlate 429 spikes with a specific identifier (an IP, a
- * principal id) without trawling logs for the original limiter create() arg.
+ * is always 0 on this path (the limiter rejected the call).
+ *
+ * `limiterKey` is carried on the object and deliberately kept OUT of `context()`. That map is promoted to
+ * Problem Details extensions, so it travels in the response body and the per-error log line — and on
+ * `password_change_per_identity` this key is the caller's own identity id, which no erasure path reaches in
+ * either sink. An in-process consumer may read the property; nothing may serialise it. The prohibition is
+ * pinned by a test rather than left to this paragraph, because a one-line addition to the map below is all
+ * it would take to turn a person's id into a response field.
  */
 final class RateLimitExceeded extends DomainException implements RateLimited
 {

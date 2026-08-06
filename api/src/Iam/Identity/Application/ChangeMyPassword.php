@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Application;
 
 use Closure;
+use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
+use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidCurrentPassword;
 use Erpify\Iam\Identity\Domain\Exception\NewPasswordMustDiffer;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
@@ -28,15 +30,27 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  *      serialises this write against the other credential writers on the same row (a reset completing, a
  *      concurrent change), so the "is it the same password?" decision reads committed state rather than a
  *      snapshot a rival transaction has already invalidated.
- *   2. Refuse a wrong current password ({@see InvalidCurrentPassword}) before anything mutates. An identity with
+ *   2. Wall an identity that is no longer `ACTIVE`, in the vocabulary the rest of the product uses for it —
+ *      403 `account-suspended` / `account-deactivated`, the same wall {@see CompletePasswordReset} raises from
+ *      the same position. It sits ahead of every comparison so a walled identity pays no KDF at all, and it is
+ *      what keeps the aggregate's own `InvalidIdentityTransition` a defensive floor rather than the answer a
+ *      caller meets, which would speak of a lifecycle transition nobody asked for.
+ *   3. Refuse a wrong current password ({@see InvalidCurrentPassword}) before anything mutates. An identity with
  *      no credential at all cannot re-prove one, so it takes the same refusal — a credential-less identity is
  *      `INVITED` and holds no session, so this arm is unreachable rather than an oracle.
- *   3. Refuse a new password equal to the stored one ({@see NewPasswordMustDiffer}). It has to happen here, not
+ *   4. Refuse a new password equal to the stored one ({@see NewPasswordMustDiffer}). It has to happen here, not
  *      at the wire edge: deciding it needs the stored hash. Letting it through would emit a "password changed"
  *      fact, tear down every other device and mail a security notice for a change that did not happen.
- *   4. Only then hash the new password and mutate. The KDF runs under the row lock — a deliberate cost: the only
+ *   5. Only then hash the new password and mutate. The KDF runs under the row lock — a deliberate cost: the only
  *      contender for this row is the same identity's own credential writes, and hashing earlier would pay a KDF
  *      on every mistyped current password.
+ *
+ * Clearing the lockout is an explicit step, not an inherited one. A live lock is orthogonal to `ACTIVE`, so a
+ * locked identity reaches here and leaves unlocked; that used to happen anyway, as a side effect of the
+ * programmatic login two layers away firing `LoginSuccessEvent`. It is stated here because it is a decision:
+ * re-proving the current secret and rotating it is strictly stronger evidence than the reset flow accepts for
+ * the same relief ({@see CompletePasswordReset} clears it in the same position), and the counter the lock
+ * summarises is about a credential that no longer exists.
  *
  * The two effects that must not be able to roll the change back run AFTER the commit, in an order that is itself
  * load-bearing. {@see RevokeSessionsBestEffort} first, because containment is the reason a credential change
@@ -68,6 +82,8 @@ final readonly class ChangeMyPassword
      * @param Closure(): HashedPassword     $hashNew         defers the KDF of the new password until both
      *                                                       refusals are past, so a rejected attempt never pays it
      *
+     * @throws AccountSuspended       when the identity is SUSPENDED (403)
+     * @throws AccountDeactivated     when the identity is DEACTIVATED or still INVITED (403)
      * @throws InvalidCurrentPassword when the submitted current password does not match the stored one (403)
      * @throws NewPasswordMustDiffer  when the submitted new password is the one already stored (422)
      * @throws UserNotFound           when the id resolves to no identity (404)
@@ -81,6 +97,8 @@ final readonly class ChangeMyPassword
         $email = $this->transactionManager->transactional(
             function () use ($userId, $verifyCurrent, $isSameAsCurrent, $hashNew): string {
                 $user = $this->users->findByIdForUpdate($userId) ?? throw UserNotFound::withId($userId);
+                $user->ensureActive();
+
                 $current = $user->passwordHash() ?? throw new InvalidCurrentPassword();
 
                 if (!$verifyCurrent($current)) {
@@ -92,6 +110,7 @@ final readonly class ChangeMyPassword
                 }
 
                 $user->changePassword($hashNew());
+                $user->clearLockout();
 
                 $this->users->save($user);
                 $this->eventBus->publish(...$user->pullDomainEvents());
