@@ -156,11 +156,12 @@ With a floor of 2, neither of exactly two administrators is demotable and erasin
 **third**. An invariant that radiates side effects into an unrelated process is mis-chosen: it should
 close the problem that motivated it, and this one does not close #602 at all.
 
-**What this ADR does and does not do about it.** It records that provisioning a second administrator is
-sound hygiene and must stay unenforced. It does **not** claim the deployment guides say so — they
-mention no administrator at all — and it does **not** close the "sole active administrator cannot be
-erased" item in §7, whose own preamble requires striking the entry there and correcting whatever
-describes the mitigated state. Both are follow-up work, named here so the gap is not read as closed.
+**What this ADR does and does not do about it.** Provisioning a second administrator is sound hygiene, is
+now written into [`../deployment-guide.md`](../deployment-guide.md) § *Provisioning administrators*, and
+must stay unenforced. It does **not** close the "sole active administrator cannot be erased" item in §7:
+an unenforced recommendation cannot make an invariant hold in an installation that declined it, so the
+entry stays open with a pointer to the guidance rather than a strike. Recording the mitigation and
+claiming the closure are different acts, and only the first is warranted.
 
 *Discarded:* enforcing ≥2 in schema or application. It makes an open GDPR item strictly worse,
 contradicts the bootstrap command and the E2E seed, and buys no transition.
