@@ -248,7 +248,7 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
   - [x] `make db.migrate` / `make db.validate` exit 0; `db.diff` posterior sin deriva
   - [ ] **Pase adversarial PARCIAL** — 3 de 4 lectores murieron por límite de sesión; ver la sección dedicada
   - [ ] Comentarios de cierre en #389 #565 #562 #564
-  - [ ] PR en draft
+  - [x] PR **draft** abierto: https://github.com/sergio-salcedo-dev/ERPify/pull/650
 
 ---
 
