@@ -157,16 +157,13 @@ export function ChangePasswordForm() {
         className="change-password-form__success border-border bg-card space-y-3 rounded-lg border p-4"
         data-testid="change-password-form__success"
       >
-        <p
-          role="status"
-          className="change-password-form__success-title text-foreground flex items-center gap-2 text-sm font-medium"
-        >
+        <output className="change-password-form__success-title text-foreground flex items-center gap-2 text-sm font-medium">
           <span
             className="change-password-form__success-dot bg-success size-2 shrink-0 rounded-full"
             aria-hidden="true"
           />
           {PASSWORD_CHANGED_TITLE}
-        </p>
+        </output>
         <Button
           type="button"
           variant="outline"

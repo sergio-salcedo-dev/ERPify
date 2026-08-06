@@ -88,6 +88,10 @@ describe("<ChangePasswordForm>", () => {
     );
     expect(await screen.findByTestId("change-password-form__success")).toBeInTheDocument();
     expect(screen.queryByTestId("change-password-form")).not.toBeInTheDocument();
+    // The confirmation replaces the form rather than appearing beside it, so a screen reader only
+    // learns the change succeeded if the new content is a live region. Asserting the role keeps that
+    // announcement a property of the markup instead of a side effect of whichever element renders it.
+    expect(screen.getByRole("status")).toHaveTextContent("Password updated.");
   });
 
   it("returns to an empty form when the user chooses to change the password again", async () => {
