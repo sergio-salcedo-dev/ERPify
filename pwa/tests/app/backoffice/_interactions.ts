@@ -1,0 +1,37 @@
+import { fireEvent, screen } from "@testing-library/react";
+
+/** Opens attempted on a row overflow menu before the failure is allowed to surface. */
+const OPEN_ATTEMPTS = 3;
+
+/**
+ * Opens a row's `⋯` overflow menu and returns the named item.
+ *
+ * The menu is a Base UI popup rendered through a portal, and under jsdom churn a
+ * just-opened menu can close again before its content mounts — so the OPEN is
+ * retried. Only the open: the final attempt awaits the item single-shot, so an
+ * item that genuinely never renders still fails instead of being masked.
+ *
+ * `surface` is the testid surface owning the row — `banks-table`, `users-table`,
+ * `bank-accounts-table` — and `action` the item's element name (`delete`,
+ * `revoke`), per the grammar in `docs/adr/test-id-naming-contract.md`. Both are
+ * parameters rather than one copy of this helper per surface because a copy
+ * written without the retry is what makes a row-menu spec red once in a thousand runs.
+ */
+export async function openRowMenuItem(
+  surface: string,
+  action: string,
+  id: string,
+): Promise<HTMLElement> {
+  for (let attempt = 1; attempt < OPEN_ATTEMPTS; attempt += 1) {
+    fireEvent.click(screen.getByTestId(`${surface}__actions-${id}`));
+    try {
+      return await screen.findByTestId(`${surface}__${action}-${id}`);
+    } catch {
+      // The item never rendered — the open lost the race; re-open the menu.
+    }
+  }
+
+  fireEvent.click(screen.getByTestId(`${surface}__actions-${id}`));
+
+  return screen.findByTestId(`${surface}__${action}-${id}`);
+}

@@ -12,6 +12,8 @@ use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 
@@ -24,6 +26,12 @@ use Symfony\Component\Serializer\Exception\ExceptionInterface;
  * The controller only turns the validated wire strings into the domain vocabulary; the "keep ≥1 active ADMIN"
  * guard, the redundant-set no-op, the `Uuid::ensure`/`UserNotFound` edge and the transactional publish all live
  * in {@see ChangeUserRoles}, and every error is carried by the RFC 9457 pipeline — never a manual body.
+ *
+ * A second, narrower check rides on the payload rather than the route: promoting somebody to administrator is a
+ * distinct act from adjusting a member's roles, so a set carrying `ADMIN` additionally demands
+ * `users.grantAdmin`. It is imperative because it is conditional — `#[IsGranted]` would refuse every role
+ * change, including the ones the actor is entitled to make. It stays here rather than in {@see ChangeUserRoles}
+ * for the same reason the route gate does: the use case is also driven with no session behind it.
  */
 #[Route('/backoffice/users/{id}/roles', name: self::ROUTE_NAME, methods: ['PATCH'])]
 #[IsGranted('users.changeRoles')]
@@ -31,10 +39,13 @@ final readonly class UserPatchRolesController
 {
     public const string ROUTE_NAME = 'backoffice_user_change_roles';
 
+    private const string GRANT_ADMIN_PERMISSION = 'users.grantAdmin';
+
     public function __construct(
         private ChangeUserRoles $changeUserRoles,
         private UserResourceMapper $userResourceMapper,
         private ResourceResponder $resourceResponder,
+        private AuthorizationCheckerInterface $authorizationChecker,
     ) {
     }
 
@@ -46,11 +57,34 @@ final readonly class UserPatchRolesController
         #[StrictRequestPayload(acceptFormat: ['json'])]
         ChangeUserRolesRequest $request,
     ): Response {
-        $user = $this->changeUserRoles->run($id, ...$this->rolesFrom($request));
+        $roles = $this->rolesFrom($request);
+
+        if ($this->grantsAdmin($roles) && !$this->authorizationChecker->isGranted(self::GRANT_ADMIN_PERMISSION)) {
+            // The message travels as the RFC 9457 `title`, so it names the refused act and no internals.
+            throw new AccessDeniedException('You may not grant the ADMIN role.');
+        }
+
+        $user = $this->changeUserRoles->run($id, ...$roles);
 
         return $this->resourceResponder->respond(
             $this->userResourceMapper->toDetailResource($user),
         );
+    }
+
+    /**
+     * Whether the resulting set would leave the target holding the administrator role — the one payload shape
+     * the extra permission governs. A named predicate rather than an inline `in_array`, because what the guard
+     * it serves is about is the *act of delegating administration*, not the mechanics of scanning a list.
+     *
+     * Deliberately a property of the *requested* set alone, never a delta against what the target already
+     * holds: re-sending `ADMIN` to somebody who has it is still an assertion that they should have it, and a
+     * caller who may not make that assertion must not be able to launder it through a redundant PATCH.
+     *
+     * @param list<Role> $roles
+     */
+    private function grantsAdmin(array $roles): bool
+    {
+        return \in_array(Role::ADMIN, $roles, true);
     }
 
     /**

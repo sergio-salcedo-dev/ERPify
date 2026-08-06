@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { UserPlus } from "lucide-react";
 import type { User } from "@/context/backoffice/user/domain/User";
 import type { UserInput } from "@/context/backoffice/user/domain/UserRepository";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { useQueryState } from "@/context/shared/resource/application/createQueryState";
 import { useResourceList } from "@/context/shared/resource/application/useResourceList";
 import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
@@ -12,6 +13,7 @@ import {
   AsyncBoundary,
   LIST_DENSITY_STORAGE_KEY,
   ListDisplayToggles,
+  MutationError,
   RecordSheet,
   isListDensity,
 } from "@/components/erpify";
@@ -82,6 +84,7 @@ export function UsersListView() {
     paginationActions,
     problem,
     reload,
+    silentReload,
     peekId,
     setPeekId,
     listContainerRef,
@@ -130,6 +133,19 @@ export function UsersListView() {
     query.setSort(next ? { field: next.columnId, direction: next.direction } : null);
 
   const { filter } = query;
+
+  // Persistent surface for a failed row mutation, anchored above the list — the confirmation dialog closes
+  // itself and never renders the failure. Kept apart from `useResourceList`'s delete-error state: that one
+  // carries the focus-recovery bookkeeping of an optimistic removal, and a revocation removes no row.
+  const [revokeProblem, setRevokeProblem] = useState<ProblemDetails | null>(null);
+
+  // A revocation withdraws the identity to REVOKED instead of removing it, so the list reconciles by
+  // re-reading rather than dropping the row: `silentReload` refreshes in place — the badge flips and the row's
+  // action retires itself — without the loading skeleton stealing the view.
+  const onInvitationRevoked = (): void => {
+    setRevokeProblem(null);
+    silentReload();
+  };
 
   const peekUser = useMemo(() => items.find((user) => user.id === peekId) ?? null, [items, peekId]);
 
@@ -211,6 +227,14 @@ export function UsersListView() {
         />
       ) : null}
 
+      {revokeProblem ? (
+        <MutationError
+          problem={revokeProblem}
+          onDismiss={() => setRevokeProblem(null)}
+          testId="users-list__revoke-error"
+        />
+      ) : null}
+
       <AsyncBoundary
         state={boundaryState}
         data={items}
@@ -246,6 +270,8 @@ export function UsersListView() {
                     users={items}
                     onUserPeek={setPeekId}
                     density={density}
+                    onInvitationRevoked={onInvitationRevoked}
+                    onRevokeFailed={setRevokeProblem}
                     className="md:hidden"
                   />
                   <div className="hidden md:block">
@@ -256,11 +282,18 @@ export function UsersListView() {
                       onSortChange={setTableSort}
                       onUserPeek={setPeekId}
                       density={density}
+                      onInvitationRevoked={onInvitationRevoked}
+                      onRevokeFailed={setRevokeProblem}
                     />
                   </div>
                 </>
               ) : (
-                <UsersCards users={items} density={density} />
+                <UsersCards
+                  users={items}
+                  density={density}
+                  onInvitationRevoked={onInvitationRevoked}
+                  onRevokeFailed={setRevokeProblem}
+                />
               )}
               <UsersPagination
                 pageSize={

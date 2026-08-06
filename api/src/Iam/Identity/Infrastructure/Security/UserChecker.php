@@ -39,13 +39,21 @@ final readonly class UserChecker implements UserCheckerInterface
             return;
         }
 
-        if (IdentityStatus::INVITED === $user->status()) {
-            // why: an INVITED identity is rejected before any password verification (it has no credential yet),
-            // so without a floor this branch answers measurably faster than a wrong-password failure — a
+        // Both credential-less states are walled here, and enumerated rather than defaulted so a state added
+        // later fails the build instead of falling through into admission.
+        $credentialLessWall = match ($user->status()) {
+            IdentityStatus::INVITED => new InvitedAccountException(),
+            IdentityStatus::REVOKED => new RevokedAccountException(),
+            IdentityStatus::ACTIVE, IdentityStatus::SUSPENDED, IdentityStatus::DEACTIVATED => null,
+        };
+
+        if (null !== $credentialLessWall) {
+            // why: neither identity holds a credential, so this branch is reached before any password
+            // verification and would otherwise answer measurably faster than a wrong-password failure — a
             // pre-identity state oracle. Pay the same hashing work the equalised not-found path pays.
             $this->timingFloor->equalise();
 
-            throw new InvitedAccountException();
+            throw $credentialLessWall;
         }
     }
 

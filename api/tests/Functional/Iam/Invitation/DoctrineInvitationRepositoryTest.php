@@ -98,6 +98,47 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
         });
     }
 
+    public function testTheLockingReadReturnsOnlyTheSubjectsStillRevocableInvitations(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $userId = Uuid::generate();
+
+            $live = $this->invitationFor($userId);
+            $live->markSent();
+
+            $secondLive = $this->invitationFor($userId);
+            $secondLive->markSent();
+            // Not revocable: never delivered, already consumed, and somebody else's.
+            $undelivered = $this->invitationFor($userId);
+            $spent = $this->invitationFor($userId);
+            $spent->markSent();
+            $spent->accept();
+
+            $foreign = $this->invitationFor(Uuid::generate());
+            $foreign->markSent();
+
+            foreach ([$live, $secondLive, $undelivered, $spent, $foreign] as $invitation) {
+                $this->repository->save($invitation);
+            }
+
+            $this->entityManager->clear();
+
+            // Runs inside a transaction — this one does — because `FOR UPDATE` needs the lock held to commit.
+            $revocable = $this->repository->findSentByInvitedUserForUpdate($userId);
+
+            // Sorted on both sides: the query declares no ORDER BY, so which of the two comes first is
+            // Postgres's business and asserting it would pin a detail the caller does not depend on.
+            $foundIds = \array_map(static fn (Invitation $found): ?string => $found->getId(), $revocable);
+            \sort($foundIds);
+            $expectedIds = [$live->getId(), $secondLive->getId()];
+            \sort($expectedIds);
+
+            $this->assertCount(2, $revocable);
+            $this->assertSame($expectedIds, $foundIds);
+            $this->assertSame([], $this->repository->findSentByInvitedUserForUpdate(Uuid::generate()));
+        });
+    }
+
     private function countFor(string $userId): int
     {
         // count(*) surfaces as an int or a numeric string depending on the driver.

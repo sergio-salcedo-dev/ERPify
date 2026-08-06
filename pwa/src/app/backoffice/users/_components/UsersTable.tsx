@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { User } from "@/context/backoffice/user/domain/User";
 import { DataTable, TruncatedText } from "@/components/erpify";
 import type { DataTableColumn, DataTableSelection, DataTableSort } from "@/components/erpify";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { userRoutes } from "../_lib/userRoutes";
@@ -22,6 +23,8 @@ interface UsersTableProps {
   selection?: DataTableSelection;
   onUserPeek?: (id: string) => void;
   density?: "compact" | "comfortable";
+  onInvitationRevoked: () => void;
+  onRevokeFailed: (problem: ProblemDetails) => void;
 }
 
 const renderEmailCell = (row: User) => <TruncatedText value={row.email} />;
@@ -49,14 +52,21 @@ const renderCreatedAtCell = (row: User) =>
 const renderUpdatedAtCell = (row: User) =>
   renderRelativeCell(row.updatedAt, `users-table__updated-${row.id}`);
 
-function buildUsersColumns(visible: UserColumnKey[]): DataTableColumn<User>[] {
+function buildUsersColumns(
+  visible: UserColumnKey[],
+  onInvitationRevoked: () => void,
+  onRevokeFailed: (problem: ProblemDetails) => void,
+): DataTableColumn<User>[] {
   const shown = new Set(visible);
   const renderActionsCell = (row: User) => (
     <UserRowActions
       id={row.id}
       email={row.email}
+      status={row.status}
       surface="table"
       reveal="row"
+      onInvitationRevoked={onInvitationRevoked}
+      onRevokeFailed={onRevokeFailed}
       className="justify-end"
     />
   );
@@ -128,10 +138,15 @@ export function UsersTable({
   selection,
   onUserPeek,
   density = "compact",
+  onInvitationRevoked,
+  onRevokeFailed,
 }: Readonly<UsersTableProps>) {
   const router = useRouter();
 
-  const columns = useMemo(() => buildUsersColumns(visible), [visible]);
+  const columns = useMemo(
+    () => buildUsersColumns(visible, onInvitationRevoked, onRevokeFailed),
+    [visible, onInvitationRevoked, onRevokeFailed],
+  );
 
   return (
     <div

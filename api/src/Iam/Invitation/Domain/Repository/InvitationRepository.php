@@ -29,6 +29,22 @@ interface InvitationRepository
     public function findByIdForUpdate(string $id): ?Invitation;
 
     /**
+     * Every still-revocable invitation addressed to the user, under a pessimistic write lock. `SENT` is the
+     * only revocable state — `CREATED` has not been delivered and the three terminal states are spent — so the
+     * predicate is the filter, not a caller-side check.
+     *
+     * The lock is what makes revoking several rows survivable under a concurrent accept. Without it the
+     * invitee retiring one of them mid-flight would make the aggregate refuse its `SENT → REVOKED` transition
+     * and roll the whole operation back, so an incident responder pulling live tokens would revoke NOTHING.
+     * `FOR UPDATE` under READ COMMITTED re-evaluates the predicate after the lock is granted, so a row that
+     * became `ACCEPTED` simply leaves the set and every other invitation is still revoked. Must run inside a
+     * transaction; several rows may come back, because nothing constrains a user to one invitation.
+     *
+     * @return list<Invitation>
+     */
+    public function findSentByInvitedUserForUpdate(string $userId): array;
+
+    /**
      * Hard-deletes every invitation addressed to the user — whatever its status — and returns how many rows
      * went. A terminal `ACCEPTED`, `REVOKED` or `EXPIRED` invitation still carries the invited person's id,
      * so the lifecycle state does not change that the column is personal data and none of them may be spared.

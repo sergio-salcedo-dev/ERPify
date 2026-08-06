@@ -36,10 +36,16 @@ Feature: Assign an identity's roles
     And there should be 1 event stored for aggregate "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d" named "erpify.iam.identity.roles-changed"
     And there should be 1 event stored named "erpify.iam.session.all-revoked"
     And 0 outbox events were created on the queue "async"
+    # The compliance record of the change, carrying both role sets and nothing else — `User` stays out of the
+    # write-capture CDC (that diff would carry `password_hash`), so this explicit row is the ONLY attributable
+    # evidence a role change leaves. The erasure refusal depends on it existing.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_CHANGED' AND level = 'security' AND resource_type = 'User' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d' AND actor_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
+    And there should have 1 records in SQL result
     # Budget canary: the admission gate read, the wrapped write (+2 BEGIN/COMMIT) and the wrapped session
     # revoke (+2), with NO guard read — the target is not an administrator, so the directory is never asked.
+    # One of the writes is the USER_ROLES_CHANGED insert, written synchronously because it is `security`.
     # A shift means an added round trip; re-measure rather than nudging the number.
-    And 21 requests got executed for doctrine connection "default"
+    And 22 requests got executed for doctrine connection "default"
 
   # Roles are orthogonal to the identity lifecycle, so a suspended member is re-roled like any other — the new
   # set simply stays inert until the identity can act again.
@@ -123,6 +129,9 @@ Feature: Assign an identity's roles
     And the JSON node "type" should be equal to "last-active-administrator-protected"
     And there should be 0 events stored named "erpify.iam.identity.roles-changed"
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
+    # A refused change is not a change: the guard runs before the mutation, so the trail records nothing.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_CHANGED' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
+    And there should have 0 records in SQL result
 
   Scenario Outline: A malformed set is a 422, before the domain is touched
     Given I am logged in as an administrator
