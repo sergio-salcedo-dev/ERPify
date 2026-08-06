@@ -32,6 +32,19 @@ Name **ports by capability** and **implementations by technology/strategy** — 
 - An in-memory double that also records the calls it received still uses `InMemory<Port>` — the implementation nature dominates the incidental spying.
 - Reserve `Spy*` / `Stub*` / `Dummy*` for doubles that embody a test-double pattern instead of an alternative implementation of a domain port (a stubbed framework exception, a spy mailer, a stub clock).
 
+## Assert the seed before asserting the absence
+
+A test that asserts *"no row survives"* passes perfectly when the setup inserted nothing. The assertion is true, the test is green, and it proves nothing — so **every test whose subject is an absence must first assert that its own seed happened**: that the `INSERT` affected N rows, that the fixture exists, that the query it is about to negate would have found something a moment ago.
+
+This is not hypothetical hygiene. It shipped twice:
+
+- A seed written `INSERT … SELECT … FROM organization LIMIT 1` inserted **zero rows** — the test database is migrated and never provisioned — so the phantom row under test never existed and both assertions were already true without it.
+- An erasure `UPDATE` ran over **zero rows**, leaving its acceptance criteria unproven and its control unfalsifiable, while a `17 → 18` query counter was read as confirmation. **+1 is also what an `UPDATE` that matches nothing costs.**
+
+The same trap in its other shapes: a `--filter` that selects a strict subset still exits 0 (verify with `--list-tests`, do not reason about it), and a gate whose source file is missing must **fail rather than skip**.
+
+Corollary — **a control that has never been seen red is not a control.** Prove the red by sabotage: break the thing the test defends, watch it fail, and restore the bytes **by copy**, never with `git checkout --` (it reverts your uncommitted work along with the probe).
+
 ## Behat step vocabulary
 
 A step definition is a shared asset. Never delete one for being unused, and search the vocabulary before writing a new one — `make php.behat c='-dl'` lists it, `make php.behat c="-d '<text>'"` searches it. When you touch a feature, spend the idle steps that fit it: an assertion that exists and is never made proves nothing. Full rule, current numbers and the debugging-only exception: [`api/CLAUDE.md`](../../api/CLAUDE.md).

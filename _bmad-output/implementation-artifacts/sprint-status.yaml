@@ -168,7 +168,7 @@ development_status:
   # decisión pendiente del usuario, ninguna historia lo presupone. #562/#565 seguimiento operativo. #564 fuera
   # por ALCANZABILIDAD (php no declara replicas: en compose.prod.yaml); tripwire de reapertura: réplicas de php
   # o deploy rolling, momento en el que pasa a defecto de DISPONIBILIDAD urgente.
-  epic-gdpr-hardening: in-progress
+  epic-gdpr-hardening: done
   g-4a-fuga-passwordresetcompleted-transportes-messenger: done
   # G-1a: pase adversarial del CONTRATO hecho y registrado, y las TRES decisiones que abrió, ratificadas por
   # Sergio (2026-08-01). D1=① el gate ATERRIZA EN ROJO por Membership.user_id e Invitation.invited_user_id —
@@ -335,7 +335,7 @@ development_status:
   # moverse al MISMO pseudónimo o la unicidad se rompe.
   # Mientras G-5 no cierre, la épica NO puede declararse completada.
   g-5-ids-de-persona-fuera-del-event-store: done
-  epic-gdpr-hardening-retrospective: optional
+  epic-gdpr-hardening-retrospective: done
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.
@@ -383,4 +383,35 @@ development_status:
 #     no en SessionAdmissionGate) — es la premisa de la que cuelga toda la evaluación y nada la pinnea.
 #     Descartados: dimensión IP/origen (re-deriva login_throttling y abandona el caso del spray distribuido
 #     que el contador existe para cazar), y MFA como respuesta a esto (el muro es anterior al segundo factor).
-action_items: []
+# Action items — retrospectiva gdpr-hardening (2026-08-04). Mismo principio: resolver, no acumular.
+# Detalle y triaje en epic-gdpr-hardening-retro-2026-08-04.md. Lo ya registrado en deferred-work.md con su
+# trigger (control detective de event_store, scan secuencial del UPDATE, firma anonymise, conjunto cerrado de
+# D12) NO se duplica aquí.
+# NOTA: la lista nació con SEIS y dos eran FALSOS, detectados al ir a implementarlos y removidos:
+#   · "->stateful() para los otros dos schedules" — los TRES ya lo llevan; G-3b los arregló todos. El item se
+#     escribió leyendo el texto de la tarea ("decidir si se arregla aquí para los tres") sin medir el resultado.
+#   · "el audit no vio esta épica con 8/8 en done" — la vio: su check A es lo que abrió la sesión de la retro.
+#     Lo que sí es real quedó reformulado abajo, y va de la convención de commit, no del comando.
+# Los cinco items se implementaron en esta misma PR: los dos resolubles y las tres decisiones, tomadas por
+# Sergio el 2026-08-04. Detalle y argumento de cada decision en el fichero de la retro.
+action_items:
+  - epic: gdpr-hardening
+    action: "Afirmar que la siembra afectó a N filas antes de asertar la ausencia — la contramedida que arregló los dos tests vacuos (G-1b, G-5)"
+    owner: "Sergio"
+    status: done
+  - epic: gdpr-hardening
+    action: "Declarar dónde vive el registro de la entrega conjunta G-1a + G-1b en vez de reconstruirlo a posteriori desde el diff"
+    owner: "Sergio"
+    status: done
+  - epic: gdpr-hardening
+    action: "El pase adversarial pasa a ser requisito para ABRIR el PR, no para llegar a done; un PR que necesita ojos antes es un draft"
+    owner: "Sergio"
+    status: done
+  - epic: gdpr-hardening
+    action: "Vuelve el tag de historia al asunto de los commits que llevan CODIGO — es la unica entrada del check B del audit; descartado el hook de commit-msg"
+    owner: "Sergio"
+    status: done
+  - epic: gdpr-hardening
+    action: "La promesa de conjunto cerrado de D12 y su gemelo de audit_log se ablanda: cerrado por revision, no por gate, con el trigger del gate explicito"
+    owner: "Sergio"
+    status: done
