@@ -57,9 +57,11 @@ and its exhaustion folds into the same opaque wall as a dead link.
 
 **The corollary is already red on the invitation half, and that is why it belongs in the invariant.**
 The six `Invitation` events carry the invitation id as the envelope's `aggregateId`
-(`CarriesInvitationSnapshot.php:11-13`) — and that id *is* the accept link's selector — so
-`DbalEventStore` writes it to `event_store.aggregate_id`, a table with no TTL and no erasure path
-(`PRODUCTION_SECURITY_CHECKLIST.md` §7). `CreateInvitationCommand:70` additionally prints the whole
+(`CarriesInvitationSnapshot.php:11-13`) — and that id *is* the accept link's selector
+(`AcceptInvitation::splitToken()` reads `<invitationId>.<secret>`) — so `DbalEventStore` writes it to
+`event_store.aggregate_id` with no TTL. The table's one sanctioned mutation does not reach it:
+`EventStoreSubjectAnonymiser` erases **by value** and is called only with a person's id
+(`FulfilIdentityErasure.php:113`), and a selector is not one. `CreateInvitationCommand:70` additionally prints the whole
 token, secret included. The reset half does satisfy the corollary: `PasswordResetToken` raises
 `PasswordResetRequested($userId)`, so its envelope names the *user*, not the token row. Two token flows,
 one convention each. Anything built under this ADR follows the reset convention; the invitation
