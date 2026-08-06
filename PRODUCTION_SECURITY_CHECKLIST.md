@@ -577,17 +577,30 @@ mitigated state. Accepting one means recording who accepted it and against which
       the weekly CI cron runs `make composer.check.mercure-pin`, which goes red at the first
       upstream tag newer than `v0.4.2`. Tracking issue:
       [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
-- [ ] **A stolen session can stall self-service password recovery for an hour.** The per-identity budget on
-      `POST /me/password` (10 / 15 min) refuses out loud, and the documented way around it —
-      `/forgot-password` → `/reset-password` — runs on a *different* limiter that the same attacker can also
-      drain: the session reveals the address (`GET /me`), five requests spend `password_recovery_per_email`
-      (5 / hour), and exhaustion there is **silent by contract**, so the owner sees the uniform 202 and no
-      email arrives. Nothing is destroyed — the existing credential keeps working, both budgets refill on
-      sliding windows, and an administrator can suspend the identity or erase its sessions — but the owner
-      cannot self-serve a rotation for up to the longer window while an attacker keeps both buckets drained.
-      Raising or lowering either number does not remove this; closing it means a recovery path the session
-      holder cannot spend (an out-of-band channel, or an operator action). **Weigh it before the first
-      customer**, and do not cite the recovery route as an always-available escape hatch in the meantime.
+- [ ] **A stolen session can deny the owner a credential *rotation*, but not an *eviction*.** Both budgets a
+      session holder can reach are keyed by something they already have: `password_change_per_identity`
+      (10 / 15 min, a visible 429) by the identity itself, and `password_recovery_per_email` (5 / hour, whose
+      exhaustion is **silent by contract**, so the owner meets the uniform 202 and no email arrives) by the
+      address `GET /me` hands them. Neither one is the security objective. **Eviction is, and it has a path no
+      budget gates:** `POST /sessions/revoke-others` carries no limiter of any kind — every throttle in the
+      repo lives in `Iam/Identity` or `Iam/Invitation`, none in `Iam/Session` — needs only a live session, and
+      ships in the PWA as *Active sessions*. The owner's route to a live session is untouched: the credential
+      still works, a stolen session feeds no failed attempts into the lockout (`LoginAttemptRegistrar` is
+      reached only from the login failure handler, never from the password-change path), and the persisted
+      lock is enforced at `UserChecker::checkPostAuth` alone, never by `SessionAdmissionGate`. So the sequence
+      is **sign in → `GET /sessions` (the intruder's row is listed, with its device label) → `revoke-others`**,
+      and the delayed rotation is then hygiene against an adversary who no longer holds anything.
+      **The attacker holds the same weapon and the race still resolves for the owner:** either party can fire
+      `revoke-others` and evict the other, with no budget on either side, but **re-entry is not symmetric** —
+      the owner returns with the credential, while a revoked cookie is dead and no path re-mints one without
+      the password. Each round costs the owner one login.
+      **What survives is the composition, and it belongs to
+      [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602), not here:** an attacker who *also*
+      drives the per-email lockout (10 failures → `PT15M`, needing ≥2 source addresses to clear the per-IP
+      throttle) denies the owner the very session eviction requires. Until #602 closes, what the product owes
+      is **ordering guidance — evict first, rotate second** — in the UI copy and the password-changed mail.
+      `revoke-others` carrying no limiter is deliberate and load-bearing: it is the one edge an adversary
+      cannot spend. **Do not "harden" it.**
 - [ ] **A credential change can sign a second browser tab out of the application, and it is accepted.** Both
       flows that replace a credential from a live browser — `ChangeMyPassword` and `CompletePasswordReset` —
       revoke **every** session and mint a replacement onto the requesting tab. A request already in flight from
