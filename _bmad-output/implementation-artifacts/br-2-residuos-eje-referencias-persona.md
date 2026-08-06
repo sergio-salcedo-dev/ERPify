@@ -15,8 +15,13 @@ Status: ready-for-dev
 | # | Decisión | Resuelto |
 |---|---|---|
 | **D1** | **#389** — alcance de la redacción | **Ambas vías: documento + API.** El arreglo «más barato» de la épica no cierra el sumidero — la petición de API lleva el id bajo `filters[N][value]` (`buildSearchParams.ts:17-26`), clave que ningún `replace actorId` alcanza. Se acepta el coste: redactar `filters[N][value]` se lleva también nivel, acción y fechas, y el log de acceso deja de poder responder «qué filtro se aplicó». |
-| **D2** | **#565** — cerrar o implementar | **Cerrar con evidencia + tripwire + mapear `40P01`.** El ABBA no es alcanzable y la sentencia `OR` es un arreglo peor que el defecto. Lo que sí tiene valor es que `40P01` no está mapeado a nada reintentable en todo el repo — y mapearlo cubre además `event_store`, cuyo `payload::text ILIKE` sí fuerza seq scan y bloqueo amplio. |
-| **D3** | **#564** — 2 columnas o 4 + gate | **4 columnas + gate.** El patrón afecta a 4 columnas en 2 tablas, no 2. El issue pide «decidir una vez»; el gate es lo que hace que la decisión sobreviva a la próxima migración. |
+| **D2** | **#565** — cerrar o implementar | **Cerrar con evidencia + tripwire + mapear `40P01`, acotando el ADR.** El ABBA no es alcanzable y la sentencia `OR` es un arreglo peor que el defecto. El caso real del deadlock no es `audit_log` sino **`event_store`**, que el ADR no midió: su edición delimita el alcance de lo que decidió, no lo revierte. |
+| **D3** | **#564** — 2 columnas o 4 + gate | **Sólo las 2 de `audit_log`, más el gate.** Revisada: `identity_user.status`/`failed_attempts` dropearon su default por un argumento **distinto y válido** (el agregado siempre fija el valor; un default enmascararía la escritura que lo olvide), y ponérselo sería un **fail-open** sobre la columna que lee la admisión de sesión. |
+
+> **Estas dos filas son la versión revisada.** D2 y D3 se tomaron primero sobre una recomendación incompleta; un
+> pase de validación en contexto fresco encontró que D3 habría causado daño real y que D2 chocaba con un ADR
+> que nadie había leído. Queda escrito porque el fallo es reproducible: recomendé «4 columnas» por simetría del
+> patrón sin comprobar que las razones para dropear el default fueran la misma en las dos tablas. No lo eran.
 
 **#562 no tenía decisión: tenía un hecho.** El issue describe un N+1 vía `UserRepository::findById()` que **ya no
 existe** (entregado en G-1c/#634). Se cierra con evidencia; lo que queda es otra deuda, ya registrada en
@@ -175,7 +180,8 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 - El comentario de cierre (o de re-encuadre) cita la evidencia: `User.php:38-41`, `AdministratorErasureRequiresDemotion.php:15-18`, y que `'User'` aparece una sola vez en `api/src`.
 - Existe un test que **se pone rojo el día que el ABBA se vuelve alcanzable** — es decir, cuando aparezca un escritor de `resource_type='User'` ajeno a la transacción. Precedente de forma: `DoctrineActiveAdministratorDirectoryTest.php:111-137` interroga `pg_locks` para `pg_backend_pid()` en vez de simular concurrencia.
 - **`40P01` se mapea a un marcador reintentable** del contrato RFC 9457 (hoy sale 500), y `docs/api-error-contract.md` se actualiza — **obligatorio, NFR26**. La razón de fondo **no es el ABBA** sino `event_store`: `DbalEventStoreSubjectAnonymiser.php:61-69` corre en la **misma** transacción que los dos pases de auditoría y su `payload::text ILIKE` (`:68`) fuerza seq scan sobre filas que cualquier escritura de negocio está insertando por el outbox. Ahí el deadlock **sí** es plausible.
-- **Tres cosas que el mapeo exige decidir y que no se pueden improvisar**: (a) **qué marcador** — no existe ninguno «reintentable» en `api/src/Shared/ErrorContract/Domain/Exception/`, hay que crearlo o reutilizar `Conflict`; (b) **dónde se traduce** — `DeadlockException` es de DBAL, no `DomainException`, así que no entra por la vía habitual; (c) **cómo se reconcilia con `docs/adr/audit-activity-log.md:177-181`**, que decidió explícitamente *no* añadir reintento síncrono aquí. Ignorar ese ADR, no acotarlo, es lo que haría el mapeo insostenible en review.
+- **Qué marcador y dónde se traduce, decidido aquí y no en el teclado**: no existe ninguno «reintentable» en `api/src/Shared/ErrorContract/Domain/Exception/`, así que hay que crearlo o justificar reutilizar `Conflict`; y como `Doctrine\DBAL\Exception\DeadlockException` **no** es `DomainException`, el punto de traducción hay que nombrarlo explícitamente en el PR (candidato: `ProblemDetailsFactory`, que ya menciona `deadlock` en `:450`).
+- **El ADR se ACOTA, no se ignora ni se revierte.** `docs/adr/audit-activity-log.md:177-181` decidió no añadir reintento síncrono, y su argumento —que las clases reintentables no contienden en el write de `audit_log`— **probablemente acierta para `audit_log`**. Lo que el ADR no cubre es `event_store`: `DbalEventStoreSubjectAnonymiser.php:61-69` corre en la misma transacción y su `ILIKE` fuerza seq scan sobre filas que el outbox está insertando. **La edición del ADR delimita su alcance a la tabla que midió**; dejar dos documentos del repo diciendo lo contrario es el patrón contrato↔realidad que este lote existe para cerrar.
 - **NO se implementa la sentencia `OR`.** Los cinco motivos están arriba (§#565); el principal es que regresaría GDPR y destruiría evidencia de terceros.
 
 ### AC3 — #562: se cierra con evidencia y la deuda restante queda nombrada correctamente
@@ -186,11 +192,13 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 
 ### AC4 — #564: la clase de defecto se cierra por la vía reachable
 
-- Migración **nueva** (jamás editar `Version20260723151422.php` ni `Version20260626215406.php`, ambas mergeadas) con `ALTER COLUMN … SET DEFAULT` para **las cuatro columnas**: `audit_log.actor_erased`, `audit_log.resource_erased`, `identity_user.status` (`'ACTIVE'`), `identity_user.failed_attempts` (`0`); `down()` reversible.
-- `AuditLogSchemaListener.php:51-52` declara los defaults, y `:19-23` deja de afirmar lo que sus tres hermanos desmienten. El mapping ORM de `User` cubre las dos de `identity_user`.
-- **Generar la migración con `make db.diff` DESPUÉS de tocar el listener y el mapping** — no a mano: el listener es la fuente de verdad de `audit_log`, que no tiene entidad ORM.
+- Migración **nueva** (jamás editar `Version20260723151422.php` ni `Version20260626215406.php`, ambas mergeadas) con `ALTER COLUMN … SET DEFAULT FALSE` para **las dos columnas de `audit_log`**: `actor_erased` y `resource_erased`; `down()` reversible.
+- **`identity_user.status` y `failed_attempts` quedan FUERA, y esto es deliberado.** Su `DROP DEFAULT` (`Version20260709230444.php:22-27`, `Version20260711171040.php:22-27`) **no** obedece a la premisa falsa del schema listener — obedece a un argumento válido y distinto: *el agregado siempre fija el valor explícitamente, y un default latente sólo enmascararía una escritura futura que lo olvide*. Ponerles default convertiría un fallo ruidoso en un **fail-open** sobre la columna que lee la admisión de sesión (`DoctrineActiveAdministratorDirectory.php:49` filtra por `status = :active`). Además la vía reachable no las alcanza: retroceder la imagen por debajo de #467/#475 no es un rollback plausible.
+- `AuditLogSchemaListener.php:51-52` declara los defaults, y `:19-23` deja de afirmar lo que sus tres hermanos desmienten.
+- **Generar la migración con `make db.diff` DESPUÉS de tocar el listener** — no a mano: el listener es la fuente de verdad de `audit_log`, que no tiene entidad ORM. Exige la BD **en head** antes de generar.
 - `docs/deployment-guide.md:193-197` (Rollback) recoge la regla: una columna `NOT NULL` añadida sin `DEFAULT` rompe cada `INSERT` tras un rollback de imagen.
-- **Gate**: un `*RulesGateTest` en `api/tests/Unit/Shared/Architecture/` que falle sobre `ALTER COLUMN \w+ DROP DEFAULT` en `api/migrations/**` cuando la columna es `NOT NULL`. Debe **provocarse en rojo** antes de darlo por bueno (no basta con que pase): las cuatro migraciones existentes son el caso de prueba, así que el gate necesita una exención explícita para ellas o se corrige el histórico — decidir al escribirlo y dejarlo dicho.
+- **Gate** en `api/tests/Unit/Shared/Architecture/`: falla cuando una migración hace `ALTER COLUMN … DROP DEFAULT` sobre una columna que el `ADD COLUMN` de **esa misma migración** declara `NOT NULL` (es el único caso decidible con un barrido textual — no intentar inferirlo de otra forma). **Exención por lista cerrada de los cuatro ficheros históricos, y la lista no puede crecer**: eso es lo que convierte el gate en trinquete en vez de en decoración.
+- **El gate se provoca en rojo antes de darlo por bueno**, con una migración sintética en fixture — no basta con que pase, porque tras la exención nace verde sobre conjunto vacío.
 
 ### AC5 — Gates y proceso
 
@@ -219,9 +227,9 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
   - [ ] Corregir `LiveIdentityDirectory.php:28-30` (sólo el puerto)
   - [ ] Comentario de cierre; registrar las 5 lecturas sin `LIMIT`; actualizar la `Ref:` rancia de `deferred-work.md:11`
 - [ ] **T4 — #564 default + listener + doc** (AC: 4)
-  - [ ] `AuditLogSchemaListener.php:51-52` (+ `:19-23`) y el mapping ORM de `User`, **luego** `make db.diff`
+  - [ ] `AuditLogSchemaListener.php:51-52` (+ `:19-23`), **luego** `make db.diff` con la BD en head. **Solo `audit_log`** — `identity_user` queda fuera, ver AC4
   - [ ] `docs/deployment-guide.md:193-197`
-  - [ ] `*RulesGateTest` sobre `api/migrations/**` — **provocarlo en rojo**, y resolver qué hacer con las 4 migraciones históricas que lo violan
+  - [ ] `*RulesGateTest` sobre `api/migrations/**` con exención de lista cerrada — **provocarlo en rojo** con una migración sintética
 - [ ] **T5 — Gates, pase adversarial, PR draft** (AC: 5)
 
 ---

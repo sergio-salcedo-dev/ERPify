@@ -83,8 +83,11 @@ gdpr-hardening no cubrió. **Es el único lote con consecuencia legal.**
   con una sola réplica, y el peor tumba la escritura de negocio (`AuditWriteCaptureListener.php:57`, sin
   `catch`, dentro de `onFlush`). Su «tensión» blindada es **un error de hecho**: el schema listener sí puede
   expresar defaults — `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaListener.php:47` y
-  `BankCountSchemaListener.php:33-34` lo hacen. Caída la premisa el arreglo cuesta 2 ficheros, y el patrón
-  afecta a **4 columnas en 2 tablas**, no 2. Se cierra con las cuatro más un gate.
+  `BankCountSchemaListener.php:33-34` lo hacen. Caída la premisa el arreglo cuesta 2 ficheros. El patrón se
+  repite en **4 columnas de 2 tablas**, pero sólo las dos de `audit_log` se corrigen: en `identity_user` el
+  default se dropeó por un argumento distinto y válido — el agregado siempre fija el valor, y un default
+  latente enmascararía la escritura futura que lo olvide — así que ponérselo sería un **fail-open** sobre la
+  columna que lee la admisión de sesión. Se cierra con esas dos más un gate de trinquete.
 
 ### BR-3 · Auditoría y crypto — cierres del eje 3
 
