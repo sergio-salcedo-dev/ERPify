@@ -182,6 +182,16 @@ best-effort. La pérdida se cubre por **observabilidad** (alarma sobre el pico d
 best-effort significa pérdida **visible**, no pérdida evitada. El vector dominante de pérdida sigue siendo que
 `kernel.terminate` no dispare (SIGTERM/reciclado del worker), que ningún reintento de BD toca.
 
+**Alcance de esa decisión: el `INSERT` de `activity`, no toda contención de la aplicación.** El argumento mide un
+write concreto —una fila, autocommit, esquema con solo PK— y para ése se sostiene. No cubre la transacción del
+borrado GDPR, que tiene otra forma: `FulfilIdentityErasure` corre el pase de actor, el pase de recurso y el
+anonimizador del `event_store` bajo una sola transacción, y el último es un `payload::text ILIKE` que fuerza scan
+secuencial sobre filas que el outbox está insertando en paralelo. Ahí las clases reintentables sí son plausibles.
+**Lo que se añade no es reintento** —la decisión de arriba sigue intacta— **sino traducción**:
+`DoctrineTransactionManager` convierte cualquier `RetryableException` de DBAL en `TransientTransactionFailure`, o
+sea 503 `transient-transaction-failure`, de modo que un `40P01` deja de salir como 500 `unhandled-exception`. El
+llamador recibe «reinténtalo» en vez de «el servidor está roto»; reintentar sigue siendo cosa suya.
+
 **Trigger de revisita.** Si `MESSENGER_TRANSPORT_DSN` migra a un **broker real** (AMQP/Redis/SQS), el `dispatch` pasa a
 ser más barato que un write a BD y la absorción de picos deja de ser gratis — reconsiderar entonces una cola de
 `activity` (y, con ella, la pregunta del tombstone). Hoy, con transporte Doctrine, la cola era coste neto.

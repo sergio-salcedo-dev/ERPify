@@ -125,6 +125,53 @@ final class PersonResourceErasureGateTest extends TestCase
         }
     }
 
+    /**
+     * The single-writer tripwire. `FulfilIdentityErasure` runs the actor pass and the resource pass inside
+     * one transaction, in that order, and neither statement fixes its lock order with an `ORDER BY` — so two
+     * concurrent erasures taking the two axes in opposite orders is a textbook ABBA deadlock. It is
+     * unreachable, and the reason is NOT that anything serialises them: it is that the reciprocal pair of
+     * rows cannot coexist. The only file that names a person as an audit RESOURCE is this erasure, and the
+     * erasure hard-deletes the identity, so a subject once erased never acts again.
+     *
+     * That argument dies the moment a second file writes the type — an admin action recorded against a user,
+     * say — because then the resource axis carries rows the erasure did not write, two live administrators
+     * can each be the other's resource, and the deadlock becomes reachable while every other gate stays
+     * green. A `40P01` surfaces as a 500 through the RFC 9457 pipeline.
+     *
+     * This is the sibling of `theStalenessOfAPersonTypeIsSatisfiedByItsOwnErasureDeclaration` and not a
+     * duplicate of it: that one matches the quoted literal, so a writer reaching the type through an
+     * imported constant or a route default is invisible to it. Derivation resolves all three forms, which is
+     * what makes this one a tripwire rather than a spot check.
+     *
+     * **What it does not see**, because a tripwire that overstates its reach is worse than none:
+     *  - A type passed as a VARIABLE — `AuditResource::of($type, $id)` — matches none of the three derivation
+     *    forms and raises nothing. {@see \Erpify\Shared\Audit\Infrastructure\Http\RequestAuditResourceExtractor}
+     *    is written that way and is covered only because its INPUT is a `#[Route]` default literal; a
+     *    `$request->attributes->set('_audit_resource_type', …)` at runtime would be covered by neither.
+     *  - `api/src` only. The row seeded by `features/backoffice/users/erase.feature` and the
+     *    `AuditResource::of('User', …)` in `AuditActorAnonymiserFunctionalTest` are test surfaces, correctly
+     *    invisible here — they do not make the deadlock reachable in production.
+     */
+    #[Test]
+    public function noSecondFileWritesAPersonTypeIntoTheResourceAxis(): void
+    {
+        $registry = $this->registry();
+
+        foreach ($this->personTypes() as $type => $personResourceDeclaration) {
+            $this->assertSame([$personResourceDeclaration->erasedBy], $registry->filesDerivingType($type), \sprintf(
+                'A file other than the declared erasure of "%s" now writes it into the audit resource axis. '
+                . 'Two consequences, and the second is the one nobody will look for: the erasure no longer '
+                . 'accounts for every row naming a person as a resource, and the ABBA deadlock between the '
+                . 'actor pass and the resource pass of FulfilIdentityErasure — unreachable only because the '
+                . 'reciprocal rows cannot coexist — becomes reachable. Fix the first by naming the new '
+                . "writer's erasure; fix the second by giving both passes a deterministic lock order "
+                . '(`ORDER BY id`, as DoctrineActiveAdministratorDirectory already does) and by confirming '
+                . '40P01 still maps to a retryable marker.',
+                $type,
+            ));
+        }
+    }
+
     #[Test]
     public function everyPersonTypeNamesAWitnessThatProvesItsErasure(): void
     {

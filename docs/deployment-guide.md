@@ -194,6 +194,7 @@ Step-by-step (incl. internal-CA trust and `/etc/hosts`) and VPS promotion:
 
 - Images are immutable (digest-pinned). Redeploy the previous image tag.
 - Roll back DB changes only if the migration is reversible — otherwise restore from the most recent Postgres backup and replay.
+- **Redeploying the previous image does not undo its migrations — `down()` never runs.** The old writer therefore meets the new schema, and the one shape that breaks under it is a `NOT NULL` column added **without a `DEFAULT`**: every `INSERT` from code that predates the column fails. It needs no rolling deploy and no second replica; one replica rolled back is enough. On `audit_log` the consequence is tiered by how the write is issued — the `change` tier writes inside `onFlush` with no `catch`, so the **business** write fails with the audit write. A `NOT NULL` column therefore keeps a persistent `DEFAULT`; if a `postGenerateSchema` listener is the table's source of truth, declare it there so `make db.diff` stays clean instead of dropping the default to silence the diff. Gate: `MigrationColumnDefaultGateTest` (a closed exemption list of the four migrations that predate it).
 - Postgres holds all application state, so a restore is a single artifact: `STAMP=<stamp> make restore.prod` (runbook: [`vps-deployment.md`](./vps-deployment.md) § Backups).
 
 ## Operational notes

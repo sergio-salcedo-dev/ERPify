@@ -16,11 +16,17 @@ use Doctrine\ORM\Tools\ToolEvents;
  * `make db.diff` would generate a DROP for it. This listener is the **source of truth** for the table's
  * shape — the migration is generated from it.
  *
- * Doctrine's schema abstraction expresses only a subset of the ideal DDL: there is no `CHECK`, no native
- * Postgres `ENUM` and no column `DEFAULT`, so `level`/`actor_type` are plain `VARCHAR` holding the backing
- * value of their PHP enum (the enum, not the database, is the closed set), and every value is supplied by
- * the writer rather than by a column default. `ip` is `VARCHAR(45)` because DBAL models no `inet` type and
- * no query needs subnet operators.
+ * Doctrine's schema abstraction expresses only a subset of the ideal DDL: there is no `CHECK` and no native
+ * Postgres `ENUM`, so `level`/`actor_type` are plain `VARCHAR` holding the backing value of their PHP enum
+ * (the enum, not the database, is the closed set). `ip` is `VARCHAR(45)` because DBAL models no `inet` type
+ * and no query needs subnet operators.
+ *
+ * Column `DEFAULT` it does express, and the two erasure flags carry one. The writer still supplies every
+ * value: a default is not how a row gets written, it is what a row written by the *previous image* gets. A
+ * `NOT NULL` column with no default breaks every `INSERT` issued by code that predates the column, and
+ * redeploying the previous image tag — the documented rollback in `docs/deployment-guide.md` — does not undo
+ * the migration with it, because `down()` never runs. On this table that is not a degraded
+ * trail: the `change` tier writes inside `onFlush` with no `catch`, so the business write fails with it.
  */
 #[AsDoctrineListener(event: ToolEvents::postGenerateSchema)]
 final class AuditLogSchemaListener
@@ -48,8 +54,8 @@ final class AuditLogSchemaListener
         $table->addColumn('metadata', Types::JSONB);
         $table->addColumn('ip', Types::STRING, ['length' => 45, 'notnull' => false]);
         $table->addColumn('user_agent', Types::STRING, ['length' => 512, 'notnull' => false]);
-        $table->addColumn('actor_erased', Types::BOOLEAN);
-        $table->addColumn('resource_erased', Types::BOOLEAN);
+        $table->addColumn('actor_erased', Types::BOOLEAN, ['default' => false]);
+        $table->addColumn('resource_erased', Types::BOOLEAN, ['default' => false]);
         $table->addColumn('occurred_on', Types::DATETIMETZ_IMMUTABLE);
         $table->addColumn('encryption_scope_id', Types::STRING, ['length' => 160, 'notnull' => false]);
 

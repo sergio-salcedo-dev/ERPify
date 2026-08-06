@@ -25,6 +25,11 @@ use RuntimeException;
  * and the make target selects both through a common prefix rather than naming either.
  *
  * @internal
+ *
+ * The method count grows with the number of rules there are to falsify, which is the property this class is
+ * for — collapsing two reds into one case to stay under a threshold would hide which rule failed
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
 #[CoversNothing]
 final class PersonResourceErasureRulesGateTest extends TestCase
@@ -80,6 +85,27 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         );
     }
 
+    /**
+     * Falsifies the single-writer tripwire over the real tree. There, exactly one file derives the person
+     * type, so `assertSame([owner], filesDerivingType(...))` is indistinguishable from an assertion whose
+     * right-hand side can never hold more than one entry — which is precisely how a tripwire ends up
+     * unable to trip.
+     */
+    #[Test]
+    public function theDerivationSweepReportsEverySecondWriterOfAType(): void
+    {
+        $deriving = $this->overFixtures('registry.complete')->filesDerivingType(self::TYPE);
+
+        $this->assertContains('src/AuditResourceFixtureWriter.php', $deriving);
+        $this->assertContains('src/SecondAuditResourceFixtureWriter.php', $deriving);
+        $this->assertCount(
+            2,
+            $deriving,
+            'The derivation sweep collapses two writers of the same type into one entry, so an assertion '
+            . 'pinning a person type to a single deriving file could never go red.',
+        );
+    }
+
     #[Test]
     public function theSweepResolvesATypeNamedOnlyThroughAnotherClassesConstant(): void
     {
@@ -105,7 +131,12 @@ final class PersonResourceErasureRulesGateTest extends TestCase
 
         $this->assertSame([self::TYPE, self::IMPORTED_TYPE], $registry->resourceTypesInSource());
         $this->assertSame(
-            ['src/AnonymiserHolderFixture.php', 'src/AuditResourceFixtureWriter.php', 'src/ReceivingEraserFixture.php'],
+            [
+                'src/AnonymiserHolderFixture.php',
+                'src/AuditResourceFixtureWriter.php',
+                'src/ReceivingEraserFixture.php',
+                'src/SecondAuditResourceFixtureWriter.php',
+            ],
             $registry->sourceFilesCarrying(self::TYPE),
         );
     }

@@ -351,7 +351,7 @@ development_status:
   # tiempo. Un issue solo se cierra con evidencia medida en el comentario de cierre.
   epic-backlog-resolution: in-progress
   br-1-behat-vocabulario-falsabilidad: backlog
-  br-2-residuos-eje-referencias-persona: ready-for-dev
+  br-2-residuos-eje-referencias-persona: review
   br-3-auditoria-crypto-cierres-eje-3: backlog
   br-4-endurecimiento-identidad-grafo-recuperacion: backlog
   br-5-ciclo-de-vida-iam-session: backlog

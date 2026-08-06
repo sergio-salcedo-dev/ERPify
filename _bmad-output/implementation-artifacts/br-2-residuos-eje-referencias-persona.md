@@ -1,6 +1,10 @@
+---
+baseline_commit: 5431333272e797b834f73669459ad3198c5e88f0
+---
+
 # Story BR-2: Residuos del eje de referencias a persona
 
-Status: ready-for-dev
+Status: review
 
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · Lote BR-2 · Issues #389 #562 #565 #564
 > Rama: `fix/shared-person-reference-residuals-uxa2` · Worktree: `.claude/worktrees/shared-person-reference-residuals-uxa2` · Base: `main` @ `bca43bf1`
@@ -213,24 +217,38 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 ## Tasks / Subtasks
 
 - [x] **T0 — D1/D2/D3 resueltas** (2026-08-06): ambas vías · cerrar+tripwire+`40P01` · 4 columnas + gate
-- [ ] **T1 — #389 redacción del log** (AC: 1)
-  - [ ] `api/frankenphp/Caddyfile:24-29` — `replace` para los 3 nombres directos **y** `filters[0..8][value]`
-  - [ ] Extender `api/tests/Unit/Shared/Architecture/CaddyfileAccessLogRedactionGateTest.php` — **ojo: el regex `[^}]*` (`:27-37`) no cruza `}`; las entradas nuevas deben ser hermanas dentro del mismo `request>uri query { … }`**
-  - [ ] Corregir docblocks `auditUrlState.ts:45-52` y `auditFilter.ts:6-8`
-  - [ ] `PRODUCTION_SECURITY_CHECKLIST.md` — el residual del path
-- [ ] **T2 — #565 clasificación + tripwire** (AC: 2)
-  - [ ] Extender `api/tests/Support/AuditResourceTypeRegistry.php` + `PersonResourceErasureGateTest` (**no** un sweep nuevo), acotando los sembrados de test
-  - [ ] `DbalAuditResourceAnonymiser.php:23-25` — **lleva la misma premisa falsa que refutamos**: dice que una fila que nombra al sujeto como recurso «very often» la escribió un administrador cambiándole los roles. Si #565 es cierto, ese docblock miente igual que el de `LiveIdentityDirectory`
-  - [ ] Comentario de cierre con la evidencia (usar el argumento del hard-delete, no el del lock)
-  - [ ] Mapeo `40P01` → marcador reintentable + `docs/api-error-contract.md` (NFR26)
-- [ ] **T3 — #562 cierre con evidencia + contrato honesto** (AC: 3)
-  - [ ] Corregir `LiveIdentityDirectory.php:28-30` (sólo el puerto)
-  - [ ] Comentario de cierre; registrar las 5 lecturas sin `LIMIT`; actualizar la `Ref:` rancia de `deferred-work.md:11`
-- [ ] **T4 — #564 default + listener + doc** (AC: 4)
-  - [ ] `AuditLogSchemaListener.php:51-52` (+ `:19-23`), **luego** `make db.diff` con la BD en head. **Solo `audit_log`** — `identity_user` queda fuera, ver AC4
-  - [ ] `docs/deployment-guide.md:193-197`
-  - [ ] `*RulesGateTest` sobre `api/migrations/**` con exención de lista cerrada — **provocarlo en rojo** con una migración sintética
+- [x] **T1 — #389 redacción del log** (AC: 1)
+  - [x] `api/frankenphp/Caddyfile` — `replace` para los 3 nombres directos **y** `filters[0..8][value]`
+  - [x] Extender `CaddyfileAccessLogRedactionGateTest.php` — ata el rango al productor PWA; falsificado en 3 direcciones
+  - [x] Corregir docblocks `auditUrlState.ts` y `auditFilter.ts`
+  - [x] `PRODUCTION_SECURITY_CHECKLIST.md` — el residual del path + la redacción ampliada
+  - [x] **Tercera vía, no prevista por la historia (decisión de Sergio, 2026-08-06): `request_uri` del log de aplicación.** `RequestUriRedaction` + los dos callsites de `ExceptionResponder` + `docs/api-error-contract.md` (NFR26)
+- [x] **T2 — #565 clasificación + tripwire** (AC: 2)
+  - [x] `PersonResourceErasureGateTest::noSecondFileWritesAPersonTypeIntoTheResourceAxis` usa `filesDerivingType()` (las 3 formas), no `sourceFilesCarrying()` (solo literal). Falsificado con un segundo escritor real en `api/src` y con `SecondAuditResourceFixtureWriter` en el árbol de fixtures. **No hizo falta acotar los sembrados de test**: el barrido lee `api/src` únicamente, así que `erase.feature` y `AuditActorAnonymiserFunctionalTest` son invisibles por construcción
+  - [x] `DbalAuditResourceAnonymiser` — la separación de ejes pasa a ser una regla sobre lo que las columnas SIGNIFICAN, no una afirmación estadística sobre quién escribió las filas
+  - [x] `40P01` → `TransientTransactionFailure` (503 `transient-transaction-failure`) traducido en `DoctrineTransactionManager`, el seam de transacción. Se captura el marcador `RetryableException` de DBAL, no una lista de SQLSTATEs. `docs/api-error-contract.md` actualizado (NFR26); deptrac 0 violaciones
+  - [x] `docs/adr/audit-activity-log.md` ACOTADO: su argumento mide el `INSERT` de `activity`; se añade **traducción, no reintento**, así que la decisión no se revierte
+  - [ ] Comentario de cierre en #565 (T5)
+
+> **Nota para el PR:** el candidato que la historia sugería para el punto de traducción —`ProblemDetailsFactory:450`,
+> «que ya menciona deadlock»— es un falso amigo: ese `deadlock` habla de un ciclo en la cadena de excepciones, no de
+> uno de base de datos. Y traducir ahí habría metido un import de Doctrine en `Application`, que es exactamente lo
+> que el trinquete de deptrac rechaza.
+- [x] **T3 — #562 cierre con evidencia + contrato honesto** (AC: 3)
+  - [x] Corregir `LiveIdentityDirectory.php` (sólo el puerto; `DoctrineLiveIdentityDirectory` ya era honesto)
+  - [x] `deferred-work.md`: `Ref:` corregida a `:106`/`:221`, prosa que citaba el docblock viejo reescrita, y las 5 lecturas sin `LIMIT` registradas como bala nueva
+  - [ ] Comentario de cierre en #562 (T5)
+- [x] **T4 — #564 default + listener + doc** (AC: 4)
+  - [x] `AuditLogSchemaListener` declara los dos defaults y su docblock deja de afirmar la premisa falsa; `make db.diff` con la BD en head → `Version20260806180031.php`. **Solo `audit_log`**; `identity_user` no produce deriva porque su entidad tampoco declara default
+  - [x] `docs/deployment-guide.md` § Rollback recoge la regla
+  - [x] `MigrationColumnDefaultGateTest` + `MigrationColumnDefaultRulesGateTest` + `Fixture/MigrationColumnDefault/` (8 fixtures). Provocado en rojo con `Version29990101000000.php` sintética en el árbol real; los fixtures cazaron un fallo real de la regla (`DEFAULT 'ACTIVE' NOT NULL` no se detectaba)
+  - [x] Medido: `INSERT` que omite las dos columnas ahora escribe `f`/`f` (probe en transacción con `ROLLBACK`); `db.diff` posterior dice «No changes detected»
 - [ ] **T5 — Gates, pase adversarial, PR draft** (AC: 5)
+  - [x] Todos los gates verdes, cada uno de corrida fresca con exit code impreso (tabla abajo)
+  - [x] `make db.migrate` / `make db.validate` exit 0; `db.diff` posterior sin deriva
+  - [ ] **Pase adversarial PARCIAL** — 3 de 4 lectores murieron por límite de sesión; ver la sección dedicada
+  - [ ] Comentarios de cierre en #389 #565 #562 #564
+  - [ ] PR en draft
 
 ---
 
@@ -321,6 +339,145 @@ claude-opus-5[1m]
 Medición inicial: 4 subagentes read-only contra `bca43bf1` (2026-08-06). Los cuatro informes refutan la
 disposición planificada en #565, #562 y #564.
 
+**Sondas contra el stack vivo** (no solo gates textuales):
+
+- Log de acceso, petición de documento → `actorId=REDACTED&correlationId=REDACTED&level=security&resourceId=REDACTED`.
+- Log de acceso, petición de API → `filters[0][value]=REDACTED`, `filters[8][value]=REDACTED`, y
+  **`filters[9][value]` en claro** — el borde del rango es observable, no teórico. Es lo que motivó atar el
+  rango al productor en vez de dejarlo escrito en un comentario.
+- Log de aplicación → `"request_uri":"/api/audit?actorId=REDACTED&filters%5B0%5D%5Bfield%5D=actorId&filters%5B0%5D%5Bvalue%5D=REDACTED&token=REDACTED"`.
+- `INSERT` que omite las dos columnas nuevas → escribe `f`/`f` (probe en transacción, `ROLLBACK`).
+
+**Gates provocados en rojo antes de darlos por buenos** (restaurando por bytes, nunca `git checkout --`):
+
+| Gate | Rojos provocados |
+|---|---|
+| `CaddyfileAccessLogRedactionGateTest` | hueco no contiguo en los índices · décimo `filters.push(` en el productor TypeScript · `replace token` retirado |
+| `RequestUriRedactionTest` | `redact()` neutralizado a `return $requestUri;` → 10 de 16 rojos (exactamente las filas que deben redactar) |
+| `MigrationColumnDefaultGateTest` | migración sintética `Version29990101000000.php` en el árbol real |
+| `MigrationColumnDefaultRulesGateTest` | los fixtures cazaron un fallo REAL de la regla: `DEFAULT 'ACTIVE' NOT NULL` no se detectaba porque la cola se cortaba en la comilla del literal SQL |
+| `PersonResourceErasureGateTest` (tripwire) | segundo escritor real de `AuditResource::of('User', …)` en `api/src` |
+
+**Falso positivo descartado con medición, no con una muestra.** `AuditTimelineSearchCursorFunctionalTest::testTimelineAccessPathsAreIndexBacked`
+falló de forma reproducible tras una corrida de Behat. No es regresión de este diff: el test siembra con
+`TRUNCATE` + reinserción y no hace `ANALYZE`, así que el planner puede escoger sobre `reltuples` rancio. Un
+`ANALYZE audit_log` (solo estadísticas) lo pone verde. Los `DEFAULT` de columna no entran en el modelo de
+coste del planner. **Queda como hallazgo fuera de alcance**: es un gate que puede volverse rojo por la
+ventana de autovacuum.
+
 ### Completion Notes List
 
+- **AC1 cerrado por TRES vías, no dos.** La tercera —`request_uri` del log de aplicación— no estaba en la
+  historia; se midió durante T1 y Sergio decidió cerrarla aquí. `RedactionDenylist` no podía protegerla
+  porque casa NOMBRES de clave y nunca mira dentro de un valor.
+- **Los ejes de identidad NO se metieron en `RedactionDenylist::KEYS`.** Esa lista se casa por subcadena
+  también contra las claves de extensión del cuerpo, y `actorId`/`resourceId`/`correlationId` son nombres de
+  propiedad de los Resource DTO: añadirlos ahí habría empezado a recortar campos de respuestas en silencio.
+- **En PHP el rango no tiene acantilado.** El Caddyfile enumera 0..8 porque su gramática no tiene comodín;
+  `RequestUriRedaction` usa un patrón, así que cubre cualquier índice y también la forma `[value][]` del
+  operador `in` que el borde deja declarada fuera de alcance.
+- **AC2 se resolvió reutilizando `ServiceUnavailable`, no creando un marcador.** 409 le diría al llamador que
+  resuelva un conflicto que no existe; 503 es «reinténtalo». Se traduce en `DoctrineTransactionManager` —el
+  seam de transacción— y no en `ProblemDetailsFactory`, que es `Application` y habría estrenado un import de
+  Doctrine contra el trinquete de deptrac. Se captura el marcador `RetryableException` de DBAL, no una lista
+  de SQLSTATEs.
+- **El ADR se acotó sin revertirse**: se añade traducción, no reintento síncrono.
+- **AC4: no hizo falta acotar los sembrados de test** que la historia anticipaba — el barrido del registro lee
+  `api/src` únicamente, así que `erase.feature` y `AuditActorAnonymiserFunctionalTest` son invisibles por
+  construcción.
+
+**Fuera de alcance, no arreglado, declarado:**
+
+- `testTimelineAccessPathsAreIndexBacked` puede ponerse rojo por estadísticas rancias (arriba).
+- Dos `PHPUnit Notices` preexistentes en `DoctrineSessionRepositoryStoreUnavailableTest` (mocks sin
+  expectativas). No es mi diff.
+
 ### File List
+
+**Nuevos**
+
+- `api/migrations/2026/Version20260806180031.php`
+- `api/src/Shared/ErrorContract/Application/RequestUriRedaction.php`
+- `api/src/Shared/Persistence/Domain/Exception/TransientTransactionFailure.php`
+- `api/tests/Support/MigrationColumnDefaults.php`
+- `api/tests/Unit/Shared/Architecture/MigrationColumnDefaultGateTest.php`
+- `api/tests/Unit/Shared/Architecture/MigrationColumnDefaultRulesGateTest.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/MigrationColumnDefault/` (8 fixtures)
+- `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/src/SecondAuditResourceFixtureWriter.php`
+- `api/tests/Unit/Shared/ErrorContract/Application/RequestUriRedactionTest.php`
+
+**Modificados**
+
+- `api/frankenphp/Caddyfile`
+- `api/src/Iam/Identity/Domain/Repository/LiveIdentityDirectory.php`
+- `api/src/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListener.php`
+- `api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditResourceAnonymiser.php`
+- `api/src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php`
+- `api/src/Shared/Persistence/Infrastructure/DoctrineTransactionManager.php`
+- `api/tests/Unit/Shared/Architecture/CaddyfileAccessLogRedactionGateTest.php`
+- `api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php`
+- `api/tests/Unit/Shared/Architecture/PersonResourceErasureRulesGateTest.php`
+- `api/tests/Unit/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponderTest.php`
+- `api/tests/Unit/Shared/Persistence/DoctrineTransactionManagerTest.php`
+- `docs/adr/audit-activity-log.md`
+- `docs/api-error-contract.md`
+- `docs/deployment-guide.md`
+- `pwa/src/app/backoffice/audit/_lib/auditFilter.ts`
+- `pwa/src/app/backoffice/audit/_lib/auditUrlState.ts`
+- `PRODUCTION_SECURITY_CHECKLIST.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+### Gates (corridas frescas, exit code impreso)
+
+| Gate | Exit |
+|---|---|
+| `make php.quality` (incluye deptrac: 0 violaciones) | 0 |
+| `make pwa.quality` | 0 |
+| `make php.unit` (2345 tests) | 0 |
+| `make php.behat` (399 escenarios) | 0 |
+| `make pwa.test.unit` | 0 |
+| `make php.lint.person-reference` | 0 |
+| `make php.lint.error-contract` | 0 |
+| `make php.lint.audit-resource` | 0 |
+| `make php.lint.bounded-context` | 0 |
+| `make php.lint.persistent-transport` | 0 |
+| `make php.lint.schedule-consumption` | 0 |
+| `make db.migrate` | 0 |
+| `make db.validate` (schema in sync) | 0 |
+| `make db.diff` posterior | «No changes detected» (sin deriva) |
+
+### Pase adversarial (AC5) — PARCIAL, registrado aquí
+
+**Estado: INCOMPLETO. El PR se abre en draft y NO debe promoverse hasta cerrarlo.**
+
+Lanzados cuatro lectores hostiles read-only en contexto fresco (2026-08-06). **Tres murieron por límite de
+sesión** (#389 sumideros, #565 tripwire+503, crítico de completitud). Sobrevivió uno, que enumeró
+exhaustivamente los escritores de `audit_log.resource_type`.
+
+**Lo que el pase confirmó, con evidencia:**
+
+- `User` **no** implementa `AuditedEntity` (`User.php:38`), así que suspender o degradar no escribe fila.
+- `EraseIdentitySubject.php:59` hace **hard delete** de la fila de `identity_user`.
+- Ni el pase de actor (`DbalAuditActorAnonymiser.php:67-77`) ni el de recurso
+  (`DbalAuditResourceAnonymiser.php:54-62`) llevan `ORDER BY`; los dos corren en la transacción abierta en
+  `FulfilIdentityErasure.php:133`. El ABBA es estructuralmente posible y sólo lo bloquea la no-coexistencia.
+- **Un solo `AuditResource::of` con `'User'` en `api/src`** (`FulfilIdentityErasure.php:147`, constante en
+  `:107`). El tripwire no está verde por un fallo del barrido: el singleton es real.
+- `ReconcileErasedSubjectReferences.php:132-134` lee `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE`, pero
+  **fuera** de un `AuditResource::of(...)`, así que no entra en `filesDerivingType` — correcto.
+
+**Hallazgo aplicado:** el tripwire no ve un tipo pasado como **variable** (`AuditResource::of($type, $id)`),
+forma que no casa con ninguna de las tres derivaciones y que **no levanta excepción**. Queda declarado en el
+docblock de `noSecondFileWritesAPersonTypeIntoTheResourceAxis` en vez de dejar que un verde se lea como más
+de lo que prueba.
+
+**Pendiente antes de sacar el PR de draft:** los tres ángulos que no se llegaron a ejecutar — las otras
+superficies de log que pueden recibir un id de persona (#389), si `RetryableException` llega envuelta y la
+traducción es código muerto (#565), y la revisión AC-por-AC del crítico de completitud.
+
+### Change Log
+
+| Fecha | Cambio |
+|---|---|
+| 2026-08-06 | Implementación completa de T1–T4; T5 con gates verdes y pase adversarial **parcial** |

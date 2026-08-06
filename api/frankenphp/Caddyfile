@@ -19,12 +19,46 @@
 {$SERVER_NAME:localhost} {
 	log {
 		{$CADDY_SERVER_LOG_OPTIONS}
-		# Redact secret-bearing query parameters: `authorization` can be set by Mercure, and `token` carries
-		# the single-use invitation/reset secret (`<id>.<secret>`) — neither may land in the access log.
+		# Redact secret- and identity-bearing query parameters. The access log has no owner of erasure:
+		# no compose file declares a `logging:` driver, so stderr lands in the default json-file driver
+		# with no rotation and no TTL, and nothing in the GDPR erasure path can reach it. Whatever gets
+		# in outlives the erasure the app confirmed to the subject.
+		#
+		# Secrets: `authorization` can be set by Mercure, and `token` carries the single-use
+		# invitation/reset secret (`<id>.<secret>`).
+		#
+		# Person ids arrive on two different requests and both have to be covered — closing only the
+		# cheaper one leaves the sink open. The audit screen holds its filter state in the document URL
+		# (`actorId`, `resourceId`), so those names appear on the navigation; the API request that the
+		# same screen fires on every keystroke of the filter carries the identical values under the
+		# generic `filters[N][value]` grammar, a key no name-based rule reaches. `correlationId` is not
+		# a person id — it is redacted because a request-correlation UUID reconstructs a session.
+		#
+		# `filters[N][value]` is blunt on purpose: the grammar has no wildcard and the index carries no
+		# type, so redacting the value axis also blanks level, actor type, action and the date bounds —
+		# of every list surface, not just audit. The access log can no longer answer "which filter was
+		# applied"; that diagnostic is spent knowingly. It buys more than audit: the account-holder name
+		# and the user email filters travel the same way.
+		#
+		# The range 0..8 is the whole producer surface — nine axes is the most any criteria builder in
+		# the PWA emits — and it is not left to a reader to keep true: the gate derives this range from
+		# the file and fails when a builder outgrows it.
 		format filter {
 			request>uri query {
 				replace authorization REDACTED
 				replace token REDACTED
+				replace actorId REDACTED
+				replace resourceId REDACTED
+				replace correlationId REDACTED
+				replace filters[0][value] REDACTED
+				replace filters[1][value] REDACTED
+				replace filters[2][value] REDACTED
+				replace filters[3][value] REDACTED
+				replace filters[4][value] REDACTED
+				replace filters[5][value] REDACTED
+				replace filters[6][value] REDACTED
+				replace filters[7][value] REDACTED
+				replace filters[8][value] REDACTED
 			}
 		}
 	}

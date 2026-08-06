@@ -20,12 +20,17 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * table grows.
  *
  * **What it deliberately does NOT touch, and why.** It leaves `actor_id`, `ip`, `user_agent` and
- * `actor_erased` alone. Those four describe the party that *acted*, and a row naming this subject as a
- * resource was very often written by somebody else — an administrator changing the subject's roles. Redacting
- * that row's `ip` would destroy a third party's evidence, and raising `actor_erased` on it would falsely
- * report the administrator as an erased actor, corrupting the very flag
- * `docs/adr/audit-activity-log.md` D4.1 materialised to make erasure queryable. The two axes are separate
- * columns because they are separate people; this writes only its own.
+ * `actor_erased` alone. Those four describe the party that *acted*, which is not the person this statement
+ * erases: redacting such a row's `ip` would destroy a third party's evidence, and raising `actor_erased` on
+ * it would report that party as an erased actor, corrupting the very flag `docs/adr/audit-activity-log.md`
+ * D4.1 materialised to make erasure queryable. The two axes are separate columns because they are separate
+ * people; this writes only its own.
+ *
+ * That is a rule about what the columns MEAN, not a claim about who wrote the rows. Today exactly one file
+ * names a person as an audit resource — the erasure that runs this — because `User` is deliberately not an
+ * `AuditedEntity` (it would carry `password_hash` into the trail), so suspending or demoting a user writes
+ * no row at all. `PersonResourceErasureGateTest` fails the build the day a second writer appears, which is
+ * when the third-party case stops being hypothetical.
  *
  * The pseudonym is guarded with {@see Uuid::ensure()} at this edge like the sibling anonymiser: the only
  * caller already holds one minted by {@see DbalAuditActorAnonymiser}, so this is defence in depth — a future

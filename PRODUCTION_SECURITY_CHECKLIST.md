@@ -357,8 +357,14 @@ you change anything here.
       rejection and **every** forgot outcome, so latency correlates with nothing (SI-12). A dead reset/accept
       link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (SI-13):
       `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password`, the client strips `?token=`
-      from the URL/history on mount, and Caddy's access log **redacts the `token` query parameter** (gate:
-      `CaddyfileAccessLogRedactionGateTest`). Recovery rate limits are **neutral per target**: forgot is capped
+      from the URL/history on mount, and Caddy's access log **redacts every secret- and identity-bearing query
+      parameter**: `authorization`, `token`, the audit screen's `actorId`/`resourceId`/`correlationId`, and the
+      `filters[0..8][value]` grammar every list surface serializes its filter values into — which also covers
+      the account-holder name and the user email filters. That index range is not left to a reader to keep
+      true: the gate (`CaddyfileAccessLogRedactionGateTest`) derives it from the Caddyfile and fails when a PWA
+      criteria builder outgrows it, so a tenth filter axis breaks the build instead of un-redacting silently.
+      The cost is accepted and real — a redacted value axis means the access log can no longer answer "which
+      filter was applied". Recovery rate limits are **neutral per target**: forgot is capped
       per email (`password_recovery_per_email`) and a saturated target still gets the uniform 202 with the work
       silenced (plus the timing floor); token endpoints are capped per selector. **A per-target budget may only
       429 where the caller has already proved it holds the target** — which is the authenticated password change
@@ -614,6 +620,17 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Accepted 2026-08-05 (Sergio):** no customer, and the cost of closing it is three seams across two
       contexts for a recoverable UX papercut. Re-assess if a session-scoped revoke becomes cheap for another
       reason, or the first time a user reports it.
+- [ ] **A person's id still reaches the access log through the URL *path*, and it is accepted.** Caddy's
+      access-log filter operates on `request>uri query`, so it is structurally incapable of touching a path
+      segment — and `pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts` composes
+      `/api/v1/backoffice/users/<uuid>`, where the uuid is the person's id. The sink has no owner of erasure:
+      no compose file declares a `logging:` driver, so it is the default json-file driver with neither rotation
+      nor TTL, and nothing in `FulfilIdentityErasure` can reach it. An id that lands there outlives the erasure
+      the application confirmed to the subject. Closing it is not a wider `replace` but a different mechanism —
+      a log-level rewrite of `uri`, a `logging:` driver whose retention the erasure path can act on, or no
+      access log for `/api/*` at all. **Accepted for now:** there is no production deployment, and the
+      query-side leak that *was* closed is the one with volume — it fired on every keystroke of a filter,
+      against one entry per user record opened here.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

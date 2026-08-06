@@ -43,12 +43,18 @@ export interface AuditUrlState {
 }
 
 /**
- * Single source of truth for the audit screen's state, held entirely in URL params (shareable,
- * never PII in storage — an `actor_id`/`resource_id` would be PII). Reads decode the params; writes
- * re-serialize the whole decoded state, so a stale param can never linger. Defaults (empty filters,
- * Timeline view, DESC, no open entry) are omitted from the URL to keep it minimal and the memo key
- * stable — the latter matters because the timeline hook resets its keyset cursor whenever the filter
- * value changes, so a flapping identity would thrash pagination.
+ * Single source of truth for the audit screen's state, held entirely in URL params. `actorId` and
+ * `resourceId` identify a person, and they are in the address bar on purpose: that is what makes an
+ * investigation shareable in a ticket and reachable by deep link, and it is why none of them is ever
+ * written to device storage the app controls. The price is that they travel on every navigation, so
+ * the sink that would otherwise keep them forever is closed at the edge — Caddy's access log redacts
+ * both by name, and redacts the `filters[N][value]` grammar this screen's API request puts the same
+ * values in (`api/frankenphp/Caddyfile`).
+ *
+ * Reads decode the params; writes re-serialize the whole decoded state, so a stale param can never
+ * linger. Defaults (empty filters, Timeline view, DESC, no open entry) are omitted from the URL to
+ * keep it minimal and the memo key stable — the latter matters because the timeline hook resets its
+ * keyset cursor whenever the filter value changes, so a flapping identity would thrash pagination.
  */
 export function useAuditUrlState(): AuditUrlState {
   const router = useRouter();
