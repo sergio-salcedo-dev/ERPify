@@ -179,8 +179,56 @@ Step-by-step (incl. internal-CA trust and `/etc/hosts`) and VPS promotion:
    ENV=prod make db.migrate
    ```
 
-4. Watch `messenger_worker` logs: `ENV=prod make docker.logs` (filter by service).
-5. Run smoke tests per [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
+4. **Provision the organization and its administrators** — first install only; see below.
+5. Watch `messenger_worker` logs: `ENV=prod make docker.logs` (filter by service).
+6. Run smoke tests per [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
+
+### Provisioning administrators (first install)
+
+Migrations create the schema and nothing else: there is no public sign-up, so until these run the
+installation has no organization and nobody who can sign in.
+
+```bash
+ENV=prod make sf c='organization:provision "<organization display name>"'
+ENV=prod make sf c='organization:administrator:create <email>'   # hidden prompt — see below
+```
+
+**Omit the password argument.** It is optional precisely so the command can prompt for it hidden; passed
+as an argument it is visible in the host's process list and lands in shell history. The plaintext is
+hashed in Infrastructure and never printed or logged either way.
+
+**Hand custody over immediately.** Whoever runs the command chooses that first password, so at this
+moment the operator — not the customer — holds the customer's administrative credential. The
+administrator's first action must be **Account ▸ change password**, which is the first credential the
+operator never saw. Treat the bootstrap password as a delivery token, not as a credential: single use,
+out of band, replaced on first sign-in.
+
+**Provision a second administrator wherever the organization can name one**, from the signed-in first
+administrator (*Users ▸ invite*, role `ADMIN`) or by CLI:
+
+```bash
+ENV=prod make sf c='iam:invitation:create <second-email> ADMIN'
+```
+
+The invitee sets their own password when accepting, so no operator ever holds their credential. Note the
+CLI prints the acceptance link in full — deliver it out of band and do not leave it in a shared terminal
+([#648](https://github.com/sergio-salcedo-dev/ERPify/issues/648)).
+
+Why it is worth doing, stated exactly, because the reasons that sound obvious are not the ones that hold:
+
+- **It is the only thing that makes an administrator's own GDPR erasure satisfiable.** Erasure refuses any
+  subject still holding `ADMIN`, so it must be demoted first, and demotion is refused while it would leave
+  the organization with no active administrator. A sole administrator therefore cannot be erased at all —
+  a real obligation the day the installation has a customer.
+- **It does not protect against an administrator being locked out.** No transition lets one administrator
+  clear another's lockout, and both budgets an attacker spends are keyed per email address, so a second
+  administrator multiplies the attacker's cost by two and nothing else. Do not treat this as a mitigation
+  for [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602); see
+  [`adr/administrative-recovery-channel.md`](./adr/administrative-recovery-channel.md).
+
+**It is a recommendation and the software does not enforce it** — deliberately. The enforced floor is *at
+least one* active administrator. Raising it to two would make erasing an administrator require a **third**,
+by the same demotion chain above, which is strictly worse than the gap it would be trying to close.
 
 ## CI/CD
 
