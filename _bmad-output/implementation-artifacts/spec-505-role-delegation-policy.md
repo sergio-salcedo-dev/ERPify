@@ -2,7 +2,7 @@
 title: 'Inviter role-delegation policy, attributable role changes, and a console lever to revoke an invitation (#505)'
 type: 'feature'
 created: '2026-08-06'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '58a081a8d34f4cadc69a118f1038e75bef400bc6'
 review_loop_iteration: 0
 context:

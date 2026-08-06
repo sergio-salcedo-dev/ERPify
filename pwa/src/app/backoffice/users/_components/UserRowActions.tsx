@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { MailX, MoreHorizontal } from "lucide-react";
 import { CopyButton } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,11 @@ interface UserRowActionsProps {
  * that remains the only control. The status condition also retires the action without any client-side
  * bookkeeping — a revocation withdraws the identity to REVOKED, so the re-read that follows removes the menu
  * on its own.
+ *
+ * That retirement is why the cluster is the dialog's closing focus target on success: the control the dialog
+ * would normally return to has just stopped existing, and nothing else would catch the focus, leaving a
+ * keyboard user at the top of the document. The cluster survives every status, sits where the operator was
+ * acting, and holds the row's remaining control.
  */
 export function UserRowActions({
   id,
@@ -76,12 +81,20 @@ export function UserRowActions({
   className,
 }: Readonly<UserRowActionsProps>) {
   const [revokeOpen, setRevokeOpen] = useState(false);
+  const clusterRef = useRef<HTMLDivElement>(null);
   const mayRevoke = useCan(Permission.USERS_REVOKE_INVITATION);
   const revocable = mayRevoke && status === UserStatus.INVITED;
   const prefix = `users-${surface}`;
 
   return (
-    <div className={cn("users-row-actions flex items-center gap-0.5", className)}>
+    <div
+      ref={clusterRef}
+      // Focus target, never a tab stop: the closing dialog aims here, and a real browser lands on the first
+      // tabbable control inside — the container itself only catches the focus when there is none.
+      tabIndex={-1}
+      className={cn("users-row-actions flex items-center gap-0.5 outline-none", className)}
+      data-testid={`${prefix}__row-actions-${id}`}
+    >
       <span className={cn("users-row-actions__reveal", REVEAL_CLASS[reveal])}>
         <CopyButton
           value={id}
@@ -129,6 +142,7 @@ export function UserRowActions({
             onOpenChange={setRevokeOpen}
             onRevoked={onInvitationRevoked}
             onError={onRevokeFailed}
+            focusOnRevoked={clusterRef}
           />
         </>
       ) : null}

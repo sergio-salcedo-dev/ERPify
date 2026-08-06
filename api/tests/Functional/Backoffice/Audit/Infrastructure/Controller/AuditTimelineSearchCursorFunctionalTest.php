@@ -306,6 +306,12 @@ final class AuditTimelineSearchCursorFunctionalTest extends WebTestCase
                 $i <= 2 ? AuditResource::of('Bank', self::RESOURCE_ID) : null,
             ));
         }
+
+        // `TRUNCATE` does not reset `pg_statistic`, so without this the planner chooses for the table as it was
+        // BEFORE the seed — whatever the rest of the suite happened to leave behind. The index-backed access
+        // assertion then passes or fails on the previous test's data rather than on this one's, which is how a
+        // deterministic claim about access paths turns into a run-order lottery.
+        $connection->executeStatement('ANALYZE audit_log');
     }
 
     private function entry(string $action, DateTimeImmutable $occurredOn): AuditLogEntry

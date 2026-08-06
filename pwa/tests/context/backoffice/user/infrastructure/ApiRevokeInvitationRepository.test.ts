@@ -3,7 +3,6 @@ import { ApiRevokeInvitationRepository } from "@/context/backoffice/user/infrast
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
-import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 
 // Built inline so each `vi.fn()` is contextually typed to the matching (generic)
 // HttpClient method; recover the spy for assertions via `vi.mocked(client.delete)`.
@@ -14,16 +13,24 @@ function httpClient(): HttpClient {
 const USER_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c";
 
 describe("ApiRevokeInvitationRepository", () => {
-  it("DELETEs the invitation sub-resource of the user", async () => {
+  it("DELETEs the invitation sub-resource of the user, once, and resolves to nothing", async () => {
     const client = httpClient();
     vi.mocked(client.delete).mockResolvedValue(undefined);
 
-    await new ApiRevokeInvitationRepository(client).revoke(USER_ID);
+    // The path is spelled out rather than rebuilt from `API_ENDPOINTS`: asserting that the adapter called the
+    // same helper it calls pins nothing, while the literal fails the day the route moves under it.
+    const result = await new ApiRevokeInvitationRepository(client).revoke(USER_ID);
 
-    expect(client.delete).toHaveBeenCalledWith(`/api/v1/backoffice/users/${USER_ID}/invitation`);
-    expect(client.delete).toHaveBeenCalledWith(
-      API_ENDPOINTS.BACKOFFICE.USERS.REVOKE_INVITATION(USER_ID),
+    expect(client.delete).toHaveBeenCalledExactlyOnceWith(
+      `/api/v1/backoffice/users/${USER_ID}/invitation`,
     );
+    // The verb is part of the contract — a revocation is never a POST or a PATCH — and the 204 must surface as
+    // `undefined`, never a body a caller could come to depend on.
+    expect(client.post).not.toHaveBeenCalled();
+    expect(client.patch).not.toHaveBeenCalled();
+    expect(client.put).not.toHaveBeenCalled();
+    expect(client.get).not.toHaveBeenCalled();
+    expect(result).toBeUndefined();
   });
 
   it("percent-encodes the id it interpolates into the path", async () => {

@@ -86,8 +86,28 @@ const ACTIVE_USER = new User(
   "2026-07-01T10:00:00+00:00",
 );
 
+// A second pending invitation, so two withdrawals can overlap.
+const SECOND_INVITED_USER = new User(
+  "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e",
+  "pending-two@erpify.test",
+  UserStatus.INVITED,
+  [Role.VIEWER],
+  "2026-07-01T10:00:00+00:00",
+  "2026-07-01T10:00:00+00:00",
+);
+
+const SECOND_WITHDRAWN_USER = new User(
+  SECOND_INVITED_USER.id,
+  SECOND_INVITED_USER.email,
+  UserStatus.REVOKED,
+  SECOND_INVITED_USER.roles,
+  SECOND_INVITED_USER.createdAt,
+  "2026-07-02T09:00:00+00:00",
+);
+
 const INVITED_ROW = `users-table__row-${INVITED_USER.id}`;
 const STATUS_BADGE = `users-table__status-${INVITED_USER.id}`;
+const SECOND_STATUS_BADGE = `users-table__status-${SECOND_INVITED_USER.id}`;
 
 function renderList() {
   render(
@@ -175,6 +195,24 @@ describe("Users row revoke-invitation action", () => {
     expect(screen.queryByTestId("users-list__revoke-error")).not.toBeInTheDocument();
   });
 
+  it("lands focus in the row it acted on instead of stranding it on the document", async () => {
+    revoke.mockResolvedValue(undefined);
+    search
+      .mockResolvedValueOnce(pageOf(INVITED_USER, ACTIVE_USER))
+      .mockResolvedValue(pageOf(WITHDRAWN_USER, ACTIVE_USER));
+    renderList();
+    await screen.findByTestId(INVITED_ROW);
+
+    fireEvent.click(await openRowMenuItem("users-table", "revoke", INVITED_USER.id));
+    fireEvent.click(await screen.findByTestId("user-revoke-invitation__confirm"));
+
+    // The control that opened the dialog is gone with the status it was gated on, so the default restore has
+    // nothing to return to. Focus must land inside the row's action cluster, never on <body>.
+    const cluster = await screen.findByTestId(`users-table__row-actions-${INVITED_USER.id}`);
+    await waitFor(() => expect(cluster).toContainElement(document.activeElement as HTMLElement));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
   it("retires the row action once the identity is withdrawn, with no client-side bookkeeping", async () => {
     revoke.mockResolvedValue(undefined);
     search
@@ -195,6 +233,45 @@ describe("Users row revoke-invitation action", () => {
     });
   });
 
+  it("reconciles a revocation confirmed while the previous one's read is still in flight", async () => {
+    revoke.mockResolvedValue(undefined);
+    // Two withdrawals in a row is the reachable overlap: every other read this surface issues replaces the
+    // rows with the skeleton, so there is no menu to confirm during one. The read opened by the first
+    // reconcile was issued before the second revocation committed and cannot carry it — dropping the second
+    // reconcile behind it would leave that row reading Invited, still offering an action that now 404s.
+    let releaseFirstReconcile: (page: ReturnType<typeof pageOf>) => void = () => {};
+    search
+      .mockResolvedValueOnce(pageOf(INVITED_USER, SECOND_INVITED_USER))
+      .mockReturnValueOnce(
+        new Promise<ReturnType<typeof pageOf>>((resolve) => {
+          releaseFirstReconcile = resolve;
+        }),
+      )
+      .mockResolvedValue(pageOf(WITHDRAWN_USER, SECOND_WITHDRAWN_USER));
+
+    renderList();
+    await screen.findByTestId(INVITED_ROW);
+
+    fireEvent.click(await openRowMenuItem("users-table", "revoke", INVITED_USER.id));
+    fireEvent.click(await screen.findByTestId("user-revoke-invitation__confirm"));
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(await openRowMenuItem("users-table", "revoke", SECOND_INVITED_USER.id));
+    fireEvent.click(await screen.findByTestId("user-revoke-invitation__confirm"));
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith(SECOND_INVITED_USER.id));
+
+    // Still two reads: the second reconcile waits on the one in flight rather than racing it.
+    expect(search).toHaveBeenCalledTimes(2);
+
+    // That read lands too early to know about the second revocation.
+    releaseFirstReconcile(pageOf(WITHDRAWN_USER, SECOND_INVITED_USER));
+
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(3));
+    await waitFor(() =>
+      expect(screen.getByTestId(SECOND_STATUS_BADGE)).toHaveTextContent("Revoked"),
+    );
+  });
+
   it("closes the dialog and anchors a failure in the list-level error surface", async () => {
     revoke.mockRejectedValue(nothingRevocable());
     renderList();
@@ -209,8 +286,9 @@ describe("Users row revoke-invitation action", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("user-revoke-invitation__dialog")).not.toBeInTheDocument();
     });
-    // A failed revocation leaves the register untouched, so nothing is re-read.
-    expect(search).toHaveBeenCalledTimes(1);
+    // A failure reconciles too, and that is the point: this refusal means the row was stale, so leaving it
+    // untouched would keep offering a revocation that answers 404 on every retry.
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
     expect(toastNotifier.error).toHaveBeenCalled();
   });
 
@@ -228,5 +306,76 @@ describe("Users row revoke-invitation action", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("users-list__revoke-error")).not.toBeInTheDocument();
     });
+  });
+
+  it("clears the error surface when the query changes, so it never outlives the list it described", async () => {
+    revoke.mockRejectedValue(nothingRevocable());
+    renderList();
+    await screen.findByTestId(INVITED_ROW);
+
+    fireEvent.click(await openRowMenuItem("users-table", "revoke", INVITED_USER.id));
+    fireEvent.click(await screen.findByTestId("user-revoke-invitation__confirm"));
+    await screen.findByTestId("users-list__revoke-error");
+
+    // Sorting re-queries the register: the banner names a row of the previous result set.
+    fireEvent.click(screen.getByRole("button", { name: /^Email/ }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("users-list__revoke-error")).not.toBeInTheDocument();
+    });
+  });
+});
+
+/**
+ * The three surfaces render the same `<UserRowActions>` but reach it through three different call sites, each
+ * with its own callback plumbing — so the table's coverage transfers to neither. These pin that the action is
+ * wired, not that the cluster works: that is the table's job above.
+ */
+describe("Users row revoke-invitation action across surfaces", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    search.mockResolvedValue(pageOf(INVITED_USER, ACTIVE_USER));
+    me.mockResolvedValue(REVOKER);
+    revoke.mockResolvedValue(undefined);
+  });
+
+  it("revokes from the stacked list, the surface below the md breakpoint", async () => {
+    renderList();
+    await screen.findByTestId(`users-stacked__row-${INVITED_USER.id}`);
+
+    fireEvent.click(await openRowMenuItem("users-stacked", "revoke", INVITED_USER.id));
+    fireEvent.click(await screen.findByTestId("user-revoke-invitation__confirm"));
+
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith(INVITED_USER.id));
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+  });
+
+  it("revokes from the cards view", async () => {
+    renderList();
+    await screen.findByTestId(INVITED_ROW);
+
+    fireEvent.click(screen.getByTestId("users-list__view-toggle-cards"));
+    await screen.findByTestId(`users-cards__item-${INVITED_USER.id}`);
+
+    fireEvent.click(await openRowMenuItem("users-cards", "revoke", INVITED_USER.id));
+    fireEvent.click(await screen.findByTestId("user-revoke-invitation__confirm"));
+
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith(INVITED_USER.id));
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+  });
+
+  it("surfaces a cards-view failure in the same list-level error surface", async () => {
+    revoke.mockRejectedValue(nothingRevocable());
+    renderList();
+    await screen.findByTestId(INVITED_ROW);
+
+    fireEvent.click(screen.getByTestId("users-list__view-toggle-cards"));
+    await screen.findByTestId(`users-cards__item-${INVITED_USER.id}`);
+
+    fireEvent.click(await openRowMenuItem("users-cards", "revoke", INVITED_USER.id));
+    fireEvent.click(await screen.findByTestId("user-revoke-invitation__confirm"));
+
+    expect(await screen.findByTestId("users-list__revoke-error")).toBeInTheDocument();
   });
 });

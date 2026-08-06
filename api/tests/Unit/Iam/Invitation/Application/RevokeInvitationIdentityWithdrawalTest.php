@@ -11,6 +11,7 @@ use Erpify\Iam\Identity\Domain\Event\UserInvitationRevoked;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Invitation\Application\RevokeInvitation;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
+use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -81,6 +82,30 @@ final class RevokeInvitationIdentityWithdrawalTest extends TestCase
         // The row is locked for the same reason the invitations are: an accept landing first must lose the
         // race deterministically rather than leave the pair disagreeing.
         $this->assertSame([self::USER_ID], $users->forUpdateCalls);
+    }
+
+    #[Test]
+    public function itStillPullsTheTokenWhenTheIdentityHasAlreadyMovedOn(): void
+    {
+        // The shape that would otherwise be unrevocable BY ANY ROUTE: a `SENT` invitation whose identity is no
+        // longer `INVITED`. Refusing here would abort the whole transaction on the identity's guard, so the
+        // live token would survive every attempt — the exact outcome the all-or-nothing loop exists to prevent.
+        $user = $this->invitedUser();
+        $user->revokeInvitation();
+        $user->pullDomainEvents();
+
+        $users = new InMemoryUserRepository($user);
+        $eventBus = new RecordingEventBus();
+        $leftover = $this->sentInvitation();
+
+        $this->revoker(new InMemoryInvitationRepository($leftover), $users, $eventBus)
+            ->revokeForInvitedUser(self::USER_ID)
+        ;
+
+        $this->assertSame(InvitationStatus::REVOKED, $leftover->status());
+        $this->assertSame(IdentityStatus::REVOKED, $user->status());
+        $this->assertSame([], $users->saved, 'an identity already withdrawn is not written again');
+        $this->assertCount(0, $this->withdrawalsIn($eventBus));
     }
 
     #[Test]

@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@/context/backoffice/user/domain/User";
 import { DataTable, TruncatedText } from "@/components/erpify";
@@ -143,10 +142,11 @@ export function UsersTable({
 }: Readonly<UsersTableProps>) {
   const router = useRouter();
 
-  const columns = useMemo(
-    () => buildUsersColumns(visible, onInvitationRevoked, onRevokeFailed),
-    [visible, onInvitationRevoked, onRevokeFailed],
-  );
+  // Built per render, deliberately unmemoized. The row actions are callbacks the owner recreates every render,
+  // so any dependency array containing them never matches twice — and the compiler-backed hook lint rejects
+  // the `useCallback` spelling that would stabilise them, because the dependencies it infers are not the ones
+  // that keep the closure fresh. What is left is six column descriptors, which `<DataTable>` only iterates.
+  const columns = buildUsersColumns(visible, onInvitationRevoked, onRevokeFailed);
 
   return (
     <div

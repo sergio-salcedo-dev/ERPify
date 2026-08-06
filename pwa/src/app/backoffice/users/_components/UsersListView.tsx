@@ -141,10 +141,43 @@ export function UsersListView() {
 
   // A revocation withdraws the identity to REVOKED instead of removing it, so the list reconciles by
   // re-reading rather than dropping the row: `silentReload` refreshes in place — the badge flips and the row's
-  // action retires itself — without the loading skeleton stealing the view.
+  // action retires itself — without the loading skeleton stealing the view. Deferred rather than dropped when
+  // a read is already running: confirming during a debounced filter fetch would otherwise report the
+  // revocation over a row still reading Invited.
   const onInvitationRevoked = (): void => {
     setRevokeProblem(null);
-    silentReload();
+    silentReload({ whenBusy: "defer" });
+  };
+
+  // A failure re-reads too. The row the action was offered on may simply be stale — the invitee accepted, or
+  // another operator revoked first — and leaving it untouched would keep offering a revocation that answers 404
+  // on every retry. Reconciling turns a confusing repeat into a visible state change beside the error.
+  const onRevokeFailed = (problem: ProblemDetails): void => {
+    setRevokeProblem(problem);
+    silentReload({ whenBusy: "defer" });
+  };
+
+  // The banner names a row of the list that produced it, so a different list makes it a claim about nothing on
+  // screen. Cleared while rendering the new query rather than from an effect, so no frame shows it over rows it
+  // never described. Page navigation clears it at its own controls: the cursor lives inside the list hook and
+  // changes nothing this component can compare here.
+  const [bannerQuery, setBannerQuery] = useState({
+    filter,
+    sort: query.sort,
+    pageSize: query.pageSize,
+  });
+  if (
+    filter !== bannerQuery.filter ||
+    query.sort !== bannerQuery.sort ||
+    query.pageSize !== bannerQuery.pageSize
+  ) {
+    setBannerQuery({ filter, sort: query.sort, pageSize: query.pageSize });
+    setRevokeProblem(null);
+  }
+
+  const goToPage = (navigate: () => void): void => {
+    setRevokeProblem(null);
+    navigate();
   };
 
   const peekUser = useMemo(() => items.find((user) => user.id === peekId) ?? null, [items, peekId]);
@@ -271,7 +304,7 @@ export function UsersListView() {
                     onUserPeek={setPeekId}
                     density={density}
                     onInvitationRevoked={onInvitationRevoked}
-                    onRevokeFailed={setRevokeProblem}
+                    onRevokeFailed={onRevokeFailed}
                     className="md:hidden"
                   />
                   <div className="hidden md:block">
@@ -283,7 +316,7 @@ export function UsersListView() {
                       onUserPeek={setPeekId}
                       density={density}
                       onInvitationRevoked={onInvitationRevoked}
-                      onRevokeFailed={setRevokeProblem}
+                      onRevokeFailed={onRevokeFailed}
                     />
                   </div>
                 </>
@@ -292,7 +325,7 @@ export function UsersListView() {
                   users={items}
                   density={density}
                   onInvitationRevoked={onInvitationRevoked}
-                  onRevokeFailed={setRevokeProblem}
+                  onRevokeFailed={onRevokeFailed}
                 />
               )}
               <UsersPagination
@@ -301,8 +334,8 @@ export function UsersListView() {
                 }
                 hasPrev={paginationActions.hasPrev}
                 hasNext={paginationActions.hasNext}
-                onPrev={paginationActions.goPrev}
-                onNext={paginationActions.goNext}
+                onPrev={() => goToPage(paginationActions.goPrev)}
+                onNext={() => goToPage(paginationActions.goNext)}
                 onPageSizeChange={query.setPageSize}
               />
             </>

@@ -17,9 +17,9 @@ use Symfony\Component\Security\Core\User\UserInterface;
  * between proving credentials and minting a session, whether an identity may be admitted — so "authenticated"
  * never implies "admitted".
  *
- * - {@see checkPreAuth} runs BEFORE the password is verified: an `INVITED` identity is rejected here (as a
- *   plain account-status failure) so its password is never checked and the failure collapses into the
- *   uniform pre-identity 401.
+ * - {@see checkPreAuth} runs BEFORE the password is verified: the credential-less states — `INVITED` and the
+ *   terminal `REVOKED` — are rejected here (as plain account-status failures) so no password is ever checked
+ *   and both failures collapse into the same uniform pre-identity 401.
  * - {@see checkPostAuth} runs AFTER the password is verified (identity proven): a `SUSPENDED` / `DEACTIVATED`
  *   identity is rejected here, which aborts authentication so the firewall mints no session — the "no session
  *   artifacts" guarantee is structural, not something cleaned up afterwards.

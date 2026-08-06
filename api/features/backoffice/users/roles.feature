@@ -41,6 +41,12 @@ Feature: Assign an identity's roles
     # evidence a role change leaves. The erasure refusal depends on it existing.
     And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_CHANGED' AND level = 'security' AND resource_type = 'User' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d' AND actor_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
     And there should have 1 records in SQL result
+    # "Both role sets and nothing else" read at the column, not at the port: jsonb equality against a value
+    # built key by key fails on a missing key, a surplus one (a credential, an email, a diff of the aggregate)
+    # and on a value that is not the canonical — sorted, deduplicated — set. The held set is trent's fixture
+    # `[MANAGER]`; the assigned one is the request's, sorted.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_CHANGED' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d' AND metadata = jsonb_build_object('previous_roles', jsonb_build_array('MANAGER'), 'new_roles', jsonb_build_array('AUDIT_READER', 'EDITOR'))"
+    And there should have 1 records in SQL result
     # Budget canary: the admission gate read, the wrapped write (+2 BEGIN/COMMIT) and the wrapped session
     # revoke (+2), with NO guard read — the target is not an administrator, so the directory is never asked.
     # One of the writes is the USER_ROLES_CHANGED insert, written synchronously because it is `security`.
@@ -79,6 +85,12 @@ Feature: Assign an identity's roles
     And the JSON node "data.roles[0]" should be equal to "MANAGER"
     And there should be 0 events stored named "erpify.iam.identity.roles-changed"
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
+    # The only path on which "a change that did not happen leaves no compliance record" is observable: this one
+    # answers 200 and COMMITS, so a row written before the set was compared would still be here to count. On the
+    # refusal path the same query proves nothing — the 409 aborts the transaction the audit write shares, so any
+    # row it had written would have rolled back with it.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_CHANGED' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a62'"
+    And there should have 0 records in SQL result
     # Its own budget, far below the change path: the transaction opens and closes around a single read, with
     # nothing written and no revoke behind it.
     And 3 requests got executed for doctrine connection "default"
@@ -129,9 +141,6 @@ Feature: Assign an identity's roles
     And the JSON node "type" should be equal to "last-active-administrator-protected"
     And there should be 0 events stored named "erpify.iam.identity.roles-changed"
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
-    # A refused change is not a change: the guard runs before the mutation, so the trail records nothing.
-    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_CHANGED' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
-    And there should have 0 records in SQL result
 
   Scenario Outline: A malformed set is a 422, before the domain is touched
     Given I am logged in as an administrator

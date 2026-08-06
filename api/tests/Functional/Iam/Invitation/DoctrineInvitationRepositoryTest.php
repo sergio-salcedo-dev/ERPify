@@ -139,6 +139,48 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
         });
     }
 
+    public function testTheRevocableReadActuallyTakesTheRowLockItPromises(): void
+    {
+        // The lock is the load-bearing claim of this port: it is what makes a concurrent accept drop out of the
+        // set instead of leaving the revocation to abort on it. Nothing else in the suite can see it — the
+        // in-memory double cannot, and the Behat budget counts queries, not lock modes — so deleting
+        // `setLockMode(...)` would leave every other assertion green.
+        //
+        // Observed through `pg_locks` on this backend rather than from a second connection: the fixture row is
+        // written inside the transaction this class always rolls back, so no other session can see it to
+        // contend for. `SELECT … FOR UPDATE` takes RowShareLock on the relation where a plain SELECT takes only
+        // AccessShareLock, and the difference is visible while the transaction is still open.
+        $this->inRolledBackTransaction(function (): void {
+            $userId = Uuid::generate();
+            $live = $this->invitationFor($userId);
+            $live->markSent();
+
+            $this->repository->save($live);
+            $this->entityManager->clear();
+
+            $this->repository->findSentByInvitedUserForUpdate($userId);
+
+            $this->assertContains(
+                'RowShareLock',
+                $this->lockModesHeldOnInvitations(),
+                'findSentByInvitedUserForUpdate must read FOR UPDATE — a plain read takes AccessShareLock only',
+            );
+        });
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function lockModesHeldOnInvitations(): array
+    {
+        /** @phpstan-var list<string> */
+        return $this->connection->fetchFirstColumn(
+            'SELECT l.mode FROM pg_locks l JOIN pg_class c ON c.oid = l.relation '
+            . 'WHERE c.relname = :table AND l.pid = pg_backend_pid()',
+            ['table' => 'iam_invitation'],
+        );
+    }
+
     private function countFor(string $userId): int
     {
         // count(*) surfaces as an int or a numeric string depending on the driver.

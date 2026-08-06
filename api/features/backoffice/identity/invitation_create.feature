@@ -31,12 +31,18 @@ Feature: Invite a member from the console
     And 1 notification email was sent
     And The notification email subject should be equal to "Your ERPify invitation"
     And The notification email recipient should be "newbie@erpify.test"
+    # The roles an invitation grants are recorded against the invited subject, so the console's two delegation
+    # paths leave the same kind of evidence: without it, minting a second administrator off the record would be
+    # a matter of inviting one rather than promoting one.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_GRANTED' AND level = 'security' AND resource_type = 'User' AND metadata = jsonb_build_object('previous_roles', jsonb_build_array(), 'new_roles', jsonb_build_array('EDITOR'))"
+    And there should have 1 records in SQL result
     # The wrapped write's query budget (auth/admission lookups are excluded from the counter): the atomic
     # onboarding funnels through three contexts — identity, membership and invitation — and each aggregate's
     # domain events are appended to the event store inside the same transaction, so the count is well above a
-    # single-table create. Nothing on this path writes an audit row: only Bank and BankAccount are
-    # `AuditedEntity`, and the generic access hook audits GET, so no `audit_log` write is in this number.
-    And 26 requests got executed only for doctrine connection "default"
+    # single-table create. Exactly ONE of these is an `audit_log` write, the role-grant row above, written
+    # synchronously because it is `security`; no CDC row joins it, since only Bank and BankAccount are
+    # `AuditedEntity` and the generic access hook audits GET.
+    And 27 requests got executed only for doctrine connection "default"
 
   # Handing the invitee ADMIN is a second, narrower act: the controller demands `users.grantAdmin` on top of
   # `users.invite`, but only when the payload actually carries that role. Both permissions are granted to

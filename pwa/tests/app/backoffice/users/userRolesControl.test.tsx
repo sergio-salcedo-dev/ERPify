@@ -22,6 +22,7 @@ vi.mock("@/context/shared/notification/infrastructure/Toast", () => ({
 
 import { UserRolesControl } from "@/app/backoffice/users/_components/UserRolesControl";
 import { AuthProvider } from "@/context/shared/access/infrastructure/ui/AuthProvider";
+import { useSession } from "@/context/shared/access/application/useSession";
 import { User } from "@/context/backoffice/user/domain/User";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { Permission } from "@/context/shared/access/domain/Permission";
@@ -38,10 +39,29 @@ const ADMIN: Identity = {
   email: "admin@erpify.test",
   status: UserStatus.ACTIVE,
   roles: [Role.ADMIN],
+  permissions: [Permission.USERS_READ, Permission.USERS_CHANGE_ROLES, Permission.USERS_GRANT_ADMIN],
+};
+
+// May re-grant roles but may not mint another administrator — the discriminating row of the delegation gate.
+const DELEGATE: Identity = {
+  ...ADMIN,
+  email: "delegate@erpify.test",
   permissions: [Permission.USERS_READ, Permission.USERS_CHANGE_ROLES],
 };
 
 const VIEWER: Identity = { ...ADMIN, roles: [Role.VIEWER], permissions: [Permission.USERS_READ] };
+
+const NO_SESSION = "none";
+
+/**
+ * Reports the hydrated identity. An absent ADMIN checkbox alone cannot tell "authenticated without
+ * `users.grantAdmin`" apart from "session never resolved" — both hide it — so the probe pins which one the
+ * assertion is observing.
+ */
+function SessionProbe() {
+  const { session } = useSession();
+  return <span data-testid="probe">{session?.user.email ?? NO_SESSION}</span>;
+}
 
 function user(roles: Role[] = [Role.VIEWER], status: UserStatus = UserStatus.ACTIVE): User {
   return User.fromPrimitives({
@@ -67,6 +87,7 @@ function problem(): ProblemDetails {
 function renderControl(target: User, onChanged: (u: User) => void = vi.fn()) {
   return render(
     <AuthProvider>
+      <SessionProbe />
       <UserRolesControl user={target} onChanged={onChanged} />
     </AuthProvider>,
   );
@@ -151,5 +172,67 @@ describe("UserRolesControl", () => {
 
     await waitFor(() => expect(me).toHaveBeenCalled());
     expect(screen.queryByTestId("user-roles")).not.toBeInTheDocument();
+  });
+});
+
+const ADMIN_CHECKBOX = `user-roles__role-${Role.ADMIN}`;
+
+/**
+ * Truth table of the ADMIN checkbox on the detail editor. Delegating the administrator role is a capability of
+ * its own on top of editing roles at all, so the row that matters is an actor holding `users.changeRoles`
+ * without `users.grantAdmin` — every other role stays offered there, which separates "the gate closed" from
+ * "the roles failed to render".
+ *
+ * The exception is what keeps the gate from becoming a demotion: a target who already holds ADMIN keeps the
+ * checkbox even for an actor who could not grant it. The form submits the COMPLETE set, so hiding a checked
+ * box would silently strip a role on the next save — a privilege the actor cannot restore, taken by an edit
+ * they did not make.
+ */
+describe("UserRolesControl ADMIN delegation gate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("offers the ADMIN checkbox to a session holding users.grantAdmin", async () => {
+    me.mockResolvedValue(ADMIN);
+    renderControl(user([Role.VIEWER]));
+
+    expect(await screen.findByText(ADMIN.email)).toBeInTheDocument();
+    expect(screen.getByTestId(ADMIN_CHECKBOX)).toBeInTheDocument();
+  });
+
+  it("hides it from an actor without the capability, keeping every other role editable", async () => {
+    me.mockResolvedValue(DELEGATE);
+    renderControl(user([Role.VIEWER]));
+
+    expect(await screen.findByText(DELEGATE.email)).toBeInTheDocument();
+    expect(screen.queryByTestId(ADMIN_CHECKBOX)).not.toBeInTheDocument();
+    for (const role of [Role.VIEWER, Role.EDITOR, Role.MANAGER, Role.AUDIT_READER]) {
+      expect(screen.getByTestId(`user-roles__role-${role}`)).toBeInTheDocument();
+    }
+  });
+
+  it("keeps it for an actor without the capability when the target already holds ADMIN", async () => {
+    me.mockResolvedValue(DELEGATE);
+    renderControl(user([Role.ADMIN, Role.VIEWER]));
+
+    expect(await screen.findByText(DELEGATE.email)).toBeInTheDocument();
+    expect(screen.getByTestId(ADMIN_CHECKBOX)).toBeChecked();
+  });
+
+  it("carries the held ADMIN through an unrelated edit by an actor who could not grant it", async () => {
+    me.mockResolvedValue(DELEGATE);
+    changeRun.mockResolvedValueOnce(user([Role.ADMIN, Role.MANAGER]));
+    renderControl(user([Role.ADMIN]));
+
+    fireEvent.click(await screen.findByTestId(`user-roles__role-${Role.MANAGER}`));
+    fireEvent.submit(screen.getByTestId("user-roles"));
+
+    // The complete set travels, ADMIN included: editing the rest never strips what the actor cannot re-grant.
+    // Asserted as a set — the wire contract is which roles are granted, not the order the checkboxes emit.
+    await waitFor(() => expect(changeRun).toHaveBeenCalled());
+    const [targetId, submittedRoles] = changeRun.mock.calls[0] as [string, Role[]];
+    expect(targetId).toBe(TARGET_ID);
+    expect([...submittedRoles].sort()).toEqual([Role.ADMIN, Role.MANAGER].sort());
   });
 });

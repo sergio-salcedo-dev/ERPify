@@ -66,7 +66,7 @@ Forgot-password responds **uniformly for every identity state** (same status, sa
 
 ### D10 — Invariant 1 (pre-identity indistinguishability) is a timing + status + shape contract
 
-Indistinguishability is not copy parity. Login walks the **same path** whether or not the account exists — always hashing a dummy password (the existing timing-equalised `UserProvider`, elevated to contract) — so latency does not leak. HTTP **status and response shape are uniform** across the three pre-identity cases {non-existent, wrong password, non-eligible identity (`INVITED`)}. Forgot-password uses an **invariant status** and identical observable work regardless of account existence or state. The rate-limiter must not break neutrality: a throttled response stays within the uniform pre-identity failure shape rather than surfacing a distinguishable "too many attempts".
+Indistinguishability is not copy parity. Login walks the **same path** whether or not the account exists — always hashing a dummy password (the existing timing-equalised `UserProvider`, elevated to contract) — so latency does not leak. HTTP **status and response shape are uniform** across the four pre-identity cases {non-existent, wrong password, non-eligible identity (`INVITED`), withdrawn identity (`REVOKED`)}. Forgot-password uses an **invariant status** and identical observable work regardless of account existence or state. The rate-limiter must not break neutrality: a throttled response stays within the uniform pre-identity failure shape rather than surfacing a distinguishable "too many attempts".
 
 ### D11 — Invariant 2 (token opacity) is URL-hygiene plus one opaque message
 
@@ -85,7 +85,7 @@ Adding the `invalid-token` marker and the account-status types updates [`../api-
 ## Load-bearing implementation challenges
 
 - **Gate coverage is a security invariant, not a feature:** the Session Admission Gate must run inside the firewall's authenticated context on every request and fail closed; a route that authenticates but bypasses it re-opens revoked sessions.
-- **Constant-time across identity states:** the dummy-hash path must also cover `INVITED` (no stored password) and forgot-password, or timing re-enumerates what the copy hides.
+- **Constant-time across identity states:** the dummy-hash path must also cover the credential-less states `INVITED` and `REVOKED` (no stored password) and forgot-password, or timing re-enumerates what the copy hides.
 - **Session regeneration at two privilege jumps:** invitation-accept and reset both mint a session and must regenerate the id; neither goes through `json_login`.
 - **Promotion churn:** moving shipped `Backoffice/Identity` code (`User`, `SecurityUser`, provider, authenticator, `SecurityActorContextFactory`) to `Iam/` touches `security.yaml`, deptrac, and coordinates with the in-flight RBAC placement.
 

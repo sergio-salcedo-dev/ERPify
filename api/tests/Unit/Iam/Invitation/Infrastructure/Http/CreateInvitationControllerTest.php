@@ -23,6 +23,7 @@ use Erpify\Tests\Unit\Iam\Invitation\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Iam\Invitation\Application\SpyInvitationEmailSender;
 use Erpify\Tests\Unit\Organization\Membership\Application\InMemoryMembershipRepository;
 use Erpify\Tests\Unit\Organization\Organization\Application\InMemoryOrganizationRepository;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -135,7 +136,7 @@ final class CreateInvitationControllerTest extends TestCase
         $organizations->save(Organization::provision(self::ORG_ID, 'ACME'));
 
         return new SendInvitation(
-            new InviteUser($users, $this->passingValidator()),
+            new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger()),
             new GrantMembership(new InMemoryMembershipRepository(), $organizations),
             $invitations,
             new SendInvitationEmailBestEffort(new SpyInvitationEmailSender(), new NullLogger()),

@@ -117,6 +117,10 @@ export function useResourceList<T extends { id: string }, F, TInput>(
   // returning an empty tail page (the in-memory mock clamps the cursor, a real
   // API may not). Cleared whenever a load yields rows.
   const recoveryLinksRef = useRef<Set<string>>(new Set());
+  // A `defer` reconcile asked for while a load was already running, drained once that load settles. Only the
+  // current load drains it: a query change retires the in-flight read, and its closure would re-issue the
+  // query the user has just left.
+  const pendingSilentReloadRef = useRef(false);
 
   const { filter, sort, pageSize } = query;
 
@@ -165,7 +169,15 @@ export function useResourceList<T extends { id: string }, F, TInput>(
         setProblem(nextProblem);
         setState(ViewStatus.ERROR);
       } finally {
-        if (seq === seqRef.current) reloadingRef.current = false;
+        if (seq === seqRef.current) {
+          reloadingRef.current = false;
+          // Drain a reconcile that arrived mid-flight. One at most, and only after this load settled, so a
+          // burst of triggers collapses into a single follow-up read instead of a queue of them.
+          if (pendingSilentReloadRef.current) {
+            pendingSilentReloadRef.current = false;
+            loadItems({ silent: true });
+          }
+        }
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -216,7 +228,6 @@ export function useResourceList<T extends { id: string }, F, TInput>(
   }, [state, items.length, pagination, navigateTo]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadItems();
   }, [loadItems]);
 
@@ -482,9 +493,26 @@ export function useResourceList<T extends { id: string }, F, TInput>(
     setSelectedIds((prev) => new Set([...prev, ...confirmed]));
   };
 
-  // A coalesced silent reconcile: skip while a load or bulk delete is in flight.
-  const silentReload = (): void => {
-    if (reloadingRef.current || bulkDeleteInFlightRef.current) return;
+  /**
+   * A silent reconcile, and what happens when one is already running is the caller's call, because the two
+   * kinds of caller need opposite answers.
+   *
+   * `drop` (the default) is for a stream of notifications nobody is waiting on — realtime deltas. A burst
+   * collapses into the one read already in flight; a delta the read was too early to carry heals on the next
+   * event, and paying for a trailing read per burst is a cost with no reader.
+   *
+   * `defer` is for reconciling a write this user just confirmed. That read cannot be dropped: the in-flight
+   * one was issued before the write committed, so it cannot carry the result, and nothing would ever ask
+   * again — leaving the mutation's own "done" rendered over the rows it just changed.
+   *
+   * A bulk delete drops either way: that path owns `items` while it runs and reconciles itself when it settles.
+   */
+  const silentReload = (options?: { whenBusy?: "drop" | "defer" }): void => {
+    if (bulkDeleteInFlightRef.current) return;
+    if (reloadingRef.current) {
+      if (options?.whenBusy === "defer") pendingSilentReloadRef.current = true;
+      return;
+    }
     loadItems({ silent: true });
   };
 

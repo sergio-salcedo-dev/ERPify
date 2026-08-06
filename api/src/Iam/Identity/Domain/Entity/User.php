@@ -380,6 +380,16 @@ final class User extends AggregateRoot
     }
 
     /**
+     * Whether this identity is still awaiting the invitation it was provisioned for — the only state from which
+     * {@see revokeInvitation()} is legal. Exposed as a predicate so a caller can ask before acting instead of
+     * driving the aggregate into a guard it already knows will refuse.
+     */
+    public function isInvited(): bool
+    {
+        return IdentityStatus::INVITED === $this->status;
+    }
+
+    /**
      * @return list<Role>
      */
     public function roles(): array

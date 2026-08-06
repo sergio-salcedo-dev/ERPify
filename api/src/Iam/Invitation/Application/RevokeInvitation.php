@@ -60,22 +60,20 @@ final readonly class RevokeInvitation
     }
 
     /**
-     * Revokes EVERY still-live invitation addressed to a user, in one transaction. Several is the shape the
-     * schema admits — `invited_user_id` carries a plain index and no uniqueness — and under incident response
-     * refusing on more than one would be the worst answer available: it would leave the extra tokens live.
-     * All-or-nothing, so a failure on the n-th rolls the earlier revocations back and publishes nothing; a
-     * responder is never told "revoked" over a partially-pulled set.
-     *
-     * The read takes the row locks (see the port), so an invitee accepting concurrently drops out of the set
-     * instead of raising an invalid transition that would abandon the rest. An accept that lands before the
-     * lock leaves nothing revocable, which is the 404 below — and the console reload then shows `ACTIVE`,
-     * the true state and the responder's cue.
+     * Revokes EVERY still-live invitation addressed to a user, in one transaction. All-or-nothing, so a
+     * failure on the n-th rolls the earlier revocations back and publishes nothing; a responder is never told
+     * "revoked" over a partially-pulled set.
      *
      * More than one is defensive rather than expected: no write path produces it. `SendInvitation` mints a
      * fresh identity per invite and `identity_user.email` is unique, while `ResendInvitation` re-tokenises the
      * same row in place. The loop exists because the schema admits what the code does not — `invited_user_id`
-     * carries a plain index and no uniqueness — and a responder must never be left holding a live token that a
-     * single-row read happened to miss.
+     * carries a plain index and no uniqueness — and under incident response, refusing on more than one would be
+     * the worst answer available: it would leave the extra tokens live.
+     *
+     * The read takes the row locks, so an invitee accepting concurrently drops out of the set instead of
+     * raising an invalid transition that would abandon the rest. An accept that lands before the lock leaves
+     * nothing revocable, which is the 404 below — and the console reload then shows `ACTIVE`, the true state
+     * and the responder's cue.
      *
      * @throws RevocableInvitationNotFound when the user has no `SENT` invitation left to pull
      * @throws UserNotFound                when the invitations name an identity that no longer exists
@@ -110,12 +108,31 @@ final readonly class RevokeInvitation
     /**
      * Withdraws the identity once per call, never once per invitation: the transition is guarded `INVITED →
      * REVOKED`, so a second application would raise an invalid transition and abort a revocation that had
-     * already succeeded. The row is locked for the same reason the invitations are — an accept that lands
-     * first must lose the race deterministically rather than leave the pair disagreeing.
+     * already succeeded.
+     *
+     * An identity that is not `INVITED` is left alone rather than refused, and that is the whole point: the loop
+     * above exists so a responder is never left holding a live token, and throwing here would hand back exactly
+     * that outcome. A `SENT` invitation whose identity has already moved on — withdrawn by an earlier
+     * revocation, or activated by an accept that beat this call — would otherwise be unrevocable **by any
+     * route**, because every attempt would abort the whole transaction on the identity's guard.
+     *
+     * The invitation lock is taken first and this one second, deliberately matching {@see AcceptInvitation}'s
+     * order rather than {@see \Erpify\Iam\Identity\Application\FulfilIdentityErasure}'s opposite one. Both
+     * orders invert against something — the two pre-existing paths already disagree with each other — so the
+     * choice is which pair may deadlock, and accept-versus-revoke is the pair that actually races: one is a
+     * responder pulling a token while its holder clicks the link, and accept holds its invitation lock across
+     * the password KDF. Revoking while the same subject is being erased is the rarer pair and keeps the edge.
+     *
+     * @throws UserNotFound when the invitations name an identity that no longer exists — a desync no write path
+     *                      produces, surfaced rather than swallowed
      */
     private function withdrawIdentity(string $userId): void
     {
         $user = $this->users->findByIdForUpdate($userId) ?? throw UserNotFound::withId($userId);
+
+        if (!$user->isInvited()) {
+            return;
+        }
 
         $user->revokeInvitation();
 

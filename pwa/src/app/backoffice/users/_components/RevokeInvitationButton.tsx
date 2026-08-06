@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { TriangleAlert } from "lucide-react";
 import { Spinner } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,12 @@ interface RevokeInvitationButtonProps {
    * persistent `<MutationError>` anchored to the mutation's origin — errors never render inside the dialog.
    */
   onError: (problem: ProblemDetails) => void;
+  /**
+   * Where focus goes after a successful revocation, because the control that opened the dialog does not
+   * survive it — the row's status changes and the menu is gated on the old one. Only on success: a cancel
+   * still returns to its trigger, and a failure belongs to the `<MutationError>` that takes focus itself.
+   */
+  focusOnRevoked: RefObject<HTMLElement | null>;
 }
 
 /**
@@ -48,19 +54,25 @@ export function RevokeInvitationButton({
   onOpenChange,
   onRevoked,
   onError,
+  focusOnRevoked,
 }: Readonly<RevokeInvitationButtonProps>) {
   const [revoking, setRevoking] = useState(false);
+  // Read once, when the closing dialog restores focus — a ref, not state, because the value is consulted
+  // after the render that closed the dialog has already committed.
+  const revokedRef = useRef(false);
 
   const onConfirm = async (): Promise<void> => {
     if (revoking) return;
     setRevoking(true);
     try {
       await container.get<RevokeInvitation>("BackOfficeRevokeInvitation").run(userId);
+      revokedRef.current = true;
       onOpenChange(false);
       toastNotifier.success("Invitation revoked", { description: email });
       onRevoked();
     } catch (err) {
       if (!(err instanceof HttpError)) throw err;
+      revokedRef.current = false;
       onOpenChange(false);
       onError(err.problem);
       toastNotifier.error("Couldn't revoke the invitation — see error details");
@@ -71,7 +83,11 @@ export function RevokeInvitationButton({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" data-testid="user-revoke-invitation__dialog">
+      <DialogContent
+        className="sm:max-w-md"
+        finalFocus={() => (revokedRef.current ? focusOnRevoked.current : true)}
+        data-testid="user-revoke-invitation__dialog"
+      >
         <DialogHeader>
           <div className="flex items-start gap-3">
             <span
