@@ -356,6 +356,7 @@ disposición planificada en #565, #562 y #564.
 | `RequestUriRedactionTest` | `redact()` neutralizado a `return $requestUri;` → 10 de 16 rojos (exactamente las filas que deben redactar) |
 | `MigrationColumnDefaultGateTest` | migración sintética `Version29990101000000.php` en el árbol real |
 | `MigrationColumnDefaultRulesGateTest` | los fixtures cazaron un fallo REAL de la regla: `DEFAULT 'ACTIVE' NOT NULL` no se detectaba porque la cola se cortaba en la comilla del literal SQL |
+| `TransactionManagerRetryableFailureTest` | `catch (RetryableException)` neutralizado → rojo con «la traducción es código muerto» |
 | `PersonResourceErasureGateTest` (tripwire) | segundo escritor real de `AuditResource::of('User', …)` en `api/src` |
 
 **Falso positivo descartado con medición, no con una muestra.** `AuditTimelineSearchCursorFunctionalTest::testTimelineAccessPathsAreIndexBacked`
@@ -434,7 +435,7 @@ ventana de autovacuum.
 |---|---|
 | `make php.quality` (incluye deptrac: 0 violaciones) | 0 |
 | `make pwa.quality` | 0 |
-| `make php.unit` (2345 tests) | 0 |
+| `make php.unit` (2346 tests) | 0 |
 | `make php.behat` (399 escenarios) | 0 |
 | `make pwa.test.unit` | 0 |
 | `make php.lint.person-reference` | 0 |
@@ -472,9 +473,30 @@ forma que no casa con ninguna de las tres derivaciones y que **no levanta excepc
 docblock de `noSecondFileWritesAPersonTypeIntoTheResourceAxis` en vez de dejar que un verde se lea como más
 de lo que prueba.
 
-**Pendiente antes de sacar el PR de draft:** los tres ángulos que no se llegaron a ejecutar — las otras
-superficies de log que pueden recibir un id de persona (#389), si `RetryableException` llega envuelta y la
-traducción es código muerto (#565), y la revisión AC-por-AC del crítico de completitud.
+**Dos de los tres ángulos caídos se ejecutaron después, a mano.**
+
+**(#565 — ¿la traducción es código muerto?) NO lo es, medido contra Postgres real.** `wrapInTransaction`
+(`api/vendor/doctrine/orm/src/EntityManager.php`) no tiene `catch`, pero sí un `finally` con `close()` +
+`rollBack()`, y en PHP una excepción lanzada desde un `finally` **sustituye** a la que está en vuelo —
+`Connection::rollBack()` puede lanzar (`convertException`). `TransactionManagerRetryableFailureTest` aborta la
+transacción en el servidor (`SELECT 1 / 0` → `25P02`, el estado en que un deadlock deja a su víctima) y
+comprueba que la `DeadlockException` sale traducida con el driver intacto como `previous`. Falsificado
+neutralizando el `catch`: rojo con el mensaje «la traducción es código muerto».
+**Corrección de alcance medida en `vendor/`:** en PostgreSQL el converter mapea a `DeadlockException` sólo
+`40001` y `40P01`; `55P03` cae a un `DriverException` genérico, así que `LockWaitTimeoutException` es
+inalcanzable en esta plataforma. El `catch` es más estrecho de lo que se temía, y la documentación ya lo decía
+bien.
+
+**(#389 — ¿queda algún sumidero?) SÍ, uno, y no lo cierra este PR.** `getRequestUri`/`getQueryString`/
+`getUri` no aparecen en ningún otro punto de `api/src`, y el canal `observability` sólo emite `route`,
+`limit`, `direction`, paginación y `correlation_id` — ningún valor de filtro. **Pero el contenedor de Next
+imprime la URL entera del documento**, ids de persona incluidos, al mismo `json-file` sin rotación; Caddy no
+puede alcanzarlo porque es otro proceso. Medido en dev; prod corre el standalone `node server.js`, donde no se
+observó pero **tampoco se verificó**. Registrado como residual abierto en `PRODUCTION_SECURITY_CHECKLIST.md`
+§7 — no como cerrado.
+
+**Pendiente antes de sacar el PR de draft:** la revisión AC-por-AC del crítico de completitud, que es el
+ángulo que no se ha ejecutado por nadie.
 
 ### Change Log
 

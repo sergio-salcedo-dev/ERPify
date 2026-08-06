@@ -631,6 +631,19 @@ mitigated state. Accepting one means recording who accepted it and against which
       access log for `/api/*` at all. **Accepted for now:** there is no production deployment, and the
       query-side leak that *was* closed is the one with volume — it fired on every keystroke of a filter,
       against one entry per user record opened here.
+- [ ] **The Next.js container logs the full request URL, person ids included — measured in dev, unverified in
+      prod.** The audit screen navigates to `/backoffice/audit?actorId=<uuid>&resourceId=<uuid>`, Caddy
+      reverse-proxies the document to the PWA, and the container prints
+      `GET /backoffice/audit?actorId=… 200 in 73ms` to stderr — the same json-file driver with no rotation and
+      no TTL that Caddy's access log uses, and one that Caddy's `query` filter cannot reach because it is a
+      different process. **Caddy's redaction does not cover this**; anyone reading "the access log redacts
+      `actorId`" as "no log holds it" would be wrong. `pwa/next.config.ts` also sets
+      `logging.fetches.fullUrl: true`, widening what server-side fetches record.
+      **Scope, stated with its limit:** that line is emitted by `next dev`, and production runs the standalone
+      `node server.js` (`pwa/Dockerfile`), where it was **not** observed — but nor was it verified against a
+      running production image, so treat prod as unconfirmed rather than clean. Closing it means a `logging:`
+      driver with a retention the erasure path can act on, or keeping the ids out of the document URL — which
+      the deep-link design deliberately does not do.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.
