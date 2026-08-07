@@ -112,8 +112,15 @@ final class InvitationEventsTest extends TestCase
     public function noLifecycleEventCarriesTheInvitationIdInItsEnvelopeOrItsPayload(): void
     {
         $events = $this->everyLifecycleEvent();
+        $observed = \array_values(\array_unique(\array_map(
+            static fn (DomainEvent $event): string => $event::class,
+            $events,
+        )));
 
-        $this->assertGreaterThanOrEqual(self::KNOWN_EVENT_COUNT, \count($events));
+        // The walk below is hand-written, so this ties it to the discovered family: a seventh event recorded by
+        // a new transition turns this red until the walk reaches it, instead of sitting silently outside the
+        // assertion while a count floor still passes.
+        $this->assertEqualsCanonicalizing($this->eventsSharingTheEnvelope(), $observed);
 
         foreach ($events as $event) {
             $written = \json_encode(

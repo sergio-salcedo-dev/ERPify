@@ -557,8 +557,11 @@ mitigated state. Accepting one means recording who accepted it and against which
       `PasswordResetCompleted`, `UserSuspended`, `UserDeactivated`, `UserRolesChanged`, `UserLocked`,
       `PasswordResetRequested`, plus `AllSessionsRevoked` and `OtherSessionsRevoked` — those last two are
       coarse facts about the USER, so their `aggregate_id` is the `userId` and their payload is empty, the
-      same shape as the leak this entry closes. In the payload: `SessionStarted` and `SessionRevoked`
-      (`userId`) and the six `Invitation*` (`invitedUserId`).
+      same shape as the leak this entry closes, and so are the six `Invitation*`, whose envelope names the
+      invited user. In the payload: `SessionStarted` and `SessionRevoked` (`userId`) — and, in rows written
+      before the invitation envelope moved, `Invitation*`'s `invitedUserId`. Those rows are deliberately not
+      migrated, which is why the erasure matches **by value across both axes** rather than by a remembered
+      list of columns or keys.
       It is not reachable by the crypto-shredding used in `audit_log`: `aggregate_id` is `UUID NOT NULL`, a
       stream key and an index (`event_store_stream_version_uniq`, `event_store_aggregate_idx`), and a
       lookup table is barred by [`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4. The

@@ -18,11 +18,12 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * leave `SELECT aggregate_id FROM event_store` green while the identifier stayed alive in the `payload` of
  * the row beside it — a claim whose only evidence is the half it chose to look at.
  *
- * **Why the JSON columns are matched as text.** The identifier appears under different key names already
- * (`invitedUserId` in the six invitation events, `userId` in two session ones) and the shared snapshot trait
- * guarantees more will follow, so matching by key name would be a declaration that checks only itself: it
- * would go green on exactly the events nobody remembered to list. Matching the value over the serialised
- * column reaches any key, including one nobody has written yet.
+ * **Why the JSON columns are matched as text.** The identifier appears under different key names — `userId` in
+ * two session events today, `invitedUserId` in every invitation row written before that envelope moved the id
+ * to its aggregate column, which are not migrated and are still here. Matching by key name would be a
+ * declaration that checks only itself: it would go green on exactly the events nobody remembered to list, and
+ * on none of the historical shapes. Matching the value over the serialised column reaches any key, including
+ * one nobody has written yet and one nobody remembers having written.
  *
  * **Case-insensitively, and that is not defensive programming.** `aggregate_id` is a `uuid` column, so
  * Postgres normalises its case on both sides of a comparison; `payload` and `metadata` are jsonb TEXT and it

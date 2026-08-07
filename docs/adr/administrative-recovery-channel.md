@@ -55,14 +55,13 @@ and by nothing else (`rate_limiter.yaml:59-68`, `PasswordRecoveryThrottle::allow
 `InvitationAcceptThrottle::allowAccept()` — no email or identity dimension anywhere in either path),
 and its exhaustion folds into the same opaque wall as a dead link.
 
-**The corollary is already red on the invitation half, and that is why it belongs in the invariant.**
-The six `Invitation` events carry the invitation id as the envelope's `aggregateId`
-(`CarriesInvitationSnapshot.php:11-13`) — and that id *is* the accept link's selector
-(`AcceptInvitation::splitToken()` reads `<invitationId>.<secret>`) — so `DbalEventStore` writes it to
-`event_store.aggregate_id` with no TTL. The table's one sanctioned mutation does not reach it:
-`EventStoreSubjectAnonymiser` erases **by value** and is called only with a person's id
-(`FulfilIdentityErasure.php:113`), and a selector is not one. `CreateInvitationCommand:70` additionally prints the whole
-token, secret included. The reset half does satisfy the corollary: `PasswordResetToken` raises
+**The corollary was red on the invitation half, and that is why it belongs in the invariant.**
+At `eventVersion` 1 the six `Invitation` events carried the invitation id as the envelope's `aggregateId`
+— and that id *is* the accept link's selector (`AcceptInvitation::splitToken()` reads
+`<invitationId>.<secret>`) — so `DbalEventStore` wrote it to `event_store.aggregate_id` with no TTL. The
+table's one sanctioned mutation does not reach it: `EventStoreSubjectAnonymiser` erases **by value** and is
+called only with a person's id, and a selector is not one. `CreateInvitationCommand` additionally printed the
+whole token, secret included, on every success. The reset half does satisfy the corollary: `PasswordResetToken` raises
 `PasswordResetRequested($userId)`, so its envelope names the *user*, not the token row. Two token flows,
 one convention each. Anything built under this ADR follows the reset convention; the invitation
 divergence is a named residual, not a precedent.

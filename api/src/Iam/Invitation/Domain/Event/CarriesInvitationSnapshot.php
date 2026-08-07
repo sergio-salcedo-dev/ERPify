@@ -14,11 +14,14 @@ use Override;
  *
  * **The invitation id is deliberately absent from the envelope, and that is a security invariant rather than a
  * modelling preference.** It is the selector half of the `<invitationId>.<secret>` acceptance link and it keys
- * the per-selector accept budget, so anything that persists it hands a reader of that store a way to drain a
- * live invitation's budget behind the same opaque wall a dead link produces. `event_store` has no TTL, so an
- * envelope carrying it would keep that selector long after the invitation itself was gone. The sibling reset
- * flow reaches the same shape from the same reasoning
- * ({@see \Erpify\Iam\Identity\Domain\Event\PasswordResetRequested}).
+ * the per-selector accept budget. What keeping it here costs is **permanence**: `event_store` has no TTL, it is
+ * a designated export surface, and its one sanctioned mutation erases by a person's id — which a selector is
+ * not — so an envelope carrying it would hold that selector long after the invitation row, and the person, were
+ * gone. **It does not, on its own, close the drain against a reader of the live database**: the same value is
+ * the invitation's primary key, so `SELECT id FROM iam_invitation WHERE status = 'SENT'` reaches every live
+ * selector regardless of what this envelope holds. Closing that would take a selector minted apart from the
+ * aggregate id, which is a larger change and a separate decision. The sibling reset flow reaches the same shape
+ * from the same reasoning ({@see \Erpify\Iam\Identity\Domain\Event\PasswordResetRequested}).
  *
  * `aggregateType()` stays `Iam.Invitation` while the id denotes a person: `aggregate_type` names the lifecycle
  * family and `aggregate_id` names the subject, so the pair `event_store_aggregate_idx` indexes stays precise
@@ -49,11 +52,14 @@ trait CarriesInvitationSnapshot
     }
 
     /**
-     * The envelope moved from "invitation id + `invitedUserId` payload" to "`invitedUserId` alone", which is a
-     * different schema under the same event name. A stored row at v1 therefore resolves no registered class in
+     * v1 of this envelope was keyed by the invitation id and carried the `invitedUserId` in its payload; this is
+     * v2. A stored v1 row therefore resolves no registered class in
      * {@see \Erpify\Shared\Event\Infrastructure\Mapper\ReflectionDomainEventMapper} and fails loudly on read,
      * which is the intended outcome: its `aggregate_id` means something this class no longer means, and no
-     * upcaster can repair that — an upcaster transforms the payload and never sees the aggregate column.
+     * upcaster can repair that — an upcaster transforms the payload and never sees the aggregate column. **The
+     * loudness is an uncaught `InvalidArgumentException` in the projection runner**, so if a projector ever
+     * subscribes to these names, un-migrated rows must be dealt with first; the blast radius is recorded in
+     * `docs/adr/event-store-and-projections.md` D12.
      */
     #[Override]
     public static function eventVersion(): int

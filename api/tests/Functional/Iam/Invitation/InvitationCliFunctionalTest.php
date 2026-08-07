@@ -29,8 +29,9 @@ use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * Drives the invitation CLI end-to-end against REAL Postgres: create funnels an INVITED identity through a
- * membership and emits a SENT invitation whose accept token it prints; revoke and resend transition it. The
- * commit path matters (create wraps three aggregates in one transaction), so each test truncates the graph.
+ * membership and emits a SENT invitation; revoke and resend transition it. The commit path matters (create
+ * wraps three aggregates in one transaction), so each test truncates the graph. The accept token reaches
+ * stdout only under `--show-token`, which these tests pass wherever they need to read it.
  *
  * A full-flow CLI functional test against the real graph legitimately touches many types; the coupling is
  * inherent to driving the three-context invite/revoke/resend flow, not a design smell.

@@ -9,7 +9,9 @@ use Override;
 
 /**
  * Records that an invitation aggregate was minted (`CREATED`). Emitted before delivery, so it never carries the
- * raw token; the payload is the PII-free {@see CarriesInvitationSnapshot} shape.
+ * raw token; it carries the {@see CarriesInvitationSnapshot}
+ * envelope, whose aggregate id IS the invited user — a person's id, so this event may not be queued on a
+ * persisted transport.
  */
 final class InvitationCreated extends DomainEvent
 {

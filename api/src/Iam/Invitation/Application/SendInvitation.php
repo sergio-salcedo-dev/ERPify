@@ -35,9 +35,11 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * whole point, so the coupling is accepted rather than diffused through indirection.
  *
  * The post-commit email is best-effort: the invitation is already durable, so a mailer fault must not abort the
- * caller mid-hand-over. The fault is reported rather than only logged, because an invitation that is live and
- * undeliverable is precisely the state whose only remedy — handing the token over out of band — needs whoever
- * is holding the prompt to know it happened.
+ * caller mid-hand-over. The fault is *available* to the caller on {@see IssuedInvitation} rather than only
+ * logged, because an invitation that is live and undeliverable is precisely the state whose only remedy —
+ * handing the token over out of band — needs whoever is holding the prompt to know it happened. The console
+ * adapters act on it; {@see \Erpify\Iam\Invitation\Infrastructure\Http\CreateInvitationController} still
+ * answers `201` and drops it, since surfacing it there would change the wire contract.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */

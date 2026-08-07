@@ -362,6 +362,15 @@ Consecuencias que esta decisión hereda y conviene tener escritas:
 - `AcceptInvitation` publica ahora eventos claveados por el usuario mientras sostiene el lock de la fila de
   **invitación**, no el de la identidad. Hoy es inocuo porque ese UNIQUE es inerte (`tenant_id` siempre
   `NULL`); queda registrado en `deferred-work.md` como deuda de la historia que active el versionado real.
+- **El radio de explosión de ese «falla ruidosamente», dicho antes de que alguien lo descubra.**
+  `ProjectionRunner::project()` llama al deserializador **sin `catch`**, y `RunProjectionsOnDomainEvent` llama
+  a `catchUpAll()` también sin `catch`, disparado por *todo* `DomainEvent` y —para los eventos de `Iam` sin
+  enrutar— **dentro de la transacción de escritura de quien publica**. Así que el día que un proyector se
+  suscriba a `erpify.iam.invitation.*`, o que un `event:projection:rebuild` reproduzca desde la secuencia 0,
+  cada fila v1 sin migrar aborta esa escritura, no solo el proyector: no hay salto, ni dead-letter, ni
+  upcaster que la repare. **Hoy es inalcanzable y está medido**: `BankCountProjector` es el único `Projector`
+  del árbol y `stream()` filtra por `event_name`, así que esas filas nunca se devuelven. Suscribir un
+  proyector a esos nombres exige tratar antes las filas v1.
 
 **Alternativas descartadas:**
 

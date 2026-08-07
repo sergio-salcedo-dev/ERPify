@@ -8,8 +8,9 @@ use Erpify\Shared\Event\Domain\DomainEvent;
 use Override;
 
 /**
- * Records that a live invitation lapsed past its TTL (`SENT → EXPIRED`). Carries only the PII-free
- * {@see CarriesInvitationSnapshot} shape.
+ * Records that a live invitation lapsed past its TTL (`SENT → EXPIRED`). Carries the
+ * {@see CarriesInvitationSnapshot} envelope, whose aggregate id IS the invited user — a person's id, so this
+ * event may not be queued on a persisted transport.
  */
 final class InvitationExpired extends DomainEvent
 {
