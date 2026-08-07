@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
+use Closure;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
 use Override;
 
@@ -30,11 +31,36 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
     /** @var list<string> */
     public array $askedWhetherAdministrator = [];
 
+    public int $setLocksTaken = 0;
+
     /**
-     * @param array<string, bool> $adminUserIsActive admin user id => (its backing User exists AND is ACTIVE)
+     * How many single-row locks had already been taken each time the SET lock was. The order is the whole
+     * invariant and it is the half a call-count assertion cannot see: a set lock taken after the row lock
+     * orders nothing that has not already happened, and leaves the ABBA it exists against reachable.
+     *
+     * @var list<int>
      */
-    public function __construct(private readonly array $adminUserIsActive)
+    public array $rowLocksTakenBeforeEachSetLock = [];
+
+    /**
+     * @param array<string, bool>   $adminUserIsActive admin user id => (its backing User exists AND is ACTIVE)
+     * @param (Closure(): int)|null $rowLockCounter    single-row locks taken so far; omit when a test only
+     *                                                 cares that the set lock was taken at all
+     */
+    public function __construct(
+        private readonly array $adminUserIsActive,
+        private readonly ?Closure $rowLockCounter = null,
+    ) {
+    }
+
+    #[Override]
+    public function lockActiveAdministrators(): void
     {
+        ++$this->setLocksTaken;
+
+        if ($this->rowLockCounter instanceof Closure) {
+            $this->rowLocksTakenBeforeEachSetLock[] = ($this->rowLockCounter)();
+        }
     }
 
     #[Override]

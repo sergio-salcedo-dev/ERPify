@@ -28,8 +28,9 @@ final readonly class PermissionCatalog
     /**
      * Every published permission. The completeness gate
      * ({@see \Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security\PermissionCatalogCoversEveryGatedRouteTest})
-     * asserts the catalog is a *superset* of what `#[IsGranted]` gates, never an equality — so a permission may
-     * be declared here ahead of the endpoint that reaches it without breaking the gate.
+     * asserts the catalog is a *superset* of what the tree gates — both the `#[IsGranted]` attributes and the
+     * permissions checked imperatively against the authorization checker — never an equality, so a permission
+     * may be declared here ahead of the endpoint that reaches it without breaking the gate.
      *
      * That slack is load-bearing for `users.grantAdmin`, which gates a *payload* rather than a route: both
      * endpoints that can hand out `ADMIN` are already `#[IsGranted]` on their own action, and the extra
@@ -70,7 +71,7 @@ final readonly class PermissionCatalog
 
     /**
      * Whether $candidate is a permission this installation publishes. Takes a raw string because its caller
-     * (the completeness gate) reads unvalidated `#[IsGranted]` arguments.
+     * (the completeness gate) reads unvalidated arguments straight from attributes and from source.
      */
     public function contains(string $candidate): bool
     {

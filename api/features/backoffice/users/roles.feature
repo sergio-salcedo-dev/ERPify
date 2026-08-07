@@ -47,11 +47,14 @@ Feature: Assign an identity's roles
     # `[MANAGER]`; the assigned one is the request's, sorted.
     And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_CHANGED' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d' AND metadata = jsonb_build_object('previous_roles', jsonb_build_array('MANAGER'), 'new_roles', jsonb_build_array('AUDIT_READER', 'EDITOR'))"
     And there should have 1 records in SQL result
-    # Budget canary: the admission gate read, the wrapped write (+2 BEGIN/COMMIT) and the wrapped session
-    # revoke (+2), with NO guard read — the target is not an administrator, so the directory is never asked.
+    # Budget canary: the admission gate read, the active-admin set lock, the wrapped write (+2 BEGIN/COMMIT)
+    # and the wrapped session revoke (+2), with NO guard read — the target is not an administrator, so the
+    # directory is never ASKED its question, only told to take the lock. That lock is unconditional on purpose:
+    # it fixes the order in which this transaction and a concurrent one acquire `identity_user` rows, and an
+    # order that only holds when the guard happens to run is not an order.
     # One of the writes is the USER_ROLES_CHANGED insert, written synchronously because it is `security`.
     # A shift means an added round trip; re-measure rather than nudging the number.
-    And 22 requests got executed for doctrine connection "default"
+    And 23 requests got executed for doctrine connection "default"
 
   # Roles are orthogonal to the identity lifecycle, so a suspended member is re-roled like any other — the new
   # set simply stays inert until the identity can act again.
@@ -91,9 +94,11 @@ Feature: Assign an identity's roles
     # row it had written would have rolled back with it.
     And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_CHANGED' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a62'"
     And there should have 0 records in SQL result
-    # Its own budget, far below the change path: the transaction opens and closes around a single read, with
-    # nothing written and no revoke behind it.
-    And 3 requests got executed for doctrine connection "default"
+    # Its own budget, far below the change path: the transaction opens and closes around the set lock and a
+    # single read, with nothing written and no revoke behind it. The lock is here too, and not because this
+    # branch could deadlock on its own — holding one row and asking for nothing more never closes a cycle —
+    # but because which branch this is only becomes knowable after the target row is locked.
+    And 4 requests got executed for doctrine connection "default"
 
   @anonymous
   Scenario: An unauthenticated role change is a 401, not a 403

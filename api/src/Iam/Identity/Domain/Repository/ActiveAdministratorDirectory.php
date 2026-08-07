@@ -17,6 +17,36 @@ namespace Erpify\Iam\Identity\Domain\Repository;
 interface ActiveAdministratorDirectory
 {
     /**
+     * Takes the set lock without asking the question, so the caller can acquire it BEFORE the single
+     * `identity_user` row it is about to change.
+     *
+     * It exists because the order those two locks are taken in is the whole invariant, and getting it wrong
+     * is silent. {@see keepsAnActiveAdminWithout()} locks the active-admin set in `id` order; a use case that
+     * has already locked its target row holds one member of that set out of order — the target is a member
+     * whenever it is an ACTIVE administrator, `ADMIN` alone is not enough — so two concurrent transitions on
+     * administrators X and Y (`X.id < Y.id`) each hold one and wait for the other: an ABBA deadlock, surfacing
+     * as `40P01` and a 503 that nothing in the code explains.
+     *
+     * Taking the set first closes that cycle **between the transitions that take this lock**: each acquires the
+     * whole set before its target, so any two of them serialise on the set and neither can be mid-scan while
+     * the other holds a member.
+     *
+     * **The scope of that guarantee is exactly its wording, and the residual is real.** A writer that makes a
+     * row join the set without taking this lock reopens the window: `Iam\Invitation`'s `AcceptInvitation`
+     * turns an `INVITED` identity carrying `ADMIN` into an `ACTIVE` administrator on an unlocked path, so a
+     * transition whose set statement already ran can find a lower-id member appearing under a third one. It is
+     * deliberately not fixed here: that use case holds its row across a password KDF, and holding the whole
+     * administrator set across a KDF trades a rare deadlock for a routine one. It also means a later
+     * {@see keepsAnActiveAdminWithout()} is not merely a re-read: it runs its own statement under a new READ
+     * COMMITTED snapshot, so a row that joined the set since is a genuine second acquisition.
+     *
+     * **Must run inside the caller's transaction**, as the first statement that touches `identity_user` — a
+     * lock taken outside one is released at the end of its statement, and one taken after the row lock orders
+     * nothing that has not already happened.
+     */
+    public function lockActiveAdministrators(): void;
+
+    /**
      * Authoritative only over administrators whose backing `User` both exists AND is `ACTIVE`: an identity
      * that is absent or no longer `ACTIVE` must never keep a phantom administrator alive. Its adapter takes a
      * `FOR UPDATE` lock over the active-admin set so concurrent transitions serialize — the invariant is

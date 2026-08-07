@@ -30,9 +30,11 @@ Feature: Change an identity's status (suspend / deactivate)
     And there should be 1 event stored for aggregate "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c" named "erpify.iam.identity.suspended"
     And there should be 1 event stored named "erpify.iam.session.all-revoked"
     And 0 outbox events were created on the queue "async"
-    # Budget canary: the admission gate read, the guard EXISTS, the wrapped write (+2 BEGIN/COMMIT) and the
-    # wrapped session revoke (+2). A shift means an added round trip (e.g. an N+1 in the guard) — re-measure.
-    And 22 requests got executed for doctrine connection "default"
+    # Budget canary: the admission gate read, the active-admin set lock, the guard's own set read, the wrapped write
+    # (+2 BEGIN/COMMIT) and the wrapped session revoke (+2). The lock and the guard are two round trips over
+    # one statement: the second re-reads under a lock the first already holds, so it costs a read and never a
+    # second acquisition. A shift means an added round trip (e.g. an N+1 in the guard) — re-measure.
+    And 23 requests got executed for doctrine connection "default"
 
   Scenario: An administrator deactivates an active member
     Given I am logged in as an administrator
