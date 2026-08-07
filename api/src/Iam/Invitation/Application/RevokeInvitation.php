@@ -124,12 +124,11 @@ final readonly class RevokeInvitation
      * revocation, or activated by an accept that beat this call — would otherwise be unrevocable **by any
      * route**, because every attempt would abort the whole transaction on the identity's guard.
      *
-     * The invitation lock is taken first and this one second, deliberately matching {@see AcceptInvitation}'s
-     * order rather than {@see \Erpify\Iam\Identity\Application\FulfilIdentityErasure}'s opposite one. Both
-     * orders invert against something — the two pre-existing paths already disagree with each other — so the
-     * choice is which pair may deadlock, and accept-versus-revoke is the pair that actually races: one is a
-     * responder pulling a token while its holder clicks the link, and accept holds its invitation lock across
-     * the password KDF. Revoking while the same subject is being erased is the rarer pair and keeps the edge.
+     * The invitation lock is taken first and this one second, matching {@see AcceptInvitation}. What fixes
+     * that order for the pair is the accept, not this: it arrives holding a token and learns which identity
+     * the invitation concerns only from the row it has already locked, so it has no freedom to yield. Both
+     * entry points here do have some — {@see revokeForInvitedUser()} is even handed the person rather than the
+     * delivery record — and so does the erasure; they conform because the accept cannot.
      *
      * @throws UserNotFound when the invitations name an identity that no longer exists — a desync no write path
      *                      produces, surfaced rather than swallowed

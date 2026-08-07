@@ -50,14 +50,22 @@ final readonly class EraseIdentitySubject
         Uuid::ensure($userId);
 
         return $this->transactionManager->transactional(function () use ($userId): IdentityErasureResult {
-            $tokensDeleted = $this->resetTokens->deleteAllForUser($userId);
-
+            // The identity row is taken before the tokens, and the order is the whole point rather than a
+            // reading preference. Both reset paths acquire the same pair this way round, and neither is free
+            // to stop: for the forgot path the user row lock IS the supersede mutex, so two concurrent
+            // requests that took it after their delete+insert would leave both tokens live; for the complete
+            // path the status re-read under that lock is what walls a reset an administrator has just
+            // suspended. Their order is a correctness requirement, not a habit. This use case has no such
+            // requirement — it holds the subject's id before the transaction opens and could acquire either
+            // way — so it is the one that conforms.
             $user = $this->users->findById($userId);
             $identityErased = $user instanceof User;
 
             if ($user instanceof User) {
                 $this->users->remove($user);
             }
+
+            $tokensDeleted = $this->resetTokens->deleteAllForUser($userId);
 
             return new IdentityErasureResult($userId, $identityErased, $tokensDeleted);
         });

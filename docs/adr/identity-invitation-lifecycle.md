@@ -82,6 +82,47 @@ Error specificity is a function of the trust level attained, not of the error ki
 
 Adding the `invalid-token` marker and the account-status types updates [`../api-error-contract.md`](../api-error-contract.md) (NFR26).
 
+### D13 — One acquisition order over the identity plane's three write tables, and the erasure is the member that conforms
+
+Five write paths lock more than one of `iam_invitation`, `identity_user` and `identity_password_reset_token`
+inside one transaction, and two pairs disagreed — an ABBA in each, surfacing as `40P01` and a 503 with nothing
+in the code to explain it. The order is fixed at **`iam_invitation` → `identity_user` →
+`identity_password_reset_token`**, and what fixes it is not a probability estimate about which race is likelier
+but which path **cannot move**, which is a different reason per pair. `AcceptInvitation` arrives holding a
+token and learns which identity the invitation concerns only from the row it has already locked — zero degrees
+of freedom, so it pins the first pair and `RevokeInvitation` follows it. In the second pair every participant
+knows both ids up front, so freedom selects nobody; what pins the reset paths is their own correctness — the
+user row lock **is** the forgot path's supersede mutex (taken after the delete+insert, two concurrent requests
+leave both tokens live) and the status re-read under it is what walls a completion an administrator has just
+suspended. `FulfilIdentityErasure` is pinned by neither: it holds the subject's id before its transaction
+opens. It therefore conforms to both, and never defines. *Discarded:* keeping the erasure's order and demanding
+the other four yield — three of them cannot, and the fourth has no reason to. *Discarded:* a declared total
+order over all seven resources the erasure touches — only two pairs close a cycle, and nothing can enforce a
+total order (neither deptrac nor PHPStan sees statement order), so declaring one would be unfalsifiable.
+
+The purge that leads still follows the administrator refusal: in front of it, a transaction about to abort
+would take write locks on `iam_invitation`, and the contention would fall on the very pair the order exists to
+keep apart. The rollback hides the damage; the waiting does not.
+
+*Enforcement, because nothing in the pre-existing suite went red in either direction:* `ErasureLockOrderTest`
+asserts the acquisition **sequence** over the use cases (a call-count assertion cannot see an order), and
+`ErasureLockOrderFunctionalTest` measures it against the real adapters — a second connection asking, with
+`FOR UPDATE NOWAIT`, what the transaction holds at each acquisition instant. Two instruments because neither
+implies the other: an adapter that stopped locking leaves the first green, a reordering leaves a per-adapter
+lock test green.
+
+*Within `iam_invitation` the same reasoning applies to the two statements that lock a set rather than a row,
+and they reach one direction by different routes:* `findSentByInvitedUserForUpdate` carries `ORDER BY id`,
+while `deleteAllForInvitedUser` — a bulk `DELETE`, which admits no ordering — takes its rows through an ordered
+locking read first. Without that read a revocation and an erasure of one invitee could walk shared rows in
+opposite directions; the cost is one round trip on an operation that runs once per person. The lock read is
+unfiltered by status because the delete is, and locking a narrower set than the one being deleted would hand
+the difference back to the plan.
+
+*What none of this proves:* **no real two-transaction race is exercised anywhere.** The image carries neither
+`pcntl` nor the procedural `pgsql` extension, so a second transaction cannot run concurrently inside a test
+process. Every claim here rests on acquisition instants and on statement order, never on an observed `40P01`.
+
 ## Load-bearing implementation challenges
 
 - **Gate coverage is a security invariant, not a feature:** the Session Admission Gate must run inside the firewall's authenticated context on every request and fail closed; a route that authenticates but bypasses it re-opens revoked sessions.
