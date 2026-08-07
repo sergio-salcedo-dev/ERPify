@@ -524,8 +524,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       adding an event: classify its aggregate, and do not route a person's aggregate off the request.
       **Two limits, stated so a green build is not read as more than it is:** the gate classifies the
       *aggregate*, not the payload — a non-person aggregate carrying a person's id (`Iam.Session`'s
-      `userId`, `Iam.Invitation`'s `invitedUserId`) is out of its reach — and it says nothing about
-      `event_store`, which keeps the real `aggregate_id` forever regardless of routing (below).
+      `userId`) is out of its reach — and it says nothing about `event_store`, which keeps the real
+      `aggregate_id` forever regardless of routing (below). `Iam.Invitation` left that first limit by
+      becoming a `person` aggregate: its six events now name the invited user and carry an empty payload,
+      because their previous `aggregate_id` was the **selector** of the acceptance link and this log has no
+      TTL. The classification is `person` on what the id denotes, not on what the type is called — reading
+      the name `Iam.Invitation` and correcting it back to `non-person` would file a person's id as safe to
+      queue.
 - [x] **A persisted reference to a person has a named owner of its erasure, and that owner executes it** —
       closed for every `Types::GUID` column an entity declares. No object graph crosses a module boundary, so
       a context needing a person holds their id; `membership.user_id` and `iam_invitation.invited_user_id`
@@ -566,8 +571,11 @@ mitigated state. Accepting one means recording who accepted it and against which
       `PasswordResetCompleted`, `UserSuspended`, `UserDeactivated`, `UserRolesChanged`, `UserLocked`,
       `PasswordResetRequested`, plus `AllSessionsRevoked` and `OtherSessionsRevoked` — those last two are
       coarse facts about the USER, so their `aggregate_id` is the `userId` and their payload is empty, the
-      same shape as the leak this entry closes. In the payload: `SessionStarted` and `SessionRevoked`
-      (`userId`) and the six `Invitation*` (`invitedUserId`).
+      same shape as the leak this entry closes, and so are the six `Invitation*`, whose envelope names the
+      invited user. In the payload: `SessionStarted` and `SessionRevoked` (`userId`) — and, in rows written
+      before the invitation envelope moved, `Invitation*`'s `invitedUserId`. Those rows are deliberately not
+      migrated, which is why the erasure matches **by value across both axes** rather than by a remembered
+      list of columns or keys.
       It is not reachable by the crypto-shredding used in `audit_log`: `aggregate_id` is `UUID NOT NULL`, a
       stream key and an index (`event_store_stream_version_uniq`, `event_store_aggregate_idx`), and a
       lookup table is barred by [`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4. The

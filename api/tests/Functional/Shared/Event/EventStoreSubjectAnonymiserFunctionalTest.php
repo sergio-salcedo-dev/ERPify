@@ -55,15 +55,27 @@ final class EventStoreSubjectAnonymiserFunctionalTest extends KernelTestCase
 
             // The column axis: an identity event whose aggregate IS the person.
             $identityEvent = $this->seed($connection, self::SUBJECT_ID, 'Iam.Identity', 'identity.suspended', '{}');
-            // The payload axis, and the case trap with it: the aggregate is somebody else's invitation, the
-            // person's id sits inside the JSON, UPPERCASED and under a key no registry enumerates. `payload`
-            // is jsonb TEXT, the one place Postgres does not fold case for us.
+            // The payload axis, and the case trap with it: the person's id sits inside the JSON, UPPERCASED and
+            // under a key no registry enumerates. `payload` is jsonb TEXT, the one place Postgres does not fold
+            // case for us. This is the v1 invitation envelope — keyed by the invitation, the person in the
+            // payload. The application no longer writes that shape and those rows were never migrated, which is
+            // exactly why the erasure matches by value instead of by a list of columns anyone maintains.
             $invitationEvent = $this->seed(
                 $connection,
                 self::INVITATION_ID,
                 'Iam.Invitation',
                 'invitation.created',
                 \sprintf('{"invitedUserId": "%s"}', \strtoupper(self::SUBJECT_ID)),
+            );
+            // The v2 invitation envelope, which is what the application writes now: the person IS the aggregate
+            // id and the payload is empty. Without this row the suite would assert the erasure over the shape
+            // the code stopped producing and over none of the shape it produces.
+            $currentInvitationEvent = $this->seed(
+                $connection,
+                self::SUBJECT_ID,
+                'Iam.Invitation',
+                'invitation.sent',
+                '[]',
             );
             // A second person, untouched by this erasure — one subject's erasure is not another's.
             $otherEvent = $this->seed(
@@ -74,7 +86,7 @@ final class EventStoreSubjectAnonymiserFunctionalTest extends KernelTestCase
                 \sprintf('{"invitedUserId": "%s"}', self::OTHER_SUBJECT_ID),
             );
 
-            $this->assertSame(2, $anonymiser->anonymise(self::SUBJECT_ID, $pseudonym), 'one row per axis');
+            $this->assertSame(3, $anonymiser->anonymise(self::SUBJECT_ID, $pseudonym), 'both axes, both shapes');
 
             $this->assertSame($pseudonym, $this->columnOf($connection, $identityEvent, 'aggregate_id'));
             // The guarantee is not bought by deleting history: the row survives with its stream position.
@@ -87,6 +99,9 @@ final class EventStoreSubjectAnonymiserFunctionalTest extends KernelTestCase
             $this->assertStringNotContainsStringIgnoringCase(self::SUBJECT_ID, $invitationPayload);
             // Rewritten, not emptied — the key and the shape a deserializer depends on are still there.
             $this->assertStringContainsString('invitedUserId', $invitationPayload);
+
+            // The current envelope is reached by the column axis, like any event whose aggregate is a person.
+            $this->assertSame($pseudonym, $this->columnOf($connection, $currentInvitationEvent, 'aggregate_id'));
 
             $this->assertSame(self::OTHER_SUBJECT_ID, $this->columnOf($connection, $otherEvent, 'aggregate_id'));
             $this->assertStringContainsStringIgnoringCase(

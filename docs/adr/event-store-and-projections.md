@@ -345,6 +345,33 @@ queda intacta — la sentencia no cambia. Lo que se acota es *cuándo* corre, nu
 `aggregate_id` deja `SELECT aggregate_id FROM event_store` en verde mientras el id sigue vivo en el `payload` de
 la fila contigua — una declaración cuya única evidencia es la mitad que eligió mirar.
 
+*Enmienda (2026-08-07, al cerrar el residuo de invitación).* El inventario de arriba deja de describir a los
+seis `Invitation*`: su `aggregateId` pasa a ser el `invitedUserId` y su `payload` queda vacío, de modo que
+migran del eje de payload al eje de columna. El motivo **no** es de borrado —esta política los alcanzaba por
+las dos vías— sino que su `aggregate_id` era el **selector** del enlace de aceptación, y este log no caduca:
+lo prohíbe el corolario de I-1 de [`administrative-recovery-channel.md`](./administrative-recovery-channel.md).
+Consecuencias que esta decisión hereda y conviene tener escritas:
+
+- Los seis suben a `eventVersion` **2**. Una fila v1 ya no resuelve clase en `ReflectionDomainEventMapper` y
+  **falla ruidosamente al leerse**, que es lo correcto: su `aggregate_id` significa algo que la clase ya no
+  significa, y ningún upcaster puede repararlo — un upcaster transforma el `payload` y nunca ve la columna.
+  **No se migran filas históricas**; siguen conteniendo selectores y esta política las alcanza igual.
+- El sujeto de esos eventos pasa a compartir el eje de `aggregate_id` con sus eventos de `Iam.Identity` y con
+  los dos revokes masivos de sesión, así que un borrado los mueve **todos al mismo seudónimo** y la unicidad
+  de `event_store_stream_version_uniq` se preserva por la misma razón que ya se enuncia arriba.
+- `AcceptInvitation` publica ahora eventos claveados por el usuario mientras sostiene el lock de la fila de
+  **invitación**, no el de la identidad. Hoy es inocuo porque ese UNIQUE es inerte (`tenant_id` siempre
+  `NULL`); queda registrado en `deferred-work.md` como deuda de la historia que active el versionado real.
+- **El radio de explosión de ese «falla ruidosamente», dicho antes de que alguien lo descubra.**
+  `ProjectionRunner::project()` llama al deserializador **sin `catch`**, y `RunProjectionsOnDomainEvent` llama
+  a `catchUpAll()` también sin `catch`, disparado por *todo* `DomainEvent` y —para los eventos de `Iam` sin
+  enrutar— **dentro de la transacción de escritura de quien publica**. Así que el día que un proyector se
+  suscriba a `erpify.iam.invitation.*`, o que un `event:projection:rebuild` reproduzca desde la secuencia 0,
+  cada fila v1 sin migrar aborta esa escritura, no solo el proyector: no hay salto, ni dead-letter, ni
+  upcaster que la repare. **Hoy es inalcanzable y está medido**: `BankCountProjector` es el único `Projector`
+  del árbol y `stream()` filtra por `event_name`, así que esas filas nunca se devuelven. Suscribir un
+  proyector a esos nombres exige tratar antes las filas v1.
+
 **Alternativas descartadas:**
 
 - **Crypto-shredding del `aggregate_id`.** No aplica: una clave indexada no se cifra. Y es **peor que

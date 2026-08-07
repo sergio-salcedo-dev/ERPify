@@ -37,10 +37,8 @@ final readonly class ResendInvitation
 
     /**
      * @throws InvitationNotFound when the id resolves to no invitation
-     *
-     * @return string the fresh `<invitationId>.<secret>` accept token, delivered once
      */
-    public function resend(string $invitationId): string
+    public function resend(string $invitationId): IssuedInvitation
     {
         Uuid::ensure($invitationId);
 
@@ -72,8 +70,7 @@ final readonly class ResendInvitation
         );
 
         $acceptToken = $invitationId . '.' . $generated->plaintext();
-        $this->emailSender->send($recipientEmail, $acceptToken);
 
-        return $acceptToken;
+        return new IssuedInvitation($acceptToken, $this->emailSender->send($recipientEmail, $acceptToken));
     }
 }

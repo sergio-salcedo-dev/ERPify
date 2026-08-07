@@ -66,7 +66,7 @@ final class SendInvitationTest extends TestCase
             new FixedClock(new DateTimeImmutable(self::NOW)),
         );
 
-        $token = $sendInvitation->invite('Newbie@Erpify.Test', Role::EDITOR);
+        $issued = $sendInvitation->invite('Newbie@Erpify.Test', Role::EDITOR);
 
         $this->assertCount(1, $users->saved);
         $invitedUser = $users->saved[0];
@@ -87,8 +87,9 @@ final class SendInvitationTest extends TestCase
 
         $this->assertCount(1, $emailSender->sent);
         $this->assertSame('newbie@erpify.test', $emailSender->sent[0]['recipient']);
-        $this->assertSame($token, $emailSender->sent[0]['token']);
-        $this->assertStringStartsWith($invitation->getId() . '.', $token);
+        $this->assertSame($issued->acceptToken, $emailSender->sent[0]['token']);
+        $this->assertStringStartsWith($invitation->getId() . '.', $issued->acceptToken);
+        $this->assertTrue($issued->mailerAccepted);
     }
 
     private function passingValidator(): Validator

@@ -47,7 +47,11 @@ There is no public sign-up and no generic user-create command; subsequent member
 
 ```bash
 make sf c='iam:invitation:create <email> [ROLE ...]'             # default role: VIEWER
+make sf c='iam:invitation:create <email> --show-token'          # also print the raw accept link
 ```
+
+The accept link is printed only under `--show-token`, or unconditionally when the mailer refused the send (with
+a warning saying so). Locally the link also lands in Mailpit, which is usually the easier place to read it.
 
 ## Run / stop / inspect
 

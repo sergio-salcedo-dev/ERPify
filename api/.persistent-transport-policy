@@ -29,8 +29,8 @@
 #     needs an argued ADR exception. Keying per event class instead would be finer, but a class rename would
 #     silently empty the registry; `aggregateType()` is the stable key.
 #   - It classifies the `aggregate_id`, NOT the payload. An event whose id is safe but whose payload carries
-#     a person's id — every `Invitation*` (`invitedUserId`), `SessionStarted` and `SessionRevoked`
-#     (`userId`) — is out of its reach. Closing that is FR9/G-4b in the GDPR-hardening epic.
+#     a person's id — `SessionStarted` and `SessionRevoked` (`userId`) — is out of its reach. Closing that is
+#     FR9/G-4b in the GDPR-hardening epic.
 #   - It only sees `DomainEvent` subclasses under `src`. A plain Messenger message carrying a user id, routed
 #     to `async` and consumed by an `#[AsMessageHandler]`, reproduces the defect with this gate green. That
 #     is the cheapest way to reintroduce it and nothing here stops it.
@@ -52,9 +52,12 @@ Backoffice.BankAccount => non-person
 # The aggregate is the user.
 Iam.Identity => person
 
-# The aggregate id is the invitation's, for all six events; the invited user's id rides the payload, which
-# this gate does not reach.
-Iam.Invitation => non-person
+# PERSON, and the type's name is not the reason to doubt it — this file classifies what the `aggregate_id`
+# DENOTES, never what the aggregate type is called. All six events name the invited user as their subject, so
+# their `aggregate_id` is that person's id and their payload is empty. `aggregateType()` stays `Iam.Invitation`
+# on purpose (it names the lifecycle family, which is what keeps the family filterable); reading that name and
+# "correcting" this line back to `non-person` would file a person's id as safe to queue.
+Iam.Invitation => person
 
 # MIXED, and therefore person. `SessionStarted` and `SessionRevoked` carry the session's id — but
 # `AllSessionsRevoked` and `OtherSessionsRevoked` are coarse facts about the USER, so their `aggregate_id`
