@@ -24,8 +24,10 @@
 # rules — run together by `make php.lint.audit-resource`. It fails the build when a type reaches
 # `AuditResource::of(...)` — written as a literal at the call, or held in a constant the call resolves,
 # whether declared in the calling class or in another one it imports — or a route's
-# `_audit_resource_type` default without a line here; when a `person` line names a file that does not call
-# anonymise() on an AuditResourceAnonymiser it holds; when its witness does not exist, is not a `.feature`
+# `_audit_resource_type` default without a line here; when a `person` line names a file that holds no
+# collaborator able to erase the resource axis — an AuditResourceAnonymiser, or the AuditSubjectTrailErasure
+# that orders that same pass behind the two-axis row lock — or holds one and never calls its erasing verb;
+# when its witness does not exist, is not a `.feature`
 # under `features/`, or has no single scenario that both seeds a row of the type and asserts none survives;
 # and when a `non-person` type is no longer written anywhere.
 #

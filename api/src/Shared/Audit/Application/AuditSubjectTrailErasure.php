@@ -18,8 +18,9 @@ use Erpify\Shared\Audit\Domain\AuditResource;
  *    deadlock between the two axes stays reachable while every gate is green.
  *  - Minting a second pseudonym for the resource pass splits one person into two anonymous identities.
  *
- * Both were knowledge the orchestrating use case held by hand. Here the first is unexpressible — the lock is
- * inside {@see beginForSubject()} — and the second is expressible only by ignoring what that method returns.
+ * Both were knowledge the orchestrating use case held by hand, and both are now unexpressible: the lock is
+ * inside {@see beginForSubject()}, and {@see completeForSubject()} takes that method's own return value rather
+ * than a bare string, so there is no signature a freshly minted pseudonym fits.
  *
  * **Why two methods and not one.** A `security` audit entry naming the subject as its resource is written
  * BETWEEN the passes: the resource anonymiser's `UPDATE` matches rows that already exist, so the entry has to
@@ -45,12 +46,14 @@ interface AuditSubjectTrailErasure
     public function beginForSubject(AuditResource $subject): ActorAnonymisationResult;
 
     /**
-     * Anonymises the rows naming `$subject` as a resource, using the pseudonym `beginForSubject()` minted.
+     * Anonymises the rows naming `$subject` as a resource, under the pseudonym `beginForSubject()` minted.
      *
-     * `$pseudonym` is an input rather than a fresh value on purpose: both axes of one person must collapse
-     * onto one anonymous identity, or intra-subject correlation dies with no gain.
+     * It takes the whole {@see ActorAnonymisationResult} rather than the pseudonym string it carries, so that
+     * the value can only have come from the actor pass. Both axes of one person must collapse onto one
+     * anonymous identity — a second pseudonym splits them, gains nothing, and is the failure a `string`
+     * parameter would accept without complaint.
      *
      * @return int rows whose `resource_id` was rewritten
      */
-    public function completeForSubject(AuditResource $subject, string $pseudonym): int;
+    public function completeForSubject(AuditResource $subject, ActorAnonymisationResult $anonymisation): int;
 }

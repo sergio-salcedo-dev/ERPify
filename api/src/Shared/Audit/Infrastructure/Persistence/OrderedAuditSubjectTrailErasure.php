@@ -40,8 +40,8 @@ final readonly class OrderedAuditSubjectTrailErasure implements AuditSubjectTrai
     }
 
     #[Override]
-    public function completeForSubject(AuditResource $subject, string $pseudonym): int
+    public function completeForSubject(AuditResource $subject, ActorAnonymisationResult $anonymisation): int
     {
-        return $this->resourceAnonymiser->anonymise($subject, $pseudonym);
+        return $this->resourceAnonymiser->anonymise($subject, $anonymisation->pseudonym);
     }
 }

@@ -194,6 +194,28 @@ final class PersonResourceErasureGateTest extends TestCase
         }
     }
 
+    #[Test]
+    public function theModuleBoundaryTheRuleComparesIsTheOneDeptracIsolates(): void
+    {
+        // Over the real tree every writer of the one person type sits in `src/Iam/Identity`, so the rule
+        // above compares an empty difference and would keep reporting green if `moduleOf()` were widened —
+        // `0, 1` turns "same module" into "anywhere under src/" and the rule becomes vacuous with no test
+        // noticing. That is the direction that fails SILENTLY, so it is the one that needs pinning; the
+        // narrow direction already fails loudly, by rejecting a correct writer.
+        $this->assertSame('src/Iam/Identity', $this->moduleOf('src/Iam/Identity/Application/FulfilIdentityErasure.php'));
+        $this->assertNotSame(
+            $this->moduleOf('src/Iam/Identity/Application/FulfilIdentityErasure.php'),
+            $this->moduleOf('src/Backoffice/Health/Application/Probe.php'),
+            'Two different contexts resolve to the same module, so the containment rule permits any writer.',
+        );
+        // Sibling MODULES of one context must separate too — deptrac isolates `Backoffice/Bank` from
+        // `Backoffice/BankAccount`, and a prefix of two segments would fold them together.
+        $this->assertNotSame(
+            $this->moduleOf('src/Backoffice/Bank/Application/X.php'),
+            $this->moduleOf('src/Backoffice/BankAccount/Application/X.php'),
+        );
+    }
+
     /**
      * The `src/<Context>/<Module>` prefix — the granularity deptrac isolates at, so "same module" here means
      * the same thing it means to the boundary gate rather than a second, softer definition.

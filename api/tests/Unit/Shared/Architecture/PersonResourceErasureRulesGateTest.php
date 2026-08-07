@@ -86,10 +86,9 @@ final class PersonResourceErasureRulesGateTest extends TestCase
     }
 
     /**
-     * Falsifies the single-writer tripwire over the real tree. There, exactly one file derives the person
-     * type, so `assertSame([owner], filesDerivingType(...))` is indistinguishable from an assertion whose
-     * right-hand side can never hold more than one entry — which is precisely how a tripwire ends up
-     * unable to trip.
+     * Falsifies the derivation sweep in the direction the real tree cannot. Over `src` the sweep's callers
+     * only ever ask about writers that exist, so a sweep silently capped at one file would satisfy them all
+     * while hiding exactly what the registry depends on seeing — a second writer. Here it must return both.
      */
     #[Test]
     public function theDerivationSweepReportsEverySecondWriterOfAType(): void

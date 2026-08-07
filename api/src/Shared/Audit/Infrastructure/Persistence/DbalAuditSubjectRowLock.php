@@ -30,9 +30,14 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * function of the subject alone. Idempotency stays where it already is, in the anonymisers' own predicates.
  *
  * What it does NOT cover: rows another transaction commits between this lock and the anonymisers' UPDATEs.
- * Under `READ COMMITTED` those are visible to the UPDATE and were never locked here. They are not a cycle
- * risk — a committed row is held by nobody — but they are the reason this is a lock over the erasure's own
- * pair of statements, not a claim about the table.
+ * Under `READ COMMITTED` those are visible to the UPDATE and were never locked here, and they CAN still form a
+ * cycle — two erasures whose locked sets did not overlap can each acquire one of a newly committed reciprocal
+ * pair from their own statements, in opposite orders. "A committed row is held by nobody" is true at commit
+ * time and beside the point, because each erasure then acquires it. What keeps that unreachable is not this
+ * class: it is the administrator refusal, since a reciprocal pair requires both subjects to have acted on each
+ * other as administrators, and `AdministratorErasureRequiresDemotion` refuses to erase an identity that still
+ * carries the role. Read this as the boundary of the guarantee — a lock over the erasure's own pair of
+ * statements, never a claim about the table.
  */
 #[AsAlias(AuditSubjectRowLock::class)]
 final readonly class DbalAuditSubjectRowLock implements AuditSubjectRowLock

@@ -159,10 +159,7 @@ final readonly class FulfilIdentityErasure
 
                 // Same pseudonym for both axes: one person must not split into two anonymous identities.
                 // It re-links nothing, because the original id is gone from both columns.
-                $anonymisedResourceRows = $this->auditTrail->completeForSubject(
-                    $subject,
-                    $anonymisation->pseudonym,
-                );
+                $anonymisedResourceRows = $this->auditTrail->completeForSubject($subject, $anonymisation);
                 $anonymisedEventRows = $this->anonymiseBusinessLog(
                     $identity,
                     $subjectId,
@@ -208,6 +205,18 @@ final readonly class FulfilIdentityErasure
      * pushing it into the shared module would be an inventory of aggregate types, which is the enumeration
      * `docs/adr/event-store-and-projections.md` D12 rejects and which the payload axis defeats anyway.
      */
+    private function anonymiseBusinessLog(
+        IdentityErasureResult $identity,
+        string $subjectId,
+        string $pseudonym,
+    ): int {
+        if (!$identity->identityErased) {
+            return 0;
+        }
+
+        return $this->eventStoreSubjectAnonymiser->anonymise($subjectId, $pseudonym);
+    }
+
     /**
      * The three references to the subject that no constraint removes. None has a physical foreign key —
      * sessions live in this context, the membership and the invitations cross a bounded context, so integrity
@@ -224,18 +233,6 @@ final readonly class FulfilIdentityErasure
             $this->purgeUserMembership->purge($subjectId),
             $this->purgeUserInvitations->purge($subjectId),
         ];
-    }
-
-    private function anonymiseBusinessLog(
-        IdentityErasureResult $identity,
-        string $subjectId,
-        string $pseudonym,
-    ): int {
-        if (!$identity->identityErased) {
-            return 0;
-        }
-
-        return $this->eventStoreSubjectAnonymiser->anonymise($subjectId, $pseudonym);
     }
 
     /**

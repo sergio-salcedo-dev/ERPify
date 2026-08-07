@@ -26,11 +26,13 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * D4.1 materialised to make erasure queryable. The two axes are separate columns because they are separate
  * people; this writes only its own.
  *
- * That is a rule about what the columns MEAN, not a claim about who wrote the rows. Today exactly one file
- * names a person as an audit resource — the erasure that runs this — because `User` is deliberately not an
- * `AuditedEntity` (it would carry `password_hash` into the trail), so suspending or demoting a user writes
- * no row at all. `PersonResourceErasureGateTest` fails the build the day a second writer appears, which is
- * when the third-party case stops being hypothetical.
+ * That is a rule about what the columns MEAN, not a claim about who wrote the rows — and it has to be, because
+ * several files now name a person as an audit resource: the erasure that runs this, plus the role change and
+ * the invitation that record an administrator acting on a user. The third-party case is live, not
+ * hypothetical, and this statement is indifferent to it: the `WHERE` matches on `(resource_type, resource_id)`
+ * and never on who wrote the row, so a sibling writer's rows are erased exactly like the erasure's own.
+ * `PersonResourceErasureGateTest` bounds WHERE those writers may live — the module declared to erase the type
+ * — rather than how many there are.
  *
  * The pseudonym is guarded with {@see Uuid::ensure()} at this edge like the sibling anonymiser: the only
  * caller already holds one minted by {@see DbalAuditActorAnonymiser}, so this is defence in depth — a future

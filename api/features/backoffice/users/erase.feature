@@ -105,8 +105,10 @@ Feature: Erase an identity (GDPR right to erasure)
     # actor pass mints the pseudonym the resource pass needs, and the resource pass has to find a row that
     # already exists. Each UPDATE is one round trip regardless of how many rows it matches, and the resource
     # one always matches at least that just-written row — which is how its identifier gets anonymised at all.
-    # The remaining reads resolve the acting admin and its permissions
-    # before the controller. The two reference deletes are one directed DELETE each, which is why they cost
+    # The remainder is the acting admin and its permissions resolved before the controller, plus the
+    # SAVEPOINT/RELEASE pair DBAL emits because EraseIdentitySubject opens a nested transaction — those two
+    # go through executeStatement() and are counted like any other round trip. The total is measured; this
+    # decomposition is a reading aid, so check it against a real run before trusting any single term. The two reference deletes are one directed DELETE each, which is why they cost
     # exactly one round trip apiece and not one per row. A shift means an added round trip — re-measure,
     # don't just bump the number.
     And 19 requests got executed for doctrine connection "default"
