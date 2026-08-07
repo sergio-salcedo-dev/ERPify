@@ -202,7 +202,10 @@ final class PersonResourceErasureGateTest extends TestCase
         // `0, 1` turns "same module" into "anywhere under src/" and the rule becomes vacuous with no test
         // noticing. That is the direction that fails SILENTLY, so it is the one that needs pinning; the
         // narrow direction already fails loudly, by rejecting a correct writer.
-        $this->assertSame('src/Iam/Identity', $this->moduleOf('src/Iam/Identity/Application/FulfilIdentityErasure.php'));
+        $this->assertSame(
+            'src/Iam/Identity',
+            $this->moduleOf('src/Iam/Identity/Application/FulfilIdentityErasure.php'),
+        );
         $this->assertNotSame(
             $this->moduleOf('src/Iam/Identity/Application/FulfilIdentityErasure.php'),
             $this->moduleOf('src/Backoffice/Health/Application/Probe.php'),
