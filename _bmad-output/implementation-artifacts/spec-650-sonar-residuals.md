@@ -4,7 +4,7 @@ type: 'refactor'
 created: '2026-08-07'
 baseline_commit: 5f7d853f9bb13dc41bc1366fc4ab910b7acee54b
 status: 'in-review'
-review_loop_iteration: 0
+review_loop_iteration: 1
 context: []
 ---
 
@@ -27,9 +27,12 @@ precedente `NORMALIZED_DENYLIST` del mismo fichero.
 ## Boundaries & Constraints
 
 **Always:**
-- Comportamiento observable **idéntico** byte a byte. Es un refactor, no un cambio de política de redacción.
-- Cada reescritura llega con el test que la falsifica.
-- Paridad de vocabulario API↔PWA intacta: `IDENTITY_KEYS` y `IDENTITY_AXES` siguen siendo la misma lista.
+- Los dos cambios que cierran las issues de Sonar preservan el comportamiento **byte a byte**; los cinco
+  cierres de fuga lo cambian **solo en dirección de redactar más**, nunca menos. Sobre-redactar un log cuesta
+  un diagnóstico; sub-redactarlo cuesta un identificador que sobrevive a su propio borrado.
+- Cada cambio llega con el test que lo falsifica.
+- Paridad de vocabulario API↔PWA: `IDENTITY_KEYS` y `IDENTITY_AXES` siguen siendo la misma lista, y ahora
+  con un gate que lo comprueba en vez de un test que lo promete.
 
 **Ask First:**
 - Si algún test **existente** cambia de resultado → HALT (sería cambio de comportamiento, no un smell).
@@ -131,6 +134,38 @@ alcance en la PR:
 - **PHP decodifica un *valor* anidado una vez, pero una *clave* hasta seis.** Asimetría del mismo signo.
 - **Cero gates de paridad** entre los tres sitios que sostienen este vocabulario (`Caddyfile`,
   `RequestUriRedaction.php`, `redaction.ts`). El hallazgo #2 es lo que produce esa ausencia con el tiempo.
+
+## Segundo pase adversarial (2026-08-07, sobre los cierres de fuga, antes de abrir la PR)
+
+El primer pase revisó un refactor; los cinco cierres son cambio de comportamiento sobre un control GDPR y
+llevan pase propio. Devolvió **dos GRAVE, ambos contra afirmaciones escritas en la documentación de este
+mismo diff** — lo peor que puede producir este trabajo: prosa que asegura una protección inexistente.
+
+| # | Hallazgo | Estado |
+|---|---|---|
+| G2 | `scrubNestedUri` decodificaba el valor una vez: `next=%252Fa%253FactorId%253D<id>` —la entrada exacta que fija el test nuevo de PHP— llegaba **intacta a Sentry**. El test de profundidad no lo veía: apila niveles de codificación **simple** | **Cerrado**: `decodeUntilQuerySurfaces` compartido + test que cae al revertirlo (1 de 80) |
+| M2 | `\s` de PCRE es ASCII: `%C2%A0`, `%E2%80%80` y el BOM **fugaban en PHP** y se redactaban en TS, mientras el docblock afirmaba «mirrors the API» | **Cerrado**: clase Unicode con respaldo ASCII para bytes no-UTF8; 3 casos |
+| M3 | PHP reducía solo para comparar, TS reasignaba: `%250%0A0actorId` **fugaba en PHP** | **Cerrado**: `reduce()` alimenta la decodificación siguiente; 1 caso |
+| M4 | El gate prometía «los tres» y comparaba dos: un cuarto eje en **ambos** deployables dejaba a Caddy con tres y el gate verde | **Cerrado**: tercera aserción derivada de `IDENTITY_KEYS`; docblock reescrito a lo que prueba |
+| m1–m3 | «seis decodificaciones» (son cinco llamadas / seis formas), «creció de 0..8 a 0..19» (narrativa de rama, no verificable), «un vigésimo eje rompe el build» (son veinte; rompe el vigesimoprimero) | **Corregidos** |
+| m4 | Escape malformado final (`?actorId%=`) no redactado en ningún sumidero | **Declarado** en `docs/api-error-contract.md`, no cerrado: sanar escapes arbitrarios es adivinar, y adivinar mal redacta parámetros reales |
+
+**Claims que sobrevivieron al ataque** (medidos por el revisor, no argumentados): la compatibilidad de
+`decodeUntilQuerySurfaces` — **0 contraejemplos en 400.000 entradas fuzzeadas**; ninguna sobre-redacción
+alcanza un cuerpo de respuesta (las seis call sites son sumideros; el cuerpo va por `RedactionDenylist`);
+ninguna clave que un productor real emita se sobre-redacta; ambos bucles terminan y no hay coste cuadrático.
+
+**Dos abiertos, que no cierro unilateralmente** — ver el cuerpo de la PR:
+
+- **G1 — Caddy no puede recibir estos arreglos.** Su `format filter` casa el nombre del parámetro
+  literalmente: sin comodín, sin normalización, sin decodificación. Medido sobre el stack vivo, misma
+  petición, misma línea: `?actorId%00=`, `?actorId%20=`, `?actor+Id=` y el doblemente codificado se redactan
+  en la línea de error y en Sentry, y **llegan en claro al access log**. Cerrarlo en el borde significa sacar
+  el query string del access log entero. Es una decisión con coste propio, no un arreglo.
+- **M5 — coste ~2,5× sobre entrada hostil.** Medido: 36,8 KB de pares `k=%253Fx%253D1` pasan de 1,06 ms a
+  2,62 ms; escala lineal (~72 µs/KB), así que una URI de 82 KB gasta 5,97 ms **solo en redacción** contra un
+  presupuesto documentado de p99 ≤ 5 ms en 4xx. `ExceptionResponderBenchmarkTest` ataca una ruta sin query
+  string, así que no mide nada de esto.
 
 ## Design Notes
 

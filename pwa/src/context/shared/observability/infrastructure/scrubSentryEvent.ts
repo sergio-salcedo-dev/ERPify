@@ -1,6 +1,7 @@
 import type { Event } from "@sentry/nextjs";
 import {
   isDenylistedKey,
+  decodeUntilQuerySurfaces,
   isIdentityAxisKey,
   REDACTION_SENTINEL,
   scrubDeep,
@@ -118,25 +119,39 @@ function tryScrubJson(data: string): string {
  * that arrives here outlives the erasure the application confirmed to the subject.
  */
 function scrubQueryString(queryString: string): string {
-  return scrubPairs(queryString, true);
+  return scrubPairs(queryString, 0);
 }
+
+/**
+ * How far a URI carried inside a value is followed. Mirrors the API's
+ * `RequestUriRedaction::MAX_NESTED_URI_DEPTH`: one level reaches `?next=<the whole audit URL>`, and the
+ * second reaches the same URL wrapped once more — the shape a client produces when an expired session
+ * bounces through the login redirect twice. Stopping a level short of the API is not a smaller guarantee,
+ * it is the same identifier kept out of one sink and let into the other.
+ */
+const MAX_NESTED_URI_DEPTH = 2;
 
 /**
  * Every rule above matches a parameter NAME, and that misses a whole class: when a session expires the
  * client navigates to `/login?next=<the entire audit URL>`, so the ids that screen holds arrive under a
- * name no denylist will ever contain. A value that is itself a URI is followed one level — enough for the
- * shape that exists, and no recursion to bound.
+ * name no denylist will ever contain. A value that is itself a URI is therefore followed and scrubbed by
+ * the same vocabulary, to the bound above.
  */
-function scrubNestedUri(value: string): string {
-  const queryStart = value.indexOf("?");
+function scrubNestedUri(value: string, depth: number): string {
+  const decoded = decodeUntilQuerySurfaces(value);
+  const queryStart = decoded.indexOf("?");
   if (queryStart === -1) {
     return value;
   }
 
-  return `${value.slice(0, queryStart + 1)}${scrubPairs(value.slice(queryStart + 1), false)}`;
+  const scrubbed = `${decoded.slice(0, queryStart + 1)}${scrubPairs(decoded.slice(queryStart + 1), depth)}`;
+
+  // Only a value that WAS carrying an identifier is rewritten. Returning the caller's bytes otherwise keeps
+  // the encoding depth an operator reads the request by, which decoding here would otherwise flatten.
+  return scrubbed === decoded ? value : scrubbed;
 }
 
-function scrubPairs(query: string, followNested: boolean): string {
+function scrubPairs(query: string, depth: number): string {
   const params = new URLSearchParams(query);
   const scrubbed = new URLSearchParams();
   for (const [key, value] of params) {
@@ -144,7 +159,8 @@ function scrubPairs(query: string, followNested: boolean): string {
       scrubbed.append(key, REDACTION_SENTINEL);
       continue;
     }
-    scrubbed.append(key, followNested ? scrubNestedUri(value) : value);
+    const follows = depth < MAX_NESTED_URI_DEPTH;
+    scrubbed.append(key, follows ? scrubNestedUri(value, depth + 1) : value);
   }
   return scrubbed.toString();
 }

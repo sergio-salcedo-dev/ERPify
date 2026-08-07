@@ -31,10 +31,90 @@ export const REDACTION_DENYLIST = [
 
 const NORMALIZED_DENYLIST: string[] = REDACTION_DENYLIST.map((d: string) => d.toLowerCase());
 
-export function isDenylistedKey(key: string): boolean {
-  const lowerKey: string = key.toLowerCase();
+/**
+ * Whitespace and control bytes, which pad a parameter name without changing what it names. `\s` alone
+ * is not enough: it does not cover NUL, and NUL is exactly the byte that walks `actorId%00` past a
+ * whole match. Mirrors the API's `RequestUriRedaction::PADDING_BYTES`.
+ */
+const PADDING_BYTES = /[\s\u0000-\u001F\u007F]+/g;
 
-  return NORMALIZED_DENYLIST.some((denied: string) => lowerKey.includes(denied));
+/**
+ * Bounds the decode loop below, so a key of stacked `%25`s cannot spin it. Mirrors the API's
+ * `RequestUriRedaction::MAX_DECODE_PASSES`, because a spelling one side unwraps and the other does not is
+ * an identifier that reaches one sink after being kept out of the other.
+ */
+const MAX_DECODE_PASSES = 4;
+
+/**
+ * A key reduced to what it actually names, so padding and encoding cannot walk it past an exact match.
+ *
+ * `URLSearchParams` decodes exactly once, which is one level short of the API: a caller who writes
+ * `filters%255B0%255D%255Bvalue%255D` hands this a key still spelling `filters%5B0%5D%5Bvalue%5D`, and the
+ * pattern matches neither. The sink records what the caller sent, not what our own UI meant to send.
+ */
+function reduceKey(key: string): string {
+  let candidate: string = key.toLowerCase().replace(PADDING_BYTES, "");
+
+  for (let pass = 0; pass < MAX_DECODE_PASSES; pass += 1) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(candidate);
+    } catch {
+      // A malformed escape (`%`, `%zz`) is left as the literal bytes the caller sent, exactly as the API's
+      // urldecode does — matching stays on what is already reduced rather than throwing at the sink.
+      return candidate;
+    }
+
+    const reduced: string = decoded.toLowerCase().replace(PADDING_BYTES, "");
+
+    if (reduced === candidate) {
+      return candidate;
+    }
+
+    candidate = reduced;
+  }
+
+  return candidate;
+}
+
+/**
+ * A value decoded until a URI's query surfaces, for the caller that follows a nested URI. Keys are read
+ * through several decodings, and a value that stopped at one left the two halves of the same rule
+ * disagreeing: `?next=%252Fa%253FactorId%253D<id>` carries no literal `?` after the single decoding
+ * URLSearchParams performs, so the nested URI was never followed and the id travelled intact.
+ *
+ * The input is returned unchanged when no query ever surfaces, so a value that is not a URI keeps the
+ * caller's bytes. Mirrors the API's `RequestUriRedaction::decodeUntilQuerySurfaces()`.
+ */
+export function decodeUntilQuerySurfaces(value: string): string {
+  let candidate: string = value;
+
+  for (let pass = 0; pass < MAX_DECODE_PASSES; pass += 1) {
+    if (candidate.includes("?")) {
+      return candidate;
+    }
+
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(candidate);
+    } catch {
+      return value;
+    }
+
+    if (decoded === candidate) {
+      return value;
+    }
+
+    candidate = decoded;
+  }
+
+  return candidate.includes("?") ? candidate : value;
+}
+
+export function isDenylistedKey(key: string): boolean {
+  const reduced: string = reduceKey(key);
+
+  return NORMALIZED_DENYLIST.some((denied: string) => reduced.includes(denied));
 }
 
 /**
@@ -76,9 +156,9 @@ export const REDACTION_SENTINEL = "REDACTED";
 
 /** True when a query-parameter name is an identity axis or the value axis of the search grammar. */
 export function isIdentityAxisKey(key: string): boolean {
-  const lowerKey: string = key.toLowerCase();
+  const reduced: string = reduceKey(key);
 
-  return IDENTITY_AXIS_KEYS.includes(lowerKey) || SEARCH_VALUE_KEY.test(lowerKey);
+  return IDENTITY_AXIS_KEYS.includes(reduced) || SEARCH_VALUE_KEY.test(reduced);
 }
 
 /** Bounds recursion against pathological / cyclic structures. */

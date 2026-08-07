@@ -280,6 +280,25 @@ The sink is what makes this a leak rather than verbosity: in prod Monolog writes
 
 The identity axes are **not** folded into `RedactionDenylist::KEYS`: that list is substring-matched against problem-details extension keys too, and `actorId`/`resourceId`/`correlationId` are Resource DTO property names, so adding them there would silently start stripping fields out of response bodies. Adding a key here means extending `RequestUriRedaction::IDENTITY_KEYS` plus a row in `RequestUriRedactionTest::provideRedactedCases`.
 
+### What a key is reduced to before it is matched
+
+An axis is matched **whole**, so the match has to run against what the key names rather than against the bytes the caller chose to spell it with. Two reductions run first, both in the over-matching direction, because over-redacting a log costs a diagnostic while under-redacting it costs an identifier that outlives its own erasure:
+
+- **Padding is stripped** (`RequestUriRedaction::PADDING_BYTES`: whitespace and control bytes). Without it `?actorId%00=`, `?actorId%0A=`, `?actorId%20=` and `?actor+Id=` each miss the whole match. Such a request answers 4xx — no DTO property carries the padded name — and 4xx is precisely what the `fingers_crossed` buffer holds and flushes on the next 5xx, so the value reaches the sink regardless of the status.
+- **The key is decoded repeatedly**, up to `MAX_DECODE_PASSES` (five `urldecode` calls, so six candidate forms), because the positional grammar travels percent-encoded and a caller may wrap it further. The reduced form is what the next decoding starts from, not merely what the comparison sees: `%250%0A0actorId` only heals into a decodable escape once the padding is gone. **A nested URI carried in a VALUE is decoded the same way** (`decodeUntilQuerySurfaces`) — an asymmetry where the key was read through six forms and the value through one let `?next=%252F…%253FactorId%253D<id>` through untouched.
+
+**Declared residual — a trailing malformed escape.** `?actorId%=`, `?actorId%zz=` and `?filters%5B0%5D%5Bvalue%5D%=` are not redacted by any of the three sinks: PHP's `urldecode` leaves the invalid bytes and converges, and the PWA's `decodeURIComponent` throws and the catch returns the unreduced candidate. `?token%=` survives only because the denylist is substring-matched, which is not a rule that generalises. This is declared rather than closed because healing arbitrary malformed escapes means guessing what the caller meant, and a wrong guess redacts real parameters; it is listed here so the next reader finds it stated rather than discovering it.
+
+### Two of the three sinks, and the one that is different
+
+Three files hold this vocabulary and none imports another: `api/frankenphp/Caddyfile` (access log), `RequestUriRedaction` (per-error log line), and `pwa/src/context/shared/observability/domain/redaction.ts` (Sentry event).
+
+**The API and the PWA reduce identically** — same padding class, same `MAX_DECODE_PASSES`, same `MAX_NESTED_URI_DEPTH`, and the value decoded until a query surfaces on both. A level or a decoding one side performs and the other does not is not a smaller guarantee; it is the same identifier kept out of one sink and let into the other, and Sentry's retention is reached by no erasure path either.
+
+**Caddy is not, and cannot be, held to that.** Its `format filter` matches a parameter name literally: there is no wildcard, no normalisation, no decoding. `?actorId%00=<id>`, `?actor+Id=<id>` and `?filters%255B0%255D%255Bvalue%255D=<id>` are therefore redacted in the per-error log line and in the Sentry event, and reach the **access log in clear** — measured, not inferred. Closing it at the edge would mean dropping the query string from the access log altogether, which is a separate decision with its own cost.
+
+`RedactionVocabularyParityTest` fails when the identity axes diverge between the two deployables, when an axis is missing from the edge's enumeration, or when the case that exists to prove the pattern out-reaches the edge stops actually stepping past it. That last check is not decorative: the enumeration reaches `filters[0..19]` while a docblock and a test comment went on describing `filters[0..8]`, and the case named "at an index beyond what the edge enumerates" silently stopped testing anything. The gate compares vocabularies only — not the two search-value patterns, the two denylists, or the bounds, all mirrored by hand.
+
 ## Environment-aware `debug` extension
 
 Behavior is keyed off `%kernel.environment%` (injected via `#[Autowire('%kernel.environment%')]` — never `$_ENV` / `getenv()`). The decision lives in `ProblemDetailsFactory::buildDebugExtension()` (lines 482–504) and `resolveDebugMode()` (lines 464–471).

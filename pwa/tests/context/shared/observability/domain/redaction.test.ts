@@ -68,6 +68,33 @@ describe("identity axes", () => {
     expect(isIdentityAxisKey("filters[0][operator]")).toBe(false);
     expect(isIdentityAxisKey("limit")).toBe(false);
   });
+
+  // An axis is matched whole, so one byte of padding was enough to miss it. The request 4xxs, and a 4xx is
+  // what the API's fingers_crossed buffer flushes on the next 5xx — the value reaches a sink either way.
+  it("matches an axis padded with a control byte or whitespace", () => {
+    expect(isIdentityAxisKey("actorId\u0000")).toBe(true);
+    expect(isIdentityAxisKey("actorId\n")).toBe(true);
+    expect(isIdentityAxisKey("actorId\t")).toBe(true);
+    expect(isIdentityAxisKey("actorId\u007F")).toBe(true);
+    expect(isIdentityAxisKey("actor Id")).toBe(true);
+    expect(isIdentityAxisKey("filters[0][value] ")).toBe(true);
+  });
+
+  // URLSearchParams decodes exactly once, which is a level short of the API's MAX_DECODE_PASSES. A caller
+  // who double-encodes hands this a key still spelling `filters%5B0%5D%5Bvalue%5D`.
+  it("matches a key still encoded after the caller's single decoding", () => {
+    expect(isIdentityAxisKey("filters%5B0%5D%5Bvalue%5D")).toBe(true);
+    expect(isIdentityAxisKey("actor%49d")).toBe(true);
+  });
+
+  // decodeURIComponent throws on a malformed escape. A redactor that throws inside a telemetry hook takes
+  // the whole event with it, so the reduction stops at what it has rather than propagating.
+  it("survives a malformed escape instead of throwing at the sink", () => {
+    expect(() => isIdentityAxisKey("%")).not.toThrow();
+    expect(() => isIdentityAxisKey("%zz")).not.toThrow();
+    expect(() => isIdentityAxisKey("actorId%")).not.toThrow();
+    expect(isIdentityAxisKey("filters%5B0%5D%5Bvalue%5D%")).toBe(false);
+  });
 });
 
 describe("scrubDeep", () => {
