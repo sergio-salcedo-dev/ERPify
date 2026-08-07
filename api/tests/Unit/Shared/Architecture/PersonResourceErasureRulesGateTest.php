@@ -177,7 +177,10 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         );
 
         $this->assertNotNull($defect, 'A file that only mentions the anonymiser was accepted as erasing.');
-        $this->assertStringContainsString('holds no AuditResourceAnonymiser property', $defect);
+        $this->assertStringContainsString(
+            'holds no AuditResourceAnonymiser or AuditSubjectTrailErasure property',
+            $defect,
+        );
     }
 
     #[Test]
@@ -191,7 +194,7 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         ;
 
         $this->assertNotNull($defect, 'An owner that holds the anonymiser and never calls it was accepted.');
-        $this->assertStringContainsString('never calls anonymise() on it', $defect);
+        $this->assertStringContainsString('never calls anonymise()/completeForSubject() on it', $defect);
     }
 
     #[Test]

@@ -11,6 +11,7 @@ use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Audit\Domain\ActorContext;
+use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryActiveAdministratorDirectory;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryPasswordResetTokenRepository;
@@ -23,6 +24,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactor
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -127,8 +129,11 @@ final class EraseIdentitySubjectCommandTest extends TestCase
                 new InMemoryPasswordResetTokenRepository(),
                 new InlineTransactionManager(),
             ),
-            new RecordingAuditActorAnonymiser(matchCount: 0),
-            new RecordingAuditResourceAnonymiser(matchCount: 0),
+            new OrderedAuditSubjectTrailErasure(
+                new RecordingAuditSubjectRowLock(),
+                new RecordingAuditActorAnonymiser(matchCount: 0),
+                new RecordingAuditResourceAnonymiser(matchCount: 0),
+            ),
             new RecordingEventStoreSubjectAnonymiser(),
             $directory ?? new InMemoryActiveAdministratorDirectory([self::OTHER_ADMIN_ID => true]),
             new PurgeUserSessions(new InMemorySessionRepository()),

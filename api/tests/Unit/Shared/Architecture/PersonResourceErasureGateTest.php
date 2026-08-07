@@ -126,50 +126,81 @@ final class PersonResourceErasureGateTest extends TestCase
     }
 
     /**
-     * The single-writer tripwire. `FulfilIdentityErasure` runs the actor pass and the resource pass inside
-     * one transaction, in that order, and neither statement fixes its lock order with an `ORDER BY` — so two
-     * concurrent erasures taking the two axes in opposite orders is a textbook ABBA deadlock. It is
-     * unreachable, and the reason is NOT that anything serialises them: it is that the reciprocal pair of
-     * rows cannot coexist. The only file that names a person as an audit RESOURCE is this erasure, and the
-     * erasure hard-deletes the identity, so a subject once erased never acts again.
+     * The containment rule for the resource axis: a person type may be written by more than one file, but
+     * every one of them lives in the module whose use case is declared to erase it.
      *
-     * That argument dies the moment a second file writes the type — an admin action recorded against a user,
-     * say — because then the resource axis carries rows the erasure did not write, two live administrators
-     * can each be the other's resource, and the deadlock becomes reachable while every other gate stays
-     * green. A `40P01` surfaces as a 500 through the RFC 9457 pipeline.
+     * It is deliberately weaker than the single-writer rule it replaces, and the reason is worth stating
+     * because the weakening is what makes it survive. That rule read `[owner] === filesDerivingType()`, and
+     * it rested on an argument about deadlock: `FulfilIdentityErasure` runs the actor pass and the resource
+     * pass as two statements in one transaction, so two concurrent erasures could take them in opposite
+     * orders — a textbook ABBA — and the only thing making that unreachable was that the erasure was the sole
+     * writer of the axis and hard-deletes the identity, so a subject once erased never acts again. An
+     * administrator acting on another administrator ends that, and the invariant with it.
      *
-     * This is the sibling of `theStalenessOfAPersonTypeIsSatisfiedByItsOwnErasureDeclaration` and not a
-     * duplicate of it: that one matches the quoted literal, so a writer reaching the type through an
-     * imported constant or a route default is invisible to it. Derivation resolves all three forms, which is
-     * what makes this one a tripwire rather than a spot check.
+     * **That protection now lives where it belongs, in the code rather than in a file census.**
+     * {@see \Erpify\Shared\Audit\Application\AuditSubjectRowLock} takes both axes as one set in `id` order
+     * before either is rewritten, so concurrent erasures acquire their shared rows in the same sequence and
+     * one blocks instead of cycling. `FulfilIdentityErasureTest` pins that the lock is taken BEFORE either
+     * anonymiser, which is the half a call-count assertion would miss. A rule about who may write a column is
+     * the wrong instrument for a concurrency invariant: it went red for a change that was correct, and it
+     * would have gone green again the moment a writer was deleted for unrelated reasons.
      *
-     * **What it does not see**, because a tripwire that overstates its reach is worse than none:
+     * What remains is the claim the census can actually support. `docs/adr/audit-activity-log.md` D4 assigns
+     * erasure of a person-denoting resource to the context that owns the person, so a writer OUTSIDE that
+     * module is the shape that breaks the assignment: it produces rows in a context that has no erasure
+     * declared for them, and the registry — one owner per type — has no way to express a second one. Siblings
+     * inside the module are fine because the declared erasure already covers them: it matches on
+     * `(resource_type, resource_id)`, never on who wrote the row.
+     *
+     * Sibling of `theStalenessOfAPersonTypeIsSatisfiedByItsOwnErasureDeclaration` and not a duplicate: that
+     * one matches the quoted literal, so a writer reaching the type through an imported constant or a route
+     * default is invisible to it — which is exactly how both current writers reach it. Derivation resolves
+     * all three forms.
+     *
+     * **What it does not see**, because a rule that overstates its reach is worse than none:
      *  - A type passed as a VARIABLE — `AuditResource::of($type, $id)` — matches none of the three derivation
      *    forms and raises nothing. {@see \Erpify\Shared\Audit\Infrastructure\Http\RequestAuditResourceExtractor}
      *    is written that way and is covered only because its INPUT is a `#[Route]` default literal; a
      *    `$request->attributes->set('_audit_resource_type', …)` at runtime would be covered by neither.
      *  - `api/src` only. The row seeded by `features/backoffice/users/erase.feature` and the
      *    `AuditResource::of('User', …)` in `AuditActorAnonymiserFunctionalTest` are test surfaces, correctly
-     *    invisible here — they do not make the deadlock reachable in production.
+     *    invisible here.
+     *  - Nothing about concurrency. A green here is not evidence the lock exists, is called, or is called in
+     *    time; those are three separate assertions and they live in the erasure's own unit test.
      */
     #[Test]
-    public function noSecondFileWritesAPersonTypeIntoTheResourceAxis(): void
+    public function everyFileWritingAPersonTypeLivesInTheModuleThatErasesIt(): void
     {
         $registry = $this->registry();
 
         foreach ($this->personTypes() as $type => $personResourceDeclaration) {
-            $this->assertSame([$personResourceDeclaration->erasedBy], $registry->filesDerivingType($type), \sprintf(
-                'A file other than the declared erasure of "%s" now writes it into the audit resource axis. '
-                . 'Two consequences, and the second is the one nobody will look for: the erasure no longer '
-                . 'accounts for every row naming a person as a resource, and the ABBA deadlock between the '
-                . 'actor pass and the resource pass of FulfilIdentityErasure — unreachable only because the '
-                . 'reciprocal rows cannot coexist — becomes reachable. Fix the first by naming the new '
-                . "writer's erasure; fix the second by giving both passes a deterministic lock order "
-                . '(`ORDER BY id`, as DoctrineActiveAdministratorDirectory already does) and by confirming '
-                . '40P01 still maps to a retryable marker.',
+            $owningModule = $this->moduleOf($personResourceDeclaration->erasedBy);
+            $foreignWriters = \array_values(\array_filter(
+                $registry->filesDerivingType($type),
+                fn (string $sourceFile): bool => $this->moduleOf($sourceFile) !== $owningModule,
+            ));
+
+            $this->assertSame([], $foreignWriters, \sprintf(
+                'These files write "%s" into the audit resource axis from outside %s, the module whose use '
+                . 'case is declared to erase it: %s. `docs/adr/audit-activity-log.md` D4 assigns erasure of a '
+                . 'person-denoting resource to the context that owns the person, so a writer outside it '
+                . 'produces rows whose erasure nobody in that context knows to account for. Either move the '
+                . 'write behind a seam the owning module publishes, or reclassify the type and give the new '
+                . 'owner its own registry line.',
                 $type,
+                $owningModule,
+                \implode(', ', $foreignWriters),
             ));
         }
+    }
+
+    /**
+     * The `src/<Context>/<Module>` prefix — the granularity deptrac isolates at, so "same module" here means
+     * the same thing it means to the boundary gate rather than a second, softer definition.
+     */
+    private function moduleOf(string $sourceFile): string
+    {
+        return \implode('/', \array_slice(\explode('/', $sourceFile), 0, 3));
     }
 
     #[Test]

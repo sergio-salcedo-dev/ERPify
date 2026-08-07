@@ -11,9 +11,8 @@ use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Audit\Application\ActorContextFactory;
-use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
 use Erpify\Shared\Audit\Application\AuditLogger;
-use Erpify\Shared\Audit\Application\AuditResourceAnonymiser;
+use Erpify\Shared\Audit\Application\AuditSubjectTrailErasure;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
@@ -24,8 +23,8 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * Fulfils a GDPR "right to erasure" request against one subject as a single atomic operation — the identity
  * and its audit trail are de-identified as one unit. It chains, in one transaction: the administrator refusal,
  * the identity erasure ({@see EraseIdentitySubject} — its own transaction nests and joins), the audit-trail
- * anonymisation across **both** axes — {@see AuditActorAnonymiser} for rows the subject authored and
- * {@see AuditResourceAnonymiser} for rows that name them — whose DBAL runs on the same Connection the
+ * anonymisation across **both** axes ({@see AuditSubjectTrailErasure} — rows the subject authored and rows
+ * that name them, locked as one set before either is rewritten), whose DBAL runs on the same Connection the
  * EntityManager wraps, so they commit or roll back with the rest, the anonymisation of the reproducible
  * business log ({@see EventStoreSubjectAnonymiser}, run only for a subject whose identity was live), the
  * hard-delete of the subject's sessions ({@see PurgeUserSessions}), of the membership that admitted them
@@ -108,8 +107,7 @@ final readonly class FulfilIdentityErasure
 
     public function __construct(
         private EraseIdentitySubject $eraseIdentitySubject,
-        private AuditActorAnonymiser $auditActorAnonymiser,
-        private AuditResourceAnonymiser $auditResourceAnonymiser,
+        private AuditSubjectTrailErasure $auditTrail,
         private EventStoreSubjectAnonymiser $eventStoreSubjectAnonymiser,
         private ActiveAdministratorDirectory $administrators,
         private PurgeUserSessions $purgeUserSessions,
@@ -136,16 +134,20 @@ final readonly class FulfilIdentityErasure
                     throw AdministratorErasureRequiresDemotion::forUser($subjectId);
                 }
 
-                $identity = $this->eraseIdentitySubject->execute($subjectId);
-                $anonymisation = $this->auditActorAnonymiser->anonymise($subjectId);
-
-                // One value, two uses, three lines apart: whoever writes the subject's real id into the trail
-                // is the one that clears it, and they cannot disagree about which resource that is because
-                // there is only one to disagree about. The write has to come first — the anonymiser's UPDATE
-                // matches rows that already exist — and it is a `security` entry, so it is inserted
-                // synchronously on this connection rather than deferred past the statement that clears it.
+                // One value, three uses: the axis lock, the compliance entry's resource, and the pass that
+                // clears it. Whoever writes the subject's real id into the trail is the one that clears it,
+                // and they cannot disagree about which resource that is because there is only one to
+                // disagree about.
                 $subject = AuditResource::of(self::SUBJECT_RESOURCE_TYPE, $subjectId);
 
+                $identity = $this->eraseIdentitySubject->execute($subjectId);
+                // Locks both axes as one set before rewriting either — see the port for why ordering the two
+                // statements individually cannot prevent the deadlock they can reach.
+                $anonymisation = $this->auditTrail->beginForSubject($subject);
+
+                // The write has to come first — the anonymiser's UPDATE matches rows that already exist —
+                // and it is a `security` entry, so it is inserted synchronously on this connection rather
+                // than deferred past the statement that clears it.
                 if ($identity->erasedAnything()) {
                     $this->auditLogger->log(
                         self::SUBJECT_ERASURE_ACTION,
@@ -157,7 +159,7 @@ final readonly class FulfilIdentityErasure
 
                 // Same pseudonym for both axes: one person must not split into two anonymous identities.
                 // It re-links nothing, because the original id is gone from both columns.
-                $anonymisedResourceRows = $this->auditResourceAnonymiser->anonymise(
+                $anonymisedResourceRows = $this->auditTrail->completeForSubject(
                     $subject,
                     $anonymisation->pseudonym,
                 );
@@ -166,13 +168,7 @@ final readonly class FulfilIdentityErasure
                     $subjectId,
                     $anonymisation->pseudonym,
                 );
-                $sessionsDeleted = $this->purgeUserSessions->purge($subjectId);
-                // Neither reference has a physical foreign key — both cross a bounded context, so integrity
-                // is by id — and nothing cascades when the identity row goes. Without these two links the
-                // subject's real id survives their own erasure in the membership that admitted them and in
-                // every invitation addressed to them.
-                $membershipsDeleted = $this->purgeUserMembership->purge($subjectId);
-                $invitationsDeleted = $this->purgeUserInvitations->purge($subjectId);
+                [$sessionsDeleted, $membershipsDeleted, $invitationsDeleted] = $this->purgeReferences($subjectId);
 
                 $result = new FulfilIdentityErasureResult(
                     $identity->identityErased,
@@ -212,6 +208,24 @@ final readonly class FulfilIdentityErasure
      * pushing it into the shared module would be an inventory of aggregate types, which is the enumeration
      * `docs/adr/event-store-and-projections.md` D12 rejects and which the payload axis defeats anyway.
      */
+    /**
+     * The three references to the subject that no constraint removes. None has a physical foreign key —
+     * sessions live in this context, the membership and the invitations cross a bounded context, so integrity
+     * is by id — and nothing cascades when the identity row goes. Without these the subject's real id survives
+     * their own erasure in the session store, in the membership that admitted them, and in every invitation
+     * addressed to them.
+     *
+     * @return array{int, int, int} sessions, memberships and invitations deleted, in that order
+     */
+    private function purgeReferences(string $subjectId): array
+    {
+        return [
+            $this->purgeUserSessions->purge($subjectId),
+            $this->purgeUserMembership->purge($subjectId),
+            $this->purgeUserInvitations->purge($subjectId),
+        ];
+    }
+
     private function anonymiseBusinessLog(
         IdentityErasureResult $identity,
         string $subjectId,
