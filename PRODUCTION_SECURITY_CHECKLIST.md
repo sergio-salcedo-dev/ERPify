@@ -358,19 +358,31 @@ you change anything here.
       verification of the firewall's own hasher) — malformed/unknown login identifiers, the `INVITED` pre-auth
       rejection and **every** forgot outcome, so latency correlates with nothing (SI-12). A dead reset/accept
       link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (SI-13):
-      `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password` + `/backoffice/audit` (the
-      audit URL names the people under investigation, so it leaves the tab no more readily than a token does),
-      the client strips `?token=` from the URL/history on mount, and Caddy's access log **redacts every
-      secret- and identity-bearing query parameter**: `authorization`, `token`, the audit screen's
-      `actorId`/`resourceId`/`correlationId`, and the
-      `filters[0..8][value]` grammar every list surface serializes its filter values into — which also covers
-      the account-holder name and the user email filters. **Caddy also drops the `Referer` header**, because a
+      `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password` + `/backoffice/audit` and its
+      subtree (the audit URL names the people under investigation, so it leaves the tab no more readily than a
+      token does). **Read that header for what it is:** it is delivered with a DOCUMENT, so it governs a deep
+      link or a refresh and not a client-side navigation into the screen from elsewhere in the back-office,
+      where the initial document's policy still applies. It is defence in depth; the edge is what closes the
+      log. The client also strips `?token=` from the URL/history on mount, and Caddy's access log **redacts
+      every secret- and identity-bearing query parameter**: `authorization`, `token`, the audit screen's
+      `actorId`/`resourceId`/`correlationId`, and the `filters[0..19][value]` grammar every list surface
+      serializes its filter values into — which also covers the account-holder name and the user email
+      filters. **The range is bound to `SearchQuery::MAX_FILTERS`, not to what this UI emits**, because the
+      entry is written before Symfony validates anything: a 422 or a 404 is logged like any other request, so
+      the enumeration has to cover every index the API will accept from any client. An index at or beyond the
+      cap is rejected by validation but still logged, so a caller who fabricates one — and therefore already
+      knows the identifier — can plant it there; Caddy's grammar has no wildcard and that stays open. **Caddy also drops the `Referer` header**, because a
       log line records more than its URI: for a same-origin API call the referring document is the screen the
       ids live on, so an unfiltered `Referer` reproduces in clear exactly what the `uri` filter blanked, on the
       same entry. The **application** log answers the same vocabulary through a Monolog processor over every
       record carrying a `request_uri` — the framework's own router listener writes one at INFO, and prod's
-      `fingers_crossed` buffer flushes it on any 5xx — and the **Sentry** event is scrubbed on both
-      `request.url` and `request.query_string` before it leaves the process, on both deployables. That index range is not left to a reader to keep
+      `fingers_crossed` buffer flushes it on any 5xx — and the **Sentry** event is scrubbed on `request.url`,
+      `request.query_string` and the `Referer` header before it leaves the process, on both deployables.
+      **An identifier does not have to travel under a name anyone listed.** Every rule above matches a
+      parameter name, and an expired session redirects to `/login?next=<the whole audit URL>`, so the ids
+      arrive inside a value. A value that is itself a URI is therefore followed one level and redacted by the
+      same vocabulary; a value with nothing to redact is returned byte for byte, so the shape an operator
+      reads a request by survives. That index range is not left to a reader to keep
       true: the gate (`CaddyfileAccessLogRedactionGateTest`) derives it from the Caddyfile and fails when a PWA
       criteria builder outgrows it, so a tenth filter axis breaks the build instead of un-redacting silently.
       The cost is accepted and real — a redacted value axis means the access log can no longer answer "which

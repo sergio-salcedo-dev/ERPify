@@ -35,8 +35,9 @@ interface AuditSubjectRowLock
      * Locks every `audit_log` row naming `$subject` on either axis until the caller's transaction ends.
      *
      * **Must run inside that transaction**, before either anonymiser: a lock taken outside one is released
-     * at the end of the statement and protects nothing. Callers that hold no transaction get no error and no
-     * protection, which is why the only caller wraps the whole erasure in one.
+     * at the end of the statement and protects nothing. An implementation is expected to REFUSE rather than
+     * comply silently, because the silent version returns the rows, raises nothing, and leaves the caller
+     * believing it is protected — the shape of failure this whole contract exists to remove.
      *
      * `$subject` carries the type and id of the resource axis; the actor axis is matched on the same id,
      * because both axes name the same person — that identity is the reason the two statements can collide.

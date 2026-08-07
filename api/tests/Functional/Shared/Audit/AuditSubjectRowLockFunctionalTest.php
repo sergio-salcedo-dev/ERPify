@@ -93,6 +93,31 @@ final class AuditSubjectRowLockFunctionalTest extends KernelTestCase
         });
     }
 
+    /**
+     * The clause the whole fix rests on, and the one nothing else can see: deleting `ORDER BY id` leaves the
+     * assertions above green — the same rows are locked, in whatever order the planner picked — and reopens
+     * the deadlock. Acquisition order is not observable from a single holder, so this asks the planner
+     * instead, over the statement the class actually emits rather than a copy of it kept in a test.
+     *
+     * The assertion tolerates either shape that ESTABLISHES the order — an explicit `Sort` on `id`, or a scan
+     * that already walks the primary key — because which one the planner picks is a function of table
+     * statistics, and pinning one would be a test that goes red on an autovacuum rather than on a defect.
+     */
+    #[Test]
+    public function theLockedRowsAreOrderedByIdInThePlan(): void
+    {
+        $plan = $this->planFor($this->statementTheLockEmits());
+
+        $this->assertStringContainsString('LockRows', $plan, 'the statement no longer locks rows at all');
+        $this->assertTrue(
+            \str_contains($plan, '"Sort Key": ["id"]') || \str_contains($plan, 'audit_log_pkey'),
+            'The lock no longer establishes an order over the rows it takes: the plan has neither a Sort on '
+            . '`id` nor a primary-key walk. Two concurrent erasures can then acquire the shared rows in '
+            . "opposite directions, which is the deadlock this class exists to prevent — and it is the one \n"
+            . 'thing the sibling assertions in this class cannot see. Plan: ' . $plan,
+        );
+    }
+
     #[Test]
     public function theLockSurvivesTheStatementThatTookIt(): void
     {

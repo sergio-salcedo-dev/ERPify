@@ -81,11 +81,15 @@ final class MigrationColumnDefaults
 
     /**
      * `ADD [COLUMN] [IF NOT EXISTS] <name>`, in both spellings the tree uses — Doctrine generates the bare
-     * form, hand-written migrations use `COLUMN IF NOT EXISTS`. `ADD CONSTRAINT` is excluded by name
-     * because it is the one `ADD` that is followed by an identifier and is not a column.
+     * form, hand-written migrations use `COLUMN IF NOT EXISTS`.
+     *
+     * The excluded words are every `ADD` that is followed by something which is not a column name. Missing
+     * one is not a missed defect but an invented one: `ADD CHECK (code IS NOT NULL)` would otherwise read as
+     * a column called `check`, declared `NOT NULL`, with no default — a red on a correct migration whose only
+     * exits are inventing a `DEFAULT` or growing an exemption list this gate keeps closed.
      */
-    private const string ADDED_COLUMN
-        = '/\bADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(?!CONSTRAINT\b)([A-Za-z_]\w*)\b([^,]*)/i';
+    private const string ADDED_COLUMN = '/\bADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?'
+        . '(?!CONSTRAINT\b|CHECK\b|PRIMARY\b|UNIQUE\b|FOREIGN\b|EXCLUDE\b)([A-Za-z_]\w*)\b([^,]*)/i';
 
     /** `ALTER [COLUMN] <name> DROP DEFAULT`. `DROP NOT NULL` is a different statement and must not match. */
     private const string DEFAULT_DROPPED
@@ -147,13 +151,11 @@ final class MigrationColumnDefaults
     {
         $columns = [];
 
-        foreach (self::statementsIn($source) as $statement) {
-            $table = self::tableIn($statement);
-
-            \preg_match_all(self::ADDED_COLUMN, $statement, $matches, PREG_SET_ORDER);
+        foreach (self::tableSegmentsIn($source) as $segment) {
+            \preg_match_all(self::ADDED_COLUMN, $segment['sql'], $matches, PREG_SET_ORDER);
 
             foreach ($matches as $match) {
-                $columns[$table . '.' . \strtolower($match[1])] = [
+                $columns[$segment['table'] . '.' . \strtolower($match[1])] = [
                     'notNull' => 1 === \preg_match('/\bNOT\s+NULL\b/i', $match[2]),
                     'hasDefault' => 1 === \preg_match('/\bDEFAULT\b/i', $match[2]),
                 ];
@@ -207,26 +209,52 @@ final class MigrationColumnDefaults
     {
         $columns = [];
 
-        foreach (self::statementsIn($source) as $statement) {
-            $table = self::tableIn($statement);
-
-            \preg_match_all($pattern, $statement, $matches);
+        foreach (self::tableSegmentsIn($source) as $segment) {
+            \preg_match_all($pattern, $segment['sql'], $matches);
 
             // The pattern arrives as a parameter, so the capturing group is a promise of the two constants
             // above rather than something the type checker can read off a literal.
             foreach ($matches[1] ?? [] as $column) {
-                $columns[] = $table . '.' . \strtolower($column);
+                $columns[] = $segment['table'] . '.' . \strtolower($column);
             }
         }
 
         return \array_values(\array_unique($columns));
     }
 
-    private static function tableIn(string $statement): string
+    /**
+     * Every `up()` statement cut at its `ALTER TABLE` boundaries, so each piece is read against the table it
+     * actually names. One `addSql()` can carry several statements, and reading the first table for all of
+     * them puts a compliant column and a defective one under the same key — where the last write wins and
+     * the offender is reported clean.
+     *
+     * @return list<array{table: string, sql: string}>
+     */
+    private static function tableSegmentsIn(string $source): array
     {
-        return 1 === \preg_match(self::ALTERED_TABLE, $statement, $match)
-            ? \strtolower($match[1])
-            : self::UNKNOWN_TABLE;
+        $segments = [];
+
+        foreach (self::statementsIn($source) as $statement) {
+            \preg_match_all(self::ALTERED_TABLE, $statement, $matches, PREG_OFFSET_CAPTURE | PREG_SET_ORDER);
+
+            if ([] === $matches) {
+                $segments[] = ['table' => self::UNKNOWN_TABLE, 'sql' => $statement];
+
+                continue;
+            }
+
+            foreach ($matches as $index => $match) {
+                $start = $match[0][1];
+                $end = $matches[$index + 1][0][1] ?? \strlen($statement);
+
+                $segments[] = [
+                    'table' => \strtolower($match[1][0]),
+                    'sql' => \substr($statement, $start, $end - $start),
+                ];
+            }
+        }
+
+        return $segments;
     }
 
     /**
@@ -262,7 +290,13 @@ final class MigrationColumnDefaults
      */
     public static function migrationFilesIn(string $directory): array
     {
-        $files = \glob($directory . '/*/Version*.php') ?: [];
+        // Both levels. `organize_migrations: BY_YEAR` puts new files in a per-year directory, but Doctrine's
+        // finder is recursive and includes the root, so a migration dropped there — the framework's own
+        // default location — runs like any other and a one-level sweep would never see it.
+        $files = [
+            ...(\glob($directory . '/Version*.php') ?: []),
+            ...(\glob($directory . '/*/Version*.php') ?: []),
+        ];
 
         \sort($files);
 

@@ -149,6 +149,18 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Two entries, because the exact source matches only itself: a future
+      // `/backoffice/audit/<id>` would silently fall back to the catch-all,
+      // which sends the full URL to any same-origin recipient.
+      {
+        source: "/backoffice/audit/:path*",
+        headers: [
+          {
+            key: "Referrer-Policy",
+            value: "no-referrer",
+          },
+        ],
+      },
     ];
   },
 

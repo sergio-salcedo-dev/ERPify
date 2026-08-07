@@ -129,13 +129,13 @@ final class PersonResourceErasureGateTest extends TestCase
      * The containment rule for the resource axis: a person type may be written by more than one file, but
      * every one of them lives in the module whose use case is declared to erase it.
      *
-     * It is deliberately weaker than the single-writer rule it replaces, and the reason is worth stating
-     * because the weakening is what makes it survive. That rule read `[owner] === filesDerivingType()`, and
-     * it rested on an argument about deadlock: `FulfilIdentityErasure` runs the actor pass and the resource
-     * pass as two statements in one transaction, so two concurrent erasures could take them in opposite
-     * orders — a textbook ABBA — and the only thing making that unreachable was that the erasure was the sole
-     * writer of the axis and hard-deletes the identity, so a subject once erased never acts again. An
-     * administrator acting on another administrator ends that, and the invariant with it.
+     * It is deliberately weaker than demanding a single writer, and the weakening is what makes it survive.
+     * Demanding one writer would rest on an argument about deadlock: `FulfilIdentityErasure` runs the actor
+     * pass and the resource pass as two statements in one transaction, so two concurrent erasures can take
+     * them in opposite orders — a textbook ABBA — and the only thing that would make it unreachable is the
+     * erasure being the sole writer of the axis while hard-deleting the identity, so a subject once erased
+     * never acts again. An administrator acting on another administrator ends that, and any invariant built
+     * on it.
      *
      * **That protection now lives where it belongs, in the code rather than in a file census.**
      * {@see \Erpify\Shared\Audit\Application\AuditSubjectRowLock} takes both axes as one set in `id` order

@@ -80,7 +80,10 @@ final class TransactionManagerRetryableFailureTest extends KernelTestCase
             \sprintf(
                 'The seam let %s out of the transaction instead of TransientTransactionFailure, so a '
                 . 'deadlock still reaches the caller as a bare 500 and the translation is dead code.',
-                $escaped::class,
+                // `get_debug_type` and not `::class`: the message is built BEFORE the assertion runs, and
+                // the case this exists to describe is the one where nothing was thrown — where `::class`
+                // on null is a TypeError that destroys the diagnostic it was written to give.
+                \get_debug_type($escaped),
             ),
         );
         $this->assertSame(

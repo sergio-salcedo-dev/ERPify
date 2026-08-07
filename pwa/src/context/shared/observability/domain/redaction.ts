@@ -52,8 +52,12 @@ export function isDenylistedKey(key: string): boolean {
  */
 export const IDENTITY_AXES = ["actorid", "resourceid", "correlationid"] as const;
 
-/** The value axis of the positional search grammar, scalar and `in` forms. */
-const SEARCH_VALUE_KEY = /^filters\[\d+\]\[value\](\[\])?$/;
+/**
+ * The value axis of the positional search grammar. Index and array suffix are both permissive: the wire
+ * spells the suffix `[]`, `[0]` or `[12]` depending on whether the caller used `http_build_query`, axios or
+ * jQuery, and an event is a place where over-matching is the safe direction to be wrong in.
+ */
+const SEARCH_VALUE_KEY = /^filters\[-?\d*\]\[value\](\[-?\d*\])?$/;
 
 /**
  * Replaces the value rather than dropping the pair, unlike the denylist's strip semantics: a URL's

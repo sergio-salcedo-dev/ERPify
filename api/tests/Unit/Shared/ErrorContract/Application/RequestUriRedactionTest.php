@@ -117,6 +117,61 @@ final class RequestUriRedactionTest extends TestCase
             '/api/v1/backoffice/audit?filters%25255B0%25255D%25255Bvalue%25255D=019f-abc',
             '/api/v1/backoffice/audit?filters%25255B0%25255D%25255Bvalue%25255D=REDACTED',
         ];
+
+        // Five levels: the depth the loop DECODES to but, without a final check, never tests. The bound has
+        // to be honoured where it is drawn rather than one decoding short of it, or the cap advertises a
+        // reach it does not have.
+        yield 'search value axis, encoded to the decode bound' => [
+            '/api/v1/backoffice/audit?filters%252525255B0%252525255D%252525255Bvalue%252525255D=019f-abc',
+            '/api/v1/backoffice/audit?filters%252525255B0%252525255D%252525255Bvalue%252525255D=REDACTED',
+        ];
+
+        // The array suffix is spelled `[]` by the PWA, `[0]` by `http_build_query`, axios with
+        // `arrayFormat: "indices"` and jQuery. All three are the same axis to the server.
+        yield 'search value axis in the explicitly indexed array form' => [
+            '/api/v1/backoffice/audit?filters%5B0%5D%5Bvalue%5D%5B0%5D=019f-abc',
+            '/api/v1/backoffice/audit?filters%5B0%5D%5Bvalue%5D%5B0%5D=REDACTED',
+        ];
+
+        yield 'search value axis with an empty index' => [
+            '/api/v1/backoffice/audit?filters%5B%5D%5Bvalue%5D=019f-abc',
+            '/api/v1/backoffice/audit?filters%5B%5D%5Bvalue%5D=REDACTED',
+        ];
+    }
+
+    /**
+     * The whole class of leak that a name-matching rule cannot see. When a session expires mid-investigation
+     * the client redirects to `/login?next=<the audit URL>`, so the ids arrive under a name no denylist will
+     * ever hold. Measured in the access log before this rule existed.
+     */
+    #[Test]
+    #[DataProvider('provideItRedactsAnIdentifierCarriedInsideAValueCases')]
+    public function itRedactsAnIdentifierCarriedInsideAValue(string $requestUri, string $expected): void
+    {
+        $this->assertSame($expected, RequestUriRedaction::redact($requestUri));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function provideItRedactsAnIdentifierCarriedInsideAValueCases(): iterable
+    {
+        yield 'the session-expiry redirect the PWA builds' => [
+            '/login?next=%2Fbackoffice%2Faudit%3FactorId%3D019f-abc%26resourceId%3D019f-def'
+                . '&reason=session-expired',
+            '/login?next=%2Fbackoffice%2Faudit%3FactorId%3DREDACTED%26resourceId%3DREDACTED'
+                . '&reason=session-expired',
+        ];
+
+        yield 'a nested search grammar' => [
+            '/login?next=%2Fbackoffice%2Faudit%3Ffilters%5B0%5D%5Bvalue%5D%3D019f-abc',
+            '/login?next=%2Fbackoffice%2Faudit%3Ffilters%5B0%5D%5Bvalue%5D%3DREDACTED',
+        ];
+
+        yield 'a nested secret' => [
+            '/login?next=%2Faccept-invitation%3Ftoken%3D019f.s3cr3t',
+            '/login?next=%2Faccept-invitation%3Ftoken%3DREDACTED',
+        ];
     }
 
     #[Test]
@@ -140,6 +195,11 @@ final class RequestUriRedactionTest extends TestCase
         yield 'a resource type is not a person id' => ['/api/v1/backoffice/audit?resourceType=User'];
         // Nothing to leak, and rewriting it would corrupt a shape the operator reads the request by.
         yield 'a valueless parameter' => ['/api/v1/backoffice/audit?debug'];
+        // A value that IS a URI but carries nothing sensitive keeps the caller's bytes: following a value
+        // must not become a licence to re-encode every request that happens to hold a link.
+        yield 'a nested URI with nothing to redact' => [
+            '/login?next=%2Fbackoffice%2Fbanks%3Fsort%3Dname%26limit%3D25',
+        ];
     }
 
     /**

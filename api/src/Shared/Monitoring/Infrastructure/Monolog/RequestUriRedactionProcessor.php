@@ -8,6 +8,7 @@ use Erpify\Shared\ErrorContract\Application\RequestUriRedaction;
 use Monolog\LogRecord;
 use Monolog\Processor\ProcessorInterface;
 use Override;
+use Stringable;
 
 /**
  * Applies {@see RequestUriRedaction} to the `request_uri` of every record that carries one, whoever wrote it.
@@ -41,6 +42,13 @@ final readonly class RequestUriRedactionProcessor implements ProcessorInterface
     public function __invoke(LogRecord $record): LogRecord
     {
         $requestUri = $record->context[self::FIELD] ?? null;
+
+        // A `UriInterface` is the shape a PSR-18 or PSR-7 emitter reaches for, and the formatter stringifies
+        // it downstream with its query intact — so accepting only `string` here would redact the emitters we
+        // know about and let the next library through.
+        if ($requestUri instanceof Stringable) {
+            $requestUri = (string) $requestUri;
+        }
 
         if (!\is_string($requestUri)) {
             return $record;

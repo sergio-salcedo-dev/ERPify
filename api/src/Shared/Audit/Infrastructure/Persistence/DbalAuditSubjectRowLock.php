@@ -7,6 +7,7 @@ namespace Erpify\Shared\Audit\Infrastructure\Persistence;
 use Doctrine\DBAL\Connection;
 use Erpify\Shared\Audit\Application\AuditSubjectRowLock;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Shared\Audit\Domain\Exception\AuditSubjectLockRequiresTransaction;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -20,10 +21,17 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * union is a bitmap-or whose output order is a planner decision. Without the clause two callers can walk the
  * same rows in opposite directions and reproduce exactly the cycle this class exists to prevent.
  *
- * **The result is fetched, not merely executed.** Row locks are taken as rows are produced, so leaving them
- * unread would make the guarantee depend on the driver's buffering. `fetchFirstColumn()` materialises the
- * set and makes the lock unconditional; the ids themselves are discarded, because the anonymisers re-derive
- * their own row sets from their own predicates — this class fixes the ORDER, never the membership.
+ * **The result is walked, not merely executed.** Row locks are taken as rows are produced, so leaving them
+ * unread would make the guarantee depend on the driver's buffering. The set is iterated rather than
+ * collected: the ids are never wanted — the anonymisers re-derive their own row sets from their own
+ * predicates, since this class fixes the ORDER and never the membership — and collecting them would build a
+ * PHP array proportional to the subject's whole history inside the transaction that is holding the locks.
+ * What this bounds is the PHP heap; the driver still receives the full result set, which is the price of
+ * locking N rows in a fixed order.
+ *
+ * **A transaction is required, and its absence is loud.** Postgres releases a `FOR UPDATE` at the end of the
+ * statement that took it, so a caller with none open would get the rows, get no error, and hold nothing by
+ * the time the anonymisers run — the defect back in place with every gate green.
  *
  * **Why no `AND` narrowing by `resource_erased`/`actor_erased`.** Excluding already-anonymised rows would
  * make the two callers' lock sets diverge, which is the same defect in a new place: the set has to be a
@@ -50,7 +58,11 @@ final readonly class DbalAuditSubjectRowLock implements AuditSubjectRowLock
     #[Override]
     public function lock(AuditResource $subject): void
     {
-        $this->connection->fetchFirstColumn(
+        if (!$this->connection->isTransactionActive()) {
+            throw AuditSubjectLockRequiresTransaction::forSubject($subject->type);
+        }
+
+        \iterator_count($this->connection->iterateColumn(
             <<<'SQL'
                 SELECT id
                 FROM audit_log
@@ -63,6 +75,6 @@ final readonly class DbalAuditSubjectRowLock implements AuditSubjectRowLock
                 'subject_id' => $subject->id,
                 'resource_type' => $subject->type,
             ],
-        );
+        ));
     }
 }

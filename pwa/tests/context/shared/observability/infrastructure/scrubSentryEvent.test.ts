@@ -99,6 +99,49 @@ describe("scrubSentryEvent", () => {
     );
   });
 
+  it("redacts an identifier carried inside a value, not just under a known name", () => {
+    const event = {
+      request: {
+        query_string:
+          "next=%2Fbackoffice%2Faudit%3FactorId%3D8f14e45f%26resourceId%3D8f14e45f&reason=session-expired",
+      },
+    } as unknown as ErrorEvent;
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.request?.query_string).toContain("actorId%3DREDACTED");
+    expect(scrubbed.request?.query_string).toContain("resourceId%3DREDACTED");
+    expect(scrubbed.request?.query_string).not.toContain("8f14e45f");
+  });
+
+  it("redacts the explicitly indexed array form of the search grammar", () => {
+    const event = {
+      request: { query_string: "filters%5B0%5D%5Bvalue%5D%5B0%5D=8f14e45f" },
+    } as unknown as ErrorEvent;
+
+    expect(scrubSentryEvent(event).request?.query_string).toBe(
+      "filters%5B0%5D%5Bvalue%5D%5B0%5D=REDACTED",
+    );
+  });
+
+  it("redacts the query the Referer header carries", () => {
+    const event = {
+      request: {
+        headers: {
+          Referer: "https://app.example/backoffice/audit?actorId=8f14e45f&level=security",
+          Accept: "application/json",
+        },
+      },
+    } as unknown as ErrorEvent;
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.request?.headers).toEqual({
+      Referer: "https://app.example/backoffice/audit?actorId=REDACTED&level=security",
+      Accept: "application/json",
+    });
+  });
+
   it("handles URLs with multiple hashes gracefully (preserving them)", () => {
     const event = {
       request: { url: "https://app.example/banks?token=abc#section#subtitle" },

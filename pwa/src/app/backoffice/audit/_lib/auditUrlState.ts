@@ -51,8 +51,14 @@ export interface AuditUrlState {
  * redacts both names and the `filters[N][value]` grammar this screen's API request repeats them in,
  * and drops the `Referer` that would otherwise reproduce this whole URL on every same-origin call
  * (`api/frankenphp/Caddyfile`); the application log redacts the same axes wherever a `request_uri`
- * appears; Sentry's event is scrubbed before it leaves the process; and this route answers
- * `Referrer-Policy: no-referrer` so the URL never leaves the tab at all.
+ * appears; and Sentry's event is scrubbed on `url`, `query_string` and `Referer` before it leaves the
+ * process.
+ *
+ * This route also answers `Referrer-Policy: no-referrer`, but note what that does and does not buy:
+ * the policy is delivered with a DOCUMENT, so it applies to a deep link or a refresh and not to a
+ * client-side navigation here from elsewhere in the back-office, where the initial document's
+ * `strict-origin-when-cross-origin` still governs and same-origin requests carry the whole URL. The
+ * header is defence in depth; what actually closes the log is the edge dropping the header.
  *
  * One sink stays OPEN, and is recorded rather than claimed closed: the Next.js container prints the
  * full document URL to the same unowned driver, which Caddy cannot reach because it is a different

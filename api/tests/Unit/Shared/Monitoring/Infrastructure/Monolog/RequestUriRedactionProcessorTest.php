@@ -8,10 +8,12 @@ use DateTimeImmutable;
 use Erpify\Shared\Monitoring\Infrastructure\Monolog\RequestUriRedactionProcessor;
 use Monolog\Level;
 use Monolog\LogRecord;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Stringable;
 
 /**
  * @internal
@@ -93,6 +95,30 @@ final class RequestUriRedactionProcessorTest extends TestCase
         yield 'no request_uri' => [['route' => 'backoffice_bank_search', 'method' => 'GET']];
         yield 'empty context' => [[]];
         yield 'request_uri is not a string' => [['request_uri' => ['https://erpify.test/?actorId=x']]];
+    }
+
+    /**
+     * A PSR-7 `UriInterface` is `Stringable`, and the formatter downstream stringifies it with its query
+     * intact — so a processor that accepted only `string` would cover the emitters we know about and let the
+     * next library straight through.
+     */
+    #[Test]
+    public function itRedactsAUriObjectTheFormatterWouldStringifyLater(): void
+    {
+        $uri = new class implements Stringable {
+            #[Override]
+            public function __toString(): string
+            {
+                return 'https://erpify.test/backoffice/audit?actorId=8f14e45f-ceea&level=security';
+            }
+        };
+
+        $processed = (new RequestUriRedactionProcessor())($this->recordWith(['request_uri' => $uri]));
+
+        $this->assertSame(
+            'https://erpify.test/backoffice/audit?actorId=REDACTED&level=security',
+            $processed->context['request_uri'] ?? null,
+        );
     }
 
     /**

@@ -87,6 +87,14 @@ final class MigrationColumnDefaultRulesGateTest extends TestCase
             'up-declares-it-and-down-reverses-it.migration',
             ['audit_log.actor_classification'],
         ];
+
+        // One `addSql()` can carry two statements. Reading the first table for both files the compliant
+        // column and the defective one under one key, where the last write wins and the offender reads clean
+        // — the same collapse the two-table fixture above covers BETWEEN calls, here WITHIN one.
+        yield 'two tables inside a single addSql()' => [
+            'two-tables-in-one-statement.migration',
+            ['bank.status'],
+        ];
     }
 
     #[Test]
@@ -129,6 +137,13 @@ final class MigrationColumnDefaultRulesGateTest extends TestCase
         // would fail the first migration that deletes such a column — and the only ways out of that red are
         // an invented DEFAULT or a longer exemption list.
         yield 'a NOT NULL column re-added by down()' => ['down-reverses-a-dropped-column.migration'];
+
+        // Every `ADD` that is followed by something which is not a column name. Missing one of these words
+        // does not miss a defect, it invents one: `ADD CHECK (code IS NOT NULL)` reads as a column named
+        // `check`, `NOT NULL`, with no default — a red on a correct migration.
+        yield 'ADD CHECK and ADD PRIMARY KEY, neither of which is a column' => [
+            'check-constraint-is-not-a-column.migration',
+        ];
     }
 
     /**

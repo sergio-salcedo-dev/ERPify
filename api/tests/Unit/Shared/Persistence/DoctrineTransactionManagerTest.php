@@ -76,7 +76,7 @@ final class DoctrineTransactionManagerTest extends TestCase
             // so asserting it proves nothing a reader could not see. What matters is the status a caller
             // receives — 500 "the server is broken" is what this exists to stop being the answer.
             $problemDetails = (new ProblemDetailsFactory('prod', new NullLogger()))
-                ->fromThrowable($transientTransactionFailure, self::INSTANCE, self::CORRELATION_ID)
+                ->fromThrowable($transientTransactionFailure, self::CORRELATION_ID, self::INSTANCE)
             ;
 
             $this->assertSame(503, $problemDetails->status);

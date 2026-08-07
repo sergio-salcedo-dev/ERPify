@@ -67,9 +67,9 @@ final class SentryEventScrubberTest extends TestCase
     }
 
     /**
-     * The axes that make this a GDPR surface rather than a secrets one. `parse_str()` would nest
-     * `filters[0][value]` into keys no rule matches, which is how the positional grammar used to travel
-     * intact; the pairs are read as they were sent instead.
+     * The axes that make this a GDPR surface rather than a secrets one. The pairs are read as the caller
+     * sent them: normalising through `parse_str()` would nest `filters[0][value]` into the keys `filters`,
+     * `0`, `value`, which no rule here matches, so the positional grammar would travel intact.
      */
     public function testRedactsTheIdentityAxesInTheRawQueryStringValue(): void
     {
@@ -84,6 +84,31 @@ final class SentryEventScrubberTest extends TestCase
             ['query_string' => 'actorId=REDACTED&filters%5B0%5D%5Bvalue%5D=REDACTED&level=security'],
             $event->getRequest(),
         );
+    }
+
+    /**
+     * The one header whose value is a URI. The recursive scrub above matches key NAMES and the SDK's own
+     * sensitive-header list covers credentials only, so an unredacted `Referer` carries the referring
+     * document's whole URL — the audit screen's, ids included — into a sink with its own retention.
+     */
+    public function testRedactsTheQueryCarriedByTheRefererHeader(): void
+    {
+        $event = Event::createEvent();
+        $event->setRequest([
+            'headers' => [
+                'Referer' => 'https://erpify.test/backoffice/audit?actorId=8f14e45f-ceea&level=security',
+                'Accept' => 'application/json',
+            ],
+        ]);
+
+        (new SentryEventScrubber())($event);
+
+        $this->assertSame([
+            'headers' => [
+                'Referer' => 'https://erpify.test/backoffice/audit?actorId=REDACTED&level=security',
+                'Accept' => 'application/json',
+            ],
+        ], $event->getRequest());
     }
 
     /**

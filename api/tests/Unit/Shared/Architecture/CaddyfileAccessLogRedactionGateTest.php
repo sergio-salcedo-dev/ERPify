@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
+use Erpify\Shared\Search\Application\Http\SearchQuery;
 use FilesystemIterator;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -77,6 +78,12 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
             'correlationId',
             'a request-correlation id reconstructs a session from the log.',
         ];
+        yield 'next (a URL carried inside a value)' => [
+            'next',
+            'an expired session redirects to /login?next=<the whole audit URL>, so the ids that screen '
+            . 'holds arrive under a name no axis list contains. This filter cannot read inside a value, '
+            . 'so the whole parameter goes.',
+        ];
     }
 
     /**
@@ -121,9 +128,38 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
     }
 
     /**
-     * The one thing nothing else ties together: the Caddyfile is a Caddy file gated by a PHP test, and
-     * the producer of the indices is TypeScript. A tenth filter axis would serialize to
-     * `filters[9][value]`, which the enumeration does not cover, and every other gate would stay green.
+     * The bound that matters, because a log records what the CALLER sent. Caddy writes this entry before
+     * Symfony validates anything — a request that ends in 422 or 404 is logged just the same — so the
+     * enumeration has to cover every index the API is willing to accept, from any client, not only the
+     * indices this UI happens to emit.
+     *
+     * Measured before it was widened: `filters[12][value]=<uuid>` reached the access log in clear on the
+     * same line where `filters[8][value]` read `REDACTED`.
+     */
+    #[Test]
+    public function itCoversEveryIndexTheApiAccepts(): void
+    {
+        $covered = \count($this->redactedFilterIndices());
+
+        $this->assertGreaterThanOrEqual(
+            SearchQuery::MAX_FILTERS,
+            $covered,
+            \sprintf(
+                'The API accepts %d filters and the Caddy access log only redacts filters[0..%d][value]. '
+                . 'Every index in between reaches the log in clear, whatever the PWA happens to emit — the '
+                . 'entry is written before validation, so a 422 is logged like any other request. Widen the '
+                . 'enumeration in api/frankenphp/Caddyfile to cover index %d.',
+                SearchQuery::MAX_FILTERS,
+                $covered - 1,
+                SearchQuery::MAX_FILTERS - 1,
+            ),
+        );
+    }
+
+    /**
+     * The second bound, and the weaker one: the Caddyfile is a Caddy file gated by a PHP test, and the
+     * producer of the indices is TypeScript. A builder that outgrew even the API's own cap would be a
+     * contract break upstream of this file, and this is where it surfaces.
      *
      * The builders are discovered from the tree rather than listed here, because a list is exactly as
      * stale as the day someone adds a screen: a fifth builder with ten axes would serialize `filters[9]`

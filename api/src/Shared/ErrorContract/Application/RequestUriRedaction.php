@@ -27,6 +27,13 @@ namespace Erpify\Shared\ErrorContract\Application;
  * unable to tell a filtered request from an unfiltered one. The same token Caddy's access-log filter writes,
  * so both logs read alike.
  *
+ * **Names are not the only place an identifier hides.** Every rule here matches a parameter NAME, and that
+ * is a whole class short: an expired session redirects to `/login?next=<the entire audit URL, percent-
+ * encoded>`, so `actorId` and `resourceId` reach the log under the name `next`, which no denylist will ever
+ * contain. A value that is itself a URI with a query is therefore followed and redacted by the same rules —
+ * see {@see redactNestedUri()} for the bound and for why a value with nothing to redact is returned byte for
+ * byte.
+ *
  * **Vocabulary parity with `api/frankenphp/Caddyfile`, with one deliberate difference.** Caddy's grammar has
  * no wildcard, so it enumerates `filters[0..8][value]` and a tenth axis would escape it. Here the grammar is
  * a pattern, so no index can outgrow it, and the `filters[N][value][]` form the `in` operator would emit is
@@ -48,11 +55,24 @@ enum RequestUriRedaction
      */
     public const array IDENTITY_KEYS = ['actorid', 'resourceid', 'correlationid'];
 
-    /** The value axis of the positional search grammar, scalar and `in` forms. */
-    private const string SEARCH_VALUE_KEY = '/\Afilters\[\d+\]\[value\](\[\])?\z/';
+    /**
+     * The value axis of the positional search grammar. The index is permissive — empty, negative, any
+     * width — and so is the array suffix, which the wire spells `[]`, `[0]`, `[12]` depending on whether
+     * the caller used `http_build_query`, axios or jQuery. A log is the one place where over-matching is
+     * the safe direction: the cost is a diagnostic, and the cost of the other direction is an identifier
+     * that outlives its own erasure.
+     */
+    private const string SEARCH_VALUE_KEY = '/\Afilters\[-?\d*\]\[value\](\[-?\d*\])?\z/';
 
     /** Bound on the decode loop below, so a key of stacked `%25`s cannot spin it. */
     private const int MAX_DECODE_PASSES = 4;
+
+    /**
+     * How far a URI carried inside a value is followed. One level reaches `?next=<the whole audit URL>`,
+     * which is the shape that exists; the bound is what keeps a value of nested encoded queries from
+     * turning this into unbounded work.
+     */
+    private const int MAX_NESTED_URI_DEPTH = 2;
 
     public static function redact(string $requestUri): string
     {
@@ -68,7 +88,7 @@ enum RequestUriRedaction
             return $requestUri;
         }
 
-        return \substr($requestUri, 0, $separator + 1) . self::redactQuery($query);
+        return \substr($requestUri, 0, $separator + 1) . self::redactQueryAtDepth($query, 0);
     }
 
     /**
@@ -83,14 +103,27 @@ enum RequestUriRedaction
      */
     public static function redactQuery(string $query): string
     {
-        return \implode('&', \array_map(self::redactPair(...), \explode('&', $query)));
+        return self::redactQueryAtDepth($query, 0);
+    }
+
+    private static function redactQueryAtDepth(string $query, int $depth): string
+    {
+        return \implode('&', \array_map(
+            static fn (string $pair): string => self::redactPair($pair, $depth),
+            \explode('&', $query),
+        ));
     }
 
     /**
      * A pair with no `=` carries no value, so it is left alone: there is nothing to leak, and rewriting it
      * would corrupt a shape the operator needs to recognise the request.
+     *
+     * A key that names nothing sensitive still has to answer for what it CARRIES. Every rule above matches
+     * a parameter NAME, and the leak this misses is an identifier riding inside a value: an expired session
+     * redirects to `/login?next=<the whole audit URL, percent-encoded>`, so the ids the audit screen holds
+     * arrive under the name `next`, which no list will ever contain.
      */
-    private static function redactPair(string $pair): string
+    private static function redactPair(string $pair, int $depth): string
     {
         $equals = \strpos($pair, '=');
 
@@ -100,7 +133,49 @@ enum RequestUriRedaction
 
         $key = \substr($pair, 0, $equals);
 
-        return self::isSensitive($key) ? $key . '=' . self::SENTINEL : $pair;
+        if (self::isSensitive($key)) {
+            return $key . '=' . self::SENTINEL;
+        }
+
+        $nested = self::redactNestedUri(\substr($pair, $equals + 1), $depth);
+
+        return null === $nested ? $pair : $key . '=' . $nested;
+    }
+
+    /**
+     * A value that is itself a URI with a query, redacted by the same vocabulary and re-encoded.
+     *
+     * Returns `null` — meaning "keep the caller's bytes exactly" — whenever there is nothing to redact:
+     * no query inside, or a query the rules leave untouched. That is what keeps the file's own invariant
+     * true for every request that is not leaking; only a value that WAS carrying an identifier is rewritten,
+     * and there the redaction is worth more than byte fidelity.
+     */
+    private static function redactNestedUri(string $encodedValue, int $depth): ?string
+    {
+        if ($depth >= self::MAX_NESTED_URI_DEPTH) {
+            return null;
+        }
+
+        $decoded = \urldecode($encodedValue);
+        $separator = \strpos($decoded, '?');
+
+        if (false === $separator) {
+            return null;
+        }
+
+        $query = \substr($decoded, $separator + 1);
+
+        if ('' === $query) {
+            return null;
+        }
+
+        $redactedQuery = self::redactQueryAtDepth($query, $depth + 1);
+
+        if ($redactedQuery === $query) {
+            return null;
+        }
+
+        return \rawurlencode(\substr($decoded, 0, $separator + 1) . $redactedQuery);
     }
 
     /**
@@ -132,7 +207,9 @@ enum RequestUriRedaction
             $candidate = $decoded;
         }
 
-        return false;
+        // The candidate the last iteration decoded but did not get to test. Without this the bound is one
+        // decoding short of what it advertises, and a key encoded one level deeper than the cap walks past.
+        return self::namesASensitiveAxis($candidate);
     }
 
     private static function namesASensitiveAxis(string $key): bool
