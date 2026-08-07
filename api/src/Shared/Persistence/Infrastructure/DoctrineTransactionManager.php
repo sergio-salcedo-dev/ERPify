@@ -40,9 +40,15 @@ final readonly class DoctrineTransactionManager implements TransactionManager
      * `DeadlockException`. Untranslated they surface as a bare 500 `unhandled-exception`, telling a client
      * the server is broken when the correct answer is "try that again".
      *
-     * The original is kept as `previous` so the log line and the `dev`/`test` debug chain still name the
-     * driver exception and its SQLSTATE — the translation changes what the CALLER is told, not what an
-     * operator can see.
+     * The original is kept as `previous`, so the driver exception and its SQLSTATE survive into the
+     * `dev`/`test` debug chain and into Sentry — which receives this class precisely because
+     * `ServiceUnavailable` is the one marker that is not a `ClientError`.
+     *
+     * It does **not** reach the per-error log line. That record is built from the thrown exception's own
+     * class and message and walks no `previous` chain, so an operator reading prod stderr sees
+     * `transient-transaction-failure` and cannot tell `40P01` from `40001`. Widening it to the chain is not
+     * free — a driver message carries the statement that failed — and the two SQLSTATEs share one response
+     * and one remedy, so the distinction is left to the sinks that already hold the whole exception.
      *
      * @template T
      *

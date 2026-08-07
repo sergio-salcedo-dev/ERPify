@@ -1,0 +1,9 @@
+public function up(Schema $schema): void
+{
+    $this->addSql('ALTER TABLE audit_log DROP COLUMN actor_erased');
+}
+
+public function down(Schema $schema): void
+{
+    $this->addSql('ALTER TABLE audit_log ADD actor_erased BOOLEAN NOT NULL');
+}

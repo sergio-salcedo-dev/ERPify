@@ -46,10 +46,18 @@ export interface AuditUrlState {
  * Single source of truth for the audit screen's state, held entirely in URL params. `actorId` and
  * `resourceId` identify a person, and they are in the address bar on purpose: that is what makes an
  * investigation shareable in a ticket and reachable by deep link, and it is why none of them is ever
- * written to device storage the app controls. The price is that they travel on every navigation, so
- * the sink that would otherwise keep them forever is closed at the edge — Caddy's access log redacts
- * both by name, and redacts the `filters[N][value]` grammar this screen's API request puts the same
- * values in (`api/frankenphp/Caddyfile`).
+ * written to device storage the app controls. The price is that they travel on every navigation, into
+ * logs that no erasure path reaches, so each sink is answered where it lives: Caddy's access log
+ * redacts both names and the `filters[N][value]` grammar this screen's API request repeats them in,
+ * and drops the `Referer` that would otherwise reproduce this whole URL on every same-origin call
+ * (`api/frankenphp/Caddyfile`); the application log redacts the same axes wherever a `request_uri`
+ * appears; Sentry's event is scrubbed before it leaves the process; and this route answers
+ * `Referrer-Policy: no-referrer` so the URL never leaves the tab at all.
+ *
+ * One sink stays OPEN, and is recorded rather than claimed closed: the Next.js container prints the
+ * full document URL to the same unowned driver, which Caddy cannot reach because it is a different
+ * process. `PRODUCTION_SECURITY_CHECKLIST.md` §7 carries it, together with the accepted residual of a
+ * person id in a URL path.
  *
  * Reads decode the params; writes re-serialize the whole decoded state, so a stale param can never
  * linger. Defaults (empty filters, Timeline view, DESC, no open entry) are omitted from the URL to

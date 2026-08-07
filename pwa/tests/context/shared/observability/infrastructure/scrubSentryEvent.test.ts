@@ -31,14 +31,40 @@ describe("scrubSentryEvent", () => {
     expect(scrubbed.request?.cookies).toEqual({ session: "s" });
   });
 
-  it("scrubs denylisted params from the raw query_string", () => {
+  it("redacts denylisted params in the raw query_string, keeping their key", () => {
     const event = {
       request: { query_string: "q=hi&token=abc&page=2" },
     } as unknown as ErrorEvent;
 
     const scrubbed = scrubSentryEvent(event);
 
-    expect(scrubbed.request?.query_string).toBe("q=hi&page=2");
+    expect(scrubbed.request?.query_string).toBe("q=hi&token=REDACTED&page=2");
+  });
+
+  it("redacts the identity axes in the raw query_string", () => {
+    const event = {
+      request: { query_string: "actorId=8f14e45f&resourceId=8f14e45f&level=security" },
+    } as unknown as ErrorEvent;
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.request?.query_string).toBe(
+      "actorId=REDACTED&resourceId=REDACTED&level=security",
+    );
+  });
+
+  it("redacts the positional search grammar the audit screen fires at the API", () => {
+    const event = {
+      request: {
+        query_string: "filters%5B0%5D%5Bvalue%5D=8f14e45f&filters%5B1%5D%5Bfield%5D=level",
+      },
+    } as unknown as ErrorEvent;
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.request?.query_string).toBe(
+      "filters%5B0%5D%5Bvalue%5D=REDACTED&filters%5B1%5D%5Bfield%5D=level",
+    );
   });
 
   it("strips denylisted keys from breadcrumbs and user", () => {
@@ -53,12 +79,24 @@ describe("scrubSentryEvent", () => {
     expect(scrubbed.user).toEqual({ id: "u1" });
   });
 
-  it("strips denylisted params from the request.url query, keeping the path and hash", () => {
+  it("redacts denylisted params in the request.url query, keeping the path and hash", () => {
     const event = {
       request: { url: "https://app.example/banks?token=abc&page=2#section" },
     } as unknown as ErrorEvent;
 
-    expect(scrubSentryEvent(event).request?.url).toBe("https://app.example/banks?page=2#section");
+    expect(scrubSentryEvent(event).request?.url).toBe(
+      "https://app.example/banks?token=REDACTED&page=2#section",
+    );
+  });
+
+  it("redacts a person id the audit screen holds in the document URL", () => {
+    const event = {
+      request: { url: "https://app.example/backoffice/audit?actorId=8f14e45f&level=security" },
+    } as unknown as ErrorEvent;
+
+    expect(scrubSentryEvent(event).request?.url).toBe(
+      "https://app.example/backoffice/audit?actorId=REDACTED&level=security",
+    );
   });
 
   it("handles URLs with multiple hashes gracefully (preserving them)", () => {
@@ -66,7 +104,9 @@ describe("scrubSentryEvent", () => {
       request: { url: "https://app.example/banks?token=abc#section#subtitle" },
     } as unknown as ErrorEvent;
 
-    expect(scrubSentryEvent(event).request?.url).toBe("https://app.example/banks#section#subtitle");
+    expect(scrubSentryEvent(event).request?.url).toBe(
+      "https://app.example/banks?token=REDACTED#section#subtitle",
+    );
   });
 
   it("scrubs stringified JSON request bodies", () => {

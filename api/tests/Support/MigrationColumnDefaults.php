@@ -25,10 +25,25 @@ namespace Erpify\Tests\Support;
  * column is a question about an image no longer in the tree. Neither is answerable by parsing — do not try
  * to widen this rule into them, widen the coverage of `make db.validate` instead.
  *
+ * **A column is identified by its table, not by its name.** `db.diff` writes multi-table migrations as a
+ * matter of course and this schema repeats `status`, `user_id` and `created_at` across tables, so a rule
+ * keyed on the bare name lets one table's correct `ADD status … DEFAULT` answer for another table's bare
+ * `ADD status … NOT NULL` — a green over the very defect it exists to catch.
+ *
+ * **Only `up()` is read.** The reversal of a `DROP COLUMN` is an `ADD … NOT NULL` with no default, which is
+ * what a correct `down()` looks like and is not a defect: `down()` runs against the schema its own `up()`
+ * built, not against a live database an older image writes to. Reading both would fail the first migration
+ * that deletes a `NOT NULL` column, and the only ways out of that red would be inventing a `DEFAULT` for the
+ * reversal or growing the exemption list the gate keeps closed.
+ *
  * Declared blind spots — a green proves the listed shapes are absent, nothing more:
  *  - Only the FIRST quoted literal of each `addSql()` is read, so SQL assembled by concatenating chunks is
  *    truncated. The one migration in the tree that concatenates builds a `CREATE TABLE`, which this rule
  *    does not look at.
+ *  - The table is read from `ALTER TABLE`; a column statement reaching a table any other way is filed under
+ *    `?` and shares that bucket with every other such statement in the file.
+ *  - A source declaring no method at all is taken to BE an `up()` body, which is what the rule fixtures are.
+ *    A migration class that reached `addSql()` from a helper method would go unread.
  *  - SQL built from a variable, a heredoc, or a loop is not read at all.
  *  - A column definition is taken to end at the next comma, which is what separates two `ADD` clauses in
  *    one statement. A type carrying a comma (`NUMERIC(10, 2)`) would truncate its own definition and read
@@ -80,6 +95,15 @@ final class MigrationColumnDefaults
     private const string SET_NOT_NULL
         = '/\bALTER\s+(?:COLUMN\s+)?([A-Za-z_]\w*)\s+SET\s+NOT\s+NULL\b/i';
 
+    /** `ALTER TABLE [IF EXISTS] <table>` — what qualifies a column name into an identity. */
+    private const string ALTERED_TABLE = '/\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([A-Za-z_]\w*)/i';
+
+    /** A method declaration, read only to find where `up()` stops. */
+    private const string METHOD_DECLARATION = '/\bfunction\s+([A-Za-z_]\w*)\s*\(/';
+
+    /** Statements that name no table are filed together under a name no table can have. */
+    private const string UNKNOWN_TABLE = '?';
+
     /**
      * The columns this migration leaves `NOT NULL` with no default. Only columns THIS file adds count, so a
      * `DROP DEFAULT` on a column another migration added — a legitimate reversal, and what a `down()` does —
@@ -114,7 +138,8 @@ final class MigrationColumnDefaults
     }
 
     /**
-     * Every column this migration adds, with the two facts about its declaration the rule needs.
+     * Every column this migration adds, keyed `<table>.<column>`, with the two facts about its declaration
+     * the rule needs.
      *
      * @return array<string, array{notNull: bool, hasDefault: bool}>
      */
@@ -123,10 +148,12 @@ final class MigrationColumnDefaults
         $columns = [];
 
         foreach (self::statementsIn($source) as $statement) {
+            $table = self::tableIn($statement);
+
             \preg_match_all(self::ADDED_COLUMN, $statement, $matches, PREG_SET_ORDER);
 
             foreach ($matches as $match) {
-                $columns[\strtolower($match[1])] = [
+                $columns[$table . '.' . \strtolower($match[1])] = [
                     'notNull' => 1 === \preg_match('/\bNOT\s+NULL\b/i', $match[2]),
                     'hasDefault' => 1 === \preg_match('/\bDEFAULT\b/i', $match[2]),
                 ];
@@ -144,17 +171,7 @@ final class MigrationColumnDefaults
      */
     public static function columnsMadeNotNullIn(string $source): array
     {
-        $columns = [];
-
-        foreach (self::statementsIn($source) as $statement) {
-            \preg_match_all(self::SET_NOT_NULL, $statement, $matches);
-
-            foreach ($matches[1] as $column) {
-                $columns[] = \strtolower($column);
-            }
-        }
-
-        return \array_values(\array_unique($columns));
+        return self::qualifiedColumnsMatching(self::SET_NOT_NULL, $source);
     }
 
     /**
@@ -162,25 +179,17 @@ final class MigrationColumnDefaults
      */
     public static function columnsLosingTheirDefaultIn(string $source): array
     {
-        $columns = [];
-
-        foreach (self::statementsIn($source) as $statement) {
-            \preg_match_all(self::DEFAULT_DROPPED, $statement, $matches);
-
-            foreach ($matches[1] as $column) {
-                $columns[] = \strtolower($column);
-            }
-        }
-
-        return \array_values(\array_unique($columns));
+        return self::qualifiedColumnsMatching(self::DEFAULT_DROPPED, $source);
     }
 
     /**
+     * The `addSql()` statements of `up()`, in order.
+     *
      * @return list<string>
      */
     public static function statementsIn(string $source): array
     {
-        \preg_match_all(self::SQL_LITERAL, $source, $matches, PREG_SET_ORDER);
+        \preg_match_all(self::SQL_LITERAL, self::upBodyOf($source), $matches, PREG_SET_ORDER);
 
         $statements = [];
 
@@ -189,6 +198,61 @@ final class MigrationColumnDefaults
         }
 
         return $statements;
+    }
+
+    /**
+     * @return list<string> `<table>.<column>`, deduplicated
+     */
+    private static function qualifiedColumnsMatching(string $pattern, string $source): array
+    {
+        $columns = [];
+
+        foreach (self::statementsIn($source) as $statement) {
+            $table = self::tableIn($statement);
+
+            \preg_match_all($pattern, $statement, $matches);
+
+            // The pattern arrives as a parameter, so the capturing group is a promise of the two constants
+            // above rather than something the type checker can read off a literal.
+            foreach ($matches[1] ?? [] as $column) {
+                $columns[] = $table . '.' . \strtolower($column);
+            }
+        }
+
+        return \array_values(\array_unique($columns));
+    }
+
+    private static function tableIn(string $statement): string
+    {
+        return 1 === \preg_match(self::ALTERED_TABLE, $statement, $match)
+            ? \strtolower($match[1])
+            : self::UNKNOWN_TABLE;
+    }
+
+    /**
+     * The body of `up()`, from its declaration to whichever method is declared next.
+     *
+     * A source that declares no method is returned whole: that is the shape the rule fixtures take, and
+     * reading it as anything else would leave them matching nothing — a rules test green over an empty set,
+     * which is the exact failure the fixtures exist to rule out.
+     */
+    private static function upBodyOf(string $source): string
+    {
+        \preg_match_all(self::METHOD_DECLARATION, $source, $matches, PREG_OFFSET_CAPTURE | PREG_SET_ORDER);
+
+        $start = null;
+
+        foreach ($matches as $match) {
+            if (null !== $start) {
+                return \substr($source, $start, $match[0][1] - $start);
+            }
+
+            if ('up' === \strtolower($match[1][0])) {
+                $start = $match[0][1];
+            }
+        }
+
+        return null === $start ? $source : \substr($source, $start);
     }
 
     /**

@@ -1,5 +1,10 @@
 import type { Event } from "@sentry/nextjs";
-import { isDenylistedKey, scrubDeep } from "@/context/shared/observability/domain/redaction";
+import {
+  isDenylistedKey,
+  isIdentityAxisKey,
+  REDACTION_SENTINEL,
+  scrubDeep,
+} from "@/context/shared/observability/domain/redaction";
 
 /**
  * Sentry `beforeSend` / `beforeSendTransaction` hook: defense-in-depth scrub of
@@ -12,7 +17,9 @@ import { isDenylistedKey, scrubDeep } from "@/context/shared/observability/domai
  * Scrubs `extra`, `contexts`, `user`, `breadcrumbs`, and the caller-controlled
  * `request` sub-objects (`data` / `headers` / `cookies`), plus the raw
  * `query_string` and the `url`'s query (both strings, so they bypass key-based
- * filtering and are parsed param-by-param). Free-text (`message`, the captured
+ * filtering and are parsed param-by-param — where the identity axes are
+ * redacted alongside the denylist, since a URL is where those travel).
+ * Free-text (`message`, the captured
  * `Error.message`/stack) is intentionally NOT key-scrubbed — same scope as the
  * API scrubber; `sendDefaultPii: false` already keeps headers/cookies/bodies off
  * spans by default.
@@ -84,14 +91,24 @@ function tryScrubJson(data: string): string {
   }
 }
 
-/** Strips denylisted params from a raw `a=b&c=d` query string. */
+/**
+ * Cleans a raw `a=b&c=d` query string. Both families of sensitive value — the denylisted secrets and the
+ * identity axes — keep their key and lose their value to the sentinel, which is the rule for a URI and
+ * not the strip semantics the recursive filter applies to structured keys: a URL's diagnostic worth is
+ * its shape, and a reader has to be able to tell a request that carried a token from one that did not.
+ * The API writes the same token over the same axes in the access log and in the per-error log line, so
+ * an event lines up with them.
+ *
+ * Sentry is a third-party sink with retention of its own that no erasure path reaches, so a person id
+ * that arrives here outlives the erasure the application confirmed to the subject.
+ */
 function scrubQueryString(queryString: string): string {
   const params = new URLSearchParams(queryString);
   const scrubbed = new URLSearchParams();
   for (const [key, value] of params) {
-    if (!isDenylistedKey(key)) {
-      scrubbed.append(key, value);
-    }
+    const sensitive: boolean = isDenylistedKey(key) || isIdentityAxisKey(key);
+
+    scrubbed.append(key, sensitive ? REDACTION_SENTINEL : value);
   }
   return scrubbed.toString();
 }

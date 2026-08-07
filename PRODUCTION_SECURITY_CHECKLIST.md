@@ -358,11 +358,19 @@ you change anything here.
       verification of the firewall's own hasher) — malformed/unknown login identifiers, the `INVITED` pre-auth
       rejection and **every** forgot outcome, so latency correlates with nothing (SI-12). A dead reset/accept
       link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (SI-13):
-      `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password`, the client strips `?token=`
-      from the URL/history on mount, and Caddy's access log **redacts every secret- and identity-bearing query
-      parameter**: `authorization`, `token`, the audit screen's `actorId`/`resourceId`/`correlationId`, and the
+      `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password` + `/backoffice/audit` (the
+      audit URL names the people under investigation, so it leaves the tab no more readily than a token does),
+      the client strips `?token=` from the URL/history on mount, and Caddy's access log **redacts every
+      secret- and identity-bearing query parameter**: `authorization`, `token`, the audit screen's
+      `actorId`/`resourceId`/`correlationId`, and the
       `filters[0..8][value]` grammar every list surface serializes its filter values into — which also covers
-      the account-holder name and the user email filters. That index range is not left to a reader to keep
+      the account-holder name and the user email filters. **Caddy also drops the `Referer` header**, because a
+      log line records more than its URI: for a same-origin API call the referring document is the screen the
+      ids live on, so an unfiltered `Referer` reproduces in clear exactly what the `uri` filter blanked, on the
+      same entry. The **application** log answers the same vocabulary through a Monolog processor over every
+      record carrying a `request_uri` — the framework's own router listener writes one at INFO, and prod's
+      `fingers_crossed` buffer flushes it on any 5xx — and the **Sentry** event is scrubbed on both
+      `request.url` and `request.query_string` before it leaves the process, on both deployables. That index range is not left to a reader to keep
       true: the gate (`CaddyfileAccessLogRedactionGateTest`) derives it from the Caddyfile and fails when a PWA
       criteria builder outgrows it, so a tenth filter axis breaks the build instead of un-redacting silently.
       The cost is accepted and real — a redacted value axis means the access log can no longer answer "which
@@ -631,7 +639,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       reason, or the first time a user reports it.
 - [ ] **A person's id still reaches the access log through the URL *path*, and it is accepted.** Caddy's
       access-log filter operates on `request>uri query`, so it is structurally incapable of touching a path
-      segment — and `pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts` composes
+      segment — and the application log's `request_uri` leaves the path alone by the same decision, so the
+      residual is one residual across both logs rather than a difference between them. The producer is
+      `pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts`, which composes
       `/api/v1/backoffice/users/<uuid>`, where the uuid is the person's id. The sink has no owner of erasure:
       no compose file declares a `logging:` driver, so it is the default json-file driver with neither rotation
       nor TTL, and nothing in `FulfilIdentityErasure` can reach it. An id that lands there outlives the erasure

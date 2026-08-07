@@ -60,6 +60,17 @@
 				replace filters[7][value] REDACTED
 				replace filters[8][value] REDACTED
 			}
+
+			# The same log line also carries the referring document's URL, and for a same-origin API
+			# request that document is the screen the ids live on — so `Referer` reproduces `actorId`
+			# and `resourceId` in clear on the very entry whose `uri` the block above redacts. Caddy
+			# logs request headers by default and censors only the credential-bearing ones, so nothing
+			# above reaches this.
+			#
+			# Dropped whole rather than filtered parameter by parameter: the query filter above works on
+			# a URI field and a header is not one, and the referring path on its own is worth less than
+			# the standing risk that the next screen to put an id in its URL is not on anyone's list.
+			request>headers>Referer delete
 		}
 	}
 

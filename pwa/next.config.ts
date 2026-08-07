@@ -114,10 +114,14 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Token-bearing screens receive `?token=<id>.<secret>` in the URL, so no
-      // Referer may leave them at all — even the origin. These entries must sit
-      // AFTER the catch-all: when several sources match, the last value set for
-      // a header key wins.
+      // Screens whose URL is itself sensitive send no Referer at all — not even
+      // the origin. The token screens receive `?token=<id>.<secret>`; the audit
+      // screen holds its filter state in the query string, so its URL names the
+      // people being investigated. Under the catch-all policy a same-origin
+      // request still carries the whole URL, and the API is same-origin, so the
+      // referring URL reaches a log the erasure path cannot reach. These entries
+      // must sit AFTER the catch-all: when several sources match, the last value
+      // set for a header key wins.
       {
         source: "/accept-invitation",
         headers: [
@@ -129,6 +133,15 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/reset-password",
+        headers: [
+          {
+            key: "Referrer-Policy",
+            value: "no-referrer",
+          },
+        ],
+      },
+      {
+        source: "/backoffice/audit",
         headers: [
           {
             key: "Referrer-Policy",

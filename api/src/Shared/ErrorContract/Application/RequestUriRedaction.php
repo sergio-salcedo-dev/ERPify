@@ -68,9 +68,22 @@ enum RequestUriRedaction
             return $requestUri;
         }
 
-        $redacted = \array_map(self::redactPair(...), \explode('&', $query));
+        return \substr($requestUri, 0, $separator + 1) . self::redactQuery($query);
+    }
 
-        return \substr($requestUri, 0, $separator + 1) . \implode('&', $redacted);
+    /**
+     * The query on its own, for the sinks that carry it detached from its URI: a Sentry event splits
+     * `request.url` from `request.query_string`, and both have to answer to the same vocabulary or an axis
+     * redacted on one arrives intact on the other.
+     *
+     * Order and encoding are preserved. Normalising through `parse_str()`/`http_build_query()` would re-spell
+     * `filters[0][value]` as the nested keys `filters`, `0`, `value` — which no rule here matches, so the
+     * positional grammar would pass straight through — and would show an operator a query the caller never
+     * sent.
+     */
+    public static function redactQuery(string $query): string
+    {
+        return \implode('&', \array_map(self::redactPair(...), \explode('&', $query)));
     }
 
     /**

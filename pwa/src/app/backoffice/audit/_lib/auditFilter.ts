@@ -4,9 +4,10 @@ import { isUuid } from "@/context/shared/uuid/infrastructure/isUuid";
 /**
  * The audit timeline's UI filter state. Every field lives in URL params, never localStorage: an
  * `actorId`/`resourceId` identifies a person, so the address bar carries it — that is what keeps the
- * investigation shareable for a ticket — while no device storage the app controls does, and Caddy's
- * access log redacts it at the edge (`api/frankenphp/Caddyfile`). Empty string means "no constraint
- * on this axis".
+ * investigation shareable for a ticket — while no device storage the app controls does. The logs that
+ * see it redact it: Caddy's access log at the edge (`api/frankenphp/Caddyfile`) and a Monolog
+ * processor in the application. One sink is recorded as still open in
+ * `PRODUCTION_SECURITY_CHECKLIST.md` §7. Empty string means "no constraint on this axis".
  *
  * `from`/`to` are `dd/mm/yyyy` (the `<DateField>` format); the rest are raw strings forwarded to the
  * server filters by {@link toAuditFilters}.

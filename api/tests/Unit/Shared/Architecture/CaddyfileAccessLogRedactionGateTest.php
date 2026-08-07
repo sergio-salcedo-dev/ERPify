@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
+use FilesystemIterator;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use SplFileInfo;
 
 /**
  * Static gate over the Caddy access-log filter. The log is a sink with no owner of erasure — no compose
@@ -19,6 +23,10 @@ use PHPUnit\Framework\TestCase;
  *  - Person ids: the audit screen holds `actorId`/`resourceId` in the document URL, and fires the same
  *    identities at the API under the generic `filters[N][value]` grammar. A person id here survives the
  *    erasure the application confirmed to the subject.
+ *
+ * Both families reach the entry twice over, because a log line records more than the URI: the referring
+ * document's URL rides along in a header, and for a same-origin API call that document is the screen the
+ * ids live on. Redacting the URI alone leaves the same values in clear on the same line.
  *
  * Caddy config is not exercised by the PHP test kernel, so this gate pins the filter textually: removing
  * a `replace` fails the build instead of silently un-redacting.
@@ -32,18 +40,6 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class CaddyfileAccessLogRedactionGateTest extends TestCase
 {
-    /**
-     * Every criteria builder in the PWA, each of which serializes through `buildSearchParams` into the
-     * `filters[N][value]` grammar. The Caddyfile enumerates one index per possible filter, so the widest
-     * builder here decides how wide the enumeration has to be.
-     */
-    private const array CRITERIA_BUILDERS = [
-        'pwa/src/app/backoffice/audit/_lib/auditSearchCriteria.ts',
-        'pwa/src/app/backoffice/banks/_lib/banksSearchCriteria.ts',
-        'pwa/src/app/backoffice/bank-accounts/_lib/bankAccountsSearchCriteria.ts',
-        'pwa/src/app/backoffice/users/_lib/usersSearchCriteria.ts',
-    ];
-
     #[Test]
     #[DataProvider('provideItRedactsTheNamedQueryParameterCases')]
     public function itRedactsTheNamedQueryParameter(string $parameter, string $consequence): void
@@ -84,6 +80,28 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
     }
 
     /**
+     * The header half of the same entry. Caddy logs request headers by default and censors only the
+     * credential-bearing ones, so every `replace` above is undone on its own line by a `Referer` naming the
+     * document the request came from: for a same-origin API call that document is the audit screen, whose
+     * URL carries the very ids the URI filter just blanked.
+     *
+     * Asserted as `delete` rather than as a per-parameter filter because the filter that understands query
+     * parameters acts on a URI field and a header is not one — and because a partial rule here would fail
+     * the way the index enumeration can, leaking whatever the list forgot.
+     */
+    #[Test]
+    public function itDropsTheRefererHeader(): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/format filter \{(?:[^{}]|\{[^{}]*\})*request>headers>Referer delete/s',
+            $this->caddyfile(),
+            'The Caddy access log no longer drops the `Referer` header. The referring URL is logged in '
+            . 'full, so any screen holding a person id in its query string puts that id back into the '
+            . 'same log entry whose `uri` this filter redacts.',
+        );
+    }
+
+    /**
      * The positional grammar has no wildcard, so each index is enumerated by hand and a gap would
      * un-redact one axis while its neighbours stayed covered — invisible to a spot check of the file.
      */
@@ -107,16 +125,20 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
      * the producer of the indices is TypeScript. A tenth filter axis would serialize to
      * `filters[9][value]`, which the enumeration does not cover, and every other gate would stay green.
      *
-     * Counting `filters.push(` is a textual heuristic over straight-line builders, which is what all four
-     * are today. A builder that pushed in a loop, spread an array, or delegated to a helper would count
-     * low and this gate would not notice — that direction rests on review.
+     * The builders are discovered from the tree rather than listed here, because a list is exactly as
+     * stale as the day someone adds a screen: a fifth builder with ten axes would serialize `filters[9]`
+     * past an enumeration this gate had already declared sufficient, and nothing would say so.
+     *
+     * Counting `filters.push(` is a textual heuristic over straight-line builders, which is what every one
+     * of them is today. A builder that pushed in a loop, spread an array, or delegated to a helper would
+     * count low and this gate would not notice — that direction rests on review.
      */
     #[Test]
     public function itCoversEveryIndexThePwaCanEmit(): void
     {
         $covered = \count($this->redactedFilterIndices());
 
-        foreach (self::CRITERIA_BUILDERS as $builder) {
+        foreach ($this->criteriaBuilders() as $builder) {
             $source = $this->readRepoFile($builder);
             $emitted = \substr_count($source, 'filters.push(');
 
@@ -148,6 +170,69 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
             $this->readRepoFile('pwa/src/context/shared/search/infrastructure/buildSearchParams.ts'),
             'The PWA no longer serializes filters as `filters[N][value]`, so redacting that key name '
             . 'protects nothing. Re-derive the Caddyfile entries from the new grammar.',
+        );
+    }
+
+    /**
+     * Every PWA criteria builder, discovered from the tree instead of enumerated. Naming carries the
+     * contract: a builder that serializes through `buildSearchParams` is a `*SearchCriteria.ts` under the
+     * app router. Discovery is what makes the assertion above a gate rather than a snapshot — a hand-kept
+     * list cannot fail on the screen nobody remembered to add to it.
+     *
+     * @return list<string>
+     */
+    private function criteriaBuilders(): array
+    {
+        $root = $this->repoRoot();
+        $builders = [];
+
+        $tree = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($root . '/pwa/src/app', FilesystemIterator::SKIP_DOTS),
+        );
+
+        foreach ($tree as $file) {
+            if (!$file instanceof SplFileInfo) {
+                continue;
+            }
+
+            $path = $file->getPathname();
+
+            if (\str_ends_with($path, 'SearchCriteria.ts')) {
+                $builders[] = \substr($path, \strlen($root) + 1);
+            }
+        }
+
+        \sort($builders);
+
+        $this->assertNotEmpty(
+            $builders,
+            'No `*SearchCriteria.ts` was found under pwa/src/app, so the assertion that the Caddyfile '
+            . 'covers every index the PWA can emit would pass over an empty set. Either the naming '
+            . 'convention changed — re-derive this — or the PWA tree is not reachable.',
+        );
+
+        return $builders;
+    }
+
+    /**
+     * The repository root, which differs by how the suite is invoked: with the whole checkout present it is
+     * the parent of `api/`, while inside the dev container `/app` holds only `api/`, `public/` and the
+     * mounts, so the rest arrives through the read-only root bind mount declared in `compose.dev.yaml`.
+     */
+    private function repoRoot(): string
+    {
+        $apiRoot = \dirname(__DIR__, 4);
+
+        foreach ([\dirname($apiRoot), \dirname($apiRoot) . '/repo'] as $candidate) {
+            if (\is_dir($candidate . '/pwa/src/app')) {
+                return $candidate;
+            }
+        }
+
+        $this->fail(
+            'The PWA tree is not reachable, so this gate cannot check anything. Inside the container it '
+            . 'comes from the read-only `./` bind mount at /app/repo declared in compose.dev.yaml — '
+            . 'restore it rather than relaxing this failure into a skip.',
         );
     }
 
