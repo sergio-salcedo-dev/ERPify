@@ -204,6 +204,23 @@ Sergio decidió cerrarlo en esta PR en vez de declararlo, coherente con la tesis
 - **Rojo primero:** `testThePurgeTakesAnOrderedRowLockBeforeItsBulkDelete` falla sin el lock por `Failed asserting that an array contains 'RowShareLock'`. Es discriminante porque un `DELETE` toma `RowExclusiveLock` y **nunca** `RowShareLock`: borrar la lectura deja el borrado funcionando, los conteos idénticos y todo lo demás verde.
 - **Coste medido, no estimado:** el canario de presupuesto de `erase.feature` pasó de 19 a **20** consultas. El número se leyó del fallo (`Failed asserting that 20 matches expected 19`), no se calculó.
 
+### Hallazgo posterior al pase, medido y cerrado: el diario no veía el lock del conjunto de administradores
+
+Al evaluar si el TOCTOU de ADMIN (fuera de alcance, ver **Never**) podía arreglarse después, salió un defecto **en el entregable de esta PR**, no en el TOCTOU.
+
+El arreglo natural para ese TOCTOU es espejar `b57c68fc`: llamar a `lockActiveAdministrators()` antes de leer el rol. Ese método bloquea filas de `identity_user`, y la guarda corre **antes** de la purga de invitaciones — así que pondría `identity_user` por delante de `iam_invitation` y **reabriría ABBA #1**.
+
+**Medido, no supuesto:** con esa línea aplicada, `make php.unit` daba **exit 0, 0 rojos, 2429 tests**. Ninguno de los dos instrumentos lo veía:
+
+- `ErasureLockOrderTest` — `InMemoryActiveAdministratorDirectory::lockActiveAdministrators()` no escribía en el diario, así que la secuencia seguía siendo `[invitación, identidad, token]`.
+- `ErasureLockOrderFunctionalTest` — sus sondas preguntan por las filas **del sujeto**; el lock de conjunto toma las filas de los administradores activos, que no son las suyas.
+
+Un guardián que no ve una regresión previsible —y con fecha, porque el TOCTOU es el siguiente paso conocido— es un defecto del guardián.
+
+**Cierre:** el doble anota ahora `identity_user` en el diario cuando toma el lock del conjunto. El invariante que expresa es «el lock es sobre la TABLA, aunque la sentencia hable de administradores». Re-medido con la misma mutación: **2 rojos**, `theChainAcquires…` (la secuencia pasa a `[identity_user, iam_invitation, identity_user, token]`) y `anAdministratorIsRefused…` (el diario deja de estar vacío). Dos testigos, y ninguno de ellos existía antes.
+
+De paso desapareció la duplicación de cableado: `useCase()` recibe el diario y lo reparte, en vez de cinco líneas repetidas por prueba.
+
 ### Lo que ninguno de los dos pudo verificar
 
 - **Ninguna carrera real de dos transacciones se ejercita en ningún sitio**, por construcción (sin `pcntl`, sin `pgsql` procedural). Toda afirmación de deadlock aquí — incluidas las que los revisores comparten — descansa en instantes de adquisición, jamás en un `40P01` observado.

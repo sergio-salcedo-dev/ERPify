@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use Closure;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
+use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use Override;
 
 /**
@@ -43,6 +44,14 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
     public array $rowLocksTakenBeforeEachSetLock = [];
 
     /**
+     * Set when a test is asserting where this lock falls among OTHER tables'. The set lock is over
+     * `identity_user` rows, so it belongs in that sequence like any other acquisition on that table — and a
+     * caller that takes it without meaning to reorder anything is exactly how a cross-table order is
+     * reopened: the statement is about administrators, but the lock is about the table.
+     */
+    public ?LockOrderJournal $lockOrderJournal = null;
+
+    /**
      * @param array<string, bool>   $adminUserIsActive admin user id => (its backing User exists AND is ACTIVE)
      * @param (Closure(): int)|null $rowLockCounter    single-row locks taken so far; omit when a test only
      *                                                 cares that the set lock was taken at all
@@ -56,6 +65,8 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
     #[Override]
     public function lockActiveAdministrators(): void
     {
+        $this->lockOrderJournal?->locked(LockOrderJournal::IDENTITY_USER);
+
         ++$this->setLocksTaken;
 
         if ($this->rowLockCounter instanceof Closure) {

@@ -82,11 +82,8 @@ final class ErasureLockOrderTest extends TestCase
         $invitations = new InMemoryInvitationRepository($this->invitationFor(UserMother::DEFAULT_ID));
         $tokens = new InMemoryPasswordResetTokenRepository($this->resetTokenFor(UserMother::DEFAULT_ID));
         $users = new InMemoryUserRepository(UserMother::create());
-        $invitations->lockOrderJournal = $journal;
-        $tokens->lockOrderJournal = $journal;
-        $users->lockOrderJournal = $journal;
 
-        $result = $this->useCase($users, $tokens, $invitations)->execute(UserMother::DEFAULT_ID);
+        $result = $this->useCase($users, $tokens, $invitations, $journal)->execute(UserMother::DEFAULT_ID);
 
         // Not decoration: a statement that matches no row takes no lock, so a chain measured over an empty
         // store would record its sequence and prove nothing about the locks that sequence is about.
@@ -119,16 +116,13 @@ final class ErasureLockOrderTest extends TestCase
         $invitations = new InMemoryInvitationRepository($this->invitationFor(UserMother::DEFAULT_ID));
         $tokens = new InMemoryPasswordResetTokenRepository($this->resetTokenFor(UserMother::DEFAULT_ID));
         $users = new InMemoryUserRepository(UserMother::create());
-        $invitations->lockOrderJournal = $journal;
-        $tokens->lockOrderJournal = $journal;
-        $users->lockOrderJournal = $journal;
 
         // Caught rather than declared with expectException + finally: on the mutation this exists to catch the
         // finally would throw its own ExpectationFailedException, PHP would discard the refusal it replaced,
         // and PHPUnit would report "not an instance of AdministratorErasureRequiresDemotion" — red for the
         // right reason but naming the wrong one.
         try {
-            $this->useCase($users, $tokens, $invitations, administrators: [
+            $this->useCase($users, $tokens, $invitations, $journal, administrators: [
                 UserMother::DEFAULT_ID => true,
                 self::ACTING_ADMIN_ID => true,
             ])->execute(UserMother::DEFAULT_ID);
@@ -141,6 +135,10 @@ final class ErasureLockOrderTest extends TestCase
     }
 
     /**
+     * Every collaborator that reaches one of the three tables writes to ONE journal, the administrator
+     * directory included — its set lock is over `identity_user` rows, so leaving it out would let a caller
+     * insert an acquisition on that table ahead of the others and keep the sequence looking untouched.
+     *
      * @param array<string, bool> $administrators admin user id => backing user exists AND is ACTIVE. The
      *                                            subject's own absence from it is what lets the erasure past
      *                                            the demotion refusal
@@ -149,8 +147,15 @@ final class ErasureLockOrderTest extends TestCase
         InMemoryUserRepository $users,
         InMemoryPasswordResetTokenRepository $tokens,
         InMemoryInvitationRepository $invitations,
+        LockOrderJournal $journal,
         array $administrators = [self::ACTING_ADMIN_ID => true],
     ): FulfilIdentityErasure {
+        $users->lockOrderJournal = $journal;
+        $tokens->lockOrderJournal = $journal;
+        $invitations->lockOrderJournal = $journal;
+        $administratorDirectory = new InMemoryActiveAdministratorDirectory($administrators);
+        $administratorDirectory->lockOrderJournal = $journal;
+
         return new FulfilIdentityErasure(
             new EraseIdentitySubject($users, $tokens, new InlineTransactionManager()),
             new OrderedAuditSubjectTrailErasure(
@@ -159,7 +164,7 @@ final class ErasureLockOrderTest extends TestCase
                 new RecordingAuditResourceAnonymiser(matchCount: 0),
             ),
             new RecordingEventStoreSubjectAnonymiser(),
-            new InMemoryActiveAdministratorDirectory($administrators),
+            $administratorDirectory,
             new PurgeUserSessions(new InMemorySessionRepository()),
             new PurgeUserMembership(new InMemoryMembershipRepository()),
             new PurgeUserInvitations($invitations),
