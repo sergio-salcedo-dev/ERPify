@@ -2,7 +2,7 @@
 title: 'El selector de aceptación de invitación deja de escribirse en event_store'
 type: 'bugfix'
 created: '2026-08-07'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 5f7d853f
 review_loop_iteration: 0
 context:
