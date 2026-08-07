@@ -53,6 +53,14 @@ export function isDenylistedKey(key: string): boolean {
 export const IDENTITY_AXES = ["actorid", "resourceid", "correlationid"] as const;
 
 /**
+ * The same tuple widened for lookup, so an arbitrary key can be tested against it: `as const` makes
+ * IDENTITY_AXES a tuple of literals, which admits no `string` argument. Widened `readonly` and not copied —
+ * the axes are already lower-case, so there is nothing to normalise, and the immutability the `as const`
+ * buys is worth keeping. Unlike the substring denylist above, an axis is matched WHOLE.
+ */
+const IDENTITY_AXIS_KEYS: readonly string[] = IDENTITY_AXES;
+
+/**
  * The value axis of the positional search grammar. Index and array suffix are both permissive: the wire
  * spells the suffix `[]`, `[0]` or `[12]` depending on whether the caller used `http_build_query`, axios or
  * jQuery, and an event is a place where over-matching is the safe direction to be wrong in.
@@ -70,7 +78,7 @@ export const REDACTION_SENTINEL = "REDACTED";
 export function isIdentityAxisKey(key: string): boolean {
   const lowerKey: string = key.toLowerCase();
 
-  return IDENTITY_AXES.some((axis: string) => axis === lowerKey) || SEARCH_VALUE_KEY.test(lowerKey);
+  return IDENTITY_AXIS_KEYS.includes(lowerKey) || SEARCH_VALUE_KEY.test(lowerKey);
 }
 
 /** Bounds recursion against pathological / cyclic structures. */

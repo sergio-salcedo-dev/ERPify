@@ -35,10 +35,10 @@ namespace Erpify\Shared\ErrorContract\Application;
  * byte.
  *
  * **Vocabulary parity with `api/frankenphp/Caddyfile`, with one deliberate difference.** Caddy's grammar has
- * no wildcard, so it enumerates `filters[0..8][value]` and a tenth axis would escape it. Here the grammar is
- * a pattern, so no index can outgrow it, and the `filters[N][value][]` form the `in` operator would emit is
- * covered too — that shape costs nothing on this side, whereas at the edge it would be nine more lines for a
- * form no field mapping currently admits.
+ * no wildcard, so it spends one `replace` line per index on `filters[0..19][value]` and a twentieth axis would
+ * escape it. Here the grammar is a pattern, so no index can outgrow it, and the `filters[N][value][]` form the
+ * `in` operator would emit is covered too — that shape costs nothing on this side, whereas at the edge it would
+ * be twenty more lines for a form no field mapping currently admits.
  */
 enum RequestUriRedaction
 {
@@ -148,7 +148,11 @@ enum RequestUriRedaction
      * Returns `null` — meaning "keep the caller's bytes exactly" — whenever there is nothing to redact:
      * no query inside, or a query the rules leave untouched. That is what keeps the file's own invariant
      * true for every request that is not leaking; only a value that WAS carrying an identifier is rewritten,
-     * and there the redaction is worth more than byte fidelity.
+     * and there the redaction is worth more than byte fidelity. An empty query needs no case of its own:
+     * the rules leave it identical, so the same comparison already answers it.
+     *
+     * The `false === $separator` guard is a statement of its own because that is what narrows `strpos()`'s
+     * `int|false` down to the `int` both `substr()` offsets below are typed against.
      */
     private static function redactNestedUri(string $encodedValue, int $depth): ?string
     {
@@ -164,18 +168,11 @@ enum RequestUriRedaction
         }
 
         $query = \substr($decoded, $separator + 1);
-
-        if ('' === $query) {
-            return null;
-        }
-
         $redactedQuery = self::redactQueryAtDepth($query, $depth + 1);
 
-        if ($redactedQuery === $query) {
-            return null;
-        }
-
-        return \rawurlencode(\substr($decoded, 0, $separator + 1) . $redactedQuery);
+        return $redactedQuery === $query
+            ? null
+            : \rawurlencode(\substr($decoded, 0, $separator + 1) . $redactedQuery);
     }
 
     /**

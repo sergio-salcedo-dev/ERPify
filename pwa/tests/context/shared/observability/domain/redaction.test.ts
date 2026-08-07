@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  IDENTITY_AXES,
   REDACTION_DENYLIST,
   isDenylistedKey,
+  isIdentityAxisKey,
   scrubDeep,
 } from "@/context/shared/observability/domain/redaction";
 
@@ -27,6 +29,44 @@ describe("redaction denylist", () => {
     expect(isDenylistedKey("token")).toBe(true);
     expect(isDenylistedKey("user_password")).toBe(true);
     expect(isDenylistedKey("name")).toBe(false);
+  });
+});
+
+describe("identity axes", () => {
+  // The API's RequestUriRedaction::IDENTITY_KEYS holds the same three, and no gate compares the two lists,
+  // so this pins one side against an accidental edit — it cannot see drift introduced on the other.
+  it("holds exactly the three identity axes", () => {
+    expect([...IDENTITY_AXES]).toEqual(["actorid", "resourceid", "correlationid"]);
+  });
+
+  it("matches every axis case-insensitively", () => {
+    expect(isIdentityAxisKey("actorId")).toBe(true);
+    expect(isIdentityAxisKey("RESOURCEID")).toBe(true);
+    expect(isIdentityAxisKey("correlationId")).toBe(true);
+  });
+
+  // The wire spells the index and the array suffix differently depending on whether the caller used
+  // http_build_query, axios or jQuery, and all of them name the same axis to the server. These are the
+  // decoded forms: the predicate is handed keys URLSearchParams has already decoded once, so a
+  // percent-encoded spelling is the caller's decoding, not this function's, to answer for.
+  it("matches the value axis of the positional search grammar at any index and array suffix", () => {
+    expect(isIdentityAxisKey("filters[0][value]")).toBe(true);
+    expect(isIdentityAxisKey("filters[][value]")).toBe(true);
+    expect(isIdentityAxisKey("filters[12][value][2]")).toBe(true);
+    expect(isIdentityAxisKey("filters[-1][value][]")).toBe(true);
+  });
+
+  // Unlike the denylist above, an axis is matched whole: these keys are payload properties the UI needs,
+  // and folding them in would start stripping fields rather than redacting identifiers.
+  it("does not match a key that merely contains an axis", () => {
+    expect(isIdentityAxisKey("actorIdList")).toBe(false);
+    expect(isIdentityAxisKey("xcorrelationid")).toBe(false);
+  });
+
+  it("leaves the non-identity axes of the same grammar alone", () => {
+    expect(isIdentityAxisKey("filters[0][field]")).toBe(false);
+    expect(isIdentityAxisKey("filters[0][operator]")).toBe(false);
+    expect(isIdentityAxisKey("limit")).toBe(false);
   });
 });
 

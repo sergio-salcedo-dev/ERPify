@@ -91,11 +91,13 @@ final class RequestUriRedactionTest extends TestCase
                 . '&filters%5B0%5D%5Boperator%5D=eq&filters%5B0%5D%5Bvalue%5D=REDACTED',
         ];
 
-        // The difference from the Caddyfile, which enumerates 0..8 because its grammar has no wildcard.
-        // A tenth filter axis would escape the edge filter and must not also escape this one.
+        // The difference from the Caddyfile, which spends one `replace` line per index on 0..19 because its
+        // grammar has no wildcard. A twentieth filter axis escapes the edge filter and must not also escape
+        // this one, so the index here has to sit beyond what the edge enumerates — inside that range the case
+        // still passes while testing none of the delta it is named for.
         yield 'search value axis at an index beyond what the edge enumerates' => [
-            '/api/v1/backoffice/audit?filters%5B12%5D%5Bvalue%5D=019f-abc',
-            '/api/v1/backoffice/audit?filters%5B12%5D%5Bvalue%5D=REDACTED',
+            '/api/v1/backoffice/audit?filters%5B23%5D%5Bvalue%5D=019f-abc',
+            '/api/v1/backoffice/audit?filters%5B23%5D%5Bvalue%5D=REDACTED',
         ];
 
         yield 'search value axis in the repeated `in` form' => [
@@ -200,6 +202,9 @@ final class RequestUriRedactionTest extends TestCase
         yield 'a nested URI with nothing to redact' => [
             '/login?next=%2Fbackoffice%2Fbanks%3Fsort%3Dname%26limit%3D25',
         ];
+        // A nested URI whose query is empty reaches "nothing to redact" through an empty string rather
+        // than through the rules declining a pair, so the caller's bytes have to survive that path too.
+        yield 'a nested URI with an empty query' => ['/login?next=%2Fbackoffice%2Fbanks%3F'];
     }
 
     /**
