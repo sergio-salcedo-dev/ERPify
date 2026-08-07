@@ -166,9 +166,10 @@ services:
       # A restart is NOT enough when a service's CONSTRUCTOR SIGNATURE changes: the
       # compiled factory lives in this private volume, so the worker keeps calling the
       # old signature and dies with ArgumentCountError on a boot loop (exit 255) while
-      # the web container, which shares ./api/var, is perfectly healthy. Recreate the
-      # volume — `docker compose rm -f messenger_worker && docker volume rm
-      # <project>_messenger_cache` — then bring the stack back up.
+      # the web container, which shares ./api/var, is perfectly healthy. `make sf.cc` does
+      # not reach it either — that clear runs in the php container. Drop the volume with
+      # `make docker.worker.cache.reset`; `make app.dev` already runs it between the down
+      # and the up, so a cold start cannot inherit a stale factory.
       APP_DEBUG: "0"
     volumes:
       - ./api:/app/api

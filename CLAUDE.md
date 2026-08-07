@@ -35,6 +35,7 @@ Always invoke from the repo root. Targets decide whether to exec inside the `php
 make app.dev                        # Full dev stack (down → install → up --wait → fix ownership)
 make docker.up                      # Stack up detached (ENV=dev|staging|prod).
 make docker.down                    # Stop stack and remove orphans.
+make docker.worker.cache.reset      # Drop messenger_worker's private container cache (fixes its boot loop).
 make php.bash                       # Shell into the php container (also: php.sh, php.exec).
 make sf c='about'                   # Symfony console (also: make sf.cc, make sf.routes f='…').
 make composer c='req vendor/pkg'    # Composer in container.

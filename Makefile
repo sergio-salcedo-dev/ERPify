@@ -52,7 +52,11 @@ app.clean.all: sf.clear pwa.clean.all ## Clean all build artifacts (Symfony var 
 
 app.clean.sudo: sf.clear.sudo pwa.clean.sudo ## Host-side sudo wipe of all build artifacts (api/var + api/vendor + Next .next/.next-e2e + node_modules + lockfile) (requires sudo; run with stack down)
 
-app.dev: docker.down pwa.install.if-missing docker.up.wait php.fix.ownership ## Full dev stack with --wait
+# `docker.worker.cache.reset` sits between the down and the up on purpose: a cold start is the one moment the
+# worker's private compiled-container cache can be dropped without racing a live process, and dropping it is
+# what keeps a changed constructor signature from boot-looping the worker while everything else looks healthy.
+# It costs the worker one container recompile per cold start.
+app.dev: docker.down docker.worker.cache.reset pwa.install.if-missing docker.up.wait php.fix.ownership ## Full dev stack with --wait
 
 app.dev.clean: docker.down app.clean.sudo app.dev ## Full dev stack with --wait (destructive)
 
