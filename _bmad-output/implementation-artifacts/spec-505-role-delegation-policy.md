@@ -2,7 +2,7 @@
 title: 'Inviter role-delegation policy, attributable role changes, and a console lever to revoke an invitation (#505)'
 type: 'feature'
 created: '2026-08-06'
-status: 'in-review'
+status: 'done'
 baseline_commit: '58a081a8d34f4cadc69a118f1038e75bef400bc6'
 review_loop_iteration: 0
 context:
@@ -188,3 +188,59 @@ From inside the worktree (it has its own Compose stack); report each exit code f
   revocation withdraws the identity through `UserRepository`, exactly as the accept path already does.
 - `make php.unit`, `make php.behat` -- exit 0; report the **re-measured** query budgets rather than assuming.
 - `make php.quality`, `make pwa.quality`, `make pwa.test` -- exit 0.
+
+## Suggested Review Order
+
+**Naming the act — the permission and its two enforcement points**
+
+- Start here: the whole policy is one data row, and `users` opting out of tiering is what makes it deniable.
+  [`StaticAuthorizationPolicy.php:60`](../../api/src/Iam/Identity/Infrastructure/Security/StaticAuthorizationPolicy.php#L60)
+
+- The codebase's first imperative check; conditional on the payload, never on the route.
+  [`CreateInvitationController.php:59`](../../api/src/Iam/Invitation/Infrastructure/Http/CreateInvitationController.php#L59)
+
+**Recording it — both delegation paths, one kind of evidence**
+
+- The invite half, in the single seam the endpoint and the CLI both funnel through.
+  [`InviteUser.php:41`](../../api/src/Iam/Identity/Application/InviteUser.php#L41)
+
+- The role-change half, re-landed; the resource type is reached through its erasure owner's constant.
+  [`ChangeUserRoles.php:96`](../../api/src/Iam/Identity/Application/ChangeUserRoles.php#L96)
+
+**The new terminal state — why it exists and why it is neither DEACTIVATED nor a deletion**
+
+- The vocabulary, with the argument for both refusals in its docblock.
+  [`IdentityStatus.php:35`](../../api/src/Iam/Identity/Domain/Enum/IdentityStatus.php#L35)
+
+- The guarded transition; reachable only from INVITED.
+  [`User.php:188`](../../api/src/Iam/Identity/Domain/Entity/User.php#L188)
+
+- The fail-open the state exposed: admission now enumerates instead of falling through.
+  [`UserChecker.php:44`](../../api/src/Iam/Identity/Infrastructure/Security/UserChecker.php#L44)
+
+**Revocation — the seam decision, the lock order, and the guard the adversarial pass forced**
+
+- Withdraws once per call, skips a non-INVITED identity, and says why the lock order matches accept.
+  [`RevokeInvitation.php:137`](../../api/src/Iam/Invitation/Application/RevokeInvitation.php#L137)
+
+- Keyed by user id so the Identity-owned register never exposes an invitation id.
+  [`RevokeUserInvitationController.php:32`](../../api/src/Iam/Invitation/Infrastructure/Http/RevokeUserInvitationController.php#L32)
+
+- The lock that makes a concurrent accept drop out of the set instead of aborting the revocation.
+  [`DoctrineInvitationRepository.php:67`](../../api/src/Iam/Invitation/Infrastructure/Persistence/Doctrine/DoctrineInvitationRepository.php#L67)
+
+**Console**
+
+- The permission mirror; an entry missing here is silently dropped from `/me` and no gate ever opens.
+  [`Permission.ts:22`](../../pwa/src/context/shared/access/domain/Permission.ts#L22)
+
+- The row action, gated on the permission and on INVITED, so it retires itself after a revocation.
+  [`UserRowActions.tsx:63`](../../pwa/src/app/backoffice/users/_components/UserRowActions.tsx#L63)
+
+**Tests worth reading as evidence, not as peripherals**
+
+- Was a fail-open: a seeded REVOKED user came back ACTIVE and credentialed.
+  [`UserFixtureFactory.php:41`](../../api/tests/DataFixtures/UserFixtureFactory.php#L41)
+
+- Observes the lock through `pg_locks`; deleting `setLockMode` turns it red.
+  [`DoctrineInvitationRepositoryTest.php:151`](../../api/tests/Functional/Iam/Invitation/DoctrineInvitationRepositoryTest.php#L151)
