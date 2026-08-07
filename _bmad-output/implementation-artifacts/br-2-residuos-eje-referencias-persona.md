@@ -412,6 +412,7 @@ adversarial encontró que la versión manual omitía tres ficheros y contaba mal
 - `api/src/Shared/Monitoring/Infrastructure/Monolog/RequestUriRedactionProcessor.php`
 - `api/src/Shared/Persistence/Domain/Exception/TransientTransactionFailure.php`
 - `api/tests/Functional/Shared/Audit/AuditSubjectRowLockFunctionalTest.php`
+- `api/tests/Functional/Shared/Audit/ObservesRowLocksOnASecondConnection.php`
 - `api/tests/Functional/Shared/Persistence/TransactionManagerRetryableFailureTest.php`
 - `api/tests/Support/MigrationColumnDefaults.php`
 - `api/tests/Unit/Iam/Identity/Application/FulfilIdentityErasureAuditLockTest.php`
@@ -481,29 +482,33 @@ adversarial encontró que la versión manual omitía tres ficheros y contaba mal
 | `make db.validate` (schema in sync) | 0 |
 | `make db.diff` posterior | «No changes detected» (sin deriva) |
 
-**Segunda tanda, tras el merge de `main` (#647) y el trabajo de la tercera vuelta** — corridas frescas,
-2026-08-07:
+**Segunda tanda, con la rama completa** — corridas frescas y con exit code impreso, 2026-08-07, después del
+merge de `main` (#647, #652) y de cerrar el acoplamiento que quedaba:
 
 | Gate | Exit |
 |---|---|
-| `make php.quality.dry-run` → PHPStan | 0 («No errors») |
-| `make php.deptrac` | 0 (0 violaciones, 0 errores) |
+| `make php.quality` (PHPStan, Rector, PHPMD 0 violaciones, cs-fixer, deptrac, mapping) | 0 |
+| `make php.quality.dry-run` (**lo que corre CI**: check-only, no arregla) | 0 |
 | `make php.unit` (2402 tests, 9935 aserciones) | 0 |
+| `make php.behat` (410 escenarios, 3802 pasos) | 0 |
 | `make pwa.quality` | 0 |
-| `make pwa.test.unit` (227 ficheros) | 0 |
-| `make php.lint.error-contract` | 0 |
+| `make pwa.test.unit` (227 ficheros, 1216 tests) | 0 |
 | `make php.lint.person-reference` | 0 |
+| `make php.lint.error-contract` | 0 |
 | `make php.lint.audit-resource` | 0 |
+| `make php.lint.bounded-context` | 0 |
+| `make php.lint.persistent-transport` | 0 |
+| `make php.lint.schedule-consumption` | 0 |
 
 Los 2 `PHPUnit Notices` son los preexistentes ya declarados (`DoctrineSessionRepositoryStoreUnavailableTest`,
 mocks sin expectativas), y no son de este diff.
 
-**`php.quality.dry-run` queda ROJO, y no por PHPStan.** Rector marca un único fichero,
-`api/tests/Functional/Shared/Audit/AuditSubjectRowLockFunctionalTest.php:75`
-(`FlipTypeControlToUseExclusiveTypeRector`), que llegó con el trabajo del orden de bloqueo desde una segunda
-sesión compartiendo este worktree. Se midió **después** de que esa sesión lo commiteara, así que no es un
-estado en vuelo: es la rama. Como CI corre `quality.dry-run` (check-only, no arregla), **la rama va a fallar
-CI hasta que se pase el fixer** — `make php.quality` lo resuelve solo.
+**El último rojo era PHPMD, y su número era un síntoma.** `AuditSubjectRowLockFunctionalTest` referenciaba
+16 tipos porque cargaba con dos trabajos: el aparato para preguntarle a Postgres si una fila está bloqueada
+—segunda conexión, fixtures commiteados, sonda `FOR UPDATE NOWAIT`, borrado en `tearDown`— y la afirmación
+que un lector va a buscar ahí. El aparato pasa a
+`ObservesRowLocksOnASecondConnection`. Las 13 aserciones siguen siendo 13, y **el test se re-falsificó
+después de moverlo** borrando la mitad del eje recurso del `WHERE` del lock: rojo, igual que antes.
 
 ### Pase adversarial (AC5) — PARCIAL, registrado aquí
 
@@ -621,3 +626,7 @@ la refutación del «default es fail-open»; el cableado RFC 9457 de `TransientT
 | Fecha | Cambio |
 |---|---|
 | 2026-08-06 | Implementación completa de T1–T4; T5 con gates verdes y pase adversarial **parcial** |
+| 2026-08-07 | Pase adversarial **completo** (2 lectores en contexto fresco): 3 GRAVE + 6 SERIO, todos dispuestos. `Referer` y `request_uri` cerrados y medidos contra el stack vivo; Sentry redacta los ejes en los dos deployables; 3 gates que leían más fuerte de lo que eran, arreglados y falsificados |
+| 2026-08-07 | #647 vuelve alcanzable el ABBA: el tripwire dispara, #565 pasa de «no alcanzable» a **real y arreglado** con orden de bloqueo determinista |
+| 2026-08-07 | #562, #564 y #565 **cerrados** con evidencia medida; **#389 abierto**, con tres vías cerradas y dos residuales declarados |
+| 2026-08-07 | Rama completa y verde: `php.quality`, `php.quality.dry-run`, `php.unit`, `php.behat`, `pwa.quality`, `pwa.test.unit` y los seis gates de lint, todos exit 0 |
