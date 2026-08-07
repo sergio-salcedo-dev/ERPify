@@ -243,12 +243,15 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
   - [x] `docs/deployment-guide.md` § Rollback recoge la regla
   - [x] `MigrationColumnDefaultGateTest` + `MigrationColumnDefaultRulesGateTest` + `Fixture/MigrationColumnDefault/` (8 fixtures). Provocado en rojo con `Version29990101000000.php` sintética en el árbol real; los fixtures cazaron un fallo real de la regla (`DEFAULT 'ACTIVE' NOT NULL` no se detectaba)
   - [x] Medido: `INSERT` que omite las dos columnas ahora escribe `f`/`f` (probe en transacción con `ROLLBACK`); `db.diff` posterior dice «No changes detected»
-- [ ] **T5 — Gates, pase adversarial, PR draft** (AC: 5)
+- [x] **T5 — Gates y pase adversarial** (AC: 5)
   - [x] Todos los gates verdes, cada uno de corrida fresca con exit code impreso (tabla abajo)
   - [x] `make db.migrate` / `make db.validate` exit 0; `db.diff` posterior sin deriva
-  - [ ] **Pase adversarial PARCIAL** — 3 de 4 lectores murieron por límite de sesión; ver la sección dedicada
-  - [ ] Comentarios de cierre en #389 #565 #562 #564
-  - [x] PR **draft** abierto: https://github.com/sergio-salcedo-dev/ERPify/pull/650
+  - [x] **Pase adversarial COMPLETO** — dos lectores hostiles en contexto fresco (crítico de completitud AC-por-AC, y re-lectura de sumideros + tripwire/503) sobrevivieron y devolvieron 3 GRAVE + 6 SERIO. Todo medido, dispuesto y registrado en la sección dedicada
+  - [x] PR abierto (no draft, por decisión de Sergio): <https://github.com/sergio-salcedo-dev/ERPify/pull/650>
+- [ ] **T6 — Cierre de issues** (AC: 5)
+  - [ ] #562 y #564 cerrados con evidencia
+  - [ ] #565 cerrado como REAL Y ARREGLADO — `main` (#647) lo volvió alcanzable y el orden de bloqueo lo cierra
+  - [ ] #389 comentado con las dos vías medidas y **abierto**: los residuales que quedan están declarados, no cerrados
 
 ---
 
@@ -395,39 +398,69 @@ ventana de autovacuum.
 
 ### File List
 
+Derivada de `git diff --name-only $(git merge-base origin/main HEAD)...HEAD`, no escrita a mano — el pase
+adversarial encontró que la versión manual omitía tres ficheros y contaba mal los fixtures.
+
 **Nuevos**
 
 - `api/migrations/2026/Version20260806180031.php`
+- `api/src/Shared/Audit/Application/AuditSubjectRowLock.php`
+- `api/src/Shared/Audit/Application/AuditSubjectTrailErasure.php`
+- `api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditSubjectRowLock.php`
+- `api/src/Shared/Audit/Infrastructure/Persistence/OrderedAuditSubjectTrailErasure.php`
 - `api/src/Shared/ErrorContract/Application/RequestUriRedaction.php`
+- `api/src/Shared/Monitoring/Infrastructure/Monolog/RequestUriRedactionProcessor.php`
 - `api/src/Shared/Persistence/Domain/Exception/TransientTransactionFailure.php`
+- `api/tests/Functional/Shared/Audit/AuditSubjectRowLockFunctionalTest.php`
+- `api/tests/Functional/Shared/Persistence/TransactionManagerRetryableFailureTest.php`
 - `api/tests/Support/MigrationColumnDefaults.php`
+- `api/tests/Unit/Iam/Identity/Application/FulfilIdentityErasureAuditLockTest.php`
 - `api/tests/Unit/Shared/Architecture/MigrationColumnDefaultGateTest.php`
 - `api/tests/Unit/Shared/Architecture/MigrationColumnDefaultRulesGateTest.php`
-- `api/tests/Unit/Shared/Architecture/Fixture/MigrationColumnDefault/` (8 fixtures)
+- `api/tests/Unit/Shared/Architecture/Fixture/MigrationColumnDefault/` (**14** fixtures)
 - `api/tests/Unit/Shared/Architecture/Fixture/PersonResource/src/SecondAuditResourceFixtureWriter.php`
+- `api/tests/Unit/Shared/Audit/Infrastructure/Double/RecordingAuditSubjectRowLock.php`
 - `api/tests/Unit/Shared/ErrorContract/Application/RequestUriRedactionTest.php`
+- `api/tests/Unit/Shared/Monitoring/Infrastructure/Monolog/RequestUriRedactionProcessorTest.php`
 
 **Modificados**
 
+- `api/.audit-resource-types`
+- `api/config/services.yaml`
+- `api/features/backoffice/users/erase.feature`
 - `api/frankenphp/Caddyfile`
+- `api/src/Iam/Identity/Application/FulfilIdentityErasure.php`
 - `api/src/Iam/Identity/Domain/Repository/LiveIdentityDirectory.php`
 - `api/src/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListener.php`
 - `api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditResourceAnonymiser.php`
 - `api/src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php`
+- `api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php`
 - `api/src/Shared/Persistence/Infrastructure/DoctrineTransactionManager.php`
+- `api/tests/Support/AuditResourceTypeRegistry.php`
+- `api/tests/Unit/Iam/Identity/Application/FulfilIdentityErasure{,EventStore,ReferencePurge}Test.php`
+- `api/tests/Unit/Iam/Identity/Infrastructure/Cli/EraseIdentitySubjectCommandTest.php`
 - `api/tests/Unit/Shared/Architecture/CaddyfileAccessLogRedactionGateTest.php`
 - `api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php`
 - `api/tests/Unit/Shared/Architecture/PersonResourceErasureRulesGateTest.php`
 - `api/tests/Unit/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponderTest.php`
+- `api/tests/Unit/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubberTest.php`
 - `api/tests/Unit/Shared/Persistence/DoctrineTransactionManagerTest.php`
 - `docs/adr/audit-activity-log.md`
 - `docs/api-error-contract.md`
+- `docs/architecture-api.md`
 - `docs/deployment-guide.md`
+- `docs/rules/security.md`
+- `make/worktree.mk` — enlaza `_bmad` en los worktrees. **Ajeno a los cuatro issues**, y así queda dicho: sin él ninguna skill `bmad-*` arranca dentro de un worktree, que es donde se desarrolló esta historia
+- `pwa/next.config.ts`
 - `pwa/src/app/backoffice/audit/_lib/auditFilter.ts`
 - `pwa/src/app/backoffice/audit/_lib/auditUrlState.ts`
+- `pwa/src/context/shared/observability/domain/redaction.ts`
+- `pwa/src/context/shared/observability/infrastructure/scrubSentryEvent.ts`
+- `pwa/tests/context/shared/observability/infrastructure/scrubSentryEvent.test.ts`
 - `PRODUCTION_SECURITY_CHECKLIST.md`
 - `_bmad-output/implementation-artifacts/deferred-work.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/planning-artifacts/epics-backlog-resolution.md`
 
 ### Gates (corridas frescas, exit code impreso)
 
@@ -448,9 +481,40 @@ ventana de autovacuum.
 | `make db.validate` (schema in sync) | 0 |
 | `make db.diff` posterior | «No changes detected» (sin deriva) |
 
+**Segunda tanda, tras el merge de `main` (#647) y el trabajo de la tercera vuelta** — corridas frescas,
+2026-08-07:
+
+| Gate | Exit |
+|---|---|
+| `make php.quality.dry-run` → PHPStan | 0 («No errors») |
+| `make php.deptrac` | 0 (0 violaciones, 0 errores) |
+| `make php.unit` (2402 tests, 9935 aserciones) | 0 |
+| `make pwa.quality` | 0 |
+| `make pwa.test.unit` (227 ficheros) | 0 |
+| `make php.lint.error-contract` | 0 |
+| `make php.lint.person-reference` | 0 |
+| `make php.lint.audit-resource` | 0 |
+
+Los 2 `PHPUnit Notices` son los preexistentes ya declarados (`DoctrineSessionRepositoryStoreUnavailableTest`,
+mocks sin expectativas), y no son de este diff.
+
+**`php.quality.dry-run` queda ROJO, y no por PHPStan.** Rector marca un único fichero,
+`api/tests/Functional/Shared/Audit/AuditSubjectRowLockFunctionalTest.php:75`
+(`FlipTypeControlToUseExclusiveTypeRector`), que llegó con el trabajo del orden de bloqueo desde una segunda
+sesión compartiendo este worktree. Se midió **después** de que esa sesión lo commiteara, así que no es un
+estado en vuelo: es la rama. Como CI corre `quality.dry-run` (check-only, no arregla), **la rama va a fallar
+CI hasta que se pase el fixer** — `make php.quality` lo resuelve solo.
+
 ### Pase adversarial (AC5) — PARCIAL, registrado aquí
 
-**Estado: INCOMPLETO. El PR se abre en draft y NO debe promoverse hasta cerrarlo.**
+**Estado: COMPLETO** (cerrado en la tercera vuelta, más abajo). Las dos primeras vueltas quedan escritas
+porque su recorrido explica qué ángulos NO se habían cubierto y por qué la tercera encontró lo que encontró.
+
+**Nota de proceso, sin resolver.** AC5 dice «el PR se abre en draft y el pase lo promueve». Sergio no usa
+draft nunca, así que el mecanismo del gate de `CLAUDE.md` no encaja con su práctica y el PR se abrió normal.
+La sustancia del gate —la lectura hostil por alguien ajeno al autor, y dónde queda registrada— sí se cumple,
+aquí. **Queda abierto qué sustituye al draft**: registrar el pase antes de abrir, una etiqueta o check
+bloqueante, u otra cosa; y reescribir después esa parte de `CLAUDE.md`, que hoy contradice cómo trabaja.
 
 Lanzados cuatro lectores hostiles read-only en contexto fresco (2026-08-06). **Tres murieron por límite de
 sesión** (#389 sumideros, #565 tripwire+503, crítico de completitud). Sobrevivió uno, que enumeró
@@ -513,8 +577,44 @@ declarados.
 | El centinela no permite re-identificar | NO-HALLAZGO | Coincide con el diseño. |
 | Lista finita en Caddy | MENOR | Mismo asunto que el conteo sintáctico. |
 
-**Pendiente antes de sacar el PR de draft:** la revisión AC-por-AC del crítico de completitud, que sigue sin
-ejecutarla nadie ajeno al autor.
+### Tercera vuelta (2026-08-07) — dos lectores hostiles en contexto fresco, read-only
+
+Los dos ángulos que faltaban se ejecutaron por fin **fuera del contexto del autor**: un crítico de
+completitud con veredicto AC-por-AC, y una re-lectura hostil de la enumeración de sumideros (#389) y del
+tripwire + la traducción 503 (#565). Ninguno de los dos tenía la medición del otro. **Con esto el gate de
+AC5 queda satisfecho**, y aquí es donde está registrado.
+
+**El pre-vuelo de la sesión encontró antes que ellos el hallazgo que más cambia la disposición:** `main`
+avanzó a `aede857d` (#647) *después* del merge que traía la rama, y añade dos escritores del eje
+recurso-persona — `ChangeUserRoles.php:160` e `InviteUser.php:72`, ambos
+`AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, …)`. El tripwire disparó exactamente como
+fue escrito (`make php.unit` exit 2, `filesDerivingType('User')` = 3 ficheros), y con él **murió el argumento
+de inalcanzabilidad de #565**: el admin A degrada a B y el admin B degrada a A producen el par recíproco, y
+ninguna de las dos filas es destructiva, así que coexisten. #565 pasa de «cerrar como no alcanzable» a
+**real y arreglado** por el orden de bloqueo determinista.
+
+| # | Sev. | Hallazgo | Disposición |
+|---|---|---|---|
+| 1 | **GRAVE** | El `Referer` reproduce la URL entera de auditoría **en la misma línea** del access log cuya `uri` este PR redacta. Caddy loguea cabeceras por defecto y solo censura las de credencial | **ARREGLADO.** `request>headers>Referer delete` + `Referrer-Policy: no-referrer` en `/backoffice/audit`. Medido: antes 3 apariciones del id sonda, después 0, con las dos líneas aún emitidas |
+| 2 | **GRAVE** | `RouterListener` (en `vendor/`) vuelca `request_uri => getUri()` con query al canal `request`; en prod el buffer `fingers_crossed` lo descarga al json-file sin dueño ante cualquier 5xx | **ARREGLADO.** `RequestUriRedactionProcessor` sobre **cualquier** registro con `request_uri`, no sobre el emisor: el emisor vive en `vendor/` y un barrido de `api/src` no lo ve |
+| 3 | **GRAVE** | #647 hace alcanzable el ABBA de #565 | **ARREGLADO** por el orden de bloqueo determinista (commits `31600e76`, `83c54a7e`) |
+| 4 | SERIO | Sentry recibe `request.url` y `request.query_string` sin redactar los ejes de identidad; `parse_str()` anida `filters[0][value]` en claves que ninguna regla casa | **ARREGLADO** en los dos deployables, compartiendo el vocabulario de URIs |
+| 5 | SERIO | El gate de migraciones indexa columnas **por nombre ignorando la tabla** (last-wins) | **ARREGLADO**: clave `<tabla>.<columna>`. Falsificado: ciego a la tabla, el fixture de dos tablas devuelve `[]` |
+| 6 | SERIO | El mismo gate lee `up()` y `down()` sin distinguir → rojo falso al primer `DROP COLUMN` | **ARREGLADO**: solo `up()`. Falsificado: 1 rojo, el `down()` volviéndose falso positivo |
+| 7 | SERIO | «El gate deriva el rango del fichero» se apoyaba en 4 rutas escritas a mano | **ARREGLADO**: descubrimiento por árbol. Falsificado con un builder sintético de 10 ejes |
+| 8 | SERIO | Los docblocks del PWA afirmaban el sumidero cerrado mientras el checklist del mismo commit lo registra abierto | **ARREGLADO**: los tres docs dicen qué está cerrado, por qué vía, y qué sigue abierto |
+| 9 | SERIO | El doc y el docblock prometen que el SQLSTATE sobrevive en la línea de log; `buildLogContext` no recorre `previous` | **CORREGIDA LA AFIRMACIÓN**, no el código: ensanchar la línea metería la sentencia fallida en el log, y los dos estados comparten respuesta y remedio |
+| 10 | MENOR | File List incompleta en ambas direcciones; «8 fixtures» eran 11 | **ARREGLADO** abajo (hoy 14) |
+| 11 | MENOR | `docs/rules/security.md:61` decía que Caddy redacta solo `token` | **ARREGLADO** |
+| 12 | MENOR | El tripwire no vigila un tipo NUEVO que también denote persona y esté mal clasificado `non-person` | **NO ARREGLADO, declarado.** El registro ya dice en cabecera que nunca juzga la clasificación; solo el review cubre esa dirección |
+| 13 | MENOR | La traducción 503 no alcanza 11 sitios que abren transacción fuera del seam | **YA DECLARADO** en el docblock y en el doc: es la deuda grandfathered que el seam existe para absorber |
+
+**Lo que los dos lectores dieron por sólido**, para que se sepa qué se cubrió: la redacción de índices del
+Caddyfile y su ausencia de huecos; que un único Caddyfile sirve dev y prod; la falsificabilidad de
+`RequestUriRedaction` y de la traducción retryable; que el tripwire no está verde por un fallo del barrido;
+la refutación del «default es fail-open»; el cableado RFC 9457 de `TransientTransactionFailure`; que
+`deferred-work.md` queda pending-only; y que no hay IDs de historia ni comentarios relativos al cambio en
+`api/src`, `pwa/src` ni tests.
 
 ### Change Log
 
