@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
+use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use Override;
 
 /**
@@ -25,6 +26,9 @@ final class InMemoryPasswordResetTokenRepository implements PasswordResetTokenRe
 
     /** @var list<string> userIds passed to deleteAllForUser */
     public array $deleteAllForUserCalls = [];
+
+    /** Set when a test is asserting WHERE this table's lock falls among the others. */
+    public ?LockOrderJournal $lockOrderJournal = null;
 
     /** @var array<string, PasswordResetToken> */
     private array $byId = [];
@@ -46,6 +50,8 @@ final class InMemoryPasswordResetTokenRepository implements PasswordResetTokenRe
     #[Override]
     public function consume(PasswordResetToken $token): bool
     {
+        $this->lockOrderJournal?->locked(LockOrderJournal::PASSWORD_RESET_TOKEN);
+
         $id = $token->getId();
 
         if (null === $id || !isset($this->byId[$id])) {
@@ -67,11 +73,15 @@ final class InMemoryPasswordResetTokenRepository implements PasswordResetTokenRe
     #[Override]
     public function deleteAllForUser(string $userId): int
     {
+        $this->lockOrderJournal?->locked(LockOrderJournal::PASSWORD_RESET_TOKEN);
+
         $this->deleteAllForUserCalls[] = $userId;
         $deleted = 0;
 
         foreach ($this->byId as $key => $token) {
-            if ($token->userId() === $userId) {
+            // Case-insensitive like the Postgres `uuid` column the real adapter matches on; a `!==` here would
+            // make the double STRICTER than production, and no test could fail on the difference.
+            if (0 === \strcasecmp($token->userId(), $userId)) {
                 unset($this->byId[$key]);
                 ++$deleted;
             }

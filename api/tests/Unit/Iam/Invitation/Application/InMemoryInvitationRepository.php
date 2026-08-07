@@ -8,6 +8,7 @@ use Closure;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
+use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use Override;
 
 /**
@@ -33,6 +34,18 @@ final class InMemoryInvitationRepository implements InvitationRepository
 
     /** @var list<string> */
     public array $unlockedReads = [];
+
+    /**
+     * userIds passed to the directed bulk delete. Recorded separately from the reads because the erasure
+     * reaches this table by no other route, so "was this table touched at all" is a question only this
+     * answers.
+     *
+     * @var list<string>
+     */
+    public array $deleteAllForInvitedUserCalls = [];
+
+    /** Set when a test is asserting WHERE this table's lock falls among the others. */
+    public ?LockOrderJournal $lockOrderJournal = null;
 
     /**
      * Invoked before each {@see save()} with the invitation about to be written, so a test can make the n-th
@@ -82,6 +95,8 @@ final class InMemoryInvitationRepository implements InvitationRepository
     #[Override]
     public function findByIdForUpdate(string $id): ?Invitation
     {
+        $this->lockOrderJournal?->locked(LockOrderJournal::IAM_INVITATION);
+
         $this->lockedReads[] = $id;
 
         return $this->byId[\strtolower($id)] ?? null;
@@ -98,6 +113,8 @@ final class InMemoryInvitationRepository implements InvitationRepository
     #[Override]
     public function findSentByInvitedUserForUpdate(string $userId): array
     {
+        $this->lockOrderJournal?->locked(LockOrderJournal::IAM_INVITATION);
+
         return \array_values(\array_filter(
             $this->byId,
             static fn (Invitation $invitation): bool => InvitationStatus::SENT === $invitation->status()
@@ -112,6 +129,9 @@ final class InMemoryInvitationRepository implements InvitationRepository
     #[Override]
     public function deleteAllForInvitedUser(string $userId): int
     {
+        $this->lockOrderJournal?->locked(LockOrderJournal::IAM_INVITATION);
+
+        $this->deleteAllForInvitedUserCalls[] = $userId;
         $deleted = 0;
 
         foreach ($this->byId as $id => $invitation) {

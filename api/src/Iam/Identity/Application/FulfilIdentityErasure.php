@@ -22,20 +22,32 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 /**
  * Fulfils a GDPR "right to erasure" request against one subject as a single atomic operation — the identity
  * and its audit trail are de-identified as one unit. It chains, in one transaction: the administrator refusal,
- * the identity erasure ({@see EraseIdentitySubject} — its own transaction nests and joins), the audit-trail
+ * the hard-delete of every invitation addressed to the subject ({@see PurgeUserInvitations}), the identity
+ * erasure ({@see EraseIdentitySubject} — its own transaction nests and joins), the audit-trail
  * anonymisation across **both** axes ({@see AuditSubjectTrailErasure} — rows the subject authored and rows
  * that name them, locked as one set before either is rewritten), whose DBAL runs on the same Connection the
  * EntityManager wraps, so they commit or roll back with the rest, the anonymisation of the reproducible
  * business log ({@see EventStoreSubjectAnonymiser}, run only for a subject whose identity was live), the
- * hard-delete of the subject's sessions ({@see PurgeUserSessions}), of the membership that admitted them
- * ({@see PurgeUserMembership}) and of every invitation addressed to them ({@see PurgeUserInvitations}), and
- * the combined compliance self-audit.
+ * hard-delete of the subject's sessions ({@see PurgeUserSessions}) and of the membership that admitted them
+ * ({@see PurgeUserMembership}), and the combined compliance self-audit.
  *
- * The last two are here for the same reason as the sessions: no column in the schema references
+ * **The invitations lead rather than joining the other two purges, and that position is load-bearing.** The
+ * accept and revoke paths lock `iam_invitation` before `identity_user` and cannot do otherwise — an accept
+ * arrives holding a token and learns the identity only from the invitation it has already locked. This chain
+ * knows the subject before the transaction opens, so it is the member with the freedom to conform, and the
+ * order it settles on — invitation, identity, reset token — is the one every other path already agrees with.
+ * `ErasureLockOrderTest` and its functional sibling are what hold it there, one over the use cases and one
+ * over the real adapters; nothing in the rest of the suite goes red on a reordering.
+ *
+ * It leads the purges but still follows the administrator refusal, and that is not a compromise between the
+ * two: a purge in front of the guard would take write locks on behalf of a transaction about to abort, and
+ * the contention would fall on the very pair the ordering above exists to keep apart. The rollback would hide
+ * the damage; the waiting would not.
+ *
+ * The three purges are here for the same reason as each other: no column in the schema references
  * `identity_user`, so deleting that row cascades nowhere and every reference owes its removal to a use case
- * rather than to a constraint. Until now these two had none, so the subject's real id simply stayed
- * behind. Each is consumed as its owning context's published use case — the person's context
- * orchestrates the erasure, but never reaches into how another context stores what it owns.
+ * rather than to a constraint. Each is consumed as its owning context's published use case — the person's
+ * context orchestrates the erasure, but never reaches into how another context stores what it owns.
  *
  * Both axes are erased **here**, by the context that owns the person, rather than inside one shared
  * anonymiser: `docs/adr/audit-activity-log.md` D4 assigns erasure of a person-denoting resource to the
@@ -134,6 +146,10 @@ final readonly class FulfilIdentityErasure
                     throw AdministratorErasureRequiresDemotion::forUser($subjectId);
                 }
 
+                // First of the three tables and last of the preconditions — see the class docblock for why
+                // this chain is the member that conforms, and why the refusal still comes first.
+                $invitationsDeleted = $this->purgeUserInvitations->purge($subjectId);
+
                 // One value, three uses: the axis lock, the compliance entry's resource, and the pass that
                 // clears it. Whoever writes the subject's real id into the trail is the one that clears it,
                 // and they cannot disagree about which resource that is because there is only one to
@@ -165,7 +181,7 @@ final readonly class FulfilIdentityErasure
                     $subjectId,
                     $anonymisation->pseudonym,
                 );
-                [$sessionsDeleted, $membershipsDeleted, $invitationsDeleted] = $this->purgeReferences($subjectId);
+                [$sessionsDeleted, $membershipsDeleted] = $this->purgeReferences($subjectId);
 
                 $result = new FulfilIdentityErasureResult(
                     $identity->identityErased,
@@ -218,20 +234,22 @@ final readonly class FulfilIdentityErasure
     }
 
     /**
-     * The three references to the subject that no constraint removes. None has a physical foreign key —
-     * sessions live in this context, the membership and the invitations cross a bounded context, so integrity
-     * is by id — and nothing cascades when the identity row goes. Without these the subject's real id survives
-     * their own erasure in the session store, in the membership that admitted them, and in every invitation
-     * addressed to them.
+     * The references to the subject that no constraint removes and whose position is free. Neither has a
+     * physical foreign key — sessions live in this context, the membership crosses a bounded context, so
+     * integrity is by id — and nothing cascades when the identity row goes. Without these the subject's real
+     * id survives their own erasure in the session store and in the membership that admitted them.
      *
-     * @return array{int, int, int} sessions, memberships and invitations deleted, in that order
+     * The invitations are the same kind of reference and are purged by the same chain, but not from here:
+     * their table is one end of a lock order this chain has to respect, so the statement is placed by that
+     * order rather than by the family it belongs to.
+     *
+     * @return array{int, int} sessions and memberships deleted, in that order
      */
     private function purgeReferences(string $subjectId): array
     {
         return [
             $this->purgeUserSessions->purge($subjectId),
             $this->purgeUserMembership->purge($subjectId),
-            $this->purgeUserInvitations->purge($subjectId),
         ];
     }
 

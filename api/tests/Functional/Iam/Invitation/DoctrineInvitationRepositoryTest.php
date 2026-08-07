@@ -126,8 +126,8 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
             // Runs inside a transaction — this one does — because `FOR UPDATE` needs the lock held to commit.
             $revocable = $this->repository->findSentByInvitedUserForUpdate($userId);
 
-            // Sorted on both sides: the query declares no ORDER BY, so which of the two comes first is
-            // Postgres's business and asserting it would pin a detail the caller does not depend on.
+            // Sorted on both sides: membership of the set is this test's whole claim, and comparing it
+            // order-free keeps it from going red for the reason the sibling below owns.
             $foundIds = \array_map(static fn (Invitation $found): ?string => $found->getId(), $revocable);
             \sort($foundIds);
             $expectedIds = [$live->getId(), $secondLive->getId()];
@@ -136,6 +136,42 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
             $this->assertCount(2, $revocable);
             $this->assertSame($expectedIds, $foundIds);
             $this->assertSame([], $this->repository->findSentByInvitedUserForUpdate(Uuid::generate()));
+        });
+    }
+
+    public function testTheRevocableSetComesBackAscendingByIdWhateverOrderItWasWrittenIn(): void
+    {
+        // This is the only read in the adapter that locks a SET, and Postgres guarantees no scan order across
+        // plans — so two concurrent revocations of the same invitee can walk the same rows in opposite
+        // directions and deadlock on each other. The ordering clause is what forbids that, and nothing else
+        // in the suite goes red if it is deleted: the membership assertion above sorts both sides, the
+        // `pg_locks` sibling below sees its RowShareLock either way, and no caller reads the order.
+        //
+        // The rows are written in DESCENDING id order on purpose. Unsorted, the scan returns them the way it
+        // finds them — insertion order on a freshly truncated table — so the expectation and the accident
+        // point in opposite directions and the assertion can only pass because of the clause.
+        $this->inRolledBackTransaction(function (): void {
+            $userId = Uuid::generate();
+            $ascendingIds = [Uuid::generate(), Uuid::generate(), Uuid::generate()];
+            \sort($ascendingIds);
+
+            foreach (\array_reverse($ascendingIds) as $invitationId) {
+                $invitation = $this->invitationFor($userId, $invitationId);
+                $invitation->markSent();
+                $this->repository->save($invitation);
+            }
+
+            $this->entityManager->clear();
+
+            $revocable = $this->repository->findSentByInvitedUserForUpdate($userId);
+
+            $this->assertCount(3, $revocable, 'the seed inserted nothing, so the order below proves nothing');
+            $this->assertSame(
+                $ascendingIds,
+                \array_map(static fn (Invitation $found): ?string => $found->getId(), $revocable),
+                'findSentByInvitedUserForUpdate must lock the set in a fixed direction — without ORDER BY, two '
+                . 'concurrent revocations of one invitee can acquire the same rows in opposite orders.',
+            );
         });
     }
 
@@ -192,10 +228,15 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
         return \is_numeric($count) ? (int) $count : -1;
     }
 
-    private function invitationFor(string $userId): Invitation
+    private function invitationFor(string $userId, ?string $invitationId = null): Invitation
     {
         $generated = SingleUseToken::mint(new DateTimeImmutable('2026-07-21T13:00:00+00:00'));
-        $invitation = Invitation::create(Uuid::generate(), Uuid::generate(), $userId, $generated->token);
+        $invitation = Invitation::create(
+            $invitationId ?? Uuid::generate(),
+            Uuid::generate(),
+            $userId,
+            $generated->token,
+        );
         $invitation->pullDomainEvents();
 
         return $invitation;

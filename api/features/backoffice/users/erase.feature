@@ -88,12 +88,15 @@ Feature: Erase an identity (GDPR right to erasure)
     # every assertion above while destroying the trace this table exists to keep.
     And I execute the SQL query "SELECT event_id FROM event_store WHERE (event_id = '0190f200-0000-7000-8000-00000000ea01' AND event_name = 'erpify.iam.identity.suspended' AND aggregate_version = 1) OR (event_id = '0190f200-0000-7000-8000-00000000ea02' AND event_name = 'erpify.iam.invitation.created' AND jsonb_exists(payload, 'invitedUserId')) OR (event_id = '0190f200-0000-7000-8000-00000000ea03' AND event_name = 'erpify.iam.invitation.accepted' AND jsonb_exists(metadata, 'actor'))"
     And there should have 3 records in SQL result
-    # Budget canary (19 on "default"). In one transaction (+2 BEGIN/COMMIT): the administrator-role EXISTS
-    # probe, the reset-token delete, the identity find and delete, the two-axis row lock, the actor-axis
+    # Budget canary (19 on "default"). In one transaction (+2 BEGIN/COMMIT), in acquisition order: the
+    # administrator-role EXISTS probe, the invitation delete, the identity find and delete, the reset-token
+    # delete, the two-axis row lock, the actor-axis
     # anonymisation UPDATE, the
     # GDPR_SUBJECT_ERASED insert, the resource-axis anonymisation UPDATE, the event-store anonymisation UPDATE,
-    # the session delete, the membership delete, the invitation delete and the GDPR_ERASURE_EXECUTED insert
-    # (= 15). The row lock is the one that is pure cost: it rewrites nothing and exists only to fix the order
+    # the session delete, the membership delete and the GDPR_ERASURE_EXECUTED insert
+    # (= 15). The three table-touching deletes are listed in the order they run because that order is itself an
+    # invariant — see ErasureLockOrderTest — so a reader re-deriving the chain from this list gets the lock
+    # graph right rather than only the count. The row lock is the one that is pure cost: it rewrites nothing and exists only to fix the order
     # in which the two axis UPDATEs take their rows, so that two concurrent erasures of subjects who acted on
     # each other cannot take the same pair in opposite directions. Paying a round trip per erasure is the
     # price of that, and an erasure is rare enough that the trade is not close.

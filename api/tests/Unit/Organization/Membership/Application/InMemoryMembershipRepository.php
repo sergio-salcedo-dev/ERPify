@@ -18,6 +18,14 @@ final class InMemoryMembershipRepository implements MembershipRepository
 {
     public bool $removeCalled = false;
 
+    /**
+     * userIds passed to the directed bulk delete. Recorded rather than inferred from the store, because "the
+     * statement never ran" and "it ran and matched nothing" are the same empty store and a different claim.
+     *
+     * @var list<string>
+     */
+    public array $deleteAllForUserCalls = [];
+
     /** @var list<Membership> */
     public array $saved = [];
 
@@ -51,6 +59,8 @@ final class InMemoryMembershipRepository implements MembershipRepository
     #[Override]
     public function deleteAllForUser(string $userId): int
     {
+        $this->deleteAllForUserCalls[] = $userId;
+
         $remaining = \array_values(\array_filter(
             $this->saved,
             static fn (Membership $m): bool => 0 !== \strcasecmp($m->userId(), $userId),

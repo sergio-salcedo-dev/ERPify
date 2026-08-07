@@ -8,6 +8,7 @@ use Closure;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
+use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use Override;
 
 /**
@@ -38,6 +39,12 @@ final class InMemoryUserRepository implements UserRepository
     /** Runs at the locked re-fetch, so a test can commit a rival write at exactly the TOCTOU moment. */
     public ?Closure $onFindByIdForUpdate = null;
 
+    /**
+     * Set when a test is asserting WHERE this table's lock falls among the others. Both members below write
+     * to it, because both take the row lock: the locked re-fetch explicitly, and the delete implicitly.
+     */
+    public ?LockOrderJournal $lockOrderJournal = null;
+
     public function __construct(private readonly ?User $preset = null)
     {
     }
@@ -51,6 +58,8 @@ final class InMemoryUserRepository implements UserRepository
     #[Override]
     public function remove(User $user): void
     {
+        $this->lockOrderJournal?->locked(LockOrderJournal::IDENTITY_USER);
+
         $this->removeCalled = true;
     }
 
@@ -63,6 +72,8 @@ final class InMemoryUserRepository implements UserRepository
     #[Override]
     public function findByIdForUpdate(string $id): ?User
     {
+        $this->lockOrderJournal?->locked(LockOrderJournal::IDENTITY_USER);
+
         $this->forUpdateCalls[] = $id;
 
         if ($this->onFindByIdForUpdate instanceof Closure) {

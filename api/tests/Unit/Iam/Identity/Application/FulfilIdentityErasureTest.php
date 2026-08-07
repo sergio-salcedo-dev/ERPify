@@ -189,6 +189,11 @@ final class FulfilIdentityErasureTest extends TestCase
         $audit = new RecordingAuditLogger();
         $anonymiser = new RecordingAuditActorAnonymiser(matchCount: 3);
         $sessions = new InMemorySessionRepository();
+        // The two links that cross a bounded context. They are asserted here for the same reason as the
+        // sessions: "nothing is touched" is a claim about EVERY link of the chain, and a list that names only
+        // some of them reads as exhaustive while leaving the rest free to run.
+        $memberships = new InMemoryMembershipRepository();
+        $invitations = new InMemoryInvitationRepository();
         // A peer administrator remains, so the "keep ≥1 active ADMIN" invariant is not what refuses this.
         $directory = new InMemoryActiveAdministratorDirectory([
             UserMother::DEFAULT_ID => true,
@@ -203,6 +208,8 @@ final class FulfilIdentityErasureTest extends TestCase
                 $anonymiser,
                 $sessions,
                 $directory,
+                memberships: $memberships,
+                invitations: $invitations,
             )->execute(UserMother::DEFAULT_ID);
             $this->fail('Expected AdministratorErasureRequiresDemotion.');
         } catch (AdministratorErasureRequiresDemotion) {
@@ -212,6 +219,8 @@ final class FulfilIdentityErasureTest extends TestCase
         $this->assertFalse($users->removeCalled);
         $this->assertSame([], $anonymiser->anonymisedActorIds);
         $this->assertSame([], $sessions->deleteAllCalls);
+        $this->assertSame([], $memberships->deleteAllForUserCalls);
+        $this->assertSame([], $invitations->deleteAllForInvitedUserCalls);
         $this->assertSame([], $audit->records);
     }
 
