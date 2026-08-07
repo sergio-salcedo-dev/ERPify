@@ -34,7 +34,9 @@ Feature: Invite a member from the console
     # The roles an invitation grants are recorded against the invited subject, so the console's two delegation
     # paths leave the same kind of evidence: without it, minting a second administrator off the record would be
     # a matter of inviting one rather than promoting one.
-    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_GRANTED' AND level = 'security' AND resource_type = 'User' AND metadata = jsonb_build_object('previous_roles', jsonb_build_array(), 'new_roles', jsonb_build_array('EDITOR'))"
+    # `resource_id` is asserted, not just the metadata: without it the row could name the acting administrator
+    # as its subject and the scenario would still pass, which is the half of the claim that matters.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_GRANTED' AND level = 'security' AND resource_type = 'User' AND resource_id = (SELECT id FROM identity_user WHERE email = 'newbie@erpify.test') AND metadata = jsonb_build_object('previous_roles', jsonb_build_array(), 'new_roles', jsonb_build_array('EDITOR'))"
     And there should have 1 records in SQL result
     # The wrapped write's query budget (auth/admission lookups are excluded from the counter): the atomic
     # onboarding funnels through three contexts — identity, membership and invitation — and each aggregate's

@@ -63,6 +63,23 @@ final class RevokeInvitationTest extends TestCase
     }
 
     #[Test]
+    public function itTakesTheRowLockBeforeRevokingById(): void
+    {
+        // The by-id entry point is the one that reached the aggregate through an unlocked read, and no other
+        // assertion can see the difference: both lookups return the same row. What the lock buys is that a
+        // concurrent accept cannot commit between the load and the write — without it the entity still reads
+        // `SENT`, the aggregate's own guard passes on stale state, and the update overwrites `ACCEPTED` with
+        // `REVOKED` while the identity's own locked read finds `ACTIVE` and leaves the pair disagreeing.
+        $invitation = $this->sentInvitation();
+        $invitations = new InMemoryInvitationRepository($invitation);
+
+        $this->revoker($invitations, new RecordingEventBus())->revoke(self::INVITATION_ID);
+
+        $this->assertSame([self::INVITATION_ID], $invitations->lockedReads);
+        $this->assertSame([], $invitations->unlockedReads);
+    }
+
+    #[Test]
     public function itRejectsAMissingInvitationAsNotFound(): void
     {
         $invitations = new InMemoryInvitationRepository();

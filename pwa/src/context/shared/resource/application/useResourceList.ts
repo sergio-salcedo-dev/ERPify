@@ -169,12 +169,18 @@ export function useResourceList<T extends { id: string }, F, TInput>(
         setProblem(nextProblem);
         setState(ViewStatus.ERROR);
       } finally {
+        // The flag is cleared whichever load settles, because a retired one still owns it: leaving it set
+        // would let a reconcile asked for against the abandoned query drain into the next one, issuing a
+        // silent read nobody requested. Only the current load re-issues — a retired closure would re-run the
+        // query the user has just left.
+        const pendingSilentReload = pendingSilentReloadRef.current;
+        pendingSilentReloadRef.current = false;
+
         if (seq === seqRef.current) {
           reloadingRef.current = false;
-          // Drain a reconcile that arrived mid-flight. One at most, and only after this load settled, so a
-          // burst of triggers collapses into a single follow-up read instead of a queue of them.
-          if (pendingSilentReloadRef.current) {
-            pendingSilentReloadRef.current = false;
+          // One at most, and only after this load settled, so a burst of triggers collapses into a single
+          // follow-up read instead of a queue of them.
+          if (pendingSilentReload) {
             loadItems({ silent: true });
           }
         }

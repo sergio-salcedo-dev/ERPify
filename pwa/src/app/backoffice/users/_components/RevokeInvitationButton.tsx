@@ -101,7 +101,8 @@ export function RevokeInvitationButton({
               <DialogDescription className="text-base leading-relaxed">
                 The emailed link stops working immediately and{" "}
                 <span className="text-foreground font-semibold break-words">{email}</span> is
-                withdrawn as Revoked — they can never sign in with it. This cannot be undone.
+                withdrawn as Revoked — they can never sign in with it. This cannot be undone, and
+                the address stays taken: re-inviting it is refused until the revoked user is erased.
               </DialogDescription>
             </div>
           </div>

@@ -21,9 +21,6 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
- * @internal
- */
-/**
  * One test per admission arm, and the arms are the contract: which lifecycle states are walled, on which side
  * of credential verification, and which of them pay the timing floor. The method count and the object coupling
  * both track the size of that table — every exception in it is referenced by name on purpose — so they are

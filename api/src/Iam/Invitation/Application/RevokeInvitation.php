@@ -43,6 +43,13 @@ final readonly class RevokeInvitation
     }
 
     /**
+     * The read takes the row lock for the same reason {@see revokeForInvitedUser()}'s does, and it is not
+     * optional here either: an unlocked read hands a concurrent accept a lost update. The entity loaded before
+     * that accept commits still says `SENT`, so {@see Invitation::revoke()}'s guard passes on stale state and
+     * the `UPDATE` — carrying no `WHERE status` and no optimistic version — overwrites `ACCEPTED` with
+     * `REVOKED`, publishing a revocation of an invitation that was honoured. The identity's own locked read
+     * then finds it `ACTIVE` and leaves it alone, so the pair disagrees and the caller is told it succeeded.
+     *
      * @throws InvitationNotFound when the id resolves to no invitation
      * @throws UserNotFound       when the invitation names an identity that no longer exists — a desync no
      *                            write path produces, surfaced rather than swallowed
@@ -52,7 +59,8 @@ final readonly class RevokeInvitation
         Uuid::ensure($invitationId);
 
         $this->transactionManager->transactional(function () use ($invitationId): void {
-            $invitation = $this->invitations->findById($invitationId) ?? throw new InvitationNotFound($invitationId);
+            $invitation = $this->invitations->findByIdForUpdate($invitationId)
+                ?? throw new InvitationNotFound($invitationId);
 
             $this->revokeOne($invitation);
             $this->withdrawIdentity($invitation->invitedUserId());

@@ -22,6 +22,19 @@ final class InMemoryInvitationRepository implements InvitationRepository
     public array $saved = [];
 
     /**
+     * Which read each flow took, by id. The two lookups return the same row, so nothing else in a unit test can
+     * tell them apart — and the difference is the whole guarantee: an unlocked read lets a concurrent accept
+     * commit between the load and the write, so a stale `SENT` passes the aggregate's own guard and the update
+     * overwrites it. Recording the mode is what lets a test go red when a lock is dropped.
+     *
+     * @var list<string>
+     */
+    public array $lockedReads = [];
+
+    /** @var list<string> */
+    public array $unlockedReads = [];
+
+    /**
      * Invoked before each {@see save()} with the invitation about to be written, so a test can make the n-th
      * write of a multi-row revocation fail and observe that the whole operation is undone. The hook sits on
      * the store rather than on the aggregate because that is where a real failure lives — a constraint or a
@@ -61,12 +74,16 @@ final class InMemoryInvitationRepository implements InvitationRepository
     #[Override]
     public function findById(string $id): ?Invitation
     {
+        $this->unlockedReads[] = $id;
+
         return $this->byId[\strtolower($id)] ?? null;
     }
 
     #[Override]
     public function findByIdForUpdate(string $id): ?Invitation
     {
+        $this->lockedReads[] = $id;
+
         return $this->byId[\strtolower($id)] ?? null;
     }
 

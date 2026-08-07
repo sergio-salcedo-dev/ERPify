@@ -67,14 +67,20 @@ final readonly class UserChecker implements UserCheckerInterface
             return;
         }
 
-        $status = $user->status();
+        // Enumerated rather than chained, for the reason `checkPreAuth` is: a state added later must fail the
+        // build instead of falling through. It is enumerated HERE as well because this is the hook that decides
+        // admission — `checkPreAuth` only asks whether the identity holds a credential, which is orthogonal, so
+        // a future state answering "it does" would satisfy that hook and reach a session unwalled.
+        $lifecycleWall = match ($user->status()) {
+            IdentityStatus::SUSPENDED => new SuspendedAccountException(),
+            IdentityStatus::DEACTIVATED => new DeactivatedAccountException(),
+            // Unreachable rather than admitted: both credential-less states are walled in `checkPreAuth`,
+            // which runs before any password verification and throws.
+            IdentityStatus::ACTIVE, IdentityStatus::INVITED, IdentityStatus::REVOKED => null,
+        };
 
-        if (IdentityStatus::SUSPENDED === $status) {
-            throw new SuspendedAccountException();
-        }
-
-        if (IdentityStatus::DEACTIVATED === $status) {
-            throw new DeactivatedAccountException();
+        if (null !== $lifecycleWall) {
+            throw $lifecycleWall;
         }
 
         // The lock arm runs LAST: a lifecycle wall (SUSPENDED/DEACTIVATED) precedes the transient lockout, so a

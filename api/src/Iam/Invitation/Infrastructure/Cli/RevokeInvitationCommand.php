@@ -17,8 +17,12 @@ use Throwable;
 /**
  * Revokes a live invitation by id: its delivered token stops working at once AND the identity it provisioned is
  * withdrawn to `REVOKED`, in the same transaction. That second write is terminal — a withdrawn identity can
- * never activate, and the address it holds can never be invited again — so this is not a reversible cleanup of
- * a delivery record. A thin adapter over {@see RevokeInvitation}.
+ * never activate — so this is not a reversible cleanup of a delivery record.
+ *
+ * The withdrawn row keeps the address, and `identity_user.email` is unique, so re-inviting it is refused while
+ * that row stands. Recovering the address is possible but is not an undo: it takes erasing the identity, which
+ * is itself refused while the row carries `ADMIN`, so the sequence is demote, then erase, then invite again.
+ * A thin adapter over {@see RevokeInvitation}.
  */
 #[AsCommand(
     name: 'iam:invitation:revoke',
