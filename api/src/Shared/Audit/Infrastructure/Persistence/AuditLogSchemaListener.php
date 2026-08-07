@@ -21,8 +21,14 @@ use Doctrine\ORM\Tools\ToolEvents;
  * (the enum, not the database, is the closed set). `ip` is `VARCHAR(45)` because DBAL models no `inet` type
  * and no query needs subnet operators.
  *
- * Column `DEFAULT` it does express, and the two erasure flags carry one. The writer still supplies every
- * value: a default is not how a row gets written, it is what a row written by the *previous image* gets. A
+ * Column `DEFAULT` it does express, and the two erasure flags carry one. **It cannot mask a forgotten
+ * erasure**, which is the objection this shape usually deserves and does not here: both flags are raised by
+ * an `UPDATE` in the erasure passes, never by an `INSERT`, and a column default only applies to an `INSERT`
+ * that omits the column. That is exactly why `identity_user.status` is the opposite call — the aggregate
+ * sets *that* one on insert, so a default there would swallow a write that forgot it.
+ *
+ * The writer still supplies every value: a default is not how a row gets written, it is what a row written
+ * by the *previous image* gets. A
  * `NOT NULL` column with no default breaks every `INSERT` issued by code that predates the column, and
  * redeploying the previous image tag — the documented rollback in `docs/deployment-guide.md` — does not undo
  * the migration with it, because `down()` never runs. On this table that is not a degraded

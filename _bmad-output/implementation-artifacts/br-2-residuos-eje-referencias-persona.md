@@ -495,8 +495,26 @@ puede alcanzarlo porque es otro proceso. Medido en dev; prod corre el standalone
 observó pero **tampoco se verificó**. Registrado como residual abierto en `PRODUCTION_SECURITY_CHECKLIST.md`
 §7 — no como cerrado.
 
-**Pendiente antes de sacar el PR de draft:** la revisión AC-por-AC del crítico de completitud, que es el
-ángulo que no se ha ejecutado por nadie.
+**Segunda vuelta: lectura hostil externa (modelo distinto, sin acceso al repo).** Prompt autocontenido en
+`tmp/bmad-md/consult-br2-adversarial-pass-*.md`. Diez hallazgos. **Cada escenario se verificó contra el
+código antes de aceptarlo o rechazarlo** — dos se aceptaron, uno se refutó con evidencia, el resto ya estaban
+declarados.
+
+| # | Veredicto del revisor | Qué pasó al medirlo |
+|---|---|---|
+| **Gate de migraciones demasiado estrecho** | SERIO | **CONFIRMADO y ARREGLADO.** `ADD COLUMN x BOOLEAN NOT NULL` sin default pasaba: la regla exigía la *pareja* `ADD … DEFAULT` + `DROP DEFAULT`, y esa es sólo la más idiomática de cuatro rutas al mismo estado final. Ahora la regla se define sobre el **estado que la migración deja**, no sobre la sintaxis: cubre también el `ADD` desnudo y el `ADD` nullable + `SET NOT NULL`. Reprovocado en rojo; las cuatro exenciones **no** crecieron. Mi docblock afirmaba que el caso cubierto era «el único decidible por barrido textual» — era falso y está corregido. |
+| **Bypass por doble codificación** | SERIO | **CONFIRMADO y ARREGLADO.** `filters%255B0%255D%255Bvalue%255D` sobrevivía a un solo `urldecode`. Ahora se decodifica hasta estabilizar, con tope de 4 pasadas. Explotabilidad real baja (el productor nunca doble-codifica, así que exige una URI fabricada por quien ya conoce el id), pero el coste del arreglo es de 4 líneas y el error cae del lado seguro. Probado en rojo antes del arreglo. |
+| **El default de `audit_log` es fail-open** | SERIO | **REFUTADO con evidencia.** El escenario confunde el `INSERT` con el `UPDATE`: los dos flags los pone a `TRUE` el borrado vía `UPDATE` (`DbalAuditActorAnonymiser:69`, `DbalAuditResourceAnonymiser:55`), y el `INSERT` escribe `FALSE` constante (`DbalAuditLogWriter:39`). Un default sólo actúa sobre un `INSERT` que omite la columna, así que no puede enmascarar un borrado olvidado. Y eso **explica** la asimetría con `identity_user.status`, que sí se fija en el `INSERT`. Escrito en el listener, porque es la pregunta que un revisor volverá a hacer. |
+| **503 no certifica que la petición sea repetible** | SERIO | **ACEPTADO como corrección del contrato.** Lo retryable era la *transacción*, no la operación HTTP. Documentado en `docs/api-error-contract.md`: 503 sigue siendo mejor respuesta que el 500 que sustituye, pero no es una garantía de idempotencia, y si aparece un caso de uso multi-transacción no idempotente el arreglo va en ese caso de uso. |
+| **Sumidero de Next abierto** | GRAVE | Ya registrado como residual abierto; el revisor coincide en que no observarlo en prod no prueba que no esté. Sin cambio: es la razón principal para no promover el draft. |
+| **El conteo de `filters.push(` es sintáctico** | SERIO | Punto ciego **ya declarado** en el docblock del gate. La alternativa que propone (filtro `regexp` de Caddy en vez de enumerar índices) se probó y se **descartó**: elimina el acantilado pero cambia el modo de fallo de «se escapa un índice» a «se escapa todo si la regex está mal». Queda como propuesta para decidir, no como cambio. |
+| **El tripwire no ve tipos derivados en runtime** | SERIO | Punto ciego **ya declarado**. Su propuesta de mover el invariante al *borde de escritura* de auditoría en vez de a los sitios de construcción es buena y queda anotada como propuesta. |
+| `RetryableException` más ancho que 40P01 | MENOR | Ya documentado; el `catch` es sobre el marcador de DBAL a propósito. |
+| El centinela no permite re-identificar | NO-HALLAZGO | Coincide con el diseño. |
+| Lista finita en Caddy | MENOR | Mismo asunto que el conteo sintáctico. |
+
+**Pendiente antes de sacar el PR de draft:** la revisión AC-por-AC del crítico de completitud, que sigue sin
+ejecutarla nadie ajeno al autor.
 
 ### Change Log
 

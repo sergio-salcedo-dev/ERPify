@@ -28,6 +28,18 @@ final class RequestUriRedactionTest extends TestCase
      */
     public static function provideItReplacesTheSensitiveValueAndKeepsItsKeyCases(): iterable
     {
+        yield from self::namedKeyCases();
+        yield from self::searchGrammarCases();
+    }
+
+    /**
+     * Axes addressed by their own parameter name — the secrets, and the identity axes the audit screen puts
+     * in the document URL.
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    private static function namedKeyCases(): iterable
+    {
         yield 'single-use invitation/reset secret' => [
             '/accept-invitation?token=019f.aSecret',
             '/accept-invitation?token=REDACTED',
@@ -58,6 +70,20 @@ final class RequestUriRedactionTest extends TestCase
             '/api/v1/backoffice/audit?ACTORID=REDACTED&ResourceId=REDACTED',
         ];
 
+        yield 'denylisted key as a substring' => [
+            '/api/v1/backoffice/users?holder_email=someone@example.test',
+            '/api/v1/backoffice/users?holder_email=REDACTED',
+        ];
+    }
+
+    /**
+     * The positional search grammar, which carries the same identities under a key no name-based rule
+     * reaches. These are the cases the Caddy edge cannot cover with its finite enumeration.
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    private static function searchGrammarCases(): iterable
+    {
         yield 'search value axis, percent-encoded as it travels on the wire' => [
             '/api/v1/backoffice/audit?filters%5B0%5D%5Bfield%5D=actorId'
                 . '&filters%5B0%5D%5Boperator%5D=eq&filters%5B0%5D%5Bvalue%5D=019f-abc',
@@ -79,9 +105,17 @@ final class RequestUriRedactionTest extends TestCase
                 . '&filters%5B0%5D%5Bvalue%5D%5B%5D=REDACTED',
         ];
 
-        yield 'denylisted key as a substring' => [
-            '/api/v1/backoffice/users?holder_email=someone@example.test',
-            '/api/v1/backoffice/users?holder_email=REDACTED',
+        // The producer never double-encodes, so this is a crafted URI rather than one the app emits. It still
+        // has to be redacted: what the rule protects is the log sink, and the sink records whatever the
+        // caller sent. Over-redacting a log is the safe direction to be wrong in.
+        yield 'search value axis, double-encoded' => [
+            '/api/v1/backoffice/audit?filters%255B0%255D%255Bvalue%255D=019f-abc',
+            '/api/v1/backoffice/audit?filters%255B0%255D%255Bvalue%255D=REDACTED',
+        ];
+
+        yield 'search value axis, encoded deeper still' => [
+            '/api/v1/backoffice/audit?filters%25255B0%25255D%25255Bvalue%25255D=019f-abc',
+            '/api/v1/backoffice/audit?filters%25255B0%25255D%25255Bvalue%25255D=REDACTED',
         ];
     }
 

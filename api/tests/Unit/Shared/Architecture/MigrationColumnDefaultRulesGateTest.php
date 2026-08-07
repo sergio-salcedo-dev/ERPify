@@ -59,6 +59,19 @@ final class MigrationColumnDefaultRulesGateTest extends TestCase
             'default-before-not-null.migration',
             ['status'],
         ];
+
+        // The shortest route to the defect, and the one a rule keyed on the ADD-then-DROP pair misses
+        // entirely: no default is ever declared, so there is none to drop.
+        yield 'NOT NULL declared with no default at all' => [
+            'not-null-with-no-default-at-all.migration',
+            ['actor_classification'],
+        ];
+
+        // Two statements reaching the same end state. The ADD alone looks nullable and harmless.
+        yield 'added nullable, then tightened to NOT NULL' => [
+            'nullable-then-tightened.migration',
+            ['second_flag'],
+        ];
     }
 
     #[Test]
@@ -88,6 +101,12 @@ final class MigrationColumnDefaultRulesGateTest extends TestCase
 
         yield 'DROP NOT NULL, which is a different statement' => [
             'drop-not-null-is-not-drop-default.migration',
+        ];
+
+        // Tightening a column that KEEPS its default is the correct way to do it, and must not be swept up
+        // by the rule that catches its defective twin.
+        yield 'added with a default, then tightened to NOT NULL' => [
+            'nullable-then-tightened-with-default.migration',
         ];
     }
 

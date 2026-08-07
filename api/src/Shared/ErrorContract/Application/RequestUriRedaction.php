@@ -51,6 +51,9 @@ enum RequestUriRedaction
     /** The value axis of the positional search grammar, scalar and `in` forms. */
     private const string SEARCH_VALUE_KEY = '/\Afilters\[\d+\]\[value\](\[\])?\z/';
 
+    /** Bound on the decode loop below, so a key of stacked `%25`s cannot spin it. */
+    private const int MAX_DECODE_PASSES = 4;
+
     public static function redact(string $requestUri): string
     {
         $separator = \strpos($requestUri, '?');
@@ -90,22 +93,48 @@ enum RequestUriRedaction
     /**
      * The key arrives percent-encoded, which is how the positional grammar travels on the wire
      * (`filters%5B0%5D%5Bvalue%5D`); matching the raw bytes would see none of it.
+     *
+     * Decoding is repeated until the key stops changing, because a single pass leaves
+     * `filters%255B0%255D%255Bvalue%255D` as `filters%5b0%5d%5bvalue%5d`, which matches nothing. No producer
+     * emits that — it is a URI a caller crafted — but the sink records what the caller sent, not what the
+     * producer meant, so the rule has to read it too. Over-redacting a log costs a diagnostic; under-redacting
+     * it costs an identifier that outlives its own erasure. The pass count is capped so a key of stacked
+     * `%25`s cannot spin here.
      */
     private static function isSensitive(string $key): bool
     {
-        $decoded = \strtolower(\urldecode($key));
+        $candidate = \strtolower($key);
 
-        if (\in_array($decoded, self::IDENTITY_KEYS, true)) {
+        for ($pass = 0; $pass <= self::MAX_DECODE_PASSES; ++$pass) {
+            if (self::namesASensitiveAxis($candidate)) {
+                return true;
+            }
+
+            $decoded = \strtolower(\urldecode($candidate));
+
+            if ($decoded === $candidate) {
+                return false;
+            }
+
+            $candidate = $decoded;
+        }
+
+        return false;
+    }
+
+    private static function namesASensitiveAxis(string $key): bool
+    {
+        if (\in_array($key, self::IDENTITY_KEYS, true)) {
             return true;
         }
 
-        if (1 === \preg_match(self::SEARCH_VALUE_KEY, $decoded)) {
+        if (1 === \preg_match(self::SEARCH_VALUE_KEY, $key)) {
             return true;
         }
 
         return \array_any(
             RedactionDenylist::KEYS,
-            static fn (string $deniedKey): bool => \str_contains($decoded, $deniedKey),
+            static fn (string $deniedKey): bool => \str_contains($key, $deniedKey),
         );
     }
 }

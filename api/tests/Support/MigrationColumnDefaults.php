@@ -15,11 +15,15 @@ namespace Erpify\Tests\Support;
  * deploy: redeploying the previous image tag is the documented rollback (`docs/deployment-guide.md`) and
  * does **not** undo the migration with it, because `down()` never runs. One replica is enough.
  *
- * **This is the only case decidable by a textual sweep**, and the boundary is deliberate. Whether a column
- * added by SOME OTHER migration still has a default is a question about the live database, not about a
- * file; whether the writer that will run against it names the column is a question about an image that no
- * longer exists in the tree. Both are outside what any amount of parsing here could answer — do not try to
- * widen this rule into them, widen the coverage of `make db.validate` instead.
+ * The rule is about the END STATE a migration leaves, not about the syntax that reaches it, because the
+ * `ADD … NOT NULL DEFAULT x` + `DROP DEFAULT` pair is only the most idiomatic of four ways to arrive there.
+ * A bare `ADD … NOT NULL` gets there in one statement, and adding a column nullable then tightening it with
+ * `SET NOT NULL` gets there in two. All four break the same `INSERT`.
+ *
+ * **The boundary is what the file cannot say.** Whether a column added by SOME OTHER migration still has a
+ * default is a question about the live database; whether the writer that will run against it names the
+ * column is a question about an image no longer in the tree. Neither is answerable by parsing — do not try
+ * to widen this rule into them, widen the coverage of `make db.validate` instead.
  *
  * Declared blind spots — a green proves the listed shapes are absent, nothing more:
  *  - Only the FIRST quoted literal of each `addSql()` is read, so SQL assembled by concatenating chunks is
@@ -72,19 +76,37 @@ final class MigrationColumnDefaults
     private const string DEFAULT_DROPPED
         = '/\bALTER\s+(?:COLUMN\s+)?([A-Za-z_]\w*)\s+DROP\s+DEFAULT\b/i';
 
+    /** `ALTER [COLUMN] <name> SET NOT NULL`. `SET DEFAULT` is a different statement and must not match. */
+    private const string SET_NOT_NULL
+        = '/\bALTER\s+(?:COLUMN\s+)?([A-Za-z_]\w*)\s+SET\s+NOT\s+NULL\b/i';
+
     /**
-     * The columns this migration leaves `NOT NULL` with no default: added by it, and stripped of their
-     * default by it. Keyed by name, so a `DROP DEFAULT` on a column some other migration added — which is
-     * a legitimate reversal, and what `down()` does — is not mistaken for one.
+     * The columns this migration leaves `NOT NULL` with no default. Only columns THIS file adds count, so a
+     * `DROP DEFAULT` on a column another migration added — a legitimate reversal, and what a `down()` does —
+     * is not mistaken for one.
+     *
+     * A column qualifies when the migration makes it `NOT NULL` by either route (declared in the `ADD`, or
+     * tightened later with `SET NOT NULL`) and leaves it without a default by either route (never declared
+     * one, or declared one and dropped it). The four combinations reach the same end state, and that state —
+     * not the syntax that produced it — is what breaks the next `INSERT` from an image that predates the
+     * column.
      *
      * @return list<string>
      */
     public static function violationsIn(string $source): array
     {
-        $violations = \array_values(\array_intersect(
-            self::notNullColumnsAddedIn($source),
-            self::columnsLosingTheirDefaultIn($source),
-        ));
+        $madeNotNull = self::columnsMadeNotNullIn($source);
+        $defaultDropped = self::columnsLosingTheirDefaultIn($source);
+        $violations = [];
+
+        foreach (self::columnsAddedIn($source) as $column => $definition) {
+            $notNull = $definition['notNull'] || \in_array($column, $madeNotNull, true);
+            $keepsADefault = $definition['hasDefault'] && !\in_array($column, $defaultDropped, true);
+
+            if ($notNull && !$keepsADefault) {
+                $violations[] = $column;
+            }
+        }
 
         \sort($violations);
 
@@ -92,9 +114,11 @@ final class MigrationColumnDefaults
     }
 
     /**
-     * @return list<string>
+     * Every column this migration adds, with the two facts about its declaration the rule needs.
+     *
+     * @return array<string, array{notNull: bool, hasDefault: bool}>
      */
-    public static function notNullColumnsAddedIn(string $source): array
+    public static function columnsAddedIn(string $source): array
     {
         $columns = [];
 
@@ -102,9 +126,31 @@ final class MigrationColumnDefaults
             \preg_match_all(self::ADDED_COLUMN, $statement, $matches, PREG_SET_ORDER);
 
             foreach ($matches as $match) {
-                if (1 === \preg_match('/\bNOT\s+NULL\b/i', $match[2])) {
-                    $columns[] = \strtolower($match[1]);
-                }
+                $columns[\strtolower($match[1])] = [
+                    'notNull' => 1 === \preg_match('/\bNOT\s+NULL\b/i', $match[2]),
+                    'hasDefault' => 1 === \preg_match('/\bDEFAULT\b/i', $match[2]),
+                ];
+            }
+        }
+
+        return $columns;
+    }
+
+    /**
+     * Columns this migration promotes to `NOT NULL` after the fact. Adding a column nullable and tightening
+     * it in a second statement reaches the same end state as declaring it `NOT NULL` outright.
+     *
+     * @return list<string>
+     */
+    public static function columnsMadeNotNullIn(string $source): array
+    {
+        $columns = [];
+
+        foreach (self::statementsIn($source) as $statement) {
+            \preg_match_all(self::SET_NOT_NULL, $statement, $matches);
+
+            foreach ($matches[1] as $column) {
+                $columns[] = \strtolower($column);
             }
         }
 
