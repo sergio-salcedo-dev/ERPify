@@ -395,6 +395,74 @@ final class ExceptionResponderTest extends TestCase
         $this->assertMatchesRegularExpression('/^[A-Z]+$/', $context['request_method']);
     }
 
+    /**
+     * `request_uri` is the one context field built from caller-controlled bytes, and the denylist that
+     * guards the rest matches KEY names — it cannot see inside a value. The sink is what makes that a
+     * leak: in prod Monolog writes to `php://stderr` behind `fingers_crossed`, so one 5xx flushes the
+     * buffered WARNING lines of unrelated 4xx into a json-file driver with no rotation, no TTL and no
+     * owner of erasure, where a person id outlives the erasure the application confirmed to the subject.
+     */
+    public function testLogRecordNeverCarriesAPersonIdFromTheQueryString(): void
+    {
+        $personId = '019fd82c-bafe-7349-8257-c2d62afad9bc';
+        $bufferingLogger = new BufferingLogger();
+        $exceptionResponder = $this->makeListener($bufferingLogger);
+        $exception = new class ('', 'x') extends DomainException implements NotFound {
+        };
+        $exceptionEvent = $this->makeEvent(
+            '/api/v1/backoffice/audit?actorId=' . $personId
+                . '&filters%5B0%5D%5Bfield%5D=resourceId&filters%5B0%5D%5Bvalue%5D=' . $personId,
+            $exception,
+        );
+
+        $exceptionResponder($exceptionEvent);
+
+        $requestUri = $this->singleLogRecord($bufferingLogger)['context']['request_uri'];
+
+        $this->assertStringNotContainsString($personId, $requestUri);
+        $this->assertStringContainsString('actorId=REDACTED', $requestUri);
+        $this->assertStringContainsString(
+            'field%5D=resourceId',
+            $requestUri,
+            'Only values are redacted: the query SHAPE is what makes the line diagnostic at all.',
+        );
+    }
+
+    /**
+     * The self-failure path builds its own context map, so it does not inherit the primary path's
+     * redaction — and it is the path that fires when the error pipeline itself is broken, i.e. exactly
+     * when nobody is reading the code that was supposed to protect it.
+     */
+    public function testLastResortLogNeverCarriesAPersonIdFromTheQueryString(): void
+    {
+        $personId = '019fd82c-bafe-7349-8257-c2d62afad9bc';
+        $bufferingLogger = new BufferingLogger();
+        $exceptionResponder = $this->makeListener(
+            logger: $bufferingLogger,
+            factoryLogger: $this->throwingLogger('factory boom'),
+        );
+        $contextProxy = ['proxy' => static fn (): int => 1];
+        $exception = new class ('', 'x', $contextProxy) extends DomainException implements NotFound {
+        };
+        $exceptionEvent = $this->makeEvent(
+            '/api/v1/backoffice/audit?actorId=' . $personId,
+            $exception,
+        );
+
+        $exceptionResponder($exceptionEvent);
+
+        $logs = \array_values($bufferingLogger->cleanLogs());
+        $this->assertCount(1, $logs, 'Self-failure path must emit exactly one CRITICAL log line.');
+
+        /** @var array{0: string, 1: string, 2: array<string, mixed>} $first */
+        $first = $logs[0];
+        $context = $first[2];
+        $this->assertArrayHasKey('request_uri', $context);
+        $this->assertIsString($context['request_uri']);
+        $this->assertStringNotContainsString($personId, $context['request_uri']);
+        $this->assertStringContainsString('actorId=REDACTED', $context['request_uri']);
+    }
+
     public function testLogRecordIsEmittedWithLevelErrorForPlainDomainExceptionMappedToFiveHundred(): void
     {
         $bufferingLogger = new BufferingLogger();

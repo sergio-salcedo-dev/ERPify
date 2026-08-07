@@ -25,6 +25,11 @@ use RuntimeException;
  * and the make target selects both through a common prefix rather than naming either.
  *
  * @internal
+ *
+ * The method count grows with the number of rules there are to falsify, which is the property this class is
+ * for — collapsing two reds into one case to stay under a threshold would hide which rule failed
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
 #[CoversNothing]
 final class PersonResourceErasureRulesGateTest extends TestCase
@@ -80,6 +85,26 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         );
     }
 
+    /**
+     * Falsifies the derivation sweep in the direction the real tree cannot. Over `src` the sweep's callers
+     * only ever ask about writers that exist, so a sweep silently capped at one file would satisfy them all
+     * while hiding exactly what the registry depends on seeing — a second writer. Here it must return both.
+     */
+    #[Test]
+    public function theDerivationSweepReportsEverySecondWriterOfAType(): void
+    {
+        $deriving = $this->overFixtures('registry.complete')->filesDerivingType(self::TYPE);
+
+        $this->assertContains('src/AuditResourceFixtureWriter.php', $deriving);
+        $this->assertContains('src/SecondAuditResourceFixtureWriter.php', $deriving);
+        $this->assertCount(
+            2,
+            $deriving,
+            'The derivation sweep collapses two writers of the same type into one entry, so an assertion '
+            . 'pinning a person type to a single deriving file could never go red.',
+        );
+    }
+
     #[Test]
     public function theSweepResolvesATypeNamedOnlyThroughAnotherClassesConstant(): void
     {
@@ -105,7 +130,12 @@ final class PersonResourceErasureRulesGateTest extends TestCase
 
         $this->assertSame([self::TYPE, self::IMPORTED_TYPE], $registry->resourceTypesInSource());
         $this->assertSame(
-            ['src/AnonymiserHolderFixture.php', 'src/AuditResourceFixtureWriter.php', 'src/ReceivingEraserFixture.php'],
+            [
+                'src/AnonymiserHolderFixture.php',
+                'src/AuditResourceFixtureWriter.php',
+                'src/ReceivingEraserFixture.php',
+                'src/SecondAuditResourceFixtureWriter.php',
+            ],
             $registry->sourceFilesCarrying(self::TYPE),
         );
     }
@@ -146,7 +176,10 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         );
 
         $this->assertNotNull($defect, 'A file that only mentions the anonymiser was accepted as erasing.');
-        $this->assertStringContainsString('holds no AuditResourceAnonymiser property', $defect);
+        $this->assertStringContainsString(
+            'holds no AuditResourceAnonymiser or AuditSubjectTrailErasure property',
+            $defect,
+        );
     }
 
     #[Test]
@@ -160,7 +193,7 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         ;
 
         $this->assertNotNull($defect, 'An owner that holds the anonymiser and never calls it was accepted.');
-        $this->assertStringContainsString('never calls anonymise() on it', $defect);
+        $this->assertStringContainsString('never calls anonymise()/completeForSubject() on it', $defect);
     }
 
     #[Test]

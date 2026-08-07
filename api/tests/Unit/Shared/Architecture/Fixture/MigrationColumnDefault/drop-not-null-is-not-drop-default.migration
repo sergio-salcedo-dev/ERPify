@@ -1,0 +1,2 @@
+$this->addSql('ALTER TABLE identity_user ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NOT NULL DEFAULT ');
+$this->addSql('ALTER TABLE identity_user ALTER password_hash DROP NOT NULL');

@@ -43,12 +43,32 @@ export interface AuditUrlState {
 }
 
 /**
- * Single source of truth for the audit screen's state, held entirely in URL params (shareable,
- * never PII in storage — an `actor_id`/`resource_id` would be PII). Reads decode the params; writes
- * re-serialize the whole decoded state, so a stale param can never linger. Defaults (empty filters,
- * Timeline view, DESC, no open entry) are omitted from the URL to keep it minimal and the memo key
- * stable — the latter matters because the timeline hook resets its keyset cursor whenever the filter
- * value changes, so a flapping identity would thrash pagination.
+ * Single source of truth for the audit screen's state, held entirely in URL params. `actorId` and
+ * `resourceId` identify a person, and they are in the address bar on purpose: that is what makes an
+ * investigation shareable in a ticket and reachable by deep link, and it is why none of them is ever
+ * written to device storage the app controls. The price is that they travel on every navigation, into
+ * logs that no erasure path reaches, so each sink is answered where it lives: Caddy's access log
+ * redacts both names and the `filters[N][value]` grammar this screen's API request repeats them in,
+ * and drops the `Referer` that would otherwise reproduce this whole URL on every same-origin call
+ * (`api/frankenphp/Caddyfile`); the application log redacts the same axes wherever a `request_uri`
+ * appears; and Sentry's event is scrubbed on `url`, `query_string` and `Referer` before it leaves the
+ * process.
+ *
+ * This route also answers `Referrer-Policy: no-referrer`, but note what that does and does not buy:
+ * the policy is delivered with a DOCUMENT, so it applies to a deep link or a refresh and not to a
+ * client-side navigation here from elsewhere in the back-office, where the initial document's
+ * `strict-origin-when-cross-origin` still governs and same-origin requests carry the whole URL. The
+ * header is defence in depth; what actually closes the log is the edge dropping the header.
+ *
+ * One sink stays OPEN, and is recorded rather than claimed closed: the Next.js container prints the
+ * full document URL to the same unowned driver, which Caddy cannot reach because it is a different
+ * process. `PRODUCTION_SECURITY_CHECKLIST.md` §7 carries it, together with the accepted residual of a
+ * person id in a URL path.
+ *
+ * Reads decode the params; writes re-serialize the whole decoded state, so a stale param can never
+ * linger. Defaults (empty filters, Timeline view, DESC, no open entry) are omitted from the URL to
+ * keep it minimal and the memo key stable — the latter matters because the timeline hook resets its
+ * keyset cursor whenever the filter value changes, so a flapping identity would thrash pagination.
  */
 export function useAuditUrlState(): AuditUrlState {
   const router = useRouter();

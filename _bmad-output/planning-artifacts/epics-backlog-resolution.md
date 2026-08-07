@@ -48,18 +48,54 @@ consecuencia real; el resto es higiene del vocabulario.
 **Concepto común:** el id de una persona sobreviviendo a su propio borrado, por cuatro vías que la épica
 gdpr-hardening no cubrió. **Es el único lote con consecuencia legal.**
 
-- **#389** — medido: `auditUrlState.ts:95-103` escribe `actorId`/`resourceId`/`correlationId` en la URL, y el
-  Caddyfile (`:22-27`) redacta **solo** `authorization` y `token`, así que el id entra en el log de acceso, un
-  sumidero con retención propia y sin dueño de borrado. El docblock del propio fichero (`:46`) llama PII a ese
-  dato tres líneas antes de ponerlo en la barra de direcciones. **Corrección al título del issue: el eje `ip`
-  no existe**, son dos ejes, no tres. Arreglo más barato: añadirlos a la redacción del Caddyfile.
-- **#565** — medido y **alcanzable**: ABBA entre el pase de actor (`WHERE actor_id = :s`) y el de recurso
-  (`WHERE resource_type = :t AND resource_id = :s`), ambos en la misma transacción y en ese orden. Dos
-  administradores que se hayan suspendido mutuamente producen las dos filas recíprocas. Severidad **menor de
-  lo que suena**: PostgreSQL lo detecta (`40P01`), aborta uno y la cadena entera revierte — fallo ruidoso y
-  reintentable, no corrupción. Arreglo: una sola sentencia con `OR`, que además funde dos barridos en uno.
-- **#562** — `existingIdsAmong($ids)` sin trocear, contra un techo de 65535 parámetros ligados.
-- **#564** — ventana de despliegue rodante en una migración.
+> **Re-medido el 2026-08-06 contra `bca43bf1`, y el resultado corrige a este mismo fichero.** La versión previa
+> declaraba los cuatro «medidos y confirmados»; sólo lo estaba #389, y su arreglo estaba mal dimensionado. Es
+> la lección de la épica aplicándose a la épica: lo que se pudrió aquí no fue el tiempo, fue medir el título en
+> vez del código. Detalle y evidencia en la historia `br-2-residuos-eje-referencias-persona.md`.
+
+- **#389** — **CONFIRMADO.** `auditUrlState.ts:94-103` escribe `actorId`/`resourceId`/`correlationId` en la URL
+  y el Caddyfile (`:24-29`) redacta **solo** `authorization` y `token`, así que el id entra en el log de
+  acceso, un sumidero con retención propia y sin dueño de borrado. Correcciones: el eje `ip` **no existe**;
+  `correlationId` **no es un id de persona** (es el UUID v7 de correlación, ausente de
+  `api/.person-reference-policy`) y se redacta por otro argumento; `resourceId` lo es sólo si `resourceType`
+  denota persona. **Y el «arreglo más barato» no cierra el sumidero**: la petición de API — la que se dispara
+  en cada tecleo del filtro — lleva el id bajo `filters[N][value]` (`buildSearchParams.ts:17-26`), clave que
+  ningún `replace actorId` alcanza. Se redactan **las dos vías**, aceptando que el log de acceso deja de poder
+  responder «qué filtro se aplicó».
+- **#565** — ~~**NO ALCANZABLE (latente)**~~ → **ALCANZABLE, y ARREGLADO** (2026-08-07). Lo que sigue se
+  midió contra `main` @ `bca43bf1` y lo invirtió `aede857d` (#647): `ChangeUserRoles.php:160` e
+  `InviteUser.php:72` escriben el eje recurso-persona, de modo que las dos filas recíprocas **sí coexisten**
+  y el ABBA es alcanzable. Lo disparó el propio tripwire al mergear `main`. Se cierra con **orden de bloqueo
+  determinista** —`SELECT … ORDER BY id FOR UPDATE` sobre la unión de los dos ejes— más el mapeo de `40P01`,
+  no con la evidencia de inalcanzabilidad que este párrafo argumenta. El descarte de la sentencia `OR` de
+  fusión sigue en pie. Detalle en la historia BR-2 y en el comentario de cierre del issue.
+  El razonamiento original, conservado: el ABBA exige dos filas recíprocas que **no pueden existir**:
+  suspender o degradar a un peer no escribe ninguna fila de auditoría (`User` no es `AuditedEntity`,
+  `User.php:38-41`; lo confirma `AdministratorErasureRequiresDemotion.php:15-18`), y `resource_type='User'`
+  aparece una sola vez en `api/src` — la fila la inserta la propia transacción diez líneas antes del pase de
+  recurso, ya bloqueada. La sentencia `OR` es **un arreglo peor que el defecto**: sin `CASE WHEN` por columna
+  destruye la evidencia de un tercero, en la posición del pase de actor regresa GDPR, y rompe los dos
+  contadores de cumplimiento que `FulfilIdentityErasureTest.php:70-71` existe para proteger. Lo que sí vale es
+  que **`40P01` no está mapeado a nada reintentable en todo el repo** → saldría 500; mapearlo cubre además
+  `event_store`, cuyo `payload::text ILIKE` sí fuerza seq scan. Se cierra con evidencia + tripwire + ese mapeo.
+- **#562** — **EL ISSUE YA ESTÁ RESUELTO.** Su cuerpo describe un N+1 vía `UserRepository::findById()` que
+  G-1c/#634 eliminó: el caso de uso no importa `UserRepository` y hace **una** llamada. El troceo contra el
+  techo de 65535 es real (`ExpandArrayParameters.php:115-127` liga un parámetro por id) pero **teórico**
+  (exige ≥65 536 personas distintas) y **no es este issue** — vive en `deferred-work.md:11`. Queda abierto de
+  #562 sólo lo que nadie ha tocado: cinco lecturas sin `LIMIT` ni keyset. La deuda de más valor es que
+  `LiveIdentityDirectory.php:28-30` afirma que un llamador trocea y **ninguno lo hace** — corregido en BR-2,
+  y las cinco lecturas registradas en `deferred-work.md`. Issue cerrado con evidencia el 2026-08-07.
+- **#564** — **ALCANZABLE POR OTRA VÍA.** No hay despliegue rodante y no puede haberlo (`compose.yaml:33-45`
+  publica puertos de host fijos → `--scale php=2` falla): el título miente en su parte causal. Pero el
+  **rollback de imagen** que `docs/deployment-guide.md:195` documenta produce los mismos tres tiers de fallo
+  con una sola réplica, y el peor tumba la escritura de negocio (`AuditWriteCaptureListener.php:57`, sin
+  `catch`, dentro de `onFlush`). Su «tensión» blindada es **un error de hecho**: el schema listener sí puede
+  expresar defaults — `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaListener.php:47` y
+  `BankCountSchemaListener.php:33-34` lo hacen. Caída la premisa el arreglo cuesta 2 ficheros. El patrón se
+  repite en **4 columnas de 2 tablas**, pero sólo las dos de `audit_log` se corrigen: en `identity_user` el
+  default se dropeó por un argumento distinto y válido — el agregado siempre fija el valor, y un default
+  latente enmascararía la escritura futura que lo olvide — así que ponérselo sería un **fail-open** sobre la
+  columna que lee la admisión de sesión. Se cierra con esas dos más un gate de trinquete.
 
 ### BR-3 · Auditoría y crypto — cierres del eje 3
 
@@ -141,8 +177,10 @@ petición 60 s).
 
 ## Orden recomendado y su argumento
 
-1. **BR-2** — el único con consecuencia legal, los cuatro medidos y confirmados, y su arreglo más barato
-   (redacción en el Caddyfile) cierra un sumidero duradero sin tocar UX.
+1. **BR-2** — el único con consecuencia legal. Tras el re-medido sólo #389 es un arreglo (la redacción, en sus
+   dos vías, cierra un sumidero duradero sin tocar UX); #565 y #562 se cierran con evidencia y #564 resulta
+   alcanzable por el rollback, no por el despliegue rodante. Sigue primero **porque el re-medido lo abarató**,
+   no porque los cuatro fueran defectos vivos.
 2. **BR-4** — porque #602 es lo único que queda del residual de sesión robada tras la corrección de #645, y hasta que cierre lo que el producto debe es **guía de orden** en el copy, no código.
 3. **BR-6** — un gate que no corre invalida la confianza en todos los demás; barato y sin producción.
 4. **BR-1**, **BR-3**, **BR-5**, luego **BR-7** y **BR-8**.

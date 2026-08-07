@@ -1,0 +1,2 @@
+$this->addSql('ALTER TABLE audit_log ADD COLUMN second_flag BOOLEAN');
+$this->addSql('ALTER TABLE audit_log ALTER COLUMN second_flag SET NOT NULL');

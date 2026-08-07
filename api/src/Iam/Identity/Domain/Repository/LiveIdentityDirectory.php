@@ -27,7 +27,10 @@ interface LiveIdentityDirectory
      * One statement per call rather than one per id: the caller holds every identifier some other table
      * still names, which is bounded by the number of people the installation has ever had. That bound is
      * also the limit — an implementation binding one parameter per id meets PostgreSQL's 65535-parameter
-     * ceiling there and fails outright rather than degrading, so a caller far past that scale must chunk.
+     * ceiling there and fails outright rather than degrading. **No caller chunks**, and this contract does
+     * not ask one to: reaching the ceiling takes 65 536 distinct people referenced at once, in a product
+     * that provisions one organization per installation. Chunking is the change to make when a measurement
+     * says the count is close, not before — say so here when it becomes true.
      *
      * Returning the caller's own spelling keeps the comparison exact for the caller — UUID hex is
      * case-insensitive, so an adapter echoing the database's canonical form would make a correct id look

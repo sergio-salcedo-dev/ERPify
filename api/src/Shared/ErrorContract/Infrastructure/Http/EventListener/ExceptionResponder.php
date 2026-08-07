@@ -7,6 +7,7 @@ namespace Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener;
 use Erpify\Shared\ErrorContract\Application\ProblemDetails;
 use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Application\RedactionDenylist;
+use Erpify\Shared\ErrorContract\Application\RequestUriRedaction;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsResponder;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
@@ -49,6 +50,9 @@ use Throwable;
  * `exception_category` to route programmer errors (page on-call) separately from
  * runtime / domain errors (triaged normally). Logger channel is the default `app`
  * channel (autowired `Psr\Log\LoggerInterface`).
+ * `request_uri` carries the path and the query's SHAPE, never its sensitive values: it goes
+ * through {@see RequestUriRedaction} on both emission paths, because {@see RedactionDenylist}
+ * matches key names of the context map and cannot see inside one of its values.
  *
  * `exception_category` is an SRE-facing taxonomy: stable, queryable, derived from the
  * SPL hierarchy and the project's `DomainException` marker. Values:
@@ -241,7 +245,7 @@ final readonly class ExceptionResponder
                 'original_exception_message' => $originalThrowable->getMessage(),
                 'correlation_id' => $correlationId,
                 'instance' => $instance,
-                'request_uri' => $request->getRequestUri(),
+                'request_uri' => RequestUriRedaction::redact($request->getRequestUri()),
                 'request_method' => $request->getMethod(),
             ]);
         } catch (Throwable) {
@@ -323,7 +327,7 @@ final readonly class ExceptionResponder
             'exception_class' => $throwable::class,
             'exception_category' => $this->resolveExceptionCategory($throwable),
             'exception_message' => $throwable->getMessage(),
-            'request_uri' => $request->getRequestUri(),
+            'request_uri' => RequestUriRedaction::redact($request->getRequestUri()),
             'request_method' => $request->getMethod(),
         ]);
     }

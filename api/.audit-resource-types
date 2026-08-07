@@ -24,8 +24,10 @@
 # rules — run together by `make php.lint.audit-resource`. It fails the build when a type reaches
 # `AuditResource::of(...)` — written as a literal at the call, or held in a constant the call resolves,
 # whether declared in the calling class or in another one it imports — or a route's
-# `_audit_resource_type` default without a line here; when a `person` line names a file that does not call
-# anonymise() on an AuditResourceAnonymiser it holds; when its witness does not exist, is not a `.feature`
+# `_audit_resource_type` default without a line here; when a `person` line names a file that holds no
+# collaborator able to erase the resource axis — an AuditResourceAnonymiser, or the AuditSubjectTrailErasure
+# that orders that same pass behind the two-axis row lock — or holds one and never calls its erasing verb;
+# when its witness does not exist, is not a `.feature`
 # under `features/`, or has no single scenario that both seeds a row of the type and asserts none survives;
 # and when a `non-person` type is no longer written anywhere.
 #
@@ -73,11 +75,18 @@
 #     red, so the pair has to go together — a deliberate, reviewable act rather than an impossible one. Today
 #     even that is caught, because dropping the `User` line leaves the type still derived from `src` and the
 #     completeness check demands it back; that protection lapses for any type `src` does not name. Note what
-#     it rests on: derivation, not deletion. Exactly one file derives `User` — the erasure owner this line
-#     names — so that file's `AuditResource::of(...)` is load-bearing twice over, and a second rule says so
-#     rather than leaving it to luck: a `person` type must be BUILT by the file declared to erase it. Refactor
-#     that construction away and the build goes red at the owner rule before the completeness one even
-#     notices the type has left the universe.
+#     it rests on: derivation, not deletion. Several files derive `User`, and a rule pins that the erasure
+#     owner is one of them rather than leaving it to luck: a `person` type must be BUILT by the file declared
+#     to erase it. Refactor that construction away and the build goes red at the owner rule before the
+#     completeness one even notices the type has left the universe.
+#   - It bounds WHERE a person type may be written, not how many files write it. Every deriving file must sit
+#     in the same `src/<Context>/<Module>` as the declared erasure, because D4 assigns the obligation to the
+#     owning context and this file has room for exactly one owner per type; siblings inside that module are
+#     already covered, since the erasure matches on `(resource_type, resource_id)` and never on who wrote the
+#     row. The stricter "exactly one writer" rule this replaces was carrying a CONCURRENCY invariant it could
+#     not really hold — see `Shared\Audit\Application\AuditSubjectRowLock`, which now holds it in code — and a
+#     file census is the wrong instrument for that: it went red for a correct change, and would have gone
+#     green again the moment a writer was deleted for unrelated reasons.
 #   - It resolves a constant imported from another class, and does so on the ONE-CLASS-PER-FILE assumption
 #     below: `Holder::CONST` is looked up by the holder's SHORT name, which is what a call site spells once
 #     the class is imported. Two classes of that short name in different namespaces collapse onto one key,

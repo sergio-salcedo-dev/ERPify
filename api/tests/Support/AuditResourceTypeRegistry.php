@@ -30,7 +30,20 @@ final readonly class AuditResourceTypeRegistry
 {
     public const string NON_PERSON = 'non-person';
 
-    private const string ANONYMISER = 'AuditResourceAnonymiser';
+    /**
+     * The collaborators that can erase the resource axis, each with the verb that does it. Two, because the
+     * axis is reachable two ways and a check that knew only one would reject a correct owner: a use case may
+     * hold {@see \Erpify\Shared\Audit\Application\AuditResourceAnonymiser} directly, or hold
+     * {@see \Erpify\Shared\Audit\Application\AuditSubjectTrailErasure}, which orders that same pass behind
+     * the row lock the two axes need. Adding a spelling here weakens the rule, so a new entry earns its place
+     * only when the type it names really does clear `audit_log.resource_id`.
+     *
+     * @var array<string, string>
+     */
+    private const array ANONYMISERS = [
+        'AuditResourceAnonymiser' => 'anonymise',
+        'AuditSubjectTrailErasure' => 'completeForSubject',
+    ];
 
     public function __construct(
         private string $apiRoot,
@@ -215,7 +228,7 @@ final readonly class AuditResourceTypeRegistry
 
     /**
      * Why the declared owner of `$type` fails to erase it, or `null` when it does. The owner must hold an
-     * {@see self::ANONYMISER} property, call `anonymise()` on it, and carry the type literal — matched over
+     * {@see self::ANONYMISERS} property, call its erasing verb on it, and carry the type literal — matched over
      * comment-stripped source, so a docblock naming the collaborator cannot stand in for the call.
      */
     public function erasureDefectIn(string $type, string $erasurePath): ?string
@@ -228,27 +241,41 @@ final readonly class AuditResourceTypeRegistry
 
         $code = $this->codeWithoutComments((string) \file_get_contents($this->apiRoot . '/' . $erasurePath));
 
-        \preg_match_all(\sprintf('/%s\s+(?:\.\.\.)?\$(\w+)/', self::ANONYMISER), $code, $matches);
-        $collaborators = $matches[1];
+        /** @var list<array{property: string, verb: string}> $held */
+        $held = [];
 
-        if ([] === $collaborators) {
-            return \sprintf('%s holds no %s property, so it cannot erase "%s"', $erasurePath, self::ANONYMISER, $type);
+        foreach (self::ANONYMISERS as $anonymiser => $verb) {
+            \preg_match_all(\sprintf('/%s\s+(?:\.\.\.)?\$(\w+)/', $anonymiser), $code, $matches);
+
+            foreach ($matches[1] as $collaborator) {
+                $held[] = ['property' => $collaborator, 'verb' => $verb];
+            }
+        }
+
+        if ([] === $held) {
+            return \sprintf(
+                '%s holds no %s property, so it cannot erase "%s"',
+                $erasurePath,
+                \implode(' or ', \array_keys(self::ANONYMISERS)),
+                $type,
+            );
         }
 
         // Every candidate, and `\s*\??` on the call: the sibling reference gate paid for both — one property
         // matched first would hide the collaborator that does the work, and a correct owner would be rejected
         // for putting the call on the next line or writing it null-safe.
         if (
-            !\array_any($collaborators, static fn (string $collaborator): bool => 1 === \preg_match(
-                \sprintf('/\$this->%s\s*\??->anonymise\(/', \preg_quote($collaborator, '/')),
+            !\array_any($held, static fn (array $candidate): bool => 1 === \preg_match(
+                \sprintf('/\$this->%s\s*\??->%s\(/', \preg_quote($candidate['property'], '/'), $candidate['verb']),
                 $code,
             ))
         ) {
             return \sprintf(
-                '%s holds a %s but never calls anonymise() on it, so "%s" is declared as erased while nothing '
+                '%s holds a %s but never calls %s() on it, so "%s" is declared as erased while nothing '
                 . 'erases it',
                 $erasurePath,
-                self::ANONYMISER,
+                \implode(' or ', \array_keys(self::ANONYMISERS)),
+                \implode('()/', \array_values(self::ANONYMISERS)),
                 $type,
             );
         }

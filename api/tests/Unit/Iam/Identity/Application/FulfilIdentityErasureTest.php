@@ -18,6 +18,7 @@ use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -29,6 +30,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactor
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -388,8 +390,11 @@ final class FulfilIdentityErasureTest extends TestCase
     ): FulfilIdentityErasure {
         return new FulfilIdentityErasure(
             new EraseIdentitySubject($users, $tokens, new InlineTransactionManager()),
-            $anonymiser,
-            $resourceAnonymiser ?? new RecordingAuditResourceAnonymiser(matchCount: 0),
+            new OrderedAuditSubjectTrailErasure(
+                new RecordingAuditSubjectRowLock(),
+                $anonymiser,
+                $resourceAnonymiser ?? new RecordingAuditResourceAnonymiser(matchCount: 0),
+            ),
             $eventAnonymiser ?? new RecordingEventStoreSubjectAnonymiser(),
             $directory,
             new PurgeUserSessions($sessions),

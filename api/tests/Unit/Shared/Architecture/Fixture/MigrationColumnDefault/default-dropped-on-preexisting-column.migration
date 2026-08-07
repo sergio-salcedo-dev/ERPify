@@ -1,0 +1,2 @@
+$this->addSql('ALTER TABLE audit_log ALTER COLUMN actor_erased DROP DEFAULT');
+$this->addSql('ALTER TABLE audit_log ALTER COLUMN resource_erased DROP DEFAULT');

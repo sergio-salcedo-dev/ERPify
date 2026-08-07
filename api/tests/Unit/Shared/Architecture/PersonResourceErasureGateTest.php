@@ -125,6 +125,109 @@ final class PersonResourceErasureGateTest extends TestCase
         }
     }
 
+    /**
+     * The containment rule for the resource axis: a person type may be written by more than one file, but
+     * every one of them lives in the module whose use case is declared to erase it.
+     *
+     * It is deliberately weaker than demanding a single writer, and the weakening is what makes it survive.
+     * Demanding one writer would rest on an argument about deadlock: `FulfilIdentityErasure` runs the actor
+     * pass and the resource pass as two statements in one transaction, so two concurrent erasures can take
+     * them in opposite orders — a textbook ABBA — and the only thing that would make it unreachable is the
+     * erasure being the sole writer of the axis while hard-deleting the identity, so a subject once erased
+     * never acts again. An administrator acting on another administrator ends that, and any invariant built
+     * on it.
+     *
+     * **That protection now lives where it belongs, in the code rather than in a file census.**
+     * {@see \Erpify\Shared\Audit\Application\AuditSubjectRowLock} takes both axes as one set in `id` order
+     * before either is rewritten, so concurrent erasures acquire their shared rows in the same sequence and
+     * one blocks instead of cycling. `FulfilIdentityErasureTest` pins that the lock is taken BEFORE either
+     * anonymiser, which is the half a call-count assertion would miss. A rule about who may write a column is
+     * the wrong instrument for a concurrency invariant: it went red for a change that was correct, and it
+     * would have gone green again the moment a writer was deleted for unrelated reasons.
+     *
+     * What remains is the claim the census can actually support. `docs/adr/audit-activity-log.md` D4 assigns
+     * erasure of a person-denoting resource to the context that owns the person, so a writer OUTSIDE that
+     * module is the shape that breaks the assignment: it produces rows in a context that has no erasure
+     * declared for them, and the registry — one owner per type — has no way to express a second one. Siblings
+     * inside the module are fine because the declared erasure already covers them: it matches on
+     * `(resource_type, resource_id)`, never on who wrote the row.
+     *
+     * Sibling of `theStalenessOfAPersonTypeIsSatisfiedByItsOwnErasureDeclaration` and not a duplicate: that
+     * one matches the quoted literal, so a writer reaching the type through an imported constant or a route
+     * default is invisible to it — which is exactly how both current writers reach it. Derivation resolves
+     * all three forms.
+     *
+     * **What it does not see**, because a rule that overstates its reach is worse than none:
+     *  - A type passed as a VARIABLE — `AuditResource::of($type, $id)` — matches none of the three derivation
+     *    forms and raises nothing. {@see \Erpify\Shared\Audit\Infrastructure\Http\RequestAuditResourceExtractor}
+     *    is written that way and is covered only because its INPUT is a `#[Route]` default literal; a
+     *    `$request->attributes->set('_audit_resource_type', …)` at runtime would be covered by neither.
+     *  - `api/src` only. The row seeded by `features/backoffice/users/erase.feature` and the
+     *    `AuditResource::of('User', …)` in `AuditActorAnonymiserFunctionalTest` are test surfaces, correctly
+     *    invisible here.
+     *  - Nothing about concurrency. A green here is not evidence the lock exists, is called, or is called in
+     *    time; those are three separate assertions and they live in the erasure's own unit test.
+     */
+    #[Test]
+    public function everyFileWritingAPersonTypeLivesInTheModuleThatErasesIt(): void
+    {
+        $registry = $this->registry();
+
+        foreach ($this->personTypes() as $type => $personResourceDeclaration) {
+            $owningModule = $this->moduleOf($personResourceDeclaration->erasedBy);
+            $foreignWriters = \array_values(\array_filter(
+                $registry->filesDerivingType($type),
+                fn (string $sourceFile): bool => $this->moduleOf($sourceFile) !== $owningModule,
+            ));
+
+            $this->assertSame([], $foreignWriters, \sprintf(
+                'These files write "%s" into the audit resource axis from outside %s, the module whose use '
+                . 'case is declared to erase it: %s. `docs/adr/audit-activity-log.md` D4 assigns erasure of a '
+                . 'person-denoting resource to the context that owns the person, so a writer outside it '
+                . 'produces rows whose erasure nobody in that context knows to account for. Either move the '
+                . 'write behind a seam the owning module publishes, or reclassify the type and give the new '
+                . 'owner its own registry line.',
+                $type,
+                $owningModule,
+                \implode(', ', $foreignWriters),
+            ));
+        }
+    }
+
+    #[Test]
+    public function theModuleBoundaryTheRuleComparesIsTheOneDeptracIsolates(): void
+    {
+        // Over the real tree every writer of the one person type sits in `src/Iam/Identity`, so the rule
+        // above compares an empty difference and would keep reporting green if `moduleOf()` were widened —
+        // `0, 1` turns "same module" into "anywhere under src/" and the rule becomes vacuous with no test
+        // noticing. That is the direction that fails SILENTLY, so it is the one that needs pinning; the
+        // narrow direction already fails loudly, by rejecting a correct writer.
+        $this->assertSame(
+            'src/Iam/Identity',
+            $this->moduleOf('src/Iam/Identity/Application/FulfilIdentityErasure.php'),
+        );
+        $this->assertNotSame(
+            $this->moduleOf('src/Iam/Identity/Application/FulfilIdentityErasure.php'),
+            $this->moduleOf('src/Backoffice/Health/Application/Probe.php'),
+            'Two different contexts resolve to the same module, so the containment rule permits any writer.',
+        );
+        // Sibling MODULES of one context must separate too — deptrac isolates `Backoffice/Bank` from
+        // `Backoffice/BankAccount`, and a prefix of two segments would fold them together.
+        $this->assertNotSame(
+            $this->moduleOf('src/Backoffice/Bank/Application/X.php'),
+            $this->moduleOf('src/Backoffice/BankAccount/Application/X.php'),
+        );
+    }
+
+    /**
+     * The `src/<Context>/<Module>` prefix — the granularity deptrac isolates at, so "same module" here means
+     * the same thing it means to the boundary gate rather than a second, softer definition.
+     */
+    private function moduleOf(string $sourceFile): string
+    {
+        return \implode('/', \array_slice(\explode('/', $sourceFile), 0, 3));
+    }
+
     #[Test]
     public function everyPersonTypeNamesAWitnessThatProvesItsErasure(): void
     {

@@ -12,6 +12,7 @@ use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Audit\Domain\ActorContext;
+use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
@@ -21,6 +22,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactor
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -91,8 +93,11 @@ final class FulfilIdentityErasureEventStoreTest extends TestCase
                 new InMemoryPasswordResetTokenRepository($this->tokenFor(UserMother::DEFAULT_ID)),
                 new InlineTransactionManager(),
             ),
-            $anonymiser,
-            new RecordingAuditResourceAnonymiser(matchCount: 2),
+            new OrderedAuditSubjectTrailErasure(
+                new RecordingAuditSubjectRowLock(),
+                $anonymiser,
+                new RecordingAuditResourceAnonymiser(matchCount: 2),
+            ),
             $eventAnonymiser,
             new InMemoryActiveAdministratorDirectory([self::ACTING_ADMIN_ID => true]),
             new PurgeUserSessions(new InMemorySessionRepository()),
@@ -113,8 +118,11 @@ final class FulfilIdentityErasureEventStoreTest extends TestCase
                 new InMemoryPasswordResetTokenRepository(),
                 new InlineTransactionManager(),
             ),
-            new RecordingAuditActorAnonymiser(matchCount: 0),
-            new RecordingAuditResourceAnonymiser(matchCount: 0),
+            new OrderedAuditSubjectTrailErasure(
+                new RecordingAuditSubjectRowLock(),
+                new RecordingAuditActorAnonymiser(matchCount: 0),
+                new RecordingAuditResourceAnonymiser(matchCount: 0),
+            ),
             $eventAnonymiser,
             new InMemoryActiveAdministratorDirectory([self::ACTING_ADMIN_ID => true]),
             new PurgeUserSessions(new InMemorySessionRepository()),

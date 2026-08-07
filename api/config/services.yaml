@@ -44,3 +44,11 @@ services:
     Erpify\Shared\Event\Infrastructure\Messenger\MessengerDeadLetterReader:
         arguments:
             $failedTransport: '@messenger.transport.failed'
+
+    # Untargeted on purpose: the tag with no `handler` or `channel` attribute applies the processor to
+    # every handler, which is the point — the field it redacts is written by the framework as readily as
+    # by our own code, so naming the channels that carry it today would date on the next library that
+    # adopts the convention. Tagged one by one rather than through `_instanceof` on Monolog's interface:
+    # there is exactly one processor, and a rule that enrols the next one silently is a surprise.
+    Erpify\Shared\Monitoring\Infrastructure\Monolog\RequestUriRedactionProcessor:
+        tags: ['monolog.processor']

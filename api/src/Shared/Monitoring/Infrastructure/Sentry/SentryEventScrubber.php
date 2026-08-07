@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Monitoring\Infrastructure\Sentry;
 
 use Erpify\Shared\ErrorContract\Application\RedactionDenylist;
+use Erpify\Shared\ErrorContract\Application\RequestUriRedaction;
 use Sentry\Event;
 
 /**
@@ -13,15 +14,20 @@ use Sentry\Event;
  *
  * Pairs with `send_default_pii: false` (which already keeps request headers,
  * cookies, IP and the authenticated user off the event by default). This is the
- * belt to those braces: it strips the {@see RedactionDenylist} keys
- * (password/token/secret/authorization/cookie/ssn/iban) — **recursively, at every
- * depth** — from the event's `extra` and the `request` sub-arrays (`data`,
- * `cookies`, `headers`, `env`), and from the raw `query_string`.
+ * belt to those braces, in two vocabularies for two shapes:
  *
- * Recursion matters: the SDK captures nested request bodies (`data['user']['password']`)
- * and `query_string` arrives as a raw `a=b&c=d` string, both of which a single-level
- * filter would miss. Out of scope (covered elsewhere or by the denylist's own limits):
- * breadcrumbs, exception messages, and secret-bearing keys NOT in the denylist.
+ *  - **Key names** — the {@see RedactionDenylist} keys (password/token/secret/
+ *    authorization/cookie/ssn/iban) stripped **recursively, at every depth** from
+ *    the event's `extra` and the `request` sub-arrays (`data`, `cookies`,
+ *    `headers`, `env`). Recursion matters: the SDK captures nested request bodies
+ *    (`data['user']['password']`) a single-level filter would miss.
+ *  - **URIs** — {@see RequestUriRedaction} over `request.url` and
+ *    `request.query_string`, which arrive as raw strings a key-based rule cannot
+ *    read, and which carry the identity axes (`actorId`, `resourceId`,
+ *    `correlationId`) and the positional `filters[N][value]` search grammar.
+ *
+ * Out of scope (covered elsewhere or by the denylist's own limits): breadcrumbs,
+ * exception messages, and secret-bearing keys NOT in the denylist.
  *
  * Reusing the SAME denylist as the RFC 9457 pipeline
  * ({@see \Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory}) keeps scrub
@@ -53,28 +59,82 @@ final class SentryEventScrubber
         $request = $event->getRequest();
 
         if ([] !== $request) {
-            foreach (self::REQUEST_KEYS as $key) {
-                if (isset($request[$key]) && \is_array($request[$key])) {
-                    $request[$key] = $this->scrub($request[$key]);
-                }
-            }
-
-            // `query_string` is a raw "a=b&c=d" string in the SDK, not an array,
-            // so it bypasses the loop above — parse it so denylisted params
-            // (?token=…, ?password=…) are stripped before transmission.
-            if (
-                isset($request['query_string'])
-                && \is_string($request['query_string'])
-                && '' !== $request['query_string']
-            ) {
-                \parse_str($request['query_string'], $params);
-                $request['query_string'] = \http_build_query($this->scrub($params));
-            }
-
-            $event->setRequest($request);
+            $event->setRequest($this->scrubRequest($request));
         }
 
         return $event;
+    }
+
+    /**
+     * The caller-controlled half of the event, in the two vocabularies its two shapes need: key names for
+     * the structured sub-arrays, then URIs for the fields that are not structured at all.
+     *
+     * @param array<string, mixed> $request
+     *
+     * @return array<string, mixed>
+     */
+    private function scrubRequest(array $request): array
+    {
+        foreach (self::REQUEST_KEYS as $key) {
+            if (isset($request[$key]) && \is_array($request[$key])) {
+                $request[$key] = $this->scrub($request[$key]);
+            }
+        }
+
+        return $this->redactUrisIn($request);
+    }
+
+    /**
+     * `query_string`, `url` and `Referer` are raw strings in the SDK, so the key-based loop never reaches
+     * them — and a denylist is a rule about KEY names, the wrong shape for any of the three. They go through
+     * the vocabulary the access log and the per-error log line already share, so an axis redacted in one
+     * sink is redacted in all of them. `url` carries the query a second time (the SDK builds it from the
+     * whole URI), so redacting only `query_string` would leave the same values on the same event.
+     *
+     * Sentry is a third-party sink with its own retention that no erasure path can reach, which is what
+     * makes an identity axis here outlive the erasure the application confirmed to the subject.
+     *
+     * @param array<string, mixed> $request
+     *
+     * @return array<string, mixed>
+     */
+    private function redactUrisIn(array $request): array
+    {
+        if (isset($request['query_string']) && \is_string($request['query_string'])) {
+            $request['query_string'] = RequestUriRedaction::redactQuery($request['query_string']);
+        }
+
+        if (isset($request['url']) && \is_string($request['url'])) {
+            $request['url'] = RequestUriRedaction::redact($request['url']);
+        }
+
+        if (isset($request['headers']) && \is_array($request['headers'])) {
+            $request['headers'] = $this->redactRefererIn($request['headers']);
+        }
+
+        return $request;
+    }
+
+    /**
+     * `Referer` is the one header whose value IS a URI, and the loop above cannot help it: that scrub matches
+     * key NAMES, and the SDK's own sensitive-header list covers credentials only. Left alone it carries the
+     * referring document's whole URL — for a call made from the audit screen, the person ids that screen
+     * holds — into a third-party sink with retention of its own. Caddy drops the header outright for the same
+     * reason; here the value is worth keeping, so it is redacted rather than dropped.
+     *
+     * @param array<array-key, mixed> $headers
+     *
+     * @return array<array-key, mixed>
+     */
+    private function redactRefererIn(array $headers): array
+    {
+        foreach ($headers as $name => $value) {
+            if (\is_string($name) && 'referer' === \strtolower($name) && \is_string($value)) {
+                $headers[$name] = RequestUriRedaction::redact($value);
+            }
+        }
+
+        return $headers;
     }
 
     /**

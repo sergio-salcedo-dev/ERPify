@@ -1,0 +1,1 @@
+$this->addSql('ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS actor_erased BOOLEAN NOT NULL DEFAULT FALSE');

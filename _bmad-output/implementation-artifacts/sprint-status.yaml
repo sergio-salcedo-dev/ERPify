@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-08-04
+last_updated: 2026-08-07
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -349,9 +349,9 @@ development_status:
   # El barrido del 2026-08-06 cerró 11 de 65 midiendo cada issue CONTRA EL CÓDIGO, no contra su título, y
   # corrigió otros 4. Los 11 eran recientes, no viejos: el backlog se pudre por lo que se entrega, no por el
   # tiempo. Un issue solo se cierra con evidencia medida en el comentario de cierre.
-  epic-backlog-resolution: backlog
+  epic-backlog-resolution: in-progress
   br-1-behat-vocabulario-falsabilidad: backlog
-  br-2-residuos-eje-referencias-persona: backlog
+  br-2-residuos-eje-referencias-persona: done
   br-3-auditoria-crypto-cierres-eje-3: backlog
   br-4-endurecimiento-identidad-grafo-recuperacion: backlog
   br-5-ciclo-de-vida-iam-session: backlog

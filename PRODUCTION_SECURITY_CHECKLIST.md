@@ -358,9 +358,35 @@ you change anything here.
       verification of the firewall's own hasher) — malformed/unknown login identifiers, the `INVITED` pre-auth
       rejection and **every** forgot outcome, so latency correlates with nothing (SI-12). A dead reset/accept
       link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (SI-13):
-      `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password`, the client strips `?token=`
-      from the URL/history on mount, and Caddy's access log **redacts the `token` query parameter** (gate:
-      `CaddyfileAccessLogRedactionGateTest`). Recovery rate limits are **neutral per target**: forgot is capped
+      `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password` + `/backoffice/audit` and its
+      subtree (the audit URL names the people under investigation, so it leaves the tab no more readily than a
+      token does). **Read that header for what it is:** it is delivered with a DOCUMENT, so it governs a deep
+      link or a refresh and not a client-side navigation into the screen from elsewhere in the back-office,
+      where the initial document's policy still applies. It is defence in depth; the edge is what closes the
+      log. The client also strips `?token=` from the URL/history on mount, and Caddy's access log **redacts
+      every secret- and identity-bearing query parameter**: `authorization`, `token`, the audit screen's
+      `actorId`/`resourceId`/`correlationId`, and the `filters[0..19][value]` grammar every list surface
+      serializes its filter values into — which also covers the account-holder name and the user email
+      filters. **The range is bound to `SearchQuery::MAX_FILTERS`, not to what this UI emits**, because the
+      entry is written before Symfony validates anything: a 422 or a 404 is logged like any other request, so
+      the enumeration has to cover every index the API will accept from any client. An index at or beyond the
+      cap is rejected by validation but still logged, so a caller who fabricates one — and therefore already
+      knows the identifier — can plant it there; Caddy's grammar has no wildcard and that stays open. **Caddy also drops the `Referer` header**, because a
+      log line records more than its URI: for a same-origin API call the referring document is the screen the
+      ids live on, so an unfiltered `Referer` reproduces in clear exactly what the `uri` filter blanked, on the
+      same entry. The **application** log answers the same vocabulary through a Monolog processor over every
+      record carrying a `request_uri` — the framework's own router listener writes one at INFO, and prod's
+      `fingers_crossed` buffer flushes it on any 5xx — and the **Sentry** event is scrubbed on `request.url`,
+      `request.query_string` and the `Referer` header before it leaves the process, on both deployables.
+      **An identifier does not have to travel under a name anyone listed.** Every rule above matches a
+      parameter name, and an expired session redirects to `/login?next=<the whole audit URL>`, so the ids
+      arrive inside a value. A value that is itself a URI is therefore followed one level and redacted by the
+      same vocabulary; a value with nothing to redact is returned byte for byte, so the shape an operator
+      reads a request by survives. That index range is not left to a reader to keep
+      true: the gate (`CaddyfileAccessLogRedactionGateTest`) derives it from the Caddyfile and fails when a PWA
+      criteria builder outgrows it, so a tenth filter axis breaks the build instead of un-redacting silently.
+      The cost is accepted and real — a redacted value axis means the access log can no longer answer "which
+      filter was applied". Recovery rate limits are **neutral per target**: forgot is capped
       per email (`password_recovery_per_email`) and a saturated target still gets the uniform 202 with the work
       silenced (plus the timing floor); token endpoints are capped per selector. **A per-target budget may only
       429 where the caller has already proved it holds the target** — which is the authenticated password change
@@ -623,6 +649,32 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Accepted 2026-08-05 (Sergio):** no customer, and the cost of closing it is three seams across two
       contexts for a recoverable UX papercut. Re-assess if a session-scoped revoke becomes cheap for another
       reason, or the first time a user reports it.
+- [ ] **A person's id still reaches the access log through the URL *path*, and it is accepted.** Caddy's
+      access-log filter operates on `request>uri query`, so it is structurally incapable of touching a path
+      segment — and the application log's `request_uri` leaves the path alone by the same decision, so the
+      residual is one residual across both logs rather than a difference between them. The producer is
+      `pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts`, which composes
+      `/api/v1/backoffice/users/<uuid>`, where the uuid is the person's id. The sink has no owner of erasure:
+      no compose file declares a `logging:` driver, so it is the default json-file driver with neither rotation
+      nor TTL, and nothing in `FulfilIdentityErasure` can reach it. An id that lands there outlives the erasure
+      the application confirmed to the subject. Closing it is not a wider `replace` but a different mechanism —
+      a log-level rewrite of `uri`, a `logging:` driver whose retention the erasure path can act on, or no
+      access log for `/api/*` at all. **Accepted for now:** there is no production deployment, and the
+      query-side leak that *was* closed is the one with volume — it fired on every keystroke of a filter,
+      against one entry per user record opened here.
+- [ ] **The Next.js container logs the full request URL, person ids included — measured in dev, unverified in
+      prod.** The audit screen navigates to `/backoffice/audit?actorId=<uuid>&resourceId=<uuid>`, Caddy
+      reverse-proxies the document to the PWA, and the container prints
+      `GET /backoffice/audit?actorId=… 200 in 73ms` to stderr — the same json-file driver with no rotation and
+      no TTL that Caddy's access log uses, and one that Caddy's `query` filter cannot reach because it is a
+      different process. **Caddy's redaction does not cover this**; anyone reading "the access log redacts
+      `actorId`" as "no log holds it" would be wrong. `pwa/next.config.ts` also sets
+      `logging.fetches.fullUrl: true`, widening what server-side fetches record.
+      **Scope, stated with its limit:** that line is emitted by `next dev`, and production runs the standalone
+      `node server.js` (`pwa/Dockerfile`), where it was **not** observed — but nor was it verified against a
+      running production image, so treat prod as unconfirmed rather than clean. Closing it means a `logging:`
+      driver with a retention the erasure path can act on, or keeping the ids out of the document URL — which
+      the deep-link design deliberately does not do.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

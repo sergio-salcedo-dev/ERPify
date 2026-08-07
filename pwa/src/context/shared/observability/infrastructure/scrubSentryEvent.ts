@@ -1,5 +1,10 @@
 import type { Event } from "@sentry/nextjs";
-import { isDenylistedKey, scrubDeep } from "@/context/shared/observability/domain/redaction";
+import {
+  isDenylistedKey,
+  isIdentityAxisKey,
+  REDACTION_SENTINEL,
+  scrubDeep,
+} from "@/context/shared/observability/domain/redaction";
 
 /**
  * Sentry `beforeSend` / `beforeSendTransaction` hook: defense-in-depth scrub of
@@ -12,7 +17,9 @@ import { isDenylistedKey, scrubDeep } from "@/context/shared/observability/domai
  * Scrubs `extra`, `contexts`, `user`, `breadcrumbs`, and the caller-controlled
  * `request` sub-objects (`data` / `headers` / `cookies`), plus the raw
  * `query_string` and the `url`'s query (both strings, so they bypass key-based
- * filtering and are parsed param-by-param). Free-text (`message`, the captured
+ * filtering and are parsed param-by-param — where the identity axes are
+ * redacted alongside the denylist, since a URL is where those travel).
+ * Free-text (`message`, the captured
  * `Error.message`/stack) is intentionally NOT key-scrubbed — same scope as the
  * API scrubber; `sendDefaultPii: false` already keeps headers/cookies/bodies off
  * spans by default.
@@ -56,7 +63,7 @@ function scrubRequest(request: NonNullable<Event["request"]>): void {
   }
 
   if (headers) {
-    request.headers = scrubDeep(headers) as Record<string, string>;
+    request.headers = redactRefererIn(scrubDeep(headers) as Record<string, string>);
   }
 
   if (cookies) {
@@ -72,6 +79,21 @@ function scrubRequest(request: NonNullable<Event["request"]>): void {
   }
 }
 
+/**
+ * `Referer` is the one header whose value IS a URI, so the key-based scrub above cannot help it. Left alone
+ * it carries the referring document's whole URL — for anything fired from the audit screen, the person ids
+ * that screen holds — into a third-party sink with retention of its own.
+ */
+function redactRefererIn(headers: Record<string, string>): Record<string, string> {
+  const redacted: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    const isReferer: boolean = name.toLowerCase() === "referer";
+
+    redacted[name] = isReferer && typeof value === "string" ? scrubUrl(value) : value;
+  }
+  return redacted;
+}
+
 /** Attempt to scrub stringified JSON bodies which would otherwise bypass redaction. */
 function tryScrubJson(data: string): string {
   try {
@@ -84,14 +106,45 @@ function tryScrubJson(data: string): string {
   }
 }
 
-/** Strips denylisted params from a raw `a=b&c=d` query string. */
+/**
+ * Cleans a raw `a=b&c=d` query string. Both families of sensitive value — the denylisted secrets and the
+ * identity axes — keep their key and lose their value to the sentinel, which is the rule for a URI and
+ * not the strip semantics the recursive filter applies to structured keys: a URL's diagnostic worth is
+ * its shape, and a reader has to be able to tell a request that carried a token from one that did not.
+ * The API writes the same token over the same axes in the access log and in the per-error log line, so
+ * an event lines up with them.
+ *
+ * Sentry is a third-party sink with retention of its own that no erasure path reaches, so a person id
+ * that arrives here outlives the erasure the application confirmed to the subject.
+ */
 function scrubQueryString(queryString: string): string {
-  const params = new URLSearchParams(queryString);
+  return scrubPairs(queryString, true);
+}
+
+/**
+ * Every rule above matches a parameter NAME, and that misses a whole class: when a session expires the
+ * client navigates to `/login?next=<the entire audit URL>`, so the ids that screen holds arrive under a
+ * name no denylist will ever contain. A value that is itself a URI is followed one level — enough for the
+ * shape that exists, and no recursion to bound.
+ */
+function scrubNestedUri(value: string): string {
+  const queryStart = value.indexOf("?");
+  if (queryStart === -1) {
+    return value;
+  }
+
+  return `${value.slice(0, queryStart + 1)}${scrubPairs(value.slice(queryStart + 1), false)}`;
+}
+
+function scrubPairs(query: string, followNested: boolean): string {
+  const params = new URLSearchParams(query);
   const scrubbed = new URLSearchParams();
   for (const [key, value] of params) {
-    if (!isDenylistedKey(key)) {
-      scrubbed.append(key, value);
+    if (isDenylistedKey(key) || isIdentityAxisKey(key)) {
+      scrubbed.append(key, REDACTION_SENTINEL);
+      continue;
     }
+    scrubbed.append(key, followNested ? scrubNestedUri(value) : value);
   }
   return scrubbed.toString();
 }

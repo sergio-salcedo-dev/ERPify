@@ -2,10 +2,15 @@
  * Exact-key, case-insensitive denylist of sensitive field names, stripped from
  * any structured value before it leaves the client/server for an external sink
  * (Sentry today, Datadog later). Mirrors the API's `RedactionDenylist`
- * (`api/src/Shared/Application/Problem/RedactionDenylist.php`) so the front-end
- * scrub keeps parity with the RFC 9457 / Sentry `before_send` redaction on the
- * back-end. Strip semantics match the API: a denylisted key is REMOVED, not
- * replaced with a sentinel — the mere presence of a `password` key is a signal.
+ * (`api/src/Shared/ErrorContract/Application/RedactionDenylist.php`) so the
+ * front-end scrub keeps parity with the RFC 9457 / Sentry `before_send`
+ * redaction on the back-end. Strip semantics match the API for STRUCTURED
+ * values: a denylisted key is REMOVED, not replaced with a sentinel — the mere
+ * presence of a `password` key is a signal.
+ *
+ * A query string is not a structured value and does not follow that rule: there
+ * the key stays and the value becomes {@link REDACTION_SENTINEL}, because a
+ * URL's diagnostic worth is its shape. Both sides agree on this too.
  *
  * Extending the list here should be mirrored in the API enum (and vice-versa).
  */
@@ -30,6 +35,42 @@ export function isDenylistedKey(key: string): boolean {
   const lowerKey: string = key.toLowerCase();
 
   return NORMALIZED_DENYLIST.some((denied: string) => lowerKey.includes(denied));
+}
+
+/**
+ * Identity axes carried in a URL rather than in a body. The audit screen keeps its filter state in the
+ * query string, so the document URL names the people under investigation, and the API request it fires
+ * repeats them under the positional search grammar. Mirrors `RequestUriRedaction::IDENTITY_KEYS` on the
+ * API side; extending one list means extending the other.
+ *
+ * These stay OUT of {@link REDACTION_DENYLIST}: that list is matched as a substring against structured
+ * keys as well, and `actorId`/`resourceId`/`correlationId` are response-payload property names, so
+ * folding them in would silently start stripping fields the UI needs.
+ *
+ * `correlationId` holds no person id — it is a request-correlation UUID, redacted because the trail of
+ * one reconstructs a session.
+ */
+export const IDENTITY_AXES = ["actorid", "resourceid", "correlationid"] as const;
+
+/**
+ * The value axis of the positional search grammar. Index and array suffix are both permissive: the wire
+ * spells the suffix `[]`, `[0]` or `[12]` depending on whether the caller used `http_build_query`, axios or
+ * jQuery, and an event is a place where over-matching is the safe direction to be wrong in.
+ */
+const SEARCH_VALUE_KEY = /^filters\[-?\d*\]\[value\](\[-?\d*\])?$/;
+
+/**
+ * Replaces the value rather than dropping the pair, unlike the denylist's strip semantics: a URL's
+ * diagnostic worth IS its shape, and a missing pair leaves a reader unable to tell a filtered request
+ * from an unfiltered one. Same token the API and the access log write, so the sinks read alike.
+ */
+export const REDACTION_SENTINEL = "REDACTED";
+
+/** True when a query-parameter name is an identity axis or the value axis of the search grammar. */
+export function isIdentityAxisKey(key: string): boolean {
+  const lowerKey: string = key.toLowerCase();
+
+  return IDENTITY_AXES.some((axis: string) => axis === lowerKey) || SEARCH_VALUE_KEY.test(lowerKey);
 }
 
 /** Bounds recursion against pathological / cyclic structures. */
