@@ -2,7 +2,7 @@
 title: 'Dos ABBA cruzados cuyo único disidente es la cadena de borrado: hacer que el borrado se conforme, y medir la posición'
 type: 'bugfix'
 created: '2026-08-07'
-status: 'in-review'
+status: 'done'
 baseline_commit: '5f7d853f9bb13dc41bc1366fc4ab910b7acee54b'
 review_loop_iteration: 0
 context:
@@ -208,3 +208,49 @@ Sergio decidió cerrarlo en esta PR en vez de declararlo, coherente con la tesis
 
 - **Ninguna carrera real de dos transacciones se ejercita en ningún sitio**, por construcción (sin `pcntl`, sin `pgsql` procedural). Toda afirmación de deadlock aquí — incluidas las que los revisores comparten — descansa en instantes de adquisición, jamás en un `40P01` observado.
 - La inestabilidad de plan de `DELETE … WHERE invited_user_id = ?` se argumenta desde la forma del índice, no desde un `EXPLAIN` sobre una tabla poblada.
+
+---
+
+## Suggested Review Order
+
+**El orden elegido, y por qué cada par lo fija por una razón distinta**
+
+- La cadena entera en una pantalla: la purga lidera, tras la guarda que la mantiene fuera de una transacción condenada.
+  [`FulfilIdentityErasure.php:151`](../../api/src/Iam/Identity/Application/FulfilIdentityErasure.php#L151)
+
+- Las dos sentencias de ABBA #2 invertidas; el comentario dice qué fija a los caminos de reset, y no es su libertad.
+  [`EraseIdentitySubject.php:68`](../../api/src/Iam/Identity/Application/EraseIdentitySubject.php#L68)
+
+- El argumento corregido: fija el par el accept, no el revoke; ambas entradas de revoke conforman.
+  [`RevokeInvitation.php:127`](../../api/src/Iam/Invitation/Application/RevokeInvitation.php#L127)
+
+**El ciclo intra-tabla: dos sentencias, una dirección, dos rutas**
+
+- La lectura que bloquea un conjunto, ahora ordenada; Postgres no promete orden de recorrido entre planes.
+  [`DoctrineInvitationRepository.php:75`](../../api/src/Iam/Invitation/Infrastructure/Persistence/Doctrine/DoctrineInvitationRepository.php#L75)
+
+- El borrado masivo no admite `ORDER BY`, así que adquiere sus filas por una lectura ordenada previa.
+  [`DoctrineInvitationRepository.php:119`](../../api/src/Iam/Invitation/Infrastructure/Persistence/Doctrine/DoctrineInvitationRepository.php#L119)
+
+**Los instrumentos — ninguno implica al otro**
+
+- Afirma la SECUENCIA sobre los casos de uso; contar llamadas no vería el orden.
+  [`ErasureLockOrderTest.php:79`](../../api/tests/Unit/Iam/Identity/Application/ErasureLockOrderTest.php#L79)
+
+- Tres preguntas a una segunda conexión con `FOR UPDATE NOWAIT`, en dos instantes de adquisición.
+  [`ErasureLockOrderFunctionalTest.php:144`](../../api/tests/Functional/Iam/Identity/ErasureLockOrderFunctionalTest.php#L144)
+
+- `RowShareLock` distingue la lectura ordenada del borrado: un `DELETE` solo toma `RowExclusiveLock`.
+  [`DoctrineInvitationRepositoryTest.php:178`](../../api/tests/Functional/Iam/Invitation/DoctrineInvitationRepositoryTest.php#L178)
+
+**Periféricos**
+
+- El diario compartido: el invariante es una secuencia de tablas, no un conteo de llamadas.
+  [`LockOrderJournal.php:23`](../../api/tests/Unit/Shared/Persistence/Double/LockOrderJournal.php#L23)
+
+- ADR D13: el invariante, el porqué por par, la aplicación y lo que NADA de esto prueba.
+  [`identity-invitation-lifecycle.md`](../../docs/adr/identity-invitation-lifecycle.md)
+
+---
+
+**Entregado:** PR [#658](https://github.com/sergio-salcedo-dev/ERPify/pull/658), rama `fix/iam-erasure-lock-order-5k3k`, commits `5878be53` y `54d9474b`.
