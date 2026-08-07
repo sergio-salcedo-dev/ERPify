@@ -40,13 +40,29 @@ test.describe("BackOffice - Revoke a user invitation (real API)", () => {
     });
 
     // Narrow the server-side filter to the unique invitee so the row is unambiguous among the identities the
-    // dev DB has accumulated.
+    // dev DB has accumulated. Waited for over the WIRE, not inferred from the DOM: the invitee is already on
+    // the unfiltered page, so a visibility assertion passes while the filtered fetch is still in flight, and
+    // that late response then re-renders the row out from under the dialog opened on it.
+    const filteredSearch = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        decodeURIComponent(response.url()).includes(email) &&
+        response.ok(),
+      { timeout: COLD_ROUTE_TIMEOUT_MS },
+    );
     await page.getByTestId("users-filters__email").fill(email);
-    // Wait for the debounced server-side search to actually land: the invitee is already on the unfiltered
-    // page, so asserting only that its row is visible passes while the filtered fetch is still in flight —
-    // and that response then re-renders the row out from under the dialog opened on it. One row is a safe
-    // exact count here precisely because the filter is a per-run unique address, not a shared list.
-    await expect(page.locator('[data-testid^="users-table__row-"]')).toHaveCount(1);
+    await filteredSearch;
+
+    // `__row-actions-<id>` shares the `__row-` prefix with the row itself, so a bare prefix match counts every
+    // row twice and never settles. Excluded explicitly rather than by tightening the prefix: both ids end in a
+    // UUID, and `actions` is itself valid hex, so no charset rule tells them apart.
+    //
+    // The cold-route budget rather than the default 5 s because this waits on a debounced round trip on a
+    // dev-mode stack, where a Fast Refresh rebuild can remount the tree and reset the list hook's state — the
+    // response above having landed does not guarantee the repaint that follows it is the filtered one.
+    await expect(
+      page.locator('[data-testid^="users-table__row-"]:not([data-testid*="__row-actions-"])'),
+    ).toHaveCount(1, { timeout: COLD_ROUTE_TIMEOUT_MS });
     const row = page.getByRole("row").filter({ hasText: email });
     await expect(row).toBeVisible();
 
