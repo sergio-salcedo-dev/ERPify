@@ -9,6 +9,8 @@ use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
@@ -29,6 +31,12 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * Authorization is the controller-level `users.invite` gate over the custom `PermissionVoter`: putting the check
  * inside {@see SendInvitation} would couple the CLI, which invokes the same use case with no session. The literal
  * permission string mirrors the read-side register gate (`users.read`) — one action, no constants class yet.
+ *
+ * A second, narrower check rides on the payload rather than the route: minting an administrator is a distinct
+ * act from inviting a member, so an invite whose role set carries `ADMIN` additionally demands
+ * `users.grantAdmin`. It is imperative because it is conditional — `#[IsGranted]` would refuse every invite,
+ * including the non-admin ones the actor is entitled to send. It stays here rather than in
+ * {@see SendInvitation} for the same reason the route gate does: the CLI drives that use case with no session.
  */
 #[Route('/invitations', name: self::ROUTE_NAME, methods: ['POST'])]
 #[IsGranted('users.invite')]
@@ -36,15 +44,38 @@ final readonly class CreateInvitationController
 {
     public const string ROUTE_NAME = 'backoffice_invitation_create';
 
-    public function __construct(private SendInvitation $sendInvitation)
-    {
+    private const string GRANT_ADMIN_PERMISSION = 'users.grantAdmin';
+
+    public function __construct(
+        private SendInvitation $sendInvitation,
+        private AuthorizationCheckerInterface $authorizationChecker,
+    ) {
     }
 
     public function __invoke(#[StrictRequestPayload(acceptFormat: ['json'])] InviteUserRequest $request): Response
     {
-        $this->sendInvitation->invite($request->email, ...$this->rolesFrom($request));
+        $roles = $this->rolesFrom($request);
+
+        if ($this->grantsAdmin($roles) && !$this->authorizationChecker->isGranted(self::GRANT_ADMIN_PERMISSION)) {
+            // The message travels as the RFC 9457 `title`, so it names the refused act and no internals.
+            throw new AccessDeniedException('You may not grant the ADMIN role.');
+        }
+
+        $this->sendInvitation->invite($request->email, ...$roles);
 
         return new Response(status: Response::HTTP_CREATED);
+    }
+
+    /**
+     * Whether this alta would hand the invitee the administrator role — the one payload shape the extra
+     * permission governs. A named predicate rather than an inline `in_array`, because what the guard it
+     * serves is about is the *act of delegating administration*, not the mechanics of scanning a list.
+     *
+     * @param list<Role> $roles
+     */
+    private function grantsAdmin(array $roles): bool
+    {
+        return \in_array(Role::ADMIN, $roles, true);
     }
 
     /**

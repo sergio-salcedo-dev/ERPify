@@ -8,8 +8,11 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
 
 /**
- * The login admission wall for a `DEACTIVATED` identity: a terminal admission wall for a retired identity,
- * distinct by design from a reversible suspension.
+ * The login admission wall for a terminally unadmitted identity, distinct by design from a reversible
+ * suspension. Raised for `DEACTIVATED` (a retired member) and, from `User::ensureActive()`, for the
+ * credential-less `INVITED` and `REVOKED` — collapsing them is deliberate, since telling a withdrawn
+ * invitation apart from a retired member would report someone else's revocation decision to whoever holds the
+ * address.
  *
  * Overrides `type()` to the specific `account-deactivated` while the {@see Forbidden} marker keeps the 403
  * status — the same marker-plus-`type()` pattern {@see AccountSuspended} uses. A specific type lets a client

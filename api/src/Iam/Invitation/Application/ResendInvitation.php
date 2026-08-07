@@ -48,16 +48,24 @@ final readonly class ResendInvitation
 
         $recipientEmail = $this->transactionManager->transactional(
             function () use ($invitationId, $generated): string {
-                $invitation = $this->invitations->findById($invitationId)
+                $invitation = $this->invitations->findByIdForUpdate($invitationId)
                     ?? throw new InvitationNotFound($invitationId);
+
+                $user = $this->users->findById($invitation->invitedUserId())
+                    ?? throw InvitedIdentityUnavailable::missing();
+
+                // The invitation's own `SENT` guard is not sufficient: revoking one of several invitations
+                // addressed to the same user withdraws the identity once and leaves the others live, so a
+                // `SENT` row can point at an identity that can never activate. Re-tokenising it would mail a
+                // fresh link whose only possible outcome is the opaque wall.
+                if (!$user->isInvited()) {
+                    throw InvitedIdentityUnavailable::withdrawn();
+                }
 
                 $invitation->resend($generated->token);
 
                 $this->invitations->save($invitation);
                 $this->eventBus->publish(...$invitation->pullDomainEvents());
-
-                $user = $this->users->findById($invitation->invitedUserId())
-                    ?? throw InvitedIdentityUnavailable::missing();
 
                 return $user->email();
             },

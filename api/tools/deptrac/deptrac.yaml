@@ -472,6 +472,9 @@ deptrac:
             - Erpify\Organization\Membership\Application\GrantMembership
         Erpify\Iam\Invitation\Application\ResendInvitation:
             - Erpify\Iam\Identity\Domain\Repository\UserRepository
+        Erpify\Iam\Invitation\Application\RevokeInvitation:
+            - Erpify\Iam\Identity\Domain\Repository\UserRepository
+            - Erpify\Iam\Identity\Domain\Exception\UserNotFound
         Erpify\Iam\Invitation\Infrastructure\Http\AcceptInvitationController:
             - Erpify\Iam\Identity\Domain\HashedPassword
             - Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher

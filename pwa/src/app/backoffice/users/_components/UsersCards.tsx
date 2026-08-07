@@ -8,6 +8,7 @@ import { cn } from "@/components/cn";
 import { useIsTruncated } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { userRoutes } from "../_lib/userRoutes";
 import { UserStatusBadge } from "./UserStatusBadge";
 import { RolesBadges } from "./RolesBadges";
@@ -18,6 +19,8 @@ interface UsersCardsProps {
   selectedIds?: ReadonlySet<string>;
   onToggleSelect?: (id: string) => void;
   density?: "compact" | "comfortable";
+  onInvitationRevoked: () => void;
+  onRevokeFailed: (problem: ProblemDetails) => void;
 }
 
 /**
@@ -54,6 +57,8 @@ export function UsersCards({
   selectedIds,
   onToggleSelect,
   density = "compact",
+  onInvitationRevoked,
+  onRevokeFailed,
 }: Readonly<UsersCardsProps>) {
   return (
     <ul
@@ -91,8 +96,11 @@ export function UsersCards({
                 <UserRowActions
                   id={user.id}
                   email={user.email}
+                  status={user.status}
                   surface="cards"
                   reveal="card"
+                  onInvitationRevoked={onInvitationRevoked}
+                  onRevokeFailed={onRevokeFailed}
                   className="users-cards__actions relative z-10 ml-auto"
                 />
               </div>

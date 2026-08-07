@@ -15,11 +15,13 @@ several organizations, users belonging to more than one, billing, ownership tran
 operated by people who are not members of any customer organization.
 
 That direction produces recurring pressure to answer each new question by adding a role — `SUPER_ADMIN` for
-platform staff, `OWNER` for whoever governs an organization. Issue #505 (any `ADMIN` can mint another `ADMIN`)
-is where the pressure first surfaced, and the attempted fix is what exposed the shape of the problem: adding a
-`users.grant-admin` permission would have been a **no-op**, because a vocabulary in which `ADMIN` means *every
-action* cannot express *"`ADMIN` may not"*. The defect was never a missing role; it was a question being asked in
-a language that cannot hold it.
+platform staff, `OWNER` for whoever governs an organization. Issue #505 (any `ADMIN` can mint another `ADMIN`) is
+where the pressure first surfaced, and it is worth stating precisely what it did and did not expose. A
+permission-shaped answer is **not** a no-op: `TIER_OPT_OUT` lists `users`, so `grantedByTier()` returns `false` for
+every `users.*` permission *before* the `ADMIN => ['*']` wildcard is consulted, and each one is therefore deniable
+to `ADMIN` by a single data row. `users.grantAdmin` is that row. What the episode exposed is that a **role** was
+the wrong instrument: a rung ranked above `ADMIN` cannot express *"`ADMIN` may not"*, because the wildcard makes
+the higher rung its synonym. The defect was never a missing role.
 
 This ADR introduces neither concept. It records what they will **not** be, so that the cheap shortcut is already
 closed when the pressure returns — which is the only moment at which this document has any value.
@@ -62,10 +64,11 @@ would be a latent bug the day a second organization exists. Second, `Role` is vo
 (`@/context/shared/access/domain/Role`); a global `OWNER` would oblige the client to reason about ownership, while
 membership metadata stays server-side.
 
-Adding `OWNER` above `ADMIN` also does not work mechanically in the current policy, for the same reason
-`users.grant-admin` did not: `ADMIN` holds the `{*}` tier, so an `OWNER` tier would be its synonym unless `ADMIN`
-were demoted. Ranking roles is not how this model separates governance from operation — the
-[tier opt-out](rbac-authorization-model.md) is, and it binds every role including `ADMIN`.
+Adding `OWNER` above `ADMIN` also does not work mechanically in the current policy: `ADMIN` holds the `{*}` tier,
+so an `OWNER` tier would be its synonym unless `ADMIN` were demoted. Ranking roles is not how this model separates
+governance from operation — the [tier opt-out](rbac-authorization-model.md) is, and it binds every role including
+`ADMIN`. That asymmetry is the whole point: a *permission* on an opted-out resource can express "`ADMIN` may not",
+where a higher *rung* cannot.
 
 *Discarded:* `Role::OWNER` as the next rung of the ladder. It reads naturally and buys nothing the opt-out does not
 already give, while making the org-scoped concept globally scoped.
@@ -139,23 +142,23 @@ subject's whole attribution irreversibly, and its only guards were self-erasure 
 neither of which stops an administrator from erasing a peer. Erasure now refuses any subject still carrying
 `ADMIN`, so the demotion has to happen first, as its own act.
 
-**What that refusal buys today, stated exactly.** An extra authorization step and friction — nothing more. It is
-*not* a traceability control, because **the demotion leaves no attributable record**: `User` deliberately stays
-out of the write-capture CDC (a field-level diff would carry `password_hash` into an append-only store), the
-generic access hook audits only `GET`, and the `event_store` entry for a role change names no actor. So
-promote-act-demote-erase still reads, in `audit_log`, as one unexplained act by the erasing administrator.
+**What that refusal buys, stated exactly.** An extra authorization step *and* an attributable record. The demotion
+is audited: `ChangeUserRoles` writes an explicit `USER_ROLES_CHANGED` row at `security` level naming the subject in
+the resource columns and carrying both role sets in metadata — no credential, no email, no aggregate diff. So
+promote-act-demote-erase no longer reads, in `audit_log`, as one unexplained act by the erasing administrator.
 
-Recording the demotion is the obvious completion, and it is **deliberately not done here**. The natural
-implementation — an audit row naming the subject in the resource columns — collides with
-[`audit-activity-log.md`](audit-activity-log.md) D4, which decides that erasure anonymises the *actor* only and
-assigns erasure of a person-denoting resource to the bounded context owning it. Writing that row without settling
-that question first would leave the erased subject's real id beside their own pseudonym in one row, which is the
-reversible crosswalk that ADR's policy exists to prevent. Who owns GDPR erasure over the resource columns is a
-governance decision between contexts, not an implementation detail of this one, so it is taken separately.
+That row was written once and withdrawn, because naming a person in `resource_id` while erasure rewrote only
+`actor_id` leaves the subject's real id beside their own pseudonym whenever someone demotes *themselves* — the
+reversible crosswalk [`audit-activity-log.md`](audit-activity-log.md) D4's policy exists to prevent. That ownership
+question is settled: erasure now anonymises **both** axes inside one transaction, the resource axis driven by the
+owning context's declared eraser, with a registry gate and a reconciler as the preventive and detective halves. The
+trigger recorded here has fired, and the refusal is the traceability control it was written to be.
 
-**Revisit trigger.** When that ownership question is settled, the demotion gets its audited record and this
-refusal becomes the traceability control it is meant to be. Until then it is procedural, and this ADR says so
-rather than claiming the stronger thing.
+**What is still not claimed.** The record ages out before the data it describes — a `USER_ROLES_CHANGED` row is
+`security`, so the 365-day ceiling above governs it while the pseudonymised `change` rows survive four more years.
+And the row makes a role change *visible*, never *impossible*: the ≥1-admin guard refuses only when no **other**
+active administrator would remain, so one principal may still demote peers one at a time until they are the only
+one left. That is a separate invariant, and this ADR does not claim it.
 
 It subsumes the ≥1-admin invariant on the erasure path (the last active administrator necessarily carries the
 role), which now binds only on the transitions that can shrink the set.
@@ -170,8 +173,8 @@ separates the duty, and it needs an approval aggregate with state, expiry and no
 before an organization exists with two administrators who are not the same person's accounts.
 
 *Discarded:* auditing `User` through the write-capture CDC to record the demotion. It would put `password_hash`
-in the trail, which is why the aggregate opted out in the first place. Whatever records the demotion will be an
-explicit, field-selective row — but only once its erasure ownership is settled.
+in the trail, which is why the aggregate opted out in the first place. The demotion is recorded by an explicit,
+field-selective row instead.
 
 ## What this ADR does not decide
 

@@ -37,8 +37,10 @@ final class PermissionCatalogTest extends TestCase
         'bankAccount.changeStatus',
         'users.read',
         'users.invite',
+        'users.revokeInvitation',
         'users.changeStatus',
         'users.changeRoles',
+        'users.grantAdmin',
         'users.erase',
     ];
 

@@ -6,13 +6,17 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\ChangeUserRoles;
+use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -24,9 +28,15 @@ use Psr\Log\NullLogger;
  * here through hand-written doubles — the directory records whether it was consulted at all, and the session
  * teardown is observed through a real {@see RevokeSessionsBestEffort} over an in-memory session store.
  *
+ * The compliance row the change writes is pinned on four axes rather than one, because it is the evidence the
+ * erasure refusal's premise rests on: that it is emitted with both role sets, that its metadata shape is
+ * frozen key-for-key, and that neither a no-op nor a refused demotion fabricates one. Each is a distinct way
+ * the row could regress, so the method count reflects the surface under test, not a class doing several jobs.
+ *
  * @internal
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
 #[CoversClass(ChangeUserRoles::class)]
 final class ChangeUserRolesTest extends TestCase
@@ -185,6 +195,91 @@ final class ChangeUserRolesTest extends TestCase
         $this->assertSame([], $sessions->revokeAllCalls);
     }
 
+    public function testADemotionIsRecordedInTheComplianceTrailWithBothRoleSets(): void
+    {
+        $user = UserMother::create(roles: [Role::ADMIN]);
+        $audit = new RecordingAuditLogger();
+        $directory = new InMemoryActiveAdministratorDirectory([
+            UserMother::DEFAULT_ID => true,
+            self::OTHER_ADMIN_ID => true,
+        ]);
+
+        $this->makeUseCase(new InMemoryUserRepository($user), $directory, audit: $audit)
+            ->run(UserMother::DEFAULT_ID, Role::EDITOR)
+        ;
+
+        // Without this row a role change leaves no attributable evidence anywhere — `User` stays out of the
+        // write-capture CDC to keep `password_hash` out of the trail, the generic hook audits only GET, and
+        // the event-store entry names no actor. The erasure refusal's whole premise is that this row exists.
+        $this->assertCount(1, $audit->records);
+        $this->assertSame('USER_ROLES_CHANGED', $audit->records[0]['action']);
+        $this->assertSame(AuditLevel::SECURITY, $audit->records[0]['level']);
+
+        $resource = $audit->records[0]['resource'];
+        $this->assertInstanceOf(AuditResource::class, $resource);
+        // The type the identity context declares as denoting a natural person, so the same anonymiser pass
+        // that clears the subject's actor axis also clears this row's resource axis.
+        $this->assertSame(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $resource->type);
+        $this->assertSame(UserMother::DEFAULT_ID, $resource->id);
+    }
+
+    public function testTheMetadataContractIsFrozenKeyForKeyAndCarriesNoCredentialOrEmail(): void
+    {
+        $user = UserMother::create(roles: [Role::MANAGER, Role::VIEWER]);
+        $audit = new RecordingAuditLogger();
+
+        $this->makeUseCase(
+            new InMemoryUserRepository($user),
+            new InMemoryActiveAdministratorDirectory([]),
+            audit: $audit,
+        )->run(UserMother::DEFAULT_ID, Role::EDITOR, Role::AUDIT_READER);
+
+        // One assertion over the WHOLE array, because there is no central registry of audit-metadata schemas:
+        // the exact keys, in canonical order, with canonical (sorted, deduped) values, are the contract. A
+        // later `oldRoles`/`roles_before` rename, an extra key, or an unsorted set fails here rather than
+        // silently producing a trail nobody can query the same way twice. `User` is not a CDC-audited entity
+        // precisely because a field diff would carry the credential — this row must never reintroduce it.
+        $this->assertCount(1, $audit->records);
+        $this->assertSame(
+            ['previous_roles' => ['MANAGER', 'VIEWER'], 'new_roles' => ['AUDIT_READER', 'EDITOR']],
+            $audit->records[0]['metadata'],
+        );
+    }
+
+    public function testARedundantSetWritesNoComplianceRow(): void
+    {
+        $user = UserMother::create(roles: [Role::EDITOR]);
+        $audit = new RecordingAuditLogger();
+
+        $this->makeUseCase(
+            new InMemoryUserRepository($user),
+            new InMemoryActiveAdministratorDirectory([]),
+            audit: $audit,
+        )->run(UserMother::DEFAULT_ID, Role::EDITOR);
+
+        // The no-op short-circuit returns before mutating, so a redundant request must not pad the trail with
+        // a change that never happened.
+        $this->assertSame([], $audit->records);
+    }
+
+    public function testARefusedDemotionWritesNoComplianceRow(): void
+    {
+        $user = UserMother::create(roles: [Role::ADMIN]);
+        $audit = new RecordingAuditLogger();
+        $directory = new InMemoryActiveAdministratorDirectory([UserMother::DEFAULT_ID => true]);
+
+        try {
+            $this->makeUseCase(new InMemoryUserRepository($user), $directory, audit: $audit)
+                ->run(UserMother::DEFAULT_ID, Role::EDITOR)
+            ;
+            $this->fail('Expected LastActiveAdministratorProtected.');
+        } catch (LastActiveAdministratorProtected) {
+            // the guard refuses before the mutation, so nothing is recorded as having changed
+        }
+
+        $this->assertSame([], $audit->records);
+    }
+
     public function testChangingTheRolesOfAMissingIdentityIsANotFound(): void
     {
         $this->expectException(UserNotFound::class);
@@ -199,12 +294,14 @@ final class ChangeUserRolesTest extends TestCase
         InMemoryActiveAdministratorDirectory $directory,
         ?RecordingEventBus $eventBus = null,
         ?InMemorySessionRepository $sessions = null,
+        ?RecordingAuditLogger $audit = null,
     ): ChangeUserRoles {
         return new ChangeUserRoles(
             $repository,
             $directory,
             $this->revokeSessions($sessions ?? new InMemorySessionRepository()),
             $eventBus ?? new RecordingEventBus(),
+            $audit ?? new RecordingAuditLogger(),
             new InlineTransactionManager(),
         );
     }

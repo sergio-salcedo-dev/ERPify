@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Domain\Entity;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Event\UserDeactivated;
+use Erpify\Iam\Identity\Domain\Event\UserInvitationRevoked;
 use Erpify\Iam\Identity\Domain\Event\UserSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\HashedPassword;
@@ -118,5 +119,31 @@ final class UserLifecycleTest extends TestCase
         $this->expectException(InvalidIdentityTransition::class);
 
         UserMother::invited()->deactivate();
+    }
+
+    public function testRevokeInvitationWithdrawsAnIdentityThatNeverActivated(): void
+    {
+        $user = UserMother::invited();
+
+        $user->revokeInvitation();
+
+        $this->assertSame(IdentityStatus::REVOKED, $user->status());
+
+        $events = $user->pullDomainEvents();
+        $this->assertCount(1, $events);
+
+        foreach ($events as $event) {
+            $this->assertInstanceOf(UserInvitationRevoked::class, $event);
+            $this->assertSame(UserMother::DEFAULT_ID, $event->aggregateId());
+        }
+    }
+
+    public function testRevokeInvitationIsRejectedForAnIdentityThatCameIntoService(): void
+    {
+        // REVOKED answers "the invitation was withdrawn", never "the member was retired" — reaching it from
+        // ACTIVE would collapse the two and misreport a former member as one who never arrived.
+        $this->expectException(InvalidIdentityTransition::class);
+
+        UserMother::create()->revokeInvitation();
     }
 }

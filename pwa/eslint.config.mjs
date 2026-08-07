@@ -87,9 +87,9 @@ const eslintConfig = [
           // statement: without them the descent reaches into whole `it(…)` callbacks and consecutive
           // `it(…)` statements match each other as the sibling pair.
           selector:
-            "ExpressionStatement:not(:has(ArrowFunctionExpression)):has(CallExpression[callee.property.name='getByTestId'] TemplateLiteral[quasis.0.value.raw=/__actions-$/]) ~ ExpressionStatement:not(:has(ArrowFunctionExpression)):has(CallExpression[callee.property.name='findByTestId'] TemplateLiteral[quasis.0.value.raw=/__delete-$/])",
+            "ExpressionStatement:not(:has(ArrowFunctionExpression)):has(CallExpression[callee.property.name='getByTestId'] TemplateLiteral[quasis.0.value.raw=/__actions-$/]) ~ ExpressionStatement:not(:has(ArrowFunctionExpression)):has(CallExpression[callee.property.name='findByTestId'] TemplateLiteral[quasis.0.value.raw=/__(delete|revoke)-$/])",
           message:
-            "Opening a row's ⋯ overflow menu and then awaiting its `…__delete-<id>` item is a race: under jsdom a just-opened Base UI popup can close again before its content mounts, so the single-shot open survives locally and goes red under CI parallelism. Open it through openRowDeleteItem(surface, id) from tests/app/backoffice/banks/_interactions.ts — it retries the open, so a Delete that genuinely never renders still fails.",
+            "Opening a row's ⋯ overflow menu and then awaiting its item (`…__delete-<id>`, `…__revoke-<id>`) is a race: under jsdom a just-opened Base UI popup can close again before its content mounts, so the single-shot open survives locally and goes red under CI parallelism. Open it through openRowMenuItem(surface, action, id) from tests/app/backoffice/_interactions.ts (or the banks-scoped openRowDeleteItem built on it) — it retries the open, so an item that genuinely never renders still fails.",
         },
       ],
       "react/react-in-jsx-scope": "off", // Next.js doesn't need it

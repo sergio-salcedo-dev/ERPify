@@ -13,7 +13,9 @@ import {
   InviteUserSchema,
   type InviteUserFormValues,
 } from "@/context/backoffice/user/application/schemas/InviteUserSchema";
-import { ALL_ROLES } from "@/context/shared/access/domain/Role";
+import { ALL_ROLES, Role } from "@/context/shared/access/domain/Role";
+import { Permission } from "@/context/shared/access/domain/Permission";
+import { useCan } from "@/context/shared/access/application/useCan";
 import { FormField, MutationError, Spinner } from "@/components/erpify";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { Button } from "@/components/ui/button";
@@ -40,9 +42,19 @@ function baseField(field: string): string {
 // so `useSyncExternalStore` needs only its server (`false`) vs client (`true`) snapshots to expose it.
 const emptySubscribe = () => () => {};
 
+/**
+ * Sends the invitation that creates an identity. The ADMIN checkbox is offered only to a session holding
+ * `users.grantAdmin`: minting another administrator is a capability of its own, distinct from being allowed to
+ * invite at all. The gate is `useCan` rather than a `<Can>` wrapper because the decision is a filter over the
+ * role list — one predicate resolved once, before the `.map()` — where `<Can>` would put a guard component
+ * inside every checkbox to answer a question that concerns a single role. Hiding is convenience only: an
+ * `ADMIN` value submitted anyway is refused by the API, which remains the authorization control.
+ */
 export function InviteUserForm() {
   const router = useRouter();
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  const mayGrantAdmin = useCan(Permission.USERS_GRANT_ADMIN);
+  const offeredRoles = mayGrantAdmin ? ALL_ROLES : ALL_ROLES.filter((role) => role !== Role.ADMIN);
 
   // Until React wires the submit handler, a native submit performs a GET that leaks the invitee email
   // into the URL, history and logs. Gating the submit button on hydration stops any submit — click or
@@ -144,7 +156,7 @@ export function InviteUserForm() {
           Choose at least one role for the new member.
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
-          {ALL_ROLES.map((role) => (
+          {offeredRoles.map((role) => (
             <label
               key={role}
               className="border-border hover:bg-accent flex items-center gap-2 rounded-md border p-2 text-sm"

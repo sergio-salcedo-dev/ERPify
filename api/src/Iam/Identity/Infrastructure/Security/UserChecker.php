@@ -17,9 +17,9 @@ use Symfony\Component\Security\Core\User\UserInterface;
  * between proving credentials and minting a session, whether an identity may be admitted — so "authenticated"
  * never implies "admitted".
  *
- * - {@see checkPreAuth} runs BEFORE the password is verified: an `INVITED` identity is rejected here (as a
- *   plain account-status failure) so its password is never checked and the failure collapses into the
- *   uniform pre-identity 401.
+ * - {@see checkPreAuth} runs BEFORE the password is verified: the credential-less states — `INVITED` and the
+ *   terminal `REVOKED` — are rejected here (as plain account-status failures) so no password is ever checked
+ *   and both failures collapse into the same uniform pre-identity 401.
  * - {@see checkPostAuth} runs AFTER the password is verified (identity proven): a `SUSPENDED` / `DEACTIVATED`
  *   identity is rejected here, which aborts authentication so the firewall mints no session — the "no session
  *   artifacts" guarantee is structural, not something cleaned up afterwards.
@@ -39,13 +39,21 @@ final readonly class UserChecker implements UserCheckerInterface
             return;
         }
 
-        if (IdentityStatus::INVITED === $user->status()) {
-            // why: an INVITED identity is rejected before any password verification (it has no credential yet),
-            // so without a floor this branch answers measurably faster than a wrong-password failure — a
+        // Both credential-less states are walled here, and enumerated rather than defaulted so a state added
+        // later fails the build instead of falling through into admission.
+        $credentialLessWall = match ($user->status()) {
+            IdentityStatus::INVITED => new InvitedAccountException(),
+            IdentityStatus::REVOKED => new RevokedAccountException(),
+            IdentityStatus::ACTIVE, IdentityStatus::SUSPENDED, IdentityStatus::DEACTIVATED => null,
+        };
+
+        if (null !== $credentialLessWall) {
+            // why: neither identity holds a credential, so this branch is reached before any password
+            // verification and would otherwise answer measurably faster than a wrong-password failure — a
             // pre-identity state oracle. Pay the same hashing work the equalised not-found path pays.
             $this->timingFloor->equalise();
 
-            throw new InvitedAccountException();
+            throw $credentialLessWall;
         }
     }
 
@@ -59,14 +67,20 @@ final readonly class UserChecker implements UserCheckerInterface
             return;
         }
 
-        $status = $user->status();
+        // Enumerated rather than chained, for the reason `checkPreAuth` is: a state added later must fail the
+        // build instead of falling through. It is enumerated HERE as well because this is the hook that decides
+        // admission — `checkPreAuth` only asks whether the identity holds a credential, which is orthogonal, so
+        // a future state answering "it does" would satisfy that hook and reach a session unwalled.
+        $lifecycleWall = match ($user->status()) {
+            IdentityStatus::SUSPENDED => new SuspendedAccountException(),
+            IdentityStatus::DEACTIVATED => new DeactivatedAccountException(),
+            // Unreachable rather than admitted: both credential-less states are walled in `checkPreAuth`,
+            // which runs before any password verification and throws.
+            IdentityStatus::ACTIVE, IdentityStatus::INVITED, IdentityStatus::REVOKED => null,
+        };
 
-        if (IdentityStatus::SUSPENDED === $status) {
-            throw new SuspendedAccountException();
-        }
-
-        if (IdentityStatus::DEACTIVATED === $status) {
-            throw new DeactivatedAccountException();
+        if (null !== $lifecycleWall) {
+            throw $lifecycleWall;
         }
 
         // The lock arm runs LAST: a lifecycle wall (SUSPENDED/DEACTIVATED) precedes the transient lockout, so a

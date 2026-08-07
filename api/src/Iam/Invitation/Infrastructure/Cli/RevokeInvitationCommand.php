@@ -15,12 +15,18 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Throwable;
 
 /**
- * Revokes a live invitation by id: its delivered token stops working at once. A thin adapter over
- * {@see RevokeInvitation}.
+ * Revokes a live invitation by id: its delivered token stops working at once AND the identity it provisioned is
+ * withdrawn to `REVOKED`, in the same transaction. That second write is terminal — a withdrawn identity can
+ * never activate — so this is not a reversible cleanup of a delivery record.
+ *
+ * The withdrawn row keeps the address, and `identity_user.email` is unique, so re-inviting it is refused while
+ * that row stands. Recovering the address is possible but is not an undo: it takes erasing the identity, which
+ * is itself refused while the row carries `ADMIN`, so the sequence is demote, then erase, then invite again.
+ * A thin adapter over {@see RevokeInvitation}.
  */
 #[AsCommand(
     name: 'iam:invitation:revoke',
-    description: 'Revoke a live invitation so its delivered link stops working',
+    description: 'Revoke a live invitation: its link stops working and the invited identity is withdrawn',
 )]
 final class RevokeInvitationCommand extends Command
 {

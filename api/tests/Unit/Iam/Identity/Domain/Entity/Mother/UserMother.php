@@ -52,4 +52,17 @@ final class UserMother
     ): User {
         return User::invite($id, $email, ...($roles ?? [Role::AUDIT_READER]));
     }
+
+    /**
+     * An identity whose invitation was withdrawn before it was accepted: terminal, still credential-less, and
+     * the second state the pre-authentication wall has to refuse.
+     */
+    public static function revoked(string $id = self::DEFAULT_ID, string $email = self::DEFAULT_EMAIL): User
+    {
+        $user = self::invited($id, $email);
+        $user->revokeInvitation();
+        $user->pullDomainEvents();
+
+        return $user;
+    }
 }
