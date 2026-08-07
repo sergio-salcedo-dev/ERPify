@@ -4,7 +4,7 @@ baseline_commit: 5431333272e797b834f73669459ad3198c5e88f0
 
 # Story BR-2: Residuos del eje de referencias a persona
 
-Status: review
+Status: done
 
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · Lote BR-2 · Issues #389 #562 #565 #564
 > Rama: `fix/shared-person-reference-residuals-uxa2` · Worktree: `.claude/worktrees/shared-person-reference-residuals-uxa2` · Base: `main` @ `bca43bf1`
