@@ -91,9 +91,13 @@ export function UserRowActions({
       ref={clusterRef}
       // Focus target, never a tab stop: the closing dialog aims here, and a real browser lands on the first
       // tabbable control inside — the container itself only catches the focus when there is none.
+      //
+      // `__rowactions-` and not `__row-actions-`: the latter is a prefix match away from the row's own
+      // `__row-<id>`, so any `^=` selector over rows counts this element as a second row. Banks needs no
+      // equivalent — its delete drops the row, so focus moves to a neighbour instead of staying in place.
       tabIndex={-1}
       className={cn("users-row-actions flex items-center gap-0.5 outline-none", className)}
-      data-testid={`${prefix}__row-actions-${id}`}
+      data-testid={`${prefix}__rowactions-${id}`}
     >
       <span className={cn("users-row-actions__reveal", REVEAL_CLASS[reveal])}>
         <CopyButton

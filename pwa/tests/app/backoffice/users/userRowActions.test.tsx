@@ -208,7 +208,7 @@ describe("Users row revoke-invitation action", () => {
 
     // The control that opened the dialog is gone with the status it was gated on, so the default restore has
     // nothing to return to. Focus must land inside the row's action cluster, never on <body>.
-    const cluster = await screen.findByTestId(`users-table__row-actions-${INVITED_USER.id}`);
+    const cluster = await screen.findByTestId(`users-table__rowactions-${INVITED_USER.id}`);
     await waitFor(() => expect(cluster).toContainElement(document.activeElement as HTMLElement));
     expect(document.activeElement).not.toBe(document.body);
   });

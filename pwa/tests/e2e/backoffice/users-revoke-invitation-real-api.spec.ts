@@ -53,16 +53,12 @@ test.describe("BackOffice - Revoke a user invitation (real API)", () => {
     await page.getByTestId("users-filters__email").fill(email);
     await filteredSearch;
 
-    // `__row-actions-<id>` shares the `__row-` prefix with the row itself, so a bare prefix match counts every
-    // row twice and never settles. Excluded explicitly rather than by tightening the prefix: both ids end in a
-    // UUID, and `actions` is itself valid hex, so no charset rule tells them apart.
-    //
     // The cold-route budget rather than the default 5 s because this waits on a debounced round trip on a
-    // dev-mode stack, where a Fast Refresh rebuild can remount the tree and reset the list hook's state — the
-    // response above having landed does not guarantee the repaint that follows it is the filtered one.
-    await expect(
-      page.locator('[data-testid^="users-table__row-"]:not([data-testid*="__row-actions-"])'),
-    ).toHaveCount(1, { timeout: COLD_ROUTE_TIMEOUT_MS });
+    // dev-mode stack, where a rebuild can remount the tree and reset the list hook's state — the response
+    // above having landed does not guarantee the repaint that follows it is the filtered one.
+    await expect(page.locator('[data-testid^="users-table__row-"]')).toHaveCount(1, {
+      timeout: COLD_ROUTE_TIMEOUT_MS,
+    });
     const row = page.getByRole("row").filter({ hasText: email });
     await expect(row).toBeVisible();
 
