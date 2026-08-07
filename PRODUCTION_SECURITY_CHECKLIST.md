@@ -554,6 +554,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       erasure requires onboarding a second administrator first. Pre-existing and named in
       [`docs/adr/authorization-model-boundaries.md`](docs/adr/authorization-model-boundaries.md) D3;
       it becomes a real obligation the moment a single-administrator installation has a customer.
+      **Mitigated, not closed:** [`docs/deployment-guide.md`](docs/deployment-guide.md) § *Provisioning
+      administrators* now instructs the operator to onboard a second administrator at install time, and
+      [`docs/adr/administrative-recovery-channel.md`](docs/adr/administrative-recovery-channel.md) D4
+      records why it must stay a **recommendation** — a ≥2 floor would make erasing an administrator
+      require a third. An unenforced recommendation cannot make the invariant hold in an installation
+      that declined it, so this entry stays open; closing it means an enforced guarantee or an
+      acceptance naming the customer.
 - [ ] **A role change leaves no attributable record.** `User` deliberately stays out of the
       `AuditedEntity` CDC (a field-level diff would carry `password_hash` into the trail) and the
       generic hook audits only `GET`, so who granted or revoked `ADMIN`, and when, is not in
