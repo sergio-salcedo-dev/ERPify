@@ -80,6 +80,12 @@ final readonly class ChangeUserStatus
         Uuid::ensure($userId);
 
         $user = $this->transactionManager->transactional(function () use ($userId, $applyTransition): User {
+            // Before the target row, never after: the guard below locks the active-admin set in `id` order,
+            // and a target that is an ACTIVE administrator is a member of it. Locking the row first would hold
+            // one member out of that order, so two concurrent transitions on administrators X and Y
+            // (X.id < Y.id) would each hold one and wait for the other.
+            $this->administrators->lockActiveAdministrators();
+
             $user = $this->users->findByIdForUpdate($userId) ?? throw UserNotFound::withId($userId);
 
             if (!$this->administrators->keepsAnActiveAdminWithout($userId)) {

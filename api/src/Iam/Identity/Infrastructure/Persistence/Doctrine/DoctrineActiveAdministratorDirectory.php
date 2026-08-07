@@ -33,16 +33,38 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
     }
 
     #[Override]
+    public function lockActiveAdministrators(): void
+    {
+        $this->lockedActiveAdminIds();
+    }
+
+    #[Override]
     public function keepsAnActiveAdminWithout(string $userId): bool
     {
-        // Lock the whole active-admin set — not only the rows other than $userId — so two concurrent
-        // transitions acquire the same rows in the same order and the second blocks behind the first, then
-        // re-reads the committed state under READ COMMITTED. Excluding $userId in SQL would make the two lock
-        // sets diverge and could deadlock; the exclusion is applied in PHP instead. The explicit ORDER BY is
-        // what makes that shared order real: Postgres does not promise a stable scan order across plans, so
-        // without it two concurrent callers could take the same rows in opposite orders and deadlock. This must
-        // run inside the caller's transaction for the lock to hold until commit.
-        $activeAdminIds = $this->connection->fetchFirstColumn(
+        return \array_any(
+            $this->lockedActiveAdminIds(),
+            static fn ($adminId): bool => \is_string($adminId) && 0 !== \strcasecmp($adminId, $userId),
+        );
+    }
+
+    /**
+     * The one statement both locking members share, so the `ORDER BY` that carries the invariant cannot drift
+     * between a copy that answers a question and a copy that only takes the lock.
+     *
+     * Locks the whole active-admin set — not only the rows other than a given id — so two concurrent
+     * transitions acquire the same rows in the same order and the second blocks behind the first, then re-reads
+     * the committed state under READ COMMITTED. Excluding an id in SQL would make the two lock sets diverge and
+     * could deadlock; {@see keepsAnActiveAdminWithout()} applies its exclusion in PHP instead. The explicit
+     * `ORDER BY` is what makes that shared order real: Postgres does not promise a stable scan order across
+     * plans, so without it two concurrent callers could take the same rows in opposite orders and deadlock. It
+     * places `LockRows` above `Sort`, so the rows are locked as they emerge sorted rather than merely returned
+     * that way. Must run inside the caller's transaction for the lock to hold until commit.
+     *
+     * @return list<mixed> the locked ids, discarded by the caller that only wants the lock
+     */
+    private function lockedActiveAdminIds(): array
+    {
+        return $this->connection->fetchFirstColumn(
             <<<'SQL'
                 SELECT id
                 FROM identity_user
@@ -55,11 +77,6 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
                 'active' => IdentityStatus::ACTIVE->value,
                 'adminRole' => \json_encode([Role::ADMIN->value], JSON_THROW_ON_ERROR),
             ],
-        );
-
-        return \array_any(
-            $activeAdminIds,
-            static fn ($adminId): bool => \is_string($adminId) && 0 !== \strcasecmp($adminId, $userId),
         );
     }
 

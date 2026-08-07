@@ -81,6 +81,15 @@ final readonly class ChangeUserRoles
 
         [$user, $replaced] = $this->transactionManager->transactional(
             function () use ($userId, $roles): array {
+                // Before the target row, never after: the guard below locks the active-admin set in `id`
+                // order, and an ACTIVE administrator target is a member of it (carrying ADMIN is not enough —
+                // the set filters on status too). Locking the row first would hold one member out of that
+                // order, so two concurrent changes on administrators X and Y (X.id < Y.id) would each hold one
+                // and wait for the other. Unconditional, although the guard below is not: you cannot know
+                // which branch you are on until the target row is already locked, so a lock that rode on the
+                // guard would put the row first on precisely the paths that turn out to need the order.
+                $this->administrators->lockActiveAdministrators();
+
                 $user = $this->users->findByIdForUpdate($userId) ?? throw UserNotFound::withId($userId);
 
                 if ($this->alreadyHolds($user, $roles)) {

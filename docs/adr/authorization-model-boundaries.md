@@ -163,6 +163,33 @@ one left. That is a separate invariant, and this ADR does not claim it.
 It subsumes the ≥1-admin invariant on the erasure path (the last active administrator necessarily carries the
 role), which now binds only on the transitions that can shrink the set.
 
+**Those transitions take their two `identity_user` locks in one fixed order, and the order is the invariant.**
+Each of them locks the target row and the active-admin set the guard reads, and the set is locked `ORDER BY id`
+— so an ACTIVE administrator target (carrying `ADMIN` is not enough; the set filters on status too) is a member
+of a set the transition would otherwise be holding one row of, out of order. Two concurrent transitions on
+administrators X and Y (`X.id < Y.id`) then each hold one and wait for the other: a textbook ABBA, surfacing as
+`40P01` and a 503 with nothing in the code to explain it. The set is therefore taken first, through
+`ActiveAdministratorDirectory::lockActiveAdministrators()` — a named operation rather than a side effect of the
+guard, because the guard is **conditional** (`ChangeUserRoles` asks it only when the change demotes an active
+administrator) and an order that holds only when a branch happens to run is not an order.
+
+*Scope, because the guarantee is conditional and stating it absolutely would make the residual unfalsifiable:*
+the cycle is closed **between transitions that take this lock**. `AcceptInvitation` promotes an `INVITED`
+identity carrying `ADMIN` to `ACTIVE` without it, so a set member can appear under a transition whose set
+statement has already run — and the guard's later call is then a second acquisition rather than a re-read of
+one already held. Left open deliberately: that use case holds its row across a password KDF, and holding the
+whole administrator set across a KDF trades a rare deadlock for a routine one.
+
+*Cost, both halves of it:* one round trip per transition, and — because the lock is unconditional, first, and
+held to commit — role and status changes now serialise organization-wide instead of running in parallel when
+their targets differ. Both operations are rare enough for that to be the cheaper side of the trade, but the
+concurrency cost is the larger one and is not a latency figure.
+
+Nothing behavioural goes red if `ORDER BY id` is deleted — the verdict is an unordered containment test, the
+`pg_locks` mode is relation-level, and the statement count is unchanged — so a source gate
+(`AdministratorSetLockStatementGateTest`) is what holds the clause, and its own docblock states what a textual
+check can and cannot prove.
+
 **Known gap, pre-existing and unchanged:** the *sole* active administrator has no path to erasure at all —
 demotion is refused by the ≥1-admin invariant, self-erasure by its own guard, and no peer exists to erase them.
 Satisfying their right to erasure requires onboarding a second administrator first. This decision neither
