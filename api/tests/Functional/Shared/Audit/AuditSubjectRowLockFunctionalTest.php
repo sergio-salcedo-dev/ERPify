@@ -75,7 +75,7 @@ final class AuditSubjectRowLockFunctionalTest extends KernelTestCase
 
     protected function tearDown(): void
     {
-        if (null !== $this->outside) {
+        if ($this->outside instanceof Connection) {
             if ([] !== $this->seeded) {
                 $this->outside->executeStatement(
                     'DELETE FROM audit_log WHERE id IN (:ids)',
@@ -184,7 +184,7 @@ final class AuditSubjectRowLockFunctionalTest extends KernelTestCase
      */
     private function outsideConnection(): Connection
     {
-        if (null === $this->outside) {
+        if (!$this->outside instanceof Connection) {
             $entityManager = self::getContainer()->get(EntityManagerInterface::class);
             $this->assertInstanceOf(EntityManagerInterface::class, $entityManager);
 

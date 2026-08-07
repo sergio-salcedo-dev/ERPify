@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Monitoring\Infrastructure\Monolog;
 
+use DateTimeImmutable;
 use Erpify\Shared\Monitoring\Infrastructure\Monolog\RequestUriRedactionProcessor;
 use Monolog\Level;
 use Monolog\LogRecord;
@@ -79,9 +80,9 @@ final class RequestUriRedactionProcessorTest extends TestCase
     #[DataProvider('provideItLeavesARecordItCannotRedactUntouchedCases')]
     public function itLeavesARecordItCannotRedactUntouched(array $context): void
     {
-        $record = $this->recordWith($context);
+        $processed = (new RequestUriRedactionProcessor())($this->recordWith($context));
 
-        $this->assertSame($context, (new RequestUriRedactionProcessor())($record)->context);
+        $this->assertSame($context, $processed->context);
     }
 
     /**
@@ -121,7 +122,7 @@ final class RequestUriRedactionProcessorTest extends TestCase
     private function recordWith(array $context): LogRecord
     {
         return new LogRecord(
-            new \DateTimeImmutable('2026-08-07T09:56:25+00:00'),
+            new DateTimeImmutable('2026-08-07T09:56:25+00:00'),
             'request',
             Level::Info,
             'Matched route.',
