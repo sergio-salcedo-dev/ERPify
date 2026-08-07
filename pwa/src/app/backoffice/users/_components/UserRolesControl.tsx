@@ -5,9 +5,10 @@ import { MutationError } from "@/components/erpify";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import { ChangeUserRoles } from "@/context/backoffice/user/application/ChangeUserRoles";
 import type { User } from "@/context/backoffice/user/domain/User";
-import { ALL_ROLES } from "@/context/shared/access/domain/Role";
+import { ALL_ROLES, Role } from "@/context/shared/access/domain/Role";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { Can } from "@/context/shared/access/infrastructure/ui";
+import { useCan } from "@/context/shared/access/application/useCan";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
@@ -43,6 +44,15 @@ export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlP
   // Roles this build's vocabulary does not know get no checkbox, and the form's schema would reject them
   // anyway, so they stay out of the form entirely and are re-attached on submit. A PWA deployed behind the
   // API must never strip a grant it merely cannot draw.
+  // Minting an administrator is a capability of its own, distinct from being allowed to edit roles at all —
+  // the same split the invite form applies, and the API enforces it on this endpoint too. A role the identity
+  // already holds stays offered, so a caller without the capability can still edit the rest of the set without
+  // silently stripping an ADMIN they cannot re-grant.
+  const mayGrantAdmin = useCan(Permission.USERS_GRANT_ADMIN);
+  const offeredRoles =
+    mayGrantAdmin || user.roles.includes(Role.ADMIN)
+      ? ALL_ROLES
+      : ALL_ROLES.filter((role) => role !== Role.ADMIN);
   const renderableRoles = user.roles.filter((role) => ALL_ROLES.includes(role));
   const unrenderableRoles = user.roles.filter((role) => !ALL_ROLES.includes(role));
 
@@ -115,7 +125,7 @@ export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlP
             Roles <span className="text-destructive">*</span>
           </legend>
           <div className="grid gap-2 sm:grid-cols-2">
-            {ALL_ROLES.map((role) => (
+            {offeredRoles.map((role) => (
               <label
                 key={role}
                 className="border-border hover:bg-accent flex items-center gap-2 rounded-md border p-2 text-sm"

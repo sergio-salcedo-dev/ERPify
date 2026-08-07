@@ -11,6 +11,7 @@ use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Iam\Invitation\Domain\Event\InvitationResent;
 use Erpify\Iam\Invitation\Domain\Exception\InvitationNotFound;
+use Erpify\Iam\Invitation\Domain\Exception\InvitedIdentityUnavailable;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
@@ -57,6 +58,47 @@ final class ResendInvitationTest extends TestCase
         $this->assertCount(1, $emailSender->sent);
         $this->assertSame(UserMother::DEFAULT_EMAIL, $emailSender->sent[0]['recipient']);
         $this->assertSame($newToken, $emailSender->sent[0]['token']);
+    }
+
+    #[Test]
+    public function itRefusesToReissueAgainstAWithdrawnIdentityAndWritesNothing(): void
+    {
+        // Reachable, not hypothetical: revoking one of several invitations addressed to the same user
+        // withdraws the identity once and leaves the others `SENT`, so the aggregate's own guard passes over a
+        // row whose invitee can never activate. Re-tokenising it would mail a link that only ever meets the
+        // opaque wall.
+        [$invitation] = $this->sentInvitation();
+        $invitations = new InMemoryInvitationRepository($invitation);
+        $users = new InMemoryUserRepository(UserMother::revoked(UserMother::DEFAULT_ID));
+        $emailSender = new SpyInvitationEmailSender();
+        $eventBus = new RecordingEventBus();
+
+        try {
+            $this->useCase($invitations, $users, $emailSender, $eventBus)->resend(self::INVITATION_ID);
+            $this->fail('Expected the withdrawn identity to refuse the reissue.');
+        } catch (InvitedIdentityUnavailable) {
+            // Asserted below rather than by the expectation alone: the refusal is worth little if the fresh
+            // token was already persisted or mailed before it was raised.
+        }
+
+        $this->assertSame([], $invitations->saved);
+        $this->assertSame([], $eventBus->publishedEvents);
+        $this->assertSame([], $emailSender->sent);
+    }
+
+    #[Test]
+    public function itTakesTheRowLockBeforeReissuing(): void
+    {
+        [$invitation] = $this->sentInvitation();
+        $invitations = new InMemoryInvitationRepository($invitation);
+        $users = new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID));
+
+        $this->useCase($invitations, $users, new SpyInvitationEmailSender(), new RecordingEventBus())
+            ->resend(self::INVITATION_ID)
+        ;
+
+        $this->assertSame([self::INVITATION_ID], $invitations->lockedReads);
+        $this->assertSame([], $invitations->unlockedReads);
     }
 
     #[Test]

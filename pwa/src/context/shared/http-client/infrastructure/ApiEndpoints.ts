@@ -84,6 +84,11 @@ export const API_ENDPOINTS = {
       DETAILS: userPath,
       CHANGE_STATUS: (id: string): string => `${userPath(id)}/status`,
       CHANGE_ROLES: (id: string): string => `${userPath(id)}/roles`,
+      // Revoke the pending invitation(s) of an identity — a DELETE keyed by user id (204, no body). Keyed by
+      // the user because the console never learns an invitation id: the register publishes identities, and the
+      // API resolves every still-pending invitation of that user, withdrawing the identity to REVOKED in the
+      // same transaction. Nothing revocable → 404.
+      REVOKE_INVITATION: (id: string): string => `${userPath(id)}/invitation`,
       // GDPR erasure — a DELETE on the detail URL (204, no body). Same target as DETAILS, different verb.
       ERASE: userPath,
     },

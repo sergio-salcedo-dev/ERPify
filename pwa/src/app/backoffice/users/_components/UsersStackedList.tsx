@@ -6,6 +6,7 @@ import { TruncatedText } from "@/components/erpify";
 import { useRowKeyboardNavigation } from "@/context/shared/resource/application/useRowKeyboardNavigation";
 import { cn } from "@/components/cn";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
+import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { userRoutes } from "../_lib/userRoutes";
 import { UserStatusBadge } from "./UserStatusBadge";
 import { UserRowActions } from "./UserRowActions";
@@ -19,6 +20,8 @@ interface UsersStackedListProps {
   /** Fired when `o` is pressed on a focused row — opens the record peek. */
   onUserPeek?: (id: string) => void;
   density?: "compact" | "comfortable";
+  onInvitationRevoked: () => void;
+  onRevokeFailed: (problem: ProblemDetails) => void;
   className?: string;
 }
 
@@ -35,6 +38,8 @@ export function UsersStackedList({
   onSelectionChange,
   onUserPeek,
   density = "compact",
+  onInvitationRevoked,
+  onRevokeFailed,
   className,
 }: Readonly<UsersStackedListProps>) {
   const { focusedRow, setFocusedRow, rowRefs, handleKeyDown } = useRowKeyboardNavigation<User>({
@@ -103,7 +108,10 @@ export function UsersStackedList({
             <UserRowActions
               id={user.id}
               email={user.email}
+              status={user.status}
               surface="stacked"
+              onInvitationRevoked={onInvitationRevoked}
+              onRevokeFailed={onRevokeFailed}
               className="relative z-10 flex-none"
             />
           </li>

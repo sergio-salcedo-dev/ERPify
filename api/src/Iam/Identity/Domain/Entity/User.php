@@ -13,6 +13,7 @@ use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Event\PasswordChanged;
 use Erpify\Iam\Identity\Domain\Event\PasswordResetCompleted;
 use Erpify\Iam\Identity\Domain\Event\UserDeactivated;
+use Erpify\Iam\Identity\Domain\Event\UserInvitationRevoked;
 use Erpify\Iam\Identity\Domain\Event\UserLocked;
 use Erpify\Iam\Identity\Domain\Event\UserRolesChanged;
 use Erpify\Iam\Identity\Domain\Event\UserSuspended;
@@ -167,11 +168,31 @@ final class User extends AggregateRoot
         match ($this->status) {
             IdentityStatus::ACTIVE => null,
             IdentityStatus::SUSPENDED => throw new AccountSuspended(),
-            // INVITED is unreachable from the reset flow — a token is only minted for an ACTIVE identity and
-            // no transition returns to INVITED — but an unadmitted identity must be refused explicitly
-            // rather than fall through some `else` into whichever reason happens to be last.
-            IdentityStatus::INVITED, IdentityStatus::DEACTIVATED => throw new AccountDeactivated(),
+            // INVITED and REVOKED are unreachable from the reset flow — a token is only minted for an ACTIVE
+            // identity and no transition returns to either — but an unadmitted identity must be refused
+            // explicitly rather than fall through some `else` into whichever reason happens to be last.
+            IdentityStatus::INVITED,
+            IdentityStatus::DEACTIVATED,
+            IdentityStatus::REVOKED => throw new AccountDeactivated(),
         };
+    }
+
+    /**
+     * Withdraws an identity that never came into service: `INVITED → REVOKED`, the terminal counterpart of
+     * {@see activate()} on the invitation machine. Reached only from the invitation context, when the
+     * delivery record that justified this identity is pulled — so the register stops offering a row that can
+     * never be activated, and stops offering to revoke what is already revoked.
+     *
+     * @throws InvalidIdentityTransition when the identity is not `INVITED`
+     */
+    public function revokeInvitation(): void
+    {
+        $this->guardTransitionTo(IdentityStatus::REVOKED, IdentityStatus::INVITED);
+
+        $this->status = IdentityStatus::REVOKED;
+        $this->updatedAt = SystemClock::now();
+
+        $this->record(new UserInvitationRevoked($this->id(), null, $this->updatedAt));
     }
 
     /**
@@ -356,6 +377,16 @@ final class User extends AggregateRoot
     public function isActive(): bool
     {
         return IdentityStatus::ACTIVE === $this->status;
+    }
+
+    /**
+     * Whether this identity is still awaiting the invitation it was provisioned for — the only state from which
+     * {@see revokeInvitation()} is legal. Exposed as a predicate so a caller can ask before acting instead of
+     * driving the aggregate into a guard it already knows will refuse.
+     */
+    public function isInvited(): bool
+    {
+        return IdentityStatus::INVITED === $this->status;
     }
 
     /**

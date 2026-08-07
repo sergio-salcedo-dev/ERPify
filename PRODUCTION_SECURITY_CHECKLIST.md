@@ -197,15 +197,17 @@ you change anything here.
       carrying `ADMIN`** (409 `administrator-erasure-requires-demotion`), so an
       administrator cannot pseudonymise a peer's attribution without first demoting them.
       That subsumes the ≥1-active-admin invariant on the erasure path; the invariant still
-      binds on role and status transitions. **That refusal is a second authorization step,
-      not a traceability control** — the demotion currently leaves **no** attributable
-      record (`User` deliberately does not implement `AuditedEntity`, since a field-level
-      diff would carry `password_hash` into the trail, and the generic hook audits only
-      `GET`), so do not cite it as evidence to an assessor. Recording the demotion is
-      pending the decision on who owns GDPR erasure over the `resource_*` columns
-      (`docs/adr/audit-activity-log.md` D4); **never** satisfy it by marking `User` as
-      audited, and never by a row that names the subject in `resource_id` while erasure
-      anonymises only `actor_id` — that co-locates the real id with its own pseudonym.
+      binds on role and status transitions. **The demotion is itself recorded** —
+      `ChangeUserRoles` writes an explicit `USER_ROLES_CHANGED` `security` row naming the
+      subject in the resource columns and carrying both role sets, because `User`
+      deliberately does not implement `AuditedEntity` (a field-level diff would carry
+      `password_hash` into the trail) and the generic hook audits only `GET`. Without that
+      row the refusal would be procedure without evidence; **never** satisfy it by marking
+      `User` as audited. Naming the subject in `resource_id` is safe only because erasure
+      anonymises **both** axes in one transaction — the resource axis alongside `actor_id`
+      — so a self-demotion no longer co-locates a real id with its own pseudonym. That
+      property is load-bearing: if a future row names a person in `resource_id` whose type
+      has no declared eraser, it reintroduces the crosswalk.
       Known gap: the **sole** active administrator can be neither demoted nor erased, so
       their erasure requires onboarding a second administrator first (pre-existing).
       The writer parameterises every value (no string-interpolated SQL). **GDPR erasure is

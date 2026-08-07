@@ -56,11 +56,16 @@ final class AuditResourceConstants
      * Resolves `AuditResource::of(SomeHolder::SOME_TYPE, …)` back to the literal the constant holds, whether
      * the holder is the calling class itself (`self` / `static`) or another class the file imports.
      *
-     * The cross-file half is prevention rather than description: `src` writes no call in that form today —
-     * the one person-denoting type is reached from its writer as `self::`. It is here because a type whose
-     * literal lives in the context that owns the vocabulary, so one declaration serves the writer, the
-     * anonymiser and the reconciler, is reached as `Owner::TYPE` the moment those stop being one class, and a
-     * sweep that only understood `self::` would then classify a writer as no writer at all.
+     * The cross-file half is exercised, not merely prevention: `ChangeUserRoles` writes the role-change
+     * security row as `AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, …)`, reaching the one
+     * person-denoting type through the class declared to erase it rather than re-spelling the literal. That is
+     * the shape this half exists for — a type whose literal lives with the owner of the vocabulary, so one
+     * declaration serves the writer, the anonymiser and the reconciler. A sweep that only understood `self::`
+     * would classify such a writer as no writer at all.
+     *
+     * Note it does NOT make that file a *carrier*: {@see AuditResourceTypeRegistry::sourceFilesCarrying()}
+     * matches the quoted literal, so the owner rule still sees exactly one deriving file. Re-spelling `'User'`
+     * here instead of reaching the constant is what would turn the gate red.
      *
      * @param array<string, string> $constants `<ShortClassName>::<CONSTANT>` => the literal it holds
      *

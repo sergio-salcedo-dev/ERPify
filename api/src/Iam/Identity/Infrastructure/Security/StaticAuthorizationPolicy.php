@@ -51,12 +51,19 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
     /**
      * Permission string -> the role tokens explicitly granted it, independent of any tier.
      *
-     * The five `users.*` grants localize the identity-console authorization surface as one data line — `read`,
-     * `invite`, `changeStatus`, `changeRoles` and `erase` each back a console endpoint, all ADMIN-only. They are
-     * the single-place, declared record of each console action's intended grantee (load-bearing the day a
-     * non-ADMIN role earns one), and — because `users` opts out of tiering — they are also what actually grants
-     * ADMIN those actions. The opt-out is what confines the console to this list at all (without it, `read` —
-     * a tier verb — would auto-grant to VIEWER).
+     * The `users.*` grants localize the identity-console authorization surface as one data line each, all
+     * ADMIN-only. They are the single-place, declared record of each console action's intended grantee
+     * (load-bearing the day a non-ADMIN role earns one), and — because `users` opts out of tiering — they are
+     * also what actually grants ADMIN those actions. The opt-out is what confines the console to this list at
+     * all (without it, `read` — a tier verb — would auto-grant to VIEWER).
+     *
+     * `users.grantAdmin` is the one that governs a payload rather than an endpoint: it names the act of handing
+     * out `ADMIN` itself, checked by the invite and role-change controllers only when the submitted set carries
+     * that role. Its row starts at ADMIN and cannot start empty — `users.invite` and `users.changeRoles` are
+     * already ADMIN-only, so withholding it from ADMIN would make a second administrator impossible to create,
+     * which in turn strands the erasure of the sole administrator (that erasure is refused while the subject
+     * still holds `ADMIN`, and the demotion needs another administrator to survive it). Tightening it later —
+     * to a dedicated delegation role, say — is an edit to this one line.
      *
      * `auditTrail.read` lists ADMIN beside AUDIT_READER because `auditTrail` also opts out of tiering, so the
      * row is what grants it. That an administrator may read the trail auditing them is a decided
@@ -71,8 +78,10 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
         'bankAccount.changeStatus' => [Role::MANAGER->value],
         'users.read' => [Role::ADMIN->value],
         'users.invite' => [Role::ADMIN->value],
+        'users.revokeInvitation' => [Role::ADMIN->value],
         'users.changeStatus' => [Role::ADMIN->value],
         'users.changeRoles' => [Role::ADMIN->value],
+        'users.grantAdmin' => [Role::ADMIN->value],
         'users.erase' => [Role::ADMIN->value],
     ];
 

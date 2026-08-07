@@ -41,10 +41,13 @@
 #     the statement that clears that identifier is the resource anonymiser it runs next: a use case must
 #     not persist an id it has no way of erasing. That writer declares the literal itself and reaches it
 #     through `self::`, so this sweep sees it by the same path as any other in-class constant.
-#   - The sweep ALSO resolves `OtherClass::CONSTANT` across files, and today nothing in `src` is written
-#     that way — the capability is prevention, not description. It earns its cost because the failure it
-#     prevents is the worst shape this registry can fail in: an unseen writer means no type in the
-#     universe, so no line demanded, so nobody named as obliged to erase it. It no longer fails that way
+#   - The sweep ALSO resolves `OtherClass::CONSTANT` across files, which is how `src` writes it wherever a
+#     second use case audits against a type another one declares — `ChangeUserRoles`, `InviteUser` and
+#     `ReconcileErasedSubjectReferences` all reach `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE` that way,
+#     precisely so a `'User'` literal cannot mint a second, unregistered carrier of the same type. It earns
+#     its cost because the failure it prevents is the worst shape this registry can fail in: an unseen
+#     writer means no type in the universe, so no line demanded, so nobody named as obliged to erase it.
+#     It no longer fails that way
 #     silently either — a constant reference this sweep cannot resolve now raises instead of yielding no
 #     type. What does NOT follow is that a green here means "no unseen writer exists", and
 #     PersonResourceErasureGateTest says so at the one assertion that used to promise otherwise.

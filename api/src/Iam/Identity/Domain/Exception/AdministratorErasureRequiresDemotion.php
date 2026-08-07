@@ -10,13 +10,14 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 /**
  * Raised when erasure targets an identity that still carries `ADMIN`. Erasure is irreversible and
  * pseudonymises the subject's entire attribution in the compliance trail, so an administrator must be
- * demoted first.
+ * demoted first — and the demotion writes its own `USER_ROLES_CHANGED` `SECURITY` row, which is what turns
+ * "one administrator erased a peer" from a single unexplained act into a declared sequence in the record it
+ * is meant to protect. Without that row the refusal would be procedure without evidence, since `User` is not
+ * an `AuditedEntity` and the `event_store` entry names no actor. See
+ * `docs/adr/authorization-model-boundaries.md` D3.
  *
- * Scope of the control, stated honestly: it buys a second authorization step, **not** traceability. A role
- * change currently leaves no attributable record — `User` is not an `AuditedEntity` and the `event_store`
- * entry names no actor — so the sequence is not yet visible in `audit_log`. Recording it waits on who owns
- * GDPR erasure over the resource columns (`docs/adr/audit-activity-log.md` D4); until that is settled, this
- * refusal is procedural. See `docs/adr/authorization-model-boundaries.md` D3.
+ * What the sequence buys is bounded by where it is kept: `security` rows carry a 365-day privacy ceiling and
+ * are pruned, so this is a year of attribution, not the five-year floor that covers `change` rows.
  *
  * The refusal deliberately ignores the subject's status: a suspended administrator still carries the role,
  * and the concern is the role, not the activity. Demote-then-erase keeps the right to erasure satisfiable

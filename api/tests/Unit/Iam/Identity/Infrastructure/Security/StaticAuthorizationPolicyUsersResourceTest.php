@@ -36,8 +36,24 @@ final class StaticAuthorizationPolicyUsersResourceTest extends TestCase
     {
         yield 'read' => ['users.read'];
         yield 'invite' => ['users.invite'];
+        yield 'revokeInvitation' => ['users.revokeInvitation'];
         yield 'changeStatus' => ['users.changeStatus'];
+        yield 'changeRoles' => ['users.changeRoles'];
+        yield 'grantAdmin' => ['users.grantAdmin'];
         yield 'erase' => ['users.erase'];
+    }
+
+    public function testTheAdminGrantIsNotEmptyBecauseNothingElseCouldMintASecondAdministrator(): void
+    {
+        $policy = new StaticAuthorizationPolicy();
+
+        // Both endpoints that can hand out ADMIN are themselves ADMIN-only, so an empty grant row here would
+        // make a second administrator impossible to create — which in turn strands the GDPR erasure of the
+        // sole administrator, refused while its subject still holds ADMIN. The row is what keeps that
+        // reachable, so it is asserted as a decision rather than left to read as an oversight.
+        $this->assertTrue(
+            $policy->permits(Permission::fromString('users.grantAdmin'), [Role::ADMIN->value]),
+        );
     }
 
     public function testEveryNonAdminTierIsDeniedUsersReadThroughTheOptOut(): void

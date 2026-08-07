@@ -19,4 +19,5 @@ export const STATUS_LABEL: Record<UserStatus, string> = {
   [UserStatus.ACTIVE]: "Active",
   [UserStatus.SUSPENDED]: "Suspended",
   [UserStatus.DEACTIVATED]: "Deactivated",
+  [UserStatus.REVOKED]: "Revoked",
 };

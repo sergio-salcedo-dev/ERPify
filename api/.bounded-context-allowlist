@@ -99,6 +99,11 @@ src/Iam/Invitation/Application/AcceptInvitation.php => Erpify\Iam\Identity\Domai
 src/Iam/Invitation/Application/SendInvitation.php => Erpify\Iam\Identity\Application\InviteUser
 src/Iam/Invitation/Application/SendInvitation.php => Erpify\Organization\Membership\Application\GrantMembership
 src/Iam/Invitation/Application/ResendInvitation.php => Erpify\Iam\Identity\Domain\Repository\UserRepository
+# Revoking an invitation withdraws the identity it provisioned in the same transaction (INVITED -> REVOKED),
+# so the register stops showing a person as pending who can never activate. Same port and same shape as the
+# accept path above, which drives both aggregates of the pair through this repository.
+src/Iam/Invitation/Application/RevokeInvitation.php => Erpify\Iam\Identity\Domain\Repository\UserRepository
+src/Iam/Invitation/Application/RevokeInvitation.php => Erpify\Iam\Identity\Domain\Exception\UserNotFound
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Domain\HashedPassword
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort

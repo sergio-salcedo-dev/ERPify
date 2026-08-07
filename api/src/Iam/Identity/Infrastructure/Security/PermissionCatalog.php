@@ -26,10 +26,16 @@ namespace Erpify\Iam\Identity\Infrastructure\Security;
 final readonly class PermissionCatalog
 {
     /**
-     * Every published permission, each backing a gated route. The completeness gate
+     * Every published permission. The completeness gate
      * ({@see \Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security\PermissionCatalogCoversEveryGatedRouteTest})
      * asserts the catalog is a *superset* of what `#[IsGranted]` gates, never an equality — so a permission may
      * be declared here ahead of the endpoint that reaches it without breaking the gate.
+     *
+     * That slack is load-bearing for `users.grantAdmin`, which gates a *payload* rather than a route: both
+     * endpoints that can hand out `ADMIN` are already `#[IsGranted]` on their own action, and the extra
+     * permission is checked imperatively inside them, only when the submitted role set carries `ADMIN`. The
+     * gate discovers routes by reading `#[IsGranted]` arguments, so it is blind to that check — what pins the
+     * spelling instead is a refusal test per endpoint, each driving it with this permission withheld.
      *
      * @var list<string>
      */
@@ -44,8 +50,10 @@ final readonly class PermissionCatalog
         'bankAccount.changeStatus',
         'users.read',
         'users.invite',
+        'users.revokeInvitation',
         'users.changeStatus',
         'users.changeRoles',
+        'users.grantAdmin',
         'users.erase',
     ];
 

@@ -17,6 +17,7 @@ use Erpify\Shared\Validation\Application\Validator;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Organization\Membership\Application\InMemoryMembershipRepository;
 use Erpify\Tests\Unit\Organization\Organization\Application\InMemoryOrganizationRepository;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -56,7 +57,7 @@ final class SendInvitationTest extends TestCase
         $eventBus = new RecordingEventBus();
 
         $sendInvitation = new SendInvitation(
-            new InviteUser($users, $this->passingValidator()),
+            new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger()),
             new GrantMembership($memberships, $organizations),
             $invitations,
             new SendInvitationEmailBestEffort($emailSender, new NullLogger()),

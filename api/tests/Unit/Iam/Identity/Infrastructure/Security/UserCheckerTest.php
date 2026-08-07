@@ -9,6 +9,7 @@ use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Infrastructure\Security\DeactivatedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\InvitedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\LockedAccountException;
+use Erpify\Iam\Identity\Infrastructure\Security\RevokedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Iam\Identity\Infrastructure\Security\SuspendedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\UserChecker;
@@ -20,6 +21,14 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
+ * One test per admission arm, and the arms are the contract: which lifecycle states are walled, on which side
+ * of credential verification, and which of them pay the timing floor. The method count and the object coupling
+ * both track the size of that table — every exception in it is referenced by name on purpose — so they are
+ * allowed above the default thresholds rather than dissolved into helpers that would hide which arm is asserted.
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ *
  * @internal
  */
 #[CoversClass(UserChecker::class)]
@@ -32,6 +41,24 @@ final class UserCheckerTest extends TestCase
         $this->expectException(InvitedAccountException::class);
 
         $this->checker()->checkPreAuth(new SecurityUser(UserMother::invited()));
+    }
+
+    public function testPreAuthWallsARevokedIdentityAndPaysTheTimingFloorForIt(): void
+    {
+        // A withdrawn invitation is as credential-less as a pending one: letting it fall through to the
+        // post-authentication arms would admit it on the strength of a password it never had, and answering it
+        // faster than a wrong password would report the outcome of somebody else's revocation decision to
+        // whoever holds the address.
+        $floor = new CountingPreIdentityTimingFloor();
+        $checker = new UserChecker(new FixedClock(new DateTimeImmutable(self::NOW)), $floor);
+
+        $this->expectException(RevokedAccountException::class);
+
+        try {
+            $checker->checkPreAuth(new SecurityUser(UserMother::revoked()));
+        } finally {
+            $this->assertSame(1, $floor->invocations);
+        }
     }
 
     public function testPreAuthPaysTheTimingFloorOnlyWhenRejectingAnInvitedIdentity(): void

@@ -31,10 +31,46 @@ Feature: Invite a member from the console
     And 1 notification email was sent
     And The notification email subject should be equal to "Your ERPify invitation"
     And The notification email recipient should be "newbie@erpify.test"
+    # The roles an invitation grants are recorded against the invited subject, so the console's two delegation
+    # paths leave the same kind of evidence: without it, minting a second administrator off the record would be
+    # a matter of inviting one rather than promoting one.
+    # `resource_id` is asserted, not just the metadata: without it the row could name the acting administrator
+    # as its subject and the scenario would still pass, which is the half of the claim that matters.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_GRANTED' AND level = 'security' AND resource_type = 'User' AND resource_id = (SELECT id FROM identity_user WHERE email = 'newbie@erpify.test') AND metadata = jsonb_build_object('previous_roles', jsonb_build_array(), 'new_roles', jsonb_build_array('EDITOR'))"
+    And there should have 1 records in SQL result
     # The wrapped write's query budget (auth/admission lookups are excluded from the counter): the atomic
-    # onboarding funnels through three contexts and the audit listener writes a regulatory change row per
-    # aggregate on the same transaction, so the count is higher than a single-table create.
-    And 26 requests got executed only for doctrine connection "default"
+    # onboarding funnels through three contexts — identity, membership and invitation — and each aggregate's
+    # domain events are appended to the event store inside the same transaction, so the count is well above a
+    # single-table create. Exactly ONE of these is an `audit_log` write, the role-grant row above, written
+    # synchronously because it is `security`; no CDC row joins it, since only Bank and BankAccount are
+    # `AuditedEntity` and the generic access hook audits GET.
+    And 27 requests got executed only for doctrine connection "default"
+
+  # Handing the invitee ADMIN is a second, narrower act: the controller demands `users.grantAdmin` on top of
+  # `users.invite`, but only when the payload actually carries that role. Both permissions are granted to
+  # ADMIN and to nothing else — deliberately, since an empty delegation row would make a second administrator
+  # impossible to create — so no seeded actor holds one without the other and the REFUSAL cannot be posed
+  # here. It is pinned where such an actor can be built: UserPatchRolesFunctionalTest drives the roles
+  # endpoint over a policy that withholds the delegation grant, and CreateInvitationControllerTest drives
+  # this controller with a denying authorization checker. What this scenario pins is the other half — that
+  # the guard is conditional and the grant is real, so legitimate delegation still goes through.
+  Scenario: An administrator may invite a second administrator
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    When I send a POST request to "/backoffice/invitations" with body:
+    """
+    {
+      "email": "second-admin@erpify.test",
+      "roles": ["ADMIN"]
+    }
+    """
+    Then the response status code should be 201
+    And the response should be empty
+    # `roles::text LIKE` rather than a jsonb containment test, because the step matcher reads its argument
+    # from a double-quoted string and a JSON array literal would have to embed quotes inside it.
+    And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'second-admin@erpify.test' AND status = 'INVITED' AND roles::text LIKE '%ADMIN%'"
+    And there should have 1 records in SQL result
+    And there should be 1 event stored named "erpify.iam.invitation.sent"
 
   Scenario: A non-administrator is refused the alta with 403 and writes nothing
     Given I am logged in as a viewer

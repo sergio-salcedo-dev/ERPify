@@ -212,6 +212,77 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
         );
     }
 
+    public function testUsersGrantAdminIsGrantedToAnAdminButDeniedToAGenericTier(): void
+    {
+        $client = self::createClient();
+
+        $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
+        $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
+
+        // Handing out ADMIN is named as its own act, checked imperatively by the invite and role-change
+        // controllers only when the submitted set carries that role. This is the wired end of that check: no
+        // generic tier reaches it, and an ADMIN does — the row is non-empty on purpose, because both
+        // endpoints that can delegate are already ADMIN-only and an empty one would make a second
+        // administrator impossible to create.
+        $manager = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'grant-admin-manager@erpify.test',
+            'grant-admin-manager-password',
+            [Role::MANAGER->value],
+        );
+        $client->loginUser(new SecurityUser($manager), 'main');
+        $this->assertFalse(
+            $authorizationChecker->isGranted('users.grantAdmin'),
+            'A generic MANAGER tier must not be granted users.grantAdmin.',
+        );
+
+        $admin = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'grant-admin-admin@erpify.test',
+            'grant-admin-admin-password',
+            [Role::ADMIN->value],
+        );
+        $client->loginUser(new SecurityUser($admin), 'main');
+        $this->assertTrue(
+            $authorizationChecker->isGranted('users.grantAdmin'),
+            'An ADMIN must be granted users.grantAdmin, or no second administrator could ever be created.',
+        );
+    }
+
+    public function testUsersRevokeInvitationIsGrantedToAnAdminButDeniedToAGenericTier(): void
+    {
+        $client = self::createClient();
+
+        $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
+        $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
+
+        // Pulling a live invitation back cancels somebody's onboarding, so it stays on the same ADMIN-only
+        // footing as the invite that created it.
+        $manager = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'revoke-invitation-manager@erpify.test',
+            'revoke-invitation-manager-password',
+            [Role::MANAGER->value],
+        );
+        $client->loginUser(new SecurityUser($manager), 'main');
+        $this->assertFalse(
+            $authorizationChecker->isGranted('users.revokeInvitation'),
+            'A generic MANAGER tier must not be granted users.revokeInvitation.',
+        );
+
+        $admin = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'revoke-invitation-admin@erpify.test',
+            'revoke-invitation-admin-password',
+            [Role::ADMIN->value],
+        );
+        $client->loginUser(new SecurityUser($admin), 'main');
+        $this->assertTrue(
+            $authorizationChecker->isGranted('users.revokeInvitation'),
+            'An ADMIN must be granted users.revokeInvitation through its explicit grant.',
+        );
+    }
+
     public function testBankAccountChangeStatusIsGrantedToAManagerButDeniedToAnEditor(): void
     {
         $client = self::createClient();

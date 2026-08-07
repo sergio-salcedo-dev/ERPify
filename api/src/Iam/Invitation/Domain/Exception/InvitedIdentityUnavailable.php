@@ -33,4 +33,9 @@ final class InvitedIdentityUnavailable extends DomainException
     {
         return new self('The invited identity no longer exists.');
     }
+
+    public static function withdrawn(): self
+    {
+        return new self('The invited identity has been withdrawn.');
+    }
 }
