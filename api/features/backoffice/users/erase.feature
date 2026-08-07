@@ -88,13 +88,13 @@ Feature: Erase an identity (GDPR right to erasure)
     # every assertion above while destroying the trace this table exists to keep.
     And I execute the SQL query "SELECT event_id FROM event_store WHERE (event_id = '0190f200-0000-7000-8000-00000000ea01' AND event_name = 'erpify.iam.identity.suspended' AND aggregate_version = 1) OR (event_id = '0190f200-0000-7000-8000-00000000ea02' AND event_name = 'erpify.iam.invitation.created' AND jsonb_exists(payload, 'invitedUserId')) OR (event_id = '0190f200-0000-7000-8000-00000000ea03' AND event_name = 'erpify.iam.invitation.accepted' AND jsonb_exists(metadata, 'actor'))"
     And there should have 3 records in SQL result
-    # Budget canary (19 on "default"). In one transaction (+2 BEGIN/COMMIT), in acquisition order: the
-    # administrator-role EXISTS probe, the invitation delete, the identity find and delete, the reset-token
-    # delete, the two-axis row lock, the actor-axis
+    # Budget canary (20 on "default"). In one transaction (+2 BEGIN/COMMIT), in acquisition order: the
+    # administrator-role EXISTS probe, the invitation ordered row lock and its delete, the identity find and
+    # delete, the reset-token delete, the two-axis row lock, the actor-axis
     # anonymisation UPDATE, the
     # GDPR_SUBJECT_ERASED insert, the resource-axis anonymisation UPDATE, the event-store anonymisation UPDATE,
     # the session delete, the membership delete and the GDPR_ERASURE_EXECUTED insert
-    # (= 15). The three table-touching deletes are listed in the order they run because that order is itself an
+    # (= 16). The three table-touching deletes are listed in the order they run because that order is itself an
     # invariant — see ErasureLockOrderTest — so a reader re-deriving the chain from this list gets the lock
     # graph right rather than only the count. The row lock is the one that is pure cost: it rewrites nothing and exists only to fix the order
     # in which the two axis UPDATEs take their rows, so that two concurrent erasures of subjects who acted on
@@ -114,7 +114,7 @@ Feature: Erase an identity (GDPR right to erasure)
     # decomposition is a reading aid, so check it against a real run before trusting any single term. The two reference deletes are one directed DELETE each, which is why they cost
     # exactly one round trip apiece and not one per row. A shift means an added round trip — re-measure,
     # don't just bump the number.
-    And 19 requests got executed for doctrine connection "default"
+    And 20 requests got executed for doctrine connection "default"
 
   Scenario: Erasure forgets the subject where the trail NAMES them, not only where they acted
     # The crosswalk row: the subject is both actor and resource, which is what a self-service role change

@@ -141,11 +141,11 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
 
     public function testTheRevocableSetComesBackAscendingByIdWhateverOrderItWasWrittenIn(): void
     {
-        // This is the only read in the adapter that locks a SET, and Postgres guarantees no scan order across
-        // plans — so two concurrent revocations of the same invitee can walk the same rows in opposite
-        // directions and deadlock on each other. The ordering clause is what forbids that, and nothing else
-        // in the suite goes red if it is deleted: the membership assertion above sorts both sides, the
-        // `pg_locks` sibling below sees its RowShareLock either way, and no caller reads the order.
+        // One of the two statements here that lock a SET rather than a row, and Postgres guarantees no scan
+        // order across plans — so two concurrent revocations of the same invitee can walk the same rows in
+        // opposite directions and deadlock on each other. The ordering clause is what forbids that, and
+        // nothing else in the suite goes red if it is deleted: the membership assertion above sorts both
+        // sides, both `pg_locks` siblings see their modes either way, and no caller reads the order.
         //
         // The rows are written in DESCENDING id order on purpose. Unsorted, the scan returns them the way it
         // finds them — insertion order on a freshly truncated table — so the expectation and the accident
@@ -171,6 +171,38 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
                 \array_map(static fn (Invitation $found): ?string => $found->getId(), $revocable),
                 'findSentByInvitedUserForUpdate must lock the set in a fixed direction — without ORDER BY, two '
                 . 'concurrent revocations of one invitee can acquire the same rows in opposite orders.',
+            );
+        });
+    }
+
+    public function testThePurgeTakesAnOrderedRowLockBeforeItsBulkDelete(): void
+    {
+        // The bulk `DELETE` is the erasure chain's first acquisition on this table, and it admits no
+        // `ORDER BY` — so on its own it locks the subject's rows in whatever direction the plan walks them,
+        // while its sibling read above locks an overlapping set ascending by id. Two directions over shared
+        // rows is an ABBA within one table, reachable by a revocation racing an erasure of one invitee.
+        //
+        // Observed through `pg_locks` on this backend: the ordered `SELECT … FOR UPDATE` takes RowShareLock on
+        // the relation, which a `DELETE` alone never does — it takes RowExclusiveLock. Deleting the locking
+        // read leaves the delete working, the counts identical and every other assertion green, so this mode
+        // is the only thing in the suite that goes red on it.
+        $this->inRolledBackTransaction(function (): void {
+            $userId = Uuid::generate();
+            $this->repository->save($this->invitationFor($userId));
+            $this->repository->save($this->invitationFor($userId));
+
+            $this->entityManager->clear();
+
+            $this->assertSame(2, $this->repository->deleteAllForInvitedUser($userId), 'the seed deleted nothing');
+
+            $modes = $this->lockModesHeldOnInvitations();
+            $this->assertContains('RowExclusiveLock', $modes, 'the bulk delete did not run');
+            $this->assertContains(
+                'RowShareLock',
+                $modes,
+                'deleteAllForInvitedUser must lock its rows in id order before deleting them — a bulk DELETE '
+                . 'cannot carry ORDER BY, so without that read it walks the set in plan order while '
+                . 'findSentByInvitedUserForUpdate walks it ascending.',
             );
         });
     }

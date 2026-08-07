@@ -111,12 +111,17 @@ asserts the acquisition **sequence** over the use cases (a call-count assertion 
 implies the other: an adapter that stopped locking leaves the first green, a reordering leaves a per-adapter
 lock test green.
 
-*Residual, stated so it stays falsifiable:* `findSentByInvitedUserForUpdate` locks its set `ORDER BY id`, but
-its sibling `deleteAllForInvitedUser` is a bulk `DELETE`, which admits no ordering — so a revocation and an
-erasure of one invitee can still walk shared `iam_invitation` rows in opposite directions. Reaching it needs
-two live `SENT` invitations for one invitee, a state no write path produces. And **no real two-transaction race
-is exercised anywhere**: the image carries neither `pcntl` nor the procedural `pgsql` extension, so every
-claim here rests on acquisition instants, never on an observed `40P01`.
+*Within `iam_invitation` the same reasoning applies to the two statements that lock a set rather than a row,
+and they reach one direction by different routes:* `findSentByInvitedUserForUpdate` carries `ORDER BY id`,
+while `deleteAllForInvitedUser` — a bulk `DELETE`, which admits no ordering — takes its rows through an ordered
+locking read first. Without that read a revocation and an erasure of one invitee could walk shared rows in
+opposite directions; the cost is one round trip on an operation that runs once per person. The lock read is
+unfiltered by status because the delete is, and locking a narrower set than the one being deleted would hand
+the difference back to the plan.
+
+*What none of this proves:* **no real two-transaction race is exercised anywhere.** The image carries neither
+`pcntl` nor the procedural `pgsql` extension, so a second transaction cannot run concurrently inside a test
+process. Every claim here rests on acquisition instants and on statement order, never on an observed `40P01`.
 
 ## Load-bearing implementation challenges
 

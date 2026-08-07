@@ -194,9 +194,15 @@ Ninguno encontró un GRAVE. Las dos clases de fallo que ya se han escapado en es
 | 10 | El doble de tokens comparaba el `userId` sensible a mayúsculas; sus dos hermanos usan `strcasecmp` porque la columna es `uuid`. | Corregido (regla del boy scout: preexistente, pero el fichero ya estaba tocado). |
 | 11 | El `User` de la siembra era el único de tres fixtures sin drenar sus eventos de dominio. | Drenado. |
 
-### Residual declarado, no cerrado
+### Residual — CERRADO, no declarado
 
-`deleteAllForInvitedUser` es un `DELETE` masivo y no admite `ORDER BY`, así que una revocación y un borrado del mismo invitado pueden recorrer filas compartidas de `iam_invitation` en órdenes opuestos. **Alcanzarlo exige dos invitaciones `SENT` vivas para un invitado, estado que ningún camino de escritura produce** (`RevokeInvitation` documenta que su bucle multi-fila es defensivo, no esperado). Es preexistente — antes del cambio las dos sentencias estaban igual de desordenadas — y lo que esta PR introdujo fue la *afirmación* de haberlo cerrado, ya acotada. Cerrarlo costaría un `SELECT … ORDER BY id FOR UPDATE` extra en el camino GDPR y rompería el canario de presupuesto de `erase.feature`: decisión pendiente de Sergio.
+El hallazgo 7 dejó vivo medio ciclo: `deleteAllForInvitedUser` es un `DELETE` masivo y no admite `ORDER BY`, así que recorría las filas del invitado en orden de plan mientras su hermano las recorre ascendentes por id. Preexistente (antes del cambio las dos sentencias estaban igual de desordenadas), y alcanzable solo con dos invitaciones `SENT` vivas del mismo invitado — estado que ningún camino de escritura produce.
+
+Sergio decidió cerrarlo en esta PR en vez de declararlo, coherente con la tesis de la propia PR: una inversión conocida no se conserva por ser rara.
+
+- La purga adquiere ahora sus filas con un `SELECT i.id … ORDER BY i.id ASC FOR UPDATE` antes del borrado, sin filtrar por estado — el borrado tampoco filtra, y bloquear un conjunto más estrecho que el que se borra devolvería la diferencia al plan.
+- **Rojo primero:** `testThePurgeTakesAnOrderedRowLockBeforeItsBulkDelete` falla sin el lock por `Failed asserting that an array contains 'RowShareLock'`. Es discriminante porque un `DELETE` toma `RowExclusiveLock` y **nunca** `RowShareLock`: borrar la lectura deja el borrado funcionando, los conteos idénticos y todo lo demás verde.
+- **Coste medido, no estimado:** el canario de presupuesto de `erase.feature` pasó de 19 a **20** consultas. El número se leyó del fallo (`Failed asserting that 20 matches expected 19`), no se calculó.
 
 ### Lo que ninguno de los dos pudo verificar
 
