@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  IDENTITY_AXES,
   REDACTION_DENYLIST,
   isDenylistedKey,
+  isIdentityAxisKey,
   scrubDeep,
 } from "@/context/shared/observability/domain/redaction";
 
@@ -27,6 +29,71 @@ describe("redaction denylist", () => {
     expect(isDenylistedKey("token")).toBe(true);
     expect(isDenylistedKey("user_password")).toBe(true);
     expect(isDenylistedKey("name")).toBe(false);
+  });
+});
+
+describe("identity axes", () => {
+  // The API's RequestUriRedaction::IDENTITY_KEYS holds the same three, and no gate compares the two lists,
+  // so this pins one side against an accidental edit — it cannot see drift introduced on the other.
+  it("holds exactly the three identity axes", () => {
+    expect([...IDENTITY_AXES]).toEqual(["actorid", "resourceid", "correlationid"]);
+  });
+
+  it("matches every axis case-insensitively", () => {
+    expect(isIdentityAxisKey("actorId")).toBe(true);
+    expect(isIdentityAxisKey("RESOURCEID")).toBe(true);
+    expect(isIdentityAxisKey("correlationId")).toBe(true);
+  });
+
+  // The wire spells the index and the array suffix differently depending on whether the caller used
+  // http_build_query, axios or jQuery, and all of them name the same axis to the server. These are the
+  // decoded forms: the predicate is handed keys URLSearchParams has already decoded once, so a
+  // percent-encoded spelling is the caller's decoding, not this function's, to answer for.
+  it("matches the value axis of the positional search grammar at any index and array suffix", () => {
+    expect(isIdentityAxisKey("filters[0][value]")).toBe(true);
+    expect(isIdentityAxisKey("filters[][value]")).toBe(true);
+    expect(isIdentityAxisKey("filters[12][value][2]")).toBe(true);
+    expect(isIdentityAxisKey("filters[-1][value][]")).toBe(true);
+  });
+
+  // Unlike the denylist above, an axis is matched whole: these keys are payload properties the UI needs,
+  // and folding them in would start stripping fields rather than redacting identifiers.
+  it("does not match a key that merely contains an axis", () => {
+    expect(isIdentityAxisKey("actorIdList")).toBe(false);
+    expect(isIdentityAxisKey("xcorrelationid")).toBe(false);
+  });
+
+  it("leaves the non-identity axes of the same grammar alone", () => {
+    expect(isIdentityAxisKey("filters[0][field]")).toBe(false);
+    expect(isIdentityAxisKey("filters[0][operator]")).toBe(false);
+    expect(isIdentityAxisKey("limit")).toBe(false);
+  });
+
+  // An axis is matched whole, so one byte of padding was enough to miss it. The request 4xxs, and a 4xx is
+  // what the API's fingers_crossed buffer flushes on the next 5xx — the value reaches a sink either way.
+  it("matches an axis padded with a control byte or whitespace", () => {
+    expect(isIdentityAxisKey("actorId\u0000")).toBe(true);
+    expect(isIdentityAxisKey("actorId\n")).toBe(true);
+    expect(isIdentityAxisKey("actorId\t")).toBe(true);
+    expect(isIdentityAxisKey("actorId\u007F")).toBe(true);
+    expect(isIdentityAxisKey("actor Id")).toBe(true);
+    expect(isIdentityAxisKey("filters[0][value] ")).toBe(true);
+  });
+
+  // URLSearchParams decodes exactly once, which is a level short of the API's MAX_DECODE_PASSES. A caller
+  // who double-encodes hands this a key still spelling `filters%5B0%5D%5Bvalue%5D`.
+  it("matches a key still encoded after the caller's single decoding", () => {
+    expect(isIdentityAxisKey("filters%5B0%5D%5Bvalue%5D")).toBe(true);
+    expect(isIdentityAxisKey("actor%49d")).toBe(true);
+  });
+
+  // decodeURIComponent throws on a malformed escape. A redactor that throws inside a telemetry hook takes
+  // the whole event with it, so the reduction stops at what it has rather than propagating.
+  it("survives a malformed escape instead of throwing at the sink", () => {
+    expect(() => isIdentityAxisKey("%")).not.toThrow();
+    expect(() => isIdentityAxisKey("%zz")).not.toThrow();
+    expect(() => isIdentityAxisKey("actorId%")).not.toThrow();
+    expect(isIdentityAxisKey("filters%5B0%5D%5Bvalue%5D%")).toBe(false);
   });
 });
 
