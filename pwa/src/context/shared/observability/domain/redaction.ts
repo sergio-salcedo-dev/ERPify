@@ -32,11 +32,16 @@ export const REDACTION_DENYLIST = [
 const NORMALIZED_DENYLIST: string[] = REDACTION_DENYLIST.map((d: string) => d.toLowerCase());
 
 /**
- * Whitespace and control bytes, which pad a parameter name without changing what it names. `\s` alone
- * is not enough: it does not cover NUL, and NUL is exactly the byte that walks `actorId%00` past a
- * whole match. Mirrors the API's `RequestUriRedaction::PADDING_BYTES`.
+ * Whitespace and control bytes, which pad a parameter name without changing what it names. `\s` alone is
+ * not enough: it does not cover NUL, and NUL is exactly the byte that walks `actorId%00` past a whole
+ * match. The control ranges deliberately skip `\u0009`-`\u000D`, which `\s` already carries; naming them
+ * twice would widen nothing.
+ *
+ * Mirrors the API's `RequestUriRedaction::PADDING_BYTES` from the opposite direction: there PCRE's `\s` is
+ * ASCII-only so the Unicode separators must be named, while JS's `\s` already holds `\u00A0`, the
+ * `\u2000`-`\u200A` block and the BOM.
  */
-const PADDING_BYTES = /[\s\u0000-\u001F\u007F]+/g;
+const PADDING_BYTES = /[\s\u0000-\u0008\u000E-\u001F\u007F]+/g;
 
 /**
  * Bounds the decode loop below, so a key of stacked `%25`s cannot spin it. Mirrors the API's

@@ -114,40 +114,31 @@ describe("scrubSentryEvent", () => {
     expect(scrubbed.request?.query_string).not.toContain("8f14e45f");
   });
 
-  // The API follows a nested URI two levels. Stopping at one here is not a smaller guarantee: it is the
-  // same identifier kept out of the log and let into Sentry, whose retention no erasure path reaches.
-  it("follows a nested URI to the same depth the API does", () => {
-    const event = {
-      request: {
-        query_string: "next=%2Flogin%3Fnext%3D%252Faudit%253FactorId%253D8f14e45f",
-      },
-    } as unknown as ErrorEvent;
-
-    expect(scrubSentryEvent(event).request?.query_string).not.toContain("8f14e45f");
-  });
-
-  // The depth counter alone is not the guarantee: URLSearchParams decodes a value once, so a nested URI
-  // wrapped twice carries no literal `?` and was never followed at all. The API decodes until one surfaces.
-  it("follows a nested URI whose query only surfaces after a second decoding", () => {
-    const event = {
-      request: { query_string: "next=%252Fbackoffice%252Faudit%253FactorId%253D8f14e45f" },
-    } as unknown as ErrorEvent;
-
-    expect(scrubSentryEvent(event).request?.query_string).not.toContain("8f14e45f");
-  });
-
-  it("redacts an axis padded to miss a whole match", () => {
-    const event = {
-      request: { query_string: "actorId%00=8f14e45f&actorId%20=8f14e45f" },
-    } as unknown as ErrorEvent;
-
-    expect(scrubSentryEvent(event).request?.query_string).not.toContain("8f14e45f");
-  });
-
-  it("redacts the search grammar still encoded after the caller's single decoding", () => {
-    const event = {
-      request: { query_string: "filters%255B0%255D%255Bvalue%255D=8f14e45f" },
-    } as unknown as ErrorEvent;
+  // Each row is a spelling that reached this sink while the API redacted it. Sentry's retention is reached
+  // by no erasure path, so a spelling only one side unwraps is a person id kept out of the log and let in
+  // here. The assertion is deliberately `not.toContain` rather than an exact shape: what has to hold is
+  // that the identifier is gone, not which encoding depth the sentinel comes back wearing.
+  it.each([
+    {
+      case: "a nested URI at the depth the API follows",
+      query: "next=%2Flogin%3Fnext%3D%252Faudit%253FactorId%253D8f14e45f",
+    },
+    {
+      // The depth counter alone is not the guarantee: URLSearchParams decodes a value once, so a URI
+      // wrapped twice carries no literal `?` and used to be skipped without ever being followed.
+      case: "a nested URI whose query only surfaces after a second decoding",
+      query: "next=%252Fbackoffice%252Faudit%253FactorId%253D8f14e45f",
+    },
+    {
+      case: "an axis padded to miss a whole match",
+      query: "actorId%00=8f14e45f&actorId%20=8f14e45f",
+    },
+    {
+      case: "the search grammar still encoded after the caller's single decoding",
+      query: "filters%255B0%255D%255Bvalue%255D=8f14e45f",
+    },
+  ])("keeps the identifier out of the event for $case", ({ query }) => {
+    const event = { request: { query_string: query } } as unknown as ErrorEvent;
 
     expect(scrubSentryEvent(event).request?.query_string).not.toContain("8f14e45f");
   });
