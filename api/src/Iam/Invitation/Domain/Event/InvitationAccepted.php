@@ -9,7 +9,9 @@ use Override;
 
 /**
  * Records that an invitation was accepted (`SENT → ACCEPTED`): its owner set a password and the identity became
- * active in the same transaction. Carries only the PII-free {@see CarriesInvitationSnapshot} shape.
+ * active in the same transaction. Carries the {@see CarriesInvitationSnapshot}
+ * envelope, whose aggregate id IS the invited user — a person's id, so this event may not be queued on a
+ * persisted transport.
  */
 final class InvitationAccepted extends DomainEvent
 {

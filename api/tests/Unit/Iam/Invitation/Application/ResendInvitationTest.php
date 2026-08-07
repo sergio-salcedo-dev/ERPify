@@ -47,7 +47,8 @@ final class ResendInvitationTest extends TestCase
         $emailSender = new SpyInvitationEmailSender();
         $eventBus = new RecordingEventBus();
 
-        $newToken = $this->useCase($invitations, $users, $emailSender, $eventBus)->resend(self::INVITATION_ID);
+        $reissued = $this->useCase($invitations, $users, $emailSender, $eventBus)->resend(self::INVITATION_ID);
+        $newToken = $reissued->acceptToken;
 
         $this->assertSame(InvitationStatus::SENT, $invitation->status());
         $this->assertFalse($invitation->verify($oldSecret, new DateTimeImmutable(self::NOW)));
@@ -58,6 +59,7 @@ final class ResendInvitationTest extends TestCase
         $this->assertCount(1, $emailSender->sent);
         $this->assertSame(UserMother::DEFAULT_EMAIL, $emailSender->sent[0]['recipient']);
         $this->assertSame($newToken, $emailSender->sent[0]['token']);
+        $this->assertTrue($reissued->mailerAccepted);
     }
 
     #[Test]

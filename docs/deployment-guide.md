@@ -210,9 +210,12 @@ administrator (*Users ▸ invite*, role `ADMIN`) or by CLI:
 ENV=prod make sf c='iam:invitation:create <second-email> ADMIN'
 ```
 
-The invitee sets their own password when accepting, so no operator ever holds their credential. Note the
-CLI prints the acceptance link in full — deliver it out of band and do not leave it in a shared terminal
-([#648](https://github.com/sergio-salcedo-dev/ERPify/issues/648)).
+The invitee sets their own password when accepting, so no operator ever holds their credential. The command
+prints nothing but a confirmation when the invitation email got out; add `--show-token` only if you intend to
+deliver the link out of band, because the printed value is the whole credential and stdout survives in
+scrollback, shell history and the logs of whatever ran the command. A send the mailer refused prints the token
+regardless, with a warning saying why — that is the case where out-of-band hand-over is the invitee's only
+remaining route.
 
 Why it is worth doing, stated exactly, because the reasons that sound obvious are not the ones that hold:
 

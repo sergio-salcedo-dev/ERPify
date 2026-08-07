@@ -296,7 +296,15 @@ not routed (see *Domain events* above), and for those the `event_store` row is t
 - `eventVersion` is the payload schema version (default `1`). Bump it when an event's `toPrimitives()`
   shape changes.
 - A stored `payload` is **never rewritten**; an `Upcaster` transforms an old version forward **on read**
-  (chain empty / `NullUpcaster` today — written when the first event evolves).
+  (chain empty / `NullUpcaster` today).
+- **An upcaster is not always the answer, and the first bump proved it.** The six `Iam.Invitation` events are
+  at `eventVersion` 2: v1 was keyed by the invitation id and carried the `invitedUserId` in its payload, v2
+  names the invited user in the `aggregate_id` and carries nothing. An upcaster transforms the **payload** and
+  never sees the aggregate column, so it could not have repaired a v1 row — it would have been a half-migration
+  wearing the shape of a guarantee. The rows are deliberately not migrated: with no upcaster registered, a
+  stored v1 row resolves no class in `ReflectionDomainEventMapper` and **fails loudly on read** instead of
+  rehydrating a wrong subject. Write an upcaster when a payload gains, loses or renames a field; when the
+  *meaning of the aggregate id* changes, the honest outcome is a loud failure.
 - Adding a field a consumer needs the diff for goes on **that one event** (a delta shape or a
   `changedFields` entry), never a speculative global field ([ADR D10](../adr/event-store-and-projections.md)).
 
@@ -322,5 +330,6 @@ To keep this catalog true:
    `Projector` with their `subscribedTo()` and a read model. An unrouted event gets no at-least-once
    redelivery, so a reactor on one needs no dedup claim — and a blocking or failing effect on one belongs in
    the use case post-commit, not in a handler that would run inside the transaction.
-5. **Evolve a payload** — bump `eventVersion` and add the matching `Upcaster`.
+5. **Evolve a payload** — bump `eventVersion`, and add the matching `Upcaster` unless what changed is the
+   meaning of the `aggregate_id`, which no upcaster can reach (see *Versioning & evolution* above).
 6. **Update this file** and its `index.md` entry.

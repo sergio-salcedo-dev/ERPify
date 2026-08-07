@@ -11,15 +11,22 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Throwable;
 
 /**
  * Invites a new member: creates the `INVITED` identity, its membership and the `SENT` invitation atomically,
- * sends the email, and prints the raw accept token once (as the email delivers it) so an operator can hand it
- * over out of band. A thin adapter over {@see SendInvitation}; the management HTTP surface (deferred to the
+ * and sends the email. A thin adapter over {@see SendInvitation}; the management HTTP surface (deferred to the
  * member-lifecycle slice) will wrap the very same use case.
+ *
+ * **The raw accept token is printed only when it is needed or asked for**, because stdout is not a private
+ * channel: it survives in scrollback, in shell history and in the logs of whatever ran the command, and the
+ * value is the whole credential. Printing it unconditionally on success made every invitation pay that cost
+ * for the benefit of the rare one whose email never got out. `--show-token` buys the operator that copy
+ * deliberately; a failed send prints it regardless, because then out-of-band hand-over is the only way the
+ * invitee ever receives the link.
  */
 #[AsCommand(
     name: 'iam:invitation:create',
@@ -42,6 +49,12 @@ final class CreateInvitationCommand extends Command
                 InputArgument::IS_ARRAY | InputArgument::OPTIONAL,
                 'Org-scoped roles (default: VIEWER)',
             )
+            ->addOption(
+                'show-token',
+                null,
+                InputOption::VALUE_NONE,
+                'Print the raw accept token even when the invitation email got out',
+            )
         ;
     }
 
@@ -59,15 +72,26 @@ final class CreateInvitationCommand extends Command
         }
 
         try {
-            $acceptToken = $this->sendInvitation->invite($email, ...$this->resolveRoles($input));
+            $issued = $this->sendInvitation->invite($email, ...$this->resolveRoles($input));
         } catch (Throwable $throwable) {
             $io->error(\sprintf('Could not create the invitation: %s', $throwable->getMessage()));
 
             return Command::FAILURE;
         }
 
-        $io->success(\sprintf('Invitation sent to %s.', $email));
-        $io->writeln($acceptToken);
+        $io->success(\sprintf('Invitation created for %s.', $email));
+
+        if (!$issued->mailerAccepted) {
+            $io->warning(\sprintf(
+                'The invitation email to %s could not be sent. The invitation is live; hand the accept token '
+                . 'below over out of band, or re-run with iam:invitation:resend once mail works.',
+                $email,
+            ));
+        }
+
+        if (!$issued->mailerAccepted || true === $input->getOption('show-token')) {
+            $io->writeln($issued->acceptToken);
+        }
 
         return Command::SUCCESS;
     }

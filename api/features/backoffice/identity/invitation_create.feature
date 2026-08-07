@@ -45,6 +45,17 @@ Feature: Invite a member from the console
     # synchronously because it is `security`; no CDC row joins it, since only Bank and BankAccount are
     # `AuditedEntity` and the generic access hook audits GET.
     And 27 requests got executed only for doctrine connection "default"
+    # The envelope, asserted against the stored row rather than against the emitting code: the subject of an
+    # invitation event is the invited user, the payload is empty, and the schema version says so. Placed after
+    # the query budget above so these reads cannot move it. The empty payload is `[]` and not `{}` because an
+    # empty PHP array encodes as a JSON array — the same shape the reset event stores.
+    And I execute the SQL query "SELECT 1 FROM event_store WHERE event_name = 'erpify.iam.invitation.created' AND aggregate_id = (SELECT id FROM identity_user WHERE email = 'newbie@erpify.test') AND payload = '[]'::jsonb AND event_version = 2"
+    And there should have 1 records in SQL result
+    # The half that matters: the invitation id is the selector of the acceptance link and keys its accept
+    # budget, so no invitation event may be stored under it. Without this row the assertion above would still
+    # pass on an envelope that carried BOTH ids.
+    And I execute the SQL query "SELECT 1 FROM event_store WHERE event_name LIKE 'erpify.iam.invitation.%' AND aggregate_id IN (SELECT id FROM iam_invitation)"
+    And there should have 0 records in SQL result
 
   # Handing the invitee ADMIN is a second, narrower act: the controller demands `users.grantAdmin` on top of
   # `users.invite`, but only when the payload actually carries that role. Both permissions are granted to

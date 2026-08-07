@@ -90,7 +90,7 @@ final class Invitation extends AggregateRoot
             $token->expiresAt(),
             InvitationStatus::CREATED,
         );
-        $invitation->record(new InvitationCreated($id, $invitedUserId, occurredOn: $invitation->getCreatedAt()));
+        $invitation->record(new InvitationCreated($invitedUserId, occurredOn: $invitation->getCreatedAt()));
 
         return $invitation;
     }
@@ -103,7 +103,7 @@ final class Invitation extends AggregateRoot
     public function markSent(): void
     {
         $this->transitionTo(InvitationStatus::SENT, InvitationStatus::CREATED);
-        $this->record(new InvitationSent($this->id(), $this->invitedUserId, occurredOn: $this->updatedAt));
+        $this->record(new InvitationSent($this->invitedUserId, occurredOn: $this->updatedAt));
     }
 
     /**
@@ -115,7 +115,7 @@ final class Invitation extends AggregateRoot
     public function accept(): void
     {
         $this->transitionTo(InvitationStatus::ACCEPTED, InvitationStatus::SENT);
-        $this->record(new InvitationAccepted($this->id(), $this->invitedUserId, occurredOn: $this->updatedAt));
+        $this->record(new InvitationAccepted($this->invitedUserId, occurredOn: $this->updatedAt));
     }
 
     /**
@@ -126,7 +126,7 @@ final class Invitation extends AggregateRoot
     public function revoke(): void
     {
         $this->transitionTo(InvitationStatus::REVOKED, InvitationStatus::SENT);
-        $this->record(new InvitationRevoked($this->id(), $this->invitedUserId, occurredOn: $this->updatedAt));
+        $this->record(new InvitationRevoked($this->invitedUserId, occurredOn: $this->updatedAt));
     }
 
     /**
@@ -139,7 +139,7 @@ final class Invitation extends AggregateRoot
     public function expire(): void
     {
         $this->transitionTo(InvitationStatus::EXPIRED, InvitationStatus::SENT);
-        $this->record(new InvitationExpired($this->id(), $this->invitedUserId, occurredOn: $this->updatedAt));
+        $this->record(new InvitationExpired($this->invitedUserId, occurredOn: $this->updatedAt));
     }
 
     /**
@@ -157,7 +157,7 @@ final class Invitation extends AggregateRoot
         $this->expiresAt = $newToken->expiresAt();
         $this->updatedAt = SystemClock::now();
 
-        $this->record(new InvitationResent($this->id(), $this->invitedUserId, occurredOn: $this->updatedAt));
+        $this->record(new InvitationResent($this->invitedUserId, occurredOn: $this->updatedAt));
     }
 
     /**

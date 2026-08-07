@@ -28,14 +28,15 @@ final class SendInvitationEmailBestEffortTest extends TestCase
     {
         $recording = new SpyInvitationEmailSender();
 
-        (new SendInvitationEmailBestEffort($recording, new NullLogger()))
+        $accepted = (new SendInvitationEmailBestEffort($recording, new NullLogger()))
             ->send(self::RECIPIENT, self::ACCEPT_TOKEN)
         ;
 
         $this->assertSame([['recipient' => self::RECIPIENT, 'token' => self::ACCEPT_TOKEN]], $recording->sent);
+        $this->assertTrue($accepted);
     }
 
-    public function testSwallowsAndLogsASendFailureInsteadOfRaisingIt(): void
+    public function testSwallowsASendFailureButReportsItToTheCaller(): void
     {
         $failing = $this->createStub(InvitationEmailSender::class);
         $failing->method('send')->willThrowException(new RuntimeException('mailer down'));
@@ -50,9 +51,13 @@ final class SendInvitationEmailBestEffortTest extends TestCase
         };
 
         // Must not raise: the invitation already committed, so the caller still hands the token over.
-        (new SendInvitationEmailBestEffort($failing, $logger))->send(self::RECIPIENT, self::ACCEPT_TOKEN);
+        $accepted = (new SendInvitationEmailBestEffort($failing, $logger))->send(self::RECIPIENT, self::ACCEPT_TOKEN);
 
         $this->assertCount(1, $logger->records);
         $this->assertSame(LogLevel::WARNING, $logger->records[0]['level']);
+
+        // The log line reaches ops; only the return value reaches the operator holding the prompt, who is the
+        // one that can still hand the token over.
+        $this->assertFalse($accepted);
     }
 }
