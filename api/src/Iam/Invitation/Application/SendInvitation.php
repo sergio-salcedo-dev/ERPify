@@ -25,17 +25,19 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * a domain event).
  *
  * The single reusable use case behind both the CLI now and the management HTTP surface later (OCP): the command
- * is a thin adapter that prints the returned token; a future endpoint wraps the very same call. The raw
- * `<invitationId>.<secret>` composite is returned once so the CLI can echo it, mirroring the email — never
- * logged, never persisted.
+ * is a thin adapter over the returned {@see IssuedInvitation}; a future endpoint wraps the very same call. The
+ * raw `<invitationId>.<secret>` composite is returned once so a caller can hand it over out of band when the
+ * email did not get out — never logged, never persisted.
  *
  * The object coupling is essential complexity: an atomic onboarding necessarily coordinates three contexts
  * (identity provisioning, membership grant, invitation) plus the token, mailer, event bus and transaction —
  * each a published seam or core building block. Splitting it would fracture the single transaction that is its
  * whole point, so the coupling is accepted rather than diffused through indirection.
  *
- * The post-commit email is best-effort: the invitation is already durable, so a mailer fault must not abort
- * the caller mid-hand-over — the CLI still echoes the token and the operator resends if the mail never landed.
+ * The post-commit email is best-effort: the invitation is already durable, so a mailer fault must not abort the
+ * caller mid-hand-over. The fault is reported rather than only logged, because an invitation that is live and
+ * undeliverable is precisely the state whose only remedy — handing the token over out of band — needs whoever
+ * is holding the prompt to know it happened.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
@@ -54,10 +56,7 @@ final readonly class SendInvitation
     ) {
     }
 
-    /**
-     * @return string the raw `<invitationId>.<secret>` accept token, delivered once
-     */
-    public function invite(string $email, Role ...$roles): string
+    public function invite(string $email, Role ...$roles): IssuedInvitation
     {
         $invitationId = Uuid::generate();
         $generated = SingleUseToken::mint($this->clock->now()->add(new DateInterval(self::TTL_SPEC)));
@@ -84,8 +83,7 @@ final readonly class SendInvitation
         );
 
         $acceptToken = $invitationId . '.' . $generated->plaintext();
-        $this->emailSender->send($recipientEmail, $acceptToken);
 
-        return $acceptToken;
+        return new IssuedInvitation($acceptToken, $this->emailSender->send($recipientEmail, $acceptToken));
     }
 }

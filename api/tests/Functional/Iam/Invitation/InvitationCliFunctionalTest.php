@@ -121,7 +121,7 @@ final class InvitationCliFunctionalTest extends KernelTestCase
         $invitationId = $this->tokenSelector($firstToken);
 
         $tester = new CommandTester($this->application->find('iam:invitation:resend'));
-        $tester->execute(['invitationId' => $invitationId]);
+        $tester->execute(['invitationId' => $invitationId, '--show-token' => true]);
 
         $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
         $secondToken = $this->printedToken($tester);
@@ -150,10 +150,14 @@ final class InvitationCliFunctionalTest extends KernelTestCase
         $this->assertSame(Command::FAILURE, $tester->getStatusCode());
     }
 
+    /**
+     * `--show-token` is explicit here because the command's default is silence: the raw token is a credential
+     * and stdout is not a private channel. A test that needs the token asks for it, exactly as an operator does.
+     */
     private function create(string $email, string ...$roles): CommandTester
     {
         $tester = new CommandTester($this->application->find('iam:invitation:create'));
-        $tester->execute(['email' => $email, 'roles' => $roles]);
+        $tester->execute(['email' => $email, 'roles' => $roles, '--show-token' => true]);
 
         return $tester;
     }

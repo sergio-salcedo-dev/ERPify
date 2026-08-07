@@ -67,6 +67,16 @@ token, secret included. The reset half does satisfy the corollary: `PasswordRese
 one convention each. Anything built under this ADR follows the reset convention; the invitation
 divergence is a named residual, not a precedent.
 
+*Amendment (2026-08-07, on closing the residual).* The invitation half now follows the reset convention:
+the six events name the invited user as their `aggregateId`, their payload is empty, and their
+`eventVersion` is `2` — so no new publication writes the selector to `event_store`. `aggregateType()`
+stays `Iam.Invitation`, and `api/.persistent-transport-policy` reclassifies it `person` accordingly, since
+that registry judges what the `aggregate_id` denotes rather than what the type is called. The CLI half is
+narrowed rather than removed: `iam:invitation:create` and `iam:invitation:resend` print the raw token only
+under `--show-token`, or unconditionally when the mailer refused the send — out-of-band hand-over is then
+the invitee's only remaining route to the link. **Rows written before this are not migrated**, so the
+corollary holds for what the system writes from here, not retroactively for what it already wrote.
+
 *Discarded:* a source/IP dimension on the persisted lockout. It re-derives `login_throttling`, abandons
 the persistent counter's only documented job (`User.php:58-63`), and the key would be
 attacker-controlled and free to rotate.
