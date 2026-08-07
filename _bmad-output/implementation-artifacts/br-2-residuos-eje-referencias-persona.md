@@ -66,7 +66,15 @@ para que **ningún id de persona sobreviva a su propio borrado en un sumidero si
 compone `/users/${encodeURIComponent(id)}` — id de persona en el **path**. El filtro `query` de Caddy es
 estructuralmente incapaz de tocarlo.
 
-### #565 — ABBA entre el pase de actor y el de recurso · **NO ALCANZABLE (latente)**
+### #565 — ABBA entre el pase de actor y el de recurso · ~~**NO ALCANZABLE (latente)**~~ → **ALCANZABLE Y ARREGLADO**
+
+> **SUPERADA el 2026-08-07, y se conserva a propósito.** Todo lo que sigue en esta sección se midió contra
+> `main` @ `bca43bf1` y era cierto entonces. `aede857d` (#647) añadió dos escritores del eje recurso-persona
+> —`ChangeUserRoles.php:160` e `InviteUser.php:72`— así que el par recíproco ya coexiste y **el ABBA es
+> alcanzable**. En particular son falsas hoy dos afirmaciones de abajo: que `ChangeUserRoles` no referencia
+> `Audit`, y lo que se cita del docblock de `AdministratorErasureRequiresDemotion`, que ahora dice lo
+> contrario. Queda escrito porque la disposición correcta no se dedujo: la disparó un gate, y ese recorrido
+> es el valor. Arreglado con orden de bloqueo determinista (`31600e76`, `83c54a7e`).
 
 **Lo que sí se sostiene:**
 
@@ -183,6 +191,7 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
 
 - El comentario de cierre (o de re-encuadre) cita la evidencia: `User.php:38-41`, `AdministratorErasureRequiresDemotion.php:15-18`, y que `'User'` aparece una sola vez en `api/src`.
 - Existe un test que **se pone rojo el día que el ABBA se vuelve alcanzable** — es decir, cuando aparezca un escritor de `resource_type='User'` ajeno a la transacción. Precedente de forma: `DoctrineActiveAdministratorDirectoryTest.php:111-137` interroga `pg_locks` para `pg_backend_pid()` en vez de simular concurrencia.
+  > **Cumplido y luego superado.** Ese test existió como `noSecondFileWritesAPersonTypeIntoTheResourceAxis`, disparó con #647 — que es exactamente lo que este criterio pedía — y al hacerlo dejó de poder afirmar escritor único. Hoy la contención vive en `everyFileWritingAPersonTypeLivesInTheModuleThatErasesIt` (la regla de módulo) y en el propio lock, no en un censo de ficheros.
 - **`40P01` se mapea a un marcador reintentable** del contrato RFC 9457 (hoy sale 500), y `docs/api-error-contract.md` se actualiza — **obligatorio, NFR26**. La razón de fondo **no es el ABBA** sino `event_store`: `DbalEventStoreSubjectAnonymiser.php:61-69` corre en la **misma** transacción que los dos pases de auditoría y su `payload::text ILIKE` (`:68`) fuerza seq scan sobre filas que cualquier escritura de negocio está insertando por el outbox. Ahí el deadlock **sí** es plausible.
 - **Qué marcador y dónde se traduce, decidido aquí y no en el teclado**: no existe ninguno «reintentable» en `api/src/Shared/ErrorContract/Domain/Exception/`, así que hay que crearlo o justificar reutilizar `Conflict`; y como `Doctrine\DBAL\Exception\DeadlockException` **no** es `DomainException`, el punto de traducción hay que nombrarlo explícitamente en el PR (candidato: `ProblemDetailsFactory`, que ya menciona `deadlock` en `:450`).
 - **El ADR se ACOTA, no se ignora ni se revierte.** `docs/adr/audit-activity-log.md:177-181` decidió no añadir reintento síncrono, y su argumento —que las clases reintentables no contienden en el write de `audit_log`— **probablemente acierta para `audit_log`**. Lo que el ADR no cubre es `event_store`: `DbalEventStoreSubjectAnonymiser.php:61-69` corre en la misma transacción y su `ILIKE` fuerza seq scan sobre filas que el outbox está insertando. **La edición del ADR delimita su alcance a la tabla que midió**; dejar dos documentos del repo diciendo lo contrario es el patrón contrato↔realidad que este lote existe para cerrar.
@@ -248,10 +257,53 @@ desmienten**: `ProjectionCheckpointSchemaListener.php:35`, `EventStoreSchemaList
   - [x] `make db.migrate` / `make db.validate` exit 0; `db.diff` posterior sin deriva
   - [x] **Pase adversarial COMPLETO** — dos lectores hostiles en contexto fresco (crítico de completitud AC-por-AC, y re-lectura de sumideros + tripwire/503) sobrevivieron y devolvieron 3 GRAVE + 6 SERIO. Todo medido, dispuesto y registrado en la sección dedicada
   - [x] PR abierto (no draft, por decisión de Sergio): <https://github.com/sergio-salcedo-dev/ERPify/pull/650>
-- [ ] **T6 — Cierre de issues** (AC: 5)
-  - [ ] #562 y #564 cerrados con evidencia
-  - [ ] #565 cerrado como REAL Y ARREGLADO — `main` (#647) lo volvió alcanzable y el orden de bloqueo lo cierra
-  - [ ] #389 comentado con las dos vías medidas y **abierto**: los residuales que quedan están declarados, no cerrados
+- [x] **T6 — Cierre de issues** (AC: 5)
+  - [x] #562 y #564 cerrados con evidencia
+  - [x] #565 cerrado como REAL Y ARREGLADO — `main` (#647) lo volvió alcanzable y el orden de bloqueo lo cierra
+  - [x] #389 comentado con las dos vías medidas y **abierto**: los residuales que quedan están declarados, no cerrados
+- [x] **T7 — Code review de la tarea completa** (AC: 5)
+  - [x] Tres capas adversariales en contexto fresco y read-only; 4 decisiones + 20 parches + 4 diferidos, en «Review Findings»
+  - [x] Los dos GRAVE que devolvió (`?next=` y el rango atado al productor) medidos contra el stack vivo y cerrados
+  - [x] Cada regla nueva provocada en rojo; la aserción sobre el plan cierra el hueco de `ORDER BY id`, que antes no ponía nada rojo
+
+### Review Findings (code review 2026-08-07)
+
+Tres capas adversariales en contexto fresco y read-only (Blind Hunter, Edge Case Hunter, Acceptance
+Auditor) sobre el diff completo de la rama contra `main`. Los cuatro hallazgos marcados **[medido]** se
+verificaron con sonda contra el stack vivo o falsificando el código; el resto por lectura.
+
+**Decisiones — resueltas por Sergio el 2026-08-07, ya convertidas en parches:**
+
+- [ ] **[Review][Patch] El `?next=` de la expiración de sesión mete la URL de auditoría entera en el log** — **[medido]**: `"uri": "/login?next=%2Fbackoffice%2Faudit%3FactorId%3D<uuid>%26resourceId%3D<uuid>&reason=session-expired"`. `FetchHttpClient.ts:60` y `RequireAuth.tsx:29` construyen `next` con `pathname + search`. **Es una clase nueva**: todo el vocabulario de redacción casa NOMBRES de parámetro y aquí el id viaja dentro de un VALOR. **Decisión: redacción consciente de valores-URL**, aplicando el vocabulario recursivamente a un valor que es a su vez una URL o una ruta con query — cierra la clase, no el caso, y cubre el próximo parámetro que transporte una URL. Descartadas: recortar la query de `next` (mata el deep link que la pantalla existe para preservar) y redactar `next` por nombre (borra el destino y no cubre al siguiente)
+- [ ] **[Review][Patch] La cláusula `ORDER BY id` no la guarda nada** — **[medido]**: borrarla deja `make php.unit` en verde (2402 tests, exit 0). Es el mecanismo que cierra #565. **Decisión: aserción sobre el PLAN** — `EXPLAIN (FORMAT JSON)` de la sentencia del lock, asertando un nodo `Sort` bajo `LockRows`. Es una aserción sobre comportamiento y no sobre texto: borrar la cláusula cambia el plan. Descartados: el gate textual (solo impide borrar la línea) y el arnés de concurrencia real (lo único que probaría la adquisición, y la fuente clásica de flakes en CI)
+- [ ] **[Review][Patch] `EraseActorAuditTrailCommand` alcanza el anonimizador de actor sin lock y sin transacción** — su `UPDATE` toma filas en orden del planner, así que concurrente con un borrado reabre el ciclo, y al no pasar por `DoctrineTransactionManager` tampoco hay 503. **Decisión: se arregla en este PR** — el comando pasa por `transactional()` y toma el lock antes del `UPDATE`, para que #565 quede cerrado y no cerrado-salvo-por-la-CLI [`api/src/Shared/Audit/Infrastructure/Cli/EraseActorAuditTrailCommand.php:112`]
+- [ ] **[Review][Patch] Qué sustituye al PR draft** — el pase adversarial no precedió a la apertura del PR (creado 2026-08-06T21:11Z; la vuelta que halló los tres GRAVE es del 07-08). **Decisión: la regla pasa a ser «el pase se ejecuta y se registra en el artefacto ANTES de `gh pr create`»**, sin draft de por medio: conserva la sustancia del gate —ojos ajenos antes de que la entrega sea visible— y elimina la contradicción con no usar draft nunca. Reescribir esa parte de `CLAUDE.md`
+
+**Parches (arreglo no ambiguo):**
+
+- [ ] **[Review][Patch] La enumeración de Caddy se ata al productor, no a lo que el llamador puede enviar** — **[medido]**: `filters[12][value]=<uuid>` entra en claro junto a `filters[8][value]=REDACTED` en la misma línea, y Caddy loguea antes de que Symfony valide (la petición fue 404). `SearchQuery::MAX_FILTERS = 20`. Extender a `0..19` y derivar el gate de esa constante, declarando el residual >19 [`api/frankenphp/Caddyfile:47`, `api/tests/Unit/Shared/Architecture/CaddyfileAccessLogRedactionGateTest.php:137`]
+- [ ] **[Review][Patch] La gramática posicional con índice explícito escapa a los dos redactores** — `/\Afilters\[\d+\]\[value\](\[\])?\z/` cubre `[]` pero no `[0]`, que es lo que emiten `http_build_query`, axios `indices` y jQuery [`api/src/Shared/ErrorContract/Application/RequestUriRedaction.php:52`, `pwa/src/context/shared/observability/domain/redaction.ts:51`]
+- [ ] **[Review][Patch] La cabecera `Referer` llega a Sentry sin pasar por el vocabulario de URIs** — los scrubbers filtran `headers` por NOMBRE de clave, y `Referer` es la única cabecera cuyo valor ES una URI. El mismo argumento con el que se borra en Caddy [`api/src/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubber.php:62`, `pwa/src/context/shared/observability/infrastructure/scrubSentryEvent.ts:65`]
+- [ ] **[Review][Patch] `Referrer-Policy` es por documento, y el docblock afirma lo contrario** — en navegación SPA sigue vigente la política del documento inicial, así que «the URL never leaves the tab at all» es falso; y `source: "/backoffice/audit"` es coincidencia exacta, sin subrutas [`pwa/src/app/backoffice/audit/_lib/auditUrlState.ts:54`, `pwa/next.config.ts:143`]
+- [ ] **[Review][Patch] El lock materializa en memoria todos los ids que bloquea** — `fetchFirstColumn()` sin cota sobre el historial completo del sujeto, dentro de la transacción que sostiene los locks; `iterateColumn()` toma los mismos locks sin retener nada [`api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditSubjectRowLock.php:53`]
+- [ ] **[Review][Patch] Tres agujeros del gate de migraciones** — `ADD CHECK (x IS NOT NULL)` se lee como columna y da rojo falso; dos `ALTER TABLE` en un mismo `addSql()` colapsan en la primera tabla; el glob recorre un solo nivel y no ve una migración en la raíz de `migrations/` [`api/tests/Support/MigrationColumnDefaults.php:88,225,265`]
+- [ ] **[Review][Patch] El bucle de decodificación no comprueba el último pase que calcula** — una clave con 5 niveles de codificación escapa; `MAX_DECODE_PASSES = 4` describe 5 iteraciones y 4 decodificaciones efectivas [`api/src/Shared/ErrorContract/Application/RequestUriRedaction.php:121`]
+- [ ] **[Review][Patch] `lock()` no comprueba que haya transacción abierta** — fuera de una, Postgres libera el `FOR UPDATE` al acabar el statement: cero error, cero protección, todo verde [`api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditSubjectRowLock.php:51`]
+- [ ] **[Review][Patch] Un `request_uri` no-string se deja pasar entero, y el test lo pinnea como correcto** — un `UriInterface` es `Stringable` con query y el formateador lo serializa después [`api/src/Shared/Monitoring/Infrastructure/Monolog/RequestUriRedactionProcessor.php:43`]
+- [ ] **[Review][Patch] Comentarios relativos al cambio en dos tests**, prohibidos por `CLAUDE.md` — y el artefacto afirma que dos lectores verificaron que no los hay [`api/tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php:132`, `api/tests/Unit/Shared/Monitoring/Infrastructure/Sentry/SentryEventScrubberTest.php:71`]
+- [ ] **[Review][Patch] El mensaje anti-vacuidad revienta con `TypeError` en el caso que cubre** — `$escaped::class` se evalúa antes de `assertInstanceOf`; con `null` el diagnóstico se pierde [`api/tests/Functional/Shared/Persistence/TransactionManagerRetryableFailureTest.php:77`]
+- [ ] **[Review][Patch] Argumentos invertidos en el test del gestor de transacciones** — `fromThrowable($throwable, $correlationId, $instance)` recibe `INSTANCE` y `CORRELATION_ID` al revés; ambos son UUID, así que nunca falla y queda un ejemplo invertido del contrato [`api/tests/Unit/Shared/Persistence/DoctrineTransactionManagerTest.php:78`]
+- [ ] **[Review][Patch] El registro quedó desmentido por el propio código** — «Realidad medida» §#565 sigue con el encabezado «NO ALCANZABLE (latente)» y afirma que `ChangeUserRoles` no referencia `Audit`; AC2 cita un tripwire (`noSecondFileWritesAPersonTypeIntoTheResourceAxis`) que ya no existe con ese nombre; T6 sin marcar con los issues cerrados; la File List omite el propio fichero de la historia [`_bmad-output/implementation-artifacts/br-2-residuos-eje-referencias-persona.md`]
+- [ ] **[Review][Patch] La épica conserva la disposición refutada** — sigue diciendo de #565 «NO ALCANZABLE (latente) … se cierra con evidencia + tripwire», y está por encima de la historia en la jerarquía BMAD [`_bmad-output/planning-artifacts/epics-backlog-resolution.md:64`]
+- [ ] **[Review][Patch] `worktree.mk` cambia el comportamiento de `worktree.create` sin actualizar su documentación** — `CLAUDE.md` sigue diciendo solo «Seeds `bmad-*` skills automatically» [`make/worktree.mk:84`]
+- [ ] **[Review][Patch] Punto ciego no declarado del gate de Caddy: la censura es anulable por entorno** — `{$CADDY_SERVER_LOG_OPTIONS}` se expande dentro del bloque `log`, así que un `format json` en despliegue la sustituye sin tocar el repo [`api/frankenphp/Caddyfile:21`]
+
+**Diferidos (reales, no de este cambio):**
+
+- [x] **[Review][Defer] Asimetría de semántica entre los redactores de API y PWA** — la API decodifica hasta estabilizar y preserva la forma byte a byte; el PWA usa `URLSearchParams`, que decodifica una vez y reescribe (`?debug` → `debug=`, `+`↔espacio). Los dos docblocks declaran paridad; la paridad es de vocabulario, no de semántica — diferido, preexistente al alcance de este PR
+- [x] **[Review][Defer] `identity_user.failed_attempts` queda exento sin argumento escrito** — el docblock argumenta solo `status` — diferido, preexistente
+- [x] **[Review][Defer] El borrado del `Referer` es global al sitio** — se pierde la señal de procedencia para investigar CSRF y phishing en todas las peticiones, para un problema confinado a tres pantallas; queda como coste descrito, no como residual registrado — diferido, preexistente al alcance
+- [x] **[Review][Defer] La forma `filters[N][value][]` del operador `in` no está en la enumeración de Caddy** — AC1 ya la declara fuera de alcance; ningún field mapping admite `in` sobre un eje de identidad hoy — diferido, ya declarado
 
 ---
 
@@ -401,9 +453,12 @@ ventana de autovacuum.
 Derivada de `git diff --name-only $(git merge-base origin/main HEAD)...HEAD`, no escrita a mano — el pase
 adversarial encontró que la versión manual omitía tres ficheros y contaba mal los fixtures.
 
+Incluye este propio fichero, que el diff cuenta como añadido.
+
 **Nuevos**
 
 - `api/migrations/2026/Version20260806180031.php`
+- `api/src/Shared/Audit/Domain/Exception/AuditSubjectLockRequiresTransaction.php`
 - `api/src/Shared/Audit/Application/AuditSubjectRowLock.php`
 - `api/src/Shared/Audit/Application/AuditSubjectTrailErasure.php`
 - `api/src/Shared/Audit/Infrastructure/Persistence/DbalAuditSubjectRowLock.php`
@@ -503,7 +558,34 @@ merge de `main` (#647, #652) y de cerrar el acoplamiento que quedaba:
 Los 2 `PHPUnit Notices` son los preexistentes ya declarados (`DoctrineSessionRepositoryStoreUnavailableTest`,
 mocks sin expectativas), y no son de este diff.
 
-**El último rojo era PHPMD, y su número era un síntoma.** `AuditSubjectRowLockFunctionalTest` referenciaba
+**Tercera tanda, con los parches del code review aplicados** — corridas frescas, 2026-08-07:
+
+| Gate | Exit |
+|---|---|
+| `make php.quality` | 0 |
+| `make php.quality.dry-run` (**CI**) | 0 |
+| `make php.unit` (2416 tests, 9958 aserciones) | 0 |
+| `make php.behat` (410 escenarios, 3802 pasos) | 0 |
+| `make pwa.quality` | 0 |
+| `make pwa.test.unit` (227 ficheros, 1223 tests) | 0 |
+| Los seis gates de lint | 0 |
+| `make db.validate` | 0 («schema is in sync») |
+
+**Sonda final contra el stack vivo, las tres vías a la vez** — `?next=` con la URL de auditoría dentro,
+`filters[12]`/`filters[19]`/`actorId`, y un `Referer` apuntando a la pantalla de auditoría. **Cero
+apariciones** del id sonda en el log del contenedor:
+
+```
+"uri": "/login?next=REDACTED&reason=session-expired"
+"uri": "/api/v1/backoffice/audit?actorId=REDACTED&filters%5B12%5D%5Bvalue%5D=REDACTED&filters%5B19%5D%5Bvalue%5D=REDACTED"
+```
+
+La primera sonda tras arreglar `?next=` **todavía lo mostró en claro**, y eso fue el hallazgo: el arreglo
+cubría el log de aplicación y Sentry, pero no el borde — el filtro de Caddy sustituye el valor de un
+parámetro NOMBRADO y no sabe mirar dentro de uno. Cerrado allí con `replace next REDACTED`, que es toda la
+gramática que Caddy tiene. Sin la sonda se habría dado por cerrado con el test en verde.
+
+**El último rojo del ciclo anterior era PHPMD, y su número era un síntoma.** `AuditSubjectRowLockFunctionalTest` referenciaba
 16 tipos porque cargaba con dos trabajos: el aparato para preguntarle a Postgres si una fila está bloqueada
 —segunda conexión, fixtures commiteados, sonda `FOR UPDATE NOWAIT`, borrado en `tearDown`— y la afirmación
 que un lector va a buscar ahí. El aparato pasa a
@@ -630,3 +712,5 @@ la refutación del «default es fail-open»; el cableado RFC 9457 de `TransientT
 | 2026-08-07 | #647 vuelve alcanzable el ABBA: el tripwire dispara, #565 pasa de «no alcanzable» a **real y arreglado** con orden de bloqueo determinista |
 | 2026-08-07 | #562, #564 y #565 **cerrados** con evidencia medida; **#389 abierto**, con tres vías cerradas y dos residuales declarados |
 | 2026-08-07 | Rama completa y verde: `php.quality`, `php.quality.dry-run`, `php.unit`, `php.behat`, `pwa.quality`, `pwa.test.unit` y los seis gates de lint, todos exit 0 |
+| 2026-08-07 | **Code review de la tarea completa**, tres capas adversariales: 4 decisiones + 20 parches + 4 diferidos. Dos GRAVE nuevos, ambos ids de persona que viajan **dentro de un valor** y que ningún vocabulario basado en nombres veía |
+| 2026-08-07 | Aplicados los 20 parches. `ORDER BY id` pasa a tener guarda (aserción sobre el plan); el rango del log se ata a `SearchQuery::MAX_FILTERS`; el `Referer` se redacta también en Sentry; tres agujeros más del gate de migraciones; y `CLAUDE.md` sustituye el mecanismo del draft por «el pase precede a `gh pr create`» |

@@ -62,7 +62,14 @@ gdpr-hardening no cubrió. **Es el único lote con consecuencia legal.**
   en cada tecleo del filtro — lleva el id bajo `filters[N][value]` (`buildSearchParams.ts:17-26`), clave que
   ningún `replace actorId` alcanza. Se redactan **las dos vías**, aceptando que el log de acceso deja de poder
   responder «qué filtro se aplicó».
-- **#565** — **NO ALCANZABLE (latente).** El ABBA exige dos filas recíprocas que **no pueden existir**:
+- **#565** — ~~**NO ALCANZABLE (latente)**~~ → **ALCANZABLE, y ARREGLADO** (2026-08-07). Lo que sigue se
+  midió contra `main` @ `bca43bf1` y lo invirtió `aede857d` (#647): `ChangeUserRoles.php:160` e
+  `InviteUser.php:72` escriben el eje recurso-persona, de modo que las dos filas recíprocas **sí coexisten**
+  y el ABBA es alcanzable. Lo disparó el propio tripwire al mergear `main`. Se cierra con **orden de bloqueo
+  determinista** —`SELECT … ORDER BY id FOR UPDATE` sobre la unión de los dos ejes— más el mapeo de `40P01`,
+  no con la evidencia de inalcanzabilidad que este párrafo argumenta. El descarte de la sentencia `OR` de
+  fusión sigue en pie. Detalle en la historia BR-2 y en el comentario de cierre del issue.
+  El razonamiento original, conservado: el ABBA exige dos filas recíprocas que **no pueden existir**:
   suspender o degradar a un peer no escribe ninguna fila de auditoría (`User` no es `AuditedEntity`,
   `User.php:38-41`; lo confirma `AdministratorErasureRequiresDemotion.php:15-18`), y `resource_type='User'`
   aparece una sola vez en `api/src` — la fila la inserta la propia transacción diez líneas antes del pase de
@@ -76,7 +83,8 @@ gdpr-hardening no cubrió. **Es el único lote con consecuencia legal.**
   techo de 65535 es real (`ExpandArrayParameters.php:115-127` liga un parámetro por id) pero **teórico**
   (exige ≥65 536 personas distintas) y **no es este issue** — vive en `deferred-work.md:11`. Queda abierto de
   #562 sólo lo que nadie ha tocado: cinco lecturas sin `LIMIT` ni keyset. La deuda de más valor es que
-  `LiveIdentityDirectory.php:28-30` afirma que un llamador trocea y **ninguno lo hace**.
+  `LiveIdentityDirectory.php:28-30` afirma que un llamador trocea y **ninguno lo hace** — corregido en BR-2,
+  y las cinco lecturas registradas en `deferred-work.md`. Issue cerrado con evidencia el 2026-08-07.
 - **#564** — **ALCANZABLE POR OTRA VÍA.** No hay despliegue rodante y no puede haberlo (`compose.yaml:33-45`
   publica puertos de host fijos → `--scale php=2` falla): el título miente en su parte causal. Pero el
   **rollback de imagen** que `docs/deployment-guide.md:195` documenta produce los mismos tres tiers de fallo

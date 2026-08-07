@@ -246,3 +246,21 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
 - **(pwa+api · alcance · medium) Preferencias de usuario (tema, idioma, notificaciones) editables y persistidas desde `/backoffice/profile/settings`.** Separado del spec de «Mi cuenta» porque es un entregable independiente con su propio modelo de datos: **no** toca el agregado `User` (que hoy solo lleva `email`, `password_hash`, `roles`, `status`, `failed_attempts`, `locked_until`), sino que exige decidir dónde vive una preferencia — hoy el tema es puramente cliente (`erpify:theme` en localStorage vía `next-themes`), el idioma no existe como concepto (el traductor está apagado, `config/packages/translation.yaml`) y no hay canal de notificaciones que configurar (`notification/domain/` solo materializa `Toast`). Persistirlas server-side implica agregado/tabla nuevos y endpoint propio, revisable y mergeable sin la vista de perfil. Ref: `pwa/src/app/backoffice/profile/settings/page.tsx` (placeholder solo-título), `pwa/src/context/shared/theme/domain/Theme.ts`.
 
 
+
+## Deferred from: code review of br-2-residuos-eje-referencias-persona (2026-08-07)
+
+- **Los dos redactores de URI no comparten semántica, solo vocabulario.** La API decodifica hasta
+  estabilizar y preserva la query byte a byte a propósito; el PWA usa `URLSearchParams`, que decodifica una
+  sola vez (`filters%255B0%255D%255Bvalue%255D` escapa en el navegador y no en el servidor) y reescribe la
+  forma (`?debug` → `debug=`, `+`↔espacio, fragmento tratado distinto). Los docblocks de ambos declaran
+  «mirror parity». Ref: `pwa/src/context/shared/observability/infrastructure/scrubSentryEvent.ts:106`,
+  `api/src/Shared/ErrorContract/Application/RequestUriRedaction.php:121`.
+- **`identity_user.failed_attempts` está exento del trinquete de defaults sin argumento escrito.** El
+  docblock de `MigrationColumnDefaults` argumenta la exención de `status` (el agregado siempre fija el valor)
+  y no dice nada de `failed_attempts`, que comparte la lista cerrada. Ref:
+  `api/tests/Support/MigrationColumnDefaults.php:51-53`.
+- **El borrado del `Referer` en el access log es global al sitio.** Cierra el sumidero de ids de persona, y
+  con él se pierde la señal de procedencia para investigar CSRF, enlaces de phishing y tráfico entrante — en
+  todas las peticiones, para un problema confinado a tres pantallas. Un filtro por ruta o un `replace` sobre
+  el propio valor acotaría la pérdida. Queda descrito como hecho, no registrado como coste aceptado. Ref:
+  `api/frankenphp/Caddyfile:64-73`, `PRODUCTION_SECURITY_CHECKLIST.md:361-377`.
