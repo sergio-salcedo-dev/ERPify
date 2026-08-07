@@ -35,10 +35,10 @@ namespace Erpify\Shared\ErrorContract\Application;
  * byte.
  *
  * **Vocabulary parity with `api/frankenphp/Caddyfile`, with one deliberate difference.** Caddy's grammar has
- * no wildcard, so it enumerates `filters[0..8][value]` and a tenth axis would escape it. Here the grammar is
- * a pattern, so no index can outgrow it, and the `filters[N][value][]` form the `in` operator would emit is
- * covered too — that shape costs nothing on this side, whereas at the edge it would be nine more lines for a
- * form no field mapping currently admits.
+ * no wildcard, so it spends one `replace` line per index on `filters[0..19][value]` and a twentieth axis would
+ * escape it. Here the grammar is a pattern, so no index can outgrow it, and the `filters[N][value][]` form the
+ * `in` operator would emit is covered too — that shape costs nothing on this side, whereas at the edge it would
+ * be twenty more lines for a form no field mapping currently admits.
  */
 enum RequestUriRedaction
 {
@@ -64,8 +64,18 @@ enum RequestUriRedaction
      */
     private const string SEARCH_VALUE_KEY = '/\Afilters\[-?\d*\]\[value\](\[-?\d*\])?\z/';
 
-    /** Bound on the decode loop below, so a key of stacked `%25`s cannot spin it. */
+    /** Bound on the decode loops below, so a key or value of stacked `%25`s cannot spin them. */
     private const int MAX_DECODE_PASSES = 4;
+
+    /**
+     * Whitespace and control bytes, which pad a parameter name without changing what it names. PCRE's `\s`
+     * is ASCII-only, so the Unicode separators are named explicitly — `%C2%A0`, `%E2%80%80` and the BOM are
+     * padding a caller can spell just as easily as a space, and the PWA's JS `\s` already covers them.
+     */
+    private const string PADDING_BYTES = '/(?:[\s\x00-\x1F\x7F\x{FEFF}]|\p{Z})+/u';
+
+    /** The same class without `/u`, for a key whose bytes are not valid UTF-8 and would fail the above. */
+    private const string ASCII_PADDING_BYTES = '/[\s\x00-\x1F\x7F]+/';
 
     /**
      * How far a URI carried inside a value is followed. One level reaches `?next=<the whole audit URL>`,
@@ -148,7 +158,11 @@ enum RequestUriRedaction
      * Returns `null` — meaning "keep the caller's bytes exactly" — whenever there is nothing to redact:
      * no query inside, or a query the rules leave untouched. That is what keeps the file's own invariant
      * true for every request that is not leaking; only a value that WAS carrying an identifier is rewritten,
-     * and there the redaction is worth more than byte fidelity.
+     * and there the redaction is worth more than byte fidelity. An empty query needs no case of its own:
+     * the rules leave it identical, so the same comparison already answers it.
+     *
+     * The `false === $separator` guard is a statement of its own because that is what narrows `strpos()`'s
+     * `int|false` down to the `int` both `substr()` offsets below are typed against.
      */
     private static function redactNestedUri(string $encodedValue, int $depth): ?string
     {
@@ -156,7 +170,7 @@ enum RequestUriRedaction
             return null;
         }
 
-        $decoded = \urldecode($encodedValue);
+        $decoded = self::decodeUntilQuerySurfaces($encodedValue);
         $separator = \strpos($decoded, '?');
 
         if (false === $separator) {
@@ -164,18 +178,42 @@ enum RequestUriRedaction
         }
 
         $query = \substr($decoded, $separator + 1);
-
-        if ('' === $query) {
-            return null;
-        }
-
         $redactedQuery = self::redactQueryAtDepth($query, $depth + 1);
 
-        if ($redactedQuery === $query) {
-            return null;
+        return $redactedQuery === $query
+            ? null
+            : \rawurlencode(\substr($decoded, 0, $separator + 1) . $redactedQuery);
+    }
+
+    /**
+     * A value is decoded until a query surfaces, not once. {@see isSensitive()} reads a KEY through up to
+     * {@see MAX_DECODE_PASSES} decodings, and a value that stopped at one left the two halves of the same
+     * rule disagreeing: `?next=%252Fa%253FactorId%253D<id>` has no literal `?` after a single decode, so
+     * the nested URI was never followed and the id travelled intact under a name no denylist holds.
+     *
+     * The first decoding is unconditional, so every value that already surfaced a query at one level takes
+     * exactly the path it took before; the loop only reaches inputs that used to return early with nothing
+     * found. Deeper spellings therefore only ever cause MORE redaction, never less.
+     */
+    private static function decodeUntilQuerySurfaces(string $encodedValue): string
+    {
+        $candidate = \urldecode($encodedValue);
+
+        for ($pass = 0; $pass < self::MAX_DECODE_PASSES; ++$pass) {
+            if (\str_contains($candidate, '?')) {
+                return $candidate;
+            }
+
+            $decoded = \urldecode($candidate);
+
+            if ($decoded === $candidate) {
+                return $candidate;
+            }
+
+            $candidate = $decoded;
         }
 
-        return \rawurlencode(\substr($decoded, 0, $separator + 1) . $redactedQuery);
+        return $candidate;
     }
 
     /**
@@ -191,14 +229,14 @@ enum RequestUriRedaction
      */
     private static function isSensitive(string $key): bool
     {
-        $candidate = \strtolower($key);
+        $candidate = self::reduce($key);
 
         for ($pass = 0; $pass <= self::MAX_DECODE_PASSES; ++$pass) {
             if (self::namesASensitiveAxis($candidate)) {
                 return true;
             }
 
-            $decoded = \strtolower(\urldecode($candidate));
+            $decoded = self::reduce(\urldecode($candidate));
 
             if ($decoded === $candidate) {
                 return false;
@@ -212,6 +250,16 @@ enum RequestUriRedaction
         return self::namesASensitiveAxis($candidate);
     }
 
+    /**
+     * The identity axes are matched WHOLE, so one byte of padding is enough to miss them: `?actorId%00=`,
+     * `?actorId%0A=`, `?actorId%20=` and `?actor+Id=` all decode to something that is not `actorid`, and
+     * all four still reach this sink. The request answers 4xx — no DTO property matches the padded name —
+     * and 4xx is precisely what the `fingers_crossed` buffer holds and flushes on the next 5xx, so the
+     * value rides into the log under a key the rule declined to recognise.
+     *
+     * Whitespace and control bytes carry no meaning in a parameter name, so removing them before matching
+     * costs nothing a reader needs and closes the padding class in one rule rather than one per byte.
+     */
     private static function namesASensitiveAxis(string $key): bool
     {
         if (\in_array($key, self::IDENTITY_KEYS, true)) {
@@ -226,5 +274,19 @@ enum RequestUriRedaction
             RedactionDenylist::KEYS,
             static fn (string $deniedKey): bool => \str_contains($key, $deniedKey),
         );
+    }
+
+    /**
+     * A key reduced to what it actually names: lower-cased and stripped of padding. The reduced form is what
+     * the next decoding starts from, not just what the comparison sees — an escape split by padding
+     * (`%250%0A0actorId`) only heals into a decodable one once the padding is gone.
+     */
+    private static function reduce(string $key): string
+    {
+        $lowered = \strtolower($key);
+
+        return \preg_replace(self::PADDING_BYTES, '', $lowered)
+            ?? \preg_replace(self::ASCII_PADDING_BYTES, '', $lowered)
+            ?? $lowered;
     }
 }

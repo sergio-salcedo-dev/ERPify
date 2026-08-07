@@ -380,11 +380,25 @@ you change anything here.
       `request.query_string` and the `Referer` header before it leaves the process, on both deployables.
       **An identifier does not have to travel under a name anyone listed.** Every rule above matches a
       parameter name, and an expired session redirects to `/login?next=<the whole audit URL>`, so the ids
-      arrive inside a value. A value that is itself a URI is therefore followed one level and redacted by the
-      same vocabulary; a value with nothing to redact is returned byte for byte, so the shape an operator
-      reads a request by survives. That index range is not left to a reader to keep
+      arrive inside a value. A value that is itself a URI is therefore followed — to the same bound on both
+      deployables — and redacted by the same vocabulary; a value with nothing to redact is returned byte for
+      byte, so the shape an operator reads a request by survives. **Nor does it have to travel under the name
+      spelled the way our own UI spells it.** A whole match is missed by one byte of padding (`?actorId%00=`,
+      `%0A`, `%20`, `actor+Id`) and by one extra layer of percent-encoding, and both shapes still reach the
+      sink: the request answers 4xx, and 4xx is exactly what `fingers_crossed` buffers and flushes on the next
+      5xx. Keys are therefore stripped of whitespace/control bytes and decoded repeatedly before matching, in the
+      **application log and the Sentry event** — reductions, decode bound and nesting bound mirrored across the
+      two, because a spelling one side unwraps and the other does not is the same identifier kept out of one
+      sink and let into the other. **Caddy is the exception and stays one**: its filter matches a parameter
+      name literally, with no wildcard, normalisation or decoding, so `?actorId%00=`, `?actor+Id=` and a
+      double-encoded `filters%255B0%255D%255Bvalue%255D=` are redacted in the other two sinks and reach the
+      **access log in clear** — measured on the running stack, not inferred. Closing it there means dropping
+      the query string from the access log entirely; that trade is open, not made.
+      `RedactionVocabularyParityTest` fails the build when the two deployables' vocabularies drift or when an
+      identity axis is missing from the edge's enumeration. That index range
+      is not left to a reader to keep
       true: the gate (`CaddyfileAccessLogRedactionGateTest`) derives it from the Caddyfile and fails when a PWA
-      criteria builder outgrows it, so a tenth filter axis breaks the build instead of un-redacting silently.
+      criteria builder outgrows it, so a twenty-first filter axis breaks the build instead of un-redacting silently.
       The cost is accepted and real — a redacted value axis means the access log can no longer answer "which
       filter was applied". Recovery rate limits are **neutral per target**: forgot is capped
       per email (`password_recovery_per_email`) and a saturated target still gets the uniform 202 with the work
