@@ -1,0 +1,269 @@
+# Every Behat step pattern the contexts declare, classified by what the feature suite does with it.
+#
+# The rule this file exists to enforce: the step vocabulary is an asset to spend, not inventory to
+# audit. An idle step is an assertion somebody already built and nobody is making — a coverage signal,
+# never dead code — so it must not be deleted for being unused, and a new near-duplicate phrasing must
+# not be written before searching what exists. Both halves of that rule are claims about which steps
+# are reached, and until this file existed nothing recomputed either: the prose stating them counted
+# 205 patterns against 209, 47 features against 49, and named a context as wholly idle that eighteen
+# scenarios were using. Every gate stayed green through all three.
+#
+# Format, one per line:
+#   <step pattern exactly as the attribute declares it> => used | idle | manual | refused
+#
+#   used    - at least one committed scenario reaches it.
+#   idle    - no scenario reaches it. This is the coverage debt the rule is about: reach for these
+#             when you touch a feature they fit. Adding one is fine and is meant to be visible.
+#   manual  - a hand-invocation escape hatch, and NOT coverage debt: it prints to the formatter, or
+#             overrides an automatic BeforeScenario hook. A committed scenario must never call one.
+#   refused - a superseded phrasing kept registered so reaching for it hands back the canonical form
+#             instead of "step undefined". It throws; it is not vocabulary that can be spent.
+#
+# The gate is BehatStepVocabularyGateTest (`make php.lint.step-vocabulary`). It fails when a declared
+# pattern is classified nowhere, when a classified pattern no longer exists, when `used` is reached by
+# nothing, when `idle` is reached by something, when a scenario calls a `manual` or `refused` step, and
+# when a step written in a feature resolves to no pattern at all.
+#
+# ---------------------------------------------------------------------------------------------------
+# What it deliberately does NOT do. Read this list as the specification of the gate's blind spots — a
+# green build proves what is below the line, and nothing above it.
+#
+#   - It cannot judge a classification it derives. `used` and `idle` are recomputed from the tree, so
+#     those two cannot be wrong; `manual` and `refused` are asserted only to be UNREACHED. Marking a
+#     genuinely idle step `manual` would silence it as coverage debt and this gate would agree. Review
+#     is the only control on that direction.
+#   - It proves a pattern is REACHED, never that the assertion behind it can fail. A step whose body
+#     asserts nothing counts as `used` here exactly like one that pins a real invariant.
+#   - It does not detect near-duplicate phrasings. Two patterns saying the same thing in different
+#     words both sit here as `used`, which is the split the rule warns about and the part still left
+#     to a reader. What this file gives that reader is the list to search before writing a new one.
+#   - It matches by re-implementing Behat's turnip syntax textually, not by asking Behat. A pattern
+#     shape upstream adds that is not `:placeholder`, `(optional)` or a `/regex/` would be mismatched
+#     — which is why every feature step must resolve to something: that check is what goes red first.
+#   - It reads only `#[Given]`/`#[When]`/`#[Then]` attributes under `tests/Behat`. A step registered
+#     any other way is invisible to it.
+#   - It says nothing about whether a context is wired into `behat.dist.php`. An unregistered context
+#     declares patterns nobody can call, and every one of them reads here as `idle`.
+#
+# Counts at the last edit: 101 used · 94 idle · 9 manual · 13 refused (217 patterns, 912 distinct
+# step lines across the feature suite). They are recomputed by the gate, so they cannot drift here
+# unnoticed — but nothing keeps this comment in step with them, so trust the file, not this line.
+# ---------------------------------------------------------------------------------------------------
+
+/^(?:A|The|a|the) "([^"]*)" (?:entity|entities) found by "([^"]*)" (?:is|are) deleted$/ => idle
+/^(?:A|The|a|the) "([^"]*)" entity found by "([^"]*)" does not exist?$/ => used
+/^(?:A|The|a|the) "([^"]*)" entity found by "([^"]*)" should match:$/ => idle
+/^(?:A|The|a|the) last inserted "([^"]*)" entity found by "([^"]*)" should match:$/ => used
+/^(?:A|The|a|the) last inserted "([^"]*)" entity should match:$/ => idle
+/^(?:A|The|a|the) last updated "([^"]*)" entity found by "([^"]*)" should match:$/ => used
+/^(?:A|The|a|the) last updated "([^"]*)" entity should match:$/ => idle
+/^(?:a|the) "([^"]*)" (?:entity|entities) found by "([^"]*)" (?:is|are) updated with "([^"]*)" (?:entity|entities)$/ => idle
+/^(?:a|the) "([^"]*)" (?:entity|entities) found by "([^"]*)" (?:is|are) updated with "([^"]*)"$/ => idle
+/^(?:a|the) "([^"]*)" (?:entity|entities) found by "([^"]*)" (?:is|are) updated with (?:entity|entities):$/ => idle
+/^(?:a|the) "([^"]*)" (?:entity|entities) found by "([^"]*)" (?:is|are) updated with:$/ => idle
+/^(?:there|There) should be either "?(\d+|[^"]*)"? "([^"]*)" (?:entity|entities) found by "([^"]*)"$/ => idle
+/^(?:there|There) should have (\d+) "([^"]*)" (?:entity|entities) found by "([^"]*)"$/ => used
+/^(?:there|There) should have (\d+) records in SQL result$/ => used
+/^(?:the|The) entity "([^"]*)" found by "([^"]*)" should have "([^"]*)" as part of the property "([^"]*)"$/ => idle
+/^(?:the|The) entity "([^"]*)" found by "([^"]*)" should have "([^"]*)" equal to "([^"]*)" as part of the property "([^"]*)"$/ => idle
+/^(?:the|The) entity "([^"]*)" found by "([^"]*)" should have "([^"]*)" not existing as part of the property "([^"]*)"$/ => idle
+/^the "([^"]*)" should have "([^"]*)" records$/ => idle
+/^the JSON nodes should be equal to \(if path not empty\):$/ => idle
+/^the SQL result as JSON should be:$/ => used
+/^the SQL result as JSON without sorting should be:$/ => idle
+/^the response status code should not be (?P<responseCode>\d+)$/ => idle
+:count SQL statements of type :type got executed for doctrine connection :connectionName => idle
+:count request(s) got executed across all doctrine connections => used
+:count request(s) got executed for doctrine connection :connectionName => used
+:count request(s) got executed only for doctrine connection :connectionName => used
+:number Mercure update was published => used
+:number Mercure updates were published => used
+:number notification email was sent => used
+:number notification emails were sent => used
+:number outbox event was created => refused
+:number outbox event was created on the queue :queueName => used
+:number outbox events were created => refused
+:number outbox events were created on the queue :queueName => used
+I add :name header equal to :value => used
+I am logged in as a generic-tier user without the audit-reader role => used
+I am logged in as a user without the audit-reader role => used
+I am logged in as a viewer => used
+I am logged in as an administrator => used
+I am logged in as an editor => used
+I clear the entity managers => idle
+I consume :count message from the :transportName transport => used
+I consume :count message from the :transportName transport with time limit :seconds => idle
+I consume :count messages from the :transportName transport => used
+I consume :count messages from the :transportName transport with time limit :seconds => idle
+I dispatch the :fullyQualifiedClassName outbox event with: => used
+I dump executed the queries for doctrine connection :connectionName => idle
+I dump the executed queries for each doctrine connection => idle
+I dump the number of executed queries for each doctrine connection => idle
+I enable the web profiler => idle
+I execute :command with options: => idle
+I execute the SQL query :query => used
+I execute the SQL query :query on connection :name => used
+I follow the :node link from the previous response => used
+I follow the :node link from the previous response overriding the :param query param with :value => used
+I follow the :node link from the previous response rebased onto :path => used
+I get the published Mercure update number :value => idle
+I get the sent notification email number :value => used
+I got the event number :number from the outbox => refused
+I got the event number :number on queue :queueName from the outbox => used
+I print all outbox events => manual
+I print last outbox event => manual
+I rebuild the :name projection => used
+I reload the fixtures => used
+I remove :name header => used
+I remove event :number from the outbox => refused
+I remove event :number on the queue :queueName from the outbox => used
+I remove event of type :fullyQualifiedClassName from the outbox => refused
+I remove event of type :fullyQualifiedClassName on the queue :queueName from the outbox => used
+I reset the mercure context => manual
+I reset the notification context => manual
+I reset the outbox context => manual
+I reset the stats for all doctrine connections => used
+I run the :commandName command => used
+I run the :commandName command with options: => used
+I run the :commandName command with parameters: => used
+I send a :method request to :url => used
+I send a :method request to :url using last response with body: => idle
+I send a :method request to :url using the JSON node :node from the previous response => idle
+I send a :method request to :url with a :field in-filter of :count values, the last being :real => used
+I send a :method request to :url with body and expressions: => idle
+I send a :method request to :url with body and relative dates: => idle
+I send a :method request to :url with body: => used
+I send a :method request to :url with parameters and relative dates: => idle
+I send a :method request to :url with parameters: => idle
+I send a :method request to :url with query params and relative dates => idle
+I should have a SQL exception with message :message => idle
+I try to execute the SQL query :query => idle
+The Mercure update property :property should be equal to :value => used
+The Mercure update property :property should be null => idle
+The Mercure update property :property should exist => idle
+The Mercure update property :property should have :count element => idle
+The Mercure update property :property should have :count elements => idle
+The Mercure update property :property should not be null => idle
+The Mercure update property :property should not exist => used
+The Mercure update should have :count topic => used
+The Mercure update should have :count topics => used
+The Mercure update topic :number should be equal to :value => used
+The notification email body should contain :text => used
+The notification email recipient should be :value => used
+The notification email subject should be equal to :value => used
+The outbox event aggregate id should be equal to :id => used
+The outbox event property :property should be equal to :value => used
+The outbox event property :property should be null => idle
+The outbox event property :property should exist => idle
+The outbox event property :property should have :count element => idle
+The outbox event property :property should have :count elements => idle
+The outbox event property :property should not be null => idle
+The outbox event property :property should not exist => idle
+The outbox event should be of type :fullyQualifiedClassName => used
+a request contains :needle across all doctrine connections => used
+a request contains :needle for doctrine connection :connectionName => used
+message :number sent to :transportName is processed => used
+print last JSON response => manual
+print last response headers => manual
+print the corresponding curl command => manual
+print the web profiler link => manual
+the :code error :message should exist => idle
+the :name projection is rebuilt => used
+the :transportName transport should hold :count message => idle
+the :transportName transport should hold :count messages => idle
+the Date in JSON node :node should be equal to :expected => idle
+the JSON node :name should exist => used
+the JSON node :name should not exist => used
+the JSON node :node should be a valid UUID => used
+the JSON node :node should be a valid UUID version :version => idle
+the JSON node :node should be equal to :text => used
+the JSON node :node should be equal to the number :number => used
+the JSON node :node should be equal to the response header :header => used
+the JSON node :node should be equal to the string :text => idle
+the JSON node :node should be false => used
+the JSON node :node should be null => used
+the JSON node :node should be true => used
+the JSON node :node should contain :text => idle
+the JSON node :node should have :count element(s) => used
+the JSON node :node should match :pattern => idle
+the JSON node :node should not be equal to :text => used
+the JSON node :node should not be null => used
+the JSON node :node should not contain :text => idle
+the JSON node :nodeA should not be equal to the JSON node :nodeB => used
+the JSON nodes matching :nodeSelector should :operator value :expected => used
+the JSON nodes matching :nodeSelector should exist => used
+the JSON nodes matching :nodeSelector should have :expected children => used
+the JSON nodes matching :nodeSelector with value :value should be found at least :expectedCount time => idle
+the JSON nodes matching :nodeSelector with value :value should be found exactly :expectedCount time => idle
+the JSON nodes should be equal to: => used
+the JSON nodes should contain: => idle
+the JSON nodes should not contain: => idle
+the JSON should be equal to: => idle
+the JSON should be invalid according to the schema :filename => idle
+the JSON should be invalid according to this schema: => idle
+the JSON should be valid according to swagger :dumpPath dump schema :schemaName => idle
+the JSON should be valid according to the schema :filename => idle
+the JSON should be valid according to this schema: => idle
+the JSON should not be valid according to swagger :dumpPath dump schema :schemaName => idle
+the anonymous API rate-limit budget is exhausted for client :clientIp => used
+the command output should be JSON with a :field field => refused
+the command output should contain :needle => refused
+the command should succeed => refused
+the error :message should exist => idle
+the error :message with code :code should exist => idle
+the header :name should be a valid UUID => used
+the header :name should be a valid UUID version :version => idle
+the header :name should be equal to :value => used
+the header :name should contain :value => used
+the header :name should exist => used
+the header :name should match :regex => used
+the header :name should not be equal to :value => used
+the header :name should not contain :value => idle
+the header :name should not exist => used
+the header :name should not match :regex => idle
+the last command should fail => refused
+the last command should succeed => refused
+the last run output should be JSON with a :field field => used
+the last run output should contain :text => used
+the last run should fail => used
+the last run should succeed => used
+the logger did not log a log entry as :level with message :message => idle
+the logger logged a log entry as :level with message :message => used
+the logger logged a log entry as :level with message :message and context contains: => used
+the logger logged the message :message => idle
+the output should contain :text => refused
+the password-change budget is exhausted for identity :identityId => used
+the password-recovery budget is exhausted for email :email => used
+the request number :number argument :argumentName is equal to :expectedValue => idle
+the request number :number argument :argumentName is equal to :expectedValue for doctrine connection :connectionName => idle
+the request number :number contains :needle => idle
+the request number :number contains :needle for doctrine connection :connectionName => idle
+the request number :number does not contain :needle => idle
+the request number :number does not contain :needle for doctrine connection :connectionName => idle
+the request(s) got executed only on doctrine connection :connectionName => idle
+the response should be empty => used
+the response should be encoded in :encoding => idle
+the response should be equal to => idle
+the response should be equal to: => idle
+the response should be in JSON => idle
+the response should be streamed => idle
+the response should contain :expected => used
+the response should expire in the future => idle
+the response should not be in JSON => idle
+the response should not be streamed => idle
+the response should not contain :expected => used
+the response status code should be :responseCode => used
+the stored events are cleared => used
+the token-action budget is exhausted for selector :selector => used
+the validation error code on :field should be :code => idle
+the validation error on :field should be :message => idle
+the validation error on :field should contain :message => idle
+the validation error on :field should not exist => idle
+there should be :count event stored for aggregate :aggregateId named :eventName => used
+there should be :count event stored named :eventName => used
+there should be :count events stored for aggregate :aggregateId named :eventName => used
+there should be :count events stored named :eventName => used
+there should have been an outbox event created containing: => refused
+there should have been an outbox event created on the queue :queueName containing: => idle
+there should not have been an outbox event created containing: => refused
+there should not have been an outbox event created on the queue :queueName containing: => idle

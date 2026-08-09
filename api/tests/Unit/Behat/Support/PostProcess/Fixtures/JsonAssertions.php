@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Behat\Support\PostProcess\Fixtures;
 
+use Erpify\Tests\Behat\NodeModifier\NodeModifierLocator;
+use Erpify\Tests\Behat\NodeModifier\Scalar\NullNodeModifier;
+use Erpify\Tests\Behat\NodeModifier\Scalar\StringNodeModifier;
 use Erpify\Tests\Behat\Support\PostProcess\JsonToolTrait;
 use PHPUnit\Framework\Assert;
 
@@ -18,4 +21,20 @@ use PHPUnit\Framework\Assert;
 final class JsonAssertions extends Assert
 {
     use JsonToolTrait;
+
+    /**
+     * Two node modifiers, not the container's set: neither claims a value by auto-detection, so an
+     * expected value reaches the comparison exactly as it was written and the subject under test stays
+     * the assertion rather than modifier resolution. `null` is registered because the cases about the
+     * `::<modifier>` suffix name it explicitly.
+     */
+    public static function withScalarModifiers(): self
+    {
+        $assertions = new self();
+        $assertions->setNodeModifierLocator(
+            new NodeModifierLocator([new NullNodeModifier(), new StringNodeModifier()]),
+        );
+
+        return $assertions;
+    }
 }

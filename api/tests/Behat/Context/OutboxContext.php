@@ -36,14 +36,16 @@ use Throwable;
  * see {@see refuseUnqualified()} for why a position over the concatenation of every queue cannot be
  * asserted on.
  *
- * The three suppressions below are measured, not inherited: 25 public methods and 32 methods are the
- * 27 Gherkin patterns this context owns, and cutting them means splitting the step vocabulary across
+ * The suppressions below are measured, not inherited: 25 public methods and 32 methods are the 27
+ * Gherkin patterns this context owns, and cutting them means splitting the step vocabulary across
  * contexts, which is a change to the feature files' surface rather than a refactor. Coupling sits one
- * over the threshold at 13.
+ * over the threshold at 13, and class complexity one over at 51 — both are the arithmetic of holding
+ * one vocabulary in one place, not a method anyone would want simpler.
  *
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  * @SuppressWarnings("PHPMD.TooManyMethods")
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity")
  */
 final class OutboxContext extends AbstractContext
 {
@@ -80,7 +82,7 @@ final class OutboxContext extends AbstractContext
      */
     #[Then(':number outbox event was created')]
     #[Then(':number outbox events were created')]
-    public function outboxEventsWereCreated(int $number): void
+    public function outboxEventsWereCreated(int $number): never
     {
         $this->refuseUnqualified(\sprintf('%d outbox events were created on the queue "async"', $number));
     }
@@ -102,7 +104,7 @@ final class OutboxContext extends AbstractContext
      * Unqualified — refuses out loud. See {@see refuseUnqualified()}.
      */
     #[Then('I got the event number :number from the outbox')]
-    public function selectEventByNumber(int $number): void
+    public function selectEventByNumber(int $number): never
     {
         $this->refuseUnqualified(\sprintf('I got the event number %d on queue "async" from the outbox', $number));
     }
@@ -188,9 +190,14 @@ final class OutboxContext extends AbstractContext
 
     /**
      * Unqualified — refuses out loud. See {@see refuseUnqualified()}.
+     *
+     * The table is bound by Behat from the step's signature, so the parameter has to stay for the
+     * pattern to keep resolving at all; a refusal cannot read it.
+     *
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     #[Then('there should have been an outbox event created containing:')]
-    public function anOutboxEventCreatedContaining(TableNode $table): void
+    public function anOutboxEventCreatedContaining(TableNode $table): never
     {
         $this->refuseUnqualified('there should have been an outbox event created on the queue "async" containing:');
     }
@@ -209,9 +216,14 @@ final class OutboxContext extends AbstractContext
 
     /**
      * Unqualified — refuses out loud. See {@see refuseUnqualified()}.
+     *
+     * The table is bound by Behat from the step's signature, so the parameter has to stay for the
+     * pattern to keep resolving at all; a refusal cannot read it.
+     *
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     #[Then('there should not have been an outbox event created containing:')]
-    public function noOutboxEventCreatedContaining(TableNode $table): void
+    public function noOutboxEventCreatedContaining(TableNode $table): never
     {
         $this->refuseUnqualified(
             'there should not have been an outbox event created on the queue "async" containing:',
@@ -272,7 +284,7 @@ final class OutboxContext extends AbstractContext
      * Unqualified — refuses out loud. See {@see refuseUnqualified()}.
      */
     #[Then('I remove event :number from the outbox')]
-    public function removeEventByNumber(int $number): void
+    public function removeEventByNumber(int $number): never
     {
         $this->refuseUnqualified(\sprintf('I remove event %d on the queue "async" from the outbox', $number));
     }
@@ -292,7 +304,7 @@ final class OutboxContext extends AbstractContext
      * Unqualified — refuses out loud. See {@see refuseUnqualified()}.
      */
     #[Then('I remove event of type :fullyQualifiedClassName from the outbox')]
-    public function removeEventByType(string $fullyQualifiedClassName): void
+    public function removeEventByType(string $fullyQualifiedClassName): never
     {
         $this->refuseUnqualified(\sprintf(
             'I remove event of type "%s" on the queue "async" from the outbox',

@@ -136,10 +136,10 @@ final class MessengerConsumerContext extends AbstractContext
      * because this context defined them first, which left the console context to invent
      * "the last command …" for the same three assertions. Two vocabularies for one claim, each
      * half-used, and the generic one naming a subject that does not exist here — nothing this step
-     * ever touched was a command. {@see \Erpify\Tests\Behat\Context\RunOutcomeContext} owns them now.
+     * ever touched was a command. {@see RunOutcomeContext} owns them now.
      */
     #[Then('the command should succeed')]
-    public function theCommandShouldSucceed(): void
+    public function theCommandShouldSucceed(): never
     {
         $this->refuseSupersededPhrase('the last run should succeed');
     }
@@ -148,7 +148,7 @@ final class MessengerConsumerContext extends AbstractContext
      * Superseded — refuses. See {@see theCommandShouldSucceed()}.
      */
     #[Then('the output should contain :text')]
-    public function theOutputShouldContain(string $text): void
+    public function theOutputShouldContain(string $text): never
     {
         $this->refuseSupersededPhrase(\sprintf('the last run output should contain "%s"', $text));
     }

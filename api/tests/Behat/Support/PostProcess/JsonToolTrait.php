@@ -153,8 +153,8 @@ trait JsonToolTrait
     {
         try {
             $this->getJsonInspector()->evaluate($json, $this->nodePath($property));
-        } catch (UnexpectedValueException $exception) {
-            $this->rethrowUnlessAbsent($exception);
+        } catch (UnexpectedValueException $unexpectedValueException) {
+            $this->rethrowUnlessAbsent($unexpectedValueException);
 
             self::fail(\sprintf('The property "%s" does not exist.', $property));
         }
@@ -164,11 +164,11 @@ trait JsonToolTrait
     {
         try {
             $this->getJsonInspector()->evaluate($json, $this->nodePath($property));
-        } catch (UnexpectedValueException $exception) {
+        } catch (UnexpectedValueException $unexpectedValueException) {
             // Absence is what this step is here to observe. Anything else — a selector the accessor
             // cannot parse above all — is the step being broken, and swallowing it would report the
             // typo as the very absence the scenario set out to prove.
-            $this->rethrowUnlessAbsent($exception);
+            $this->rethrowUnlessAbsent($unexpectedValueException);
 
             return;
         }
@@ -292,8 +292,8 @@ trait JsonToolTrait
     {
         try {
             return $this->getJsonInspector()->evaluate($json, $this->nodePath($property));
-        } catch (UnexpectedValueException $exception) {
-            $this->rethrowUnlessAbsent($exception);
+        } catch (UnexpectedValueException $unexpectedValueException) {
+            $this->rethrowUnlessAbsent($unexpectedValueException);
 
             self::fail(\sprintf('Property "%s" does not exist in the JSON.', $property));
         }

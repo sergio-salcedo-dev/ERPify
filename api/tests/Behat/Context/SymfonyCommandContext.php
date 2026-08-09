@@ -74,7 +74,7 @@ final class SymfonyCommandContext extends AbstractContext
      * mechanism, because a Messenger worker run is not a command either.
      */
     #[Then('the last command should succeed')]
-    public function theLastCommandShouldSucceed(): void
+    public function theLastCommandShouldSucceed(): never
     {
         $this->refuseSupersededPhrase('the last run should succeed');
     }
@@ -83,7 +83,7 @@ final class SymfonyCommandContext extends AbstractContext
      * Superseded — refuses. See {@see theLastCommandShouldSucceed()}.
      */
     #[Then('the last command should fail')]
-    public function theLastCommandShouldFail(): void
+    public function theLastCommandShouldFail(): never
     {
         $this->refuseSupersededPhrase('the last run should fail');
     }
@@ -92,7 +92,7 @@ final class SymfonyCommandContext extends AbstractContext
      * Superseded — refuses. See {@see theLastCommandShouldSucceed()}.
      */
     #[Then('the command output should contain :needle')]
-    public function theCommandOutputShouldContain(string $needle): void
+    public function theCommandOutputShouldContain(string $needle): never
     {
         $this->refuseSupersededPhrase(\sprintf('the last run output should contain "%s"', $needle));
     }
@@ -110,7 +110,7 @@ final class SymfonyCommandContext extends AbstractContext
      * Superseded — refuses. See {@see theLastCommandShouldSucceed()}.
      */
     #[Then('the command output should be JSON with a :field field')]
-    public function theCommandOutputShouldBeJsonWithField(string $field): void
+    public function theCommandOutputShouldBeJsonWithField(string $field): never
     {
         $this->refuseSupersededPhrase(\sprintf('the last run output should be JSON with a "%s" field', $field));
     }
