@@ -79,6 +79,50 @@ final class InspectStoredIdentityIntegrityCommandTest extends TestCase
     }
 
     #[Test]
+    public function itReportsEachFindingUnderItsOwnColumnAndRepair(): void
+    {
+        $auditLogger = new RecordingAuditLogger();
+        $tester = $this->tester(
+            new FixedStoredIdentityIntegrity([], 0, malformedRoles: 2, admittedWithoutCredential: 5),
+            $auditLogger,
+        );
+
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertSame(Command::FAILURE, $tester->getStatusCode());
+        // Each fault reported under its own heading with its own repair: they are found by different reads and
+        // fixed by different acts, and a merged "something is wrong with identity_user" sends an operator to
+        // the wrong query. The counts are what say WHICH, since no identity is ever named.
+        $this->assertStringContainsString('not a JSON array', $display);
+        $this->assertStringContainsString('2 identity(ies)', $display);
+        $this->assertStringContainsString('admitted identities holding no credential', $display);
+        $this->assertStringContainsString('5 identity(ies)', $display);
+        // Still ONE row, for two faults across seven identities.
+        $this->assertCount(1, $auditLogger->records);
+    }
+
+    #[Test]
+    public function itNamesNoIdentityInAnyReport(): void
+    {
+        // The values are stored text and are printed; the identities are counted and are not. That asymmetry
+        // is the contract — an identity id is a person reference and this output reaches job logs — and only
+        // an assertion keeps it from decaying into a listing somebody adds for convenience.
+        $tester = $this->tester(
+            new FixedStoredIdentityIntegrity(['GHOST_ROLE'], 1, malformedRoles: 1, admittedWithoutCredential: 1),
+            new RecordingAuditLogger(),
+        );
+
+        $tester->execute([]);
+
+        $this->assertMatchesRegularExpression('/GHOST_ROLE/', $tester->getDisplay());
+        $this->assertDoesNotMatchRegularExpression(
+            '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i',
+            $tester->getDisplay(),
+        );
+    }
+
+    #[Test]
     public function itReachesNoVerdictWhenAProbeFails(): void
     {
         $auditLogger = new RecordingAuditLogger();
