@@ -42,19 +42,24 @@ regla del vocabulario en prosa de `api/CLAUDE.md` **sin un solo mecanismo que la
 cuente pasos ociosos, nada que impida una frase casi-duplicada, y las cifras que la regla cita ya han derivado.
 Una regla que sólo vive en prosa no es un control: es una intención.
 
-## Decisiones pendientes de ratificar
+## Decisiones
 
-Estas cinco no las puede tomar quien implementa: D1–D3 eligen entre dos invariantes (no entre dos formas de
-escribir lo mismo), y D4–D5 fijan el **alcance** del lote. **T0 es ratificarlas con Sergio antes de tocar código.**
-La columna *Recomendación* es una propuesta argumentada, no una decisión tomada.
+Ninguna de estas la puede tomar quien implementa: D1–D3 eligen entre dos invariantes (no entre dos formas de
+escribir lo mismo), y D4–D5 fijan el **alcance** del lote.
 
-| # | Fork | Recomendación | Argumento |
+**D1, D4 y D5 quedaron ratificadas por Sergio el 2026-08-09, las tres en el sentido recomendado.** El lote crece
+respecto a los 7 issues y lo hace a propósito: entra el mecanismo de falsabilidad y entran las seis vacuidades
+medidas. **D2 y D3 siguen abiertas** — su recomendación se apoya en reglas ya escritas (el contrato del docblock
+de `NodeModifierLocator`; la prohibición de borrar vocabulario ocioso), así que se ratifican con el código
+delante, no antes.
+
+| # | Fork | Decisión | Argumento |
 |---|---|---|---|
-| **D1** | #320: ¿fallo limpio o wontfix documentado? ¿2 métodos o los 13? | **Fallo limpio, los 13** | Arreglar 2 y dejar 11 con el defecto reparte el mismo trait en dos contratos. El coste marginal del 3.º al 13.º es cero |
+| **D1** | #320: ¿fallo limpio o wontfix documentado? ¿2 métodos o los 13? | ✅ **RATIFICADA — fallo limpio, los 13** | Arreglar 2 y dejar 11 con el defecto reparte el mismo trait en dos contratos. El coste marginal del 3.º al 13.º es cero |
 | **D2** | #313: ¿sintaxis de escape `\:\:` o wontfix documentado? | **Wontfix documentado** | La opción de «modificador sólo si el nombre está registrado» **contradice el contrato del docblock** (`NodeModifierLocator.php:16-18`: *«an unknown suffix is a loud exception, never a silent miss»*) — cambiaría un fallo ruidoso por una degradación silenciosa. Y el escape añade sintaxis a las features para un caso con **0 ocurrencias medidas** |
 | **D3** | #319: ¿cualificar por cola los pasos no cualificados, o retirarlos? | **Cualificar** | Retirarlos choca de frente con `api/CLAUDE.md:80` («nunca borres un paso por estar ocioso») |
-| **D4** | ¿Entra en BR-1 el **mecanismo de falsabilidad** del vocabulario, o es lote aparte? | **Que entre** | Es lo que el título del lote promete y lo único que impide que #601 se vuelva a pudrir. Coste: 1 clase de gate en un hogar que ya tiene 25 hermanas. Riesgo: cero producción. **Pero es crecimiento de alcance sobre los 7 issues — decisión de Sergio, no del implementador** |
-| **D5** | Las **seis vacuidades medidas que ningún issue registra** (sección siguiente): ¿entran? | **Las cinco de `JsonToolTrait` sí; la de `BackedEnumNodeModifier`, decidir** | Las cinco viven en el fichero que #320 ya abre — regla del boy-scout, coste marginal ~0, y son literalmente «asserts que no pueden fallar», el tema del lote. La sexta vive en un fichero que nadie más toca: incluirla es crecimiento real. **No dejar ninguna como issue de follow-up**: un pendiente es PR propia, no una etiqueta |
+| **D4** | ¿Entra en BR-1 el **mecanismo de falsabilidad** del vocabulario, o es lote aparte? | ✅ **RATIFICADA — entra** | Es lo que el título del lote promete y lo único que impide que #601 se vuelva a pudrir. Coste: 1 clase de gate en un hogar que ya tiene 25 hermanas. Riesgo: cero producción. **Pero es crecimiento de alcance sobre los 7 issues — decisión de Sergio, no del implementador** |
+| **D5** | Las **seis vacuidades medidas que ningún issue registra** (sección siguiente): ¿entran? | ✅ **RATIFICADA — las seis, V6 incluida** | Las cinco de `JsonToolTrait` viven en el fichero que #320 ya abre: boy-scout, coste marginal ~0, y son literalmente «asserts que no pueden fallar», el tema del lote. V6 vive en un fichero que nadie más toca y entra igualmente, porque es el mismo defecto de clase y **un pendiente aquí sería PR propia, no una etiqueta** |
 
 ## Realidad medida, issue por issue
 
@@ -273,7 +278,7 @@ Sobrevive una sola forma de decir «el comando fue bien», «el comando falló»
 retirados del vocabulario visible **no se eliminan**: se mantienen como alias o se documenta la decisión contraria
 en su declaración. Las 30 invocaciones medidas (23 + 7) siguen verdes.
 
-**AC6b — V1–V6 según D5.**
+**AC6b — Las seis vacuidades cerradas.**
 Cada vacuidad que entre se cierra con una aserción que **se ha visto roja contra el caso que hoy pasa**: un `null`
 explícito para `should have 0 elements`, un string arbitrario para `should be false`, un esquema inexistente para
 `should not be valid`. Un arreglo sin ese rojo no cuenta — es la misma clase de defecto que se está cerrando.
@@ -296,7 +301,7 @@ Sus hallazgos se escriben en este artefacto antes de abrir el PR, y el cuerpo de
 
 ## Tasks / Subtasks
 
-- [ ] **T0 · Ratificar D1–D5 con Sergio.** Nada de código antes. (AC: —)
+- [ ] **T0 · Ratificar D2 y D3** con el código delante. D1, D4 y D5 ya están cerradas. (AC: —)
 - [ ] **T1 · Cerrar #590, #591, #592** con comentario de evidencia medida. (AC: 1)
   - [ ] Redactar los tres comentarios citando `fichero:línea` + commit que lo arregló
   - [ ] Verificar que ninguno exige diff en `api/`
@@ -315,11 +320,11 @@ Sus hallazgos se escriben en este artefacto antes de abrir el PR, y el cuerpo de
   - [ ] Medir el vocabulario vivo primero: `make php.behat c='-dl'` y `c="-d '<texto>'"` — **no fiarse de las cifras de `api/CLAUDE.md`, ya derivaron**
   - [ ] Decidir la semántica de «fail» para el Worker
   - [ ] Migrar las 30 invocaciones; ningún paso borrado
-- [ ] **T5b · V1–V6 bajo D5.** (AC: 6b)
+- [ ] **T5b · V1–V6, las seis.** (AC: 6b)
   - [ ] Escribir primero el caso que hoy pasa y **verlo pasar** — es la prueba de la vacuidad
   - [ ] Arreglar; verlo rojo contra ese mismo caso
 - [ ] **T6 · #313 bajo D2.** (AC: 7)
-- [ ] **T7 · Mecanismo de falsabilidad del vocabulario** — *sólo si D4 = sí*. (AC: —)
+- [ ] **T7 · Mecanismo de falsabilidad del vocabulario.** (AC: —)
   - [ ] Modelar sobre `BehatSuiteCoverageGateTest` (mismo hogar, mismas auto-protecciones anti-vacuidad)
   - [ ] Verlo rojo antes de darlo por bueno
 - [ ] **T8 · Higiene del diff y de la prosa que este lote desmiente.** (AC: —)
