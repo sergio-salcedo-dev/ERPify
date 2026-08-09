@@ -304,9 +304,9 @@ Sus hallazgos se escriben en este artefacto antes de abrir el PR, y el cuerpo de
 - [ ] **T1 · Cerrar #590, #591, #592** con comentario de evidencia medida. (AC: 1)
   - [ ] Redactar los tres comentarios citando `fichero:línea` + commit que lo arregló
   - [ ] Verificar que ninguno exige diff en `api/`
-- [ ] **T2 · Corregir la épica.** (AC: 2)
-  - [ ] Reescribir §BR-1 con el re-medido; conservar la afirmación previa en blockquote marcado
-  - [ ] Revisar si el «orden recomendado» de `:186` cambia al abaratarse BR-1
+- [x] **T2 · Corregir la épica.** (AC: 2)
+  - [x] Reescribir §BR-1 con el re-medido; conservar la afirmación previa en blockquote marcado
+  - [x] Revisar el «orden recomendado»: BR-1 se **encareció**, no se abarató — anotado en su punto
 - [x] **T3 · #320 — fallo limpio en dot-path ausente.** (AC: 3, 4)
   - [x] Aplicar D1 sobre `JsonToolTrait.php`
   - [x] **Antes de tocar nada**, escribir la sonda de vacuidad del outbox y verla verde
@@ -315,24 +315,24 @@ Sus hallazgos se escriben en este artefacto antes de abrir el PR, y el cuerpo de
 - [x] **T4 · #319 — indexado por cola.** (AC: 5)
   - [x] `OutboxContext.php` bajo D3 (`Outbox.php` no necesitó cambio: `messagesOnQueue()` ya era el buen patrón)
   - [x] Verificar `dispatch_event.feature:152` (y `:191`, que el issue no listaba)
-- [ ] **T5 · #430 — un vocabulario de comandos.** (AC: 6)
-  - [ ] Medir el vocabulario vivo primero: `make php.behat c='-dl'` y `c="-d '<texto>'"` — **no fiarse de las cifras de `api/CLAUDE.md`, ya derivaron**
-  - [ ] Decidir la semántica de «fail» para el Worker
-  - [ ] Migrar las 30 invocaciones; ningún paso borrado
+- [x] **T5 · #430 — un vocabulario de comandos.** (AC: 6)
+  - [x] Medir el vocabulario vivo primero: `make php.behat c='-dl'` y `c="-d '<texto>'"` — **no fiarse de las cifras de `api/CLAUDE.md`, ya derivaron**
+  - [x] Decidir la semántica de «fail» para el Worker: el bucle lanzó (un Worker no tiene exit code propio)
+  - [x] Migrar las 30 invocaciones; ningún paso borrado
 - [x] **T5b · V1–V6, las seis.** (AC: 6b)
   - [x] Escribir primero el caso que hoy pasa y **verlo pasar** — es la prueba de la vacuidad
   - [x] Arreglar; verlo rojo contra ese mismo caso
-- [ ] **T6 · #313 bajo D2.** (AC: 7)
-- [ ] **T7 · Mecanismo de falsabilidad del vocabulario.** (AC: —)
-  - [ ] Modelar sobre `BehatSuiteCoverageGateTest` (mismo hogar, mismas auto-protecciones anti-vacuidad)
-  - [ ] Verlo rojo antes de darlo por bueno
-- [ ] **T8 · Higiene del diff y de la prosa que este lote desmiente.** (AC: —)
-  - [ ] Barrer comentarios con IDs de issue/historia en `api/tests/**` — prohibidos fuera de este artefacto
-  - [ ] **`api/CLAUDE.md:79`**: corregir el ejemplo falso (`EntityManagerContext` **no** está ocioso, 18 usos) y
+- [x] **T6 · #313 bajo D2.** (AC: 7)
+- [x] **T7 · Mecanismo de falsabilidad del vocabulario.** (AC: —)
+  - [x] Modelar sobre `BehatSuiteCoverageGateTest` (mismo hogar, mismas auto-protecciones anti-vacuidad)
+  - [x] Verlo rojo antes de darlo por bueno — 6 mutaciones, 6 rojos, cada uno en su comprobación
+- [x] **T8 · Higiene del diff y de la prosa que este lote desmiente.** (AC: —)
+  - [x] Barrer comentarios con IDs de issue/historia en `api/tests/**` — medido, cero en el diff — prohibidos fuera de este artefacto
+  - [x] **`api/CLAUDE.md:79`**: corregir el ejemplo falso (`EntityManagerContext` **no** está ocioso, 18 usos) y
         decidir qué hacer con las cifras. Si D4 = sí, **la prosa deja de citar números y apunta al gate**; si
         D4 = no, se re-miden a mano y se acepta que volverán a derivar
-  - [ ] Decidir la deriva de `api/CLAUDE.md:27` (ver Dev Notes)
-- [ ] **T9 · Gates + rojos provocados.** (AC: 8, 9)
+  - [x] Decidir la deriva de `api/CLAUDE.md:27`: corregida — `tools/` ya no lista Behat
+- [x] **T9 · Gates + rojos provocados.** (AC: 8, 9)
 - [ ] **T10 · Pase adversarial, registrado aquí, ANTES del PR.** (AC: 10)
 - [ ] **T11 · Code review de la tarea completa**, y sólo entonces mover el marcador de sprint a `done`.
 
@@ -500,6 +500,32 @@ cualquier selector roto.
   usar al sustituir los casts ciegos por guardias reales. PHPStan las reportó como *unmatched* — así se detectaron.
   Arreglo real, no supresión.
 
+**T5 — #430: un vocabulario, con sujeto neutral.** Behat resuelve un paso por patrón, así que dos contextos no
+pueden registrar la misma frase: **compartir las palabras exige compartir el resultado**, no las definiciones. Un
+`LastRun` recoge qué se ejecutó y qué imprimió; los dos contextos conservan las palabras de *arrancar* algo
+(un comando de consola no es un consume) y un `RunOutcomeContext` es dueño de lo que viene después.
+
+La frase que sobrevive no nombra ninguno de los dos mecanismos. `the command should succeed` **nunca tocó un
+comando**: validaba un `Worker` construido a mano cuyo exit code es sintético. `the last command should
+succeed` habría sido la misma mentira para los 23 escenarios de messenger, así que ambos lados se mueven a
+`the last run …` y las 30 invocaciones medidas con ellos.
+
+Dos propiedades de `LastRun` son lo que mantiene falsables los pasos nuevos, y ninguna se observa desde un
+escenario: leer antes de haber ejecutado **rechaza** en vez de responder `0` (que satisfaría «should succeed» sin
+que nada corriera), y el reset entre escenarios impide que uno asserte sobre el exit code del anterior.
+
+**T7 — el mecanismo de falsabilidad, y dos cosas que la propia lectura hacía mal.** El registro
+`api/.behat-step-vocabulary` clasifica los 217 patrones (`used` / `idle` / `manual` / `refused`) y el gate lo
+recomputa contra el árbol. `manual` y `refused` se cuentan **aparte** de `idle` a propósito: `idle` es deuda de
+cobertura que hay que gastar, y ninguna de las otras dos lo es — meterlas dentro haría mentir al único número
+del que trata la regla.
+
+Escribirlo destapó que el extractor textual leía de menos: un patrón escrito como **concatenación** entre líneas
+registraba sólo su primer literal, y uno escrito con una **constante de clase** no se leía en absoluto. Ambos
+silenciosos — el prefijo de un paso sigue pareciendo un paso plausible. Resolverlos movió el conteo de 213 a
+**217**, que es justo la deriva que el fichero existe para impedir. El extractor ahora **rechaza** un argumento
+de atributo que no puede reconstruir exactamente, en vez de registrar los literales que encuentre.
+
 **T4 — #319 bajo D3.** Las seis frases sin cola siguen registradas y **rechazan**, nombrando la canónica; se añaden
 cuatro formas cualificadas que faltaban (los dos pasos de tabla y los dos borrados). `Outbox.php` no necesitó tocarse:
 `messagesOnQueue()` ya rechazaba una cola no inspeccionable. `messages()` sobrevive y sigue en uso: es la lectura
@@ -507,45 +533,100 @@ honesta de «todas las colas» que usan las dos escotillas de diagnóstico, dond
 
 ### File List
 
-```
-api/tests/Behat/Support/PostProcess/JsonToolTrait.php            (M)  #320 · V1–V5 · V7
-api/tests/Behat/Support/PostProcess/PropertyPostProcessTrait.php (M)  V6 (helper muerto borrado)
-api/tests/Behat/NodeModifier/Scalar/BackedEnumNodeModifier.php   (M)  V6
-api/tests/Behat/Context/OutboxContext.php                        (M)  #319 (D3)
-api/features/backoffice/bank/dispatch_event.feature              (M)  #319 — :152 y :191
-api/tools/phpstan/phpstan.neon                                   (M)  2 supresiones retiradas
-api/tests/Unit/Behat/Context/OutboxTableMatchTest.php            (A)  sonda AC4 + rechazos de D3
-api/tests/Unit/Behat/Support/PostProcess/JsonNodeAssertionsTest.php       (A)  #320 (los 13) + V1–V5 + V7
-api/tests/Unit/Behat/Support/PostProcess/Fixtures/JsonAssertions.php      (A)  host del trait
-api/tests/Unit/Behat/NodeModifier/Scalar/BackedEnumNodeModifierTest.php   (M)  V6
-_bmad-output/implementation-artifacts/br-1-behat-vocabulario-falsabilidad.md (M)
-_bmad-output/implementation-artifacts/sprint-status.yaml                     (M)
-```
+Derivada de `git diff --name-only $(git merge-base origin/main HEAD)...HEAD`, **nunca a mano** — la manual de BR-2
+omitió 3 ficheros. Se regenera en el commit de cierre.
 
-> Deriva final pendiente de `git diff --name-only $(git merge-base origin/main HEAD)...HEAD` en el commit de cierre.
+```
+CLAUDE.md
+_bmad-output/implementation-artifacts/br-1-behat-vocabulario-falsabilidad.md
+_bmad-output/implementation-artifacts/sprint-status.yaml
+_bmad-output/planning-artifacts/epics-backlog-resolution.md
+api/.behat-step-vocabulary
+api/CLAUDE.md
+api/behat.dist.php
+api/config/services_test.yaml
+api/features/backoffice/bank/count.feature
+api/features/backoffice/bank/create.feature
+api/features/backoffice/bank/delete.feature
+api/features/backoffice/bank/dispatch_event.feature
+api/features/backoffice/bank/update.feature
+api/features/backoffice/bank_account/create.feature
+api/features/backoffice/bank_account/delete.feature
+api/features/backoffice/bank_account/status.feature
+api/features/backoffice/bank_account/update.feature
+api/features/shared/console/dead_letter_status.feature
+api/tests/Behat/Context/MessengerConsumerContext.php
+api/tests/Behat/Context/OutboxContext.php
+api/tests/Behat/Context/RunOutcomeContext.php
+api/tests/Behat/Context/SymfonyCommandContext.php
+api/tests/Behat/NodeModifier/NodeModifierLocator.php
+api/tests/Behat/NodeModifier/Scalar/BackedEnumNodeModifier.php
+api/tests/Behat/Support/Execution/LastRun.php
+api/tests/Behat/Support/PostProcess/JsonToolTrait.php
+api/tests/Behat/Support/PostProcess/PropertyPostProcessTrait.php
+api/tests/Unit/Behat/Context/Fixtures/OutboxContextFactory.php
+api/tests/Unit/Behat/Context/OutboxTableMatchTest.php
+api/tests/Unit/Behat/Context/OutboxUnqualifiedStepsTest.php
+api/tests/Unit/Behat/Context/SupersededRunPhrasingsTest.php
+api/tests/Unit/Behat/NodeModifier/Scalar/BackedEnumNodeModifierTest.php
+api/tests/Unit/Behat/Support/Execution/LastRunTest.php
+api/tests/Unit/Behat/Support/PostProcess/Fixtures/JsonAssertions.php
+api/tests/Unit/Behat/Support/PostProcess/JsonNodeAbsentPathTest.php
+api/tests/Unit/Behat/Support/PostProcess/JsonNodeShapeTest.php
+api/tests/Unit/Behat/Support/PostProcess/JsonSchemaValidityTest.php
+api/tests/Unit/Shared/Architecture/BehatStepVocabularyGateTest.php
+api/tests/Unit/Shared/Architecture/Support/BehatVocabularyReader.php
+api/tools/phpstan/phpstan.neon
+docs/claude-code-quickref.md
+make/php-quality.mk
+```
 
 ### Gates
 
-**Tanda 1 — 2026-08-09, tras T3 + T4 + T5b** (corrida fresca, exit code impreso):
+**Tanda final — 2026-08-09, con todo el lote dentro.** Cada uno de corrida fresca, exit code impreso; ninguno
+copiado de una corrida anterior.
 
 | Gate | Exit | Resultado |
 |---|---|---|
+| `make php.quality` | **0** | sweep completo: stan · rector · cs-fixer · phpmd · phpcs · gherkin · 7 lint gates · deptrac · cs.dry-run |
 | `make php.stan` | **0** | No errors |
-| `make php.unit` | **0** | 2507 tests, 10251 assertions, 2 skipped |
-| `make php.behat` | **0** | 410 escenarios / 3806 pasos, todos verdes |
+| `make php.unit` | **0** | 2515 tests, 12 447 assertions, 2 skipped |
+| `make php.behat` | **0** | 410 escenarios / 3806 pasos |
+| `make php.gherkin` | **0** | 49 feature files, sin problemas |
+| `make php.lint.step-vocabulary` | **0** | 5 tests, 2188 assertions |
 
-Pendientes de tanda final: `make php.quality`, `make php.lint.gherkin`.
+> **Corrección a esta historia:** el AC8 nombra `make php.lint.gherkin`. **Ese target no existe** — el real es
+> `make php.gherkin`. Un gate citado por un nombre que no resuelve es exactamente el defecto del lote, y aquí
+> estaba en la propia lista de aceptación.
 
 ### Rojos provocados
 
-**Medición intermedia** (se re-mide al final; el conteo se pudre con el propio diff).
+**Re-medido al final**, con todo el diff dentro. Restauración siempre por **copia de bytes** desde
+`tmp/br1-falsification/`, nunca con `git checkout --`; verificada con `cmp -s` en las cinco.
 
-| Qué se rompió | Cómo | Rojos | De |
+| # | Qué se rompió | Rojos | De |
 |---|---|---|---|
-| `JsonToolTrait` completo → bytes de `f2e80a9d` | copia de bytes desde `tmp/br1-falsification/`, **nunca `git checkout --`** | **34** (33 failures + 1 error) | 44 |
-| `BackedEnumNodeModifier` → bytes de `f2e80a9d` | idem | **3** | 4 |
+| M-A | `JsonToolTrait` completo → bytes de `f2e80a9d` | **34** (33 failures + 1 error) | 38 |
+| M-B | `BackedEnumNodeModifier` → bytes de `f2e80a9d` | **3** | 4 |
+| M-C | `LastRun` responde `0` en vez de rechazar «no se ha ejecutado nada» | **3** | 4 |
+| M-D | `OutboxContext::refuseUnqualified()` retorna en vez de lanzar | **6** | 6 |
+| M-E | `MessengerConsumerContext::refuseSupersededPhrase()` retorna en vez de lanzar | **2** | 6 |
 
-Restauración verificada con `cmp -s` en ambos casos: bytes idénticos.
+M-E da 2 de 6 y es correcto: sólo se neutralizó el helper de *messenger*; las cuatro frases de consola pasan por
+el de `SymfonyCommandContext`, que quedó intacto. Un 6 de 6 ahí habría sido la señal de que los tests no
+distinguen los dos sujetos.
+
+**El gate del vocabulario, comprobación por comprobación** — seis mutaciones, seis rojos, cada uno **sólo** en la
+que le toca (ninguna solapa, que es lo que prueba que las cinco comprobaciones son cinco y no una repetida):
+
+| Mutación | Rojo en |
+|---|---|
+| borrar una clasificación del registro | `…IsClassifiedAndEveryClassificationHasAPattern` |
+| clasificar un patrón que no existe | `…IsClassifiedAndEveryClassificationHasAPattern` |
+| marcar `used` un patrón ocioso | `…UsedIsReachedByAFeature` |
+| marcar `idle` un patrón en uso | `…IdleIsReachedByNoFeature` |
+| marcar `manual` un patrón que los escenarios llaman | `…CallsAStepThatIsNotForScenarios` |
+| escribir en un feature un paso que no existe | `…ResolvesToADeclaredPattern` |
 
 **Rojo no provocado sino encontrado:** los 9 pasos de Behat que murieron por la colisión `describe()` (ver Debug
 Log). Es la evidencia de que el gate de Behat no es decorativo aquí — PHPStan y los unit tests dieron verde con el
