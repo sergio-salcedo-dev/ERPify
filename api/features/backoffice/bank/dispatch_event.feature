@@ -27,8 +27,8 @@ Feature: Dispatch a bank domain event onto the outbox
     And The outbox event property "name" should be equal to "Dispatched Bank"
     And The outbox event property "shortName" should be equal to "DB"
     And I consume 1 message from the "async" transport
-    And the command should succeed
-    And the output should contain "handled successfully (acknowledging to transport)"
+    And the last run should succeed
+    And the last run output should contain "handled successfully (acknowledging to transport)"
     And 0 outbox events were created on the queue "async"
     And 1 notification email was sent
     And The notification email subject should be equal to "[ERPify] Bank created"
@@ -75,7 +75,7 @@ Feature: Dispatch a bank domain event onto the outbox
     Then 2 outbox events were created on the queue "async"
     And there should be 1 event stored for aggregate "01970000-0000-7000-8000-000000000009" named "erpify.backoffice.bank.created"
     And I consume 2 messages from the "async" transport
-    And the command should succeed
+    And the last run should succeed
     And 0 outbox events were created on the queue "async"
     And 1 notification email was sent
     And The notification email subject should be equal to "[ERPify] Bank created"
@@ -107,7 +107,7 @@ Feature: Dispatch a bank domain event onto the outbox
     """
     Then 1 outbox event was created on the queue "async"
     And I consume 1 message from the "async" transport
-    And the command should succeed
+    And the last run should succeed
     And 0 outbox events were created on the queue "async"
     And 1 notification email was sent
     And 1 Mercure update was published

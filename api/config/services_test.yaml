@@ -58,6 +58,11 @@ services:
     # The outbox over the fixed inspectable queues, on top of that resolution.
     Erpify\Tests\Behat\Support\Messenger\Outbox: ~
 
+    # What the last thing a scenario ran left behind. Shared (Symfony services are), which is the
+    # point: it is what lets one step vocabulary assert on a console command and on a Messenger
+    # worker run without either context redefining the other's patterns.
+    Erpify\Tests\Behat\Support\Execution\LastRun: ~
+
     # Recording Mercure hub: captures the realtime Updates a consumed bank event publishes, instead of
     # reaching the live hub (which has no test double and hangs ~5s per consume). Overriding the
     # MercureBundle's HubInterface alias makes RefreshRealtimeOnBankChanged and MercureContext share it.

@@ -19,8 +19,8 @@ Feature: Delete a bank account
     And The outbox event aggregate id should be equal to "acc1de00-0000-7000-8000-000000000001"
     And The outbox event property "bankId" should be equal to "11111111-1111-7000-8000-000000000003"
     And I consume 1 message from the "async" transport
-    And the command should succeed
-    And the output should contain "handled successfully (acknowledging to transport)"
+    And the last run should succeed
+    And the last run output should contain "handled successfully (acknowledging to transport)"
     And 0 outbox events were created on the queue "async"
     And 0 notification emails were sent
     And 1 Mercure update was published

@@ -8,8 +8,10 @@ use Behat\Gherkin\Node\PyStringNode;
 use Behat\Step\Then;
 use Behat\Step\When;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
+use Erpify\Tests\Behat\Support\Execution\LastRun;
 use Erpify\Tests\Behat\Support\Messenger\MessengerTransports;
 use JsonException;
+use RuntimeException;
 use Symfony\Component\Console\Logger\ConsoleLogger;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -44,8 +46,9 @@ use Throwable;
  * here can assert failure routing; a count on `failed` would read 0 by construction rather than by
  * behaviour. Covering that needs the listeners wired in deliberately, not an assertion.
  *
- * The worker's own logger is a {@see ConsoleLogger} over a buffer, so `the command should succeed` and
- * `the output should contain` can assert it ran (e.g. the "handled successfully" acknowledgement).
+ * The worker's own logger is a {@see ConsoleLogger} over a buffer, and both go into {@see LastRun}, so
+ * `the last run should succeed` and `the last run output should contain` can assert it ran (e.g. the
+ * "handled successfully" acknowledgement) in the same words a console scenario uses.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
@@ -67,11 +70,8 @@ final class MessengerConsumerContext extends AbstractContext
         '--verbose' => OutputInterface::VERBOSITY_VERY_VERBOSE,
     ];
 
-    private ?int $lastExitCode = null;
-
-    private string $lastOutput = '';
-
     public function __construct(
+        private readonly LastRun $lastRun,
         private readonly MessengerTransports $transports,
         #[Autowire(service: 'messenger.routable_message_bus')]
         private readonly MessageBusInterface $routableMessageBus,
@@ -128,25 +128,29 @@ final class MessengerConsumerContext extends AbstractContext
         $this->runWorker($names, $limit, $timeLimit, $verbosity);
     }
 
+    /**
+     * Kept registered and refusing, so a scenario reaching for the old phrasing is handed the
+     * canonical one rather than "step undefined", and nobody re-adds it believing it is missing.
+     *
+     * It could not stay: these two phrases claimed the generic wording for a Messenger worker purely
+     * because this context defined them first, which left the console context to invent
+     * "the last command …" for the same three assertions. Two vocabularies for one claim, each
+     * half-used, and the generic one naming a subject that does not exist here — nothing this step
+     * ever touched was a command. {@see \Erpify\Tests\Behat\Context\RunOutcomeContext} owns them now.
+     */
     #[Then('the command should succeed')]
     public function theCommandShouldSucceed(): void
     {
-        self::assertNotNull($this->lastExitCode, 'No consume has been executed yet');
-        self::assertSame(
-            0,
-            $this->lastExitCode,
-            \sprintf('Consume failed (code %d). Output:%s%s', $this->lastExitCode, PHP_EOL, $this->lastOutput),
-        );
+        $this->refuseSupersededPhrase('the last run should succeed');
     }
 
+    /**
+     * Superseded — refuses. See {@see theCommandShouldSucceed()}.
+     */
     #[Then('the output should contain :text')]
     public function theOutputShouldContain(string $text): void
     {
-        self::assertStringContainsString(
-            $text,
-            $this->lastOutput,
-            \sprintf('Consume output did not contain "%s". Output:%s%s', $text, PHP_EOL, $this->lastOutput),
-        );
+        $this->refuseSupersededPhrase(\sprintf('the last run output should contain "%s"', $text));
     }
 
     /**
@@ -217,15 +221,27 @@ final class MessengerConsumerContext extends AbstractContext
 
         $worker = new Worker($receivers, $this->routableMessageBus, $dispatcher, $logger);
 
+        $exitCode = 0;
+
         try {
             $worker->run(['sleep' => 50_000]);
-            $this->lastExitCode = 0;
         } catch (Throwable $throwable) {
-            $this->lastExitCode = 1;
+            // A Worker has no exit code of its own; "it threw" is the only failure signal there is,
+            // and RunOutcomeContext documents that as what "the last run should fail" means here.
+            $exitCode = 1;
             $output->writeln($throwable->getMessage());
         }
 
-        $this->lastOutput = $output->fetch();
+        $this->lastRun->record($exitCode, $output->fetch());
+    }
+
+    private function refuseSupersededPhrase(string $canonical): never
+    {
+        throw new RuntimeException(\sprintf(
+            'This phrasing named a console command for something that is a Messenger worker run, and '
+            . 'split one assertion across two vocabularies. Use: %s',
+            $canonical,
+        ));
     }
 
     private function sentEnvelope(string $transportName, int $number): Envelope

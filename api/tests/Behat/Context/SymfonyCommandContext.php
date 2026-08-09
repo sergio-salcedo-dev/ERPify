@@ -6,14 +6,13 @@ namespace Erpify\Tests\Behat\Context;
 
 use Behat\Gherkin\Node\PyStringNode;
 use Behat\Gherkin\Node\TableNode;
-use Behat\Hook\BeforeScenario;
 use Behat\Step\Then;
 use Behat\Step\When;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
+use Erpify\Tests\Behat\Support\Execution\LastRun;
 use InvalidArgumentException;
 use JsonException;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
-use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\ApplicationTester;
 use Symfony\Component\HttpKernel\KernelInterface;
 
@@ -21,10 +20,10 @@ use Symfony\Component\HttpKernel\KernelInterface;
  * Executes and asserts Symfony console commands in-process against the booted test kernel, so a
  * scenario can cover an `#[AsCommand]` end to end (exit code + captured output).
  *
- * The step vocabulary ("I run the ... command", "the last command should succeed") is deliberately
- * distinct from {@see MessengerConsumerContext}: its "the command should succeed" / "the output should
- * contain" phrases are wired to a Messenger {@see \Symfony\Component\Messenger\Worker}, not the console
- * {@see Application}, so reusing them here would redefine those patterns and break the whole suite.
+ * It owns how a command is *started*; what it left behind goes into {@see LastRun}, and asserting on
+ * that belongs to {@see RunOutcomeContext}. The split is what let one vocabulary replace two: Behat
+ * resolves a step by pattern, so two contexts can never both register a phrase — sharing the words
+ * means sharing the result, not the step definitions.
  *
  * Booting the kernel to run a command is the established pattern in this suite ({@see FixturesContext}
  * loads Doctrine fixtures via a console {@see Application}); the "drive over HTTP" rule governs HTTP
@@ -32,22 +31,10 @@ use Symfony\Component\HttpKernel\KernelInterface;
  */
 final class SymfonyCommandContext extends AbstractContext
 {
-    private const string NO_COMMAND_RAN = 'No command has been executed yet';
-
-    private ?int $lastExitCode = null;
-
-    private string $lastOutput = '';
-
     public function __construct(
+        private readonly LastRun $lastRun,
         private readonly KernelInterface $kernel,
     ) {
-    }
-
-    #[BeforeScenario]
-    public function reset(): void
-    {
-        $this->lastExitCode = null;
-        $this->lastOutput = '';
     }
 
     #[When('I run the :commandName command')]
@@ -77,88 +64,64 @@ final class SymfonyCommandContext extends AbstractContext
         $this->execute($commandName, $parameters->getRowsHash());
     }
 
+    /**
+     * Kept registered and refusing, so a scenario reaching for one is handed the canonical phrasing
+     * rather than "step undefined", and nobody re-adds it believing it is missing.
+     *
+     * None of them is wrong about its own subject. They are the second vocabulary for assertions
+     * {@see MessengerConsumerContext} had already claimed generic words for, so a reader has to know
+     * which mechanism a scenario uses before picking between them. What replaces them names neither
+     * mechanism, because a Messenger worker run is not a command either.
+     */
     #[Then('the last command should succeed')]
     public function theLastCommandShouldSucceed(): void
     {
-        $exitCode = $this->exitCode();
-
-        self::assertSame(
-            Command::SUCCESS,
-            $exitCode,
-            \sprintf('Command failed (code %d). Output:%s%s', $exitCode, PHP_EOL, $this->lastOutput),
-        );
-    }
-
-    #[Then('the last command should fail')]
-    public function theLastCommandShouldFail(): void
-    {
-        self::assertNotSame(
-            Command::SUCCESS,
-            $this->exitCode(),
-            \sprintf('Command unexpectedly succeeded. Output:%s%s', PHP_EOL, $this->lastOutput),
-        );
-    }
-
-    #[Then('the command output should contain :needle')]
-    public function theCommandOutputShouldContain(string $needle): void
-    {
-        $this->guardCommandRan();
-
-        self::assertStringContainsString(
-            $needle,
-            $this->lastOutput,
-            \sprintf('Command output did not contain "%s". Output:%s%s', $needle, PHP_EOL, $this->lastOutput),
-        );
+        $this->refuseSupersededPhrase('the last run should succeed');
     }
 
     /**
-     * The counterpart of {@see theCommandOutputShouldContain()}, for the claims a command makes by staying
-     * silent. What a report deliberately withholds is as much its contract as what it prints — an identity id
-     * kept out of an operator's terminal is a decision, and without an assertion it is only an intention.
+     * Superseded — refuses. See {@see theLastCommandShouldSucceed()}.
+     */
+    #[Then('the last command should fail')]
+    public function theLastCommandShouldFail(): void
+    {
+        $this->refuseSupersededPhrase('the last run should fail');
+    }
+
+    /**
+     * Superseded — refuses. See {@see theLastCommandShouldSucceed()}.
+     */
+    #[Then('the command output should contain :needle')]
+    public function theCommandOutputShouldContain(string $needle): void
+    {
+        $this->refuseSupersededPhrase(\sprintf('the last run output should contain "%s"', $needle));
+    }
+
+    /**
+     * Superseded — refuses. See {@see theLastCommandShouldSucceed()}.
      */
     #[Then('the command output should not contain :needle')]
     public function theCommandOutputShouldNotContain(string $needle): void
     {
-        $this->guardCommandRan();
-
-        self::assertStringNotContainsString(
-            $needle,
-            $this->lastOutput,
-            \sprintf('Command output unexpectedly contained "%s". Output:%s%s', $needle, PHP_EOL, $this->lastOutput),
-        );
+        $this->refuseSupersededPhrase(\sprintf('the last run output should not contain "%s"', $needle));
     }
 
     /**
-     * @throws JsonException when the output is not valid JSON
+     * Superseded — refuses. See {@see theLastCommandShouldSucceed()}.
      */
     #[Then('the command output should be JSON with a :field field')]
     public function theCommandOutputShouldBeJsonWithField(string $field): void
     {
-        $this->guardCommandRan();
-
-        /** @var array<string, mixed> $decoded */
-        $decoded = (array) \json_decode($this->lastOutput, true, 512, JSON_THROW_ON_ERROR);
-
-        self::assertArrayHasKey(
-            $field,
-            $decoded,
-            \sprintf('Command output was not JSON with a "%s" field. Output:%s%s', $field, PHP_EOL, $this->lastOutput),
-        );
+        $this->refuseSupersededPhrase(\sprintf('the last run output should be JSON with a "%s" field', $field));
     }
 
-    /**
-     * @phpstan-assert int $this->lastExitCode
-     */
-    private function guardCommandRan(): void
+    private function refuseSupersededPhrase(string $canonical): never
     {
-        self::assertNotNull($this->lastExitCode, self::NO_COMMAND_RAN);
-    }
-
-    private function exitCode(): int
-    {
-        $this->guardCommandRan();
-
-        return $this->lastExitCode;
+        throw new InvalidArgumentException(\sprintf(
+            'This phrasing was one of two vocabularies for the same assertion, split only by which '
+            . 'context reached the generic words first. Use: %s',
+            $canonical,
+        ));
     }
 
     /**
@@ -203,8 +166,7 @@ final class SymfonyCommandContext extends AbstractContext
         // (confirm/ask) waiting for stdin — take defaults / fail fast instead of hanging.
         $tester->run(['command' => $commandName, ...$values], ['interactive' => false]);
 
-        $this->lastExitCode = $tester->getStatusCode();
-        $this->lastOutput = $tester->getDisplay();
+        $this->lastRun->record($tester->getStatusCode(), $tester->getDisplay());
     }
 
     private function application(): Application
@@ -212,7 +174,7 @@ final class SymfonyCommandContext extends AbstractContext
         $application = new Application($this->kernel);
         $application->setAutoExit(false);
         // Catch exceptions so a throwing command surfaces as a non-zero exit code plus rendered
-        // output (what "the last command should fail" asserts) instead of aborting the scenario.
+        // output (what "the last run should fail" asserts) instead of aborting the scenario.
         $application->setCatchExceptions(true);
 
         return $application;
