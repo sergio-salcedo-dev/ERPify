@@ -353,7 +353,7 @@ development_status:
   br-1-behat-vocabulario-falsabilidad: backlog
   br-2-residuos-eje-referencias-persona: done
   br-3-auditoria-crypto-cierres-eje-3: backlog
-  br-4-endurecimiento-identidad-grafo-recuperacion: in-progress
+  br-4-endurecimiento-identidad-grafo-recuperacion: done
   br-5-ciclo-de-vida-iam-session: backlog
   br-6-gates-arquitectura-ci: backlog
   br-7-listas-backoffice: backlog

@@ -4,7 +4,7 @@ baseline_commit: f2e80a9d9b5e2db4ac7a2fe5b03145bf3c5641d0
 
 # Story BR-4: Endurecimiento de identidad — el grafo de recuperación
 
-Status: review
+Status: done
 
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · Lote BR-4 · Issues #435 #436
 > Rama: `fix/iam-identity-hardening-br4-215m` · Worktree: `.claude/worktrees/iam-identity-hardening-br4-215m` · Base: `main` @ `f2e80a9d`
