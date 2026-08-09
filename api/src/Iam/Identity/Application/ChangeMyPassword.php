@@ -8,6 +8,7 @@ use Closure;
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidCurrentPassword;
+use Erpify\Iam\Identity\Domain\Exception\InvalidHashedPassword;
 use Erpify\Iam\Identity\Domain\Exception\NewPasswordMustDiffer;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\HashedPassword;
@@ -99,7 +100,14 @@ final readonly class ChangeMyPassword
                 $user = $this->users->findByIdForUpdate($userId) ?? throw UserNotFound::withId($userId);
                 $user->ensureActive();
 
-                $current = $user->passwordHash() ?? throw new InvalidCurrentPassword();
+                // The `??` alone never fires on a corrupt row: `passwordHash()` raises before it can, and
+                // the marker-less exception lands as a 500 where this line plainly intends a 409. An
+                // unusable stored credential is indistinguishable from a wrong one to whoever is typing.
+                try {
+                    $current = $user->passwordHash() ?? throw new InvalidCurrentPassword();
+                } catch (InvalidHashedPassword) {
+                    throw new InvalidCurrentPassword();
+                }
 
                 if (!$verifyCurrent($current)) {
                     throw new InvalidCurrentPassword();

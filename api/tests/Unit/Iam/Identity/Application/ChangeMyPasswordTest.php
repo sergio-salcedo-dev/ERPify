@@ -22,6 +22,7 @@ use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use ReflectionProperty;
 use Throwable;
 
 /**
@@ -119,6 +120,31 @@ final class ChangeMyPasswordTest extends TestCase
             $this->credentialMatches(),
             $this->credentialDoesNotMatch(),
             UserMother::invited(),
+            expectedKdfRuns: 0,
+        );
+    }
+
+    /**
+     * An `ACTIVE` identity whose stored hash the value object refuses. The `??` alone never reaches its own
+     * throw here — `passwordHash()` raises first — so without the catch the marker-less exception leaves as a
+     * 500 where this path plainly intends a refusal, on a route its owner reached holding a valid session.
+     *
+     * It answers `InvalidCurrentPassword` and not a new vocabulary because that is what is true from where the
+     * caller stands: the credential they typed cannot be shown to match, and an unusable stored one is
+     * indistinguishable from a wrong one to whoever is typing. The state is planted straight onto the property,
+     * the only way persistence can produce it — the writer refuses `''` and always has.
+     */
+    public function testAnUnreadableStoredCredentialIsRefusedRatherThanRaising(): void
+    {
+        $user = UserMother::create();
+        $property = new ReflectionProperty(User::class, 'passwordHash');
+        $property->setValue($user, '');
+
+        $this->assertRefusedWithoutEffect(
+            InvalidCurrentPassword::class,
+            $this->credentialMatches(),
+            $this->credentialDoesNotMatch(),
+            $user,
             expectedKdfRuns: 0,
         );
     }

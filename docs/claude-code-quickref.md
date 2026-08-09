@@ -20,6 +20,11 @@ make docker.ps           # Compose ps.
 make docker.info         # Show this checkout's resolved stack identity (project + host ports).
 make php.bash            # Shell into the php container (also: make php.sh, make php.exec cmd='…').
 make docker.down.clean-volumes  # Stop stack and REMOVE volumes (destructive).
+make docker.worker.cache.reset  # Drop the messenger_worker's PRIVATE compiled-container cache. Its factories
+                                # live in a volume of their own, so a changed constructor signature boot-loops
+                                # it on ArgumentCountError (exit 255) while the web container stays healthy —
+                                # and neither a restart nor `make sf.cc` reaches it. `make app.dev` already
+                                # runs this between the down and the up. Detail: docs/troubleshooting/sentry-messenger-worker-dev-cache-crash.md
 make docker.prune        # Prune ALL Docker images/volumes/containers system-wide (destructive).
 make prod.env.check      # Validate .env.prod.local has all required prod secrets (no placeholders).
 make deploy.local        # Stand up the PROD profile at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance).
@@ -37,6 +42,7 @@ make composer c='req vendor/pkg'    # Run composer inside the container.
 make sf c='about'                   # Symfony console (also: make sf.cc, make sf.routes f='…', make sf.about).
 make sf c='organization:provision <name>'              # Bootstrap the installation's single organization (one per install; rejects a 2nd).
 make sf c='organization:administrator:create <email>'  # Bootstrap the first ADMIN (identity + ADMIN membership); hidden password prompt if omitted.
+make sf c='identity:integrity:inspect'                 # Report identity rows the auth path tolerates silently: role values no Role case backs, credentials HashedPassword refuses. SUCCESS clean / FAILURE finding / INVALID the read failed. Counts, never ids.
 make profiler.open                  # Open the Symfony Profiler UI (/_profiler/latest) in the browser (dev).
 make profiler.dump-server           # Start the var-dumper server: collects dump() out-of-band (dev).
 make php.test                       # PHPUnit + Behat. Pass c='…' for extra args.

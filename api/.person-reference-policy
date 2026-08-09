@@ -65,11 +65,19 @@
 #     unrelated stream. What it lacks is a DETECTIVE half — nothing here reports a row that escaped — and the
 #     reason is measurable rather than an omission: the table has no `resource_erased` flag, so every correct
 #     erasure leaves a pseudonym that resolves to no live identity and would be reported as divergence for
-#     ever. `audit_log.metadata` holds no person id. Ten paths write a row — nine `AuditLogger->log()` call
-#     sites plus the
-#     change-data-capture listener — of which seven pass a non-empty `metadata`, and exactly one of those
+#     ever. `audit_log.metadata` holds no person id. Fourteen paths write a row — thirteen
+#     `AuditLogger->log()` call sites plus the
+#     change-data-capture listener — of which most pass a non-empty `metadata`, and exactly one of those
 #     ever held a person id: the compliance entry of the identity erasure, which now names its subject as
 #     the entry's RESOURCE instead, where the anonymiser that same erasure already runs rewrites it.
+#     (The count is re-derived, not incremented: it read "nine" while `git grep -c 'auditLogger->log('`
+#     already returned twelve. A number nobody re-measures is what lets an argument resting on it go stale
+#     without ever going red — the argument here does NOT rest on the count, but on each site's content.)
+#     ONE of those sites writes content that is neither a constant, a route name nor a reviewed id:
+#     `InspectStoredIdentityIntegrityCommand` puts role values read verbatim out of `identity_user.roles`
+#     into `metadata`. It is admitted because those values are the FINDING — a role is not a person, and the
+#     identities carrying them are deliberately reported as a count so no id is ever in scope — but it is the
+#     first of its kind and is named here so the next one is not waved through by analogy.
 #     FOUR THINGS HOLD THAT, AND NONE OF THEM IS A GATE OVER KEY NAMES — a pseudonym is a UUID
 #     indistinguishable by shape from a real id, so a shape rule would break the `anonymized_actor_id`
 #     contract, and a key-name rule would verify its own declaration:

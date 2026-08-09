@@ -152,6 +152,26 @@ web container would still delete it.
 restart it: `docker compose restart messenger_worker`. This matches how Messenger
 workers behave in prod and is the expected workflow.
 
+### The second failure the private volume buys, and how it is paid
+
+**A restart is not enough when a service's CONSTRUCTOR SIGNATURE changes.** The compiled factory lives in this
+volume, so the worker keeps calling the old signature and dies on `ArgumentCountError` — a boot loop at
+exit 255 — while the web container, which shares `./api/var`, stays perfectly healthy and reports nothing.
+`make sf.cc` does not reach it either: that clear runs in the `php` container, which does not share this
+volume. The observable that identifies it in one line is the container hash — the worker's stack trace names a
+`var/cache/dev/Container…` directory that no longer exists on disk.
+
+Two things close it:
+
+- **`make docker.worker.cache.reset`** drops the volume (stopping the service first). That is the remedy when
+  the worker is already looping — after a `git pull`, say, with the stack left up.
+- **`make app.dev` runs it between the down and the up**, so a cold start cannot inherit a stale factory. It
+  costs the worker one container recompile per cold start, which is the cheaper side of the trade: the failure
+  it prevents is silent everywhere except the worker's own logs.
+
+This is why the cost is worth naming rather than hiding: the private volume trades a rare mid-flight crash for
+a recurring staleness that only a volume drop fixes, and the recurrence is what tooling has to absorb.
+
 ## Priority order for ERPify
 
 1. **`APP_DEBUG=0` on `messenger_worker`** — strongly recommended on its own; a

@@ -11,9 +11,9 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\Security\Http\Event\TokenDeauthenticatedEvent;
 
 /**
- * Keeps the registry in step with the firewall's native de-authentication. When a credential change makes
- * `ContextListener::hasUserChanged()` true (`SecurityUser` is `PasswordAuthenticatedUserInterface` and not
- * `EquatableInterface`, so a changed hash de-authenticates), the firewall dispatches
+ * Keeps the registry in step with the firewall's de-authentication. When a credential change makes
+ * `ContextListener::hasUserChanged()` true (`SecurityUser` implements `EquatableInterface`, so that verdict
+ * comes from its own `isEqualTo()`, which compares the stored credential), the firewall dispatches
  * {@see TokenDeauthenticatedEvent} and drops the native token. This listener revokes the correlated registry
  * `Session` in the same request, so "my sessions" and the audit trail never diverge from the firewall's real
  * state.

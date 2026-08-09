@@ -60,6 +60,15 @@ docker.down: ## Stop stack and remove orphans
 docker.down.clean-volumes: ## Stop stack and REMOVE volumes (destructive)
 	$(DOCKER_COMPOSE) down --remove-orphans --volumes
 
+# The worker compiles its DI container into a PRIVATE volume (compose.dev.yaml) so the web container's
+# recompiles cannot delete its files mid-flight. The cost is that a changed CONSTRUCTOR SIGNATURE leaves a
+# compiled factory calling the old one: the worker boot-loops on `ArgumentCountError` (exit 255) while the web
+# container stays healthy, and neither a restart nor `make sf.cc` reaches it — that cache clear runs in the
+# `php` container, which does not share this volume. Only dropping the volume does.
+docker.worker.cache.reset: ## Drop the messenger_worker's private compiled-container cache (fixes its boot loop)
+	-$(DOCKER_COMPOSE) rm --force --stop messenger_worker
+	-docker volume rm $(COMPOSE_PROJECT_NAME)_messenger_cache
+
 docker.prune: docker.down ## Prune ALL Docker images, volumes and containers system-wide (destructive, prompts)
 	docker system prune --all --volumes
 
@@ -67,5 +76,5 @@ docker.prune: docker.down ## Prune ALL Docker images, volumes and containers sys
 		docker.restart \
         docker.logs \
         docker.ps docker.info \
-        docker.down docker.down.clean-volumes docker.reset \
+        docker.down docker.down.clean-volumes docker.worker.cache.reset docker.reset \
         docker.prune
