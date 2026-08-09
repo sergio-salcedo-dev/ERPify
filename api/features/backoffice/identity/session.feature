@@ -100,6 +100,35 @@ Feature: Server-side session registry and admission gate
     Then the response status code should be 200
     And the JSON node "data.email" should be equal to "alice@erpify.test"
 
+  # Corrupt persisted identity data is unreachable through the type-safe writer, so it arrives by an
+  # out-of-band write or — the realistic one — by an enum that evolves incompatibly with stored rows. Both
+  # re-hydration sites are read on EVERY authenticated request, so what they do is a property of the whole
+  # authenticated surface rather than of one endpoint. The seeded SELECT is what keeps each scenario from
+  # passing vacuously if the corrupting UPDATE ever stopped matching.
+  Scenario: An unreadable credential denies the identity instead of raising a 500
+    Given I reload the fixtures
+    And I send a "GET" request to "/me"
+    And the response status code should be 200
+    When I execute the SQL query "UPDATE identity_user SET password_hash = '' WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b'"
+    And I execute the SQL query "SELECT id FROM identity_user WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b' AND password_hash = ''"
+    And there should have 1 records in SQL result
+    And I send a "GET" request to "/me"
+    Then the response status code should be 401
+
+  # The asymmetry with the credential above is the whole decision, and it is not a preference: the permission
+  # model is grant-only, so an unrecognised role can concede nothing and dropping it can only narrow. Failing
+  # the identity instead would convert a value that grants nothing into a total loss of authentication — and,
+  # for an installation whose administrator carried the retired role, into a lockout with no administrative
+  # unlock to undo it.
+  Scenario: A role the enum no longer knows is discarded without taking the others with it
+    Given I reload the fixtures
+    When I execute the SQL query "UPDATE identity_user SET roles = to_json(ARRAY['ADMIN','GHOST_ROLE']) WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b'"
+    And I execute the SQL query "SELECT id FROM identity_user WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b' AND roles::text LIKE '%GHOST_ROLE%'"
+    And there should have 1 records in SQL result
+    And I send a "GET" request to "/me"
+    Then the response status code should be 200
+    And the JSON node "data.roles" should contain "ADMIN"
+
   @anonymous
   Scenario: A successful login mints a live registry session the gate then admits
     # An earlier scenario seals the lockout on this identity to prove the gate ignores it; reload so the login
