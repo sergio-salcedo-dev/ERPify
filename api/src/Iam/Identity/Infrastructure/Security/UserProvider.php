@@ -57,7 +57,8 @@ final readonly class UserProvider implements UserProviderInterface
         $securityUser = new SecurityUser($user);
 
         // The credential is re-hydrated HERE, eagerly, so a stored hash the value object refuses becomes a
-        // not-found at the one boundary that owns "may this identity authenticate" — rather than an
+        // not-found at the boundary that owns "may this identity authenticate" for every path that reaches
+        // a provider (`ReauthenticateDevice` mints a token through `Security::login()` and does not) — rather than an
         // `InvalidHashedPassword` escaping through `getPassword()` later, from inside the firewall, where it
         // has no marker and lands as a 500 on every authenticated request. The refusal is deliberately the
         // same one an unknown email gets, timing floor included: a caller learns nothing from the difference,

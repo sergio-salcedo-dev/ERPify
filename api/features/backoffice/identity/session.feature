@@ -192,6 +192,9 @@ Feature: Server-side session registry and admission gate
     And the JSON node "data.roles[0]" should be equal to "AUDIT_READER"
     And the JSON node "data.roles[1]" should be equal to "MANAGER"
     And the JSON node "data.permissions" should have 8 elements
+    # See the credential scenarios above: the next scenario's session is minted from the database before any
+    # of its steps run, so a corrupt row left here rides into a request its own reload has already repaired.
+    And I reload the fixtures
 
   # A role change ejects that identity's live sessions: the firewall reloads the user on every request and drops
   # the token when the refreshed role set no longer matches the one the token carries. That is the property that
@@ -237,6 +240,7 @@ Feature: Server-side session registry and admission gate
     And the response status code should be 200
     And the JSON node "data.roles" should have 1 elements
     And the JSON node "data.roles[0]" should be equal to "ADMIN"
+    And I reload the fixtures
 
   @anonymous
   Scenario: A successful login mints a live registry session the gate then admits
@@ -258,3 +262,29 @@ Feature: Server-side session registry and admission gate
     And I send a "GET" request to "/me"
     And the response status code should be 200
     And the JSON node "data.email" should be equal to "alice@erpify.test"
+
+  # The provider's fail-closed needs a scenario the session comparison cannot answer for it. Every other
+  # corrupt-credential path in this file reaches `SecurityUser::isEqualTo` first, which refuses too — so with
+  # the provider's guard deleted they all stay green, and the guard would be free to be removed. Login is the
+  # one path that never reaches the comparison: there is no session copy yet, so the only thing standing
+  # between a stored hash the value object refuses and a marker-less 500 is `UserProvider` itself.
+  @anonymous
+  Scenario: An unreadable credential denies the login instead of raising a 500
+    Given I reload the fixtures
+    And I add "Content-Type" header equal to "application/json"
+    And I add "Origin" header equal to "http://localhost"
+    And I execute the SQL query "UPDATE identity_user SET password_hash = '' WHERE email = 'alice@erpify.test'"
+    And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'alice@erpify.test' AND password_hash = ''"
+    And there should have 1 records in SQL result
+    When I send a POST request to "/backoffice/login" with body:
+    """
+    {
+      "email": "alice@erpify.test",
+      "password": "alice-password"
+    }
+    """
+    # The correct password, so nothing but the unreadable hash can be refusing — and refused as the uniform
+    # `unauthenticated`, indistinguishable from an unknown email, rather than leaking the integrity fault.
+    Then the response status code should be 401
+    And the JSON node "type" should be equal to "unauthenticated"
+    And I reload the fixtures

@@ -24,7 +24,19 @@ final readonly class FailingStoredIdentityIntegrity implements StoredIdentityInt
     }
 
     #[Override]
+    public function identitiesWithMalformedRoles(): int
+    {
+        throw StoredIdentityProbeFailed::uncountableResultFrom('identity_user.roles');
+    }
+
+    #[Override]
     public function identitiesWithAnUnreadableCredential(): int
+    {
+        throw StoredIdentityProbeFailed::uncountableResultFrom('identity_user.password_hash');
+    }
+
+    #[Override]
+    public function admittedIdentitiesWithoutACredential(): int
     {
         throw StoredIdentityProbeFailed::uncountableResultFrom('identity_user.password_hash');
     }

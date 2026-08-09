@@ -20,11 +20,13 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
- * The exit code is the contract: whatever schedules this command reads nothing else, so the three outcomes
- * have to stay distinguishable. `INVALID` is the one no scenario can exercise — a probe fails when the
- * database cannot answer, which a run cannot arrange without breaking the suite carrying it — and it is also
- * the one that matters most, because a failed read reported as `SUCCESS` is a control certifying a table it
- * never managed to look at.
+ * The exit code is the contract: a caller that runs this unattended reads nothing else, so the three
+ * outcomes have to stay distinguishable — and nothing schedules it yet, so the contract is kept for a
+ * consumer that does not exist rather than repaired after one misreads it.
+ *
+ * `INVALID` is the one no scenario can exercise — a probe fails when the database cannot answer, which a run
+ * cannot arrange without breaking the suite carrying it — and it is also the one that matters most, because a
+ * failed read reported as `SUCCESS` is a control certifying a table it never managed to look at.
  *
  * @internal
  */
@@ -66,7 +68,12 @@ final class InspectStoredIdentityIntegrityCommandTest extends TestCase
         // erasure, and the finding is actionable without any of them.
         $this->assertNotInstanceOf(AuditResource::class, $auditLogger->records[0]['resource']);
         $this->assertSame(
-            ['orphan_role_values' => ['GHOST_ROLE', 'RETIRED'], 'unreadable_credentials' => 3],
+            [
+                'orphan_role_values' => ['GHOST_ROLE', 'RETIRED'],
+                'malformed_roles' => 0,
+                'unreadable_credentials' => 3,
+                'admitted_without_credential' => 0,
+            ],
             $auditLogger->records[0]['metadata'],
         );
     }

@@ -80,6 +80,13 @@ final readonly class SecurityUser implements UserInterface, PasswordAuthenticate
      *
      * Roles compare as a SET — their order in the JSON column is not a fact about the identity, and ejecting
      * live sessions over a reordered column would be a denial of service dressed as a security check.
+     *
+     * One constraint this takes on: {@see PasswordAuthenticatedUserInterface} documents a `__serialize()` that
+     * stores `hash('crc32c', …)` in place of the credential, and Symfony's default comparison carries a branch
+     * that tolerates the digest. This one does not. Adopting that trick here without teaching `isEqualTo` about
+     * it would compare an 8-character digest against a 60-character hash on every request and eject every
+     * session, including one just minted — a total, self-perpetuating outage that no test in this repository
+     * would catch.
      */
     #[Override]
     public function isEqualTo(UserInterface $user): bool

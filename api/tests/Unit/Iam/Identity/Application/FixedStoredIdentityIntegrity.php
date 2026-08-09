@@ -18,8 +18,12 @@ final readonly class FixedStoredIdentityIntegrity implements StoredIdentityInteg
     /**
      * @param list<string> $orphanRoles
      */
-    public function __construct(private array $orphanRoles, private int $unreadableCredentials)
-    {
+    public function __construct(
+        private array $orphanRoles,
+        private int $unreadableCredentials,
+        private int $malformedRoles = 0,
+        private int $admittedWithoutCredential = 0,
+    ) {
     }
 
     #[Override]
@@ -29,8 +33,20 @@ final readonly class FixedStoredIdentityIntegrity implements StoredIdentityInteg
     }
 
     #[Override]
+    public function identitiesWithMalformedRoles(): int
+    {
+        return $this->malformedRoles;
+    }
+
+    #[Override]
     public function identitiesWithAnUnreadableCredential(): int
     {
         return $this->unreadableCredentials;
+    }
+
+    #[Override]
+    public function admittedIdentitiesWithoutACredential(): int
+    {
+        return $this->admittedWithoutCredential;
     }
 }

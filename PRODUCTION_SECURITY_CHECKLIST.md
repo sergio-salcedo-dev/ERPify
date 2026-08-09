@@ -511,8 +511,13 @@ you change anything here.
       never mistaken for a clean table. It reports role values by name and credentials by **count**: an
       identity id is a person reference and this output reaches operator terminals and job logs. A run that
       finds something writes exactly one `security` `STORED_IDENTITY_DRIFT_DETECTED` row, resource-less,
-      actor `system`. **Not scheduled** — it is operator- and CI-driven; wiring it to a schedule requires the
-      `#[AsSchedule]` + consume-command pairing that `make php.lint.schedule-consumption` enforces.
+      actor `system`. **Nothing runs it yet** — no `#[AsSchedule]`, no worker, no CI step, so the rows are
+      proven clean only when a human types the command, and the detective half of this pair is therefore
+      weaker than the preventive one. Stated rather than implied, because a control nobody consumes ships
+      dead with every gate green. Scheduling it needs the schedule-attribute + consume-command pairing in both
+      compose files that `make php.lint.schedule-consumption` enforces, plus a `->stateful()` checkpoint.
+      Note for whoever does: that gate sweeps `api/src` for the attribute **including inside comments**, so a
+      docblock naming the bare form makes it demand a `scheduler_default` transport nothing declares.
 
 ## 7. Known weaknesses — open, must be closed or consciously accepted before the first customer
 

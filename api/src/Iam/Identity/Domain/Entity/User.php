@@ -394,14 +394,16 @@ final class User extends AggregateRoot
      */
     public function roles(): array
     {
-        // A stored value absent from the enum is discarded rather than raised, and the asymmetry with the
-        // credential is deliberate. Nothing type-safe writes one, so it arrives from an out-of-band write or —
-        // the realistic case — from an enum that evolved past rows still holding a retired case. Authorization
-        // here is grant-only: a permission is held iff some KNOWN role grants it, so an unrecognised value can
-        // concede nothing and dropping it can only narrow. Refusing the whole identity instead would turn a
-        // value that grants nothing into a total loss of authentication, and for an installation whose
-        // administrator carried the retired case, into a lockout no administrative unlock can undo.
-        return \array_values(\array_filter(\array_map(Role::tryFrom(...), $this->roles)));
+        // A stored value the enum cannot resolve is discarded rather than raised, and the asymmetry with the
+        // credential is deliberate. It arrives from an out-of-band write or — the realistic case — from an enum
+        // that evolved past rows still holding a retired case. Authorization here is grant-only, so an
+        // unrecognised value concedes nothing and dropping it can only narrow; refusing the whole identity
+        // would turn that into a total loss of authentication, and for an installation whose administrator
+        // carried the retired case, into a lockout no administrative unlock can undo. Non-strings go first
+        // because the column is JSON: `Role::tryFrom()` raises a marker-less `TypeError` on a nested array.
+        $stored = \array_filter($this->roles, \is_string(...));
+
+        return \array_values(\array_filter(\array_map(Role::tryFrom(...), $stored)));
     }
 
     /**

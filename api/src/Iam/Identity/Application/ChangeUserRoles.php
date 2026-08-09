@@ -42,9 +42,10 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  *    neither writes, nor emits an event, nor — the reason this matters — tears down live sessions.
  *
  * The post-commit revoke is defence in depth here, not the only barrier. A changed role set already
- * de-authenticates natively (`SecurityUser` is not `EquatableInterface`, so the token comparison covers roles
- * and the next request of the affected identity drops its session), but that path is lazy and reaches only the
- * session making that request; revoking eagerly cuts every device at once. Swallowing a revoke failure mirrors
+ * de-authenticates at the firewall — `SecurityUser::isEqualTo()` compares the role set the session carries
+ * against the one just reloaded, so the next request of the affected identity drops its session — but that
+ * path is lazy and reaches only the session making that request; revoking eagerly cuts every device at
+ * once. Swallowing a revoke failure mirrors
  * {@see CompletePasswordReset}: the role change already committed.
  *
  * Its object coupling sits one above the default threshold, and deliberately stays there. The six collaborators

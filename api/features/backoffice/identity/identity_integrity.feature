@@ -8,6 +8,7 @@ Feature: Stored identity integrity inspection
   # narrow, and an unreadable credential is refused with the same 401 an unknown email gets. Neither raises and
   # neither logs a finding, so the drift is invisible to every gate — which is the whole reason this command
   # exists, and the reason each scenario below seeds the corruption itself rather than trusting a clean run.
+  # Nothing schedules the command today — these scenarios are the only thing that runs it unattended.
 
   Scenario: A clean table reports the columns it checked, and succeeds
     Given I reload the fixtures
@@ -31,6 +32,8 @@ Feature: Stored identity integrity inspection
     And there should have 2 records in SQL result
     When I run the "identity:integrity:inspect" command
     Then the last command should fail
+    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'STORED_IDENTITY_DRIFT_DETECTED'"
+    And there should have 1 records in SQL result
     And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'STORED_IDENTITY_DRIFT_DETECTED' AND level = 'security'"
     And there should have 1 records in SQL result
     # No request is in flight, so the actor is the truth rather than a fallback — and the drifted identities
@@ -53,8 +56,8 @@ Feature: Stored identity integrity inspection
     And I reload the fixtures
 
   # The count is reported and the identities are not, and that is a contract rather than a convenience: an
-  # identity id is a person reference, and this output reaches operator terminals and the logs of whatever
-  # schedules the check. Asserting the id's ABSENCE is the only thing that keeps the decision from decaying
+  # identity id is a person reference, and this output reaches operator terminals and the logs of anything
+  # that comes to run it unattended. Asserting the id's ABSENCE is the only thing that keeps the decision from decaying
   # into a listing the next person adds for convenience.
   Scenario: An unreadable credential is counted without naming the identity
     Given I reload the fixtures
@@ -63,6 +66,11 @@ Feature: Stored identity integrity inspection
     And there should have 1 records in SQL result
     When I run the "identity:integrity:inspect" command
     Then the last command should fail
+    # `should fail` accepts INVALID too, and the no-verdict message happens to carry the column name — so
+    # without a discriminator this scenario would stay green over a probe that never ran. The count line is
+    # printed on the finding path alone.
+    And the command output should not contain "NOT a finding"
+    And the command output should contain "1 identity(ies)."
     And the command output should contain "identity_user.password_hash"
     And the command output should not contain "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
     And I reload the fixtures
@@ -77,4 +85,50 @@ Feature: Stored identity integrity inspection
     And there should have 1 records in SQL result
     When I run the "identity:integrity:inspect" command
     Then the last command should succeed
+    And I reload the fixtures
+
+  # A JSON `null` element expands to SQL NULL, and `NULL NOT IN (…)` is NULL rather than TRUE — so the row is
+  # dropped by the very predicate written to catch it. The control reported clean over the corruption it exists
+  # to find, which is the one failure a detective control may not have.
+  Scenario: A null element inside the role array is reported, not silently dropped
+    Given I reload the fixtures
+    And I execute the SQL query "UPDATE identity_user SET roles = '[null]'::json WHERE email = 'alice@erpify.test'"
+    And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'alice@erpify.test' AND roles::text = '[null]'"
+    And there should have 1 records in SQL result
+    When I run the "identity:integrity:inspect" command
+    Then the last command should fail
+    And the command output should not contain "NOT a finding"
+    And the command output should contain "null"
+    And I reload the fixtures
+
+  # A `roles` column that is not an array at all aborts the expander, and a set-returning function in FROM is
+  # evaluated before any WHERE could exclude the row. Left unhandled it turned one corrupt cell into INVALID
+  # for the whole table — telling the operator NOT to repair the only row that needed it, and hiding the
+  # credential column, which is read after.
+  Scenario: A roles column that is not a JSON array is a finding, not a failed read
+    Given I reload the fixtures
+    And I execute the SQL query "UPDATE identity_user SET roles = '{}'::json WHERE email = 'alice@erpify.test'"
+    And I execute the SQL query "UPDATE identity_user SET password_hash = '' WHERE email = 'victor@erpify.test'"
+    And I execute the SQL query "SELECT id FROM identity_user WHERE json_typeof(roles) <> 'array'"
+    And there should have 1 records in SQL result
+    When I run the "identity:integrity:inspect" command
+    Then the last command should fail
+    And the command output should not contain "NOT a finding"
+    And the command output should contain "not a JSON array"
+    # The credential column is still reported: one malformed cell must not cost every other finding.
+    And the command output should contain "credentials the value object refuses"
+    And I reload the fixtures
+
+  # The quietest shape of all: nothing raises, because the value object is never asked. The firewall reads a
+  # null password as "cannot authenticate" and answers the same uniform 401 a wrong password gets, so an
+  # ACTIVE identity is locked out with no signal at all — and every other control stays green.
+  Scenario: An admitted identity holding no credential is a finding
+    Given I reload the fixtures
+    And I execute the SQL query "UPDATE identity_user SET password_hash = NULL WHERE email = 'alice@erpify.test'"
+    And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'alice@erpify.test' AND password_hash IS NULL AND status = 'ACTIVE'"
+    And there should have 1 records in SQL result
+    When I run the "identity:integrity:inspect" command
+    Then the last command should fail
+    And the command output should not contain "NOT a finding"
+    And the command output should contain "admitted identities holding no credential"
     And I reload the fixtures
