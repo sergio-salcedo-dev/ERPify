@@ -53,9 +53,4 @@ trait PropertyPostProcessTrait
             ?->getModifier()
         ;
     }
-
-    public function propertyPostProcessIsBackedEnum(mixed $value): bool
-    {
-        return \is_string($value) && false !== \stripos($value, 'Enum::');
-    }
 }

@@ -45,14 +45,11 @@ parameters:
         - identifier: missingType.parameter
           path: ../../tests/Behat/Support/Json/*.php
         - identifier: cast.string
-          paths:
-              - ../../tests/Behat/Support/Json/*.php
-              - ../../tests/Behat/Support/PostProcess/JsonToolTrait.php
+          path: ../../tests/Behat/Support/Json/*.php
         - identifier: argument.type
           paths:
               - ../../tests/Behat/Support/Json/*.php
               - ../../tests/Behat/Context/HttpRequestContext.php
-              - ../../tests/Behat/Support/PostProcess/JsonToolTrait.php
         - identifier: return.type
           path: ../../tests/Behat/Support/Json/Json.php
         - identifier: offsetAccess.notFound

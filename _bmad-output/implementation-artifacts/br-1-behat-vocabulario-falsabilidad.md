@@ -4,7 +4,7 @@ baseline_commit: f2e80a9d9b5e2db4ac7a2fe5b03145bf3c5641d0
 
 # Story BR-1: Vocabulario y falsabilidad de Behat
 
-Status: ready-for-dev
+Status: in-progress
 
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · BR-1 de 8
 > Issues: #313 #319 #320 #430 #590 #591 #592
@@ -49,15 +49,14 @@ escribir lo mismo), y D4–D5 fijan el **alcance** del lote.
 
 **D1, D4 y D5 quedaron ratificadas por Sergio el 2026-08-09, las tres en el sentido recomendado.** El lote crece
 respecto a los 7 issues y lo hace a propósito: entra el mecanismo de falsabilidad y entran las seis vacuidades
-medidas. **D2 y D3 siguen abiertas** — su recomendación se apoya en reglas ya escritas (el contrato del docblock
-de `NodeModifierLocator`; la prohibición de borrar vocabulario ocioso), así que se ratifican con el código
-delante, no antes.
+medidas. **D2 y D3 se ratificaron el 2026-08-09 con el código delante** (T0): D2 en el sentido recomendado; D3
+**en contra de la recomendación**, hacia el rechazo ruidoso — registrado como tal en la tabla.
 
 | # | Fork | Decisión | Argumento |
 |---|---|---|---|
 | **D1** | #320: ¿fallo limpio o wontfix documentado? ¿2 métodos o los 13? | ✅ **RATIFICADA — fallo limpio, los 13** | Arreglar 2 y dejar 11 con el defecto reparte el mismo trait en dos contratos. El coste marginal del 3.º al 13.º es cero |
-| **D2** | #313: ¿sintaxis de escape `\:\:` o wontfix documentado? | **Wontfix documentado** | La opción de «modificador sólo si el nombre está registrado» **contradice el contrato del docblock** (`NodeModifierLocator.php:16-18`: *«an unknown suffix is a loud exception, never a silent miss»*) — cambiaría un fallo ruidoso por una degradación silenciosa. Y el escape añade sintaxis a las features para un caso con **0 ocurrencias medidas** |
-| **D3** | #319: ¿cualificar por cola los pasos no cualificados, o retirarlos? | **Cualificar** | Retirarlos choca de frente con `api/CLAUDE.md:80` («nunca borres un paso por estar ocioso») |
+| **D2** | #313: ¿sintaxis de escape `\:\:` o wontfix documentado? | ✅ **RATIFICADA — wontfix documentado** | La opción de «modificador sólo si el nombre está registrado» **contradice el contrato del docblock** (`NodeModifierLocator.php:16-18`: *«an unknown suffix is a loud exception, never a silent miss»*) — cambiaría un fallo ruidoso por una degradación silenciosa. Y el escape añade sintaxis a las features para un caso con **0 ocurrencias medidas** |
+| **D3** | #319: ¿cualificar por cola los pasos no cualificados, o retirarlos? | ✅ **RATIFICADA — rechazo ruidoso: TODO paso de outbox nombra su cola** | Sergio eligió la variante más fuerte de «cualificar», por encima de la recomendada (defaultear a `async`). No choca con `api/CLAUDE.md:80`: la frase **no se borra**, queda registrada y **redirige** a la canónica. Lo que se retira es una *near-duplicate phrasing* — el propio párrafo de esa regla la llama «the actual waste». Coste medido: 2 líneas de feature |
 | **D4** | ¿Entra en BR-1 el **mecanismo de falsabilidad** del vocabulario, o es lote aparte? | ✅ **RATIFICADA — entra** | Es lo que el título del lote promete y lo único que impide que #601 se vuelva a pudrir. Coste: 1 clase de gate en un hogar que ya tiene 25 hermanas. Riesgo: cero producción. **Pero es crecimiento de alcance sobre los 7 issues — decisión de Sergio, no del implementador** |
 | **D5** | Las **seis vacuidades medidas que ningún issue registra** (sección siguiente): ¿entran? | ✅ **RATIFICADA — las seis, V6 incluida** | Las cinco de `JsonToolTrait` viven en el fichero que #320 ya abre: boy-scout, coste marginal ~0, y son literalmente «asserts que no pueden fallar», el tema del lote. V6 vive en un fichero que nadie más toca y entra igualmente, porque es el mismo defecto de clase y **un pendiente aquí sería PR propia, no una etiqueta** |
 
@@ -301,28 +300,28 @@ Sus hallazgos se escriben en este artefacto antes de abrir el PR, y el cuerpo de
 
 ## Tasks / Subtasks
 
-- [ ] **T0 · Ratificar D2 y D3** con el código delante. D1, D4 y D5 ya están cerradas. (AC: —)
+- [x] **T0 · Ratificar D2 y D3** con el código delante. D1, D4 y D5 ya están cerradas. (AC: —)
 - [ ] **T1 · Cerrar #590, #591, #592** con comentario de evidencia medida. (AC: 1)
   - [ ] Redactar los tres comentarios citando `fichero:línea` + commit que lo arregló
   - [ ] Verificar que ninguno exige diff en `api/`
 - [ ] **T2 · Corregir la épica.** (AC: 2)
   - [ ] Reescribir §BR-1 con el re-medido; conservar la afirmación previa en blockquote marcado
   - [ ] Revisar si el «orden recomendado» de `:186` cambia al abaratarse BR-1
-- [ ] **T3 · #320 — fallo limpio en dot-path ausente.** (AC: 3, 4)
-  - [ ] Aplicar D1 sobre `JsonToolTrait.php`
-  - [ ] **Antes de tocar nada**, escribir la sonda de vacuidad del outbox y verla verde
-  - [ ] Tras el cambio, re-correr la sonda; falsificarla por sabotaje y restaurar por copia de bytes
-  - [ ] Test por cada forma de fallo
-- [ ] **T4 · #319 — indexado por cola.** (AC: 5)
-  - [ ] `Outbox.php` + `OutboxContext.php` bajo D3
-  - [ ] Verificar `dispatch_event.feature:152`
+- [x] **T3 · #320 — fallo limpio en dot-path ausente.** (AC: 3, 4)
+  - [x] Aplicar D1 sobre `JsonToolTrait.php`
+  - [x] **Antes de tocar nada**, escribir la sonda de vacuidad del outbox y verla verde
+  - [x] Tras el cambio, re-correr la sonda; falsificarla por sabotaje y restaurar por copia de bytes
+  - [x] Test por cada forma de fallo
+- [x] **T4 · #319 — indexado por cola.** (AC: 5)
+  - [x] `OutboxContext.php` bajo D3 (`Outbox.php` no necesitó cambio: `messagesOnQueue()` ya era el buen patrón)
+  - [x] Verificar `dispatch_event.feature:152` (y `:191`, que el issue no listaba)
 - [ ] **T5 · #430 — un vocabulario de comandos.** (AC: 6)
   - [ ] Medir el vocabulario vivo primero: `make php.behat c='-dl'` y `c="-d '<texto>'"` — **no fiarse de las cifras de `api/CLAUDE.md`, ya derivaron**
   - [ ] Decidir la semántica de «fail» para el Worker
   - [ ] Migrar las 30 invocaciones; ningún paso borrado
-- [ ] **T5b · V1–V6, las seis.** (AC: 6b)
-  - [ ] Escribir primero el caso que hoy pasa y **verlo pasar** — es la prueba de la vacuidad
-  - [ ] Arreglar; verlo rojo contra ese mismo caso
+- [x] **T5b · V1–V6, las seis.** (AC: 6b)
+  - [x] Escribir primero el caso que hoy pasa y **verlo pasar** — es la prueba de la vacuidad
+  - [x] Arreglar; verlo rojo contra ese mismo caso
 - [ ] **T6 · #313 bajo D2.** (AC: 7)
 - [ ] **T7 · Mecanismo de falsabilidad del vocabulario.** (AC: —)
   - [ ] Modelar sobre `BehatSuiteCoverageGateTest` (mismo hogar, mismas auto-protecciones anti-vacuidad)
@@ -441,19 +440,125 @@ mayormente por «no aplica» — decláralo explícitamente en el PR en vez de s
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context) — `bmad-dev-story`.
+
 ### Debug Log References
+
+**Colisión de nombres trait↔clase (costó los 9 primeros rojos de Behat).** El helper de mensajes que introduje en
+`JsonToolTrait` se llamaba `describe()`, y `OutboxContext` **ya declara un `describe(object $event)` privado**. PHP
+resuelve el método de la clase por encima del del trait **sin avisar** — ni error de compilación, ni aviso de
+PHPStan (que dio verde) — así que los 9 pasos `The outbox event property … should be equal to …` murieron con un
+`TypeError: describe(): Argument #1 ($event) must be of type object, string given`. El síntoma apareció sólo en
+Behat, nunca en unit ni en análisis estático. Renombrado a `describeNode()`; medí después los métodos declarados en
+los 4 consumidores del trait y ninguno más colisiona.
+
+**Lección de método, no de código:** un trait de aserciones no puede introducir un nombre corto sin medirlo contra
+todos sus hosts. El grep de esa comprobación está en el propio historial de esta sesión.
 
 ### Completion Notes List
 
+**T0 — D2 y D3 ratificadas con el código delante.** D2: wontfix documentado (0 paths con `::` literal medidos en
+los 49 features; los únicos sufijos son `::uuid ::regex ::date ::null ::amount`). D3: Sergio eligió el **rechazo
+ruidoso** por encima de la recomendación (defaultear a `async`). Consecuencia asumida y ejecutada: **todo** paso de
+outbox nombra su cola, incluidos los dos de tabla y el borrado por tipo.
+
+**T3 — #320, los 13 métodos.** Todas las lecturas de nodo pasan ahora por un `readNode()` privado que (a) quita el
+sufijo `::<modifier>` antes de tocar el accessor, (b) convierte un dot-path ausente en fallo de aserción legible y
+(c) **sigue lanzando**. Lo tercero es lo que salva AC4.
+
+**AC4 — la trampa no se armó.** `OutboxContext::eventMatchesTable()` usa la excepción como predicado. La sonda
+(`OutboxTableMatchTest`) se escribió **antes** de tocar nada y se vio verde; sigue verde después del cambio de #320
+y después del de #319 (migrada a la forma cualificada, que es donde D3 dejó el paso). Lleva controles positivos: sin
+ellos, un paso que rechazara todo satisfaría igual los tests de propiedad ausente.
+
+**Distinción que el issue no pedía y que evita mentir en el mensaje:** un path *ausente* es expectativa incumplida y
+sale como fallo; un selector que el accessor **no sabe parsear** conserva su propia excepción. Llamar «no existe» a
+un `node[` mandaría al lector a buscar un campo de payload en vez de una errata. Esto cierra además una vacuidad que
+ningún issue registra (**V7**): `jsonPropertyShouldNotExist()` capturaba `Exception` en ancho y daba por «no existe»
+cualquier selector roto.
+
+**T5b — las seis vacuidades, y dos supresiones de PHPStan retiradas.**
+
+- **V1** `should have N elements`: `(array) $value` contaba el *cast*, no el nodo. Ahora un escalar o un `null` es
+  fallo explícito. `assertEquals` → `assertSame`.
+- **V2/V3** `should be true/false`: `FILTER_VALIDATE_BOOLEAN` mapea a `false` todo lo que no reconoce. Ahora se
+  exige un booleano JSON de verdad. **Medido antes de endurecer**: los 47 usos en features son `pagination.hasNext`,
+  `hasPrev` y `data[0].current`, booleanos reales — Behat 410/410 lo confirma.
+- **V4** `should not be valid`: el `catch (Exception) { return; }` aceptaba como «no valida» cualquier excepción,
+  incluida la de **no haber podido cargar el esquema** — pasaba con más fuerza justo cuando menos había comprobado.
+  Narrado a `UnexpectedValueException`, que es lo único que significa «el validador rechazó el documento» (medida la
+  jerarquía de `justinrainbow/json-schema`: ninguna de sus excepciones lo extiende).
+- **V5** `should be null` no aplicaba `propertyPostProcessName()`. Resuelto **para los 13** al centralizar en
+  `readNode()`, no sólo para el que el issue nombraba.
+- **V6** `BackedEnumNodeModifier` localizaba la case buscando el token literal `Enum::`. **No es latente: está roto
+  para todos los enums del repo** — ninguno se llama `…Enum`, así que `stripos` devolvía `false`, casteaba a 0 y
+  leía la case desde el offset 6 del FQCN. Ahora la case es lo que sigue al único `::`. Su gemelo
+  `PropertyPostProcessTrait::propertyPostProcessIsBackedEnum()` **tenía cero llamadores** y duplicaba, roto, el
+  predicado que sí funciona 20 líneas más allá (`supportsValue()`): borrado. No es vocabulario de paso, es un helper
+  muerto.
+- **Dos supresiones fuera de `phpstan.neon`**: `cast.string` y `argument.type` sobre `JsonToolTrait` quedaron sin
+  usar al sustituir los casts ciegos por guardias reales. PHPStan las reportó como *unmatched* — así se detectaron.
+  Arreglo real, no supresión.
+
+**T4 — #319 bajo D3.** Las seis frases sin cola siguen registradas y **rechazan**, nombrando la canónica; se añaden
+cuatro formas cualificadas que faltaban (los dos pasos de tabla y los dos borrados). `Outbox.php` no necesitó tocarse:
+`messagesOnQueue()` ya rechazaba una cola no inspeccionable. `messages()` sobrevive y sigue en uso: es la lectura
+honesta de «todas las colas» que usan las dos escotillas de diagnóstico, donde ver todo es justamente el punto.
+
 ### File List
 
-> Derivar de `git diff --name-only $(git merge-base origin/main HEAD)...HEAD`, **nunca a mano** — la manual de BR-2
-> omitió 3 ficheros y contó mal los fixtures.
+```
+api/tests/Behat/Support/PostProcess/JsonToolTrait.php            (M)  #320 · V1–V5 · V7
+api/tests/Behat/Support/PostProcess/PropertyPostProcessTrait.php (M)  V6 (helper muerto borrado)
+api/tests/Behat/NodeModifier/Scalar/BackedEnumNodeModifier.php   (M)  V6
+api/tests/Behat/Context/OutboxContext.php                        (M)  #319 (D3)
+api/features/backoffice/bank/dispatch_event.feature              (M)  #319 — :152 y :191
+api/tools/phpstan/phpstan.neon                                   (M)  2 supresiones retiradas
+api/tests/Unit/Behat/Context/OutboxTableMatchTest.php            (A)  sonda AC4 + rechazos de D3
+api/tests/Unit/Behat/Support/PostProcess/JsonNodeAssertionsTest.php       (A)  #320 (los 13) + V1–V5 + V7
+api/tests/Unit/Behat/Support/PostProcess/Fixtures/JsonAssertions.php      (A)  host del trait
+api/tests/Unit/Behat/NodeModifier/Scalar/BackedEnumNodeModifierTest.php   (M)  V6
+_bmad-output/implementation-artifacts/br-1-behat-vocabulario-falsabilidad.md (M)
+_bmad-output/implementation-artifacts/sprint-status.yaml                     (M)
+```
+
+> Deriva final pendiente de `git diff --name-only $(git merge-base origin/main HEAD)...HEAD` en el commit de cierre.
 
 ### Gates
 
+**Tanda 1 — 2026-08-09, tras T3 + T4 + T5b** (corrida fresca, exit code impreso):
+
+| Gate | Exit | Resultado |
+|---|---|---|
+| `make php.stan` | **0** | No errors |
+| `make php.unit` | **0** | 2507 tests, 10251 assertions, 2 skipped |
+| `make php.behat` | **0** | 410 escenarios / 3806 pasos, todos verdes |
+
+Pendientes de tanda final: `make php.quality`, `make php.lint.gherkin`.
+
 ### Rojos provocados
+
+**Medición intermedia** (se re-mide al final; el conteo se pudre con el propio diff).
+
+| Qué se rompió | Cómo | Rojos | De |
+|---|---|---|---|
+| `JsonToolTrait` completo → bytes de `f2e80a9d` | copia de bytes desde `tmp/br1-falsification/`, **nunca `git checkout --`** | **34** (33 failures + 1 error) | 44 |
+| `BackedEnumNodeModifier` → bytes de `f2e80a9d` | idem | **3** | 4 |
+
+Restauración verificada con `cmp -s` en ambos casos: bytes idénticos.
+
+**Rojo no provocado sino encontrado:** los 9 pasos de Behat que murieron por la colisión `describe()` (ver Debug
+Log). Es la evidencia de que el gate de Behat no es decorativo aquí — PHPStan y los unit tests dieron verde con el
+defecto dentro.
 
 ### Pase adversarial
 
+_Pendiente — T10. Se ejecuta y se registra **aquí** antes de `gh pr create`._
+
 ### Change Log
+
+| Fecha | Cambio |
+|---|---|
+| 2026-08-09 | T0: D2 (wontfix) y D3 (rechazo ruidoso) ratificadas con el código delante |
+| 2026-08-09 | T3 + T5b: #320 sobre los 13 métodos, V1–V7, sonda AC4 verde antes y después |
+| 2026-08-09 | T4: #319 bajo D3 — 6 rechazos, 4 formas cualificadas nuevas, 2 líneas de feature |

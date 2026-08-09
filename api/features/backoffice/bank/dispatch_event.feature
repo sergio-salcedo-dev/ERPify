@@ -149,7 +149,7 @@ Feature: Dispatch a bank domain event onto the outbox
     }
     """
     Then 2 outbox events were created on the queue "async"
-    And I remove event 1 from the outbox
+    And I remove event 1 on the queue "async" from the outbox
     And 1 outbox event was created on the queue "async"
     And I got the event number 1 on queue "async" from the outbox
     And The outbox event should be of type "Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent"
@@ -188,7 +188,7 @@ Feature: Dispatch a bank domain event onto the outbox
     }
     """
     Then 2 outbox events were created on the queue "async"
-    And I remove event of type "Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent" from the outbox
+    And I remove event of type "Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent" on the queue "async" from the outbox
     And 1 outbox event was created on the queue "async"
     And I got the event number 1 on queue "async" from the outbox
     And The outbox event should be of type "Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent"

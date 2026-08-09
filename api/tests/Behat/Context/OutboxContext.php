@@ -19,6 +19,7 @@ use Erpify\Tests\Behat\Support\Json\Json;
 use Erpify\Tests\Behat\Support\Messenger\Outbox;
 use Erpify\Tests\Behat\Support\PostProcess\JsonToolTrait;
 use JsonException;
+use RuntimeException;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Throwable;
@@ -31,8 +32,12 @@ use Throwable;
  * The permanent `event_store` (the append-only log, not the outbox) is asserted with raw-SQL steps;
  * nested payload fields are read here, on the pending event.
  *
- * The three suppressions below are measured, not inherited: 21 public methods and 27 methods are the
- * 21 Gherkin steps this context owns, and cutting them means splitting the step vocabulary across
+ * Every step that reads the outbox names its queue. The unqualified phrasings are kept and refuse —
+ * see {@see refuseUnqualified()} for why a position over the concatenation of every queue cannot be
+ * asserted on.
+ *
+ * The three suppressions below are measured, not inherited: 25 public methods and 32 methods are the
+ * 27 Gherkin patterns this context owns, and cutting them means splitting the step vocabulary across
  * contexts, which is a change to the feature files' surface rather than a refactor. Coupling sits one
  * over the threshold at 13.
  *
@@ -70,17 +75,14 @@ final class OutboxContext extends AbstractContext
         $this->outbox->reset();
     }
 
+    /**
+     * Unqualified — refuses out loud. See {@see refuseUnqualified()}.
+     */
     #[Then(':number outbox event was created')]
     #[Then(':number outbox events were created')]
     public function outboxEventsWereCreated(int $number): void
     {
-        $count = \count($this->outbox->messages());
-
-        self::assertSame(
-            $number,
-            $count,
-            \sprintf('%d outbox events were created, but %d was expected', $count, $number),
-        );
+        $this->refuseUnqualified(\sprintf('%d outbox events were created on the queue "async"', $number));
     }
 
     #[Then(':number outbox event was created on the queue :queueName')]
@@ -96,10 +98,13 @@ final class OutboxContext extends AbstractContext
         );
     }
 
+    /**
+     * Unqualified — refuses out loud. See {@see refuseUnqualified()}.
+     */
     #[Then('I got the event number :number from the outbox')]
     public function selectEventByNumber(int $number): void
     {
-        $this->selectEvent($this->outbox->messages(), $number);
+        $this->refuseUnqualified(\sprintf('I got the event number %d on queue "async" from the outbox', $number));
     }
 
     #[Then('I got the event number :number on queue :queueName from the outbox')]
@@ -181,10 +186,19 @@ final class OutboxContext extends AbstractContext
         $this->jsonPropertyShouldNotExist($this->selectedEventJson(), $property);
     }
 
+    /**
+     * Unqualified — refuses out loud. See {@see refuseUnqualified()}.
+     */
     #[Then('there should have been an outbox event created containing:')]
     public function anOutboxEventCreatedContaining(TableNode $table): void
     {
-        foreach ($this->outbox->messages() as $message) {
+        $this->refuseUnqualified('there should have been an outbox event created on the queue "async" containing:');
+    }
+
+    #[Then('there should have been an outbox event created on the queue :queueName containing:')]
+    public function anOutboxEventCreatedOnQueueContaining(string $queueName, TableNode $table): void
+    {
+        foreach ($this->outbox->messagesOnQueue($queueName) as $message) {
             if ($this->eventMatchesTable($message['event'], $table)) {
                 return;
             }
@@ -193,10 +207,21 @@ final class OutboxContext extends AbstractContext
         self::fail('No outbox event found containing the expected properties');
     }
 
+    /**
+     * Unqualified — refuses out loud. See {@see refuseUnqualified()}.
+     */
     #[Then('there should not have been an outbox event created containing:')]
     public function noOutboxEventCreatedContaining(TableNode $table): void
     {
-        foreach ($this->outbox->messages() as $message) {
+        $this->refuseUnqualified(
+            'there should not have been an outbox event created on the queue "async" containing:',
+        );
+    }
+
+    #[Then('there should not have been an outbox event created on the queue :queueName containing:')]
+    public function noOutboxEventCreatedOnQueueContaining(string $queueName, TableNode $table): void
+    {
+        foreach ($this->outbox->messagesOnQueue($queueName) as $message) {
             if ($this->eventMatchesTable($message['event'], $table)) {
                 self::fail('An outbox event was found containing the properties that should be absent');
             }
@@ -243,10 +268,19 @@ final class OutboxContext extends AbstractContext
         });
     }
 
+    /**
+     * Unqualified — refuses out loud. See {@see refuseUnqualified()}.
+     */
     #[Then('I remove event :number from the outbox')]
     public function removeEventByNumber(int $number): void
     {
-        $messages = $this->outbox->messages();
+        $this->refuseUnqualified(\sprintf('I remove event %d on the queue "async" from the outbox', $number));
+    }
+
+    #[Then('I remove event :number on the queue :queueName from the outbox')]
+    public function removeEventByNumberOnQueue(int $number, string $queueName): void
+    {
+        $messages = $this->outbox->messagesOnQueue($queueName);
         $message = $messages[$number - 1] ?? null;
 
         self::assertNotNull($message, \sprintf('No outbox event number %d found', $number));
@@ -255,12 +289,24 @@ final class OutboxContext extends AbstractContext
     }
 
     /**
-     * @param class-string $fullyQualifiedClassName
+     * Unqualified — refuses out loud. See {@see refuseUnqualified()}.
      */
     #[Then('I remove event of type :fullyQualifiedClassName from the outbox')]
     public function removeEventByType(string $fullyQualifiedClassName): void
     {
-        foreach ($this->outbox->messages() as $message) {
+        $this->refuseUnqualified(\sprintf(
+            'I remove event of type "%s" on the queue "async" from the outbox',
+            $fullyQualifiedClassName,
+        ));
+    }
+
+    /**
+     * @param class-string $fullyQualifiedClassName
+     */
+    #[Then('I remove event of type :fullyQualifiedClassName on the queue :queueName from the outbox')]
+    public function removeEventByTypeOnQueue(string $fullyQualifiedClassName, string $queueName): void
+    {
+        foreach ($this->outbox->messagesOnQueue($queueName) as $message) {
             if ($message['event'] instanceof $fullyQualifiedClassName) {
                 $this->outbox->remove($message);
             }
@@ -290,6 +336,33 @@ final class OutboxContext extends AbstractContext
         $last = \end($messages);
 
         echo false === $last ? 'No outbox events' : $this->describe($last['event']);
+    }
+
+    /**
+     * The unqualified phrasings stay registered and refuse, which is the point of keeping them: a
+     * scenario that reaches for one gets the canonical form back instead of "step undefined", and
+     * nobody re-adds the phrase believing it is missing.
+     *
+     * They cannot assert, because "the outbox" is not one queue. A read with no queue named
+     * concatenates every inspectable queue into one 1-based list, so position 1 is an `async`
+     * envelope right up until `async` happens to be empty and it silently becomes a `failed` one,
+     * and a count sums queues the scenario never asked about. Nothing routes to `failed` under the
+     * consume steps today — the private dispatcher carries no failure-transport listener — so the
+     * ambiguity is latent by composition of the double rather than by design, and a change to that
+     * dispatcher wakes it with no test going red.
+     *
+     * The queue-named siblings say the same things and are what every committed scenario already
+     * uses. This is not vocabulary being deleted; it is a near-duplicate phrasing, whose halves would
+     * otherwise stay half-used, resolving to the one that can be read.
+     */
+    private function refuseUnqualified(string $qualified): never
+    {
+        throw new RuntimeException(\sprintf(
+            'This step reads every inspectable outbox queue at once, so its position and its count '
+            . 'both depend on how full a queue the scenario never named happens to be. Name the '
+            . 'queue instead: %s',
+            $qualified,
+        ));
     }
 
     /**
