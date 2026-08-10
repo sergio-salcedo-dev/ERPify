@@ -26,6 +26,7 @@ use Erpify\Tests\Behat\Context\NotificationContext;
 use Erpify\Tests\Behat\Context\OutboxContext;
 use Erpify\Tests\Behat\Context\PrivacyContext;
 use Erpify\Tests\Behat\Context\RateLimitContext;
+use Erpify\Tests\Behat\Context\RunOutcomeContext;
 use Erpify\Tests\Behat\Context\SecurityContext;
 use Erpify\Tests\Behat\Context\SqlQueryContext;
 use Erpify\Tests\Behat\Context\SymfonyCommandContext;
@@ -92,6 +93,7 @@ return (new Config())->withProfile(
                     EventStoreContext::class,
                     MessengerConsumerContext::class,
                     SymfonyCommandContext::class,
+                    RunOutcomeContext::class,
                     NotificationContext::class,
                     MercureContext::class,
                     LoggerContext::class,

@@ -29,8 +29,8 @@ Feature: Change a bank account's status
     And The outbox event property "fromStatus" should be equal to "ACTIVE"
     And The outbox event property "toStatus" should be equal to "CLOSED"
     And I consume 1 message from the "async" transport
-    And the command should succeed
-    And the output should contain "handled successfully (acknowledging to transport)"
+    And the last run should succeed
+    And the last run output should contain "handled successfully (acknowledging to transport)"
     And 0 outbox events were created on the queue "async"
     # The lifecycle transition signals a UI refetch, reusing the bank_account.updated realtime type.
     And 0 notification emails were sent

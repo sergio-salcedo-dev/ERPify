@@ -13,9 +13,9 @@ Feature: Stored identity integrity inspection
   Scenario: A clean table reports the columns it checked, and succeeds
     Given I reload the fixtures
     When I run the "identity:integrity:inspect" command
-    Then the last command should succeed
-    And the command output should contain "identity_user.roles"
-    And the command output should contain "identity_user.password_hash"
+    Then the last run should succeed
+    And the last run output should contain "identity_user.roles"
+    And the last run output should contain "identity_user.password_hash"
     # A clean run writes nothing: a trail that gains a row every time a scheduled check finds nothing buries
     # the runs that found something.
     And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'STORED_IDENTITY_DRIFT_DETECTED'"
@@ -31,7 +31,7 @@ Feature: Stored identity integrity inspection
     And I execute the SQL query "SELECT id FROM identity_user WHERE roles::text LIKE '%GHOST_ROLE%' OR password_hash = ''"
     And there should have 2 records in SQL result
     When I run the "identity:integrity:inspect" command
-    Then the last command should fail
+    Then the last run should fail
     And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'STORED_IDENTITY_DRIFT_DETECTED'"
     And there should have 1 records in SQL result
     And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'STORED_IDENTITY_DRIFT_DETECTED' AND level = 'security'"
@@ -48,11 +48,11 @@ Feature: Stored identity integrity inspection
     And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'alice@erpify.test' AND roles::text LIKE '%GHOST_ROLE%'"
     And there should have 1 records in SQL result
     When I run the "identity:integrity:inspect" command
-    Then the last command should fail
-    And the command output should contain "GHOST_ROLE"
+    Then the last run should fail
+    And the last run output should contain "GHOST_ROLE"
     # The live cases must never be reported as drift, or every run would be a finding and the control would be
     # ignored within a week. MANAGER sits in the very same column as the orphan above.
-    And the command output should not contain "MANAGER"
+    And the last run output should not contain "MANAGER"
     And I reload the fixtures
 
   # The count is reported and the identities are not, and that is a contract rather than a convenience: an
@@ -65,14 +65,14 @@ Feature: Stored identity integrity inspection
     And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'alice@erpify.test' AND password_hash = ''"
     And there should have 1 records in SQL result
     When I run the "identity:integrity:inspect" command
-    Then the last command should fail
+    Then the last run should fail
     # `should fail` accepts INVALID too, and the no-verdict message happens to carry the column name — so
     # without a discriminator this scenario would stay green over a probe that never ran. The count line is
     # printed on the finding path alone.
-    And the command output should not contain "NOT a finding"
-    And the command output should contain "1 identity(ies)."
-    And the command output should contain "identity_user.password_hash"
-    And the command output should not contain "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+    And the last run output should not contain "NOT a finding"
+    And the last run output should contain "1 identity(ies)."
+    And the last run output should contain "identity_user.password_hash"
+    And the last run output should not contain "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
     And I reload the fixtures
 
   # A credential-less INVITED identity is a lifecycle state, not corruption: counting it would make the control
@@ -84,7 +84,7 @@ Feature: Stored identity integrity inspection
     And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'alice@erpify.test' AND password_hash IS NULL"
     And there should have 1 records in SQL result
     When I run the "identity:integrity:inspect" command
-    Then the last command should succeed
+    Then the last run should succeed
     And I reload the fixtures
 
   # A JSON `null` element expands to SQL NULL, and `NULL NOT IN (…)` is NULL rather than TRUE — so the row is
@@ -96,9 +96,9 @@ Feature: Stored identity integrity inspection
     And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'alice@erpify.test' AND roles::text = '[null]'"
     And there should have 1 records in SQL result
     When I run the "identity:integrity:inspect" command
-    Then the last command should fail
-    And the command output should not contain "NOT a finding"
-    And the command output should contain "null"
+    Then the last run should fail
+    And the last run output should not contain "NOT a finding"
+    And the last run output should contain "null"
     And I reload the fixtures
 
   # A `roles` column that is not an array at all aborts the expander, and a set-returning function in FROM is
@@ -112,11 +112,11 @@ Feature: Stored identity integrity inspection
     And I execute the SQL query "SELECT id FROM identity_user WHERE json_typeof(roles) <> 'array'"
     And there should have 1 records in SQL result
     When I run the "identity:integrity:inspect" command
-    Then the last command should fail
-    And the command output should not contain "NOT a finding"
-    And the command output should contain "not a JSON array"
+    Then the last run should fail
+    And the last run output should not contain "NOT a finding"
+    And the last run output should contain "not a JSON array"
     # The credential column is still reported: one malformed cell must not cost every other finding.
-    And the command output should contain "credentials the value object refuses"
+    And the last run output should contain "credentials the value object refuses"
     And I reload the fixtures
 
   # The quietest shape of all: nothing raises, because the value object is never asked. The firewall reads a
@@ -128,7 +128,7 @@ Feature: Stored identity integrity inspection
     And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'alice@erpify.test' AND password_hash IS NULL AND status = 'ACTIVE'"
     And there should have 1 records in SQL result
     When I run the "identity:integrity:inspect" command
-    Then the last command should fail
-    And the command output should not contain "NOT a finding"
-    And the command output should contain "admitted identities holding no credential"
+    Then the last run should fail
+    And the last run output should not contain "NOT a finding"
+    And the last run output should contain "admitted identities holding no credential"
     And I reload the fixtures

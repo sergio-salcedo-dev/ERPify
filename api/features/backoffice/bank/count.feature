@@ -31,13 +31,13 @@ Feature: Bank count projection
     """
     And the response status code should be 201
     And I consume 2 messages from the "async" transport
-    And the command should succeed
+    And the last run should succeed
     And I send a "GET" request to "/backoffice/banks/count"
     And the JSON node "total" should be equal to the number 2
     And I send a "DELETE" request to "/backoffice/banks/11111111-1111-7000-8000-000000000003"
     And the response status code should be 204
     And I consume 1 message from the "async" transport
-    And the command should succeed
+    And the last run should succeed
     And I send a "GET" request to "/backoffice/banks/count"
     And the JSON node "total" should be equal to the number 1
     And I rebuild the "bank_count" projection
@@ -62,7 +62,7 @@ Feature: Bank count projection
     """
     And the response status code should be 201
     And I consume 1 message from the "async" transport
-    And the command should succeed
+    And the last run should succeed
     And I send a "GET" request to "/backoffice/banks/count"
     And the JSON node "total" should be equal to the number 1
     And I send a PUT request to "/backoffice/banks/5e1ec700-0000-7000-8000-000000000001" with body:
@@ -74,7 +74,7 @@ Feature: Bank count projection
     """
     And the response status code should be 200
     And I consume 1 message from the "async" transport
-    And the command should succeed
+    And the last run should succeed
     And there should be 1 event stored named "erpify.backoffice.bank.updated"
     And I send a "GET" request to "/backoffice/banks/count"
     And the JSON node "total" should be equal to the number 1
@@ -105,7 +105,7 @@ Feature: Bank count projection
     """
     And the response status code should be 201
     And I consume 2 messages from the "async" transport
-    And the command should succeed
+    And the last run should succeed
     And there should be 2 events stored named "erpify.backoffice.bank.created"
     And I send a "GET" request to "/backoffice/banks/count"
     And the JSON node "total" should be equal to the number 2

@@ -143,7 +143,7 @@ Migrations live in `api/migrations/2026/Version<timestamp>.php` (organised by ye
 make php.test                              # unit + e2e
 make php.unit                              # PHPUnit
 make php.unit c='--filter SomeTest'        # filter
-make php.behat                             # Behat (config: api/behat.dist.php)
+make php.behat                             # Behat, --strict (config: api/behat.dist.php)
 ```
 
 - **PHPUnit config**: `api/phpunit.xml.dist`.

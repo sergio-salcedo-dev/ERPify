@@ -42,8 +42,8 @@ Feature: Create a bank
     And The outbox event property "shortName" should be equal to "TB"
     # Consuming runs the async handlers and acks, draining the queue and producing the observable effects.
     And I consume 1 message from the "async" transport
-    And the command should succeed
-    And the output should contain "handled successfully (acknowledging to transport)"
+    And the last run should succeed
+    And the last run output should contain "handled successfully (acknowledging to transport)"
     And 0 outbox events were created on the queue "async"
     And 1 notification email was sent
     And The notification email subject should be equal to "[ERPify] Bank created"

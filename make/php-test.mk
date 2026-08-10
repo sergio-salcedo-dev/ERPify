@@ -53,8 +53,14 @@ php.unit.coverage: ## PHPUnit with clover coverage → api/var/coverage/clover.x
 
 # Behat runs from the app vendor, like PHPUnit — no separate tools tree to install.
 # The config file is discovered from the cwd (api/behat.dist.php), so no -c is needed.
-php.behat: ## Behat; pass c='…' for extra args, example: php.behat c='features/backoffice/bank/get.feature'
-	@$(PHP_BEHAT) vendor/bin/behat --format=pretty $(c)
+#
+# --strict, because Behat's default is not. `strict` defaults to false, and SoftInterpretation counts
+# only FAILED (99) and above as a failure — UNDEFINED is 30, so a step nothing defines leaves the run
+# at exit 0 with the scenario reported as passed-but-for-that-step. That is the failure mode this
+# suite is least able to notice: a context that stops being registered, or an assertion whose phrase
+# was renamed, removes the checking and leaves the scenario looking like it ran.
+php.behat: ## Behat (strict: an undefined step fails); pass c='…', example: php.behat c='features/backoffice/bank/get.feature'
+	@$(PHP_BEHAT) vendor/bin/behat --strict --format=pretty $(c)
 
 ## —— benchmarks ——
 
