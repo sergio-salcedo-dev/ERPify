@@ -8,6 +8,7 @@ use Erpify\Iam\Identity\Application\PreIdentityTimingFloor;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\InvalidEmail;
+use Erpify\Iam\Identity\Domain\Exception\InvalidHashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Override;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
@@ -53,7 +54,28 @@ final readonly class UserProvider implements UserProviderInterface
             throw new UserNotFoundException();
         }
 
-        return new SecurityUser($user);
+        $securityUser = new SecurityUser($user);
+
+        // The credential is re-hydrated HERE, eagerly, so a stored hash the value object refuses becomes a
+        // not-found at the boundary that owns "may this identity authenticate" for every path that reaches
+        // a provider (`ReauthenticateDevice` mints a token through `Security::login()` and does not) — rather than an
+        // `InvalidHashedPassword` escaping through `getPassword()` later, from inside the firewall, where it
+        // has no marker and lands as a 500 on every authenticated request. The refusal is deliberately the
+        // same one an unknown email gets, timing floor included: a caller learns nothing from the difference,
+        // and the integrity fault stays loud in the logs rather than in the response.
+        //
+        // Fail-closed is right for the credential and wrong for the roles, which `User::roles()` filters
+        // instead: an unreadable credential means the identity cannot prove anything, while an unreadable
+        // role, under a grant-only policy, means only that one grant is unavailable.
+        try {
+            $securityUser->getPassword();
+        } catch (InvalidHashedPassword) {
+            $this->timingFloor->equalise();
+
+            throw new UserNotFoundException();
+        }
+
+        return $securityUser;
     }
 
     #[Override]

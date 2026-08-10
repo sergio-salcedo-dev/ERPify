@@ -491,6 +491,33 @@ you change anything here.
       note (one-time):** native sessions minted **before** this
       ships carry no `iamSessionId`, so the gate 401s them — a single forced global logout at the II-7 deploy
       (acceptable, named).
+- [x] **Corrupt identity rows fail closed on the auth path, at BOTH re-hydration sites.** The identity is
+      re-read on every authenticated request, and two stored shapes are unrepresentable in the domain: a
+      `roles` value no `Role` case backs, and a `password_hash` `HashedPassword` refuses. Neither may 500 on
+      the credential path, and the two answers differ on purpose. The **role** is discarded and the identity
+      admitted — authorization is grant-only, so an unrecognised value concedes nothing and dropping it can
+      only narrow, while refusing would turn a value that grants nothing into a lockout with no
+      administrative unlock for whoever carried the retired case. The **credential** fails closed: refused as
+      the same `UserNotFoundException` an unknown email gets, timing floor included, so the fault stays loud
+      in the logs and silent in the response. Both sites are guarded — `UserProvider` for the row it loads,
+      and `SecurityUser::isEqualTo` (`EquatableInterface`) for the copy deserialised from the session, which
+      the firewall compares on every request and which reaches that comparison through no provider. That
+      second guard also owns the guarantee both password-replacement flows rest on when they swallow a failed
+      session revoke: a credential change de-authenticates the sessions that predate it.
+- [x] **The tolerance has a detective counterpart.** Because both shapes are handled silently and well,
+      nothing surfaces the drift: no exception, no log line, every gate green over a table that is rotting.
+      `identity:integrity:inspect` reads the raw columns (never through the aggregate, which filters the
+      orphan out on the way in) and exits `SUCCESS` / `FAILURE` / `INVALID` — the third so a failed read is
+      never mistaken for a clean table. It reports role values by name and credentials by **count**: an
+      identity id is a person reference and this output reaches operator terminals and job logs. A run that
+      finds something writes exactly one `security` `STORED_IDENTITY_DRIFT_DETECTED` row, resource-less,
+      actor `system`. **Nothing runs it yet** — no `#[AsSchedule]`, no worker, no CI step, so the rows are
+      proven clean only when a human types the command, and the detective half of this pair is therefore
+      weaker than the preventive one. Stated rather than implied, because a control nobody consumes ships
+      dead with every gate green. Scheduling it needs the schedule-attribute + consume-command pairing in both
+      compose files that `make php.lint.schedule-consumption` enforces, plus a `->stateful()` checkpoint.
+      Note for whoever does: that gate sweeps `api/src` for the attribute **including inside comments**, so a
+      docblock naming the bare form makes it demand a `scheduler_default` transport nothing declares.
 
 ## 7. Known weaknesses — open, must be closed or consciously accepted before the first customer
 

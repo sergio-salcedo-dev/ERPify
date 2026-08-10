@@ -112,6 +112,23 @@ final class SymfonyCommandContext extends AbstractContext
     }
 
     /**
+     * The counterpart of {@see theCommandOutputShouldContain()}, for the claims a command makes by staying
+     * silent. What a report deliberately withholds is as much its contract as what it prints — an identity id
+     * kept out of an operator's terminal is a decision, and without an assertion it is only an intention.
+     */
+    #[Then('the command output should not contain :needle')]
+    public function theCommandOutputShouldNotContain(string $needle): void
+    {
+        $this->guardCommandRan();
+
+        self::assertStringNotContainsString(
+            $needle,
+            $this->lastOutput,
+            \sprintf('Command output unexpectedly contained "%s". Output:%s%s', $needle, PHP_EOL, $this->lastOutput),
+        );
+    }
+
+    /**
      * @throws JsonException when the output is not valid JSON
      */
     #[Then('the command output should be JSON with a :field field')]
