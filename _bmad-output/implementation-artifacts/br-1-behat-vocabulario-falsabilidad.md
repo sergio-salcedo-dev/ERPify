@@ -4,7 +4,7 @@ baseline_commit: f2e80a9d9b5e2db4ac7a2fe5b03145bf3c5641d0
 
 # Story BR-1: Vocabulario y falsabilidad de Behat
 
-Status: in-progress
+Status: review
 
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · BR-1 de 8
 > Issues: #313 #319 #320 #430 #590 #591 #592
@@ -301,9 +301,9 @@ Sus hallazgos se escriben en este artefacto antes de abrir el PR, y el cuerpo de
 ## Tasks / Subtasks
 
 - [x] **T0 · Ratificar D2 y D3** con el código delante. D1, D4 y D5 ya están cerradas. (AC: —)
-- [ ] **T1 · Cerrar #590, #591, #592** con comentario de evidencia medida. (AC: 1)
-  - [ ] Redactar los tres comentarios citando `fichero:línea` + commit que lo arregló
-  - [ ] Verificar que ninguno exige diff en `api/`
+- [x] **T1 · Cerrar #590, #591, #592** con comentario de evidencia medida. (AC: 1)
+  - [x] Redactar los tres comentarios citando `fichero:línea` + commit que lo arregló
+  - [x] Verificar que ninguno exige diff en `api/` — ninguno lo exige
 - [x] **T2 · Corregir la épica.** (AC: 2)
   - [x] Reescribir §BR-1 con el re-medido; conservar la afirmación previa en blockquote marcado
   - [x] Revisar el «orden recomendado»: BR-1 se **encareció**, no se abarató — anotado en su punto
@@ -692,6 +692,12 @@ igualmente en el header del registro, apuntando a quien lo cubre.
 El commit `a37ffe29` dice «34 of **44** red for the trait»; el denominador correcto, re-medido tras dividir los
 test por responsabilidad, es **38**. El mensaje de un commit ya empujado no se reescribe: queda corregido aqui y
 en la tabla de arriba, que es la que manda.
+
+### PR
+
+[#672](https://github.com/sergio-salcedo-dev/ERPify/pull/672) — abierto el 2026-08-10, **después** de que el
+pase adversarial corriera y sus hallazgos quedaran escritos arriba, que es donde `CLAUDE.md` pone el gate.
+Cierra #313 #319 #320 #430 por código; #590, #591 y #592 se cerraron por separado con evidencia medida.
 
 ### Change Log
 
