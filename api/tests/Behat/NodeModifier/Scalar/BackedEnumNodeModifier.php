@@ -36,10 +36,19 @@ class BackedEnumNodeModifier extends AbstractNodeModifier
     }
 
     #[Override]
-    public function getProcessedValue(mixed $value): BackedEnum
+    public function getProcessedValue(mixed $value): BackedEnum|string
     {
         if (!\is_string($value)) {
             throw new AssertionFailedError(\sprintf('Expected a "Fqcn::CASE" string, got %s', \get_debug_type($value)));
+        }
+
+        // An equality step runs both operands through the modifier its selector names, and the actual
+        // one is the backing scalar the payload carries — "ADMIN", not `Fqcn::ADMIN`. Demanding the
+        // resolvable form of it would make the explicit `field::BackedEnum` suffix throw on every
+        // payload it was written to read, and in a negative assertion that throw reads as "did not
+        // match", so the step would hold over the very value it forbids.
+        if (!\str_contains($value, '::')) {
+            return $value;
         }
 
         $parts = \explode('::', $value);
@@ -79,10 +88,10 @@ class BackedEnumNodeModifier extends AbstractNodeModifier
     {
         $backedEnum = $this->getProcessedValue($expected);
 
-        if ($value instanceof BackedEnum) {
-            return $backedEnum === $value;
+        if ($backedEnum instanceof BackedEnum && !$value instanceof BackedEnum) {
+            return $backedEnum->value === $value;
         }
 
-        return $backedEnum->value === $value;
+        return $backedEnum === $value;
     }
 }

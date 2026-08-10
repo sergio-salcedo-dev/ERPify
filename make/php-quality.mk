@@ -195,9 +195,11 @@ php.lint.schedule-consumption: ## Schedule transport-consumption gate
 # drifts with every gate green: that paragraph counted 205 patterns against 209, 47 features against 49,
 # and named a context as wholly idle that thirteen scenarios were reaching, eighteen times.
 #
-# A green proves each pattern is REACHED or deliberately unreachable. It does not prove the assertion
-# behind a reached pattern can fail, and it does not detect two patterns that say the same thing in
-# different words — the registry header enumerates the rest of the blind spots.
+# A green proves each pattern's CLASSIFICATION matches what the features do. It does not prove the
+# assertion behind a reached pattern can fail, it does not detect two patterns that say the same thing
+# in different words, and its placeholder token is wider than Behat's — the one direction where it
+# fails open, and where --strict rather than this gate catches the undispatchable step. The registry
+# header enumerates the rest of the blind spots.
 php.lint.step-vocabulary: ## Behat step-vocabulary classification gate
 	@$(PHP_TEST) bin/phpunit --filter=BehatStepVocabularyGateTest
 

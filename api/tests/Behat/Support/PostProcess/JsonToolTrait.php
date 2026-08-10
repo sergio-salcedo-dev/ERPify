@@ -15,6 +15,7 @@ use JsonException;
 use stdClass;
 use Symfony\Component\PropertyAccess\Exception\NoSuchIndexException;
 use Symfony\Component\PropertyAccess\Exception\NoSuchPropertyException;
+use Symfony\Component\PropertyAccess\Exception\UnexpectedTypeException;
 use UnexpectedValueException;
 
 /**
@@ -255,28 +256,35 @@ trait JsonToolTrait
         );
     }
 
-    /**
-     * @throws DateMalformedStringException
-     */
     public function jsonPropertyDateShouldBeEqualTo(Json $json, string $property, string $expected): void
     {
         $value = $this->readNode($json, $property);
 
-        $expectedTime = (int) (new DateTime($expected))->format('U');
-        $foundTime = (int) (new DateTime($this->stringNode($property, $value)))->format('U');
+        $expectedTime = (int) $this->dateNode($property, $expected, 'The expected value')->format('U');
+        $foundTime = (int) $this->dateNode(
+            $property,
+            $this->stringNode($property, $value),
+            'The node value',
+        )->format('U');
         self::assertLessThan(2, (int) (\abs($expectedTime - $foundTime) / 60));
     }
 
+    /**
+     * Loose containment, mirroring the equality steps: Gherkin delivers the list as text, so a strict
+     * comparison would judge a JSON number against a string and answer on the type. Both operands go
+     * through the modifier for the same reason they do there.
+     */
     public function jsonPropertyShouldBeOneOf(Json $json, string $property, string $list): void
     {
-        $actual = $this->readNode($json, $property);
+        $value = $this->readNode($json, $property);
+        $actual = $this->propertyPostProcessValue($property, $value);
 
-        $values = \explode(',', $list);
-        $values = \array_map(trim(...), $values);
+        $values = \array_map(trim(...), \explode(',', $list));
 
-        self::assertTrue(
-            \in_array($actual, $values, true),
-            \sprintf('The node value is %s, which is not one of "%s"', $this->describeNode($actual), $list),
+        self::assertContainsEquals(
+            $actual,
+            $values,
+            \sprintf('The node value is %s, which is not one of "%s"', $this->describeNode($value), $list),
         );
     }
 
@@ -317,13 +325,25 @@ trait JsonToolTrait
      * parse is a broken step and keeps its own exception. Calling both "does not exist" would send
      * the next reader hunting a payload field for what is a typo in the step.
      *
+     * Absence reaches here under three exception classes, not two, and the third is the one a
+     * root-level selector never produces: the accessor reports a missing *leaf* with
+     * {@see NoSuchIndexException} / {@see NoSuchPropertyException}, but a well-formed path whose
+     * *parent* holds null or a scalar stops at {@see UnexpectedTypeException} — it has nothing left
+     * to traverse. `data.name` over `{"data": null}` is a path the payload does not carry, which is
+     * the same unmet expectation as any other, and only `InvalidPropertyPathException` (the selector
+     * the accessor cannot parse at all) is the broken step this rethrows for.
+     *
      * @throws UnexpectedValueException
      */
     private function rethrowUnlessAbsent(UnexpectedValueException $exception): void
     {
         $cause = $exception->getPrevious();
 
-        if ($cause instanceof NoSuchIndexException || $cause instanceof NoSuchPropertyException) {
+        if (
+            $cause instanceof NoSuchIndexException
+            || $cause instanceof NoSuchPropertyException
+            || $cause instanceof UnexpectedTypeException
+        ) {
             return;
         }
 
@@ -350,6 +370,20 @@ trait JsonToolTrait
         }
 
         return $value;
+    }
+
+    /**
+     * `new DateTime()` rejects a string it cannot parse with a `DateMalformedStringException`, which
+     * is not an `AssertionFailedError`: a node holding `true`, `0` or "n/a" would abort the scenario
+     * with a raw error where the step's whole subject is that the value is not the date expected.
+     */
+    private function dateNode(string $property, string $value, string $subject): DateTime
+    {
+        try {
+            return new DateTime($value);
+        } catch (DateMalformedStringException) {
+            self::fail(\sprintf('%s of property %s is "%s", which is not a date', $subject, $property, $value));
+        }
     }
 
     /**

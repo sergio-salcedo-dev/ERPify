@@ -20,6 +20,9 @@ use PHPUnit\Framework\TestCase;
  * recognise to false, so a boolean assertion would hold for "", 0, null, [] and any unrecognised string.
  * Each is green over a value that never carried the property being asserted.
  *
+ * The steps whose subject is the comparison rather than the shape are read in
+ * {@see JsonNodeValueComparisonTest}.
+ *
  * Every case is paired with the value the step is supposed to accept, because an assertion that
  * rejected everything would satisfy the first half on its own.
  *

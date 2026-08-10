@@ -46,11 +46,28 @@ final class BackedEnumNodeModifierTest extends TestCase
     }
 
     #[Test]
-    public function itRefusesAValueThatIsNotAFullyQualifiedCaseReference(): void
+    public function itRefusesAReferenceCarryingMoreThanOneCaseSeparator(): void
     {
         $this->expectException(AssertionFailedError::class);
         $this->expectExceptionMessage('Expected exactly one "::"');
 
-        (new BackedEnumNodeModifier())->getProcessedValue('ADMIN');
+        (new BackedEnumNodeModifier())->getProcessedValue(Role::class . '::ADMIN::VIEWER');
+    }
+
+    /**
+     * An equality step runs both operands through the modifier its selector names, so with an explicit
+     * `field::BackedEnum` suffix the *actual* arrives here as the backing scalar the payload carries.
+     * Demanding a resolvable reference of it would make the suffix throw on every payload it exists to
+     * read — and in the negative form of a table assertion that throw is read as "did not match", so
+     * the step would hold over the very value it forbids.
+     */
+    #[Test]
+    public function itHandsBackABackingScalarUntouchedSoTheExplicitSuffixIsUsable(): void
+    {
+        $modifier = new BackedEnumNodeModifier();
+
+        $this->assertSame('ADMIN', $modifier->getProcessedValue('ADMIN'));
+        $this->assertTrue($modifier->compare('ADMIN', 'ADMIN'));
+        $this->assertFalse($modifier->compare('ADMIN', 'VIEWER'));
     }
 }

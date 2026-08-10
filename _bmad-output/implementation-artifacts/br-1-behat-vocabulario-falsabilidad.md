@@ -4,7 +4,7 @@ baseline_commit: f2e80a9d9b5e2db4ac7a2fe5b03145bf3c5641d0
 
 # Story BR-1: Vocabulario y falsabilidad de Behat
 
-Status: review
+Status: done
 
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · BR-1 de 8
 > Issues: #313 #319 #320 #430 #590 #591 #592
@@ -203,8 +203,11 @@ implementaciones** (Worker propio vs `ApplicationTester`) sigue vigente y docume
 
 **Dos correcciones al issue:**
 
-1. Lista `the command output should not contain` en `SymfonyCommandContext` — **ese paso no existe hoy**. Sí existe
-   `should be JSON with a :field field`, que el issue no menciona.
+1. Lista `the command output should not contain` en `SymfonyCommandContext`. **No existía en `f2e80a9d`, la base
+   con la que se midió esto, y sí existe en la base realmente mergeada** (`SymfonyCommandContext.php:119` en
+   `origin/main`, con seis invocaciones en `identity_integrity.feature`): llegó con #668 mientras esta historia
+   se escribía. Medir contra un baseline que ya no es la base es la misma clase de error que el lote persigue.
+   El issue tampoco menciona `should be JSON with a :field field`, que sí existía.
 2. La asimetría real es que `MessengerConsumerContext` **no tiene** `the command should fail`. Unificar obliga a
    decidir qué significa «fail» para un Worker.
 
@@ -275,7 +278,9 @@ verde. Ningún paso se borra por estar ocioso.
 **AC6 — #430: un solo vocabulario de comandos.**
 Sobrevive una sola forma de decir «el comando fue bien», «el comando falló» y «la salida contiene». Los pasos
 retirados del vocabulario visible **no se eliminan**: se mantienen como alias o se documenta la decisión contraria
-en su declaración. Las 30 invocaciones medidas (23 + 7) siguen verdes.
+en su declaración. Las **53** invocaciones migradas siguen verdes: 23 de messenger, 7 de consola en
+`dead_letter_status.feature` y 23 más en `identity_integrity.feature`, que entró con #668 después de que se
+midieran las 30 originales.
 
 **AC6b — Las seis vacuidades cerradas.**
 Cada vacuidad que entre se cierra con una aserción que **se ha visto roja contra el caso que hoy pasa**: un `null`
@@ -318,7 +323,7 @@ Sus hallazgos se escriben en este artefacto antes de abrir el PR, y el cuerpo de
 - [x] **T5 · #430 — un vocabulario de comandos.** (AC: 6)
   - [x] Medir el vocabulario vivo primero: `make php.behat c='-dl'` y `c="-d '<texto>'"` — **no fiarse de las cifras de `api/CLAUDE.md`, ya derivaron**
   - [x] Decidir la semántica de «fail» para el Worker: el bucle lanzó (un Worker no tiene exit code propio)
-  - [x] Migrar las 30 invocaciones; ningún paso borrado
+  - [x] Migrar las 53 invocaciones; ningún paso borrado
 - [x] **T5b · V1–V6, las seis.** (AC: 6b)
   - [x] Escribir primero el caso que hoy pasa y **verlo pasar** — es la prueba de la vacuidad
   - [x] Arreglar; verlo rojo contra ese mismo caso
@@ -508,14 +513,14 @@ pueden registrar la misma frase: **compartir las palabras exige compartir el res
 La frase que sobrevive no nombra ninguno de los dos mecanismos. `the command should succeed` **nunca tocó un
 comando**: validaba un `Worker` construido a mano cuyo exit code es sintético. `the last command should
 succeed` habría sido la misma mentira para los 23 escenarios de messenger, así que ambos lados se mueven a
-`the last run …` y las 30 invocaciones medidas con ellos.
+`the last run …` y las 53 invocaciones con ellos.
 
 Dos propiedades de `LastRun` son lo que mantiene falsables los pasos nuevos, y ninguna se observa desde un
 escenario: leer antes de haber ejecutado **rechaza** en vez de responder `0` (que satisfaría «should succeed» sin
 que nada corriera), y el reset entre escenarios impide que uno asserte sobre el exit code del anterior.
 
 **T7 — el mecanismo de falsabilidad, y dos cosas que la propia lectura hacía mal.** El registro
-`api/.behat-step-vocabulary` clasifica los 217 patrones (`used` / `idle` / `manual` / `refused`) y el gate lo
+`api/.behat-step-vocabulary` clasifica los 221 patrones (`used` / `idle` / `manual` / `refused`) y el gate lo
 recomputa contra el árbol. `manual` y `refused` se cuentan **aparte** de `idle` a propósito: `idle` es deuda de
 cobertura que hay que gastar, y ninguna de las otras dos lo es — meterlas dentro haría mentir al único número
 del que trata la regla.
@@ -523,7 +528,8 @@ del que trata la regla.
 Escribirlo destapó que el extractor textual leía de menos: un patrón escrito como **concatenación** entre líneas
 registraba sólo su primer literal, y uno escrito con una **constante de clase** no se leía en absoluto. Ambos
 silenciosos — el prefijo de un paso sigue pareciendo un paso plausible. Resolverlos movió el conteo de 213 a
-**217**, que es justo la deriva que el fichero existe para impedir. El extractor ahora **rechaza** un argumento
+**217**, que es justo la deriva que el fichero existe para impedir. El total llegó a **219** con el rebase sobre
+#668 y a **221** con los dos pasos que el code review ató a helpers que no tenían ninguno. El extractor ahora **rechaza** un argumento
 de atributo que no puede reconstruir exactamente, en vez de registrar los literales que encuentre.
 
 **T4 — #319 bajo D3.** Las seis frases sin cola siguen registradas y **rechazan**, nombrando la canónica; se añaden
@@ -556,6 +562,7 @@ api/features/backoffice/bank_account/status.feature
 api/features/backoffice/bank_account/update.feature
 api/features/backoffice/identity/identity_integrity.feature
 api/features/shared/console/dead_letter_status.feature
+api/tests/Behat/Context/Json/JsonNodeTableStepsTrait.php
 api/tests/Behat/Context/MessengerConsumerContext.php
 api/tests/Behat/Context/OutboxContext.php
 api/tests/Behat/Context/RunOutcomeContext.php
@@ -576,6 +583,7 @@ api/tests/Unit/Behat/Support/Execution/LastRunTest.php
 api/tests/Unit/Behat/Support/PostProcess/Fixtures/JsonAssertions.php
 api/tests/Unit/Behat/Support/PostProcess/JsonNodeAbsentPathTest.php
 api/tests/Unit/Behat/Support/PostProcess/JsonNodeShapeTest.php
+api/tests/Unit/Behat/Support/PostProcess/JsonNodeValueComparisonTest.php
 api/tests/Unit/Behat/Support/PostProcess/JsonSchemaValidityTest.php
 api/tests/Unit/Shared/Architecture/BehatStepVocabularyGateTest.php
 api/tests/Unit/Shared/Architecture/Support/BehatVocabularyReader.php
@@ -588,17 +596,18 @@ make/php-test.mk
 
 ### Gates
 
-**Tanda final — 2026-08-10, rebasada sobre `origin/main` @ `935e86dc` y con los hallazgos del pase
-adversarial aplicados.** Cada uno de corrida fresca, exit code impreso; ninguno copiado.
+**Tanda final — 2026-08-10, sobre `main` mergeado en la rama (`05b0db06`, merge-base `03190384` — no es un
+rebase, aunque `935e86dc` sea ancestro) y con los hallazgos del pase adversarial y del code review aplicados.**
+Cada uno de corrida fresca, exit code impreso; ninguno copiado.
 
 | Gate | Exit | Resultado |
 |---|---|---|
 | `make php.quality` | **0** | sweep completo: stan · rector · cs-fixer · phpmd · phpcs · gherkin · 8 lint gates · deptrac · cs.dry-run |
 | `make php.stan` | **0** | No errors |
-| `make php.unit` | **0** | 2562 tests, 12 587 assertions, 2 skipped |
+| `make php.unit` | **0** | 2574 tests, 12 654 assertions, 2 skipped |
 | `make php.behat` | **0** | 425 escenarios / 3967 pasos — **en `--strict`** |
-| `make php.gherkin` | **0** | sin problemas |
-| `make php.lint.step-vocabulary` | **0** | 5 tests, 2208 assertions |
+| `make php.gherkin` | **0** | 50 ficheros feature, sin problemas |
+| `make php.lint.step-vocabulary` | **0** | 5 tests, 2241 assertions |
 
 > **Correccion a esta historia:** el AC8 nombra `make php.lint.gherkin`. **Ese target no existe** — el real es
 > `make php.gherkin`. Un gate citado por un nombre que no resuelve es exactamente el defecto del lote, y aqui
@@ -611,7 +620,7 @@ adversarial aplicados.** Cada uno de corrida fresca, exit code impreso; ninguno 
 
 | # | Que se rompio | Rojos | De |
 |---|---|---|---|
-| M-A | `JsonToolTrait` completo → bytes de `f2e80a9d` | **33** (32 failures + 1 error) | 37 |
+| M-A | `JsonToolTrait` completo → bytes de `f2e80a9d` | **41** (40 failures + 1 error) | 48 |
 | M-B | `BackedEnumNodeModifier` → bytes de `f2e80a9d` | **3** | 4 |
 | M-C | `LastRun` responde `0` en vez de rechazar «no se ha ejecutado nada» | **3** | 4 |
 | M-D | `OutboxContext::refuseUnqualified()` retorna en vez de lanzar | **6** | 6 |
@@ -713,9 +722,75 @@ test no afirmaba nada por sí mismo. Arreglados afirmando de verdad, no suprimie
 El segundo no es cosmético: `jsonPropertyShouldHaveElements` podía quedarse en la guarda y ningún test de este
 lote lo habría notado — la vacuidad que el lote existe para quitar, dentro de los tests que la quitan.
 
-Cambian dos cifras medidas y quedan corregidas arriba: la suite pasa a 2562 tests / 12 587 assertions (fusionar
-dos tests en uno resta uno), y M-A a **33 de 37**, re-medida sobre el diff final con restauración por copia de
-bytes verificada con `cmp`.
+Fusionar dos tests en uno mueve el total de la suite y el denominador de M-A. Las dos cifras se re-midieron
+entonces y otra vez al cerrar el code review; las que mandan son las de las tablas de **Gates** y **Rojos
+provocados**, y aquí no se repiten a propósito — repetir una cifra medida en un tercer sitio es la deriva que
+esta historia entera persigue.
+
+### Review Findings
+
+Code review de 2026-08-10 sobre el diff completo (`origin/main...HEAD`), tres capas independientes
+—adversarial general, cazador de casos límite y auditor de aceptación— más verificación propia. Los
+hallazgos marcados **[medido]** se comprobaron ejecutando contra el stack, no leyendo.
+
+#### Decisiones — resueltas por Sergio
+
+- [x] [Review][Decision] **Dos helpers de aserción que ningún Gherkin puede alcanzar** — `jsonPropertyShouldBeTyped()` y `jsonPropertyShouldBeOneOf()` (`api/tests/Behat/Support/PostProcess/JsonToolTrait.php:218`, `:270`) tienen **cero** llamantes en `tests/Behat/Context/` **[medido]**: ningún `#[Then]` los ata. El gate clasifica *patrones*, nunca métodos, así que no puede verlos y el header no lo lista como punto ciego — en el fichero cuya tesis es «léelo ahí y en ningún otro sitio antes de escribir un paso nuevo». Opciones: atarles un paso (gastar el vocabulario, que es la tesis del lote) · borrarlos · declararlos punto ciego. `shouldBeOneOf` además compara con `in_array(..., true)` contra strings de `explode`, así que un `1` JSON no está en `"1, 2"`, y es el único lector al que el PR no le puso `propertyPostProcessValue` sobre el actual.
+- [x] [Review][Decision] **El placeholder del reader es más ancho que el de Behat, y el gate falla ABIERTO** — `BehatVocabularyReader::PLACEHOLDER_REGEX` es `(?:"[^"]*"|'[^']*'|\S+)` (`api/tests/Unit/Shared/Architecture/Support/BehatVocabularyReader.php:32`); el de Behat es `\-?[\w\.\,]+`. Medido: `I remove X-Foo header` → **reader=1, behat=0** **[medido]**. Un paso así deja el patrón como `used` y el gate verde sobre algo que Behat declara *undefined*. El header (`api/.behat-step-vocabulary:57-60`) nombra la divergencia pero concluye que «se manifiesta primero como paso sin resolver, que es la comprobación que falla cerrado» — para esta dirección es al revés. Hoy no muerde (0 desacuerdos sobre 219 × 954) y `--strict` pone la suite roja, pero la especificación del punto ciego dice lo contrario de lo que ocurre. Opciones: estrechar el placeholder al de Behat (riesgo: reclasificaciones) · dejar el código y corregir la especificación.
+
+#### Patches
+
+- [x] [Review][Patch] `api/CLAUDE.md` recomienda una frase que ahora **lanza** — la guía «gasta los pasos ociosos» propone `there should not have been an outbox event created containing:`, clasificada `refused` e implementada como `: never` [api/CLAUDE.md:81]
+- [x] [Review][Patch] Un dot-path con padre no transitable escapa como error crudo del accessor; `should not exist` **regresiona** de pasar a romper respecto a `main` [api/tests/Behat/Support/PostProcess/JsonToolTrait.php:322]
+- [x] [Review][Patch] V7 no tiene ningún test: `jsonPropertyShouldExist()`/`ShouldNotExist()` son los dos únicos lectores fuera de `readNode()` y nada falsifica su `rethrowUnlessAbsent()` [api/tests/Behat/Support/PostProcess/JsonToolTrait.php:165]
+- [x] [Review][Patch] «More than half of it is idle» es falso: 94/219 = 43 % [api/CLAUDE.md:79]
+- [x] [Review][Patch] El header del registro se contradice: «912 step lines» contra «954» [api/.behat-step-vocabulary:52]
+- [x] [Review][Patch] El sufijo explícito `field::BackedEnum` que el docblock promete lanza sobre el *actual*, y en la forma negativa eso se lee como «no casa» [api/tests/Behat/NodeModifier/Scalar/BackedEnumNodeModifier.php:52]
+- [x] [Review][Patch] Las dos guardas anti-vacuidad del gate viven dentro de `declaredPatterns()`, que solo llama un test: bajo `--filter` los otros tres pasan verdes sobre un escaneo vacío [api/tests/Unit/Shared/Architecture/BehatStepVocabularyGateTest.php:184]
+- [x] [Review][Patch] `jsonPropertyDateShouldBeEqualTo()` deja pasar cualquier escalar al `DateTime`, que lanza `DateMalformedStringException` en vez de fallar como aserción [api/tests/Behat/Support/PostProcess/JsonToolTrait.php:261]
+- [x] [Review][Patch] Un patrón clasificado dos veces se colapsa en silencio (gana la última línea) y no está entre los puntos ciegos [api/tests/Unit/Shared/Architecture/BehatStepVocabularyGateTest.php:244]
+- [x] [Review][Patch] AC6 y «Blast radius medido» dicen 30 invocaciones; son **53** [_bmad-output/implementation-artifacts/br-1-behat-vocabulario-falsabilidad.md:211]
+- [x] [Review][Patch] La «corrección al issue #430» nº 1 es falsa contra la base mergeada: el paso sí existe [_bmad-output/implementation-artifacts/br-1-behat-vocabulario-falsabilidad.md:206]
+- [x] [Review][Patch] T7 dice «217 patrones»; son 219 [_bmad-output/implementation-artifacts/br-1-behat-vocabulario-falsabilidad.md:458]
+- [x] [Review][Patch] «rebasada sobre `935e86dc`» es un **merge**, y la base real es `03190384` [_bmad-output/implementation-artifacts/br-1-behat-vocabulario-falsabilidad.md:591]
+- [x] [Review][Patch] «a green proves each pattern is reached or deliberately unreachable» es falso para los 94 `idle`; y `testing.md` sobreafirma que las cifras no pueden derivar [CLAUDE.md:102, make/php-quality.mk:198, docs/rules/testing.md:50]
+- [x] [Review][Patch] El target nuevo no está en la lista de gates de `api/docs/make-targets.md`, y la guía de desarrollo documenta `php.behat` sin `--strict` [api/docs/make-targets.md:22, docs/development-guide-api.md:146]
+- [x] [Review][Patch] Comentario relativo al cambio superviviente: «can no longer assert on the consume» [api/tests/Behat/Context/RunOutcomeContext.php:28]
+
+#### Diferidos
+
+- [x] [Review][Defer] La forma negativa de la tabla de outbox pasa sobre una cola vacía, sin distinguir «ninguno casó» de «el setup no produjo nada» [api/tests/Behat/Context/OutboxContext.php:231] — diferido, semánticamente correcto
+- [x] [Review][Defer] `runWorker()` registra exit 0 para una consumición que resolvió cero receivers [api/tests/Behat/Context/MessengerConsumerContext.php:206] — diferido, preexistente
+- [x] [Review][Defer] `the last run output should not contain` pasa vacuamente sobre un buffer vacío a verbosidad normal [api/tests/Behat/Context/RunOutcomeContext.php:98] — diferido, latente tras un paso `idle`
+- [x] [Review][Defer] `I consume N messages` no asegura que se consumieran N [api/tests/Behat/Context/MessengerConsumerContext.php:201] — diferido, preexistente
+- [x] [Review][Defer] Dos ejecuciones en un escenario dejan la primera inasertable sin señal [api/tests/Behat/Support/Execution/LastRun.php:36] — diferido, la regla está escrita y ningún escenario la rompe
+- [x] [Review][Defer] La verbosidad se resuelve por última clave, no por máximo [api/tests/Behat/Context/MessengerConsumerContext.php:118] — diferido, preexistente
+- [x] [Review][Defer] `regexFor()` da por regex cualquier patrón que empiece por `/`; Behat exige también delimitador de cierre [api/tests/Unit/Shared/Architecture/Support/BehatVocabularyReader.php:174] — diferido, ningún patrón así hoy y falla ruidoso
+
+#### Descartado
+
+**«49 features» derivó a 50 y ningún gate lo recomputa** — descartado tras medir: las seis apariciones citan 49 como la cifra *histórica* correcta en el momento de la deriva (`f2e80a9d`, donde eran 49 **[medido]**), dentro de una frase que describe lo que la prosa vieja decía mal. Sigue siendo cierta como afirmación histórica.
+
+#### Rojos provocados por los arreglos del review
+
+Sobre las cinco clases de test del área (53 tests). Mutación **verificada como aplicada** antes de cada
+corrida, restauración por copia de bytes con `cmp`. La verificación no es ceremonia: la primera pasada de F6
+dio **cero rojos** porque el `perl` no había casado nada, que es exactamente el modo de fallo —«el arreglo sin
+el test que lo prueba»— aplicado a la medición del propio arreglo.
+
+| # | Qué se rompió | Rojos | De |
+|---|---|---|---|
+| R-A | `rethrowUnlessAbsent()` deja de aceptar `UnexpectedTypeException` | **4** (3 failures + 1 error) | 53 |
+| R-B | `jsonPropertyShouldNotExist()` deja de reenviar (V7) | **1** | 53 |
+| R-C | `jsonPropertyShouldExist()` deja de reenviar (V7) | **1** | 53 |
+| R-D | `dateNode()` deja de capturar `DateMalformedStringException` | **3** | 53 |
+| R-E | `should be one of` vuelve a `in_array(…, true)` | **1** | 53 |
+| R-F | `BackedEnumNodeModifier` deja de devolver el escalar tal cual | **1** | 53 |
+
+Sin rojo provocado se queda la guarda anti-vacuidad movida a `setUp()`: su condición es un escaneo de cero
+ficheros, que no se puede montar borrando código. Lo que sí se puede afirmar, y es lo que la movió, es
+estructural: antes era alcanzable desde **un** test de los cinco, y PHPUnit construye una instancia nueva por
+test, así que un `--filter` que seleccionara cualquiera de los otros cuatro los dejaba verdes sobre nada.
 
 ### Change Log
 
@@ -725,3 +800,4 @@ bytes verificada con `cmp`.
 | 2026-08-09 | T3 + T5b: #320 sobre los 13 métodos, V1–V7, sonda AC4 verde antes y después |
 | 2026-08-09 | T4: #319 bajo D3 — 6 rechazos, 4 formas cualificadas nuevas, 2 líneas de feature |
 | 2026-08-10 | Los 2 BLOCKER `php:S2699` de SonarCloud, con M-A y la suite re-medidas |
+| 2026-08-10 | Code review (3 capas): 2 decisiones + 16 patches aplicados, 7 diferidos, 1 descartado |

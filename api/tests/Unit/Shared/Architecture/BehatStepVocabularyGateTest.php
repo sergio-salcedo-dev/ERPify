@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
 use Erpify\Tests\Unit\Shared\Architecture\Support\BehatVocabularyReader;
+use Override;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 
@@ -175,14 +176,16 @@ final class BehatStepVocabularyGateTest extends TestCase
     }
 
     /**
-     * @return list<string>
+     * Every check below asks a question of two scans, so both empty is the one input that satisfies
+     * all five at once. The guard runs per test rather than inside the readers: PHPUnit builds a
+     * fresh instance for each, so a guard reachable from only one of them leaves the other four
+     * green over a scan of nothing whenever a `--filter` selects around it.
      */
-    private function declaredPatterns(): array
+    #[Override]
+    protected function setUp(): void
     {
-        $patterns = $this->reader()->declaredPatterns();
-
         $this->assertNotEmpty(
-            $patterns,
+            $this->reader()->declaredPatterns(),
             \sprintf(
                 '%s%sNo step pattern matched under tests/Behat. Either the contexts no longer declare steps '
                 . 'with attributes, or this gate is reading nothing and every check in it is vacuous.',
@@ -199,8 +202,14 @@ final class BehatStepVocabularyGateTest extends TestCase
                 PHP_EOL,
             ),
         );
+    }
 
-        return $patterns;
+    /**
+     * @return list<string>
+     */
+    private function declaredPatterns(): array
+    {
+        return $this->reader()->declaredPatterns();
     }
 
     /**
@@ -214,6 +223,7 @@ final class BehatStepVocabularyGateTest extends TestCase
         $this->assertIsString($contents, \sprintf('%s%sUnreadable at %s.', self::FAILURE_PREAMBLE, PHP_EOL, $path));
 
         $registry = [];
+        $duplicated = [];
 
         foreach (\explode("\n", $contents) as $line) {
             $line = \trim($line);
@@ -241,8 +251,25 @@ final class BehatStepVocabularyGateTest extends TestCase
                 \sprintf('%s%sUnknown classification on: %s', self::FAILURE_PREAMBLE, PHP_EOL, $line),
             );
 
-            $registry[\substr($line, 0, $position)] = $classification;
+            $pattern = \substr($line, 0, $position);
+
+            if (\array_key_exists($pattern, $registry)) {
+                $duplicated[] = $pattern;
+            }
+
+            $registry[$pattern] = $classification;
         }
+
+        $this->assertSame(
+            [],
+            $duplicated,
+            \sprintf(
+                '%s%sPattern(s) classified twice. The later line wins silently, so one of the two '
+                . 'classifications is never evaluated and the counts stop matching the lines.',
+                self::FAILURE_PREAMBLE,
+                PHP_EOL,
+            ),
+        );
 
         $this->assertNotEmpty(
             $registry,

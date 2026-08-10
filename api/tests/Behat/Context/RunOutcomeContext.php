@@ -25,7 +25,7 @@ use Symfony\Component\Console\Command\Command;
  *
  * One vocabulary over one holder means "the last run" is literal: within a scenario only the most
  * recent invocation is assertable, whichever context made it. A scenario that consumes and then runs a
- * console command can no longer assert on the consume — and the step still reads as though it could.
+ * console command has no way to assert on the consume — and the step still reads as though it could.
  * Assert each run before starting the next.
  *
  * @see LastRun for why the result is shared rather than the step definitions

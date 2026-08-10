@@ -19,7 +19,9 @@ use UnexpectedValueException;
  * An absent dot-path is an unmet expectation and must read as one: a raw `UnexpectedValueException`
  * naming the property accessor reads as a broken step instead. The list below is the whole set of node
  * readers on purpose — covering some would split one trait across two contracts, with nothing telling a
- * reader which applies where.
+ * reader which applies where. `should exist` and `should not exist` are here for the same reason and
+ * are read separately: they are the only two that answer the question of presence directly instead of
+ * reading a node, so they carry their own copy of the absent-versus-unreadable decision.
  *
  * Two things are kept apart that a single message would blur. A path the payload does not carry is an
  * unmet expectation and reads as a failure; a path the accessor cannot parse is a broken step and keeps
@@ -126,6 +128,67 @@ final class JsonNodeAbsentPathTest extends TestCase
         $this->expectException(UnexpectedValueException::class);
 
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeNull(new Json(self::PRESENT_PAYLOAD), 'node[');
+    }
+
+    /**
+     * A parent that holds null or a scalar has nothing left to traverse, so the accessor stops on a
+     * third exception class rather than on the two a missing leaf produces. The path is still one the
+     * payload does not carry, which is why the root-level cases above do not cover this: they are the
+     * subset where every reading of "absent" agrees.
+     */
+    #[DataProvider('provideAPathUnderAParentThatCarriesNoChildrenIsAbsentAndNotABrokenStepCases')]
+    public function testAPathUnderAParentThatCarriesNoChildrenIsAbsentAndNotABrokenStep(string $payload): void
+    {
+        $this->expectException(AssertionFailedError::class);
+        $this->expectExceptionMessage('Property "node.child" does not exist in the JSON.');
+
+        JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeNull(new Json($payload), 'node.child');
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideAPathUnderAParentThatCarriesNoChildrenIsAbsentAndNotABrokenStepCases(): iterable
+    {
+        yield 'parent holds null' => ['{"node": null}'];
+        yield 'parent holds a string' => [self::PRESENT_PAYLOAD];
+        yield 'parent holds a number' => ['{"node": 5}'];
+    }
+
+    public function testShouldExistFailsAsAnAssertionForAPathThePayloadDoesNotCarry(): void
+    {
+        $this->expectException(AssertionFailedError::class);
+        $this->expectExceptionMessage('The property "absentProperty" does not exist.');
+
+        JsonAssertions::withScalarModifiers()->jsonPropertyShouldExist(new Json(self::PRESENT_PAYLOAD), self::ABSENT);
+    }
+
+    public function testShouldExistKeepsItsOwnErrorForASelectorTheAccessorCannotParse(): void
+    {
+        $this->expectException(UnexpectedValueException::class);
+
+        JsonAssertions::withScalarModifiers()->jsonPropertyShouldExist(new Json(self::PRESENT_PAYLOAD), 'node[');
+    }
+
+    public function testShouldNotExistHoldsForAnAbsentPathAndNotForAPresentOne(): void
+    {
+        $assertions = JsonAssertions::withScalarModifiers();
+        $json = new Json(self::PRESENT_PAYLOAD);
+
+        $assertions->jsonPropertyShouldNotExist($json, self::ABSENT);
+        $assertions->jsonPropertyShouldNotExist($json, 'node.child');
+
+        $this->expectException(AssertionFailedError::class);
+        $this->expectExceptionMessage('The property "node" exists.');
+
+        $assertions->jsonPropertyShouldNotExist($json, 'node');
+    }
+
+    public function testShouldNotExistKeepsItsOwnErrorForASelectorTheAccessorCannotParse(): void
+    {
+        $this->expectException(UnexpectedValueException::class);
+
+        JsonAssertions::withScalarModifiers()->jsonPropertyShouldNotExist(new Json(self::PRESENT_PAYLOAD), 'node[');
     }
 
     public function testAModifierSuffixIsStrippedWithoutMakingANonNullNodePass(): void
