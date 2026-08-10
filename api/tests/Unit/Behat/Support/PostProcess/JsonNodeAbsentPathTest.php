@@ -128,15 +128,15 @@ final class JsonNodeAbsentPathTest extends TestCase
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeNull(new Json(self::PRESENT_PAYLOAD), 'node[');
     }
 
-    public function testAModifierSuffixNeverReachesThePropertyAccessor(): void
+    public function testAModifierSuffixIsStrippedWithoutMakingANonNullNodePass(): void
     {
         // `node::null` names the node `node` and the way to read the expectation; leaving the suffix on
         // asks the accessor for a property no payload carries, which is an absent node, not a null one.
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeNull(new Json('{"node": null}'), 'node::null');
-    }
 
-    public function testAModifierSuffixDoesNotMakeANonNullNodePass(): void
-    {
+        // Paired with the value the expectation must reject, because stripping the suffix and then
+        // asserting nothing would satisfy the accepted case on its own. The message is what pins the
+        // stripping: an unstripped suffix fails as an absent path, not as a node that is not null.
         $this->expectException(AssertionFailedError::class);
         $this->expectExceptionMessage('but it should have been null');
 

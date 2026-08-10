@@ -53,12 +53,19 @@ final class JsonNodeShapeTest extends TestCase
         ;
     }
 
-    public function testElementsAreCountedForAListAndForAnObject(): void
+    public function testElementsAreCountedForAListAndForAnObjectAndNotMiscounted(): void
     {
         $assertions = JsonAssertions::withScalarModifiers();
 
         $assertions->jsonPropertyShouldHaveElements(new Json('{"node": [1, 2, 3]}'), self::NODE, 3);
         $assertions->jsonPropertyShouldHaveElements(new Json('{"node": {"a": 1, "b": 2}}'), self::NODE, 2);
+
+        // The cases above are the accepted half; only a wrong count over a real collection shows the
+        // comparison is made at all, rather than the guard above being the whole assertion.
+        $this->expectException(AssertionFailedError::class);
+        $this->expectExceptionMessage('has 3 children whereas it should have 2');
+
+        $assertions->jsonPropertyShouldHaveElements(new Json('{"node": [1, 2, 3]}'), self::NODE, 2);
     }
 
     #[DataProvider('nonBooleanNodes')]

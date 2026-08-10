@@ -595,7 +595,7 @@ adversarial aplicados.** Cada uno de corrida fresca, exit code impreso; ninguno 
 |---|---|---|
 | `make php.quality` | **0** | sweep completo: stan · rector · cs-fixer · phpmd · phpcs · gherkin · 8 lint gates · deptrac · cs.dry-run |
 | `make php.stan` | **0** | No errors |
-| `make php.unit` | **0** | 2563 tests, 12 584 assertions, 2 skipped |
+| `make php.unit` | **0** | 2562 tests, 12 587 assertions, 2 skipped |
 | `make php.behat` | **0** | 425 escenarios / 3967 pasos — **en `--strict`** |
 | `make php.gherkin` | **0** | sin problemas |
 | `make php.lint.step-vocabulary` | **0** | 5 tests, 2208 assertions |
@@ -611,7 +611,7 @@ adversarial aplicados.** Cada uno de corrida fresca, exit code impreso; ninguno 
 
 | # | Que se rompio | Rojos | De |
 |---|---|---|---|
-| M-A | `JsonToolTrait` completo → bytes de `f2e80a9d` | **34** (33 failures + 1 error) | 38 |
+| M-A | `JsonToolTrait` completo → bytes de `f2e80a9d` | **33** (32 failures + 1 error) | 37 |
 | M-B | `BackedEnumNodeModifier` → bytes de `f2e80a9d` | **3** | 4 |
 | M-C | `LastRun` responde `0` en vez de rechazar «no se ha ejecutado nada» | **3** | 4 |
 | M-D | `OutboxContext::refuseUnqualified()` retorna en vez de lanzar | **6** | 6 |
@@ -699,6 +699,24 @@ en la tabla de arriba, que es la que manda.
 pase adversarial corriera y sus hallazgos quedaran escritos arriba, que es donde `CLAUDE.md` pone el gate.
 Cierra #313 #319 #320 #430 por código; #590, #591 y #592 se cerraron por separado con evidencia medida.
 
+### SonarCloud sobre la PR
+
+Dos **BLOCKER** `php:S2699` («add at least one assertion to this test case»), ambos reales y ninguno ruido de la
+regla: en los dos cuerpos toda aserción vive dentro de `JsonAssertions`, que es el sujeto, así que el método de
+test no afirmaba nada por sí mismo. Arreglados afirmando de verdad, no suprimiendo.
+
+| Test | Qué le faltaba | Qué se hizo |
+|---|---|---|
+| `JsonNodeAbsentPathTest::testAModifierSuffixNeverReachesThePropertyAccessor` | control positivo deliberado, pero su única afirmación era «no lanzó» | fusionado con su control negativo en `…IsStrippedWithoutMakingANonNullNodePass`, que es el idioma que el fichero hermano ya usaba dos veces |
+| `JsonNodeShapeTest::testElementsAreCountedForAListAndForAnObject` | ningún caso rechazado: la guarda de «no es una colección» estaba probada, la **comparación del conteo** no | añadido el conteo equivocado sobre una colección real (3 elementos esperando 2) |
+
+El segundo no es cosmético: `jsonPropertyShouldHaveElements` podía quedarse en la guarda y ningún test de este
+lote lo habría notado — la vacuidad que el lote existe para quitar, dentro de los tests que la quitan.
+
+Cambian dos cifras medidas y quedan corregidas arriba: la suite pasa a 2562 tests / 12 587 assertions (fusionar
+dos tests en uno resta uno), y M-A a **33 de 37**, re-medida sobre el diff final con restauración por copia de
+bytes verificada con `cmp`.
+
 ### Change Log
 
 | Fecha | Cambio |
@@ -706,3 +724,4 @@ Cierra #313 #319 #320 #430 por código; #590, #591 y #592 se cerraron por separa
 | 2026-08-09 | T0: D2 (wontfix) y D3 (rechazo ruidoso) ratificadas con el código delante |
 | 2026-08-09 | T3 + T5b: #320 sobre los 13 métodos, V1–V7, sonda AC4 verde antes y después |
 | 2026-08-09 | T4: #319 bajo D3 — 6 rechazos, 4 formas cualificadas nuevas, 2 líneas de feature |
+| 2026-08-10 | Los 2 BLOCKER `php:S2699` de SonarCloud, con M-A y la suite re-medidas |
