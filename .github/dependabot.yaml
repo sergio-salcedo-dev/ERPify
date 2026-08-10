@@ -28,6 +28,17 @@ updates:
       prefix: "chore"
     cooldown:
       default-days: 7
+    # Dependabot treats each sub-path of an action repository as its own
+    # dependency, so github/codeql-action/{init,analyze,upload-sarif} arrive as
+    # three PRs. They cannot pass alone: init and analyze validate a shared
+    # config version at runtime, and a job whose steps straddle two releases
+    # dies with "Loaded a configuration file for version 'X', but running
+    # version 'Y'". Grouping makes them move in one commit, which is the only
+    # state in which they are green.
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
 
   - package-ecosystem: npm
     directory: /pwa
