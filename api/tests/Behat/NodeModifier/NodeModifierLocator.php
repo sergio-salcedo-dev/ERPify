@@ -22,6 +22,23 @@ use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
  * The constructor fails fast if the `test.node_modifier` iterable is empty or carries a
  * duplicate modifier name, turning a mis-wired tag into an explicit error rather than a
  * confusing downstream `NoSuchPropertyException`.
+ *
+ * **Known limitation, accepted on purpose: a property path cannot carry a literal `::`.** The
+ * suffix is taken from the last `::` in the selector, so `a::b` always reads as node `a` with
+ * modifier `b` — a payload whose key genuinely contains `::` is unaddressable, and there is no
+ * escape syntax. Two reasons to leave it:
+ *
+ *   1. The measured need is zero. Across the whole feature suite the only `::` in any selector are
+ *      registered modifier suffixes; no path carries a literal one. An escape syntax would add a
+ *      rule every reader of every `.feature` has to learn, for a case none of them has.
+ *   2. The obvious alternative — treat the suffix as a modifier *only if the name is registered*,
+ *      and as a literal path otherwise — contradicts the contract two paragraphs up. A misspelled
+ *      modifier would stop being a loud `UnknownNodeModifierException` and become a silent lookup
+ *      for a node no payload has. Trading a loud failure for a quiet one is the wrong direction,
+ *      and it is the direction that costs debugging time.
+ *
+ * A bare trailing `::` is already handled below as a literal path, since it names no modifier.
+ * If a payload key with `::` ever arrives, the escape belongs here and needs tests on both sides.
  */
 readonly class NodeModifierLocator
 {

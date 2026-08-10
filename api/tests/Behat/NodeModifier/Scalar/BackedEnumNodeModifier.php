@@ -10,15 +10,16 @@ use Override;
 use PHPUnit\Framework\AssertionFailedError;
 
 /**
- * Resolves a string like `App\Enum\StatusEnum::ACTIVE` into the matching BackedEnum case
- * and compares it against an actual BackedEnum instance or its backing scalar value.
+ * Resolves a `Fqcn::CASE` string into the matching BackedEnum case and compares it against an actual
+ * BackedEnum instance or its backing scalar value.
  *
- * Resolves by value auto-detection (a `Fqcn::CASE` string) or the explicit `field::BackedEnum`
- * suffix.
+ * Resolves by value auto-detection (any string whose part before `::` is an enum) or the explicit
+ * `field::BackedEnum` suffix. Nothing here requires the enum to be *named* with an `Enum` suffix —
+ * none of this repo's are.
  *
  * Example (Gherkin):
- *   And the JSON node "status" should be equal to "App\Enum\StatusEnum::ACTIVE"
- *   // matches either an ActiveEnum instance or the scalar "active" in the response.
+ *   And the JSON node "role" should be equal to "Erpify\Shared\Access\Domain\Role::ADMIN"
+ *   // matches either a Role instance or the scalar "ADMIN" in the response.
  */
 class BackedEnumNodeModifier extends AbstractNodeModifier
 {
@@ -35,14 +36,33 @@ class BackedEnumNodeModifier extends AbstractNodeModifier
     }
 
     #[Override]
-    public function getProcessedValue(mixed $value): BackedEnum
+    public function getProcessedValue(mixed $value): BackedEnum|string
     {
         if (!\is_string($value)) {
             throw new AssertionFailedError(\sprintf('Expected a "Fqcn::CASE" string, got %s', \get_debug_type($value)));
         }
 
+        // An equality step runs both operands through the modifier its selector names, and the actual
+        // one is the backing scalar the payload carries — "ADMIN", not `Fqcn::ADMIN`. Demanding the
+        // resolvable form of it would make the explicit `field::BackedEnum` suffix throw on every
+        // payload it was written to read, and in a negative assertion that throw reads as "did not
+        // match", so the step would hold over the very value it forbids.
+        if (!\str_contains($value, '::')) {
+            return $value;
+        }
+
         $parts = \explode('::', $value);
-        $classString = $parts[0];
+
+        // The case name is what follows the one `::` a "Fqcn::CASE" string carries. Locating it by
+        // searching for the literal token `Enum::` instead made resolution depend on the enum being
+        // *named* with that suffix: for `…\Enum\Role::ADMIN` the search finds nothing, the miss casts
+        // to offset 0, and the case is read from six characters into the FQCN. No enum in this repo
+        // carries the token, so every one of them resolved to a name no case matches.
+        if (2 !== \count($parts)) {
+            throw new AssertionFailedError(\sprintf('Expected exactly one "::" in "%s"', $value));
+        }
+
+        [$classString, $enumKey] = $parts;
 
         if (!\enum_exists($classString)) {
             throw new AssertionFailedError(\sprintf('Unknown enum "%s"', $classString));
@@ -53,7 +73,6 @@ class BackedEnumNodeModifier extends AbstractNodeModifier
         }
 
         $enum = $classString;
-        $enumKey = \substr($value, ((int) \stripos($value, 'Enum::')) + 6);
 
         foreach ($enum::cases() as $backedEnum) {
             if ($backedEnum->name === $enumKey) {
@@ -69,10 +88,10 @@ class BackedEnumNodeModifier extends AbstractNodeModifier
     {
         $backedEnum = $this->getProcessedValue($expected);
 
-        if ($value instanceof BackedEnum) {
-            return $backedEnum === $value;
+        if ($backedEnum instanceof BackedEnum && !$value instanceof BackedEnum) {
+            return $backedEnum->value === $value;
         }
 
-        return $backedEnum->value === $value;
+        return $backedEnum === $value;
     }
 }

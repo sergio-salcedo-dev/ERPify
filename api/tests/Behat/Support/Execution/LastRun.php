@@ -1,0 +1,61 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Erpify\Tests\Behat\Support\Execution;
+
+use RuntimeException;
+
+/**
+ * What the last thing a scenario ran left behind: an exit code and the output it produced.
+ *
+ * It exists so the suite has one vocabulary for "did that work" instead of one per mechanism. Two
+ * contexts run things — {@see \Erpify\Tests\Behat\Context\SymfonyCommandContext} drives a console
+ * {@see \Symfony\Component\Console\Application}, {@see \Erpify\Tests\Behat\Context\MessengerConsumerContext}
+ * drives a Messenger {@see \Symfony\Component\Messenger\Worker} — and each had grown its own phrases
+ * for the same three assertions. Behat resolves a step by pattern, so two contexts cannot both
+ * register one phrase; the way to share the words is to share the *result*, which is this.
+ *
+ * Deliberately not "the last command": the worker is not a command. Its exit code is synthesised
+ * from whether the run threw, and its output is a logger buffer, so a phrase naming a command would
+ * be false half the time it is read — and a step whose subject is wrong is how a reader comes to
+ * trust the wrong thing.
+ *
+ * Reading before anything ran is a broken scenario, not an empty result, so it refuses rather than
+ * answering 0 — an exit code of 0 for "nothing ran" would satisfy "should succeed" without a single
+ * line of code having executed.
+ */
+final class LastRun
+{
+    private const string NOTHING_RAN = 'Nothing has been run yet in this scenario';
+
+    private ?int $exitCode = null;
+
+    private string $output = '';
+
+    public function record(int $exitCode, string $output): void
+    {
+        $this->exitCode = $exitCode;
+        $this->output = $output;
+    }
+
+    public function reset(): void
+    {
+        $this->exitCode = null;
+        $this->output = '';
+    }
+
+    public function exitCode(): int
+    {
+        return $this->exitCode ?? throw new RuntimeException(self::NOTHING_RAN);
+    }
+
+    public function output(): string
+    {
+        if (null === $this->exitCode) {
+            throw new RuntimeException(self::NOTHING_RAN);
+        }
+
+        return $this->output;
+    }
+}

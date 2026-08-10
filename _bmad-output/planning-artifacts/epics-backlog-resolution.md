@@ -34,12 +34,31 @@ revisor pueda leer el PR entero con un solo modelo mental en la cabeza.
 ### BR-1 · Vocabulario y falsabilidad de Behat
 
 **Issues:** #313 #319 #320 #430 #590 #591 #592
-**Toca:** `api/tests/Behat/Context/*`, `api/behat.dist.php`
+**Toca:** `api/tests/Behat/`, `api/features/`, `api/.behat-step-vocabulary`
 **Concepto común:** aserciones que pasan **vacuamente**. Un paso que no puede fallar no es cobertura.
-`#590` (los asserts a cero pasan cuando la cola no es un transporte en memoria) y `#591` (nada fija el orden
-403-antes-de-422 — el test de prioridad que existe fija el orden de **CORS**, medido) son los dos con
-consecuencia real; el resto es higiene del vocabulario.
 **Riesgo:** bajo. Cero producción.
+
+> **Re-medido el 2026-08-09 contra `f2e80a9d`, y el resultado corrige a este mismo fichero — por segunda vez
+> y por la misma causa.** La versión previa decía, literalmente:
+>
+> > `#590` (los asserts a cero pasan cuando la cola no es un transporte en memoria) y `#591` (nada fija el
+> > orden 403-antes-de-422 — el test de prioridad que existe fija el orden de **CORS**, medido) son los dos
+> > con consecuencia real; el resto es higiene del vocabulario.
+>
+> **Está exactamente invertido.** #590, #591 y #592 ya estaban resueltos: un arco previo —PRs #596–#601, del
+> 28 de julio— trabajó este terreno, arregló el código y no cerró los issues. Coste de los tres: cero, se
+> cierran con evidencia. El valor del lote vivía en #320, #319 y #430, los que esta frase llamó «higiene».
+>
+> La afirmación se conserva arriba, marcada, porque el error es reproducible y es el de la épica entera:
+> **se midió el título del issue, no el código**. En #591 además se midió el fichero equivocado — el pin
+> conductual de 403-antes-de-422 existe, en Behat y no en PHPUnit (`bank/access_control.feature:142-152`),
+> y el `git grep` del issue no lo encontró porque ningún escenario nombra las clases.
+>
+> Lo que sí sobrevivió intacto fue el hueco estructural que da nombre al lote, y resultó ser mayor de lo
+> declarado: #601 dejó la regla del vocabulario en prosa sin mecanismo, y esa prosa ya había derivado en las
+> tres afirmaciones que hacía. Cerrarlo trajo el registro `api/.behat-step-vocabulary` y su gate. Detalle,
+> evidencia y las seis vacuidades que ningún issue registraba, en la historia
+> [`br-1-behat-vocabulario-falsabilidad.md`](../implementation-artifacts/br-1-behat-vocabulario-falsabilidad.md).
 
 ### BR-2 · Residuos del eje de referencias a persona
 
@@ -183,7 +202,10 @@ petición 60 s).
    no porque los cuatro fueran defectos vivos.
 2. **BR-4** — porque #602 es lo único que queda del residual de sesión robada tras la corrección de #645, y hasta que cierre lo que el producto debe es **guía de orden** en el copy, no código.
 3. **BR-6** — un gate que no corre invalida la confianza en todos los demás; barato y sin producción.
-4. **BR-1**, **BR-3**, **BR-5**, luego **BR-7** y **BR-8**.
+4. **BR-1** — el re-medido lo **encareció**, al revés que BR-2: tres de sus siete issues se cierran con
+   evidencia y sin código, pero lo que queda (#320 sobre 13 métodos, no 2; #319; #430) es real, y el hueco
+   que da nombre al lote pedía un mecanismo, no una nota. Sigue sin consecuencia de producción.
+5. **BR-3**, **BR-5**, luego **BR-7** y **BR-8**.
 
 ## Criterios de cierre de la épica
 

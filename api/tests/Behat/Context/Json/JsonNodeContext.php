@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Tests\Behat\Context\Json;
 
 use Behat\Gherkin\Node\PyStringNode;
-use Behat\Gherkin\Node\TableNode;
 use Behat\Step\Given;
 use Behat\Step\Then;
 use DateMalformedStringException;
@@ -27,6 +26,7 @@ use Symfony\Component\Uid\Uuid;
  */
 class JsonNodeContext extends AbstractContext
 {
+    use JsonNodeTableStepsTrait;
     use JsonResponseAwareTrait;
     use JsonToolTrait;
 
@@ -117,28 +117,6 @@ class JsonNodeContext extends AbstractContext
     }
 
     /**
-     * Validate the JSON `nodes` are equal to `text`.
-     *
-     * @throws JsonException
-     */
-    #[Then('the JSON nodes should be equal to:')]
-    #[Then('/^the JSON nodes should be equal to \(if path not empty\):$/')]
-    public function theJsonNodesShouldBeEqualTo(TableNode $tableNode): void
-    {
-        foreach ($tableNode->getRowsHash() as $node => $text) {
-            if ('' === $node) {
-                continue;
-            }
-
-            if (!\is_string($text)) {
-                self::fail(\sprintf(self::EXPECTED_STRING_FORMAT, $node, \gettype($text)));
-            }
-
-            $this->theJsonNodeShouldBeEqualTo($node, $text);
-        }
-    }
-
-    /**
      * Validate the JSON property `node` match the given pattern.
      *
      * @throws JsonException
@@ -147,6 +125,31 @@ class JsonNodeContext extends AbstractContext
     public function theJsonNodeShouldMatch(string $node, string $pattern): void
     {
         $this->jsonPropertyShouldMatch($this->getJson(), $node, $pattern);
+    }
+
+    /**
+     * Validate the JSON property `node` holds a value of the given PHP type, as `gettype()` names it
+     * (`string`, `integer`, `double`, `boolean`, `array`, `NULL`).
+     *
+     * @throws JsonException
+     */
+    #[Then('the JSON node :node should be typed :type')]
+    public function theJsonNodeShouldBeTyped(string $node, string $type): void
+    {
+        $this->jsonPropertyShouldBeTyped($this->getJson(), $node, $type);
+    }
+
+    /**
+     * Validate the JSON property `node` holds one of a comma-separated list of accepted values —
+     * the assertion for a closed set whose member is not the point, e.g. a status a request may
+     * legitimately land on either side of.
+     *
+     * @throws JsonException
+     */
+    #[Then('the JSON node :node should be one of :list')]
+    public function theJsonNodeShouldBeOneOf(string $node, string $list): void
+    {
+        $this->jsonPropertyShouldBeOneOf($this->getJson(), $node, $list);
     }
 
     /**
@@ -268,50 +271,12 @@ class JsonNodeContext extends AbstractContext
     }
 
     /**
-     * Validate the JSON properties `nodes` contains `text`.
-     */
-    #[Then('the JSON nodes should contain:')]
-    public function theJsonNodesShouldContain(TableNode $tableNode): void
-    {
-        foreach ($tableNode->getRowsHash() as $node => $text) {
-            if ('' === $node) {
-                continue;
-            }
-
-            if (!\is_string($text)) {
-                self::fail(\sprintf(self::EXPECTED_STRING_FORMAT, $node, \gettype($text)));
-            }
-
-            $this->theJsonNodeShouldContain($node, $text);
-        }
-    }
-
-    /**
      * Validate the JSON propert `node` does not contain `text`.
      */
     #[Then('the JSON node :node should not contain :text')]
     public function theJsonNodeShouldNotContain(string $node, string $text): void
     {
         $this->jsonPropertyShouldNotContains($this->getJson(), $node, $text);
-    }
-
-    /**
-     * Validate the JSON properties `nodes` does not contain `text`.
-     */
-    #[Then('the JSON nodes should not contain:')]
-    public function theJsonNodesShouldNotContain(TableNode $tableNode): void
-    {
-        foreach ($tableNode->getRowsHash() as $node => $text) {
-            if ('' === $node) {
-                continue;
-            }
-
-            if (!\is_string($text)) {
-                self::fail(\sprintf(self::EXPECTED_STRING_FORMAT, $node, \gettype($text)));
-            }
-
-            $this->theJsonNodeShouldNotContain($node, $text);
-        }
     }
 
     /**

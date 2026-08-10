@@ -47,7 +47,7 @@ Corollary — **a control that has never been seen red is not a control.** Prove
 
 ## Behat step vocabulary
 
-A step definition is a shared asset. Never delete one for being unused, and search the vocabulary before writing a new one — `make php.behat c='-dl'` lists it, `make php.behat c="-d '<text>'"` searches it. When you touch a feature, spend the idle steps that fit it: an assertion that exists and is never made proves nothing. Full rule, current numbers and the debugging-only exception: [`api/CLAUDE.md`](../../api/CLAUDE.md).
+A step definition is a shared asset. Never delete one for being unused, and search the vocabulary before writing a new one — `make php.behat c='-dl'` lists it, `make php.behat c="-d '<text>'"` searches it. When you touch a feature, spend the idle steps that fit it: an assertion that exists and is never made proves nothing. The inventory is [`api/.behat-step-vocabulary`](../../api/.behat-step-vocabulary) — every declared pattern classified `used` / `idle` / `manual` / `refused`, with the classifications recomputed by `make php.lint.step-vocabulary` so a stale one fails the build. Full rule and the debugging-only exception: [`api/CLAUDE.md`](../../api/CLAUDE.md).
 
 ## Error Handling in Tests
 - Use exceptions for error handling, not return codes

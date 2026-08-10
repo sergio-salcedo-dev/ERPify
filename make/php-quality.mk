@@ -183,6 +183,26 @@ php.lint.schedule-consumption: ## Schedule transport-consumption gate
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleConsumptionGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleConsumptionRulesGateTest
 
+## —— Behat step-vocabulary gate ————————————————————————————————————————————
+
+# Fails CI when the Behat step vocabulary drifts from api/.behat-step-vocabulary: a declared pattern
+# classified nowhere, a classification whose pattern is gone, a `used` pattern no scenario reaches, an
+# `idle` one a scenario now reaches, a scenario calling a `manual` escape hatch or a `refused` phrasing,
+# or a step written in a feature that resolves to no pattern at all.
+#
+# It exists because the rule it mechanises ("the vocabulary is an asset to spend, never delete a step for
+# being unused, search before writing a near-duplicate") lived only in api/CLAUDE.md prose, and prose
+# drifts with every gate green: that paragraph counted 205 patterns against 209, 47 features against 49,
+# and named a context as wholly idle that thirteen scenarios were reaching, eighteen times.
+#
+# A green proves each pattern's CLASSIFICATION matches what the features do. It does not prove the
+# assertion behind a reached pattern can fail, it does not detect two patterns that say the same thing
+# in different words, and its placeholder token is wider than Behat's — the one direction where it
+# fails open, and where --strict rather than this gate catches the undispatchable step. The registry
+# header enumerates the rest of the blind spots.
+php.lint.step-vocabulary: ## Behat step-vocabulary classification gate
+	@$(PHP_TEST) bin/phpunit --filter=BehatStepVocabularyGateTest
+
 ## —— Deptrac (architectural boundaries) ————————————————————————————————————
 
 # Static, AST-aware gate over api/src enforcing three concerns in one ruleset
@@ -218,7 +238,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -236,7 +256,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -245,6 +265,6 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.gherkin php.gherkin.rules \
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource \
-        php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption \
+        php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary \
         php.deptrac php.deptrac.baseline \
         php.quality php.quality.dry-run

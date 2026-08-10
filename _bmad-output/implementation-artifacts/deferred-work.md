@@ -272,3 +272,35 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
   todas las peticiones, para un problema confinado a tres pantallas. Un filtro por ruta o un `replace` sobre
   el propio valor acotaría la pérdida. Queda descrito como hecho, no registrado como coste aceptado. Ref:
   `api/frankenphp/Caddyfile:64-73`, `PRODUCTION_SECURITY_CHECKLIST.md:361-377`.
+
+## Deferred from: code review of br-1-behat-vocabulario-falsabilidad (2026-08-10)
+
+- **La forma negativa de la tabla de outbox pasa sobre una cola vacía.** El bucle sobre
+  `messagesOnQueue()` no se ejecuta y el paso vuelve sin haber hecho ninguna aserción, así que «no debería
+  haberse creado un evento conteniendo X» es cierto tanto si ninguno casó como si el setup no produjo nada.
+  El test que lo cubre usa una cola no vacía. Ref: `api/tests/Behat/Context/OutboxContext.php:231-239`,
+  `api/tests/Unit/Behat/Context/OutboxTableMatchTest.php`.
+- **`runWorker()` registra exit 0 para una consumición que resolvió cero receivers.** Un `receivers`
+  ausente, vacío o con entradas no-string deja `[]`, el `Worker` gira hasta el límite de tiempo y
+  `the last run should succeed` pasa sobre una ejecución que no leyó nada — el caso que `LastRun` rechaza
+  para «no se ha ejecutado nada» y no para «se ejecutó en vacío». Ref:
+  `api/tests/Behat/Context/MessengerConsumerContext.php:201-236`.
+- **`the last run output should not contain` pasa vacuamente sobre un buffer vacío.** A verbosidad normal
+  el `ConsoleLogger` no escribe nada (el `Worker` solo loguea en `info`/`debug`), `output()` devuelve `''` y
+  la aserción negativa se cumple sola. El docblock del paso nombra justo la afirmación que esto vuelve
+  infalsificable. Ref: `api/tests/Behat/Context/RunOutcomeContext.php:92-108`.
+- **`I consume N messages` no asegura que se consumieran N.** Con menos mensajes pendientes que el límite,
+  el listener de tiempo para el worker, `run()` vuelve normal y el exit code es 0. Ref:
+  `api/tests/Behat/Context/MessengerConsumerContext.php:201-236`.
+- **Dos ejecuciones en un mismo escenario dejan la primera inasertable sin señal.** `record()` sobrescribe
+  incondicionalmente; la regla («aserta cada ejecución antes de empezar la siguiente») está escrita y nada
+  la enforcea. Ningún escenario comprometido la rompe hoy. Ref:
+  `api/tests/Behat/Support/Execution/LastRun.php:36-40`, `api/tests/Behat/Context/RunOutcomeContext.php:26-29`.
+- **La verbosidad se resuelve por última clave, no por máximo.** `{"-vvv": true, "--verbose": true}` acaba
+  en `VERY_VERBOSE`, degradando desde `DEBUG` según el orden de declaración. Ref:
+  `api/tests/Behat/Context/MessengerConsumerContext.php:118-124`.
+- **`regexFor()` da por regex cualquier patrón que empiece por `/`.** Behat exige delimitador de apertura
+  **y** cierre (`RegexPatternPolicy:60`); un patrón turnip como `/api/health returns :code` haría que
+  `preg_match` emitiera un warning y, con `failOnWarning="true"`, el gate muriera por un mensaje que no es
+  ninguno de los cinco suyos. Ningún patrón así existe hoy. Ref:
+  `api/tests/Unit/Shared/Architecture/Support/BehatVocabularyReader.php:174-176`.
