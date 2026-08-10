@@ -41,24 +41,36 @@ directory`). Do not re-split a group — treat it as one unit.
 
 ## 3. Detect the multi-pin trap (the reason this command exists)
 
-For every `github_actions` bump of `<owner>/<repo>/<path>@<sha>`:
+The trap is **multiple sub-paths of one action repository**, not multiple pin
+sites. Dependabot keys a dependency on the full `<owner>/<repo>/<path>`, so it
+already moves every occurrence of a single name in one PR — `actions/checkout`
+sits at 11 sites and arrives as one PR, never eleven. Counting raw sites would
+flag it, and the five other most-used actions here, as blocking when none of
+them are. List the distinct names instead:
 
 ```bash
-git grep -n "<owner>/<repo>" -- .github/workflows/
+git grep -hoE "uses: [a-zA-Z0-9._-]+/[a-zA-Z0-9._/-]+@" -- .github/workflows/ \
+  | sed 's/uses: //; s/@$//' | sort -u | awk -F/ '{print $1"/"$2}' \
+  | sort | uniq -c | awk '$1>1{print $1" sub-paths: "$2}'
 ```
 
-Count the distinct pin sites. **More than one site means that PR is red by
-construction** — it moves its own step and leaves the others behind, and the job
-dies with:
+**A repository with more than one sub-path is red by construction** — each PR
+moves its own step and leaves the siblings behind, and a job whose steps straddle
+two releases dies with:
 
 ```
 Loaded a configuration file for version 'X', but running version 'Y'
 ```
 
-Do not investigate such a red as a regression; it is the split itself. All sites
-must move to the same SHA in one commit. `github/codeql-action` is the standing
-example: `init` and `analyze` in `codeql.yml`, `upload-sarif` in `ci.yml` — three
-PRs, none of which can pass alone (#628/#629/#630 → #632).
+Do not investigate such a red as a regression; it is the split itself. All
+sub-paths must reach the same SHA in one commit.
+
+`github/codeql-action` is the worked example — `init` and `analyze` in
+`codeql.yml`, `upload-sarif` in `ci.yml` — and it is **grouped in
+`.github/dependabot.yaml` under `codeql-action`**, so it now arrives as a single
+PR. It is also the only such repository in this tree today: if the one-liner
+above prints anything else, that action needs a group of its own rather than a
+hand-batch every release.
 
 ## 4. Report
 
