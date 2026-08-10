@@ -9,20 +9,18 @@ use Behat\Gherkin\Node\TableNode;
 use Behat\Hook\BeforeScenario;
 use Behat\Step\Given;
 use Behat\Step\Then;
-use DateTimeImmutable;
-use DateTimeInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Event\Domain\DomainEvent;
-use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 use Erpify\Tests\Behat\Support\Json\Json;
 use Erpify\Tests\Behat\Support\Messenger\Outbox;
+use Erpify\Tests\Behat\Support\Messenger\OutboxEventFactory;
 use Erpify\Tests\Behat\Support\PostProcess\JsonToolTrait;
 use JsonException;
+use PHPUnit\Framework\AssertionFailedError;
 use RuntimeException;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Throwable;
 
 /**
  * Gherkin steps over the event-driven *outbox*. Reading it — which logical queues are inspectable, and
@@ -241,39 +239,20 @@ final class OutboxContext extends AbstractContext
     }
 
     /**
-     * Reconstructs the typed event from a stored-row-shaped JSON via the domain's own
-     * {@see DomainEvent::fromPrimitives()} and dispatches it on the default bus inside a transaction, so
-     * the persist-domain-event middleware writes the `event_store` row and the in-memory transport
+     * Dispatches a reconstructed event on the default bus inside a transaction, so the
+     * persist-domain-event middleware writes the `event_store` row and the in-memory transport
      * receives the message. The JSON carries `aggregateId`, optional `eventId`/`occurredOn`, and a
-     * `payload` object (the domain data, the same shape `toPrimitives()` returns).
+     * `payload` object — the same shape `toPrimitives()` returns. Rebuilding it is
+     * {@see OutboxEventFactory}'s job.
+     *
+     * @param class-string $fullyQualifiedClassName
      *
      * @throws JsonException
      */
     #[Then('I dispatch the :fullyQualifiedClassName outbox event with:')]
     public function dispatchOutboxEvent(string $fullyQualifiedClassName, PyStringNode $jsonPayload): void
     {
-        if (!\is_a($fullyQualifiedClassName, DomainEvent::class, true)) {
-            self::fail(\sprintf('"%s" is not a %s', $fullyQualifiedClassName, DomainEvent::class));
-        }
-
-        /** @var array<string, mixed> $decoded */
-        $decoded = (array) \json_decode($jsonPayload->getRaw(), true, 512, JSON_THROW_ON_ERROR);
-
-        $aggregateId = \is_string($decoded['aggregateId'] ?? null) ? $decoded['aggregateId'] : '';
-        $eventId = \is_string($decoded['eventId'] ?? null) ? $decoded['eventId'] : Uuid::generate();
-        $occurredOn = \is_string($decoded['occurredOn'] ?? null)
-            ? $decoded['occurredOn']
-            : (new DateTimeImmutable())->format(DateTimeInterface::ATOM);
-
-        $payload = [];
-
-        if (\is_array($decoded['payload'] ?? null)) {
-            foreach ($decoded['payload'] as $key => $value) {
-                $payload[(string) $key] = $value;
-            }
-        }
-
-        $event = $fullyQualifiedClassName::fromPrimitives($aggregateId, $payload, $eventId, $occurredOn);
+        $event = OutboxEventFactory::fromJson($fullyQualifiedClassName, $jsonPayload->getRaw());
 
         $this->entityManager->wrapInTransaction(function () use ($event): void {
             $this->messageBus->dispatch($event);
@@ -355,17 +334,18 @@ final class OutboxContext extends AbstractContext
      * scenario that reaches for one gets the canonical form back instead of "step undefined", and
      * nobody re-adds the phrase believing it is missing.
      *
-     * They cannot assert, because "the outbox" is not one queue. A read with no queue named
+     * They cannot assert, because "the outbox" is not one queue: a read with no queue named
      * concatenates every inspectable queue into one 1-based list, so position 1 is an `async`
      * envelope right up until `async` happens to be empty and it silently becomes a `failed` one,
      * and a count sums queues the scenario never asked about. Nothing routes to `failed` under the
      * consume steps today — the private dispatcher carries no failure-transport listener — so the
-     * ambiguity is latent by composition of the double rather than by design, and a change to that
-     * dispatcher wakes it with no test going red.
+     * ambiguity is latent by composition of the double, and a change there wakes it with nothing
+     * going red.
      *
-     * The queue-named siblings say the same things and are what every committed scenario already
-     * uses. This is not vocabulary being deleted; it is a near-duplicate phrasing, whose halves would
-     * otherwise stay half-used, resolving to the one that can be read.
+     * The queue-named siblings say the same things, and every committed scenario that counts, selects
+     * or removes already uses them; the two table-match forms are idle on both sides of the rename,
+     * which the registry records. This is not vocabulary being deleted — it is a near-duplicate
+     * phrasing, whose halves would otherwise stay half-used, resolving to the one that can be read.
      */
     private function refuseUnqualified(string $qualified): never
     {
@@ -417,6 +397,13 @@ final class OutboxContext extends AbstractContext
         return new Json(\json_encode($data, JSON_THROW_ON_ERROR));
     }
 
+    /**
+     * The exception is the predicate, and only a *failed assertion* may be read that way. Catching
+     * everything would fold an unregistered modifier, an unparseable path and an unencodable event
+     * into "did not match" — and in the negative step "did not match" is success, so a broken table
+     * would prove the absence it was written to prove. What this cannot separate, because nothing
+     * can: a misspelled property is genuinely absent, and absent is a legitimate non-match.
+     */
     private function eventMatchesTable(object $event, TableNode $table): bool
     {
         try {
@@ -425,7 +412,7 @@ final class OutboxContext extends AbstractContext
             foreach ($table->getRowsHash() as $property => $value) {
                 $this->jsonPropertyShouldBeEqualTo($json, $property, $value);
             }
-        } catch (Throwable) {
+        } catch (AssertionFailedError) {
             return false;
         }
 

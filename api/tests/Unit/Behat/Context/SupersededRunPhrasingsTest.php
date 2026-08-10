@@ -7,22 +7,20 @@ namespace Erpify\Tests\Unit\Behat\Context;
 use Closure;
 use Erpify\Tests\Behat\Context\MessengerConsumerContext;
 use Erpify\Tests\Behat\Context\SymfonyCommandContext;
-use Erpify\Tests\Behat\Support\Execution\LastRun;
-use Erpify\Tests\Behat\Support\Messenger\MessengerTransports;
+use Erpify\Tests\Unit\Behat\Context\Fixtures\RunContextFactory;
+use Erpify\Tests\Unit\Shared\Architecture\Support\BehatVocabularyReader;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Messenger\Handler\HandlersLocatorInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Throwable;
 
 /**
- * The six phrasings that used to be two vocabularies for the same three assertions stay registered and
- * refuse, each naming the canonical form.
+ * The six superseded phrasings stay registered and refuse, each naming the canonical form.
  *
  * Keeping them is what stops the next reader re-adding one believing it is missing, and what turns
  * reaching for one into a correction rather than "step undefined". None of that survives if a refusal
@@ -50,10 +48,17 @@ final class SupersededRunPhrasingsTest extends TestCase
         string $expected,
         string $canonical,
     ): void {
-        $this->expectException($expected);
-        $this->expectExceptionMessage($canonical);
+        try {
+            $step($this);
+        } catch (Throwable $throwable) {
+            $this->assertInstanceOf($expected, $throwable);
+            $this->assertStringContainsString($canonical, $throwable->getMessage());
+            $this->assertSuggestionIsADeclaredStep($throwable->getMessage(), 'Use: ');
 
-        $step($this);
+            return;
+        }
+
+        $this->fail('The superseded phrasing returned instead of refusing.');
     }
 
     /**
@@ -107,9 +112,7 @@ final class SupersededRunPhrasingsTest extends TestCase
 
     private function messenger(): MessengerConsumerContext
     {
-        return new MessengerConsumerContext(
-            new LastRun(),
-            new MessengerTransports(new Container()),
+        return RunContextFactory::messenger(
             $this->createStub(MessageBusInterface::class),
             $this->createStub(HandlersLocatorInterface::class),
         );
@@ -117,6 +120,40 @@ final class SupersededRunPhrasingsTest extends TestCase
 
     private function console(): SymfonyCommandContext
     {
-        return new SymfonyCommandContext(new LastRun(), $this->createStub(KernelInterface::class));
+        return RunContextFactory::console($this->createStub(KernelInterface::class));
+    }
+
+    /**
+     * A refusal earns its keep only if what it points at exists. Nothing else ties the suggested
+     * phrasing to a declared pattern: production code and test would otherwise assert the same literal
+     * typed twice, so renaming the canonical step leaves every refusal handing back a phrase that
+     * produces "step undefined" — the outcome the mechanism exists to prevent — with all gates green.
+     *
+     * The vocabulary reader resolves step *lines* against declared patterns, and a suggestion is one.
+     */
+    private function assertSuggestionIsADeclaredStep(string $message, string $marker): void
+    {
+        $position = \strpos($message, $marker);
+
+        $this->assertNotFalse(
+            $position,
+            \sprintf('The refusal carries no "%s" suggestion at all: %s', $marker, $message),
+        );
+
+        $suggestion = \trim(\substr($message, $position + \strlen($marker)));
+        $reader = new BehatVocabularyReader(
+            \dirname(__DIR__, 3) . '/Behat',
+            \dirname(__DIR__, 4) . '/features',
+        );
+
+        $this->assertSame(
+            [],
+            $reader->unresolvedStepsAmong([$suggestion]),
+            \sprintf(
+                'The refusal suggests "%s", which matches no declared step pattern. A redirect to a step '
+                . 'that does not exist is "step undefined" with extra words.',
+                $suggestion,
+            ),
+        );
     }
 }

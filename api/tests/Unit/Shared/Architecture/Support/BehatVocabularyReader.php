@@ -135,10 +135,23 @@ final class BehatVocabularyReader
      */
     public function unresolvedSteps(): array
     {
+        return $this->unresolvedStepsAmong($this->featureSteps());
+    }
+
+    /**
+     * The same resolution, over any set of step lines — a refusal's suggested phrasing is one, and
+     * checking it is what keeps a redirect pointing at a step that still exists.
+     *
+     * @param list<string> $steps
+     *
+     * @return list<string>
+     */
+    public function unresolvedStepsAmong(array $steps): array
+    {
         $regexes = \array_map($this->regexFor(...), $this->declaredPatterns());
         $unresolved = [];
 
-        foreach ($this->featureSteps() as $step) {
+        foreach ($steps as $step) {
             foreach ($regexes as $regex) {
                 if (1 === \preg_match($regex, $step)) {
                     continue 2;

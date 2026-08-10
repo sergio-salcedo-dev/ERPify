@@ -57,7 +57,7 @@ medidas. **D2 y D3 se ratificaron el 2026-08-09 con el código delante** (T0): D
 | **D1** | #320: ¿fallo limpio o wontfix documentado? ¿2 métodos o los 13? | ✅ **RATIFICADA — fallo limpio, los 13** | Arreglar 2 y dejar 11 con el defecto reparte el mismo trait en dos contratos. El coste marginal del 3.º al 13.º es cero |
 | **D2** | #313: ¿sintaxis de escape `\:\:` o wontfix documentado? | ✅ **RATIFICADA — wontfix documentado** | La opción de «modificador sólo si el nombre está registrado» **contradice el contrato del docblock** (`NodeModifierLocator.php:16-18`: *«an unknown suffix is a loud exception, never a silent miss»*) — cambiaría un fallo ruidoso por una degradación silenciosa. Y el escape añade sintaxis a las features para un caso con **0 ocurrencias medidas** |
 | **D3** | #319: ¿cualificar por cola los pasos no cualificados, o retirarlos? | ✅ **RATIFICADA — rechazo ruidoso: TODO paso de outbox nombra su cola** | Sergio eligió la variante más fuerte de «cualificar», por encima de la recomendada (defaultear a `async`). No choca con `api/CLAUDE.md:80`: la frase **no se borra**, queda registrada y **redirige** a la canónica. Lo que se retira es una *near-duplicate phrasing* — el propio párrafo de esa regla la llama «the actual waste». Coste medido: 2 líneas de feature |
-| **D4** | ¿Entra en BR-1 el **mecanismo de falsabilidad** del vocabulario, o es lote aparte? | ✅ **RATIFICADA — entra** | Es lo que el título del lote promete y lo único que impide que #601 se vuelva a pudrir. Coste: 1 clase de gate en un hogar que ya tiene 25 hermanas. Riesgo: cero producción. **Pero es crecimiento de alcance sobre los 7 issues — decisión de Sergio, no del implementador** |
+| **D4** | ¿Entra en BR-1 el **mecanismo de falsabilidad** del vocabulario, o es lote aparte? | ✅ **RATIFICADA — entra** | Es lo que el título del lote promete y lo único que impide que #601 se vuelva a pudrir. Coste: 1 clase de gate en un hogar que ya tiene 24 hermanas. Riesgo: cero producción. **Pero es crecimiento de alcance sobre los 7 issues — decisión de Sergio, no del implementador** |
 | **D5** | Las **seis vacuidades medidas que ningún issue registra** (sección siguiente): ¿entran? | ✅ **RATIFICADA — las seis, V6 incluida** | Las cinco de `JsonToolTrait` viven en el fichero que #320 ya abre: boy-scout, coste marginal ~0, y son literalmente «asserts que no pueden fallar», el tema del lote. V6 vive en un fichero que nadie más toca y entra igualmente, porque es el mismo defecto de clase y **un pendiente aquí sería PR propia, no una etiqueta** |
 
 ## Realidad medida, issue por issue
@@ -72,7 +72,7 @@ Medido dos veces por lectores independientes y verificado a mano en los cuatro p
 | `transport()` devuelve `null` cuando la cola no existe → el assert a cero pasa sin mirar | **Cerrado por construcción.** `MessengerTransports::inMemory()` (`:94-103`) **lanza** `RuntimeException` si el servicio no es `InMemoryTransport`. `service()` (`:105-110`) sólo devuelve `null` para alimentar el mensaje de rechazo |
 | El fetch-size trunca la lectura | **Cerrado.** `MessengerTransports.php:33` — `WHOLE_QUEUE = PHP_INT_MAX`, con el porqué en `:56-60` |
 
-El docblock declara el invariante (`MessengerTransports.php:25-27`): *«It refuses rather than degrades: a name that
+El docblock declara el invariante (`MessengerTransports.php:25-26`): *«It refuses rather than degrades: a name that
 resolves to nothing, or to a transport of the wrong kind, throws instead of yielding an empty read that would
 satisfy a zero-assertion.»* Arreglado por `ab796333` (#596), centralizado por `50a82c0e` (#598).
 
@@ -180,7 +180,7 @@ Mecánico bajo D3.
 |---|---|
 | `explicitModifierName()` toma la subcadena tras el último `::` sin escape | **CONFIRMADO** — `tests/Behat/NodeModifier/NodeModifierLocator.php:86-99` (`strrpos($path, '::')`, `substr($position + 2)`) |
 | Un sufijo no registrado lanza | **CONFIRMADO** — `:64-71`, `UnknownNodeModifierException` en `:70` |
-| El impacto es teórico | **CONFIRMADO y medido.** Los únicos sufijos `::` en los 49 features son `::amount` y `::null`. **Cero** paths con `::` literal |
+| El impacto es teórico | **CONFIRMADO y medido.** Los sufijos `::` de los 49 features son cinco — `::uuid ::regex ::date` (`create.feature:33-35`) y `::null ::amount` (`search.feature:51-54`) — y **todos** son modificadores registrados. **Cero** paths con `::` literal: el resto de `::` del árbol vive en strings SQL (`::jsonb`, `roles::text`) o en comentarios |
 
 Única evolución desde su apertura: `:96-98` ahora trata un `::` final desnudo como path literal en vez de lanzar por
 nombre vacío. La limitación de fondo sigue intacta. **Exige D2.**
@@ -333,7 +333,7 @@ Sus hallazgos se escriben en este artefacto antes de abrir el PR, y el cuerpo de
         D4 = no, se re-miden a mano y se acepta que volverán a derivar
   - [x] Decidir la deriva de `api/CLAUDE.md:27`: corregida — `tools/` ya no lista Behat
 - [x] **T9 · Gates + rojos provocados.** (AC: 8, 9)
-- [ ] **T10 · Pase adversarial, registrado aquí, ANTES del PR.** (AC: 10)
+- [x] **T10 · Pase adversarial, registrado aquí, ANTES del PR.** (AC: 10)
 - [ ] **T11 · Code review de la tarea completa**, y sólo entonces mover el marcador de sprint a `done`.
 
 ## Dev Notes
@@ -364,7 +364,7 @@ semántico por debajo. #430 y #313 son paralelizables e independientes.
 
 - **`api/tools/behat` no existe.** Behat 4 vive en el árbol único: `api/composer.json` (`require-dev`),
   configurado por `api/behat.dist.php`, ejecutado desde `api/vendor/bin/behat`.
-- Los gates estáticos viven en `api/tests/Unit/Shared/Architecture/` — **25 clases** hoy.
+- Los gates estáticos viven en `api/tests/Unit/Shared/Architecture/` — **24 clases** en la base, 25 con la de este lote.
 - El soporte de Behat se reparte entre `tests/Behat/Context/`, `tests/Behat/Support/` y `tests/Behat/NodeModifier/`.
 
 ### Patrones a REUTILIZAR
@@ -554,6 +554,7 @@ api/features/backoffice/bank_account/create.feature
 api/features/backoffice/bank_account/delete.feature
 api/features/backoffice/bank_account/status.feature
 api/features/backoffice/bank_account/update.feature
+api/features/backoffice/identity/identity_integrity.feature
 api/features/shared/console/dead_letter_status.feature
 api/tests/Behat/Context/MessengerConsumerContext.php
 api/tests/Behat/Context/OutboxContext.php
@@ -562,9 +563,11 @@ api/tests/Behat/Context/SymfonyCommandContext.php
 api/tests/Behat/NodeModifier/NodeModifierLocator.php
 api/tests/Behat/NodeModifier/Scalar/BackedEnumNodeModifier.php
 api/tests/Behat/Support/Execution/LastRun.php
+api/tests/Behat/Support/Messenger/OutboxEventFactory.php
 api/tests/Behat/Support/PostProcess/JsonToolTrait.php
 api/tests/Behat/Support/PostProcess/PropertyPostProcessTrait.php
 api/tests/Unit/Behat/Context/Fixtures/OutboxContextFactory.php
+api/tests/Unit/Behat/Context/Fixtures/RunContextFactory.php
 api/tests/Unit/Behat/Context/OutboxTableMatchTest.php
 api/tests/Unit/Behat/Context/OutboxUnqualifiedStepsTest.php
 api/tests/Unit/Behat/Context/SupersededRunPhrasingsTest.php
@@ -578,63 +581,117 @@ api/tests/Unit/Shared/Architecture/BehatStepVocabularyGateTest.php
 api/tests/Unit/Shared/Architecture/Support/BehatVocabularyReader.php
 api/tools/phpstan/phpstan.neon
 docs/claude-code-quickref.md
+docs/rules/testing.md
 make/php-quality.mk
+make/php-test.mk
 ```
 
 ### Gates
 
-**Tanda final — 2026-08-09, con todo el lote dentro.** Cada uno de corrida fresca, exit code impreso; ninguno
-copiado de una corrida anterior.
+**Tanda final — 2026-08-10, rebasada sobre `origin/main` @ `935e86dc` y con los hallazgos del pase
+adversarial aplicados.** Cada uno de corrida fresca, exit code impreso; ninguno copiado.
 
 | Gate | Exit | Resultado |
 |---|---|---|
-| `make php.quality` | **0** | sweep completo: stan · rector · cs-fixer · phpmd · phpcs · gherkin · 7 lint gates · deptrac · cs.dry-run |
+| `make php.quality` | **0** | sweep completo: stan · rector · cs-fixer · phpmd · phpcs · gherkin · 8 lint gates · deptrac · cs.dry-run |
 | `make php.stan` | **0** | No errors |
-| `make php.unit` | **0** | 2515 tests, 12 447 assertions, 2 skipped |
-| `make php.behat` | **0** | 410 escenarios / 3806 pasos |
-| `make php.gherkin` | **0** | 49 feature files, sin problemas |
-| `make php.lint.step-vocabulary` | **0** | 5 tests, 2188 assertions |
+| `make php.unit` | **0** | 2563 tests, 12 584 assertions, 2 skipped |
+| `make php.behat` | **0** | 425 escenarios / 3967 pasos — **en `--strict`** |
+| `make php.gherkin` | **0** | sin problemas |
+| `make php.lint.step-vocabulary` | **0** | 5 tests, 2208 assertions |
 
-> **Corrección a esta historia:** el AC8 nombra `make php.lint.gherkin`. **Ese target no existe** — el real es
-> `make php.gherkin`. Un gate citado por un nombre que no resuelve es exactamente el defecto del lote, y aquí
-> estaba en la propia lista de aceptación.
+> **Correccion a esta historia:** el AC8 nombra `make php.lint.gherkin`. **Ese target no existe** — el real es
+> `make php.gherkin`. Un gate citado por un nombre que no resuelve es exactamente el defecto del lote, y aqui
+> estaba en la propia lista de aceptacion.
 
 ### Rojos provocados
 
-**Re-medido al final**, con todo el diff dentro. Restauración siempre por **copia de bytes** desde
-`tmp/br1-falsification/`, nunca con `git checkout --`; verificada con `cmp -s` en las cinco.
+**Re-medido al final**, con el diff completo y rebasado. Restauracion siempre por **copia de bytes** desde
+`tmp/br1-falsification/`, nunca con `git checkout --`; verificada con `cmp -s` en las siete.
 
-| # | Qué se rompió | Rojos | De |
+| # | Que se rompio | Rojos | De |
 |---|---|---|---|
 | M-A | `JsonToolTrait` completo → bytes de `f2e80a9d` | **34** (33 failures + 1 error) | 38 |
 | M-B | `BackedEnumNodeModifier` → bytes de `f2e80a9d` | **3** | 4 |
 | M-C | `LastRun` responde `0` en vez de rechazar «no se ha ejecutado nada» | **3** | 4 |
 | M-D | `OutboxContext::refuseUnqualified()` retorna en vez de lanzar | **6** | 6 |
 | M-E | `MessengerConsumerContext::refuseSupersededPhrase()` retorna en vez de lanzar | **2** | 6 |
+| M-F | la frase canonica que sugiere el rechazo deja de existir (`should succeed` → `should pass`) | **2** | 6 |
+| M-G | `eventMatchesTable()` vuelve a `catch (Throwable)` | **2** | 7 |
 
-M-E da 2 de 6 y es correcto: sólo se neutralizó el helper de *messenger*; las cuatro frases de consola pasan por
-el de `SymfonyCommandContext`, que quedó intacto. Un 6 de 6 ahí habría sido la señal de que los tests no
-distinguen los dos sujetos.
+M-E y M-F dan 2 de 6 y es correcto: solo se neutraliza el helper de *messenger* / una de las canonicas; las
+frases de consola pasan por el helper de `SymfonyCommandContext`, intacto. Un 6 de 6 seria la senal de que los
+tests no distinguen los dos sujetos.
 
-**El gate del vocabulario, comprobación por comprobación** — seis mutaciones, seis rojos, cada uno **sólo** en la
+**M-G es el hallazgo del propio pase de falsificacion, y merece decirse.** La primera version del arreglo del
+predicado (`catch (Throwable)` → `catch (AssertionFailedError)`) **no ponia rojo nada** al revertirla: se aplico
+un arreglo sin el test que lo prueba, que es literalmente el defecto de este lote cometido dentro de el. Los dos
+tests que faltaban —selector con modificador no registrado, en la forma positiva y en la negativa— se
+escribieron despues y son los que dan el 2 de 7.
+
+**El gate del vocabulario, comprobacion por comprobacion** — seis mutaciones, seis rojos, cada uno **solo** en la
 que le toca (ninguna solapa, que es lo que prueba que las cinco comprobaciones son cinco y no una repetida):
 
-| Mutación | Rojo en |
+| Mutacion | Rojo en |
 |---|---|
-| borrar una clasificación del registro | `…IsClassifiedAndEveryClassificationHasAPattern` |
-| clasificar un patrón que no existe | `…IsClassifiedAndEveryClassificationHasAPattern` |
-| marcar `used` un patrón ocioso | `…UsedIsReachedByAFeature` |
-| marcar `idle` un patrón en uso | `…IdleIsReachedByNoFeature` |
-| marcar `manual` un patrón que los escenarios llaman | `…CallsAStepThatIsNotForScenarios` |
+| borrar una clasificacion del registro | `…IsClassifiedAndEveryClassificationHasAPattern` |
+| clasificar un patron que no existe | `…IsClassifiedAndEveryClassificationHasAPattern` |
+| marcar `used` un patron ocioso | `…UsedIsReachedByAFeature` |
+| marcar `idle` un patron en uso | `…IdleIsReachedByNoFeature` |
+| marcar `manual` un patron que los escenarios llaman | `…CallsAStepThatIsNotForScenarios` |
 | escribir en un feature un paso que no existe | `…ResolvesToADeclaredPattern` |
 
-**Rojo no provocado sino encontrado:** los 9 pasos de Behat que murieron por la colisión `describe()` (ver Debug
-Log). Es la evidencia de que el gate de Behat no es decorativo aquí — PHPStan y los unit tests dieron verde con el
+**Rojo no provocado sino encontrado:** los 9 pasos de Behat que murieron por la colision `describe()` (ver Debug
+Log). Es la evidencia de que el gate de Behat no es decorativo aqui — PHPStan y los unit tests dieron verde con el
 defecto dentro.
 
 ### Pase adversarial
 
-_Pendiente — T10. Se ejecuta y se registra **aquí** antes de `gh pr create`._
+**Ejecutado el 2026-08-10, ANTES de `gh pr create`, por tres contextos frescos e independientes** (lentes:
+vacuidad · regresion y cobertura perdida · auditoria de afirmaciones). Todos en modo lectura estricta. Cada
+hallazgo se verifico a mano antes de aceptarlo. **Doce aplicados, uno descartado con argumento.**
+
+#### GRAVES / SERIOS
+
+| # | Hallazgo | Que se hizo |
+|---|---|---|
+| R1 | **La suite corria sin `--strict`.** `strict` es `defaultFalse()`, `UNDEFINED = 30` y `SoftInterpretation::isFailure()` exige `>= FAILED (99)`: **un paso indefinido no rompia la build**. Y este cambio lo empeoraba: las 4 aserciones de ejecucion pasaron a un contexto que solo tiene `Then`, asi que perder su linea de registro quita las comprobaciones y **deja el escenario con pinta de haber corrido** (antes, perder el contexto dejaba el `When` indefinido y el escenario se saltaba, que es visible) | `make php.behat` pasa **`--strict`**. Verde: 425/425 |
+| R2 | **La deriva reaparecio dentro del PR**: `api/CLAUDE.md` seguia recomendando `there should not have been an outbox event created containing:`, que este cambio convierte en rechazo | Corregido a la forma cualificada |
+| V1 | **`eventMatchesTable()` capturaba `Throwable`**, asi que un modificador no registrado, un path imparseable o un fallo de codificacion se leian como «no casa» — y en la forma **negativa** eso es **pasar**: el paso probaba la ausencia que venia a probar, sobre una tabla que nadie pudo leer | `catch (AssertionFailedError)`. **Y los dos tests que lo falsifican** (M-G) |
+| V2 | **Las frases canonicas que sugieren los 14 rechazos no estaban atadas a ningun paso declarado**: codigo y test comparaban el mismo literal escrito dos veces, asi que renombrar la canonica dejaba cada rechazo apuntando a un «step undefined» con todos los gates verdes | `BehatVocabularyReader::unresolvedStepsAmong()` + asercion en ambos tests de rechazo. Falsificado por M-F |
+| A1 | **«eighteen scenarios»** es falso: son **18 invocaciones en 13 escenarios**. Estaba en **6 artefactos durables**, incluido el header del registro cuyo proposito declarado es que esta clase de numero deje de derivar | Corregido en los 6 |
+| A2 | **«More than half of it is idle»** es falso bajo el corte de cuatro vias: `idle` es 94/219 = **43 %**. Llega a la mitad solo si se le suman `manual` y `refused`, que el mismo parrafo prohibe sumar | La prosa deja de citar la proporcion |
+| A3 | **Seis comentarios relativos al cambio** («used to…») en ficheros nuevos — el patron que este repo prohibe explicitamente | Reescritos los seis |
+
+#### MENORES aplicados
+
+`.PHONY` sin `php.lint.step-vocabulary` · import desordenado en `behat.dist.php` (fichero fuera del `finder` de
+cs-fixer, nadie lo corregiria nunca) · `jsonPropertyShouldNotBeEqualTo` quedo type-strict mientras sus hermanos
+se endurecian, asi que `{"total": 5}` satisfacia `should not be equal to "5"` por el tipo y no por el valor ·
+`refuseUnqualified()` afirmaba que las hermanas cualificadas «son lo que ya usa todo escenario», falso para el par
+de tabla · **un escenario solo puede asertar sobre la ultima ejecucion** ahora que `LastRun` es compartido —
+documentado donde se decide · `docs/rules/testing.md` seguia apuntando a «current numbers» en una prosa que ya no
+los tiene · «25 hermanas» eran 24 en la base · «los unicos sufijos `::` son `::amount` y `::null`» eran cinco ·
+`MessengerTransports.php:25-27` → `:25-26`.
+
+**Blind spots que faltaban en el header del registro** (los tres se anadieron): `used` significa que **algun**
+paso casa, pero Behat despacha cada paso a **una sola** definicion — dos patrones que casen el mismo paso leerian
+ambos `used` (medido hoy: 0 de 954); la traduccion del turnip diverge de la de Behat en cinco formas que Behat si
+soporta (medido: coinciden exactamente sobre todos los patrones x todos los pasos); y el reader recorre todo
+`features/` mientras la suite declara tres raices.
+
+#### Descartado, con argumento
+
+Un pase senalo que el reader escanea todo `api/features` mientras Behat corre tres subdirectorios nombrados, y lo
+dio por hueco. **Ya esta gateado** por el hermano `BehatSuiteCoverageGateTest::testEveryFeatureFileSitsUnderADeclaredSuitePath`,
+que se pone rojo ante un `.feature` fuera de las raices declaradas. El agente no miro el gate hermano. Se registra
+igualmente en el header del registro, apuntando a quien lo cubre.
+
+#### Residuo declarado, no arreglado
+
+El commit `a37ffe29` dice «34 of **44** red for the trait»; el denominador correcto, re-medido tras dividir los
+test por responsabilidad, es **38**. El mensaje de un commit ya empujado no se reescribe: queda corregido aqui y
+en la tabla de arriba, que es la que manda.
 
 ### Change Log
 

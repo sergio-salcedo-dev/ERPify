@@ -5,8 +5,8 @@
 # never dead code — so it must not be deleted for being unused, and a new near-duplicate phrasing must
 # not be written before searching what exists. Both halves of that rule are claims about which steps
 # are reached, and until this file existed nothing recomputed either: the prose stating them counted
-# 205 patterns against 209, 47 features against 49, and named a context as wholly idle that eighteen
-# scenarios were using. Every gate stayed green through all three.
+# 205 patterns against 209, 47 features against 49, and named a context as wholly idle that thirteen
+# scenarios were reaching, eighteen times. Every gate stayed green through all four.
 #
 # Format, one per line:
 #   <step pattern exactly as the attribute declares it> => used | idle | manual | refused
@@ -43,9 +43,25 @@
 #   - It reads only `#[Given]`/`#[When]`/`#[Then]` attributes under `tests/Behat`. A step registered
 #     any other way is invisible to it.
 #   - It says nothing about whether a context is wired into `behat.dist.php`. An unregistered context
-#     declares patterns nobody can call, and every one of them reads here as `idle`.
+#     declares patterns nobody can call, and every one of them reads here as `idle`. Losing a
+#     registration is caught only by the suite going red, which needs `--strict` — Behat's default
+#     counts an undefined step as neither pass nor failure, and `make php.behat` passes `--strict`
+#     for exactly that reason.
+#   - `used` means SOME feature step matches the pattern; Behat dispatches each step to exactly ONE
+#     definition. Two patterns matching the same step would both read `used` while only one runs —
+#     the near-duplicate case above, in its more dangerous form. Measured today: 0 of the 912 step
+#     lines match more than one pattern, so nothing is currently mis-classified.
+#   - The turnip translation is re-implemented here, and diverges from Behat's in shapes Behat
+#     supports today: its match is case-insensitive and this one is not, its placeholder token is
+#     narrower, it reads `word/word` as an alternation and `(The )` as an optional group, and it
+#     accepts `~ # ` + {…}` as regex delimiters. Measured across all patterns × all step lines the
+#     two agree exactly; a divergence that ever bites shows up first as an unresolved feature step,
+#     which is the check that fails closed.
+#   - It reads every `.feature` under `features/`, while the suite declares three roots. A file
+#     outside them would mark patterns `used` that no run executes — caught by the sibling
+#     BehatSuiteCoverageGateTest, which fails on a feature file under no declared suite path.
 #
-# Counts at the last edit: 101 used · 94 idle · 9 manual · 13 refused (217 patterns, 912 distinct
+# Counts at the last edit: 102 used · 94 idle · 9 manual · 14 refused (219 patterns, 954 distinct
 # step lines across the feature suite). They are recomputed by the gate, so they cannot drift here
 # unnoticed — but nothing keeps this comment in step with them, so trust the file, not this line.
 # ---------------------------------------------------------------------------------------------------
@@ -208,6 +224,7 @@ the JSON should not be valid according to swagger :dumpPath dump schema :schemaN
 the anonymous API rate-limit budget is exhausted for client :clientIp => used
 the command output should be JSON with a :field field => refused
 the command output should contain :needle => refused
+the command output should not contain :needle => refused
 the command should succeed => refused
 the error :message should exist => idle
 the error :message with code :code should exist => idle
@@ -225,6 +242,7 @@ the last command should fail => refused
 the last command should succeed => refused
 the last run output should be JSON with a :field field => used
 the last run output should contain :text => used
+the last run output should not contain :text => used
 the last run should fail => used
 the last run should succeed => used
 the logger did not log a log entry as :level with message :message => idle

@@ -27,10 +27,10 @@ final class BackedEnumNodeModifierTest extends TestCase
     }
 
     /**
-     * The case name used to be located by searching the value for the literal token `Enum::`, which
-     * tied resolution to the enum being *named* with that suffix. Not one enum in this repo is, so a
-     * search that found nothing cast to offset 0 and the case was read from six characters into the
-     * FQCN — every enum resolving to a name no case matches.
+     * Resolution must not depend on how the enum is *named*. Locating the case by searching the value
+     * for a literal `Enum::` token does exactly that, and not one enum in this repo carries it: the
+     * search finds nothing, the miss casts to offset 0, and the case is read from six characters into
+     * the FQCN — a name no case matches.
      */
     #[Test]
     public function itResolvesAnEnumWhoseNameDoesNotEndInEnum(): void

@@ -12,17 +12,16 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The two assertions that used to hold for values which are not the shape they assert about.
+ * The two assertions whose subject is the *shape* of a node, judged on values that are not that shape.
  *
- * `should have N elements` counted `(array) $value`, and the cast wraps a scalar into a one-element
- * array and turns null into an empty one — so "should have 1 element" held for any scalar and
- * "should have 0 elements" held for an explicit null. `should be true` / `should be false` filtered
- * through `FILTER_VALIDATE_BOOLEAN`, which maps everything it does not recognise to false: "", 0, null,
- * [] and any unrecognised string all satisfied "should be false", and "yes" satisfied "should be true".
+ * Both have a cheap wrong answer. Counting `(array) $value` counts the cast, which wraps a scalar into
+ * a one-element array and turns null into an empty one, so a collection assertion would hold for values
+ * that are not collections. Filtering through `FILTER_VALIDATE_BOOLEAN` maps everything it does not
+ * recognise to false, so a boolean assertion would hold for "", 0, null, [] and any unrecognised string.
+ * Each is green over a value that never carried the property being asserted.
  *
- * Both failed the same way — green over a value that never had the property being asserted. Each case
- * is paired with the value the step is supposed to accept, because an assertion that rejected
- * everything would satisfy the first half on its own.
+ * Every case is paired with the value the step is supposed to accept, because an assertion that
+ * rejected everything would satisfy the first half on its own.
  *
  * {@see CoversNothing} because the subject is test infrastructure — `tests/` sits outside the coverage
  * allowlist, so there is no production line here to credit.

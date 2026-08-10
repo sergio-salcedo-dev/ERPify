@@ -101,7 +101,7 @@ final class SymfonyCommandContext extends AbstractContext
      * Superseded — refuses. See {@see theLastCommandShouldSucceed()}.
      */
     #[Then('the command output should not contain :needle')]
-    public function theCommandOutputShouldNotContain(string $needle): void
+    public function theCommandOutputShouldNotContain(string $needle): never
     {
         $this->refuseSupersededPhrase(\sprintf('the last run output should not contain "%s"', $needle));
     }

@@ -16,10 +16,9 @@ use PHPUnit\Framework\TestCase;
 /**
  * The three outcomes "the JSON should be invalid according to this schema" has to keep apart.
  *
- * It used to accept any exception as proof of invalidity, so it passed hardest exactly when it had
- * checked least: an unresolvable `$ref`, an unreadable schema or a missing library each satisfied it as
- * convincingly as a payload the schema had actually rejected. Only the middle one is the claim the step
- * makes; the other two mean the schema never ran at all.
+ * Only one of them is the claim the step makes. An unresolvable `$ref`, an unreadable schema or a
+ * missing library all end the validation without the schema ever being applied, and reading any of
+ * them as "invalid" makes the step pass hardest exactly when it has checked least.
  *
  * {@see CoversNothing} because the subject is test infrastructure — `tests/` sits outside the coverage
  * allowlist, so there is no production line here to credit.

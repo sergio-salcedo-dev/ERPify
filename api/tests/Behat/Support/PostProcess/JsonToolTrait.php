@@ -99,14 +99,27 @@ trait JsonToolTrait
         );
     }
 
+    /**
+     * Both operands go through the modifier, and the comparison is loose, mirroring
+     * {@see jsonPropertyShouldBeEqualTo()} exactly. Comparing the raw node with `===` against a value
+     * Gherkin always delivers as a string made the step pass on the type rather than the value: a
+     * node holding `5` satisfied `should not be equal to "5"`, and went on satisfying it if the API
+     * started returning precisely the value the scenario forbids.
+     */
     public function jsonPropertyShouldNotBeEqualTo(Json $json, string $property, mixed $expectedValue): void
     {
         $expectedValue = $this->propertyPostProcessValue($property, $expectedValue);
-        $value = $this->readNode($json, $property);
 
-        self::assertNotSame(
+        if ($expectedValue instanceof BackedEnum) {
+            $expectedValue = $expectedValue->value;
+        }
+
+        $value = $this->readNode($json, $property);
+        $actual = $this->propertyPostProcessValue($property, $value);
+
+        self::assertNotEquals(
             $expectedValue,
-            $value,
+            $actual,
             \sprintf(
                 'Property %s value is %s, which is equal to %s, but should not',
                 $property,

@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Behat\Context;
 use Behat\Gherkin\Node\TableNode;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Tests\Behat\Context\OutboxContext;
+use Erpify\Tests\Behat\NodeModifier\Exception\UnknownNodeModifierException;
 use Erpify\Tests\Unit\Behat\Context\Fixtures\OutboxContextFactory;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -86,6 +87,44 @@ final class OutboxTableMatchTest extends TestCase
 
         // The equality the step runs to decide the match is the assertion this test counts.
         $context->noOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['absentProperty', 'ACME']]));
+    }
+
+    /**
+     * A table the step cannot evaluate is not a table that failed to match.
+     *
+     * The predicate reads a thrown assertion as "not this event", which is right — and would be
+     * catastrophic applied to anything else. `::nosuchmodifier` names a modifier that is not
+     * registered: the locator raises for it deliberately, so that a typo in a selector is loud rather
+     * than a silent miss. Folded into "no match", that loudness is spent, and in the negative form it
+     * becomes a pass: the step proves the absence it was written to prove, over a table nobody could
+     * read.
+     */
+    public function testASelectorThatCannotBeEvaluatedIsNotReadAsANonMatch(): void
+    {
+        $context = $this->contextHolding((object) ['bankId' => 'ACME']);
+
+        $this->expectException(UnknownNodeModifierException::class);
+
+        $context->anOutboxEventCreatedOnQueueContaining(
+            self::ASYNC,
+            new TableNode([['bankId::nosuchmodifier', 'ACME']]),
+        );
+    }
+
+    /**
+     * The same, in the direction where swallowing it is silent. See
+     * {@see testASelectorThatCannotBeEvaluatedIsNotReadAsANonMatch()}.
+     */
+    public function testTheNegativeFormDoesNotPassOnATableItCannotEvaluate(): void
+    {
+        $context = $this->contextHolding((object) ['bankId' => 'ACME']);
+
+        $this->expectException(UnknownNodeModifierException::class);
+
+        $context->noOutboxEventCreatedOnQueueContaining(
+            self::ASYNC,
+            new TableNode([['bankId::nosuchmodifier', 'ACME']]),
+        );
     }
 
     private function contextHolding(object ...$events): OutboxContext

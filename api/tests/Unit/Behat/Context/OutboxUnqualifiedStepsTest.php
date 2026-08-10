@@ -9,6 +9,7 @@ use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Tests\Behat\Context\OutboxContext;
 use Erpify\Tests\Unit\Behat\Context\Fixtures\OutboxContextFactory;
+use Erpify\Tests\Unit\Shared\Architecture\Support\BehatVocabularyReader;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -48,10 +49,16 @@ final class OutboxUnqualifiedStepsTest extends TestCase
     {
         $context = $this->contextHolding((object) ['bankId' => 'ACME']);
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Name the queue instead:');
+        try {
+            $step($context);
+        } catch (RuntimeException $runtimeException) {
+            $this->assertStringContainsString('Name the queue instead:', $runtimeException->getMessage());
+            $this->assertSuggestionIsADeclaredStep($runtimeException->getMessage(), 'Name the queue instead: ');
 
-        $step($context);
+            return;
+        }
+
+        $this->fail('The unqualified phrasing returned instead of refusing.');
     }
 
     /**
@@ -91,6 +98,40 @@ final class OutboxUnqualifiedStepsTest extends TestCase
             $this->createStub(MessageBusInterface::class),
             $this->createStub(EntityManagerInterface::class),
             ...$events,
+        );
+    }
+
+    /**
+     * A refusal earns its keep only if what it points at exists. Nothing else ties the suggested
+     * phrasing to a declared pattern: production code and test would otherwise assert the same literal
+     * typed twice, so renaming the canonical step leaves every refusal handing back a phrase that
+     * produces "step undefined" — the outcome the mechanism exists to prevent — with all gates green.
+     *
+     * The vocabulary reader resolves step *lines* against declared patterns, and a suggestion is one.
+     */
+    private function assertSuggestionIsADeclaredStep(string $message, string $marker): void
+    {
+        $position = \strpos($message, $marker);
+
+        $this->assertNotFalse(
+            $position,
+            \sprintf('The refusal carries no "%s" suggestion at all: %s', $marker, $message),
+        );
+
+        $suggestion = \trim(\substr($message, $position + \strlen($marker)));
+        $reader = new BehatVocabularyReader(
+            \dirname(__DIR__, 3) . '/Behat',
+            \dirname(__DIR__, 4) . '/features',
+        );
+
+        $this->assertSame(
+            [],
+            $reader->unresolvedStepsAmong([$suggestion]),
+            \sprintf(
+                'The refusal suggests "%s", which matches no declared step pattern. A redirect to a step '
+                . 'that does not exist is "step undefined" with extra words.',
+                $suggestion,
+            ),
         );
     }
 }

@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
  *
  * The rule it mechanises was written down and left in prose. Prose drifts without anything going red:
  * within weeks the same paragraph counted 205 patterns where there were 209 and 47 features where
- * there were 49, and named a context as wholly idle that eighteen scenarios were using. Every gate
+ * there were 49, and named a context as wholly idle that thirteen scenarios were reaching. Every gate
  * stayed green through all three, because nothing recomputed any of it. A rule that only lives in
  * prose is not a control, it is an intention — and the point of this one is that idle vocabulary is an
  * asset to spend rather than dead code to delete, which is a claim about a number nobody was keeping.

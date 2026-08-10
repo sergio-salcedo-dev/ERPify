@@ -16,13 +16,17 @@ use Symfony\Component\Console\Command\Command;
  *
  * The contexts that *invoke* keep their own words, because what they start really is different — a
  * console command is not a Messenger consume. What follows is not: "it worked", "it did not" and
- * "the output said" are the same three claims either way, and they used to exist twice, in phrases
- * whose only difference was which context had reached the generic wording first. Both halves stayed
- * half-used and a reader had to know which mechanism was behind a scenario to pick the right one.
+ * "the output said" are the same three claims either way, and one phrasing for each is what keeps a
+ * reader from having to know which mechanism is behind a scenario before picking a step.
  *
  * The subject is named "run" rather than "command" on purpose: {@see MessengerConsumerContext} runs
  * a {@see \Symfony\Component\Messenger\Worker} directly, so calling it a command would be false for
  * every messenger scenario that reads these steps.
+ *
+ * One vocabulary over one holder means "the last run" is literal: within a scenario only the most
+ * recent invocation is assertable, whichever context made it. A scenario that consumes and then runs a
+ * console command can no longer assert on the consume — and the step still reads as though it could.
+ * Assert each run before starting the next.
  *
  * @see LastRun for why the result is shared rather than the step definitions
  */
@@ -82,6 +86,24 @@ final class RunOutcomeContext extends AbstractContext
             $text,
             $output,
             \sprintf('The last run output did not contain "%s". Output:%s%s', $text, PHP_EOL, $output),
+        );
+    }
+
+    /**
+     * The counterpart of {@see theLastRunOutputShouldContain()}, for the claims a run makes by staying
+     * silent. What a report deliberately withholds is as much its contract as what it prints — an
+     * identity id kept out of an operator's terminal is a decision, and without an assertion it is
+     * only an intention.
+     */
+    #[Then('the last run output should not contain :text')]
+    public function theLastRunOutputShouldNotContain(string $text): void
+    {
+        $output = $this->lastRun->output();
+
+        self::assertStringNotContainsString(
+            $text,
+            $output,
+            \sprintf('The last run output unexpectedly contained "%s". Output:%s%s', $text, PHP_EOL, $output),
         );
     }
 

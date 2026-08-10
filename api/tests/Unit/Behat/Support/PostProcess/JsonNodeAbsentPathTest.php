@@ -16,10 +16,10 @@ use UnexpectedValueException;
 /**
  * What every node assertion does with a selector the payload does not answer.
  *
- * An absent dot-path used to leave each of them as a raw `UnexpectedValueException` naming the property
- * accessor, which reads as a broken step rather than as the unmet expectation it is. The list below is
- * the whole set of them on purpose: fixing some would split one trait across two contracts with nothing
- * telling a reader which applies.
+ * An absent dot-path is an unmet expectation and must read as one: a raw `UnexpectedValueException`
+ * naming the property accessor reads as a broken step instead. The list below is the whole set of node
+ * readers on purpose — covering some would split one trait across two contracts, with nothing telling a
+ * reader which applies where.
  *
  * Two things are kept apart that a single message would blur. A path the payload does not carry is an
  * unmet expectation and reads as a failure; a path the accessor cannot parse is a broken step and keeps

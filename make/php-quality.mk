@@ -193,7 +193,7 @@ php.lint.schedule-consumption: ## Schedule transport-consumption gate
 # It exists because the rule it mechanises ("the vocabulary is an asset to spend, never delete a step for
 # being unused, search before writing a near-duplicate") lived only in api/CLAUDE.md prose, and prose
 # drifts with every gate green: that paragraph counted 205 patterns against 209, 47 features against 49,
-# and named a context as wholly idle that eighteen scenarios were using.
+# and named a context as wholly idle that thirteen scenarios were reaching, eighteen times.
 #
 # A green proves each pattern is REACHED or deliberately unreachable. It does not prove the assertion
 # behind a reached pattern can fail, and it does not detect two patterns that say the same thing in
@@ -263,6 +263,6 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.gherkin php.gherkin.rules \
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource \
-        php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption \
+        php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary \
         php.deptrac php.deptrac.baseline \
         php.quality php.quality.dry-run
