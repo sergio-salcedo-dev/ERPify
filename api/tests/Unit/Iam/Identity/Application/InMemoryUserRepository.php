@@ -26,6 +26,15 @@ final class InMemoryUserRepository implements UserRepository
     public array $saved = [];
 
     /**
+     * Users the store already holds, for the cases the single `$preset` cannot express: a sweep over several
+     * rows needs each id to resolve to its own aggregate, and it asserts on `$saved`, so the starting
+     * population cannot be staged there.
+     *
+     * @var list<User>
+     */
+    public array $seeded = [];
+
+    /**
      * Ids the locked re-fetch was asked for — asserting on this list is how a single-threaded test proves
      * the use case takes the row lock at all (the harness cannot exercise the real race).
      *
@@ -40,6 +49,12 @@ final class InMemoryUserRepository implements UserRepository
     public ?Closure $onFindByIdForUpdate = null;
 
     /**
+     * Runs before the user is recorded, so a test can make one row's persistence fail the way a flush fault
+     * would — the failure a sweep's per-row boundary exists to absorb, and one no mailer double can stage.
+     */
+    public ?Closure $onSave = null;
+
+    /**
      * Set when a test is asserting WHERE this table's lock falls among the others. Both members below write
      * to it, because both take the row lock: the locked re-fetch explicitly, and the delete implicitly.
      */
@@ -52,6 +67,10 @@ final class InMemoryUserRepository implements UserRepository
     #[Override]
     public function save(User $user): void
     {
+        if ($this->onSave instanceof Closure) {
+            ($this->onSave)($user);
+        }
+
         $this->saved[] = $user;
     }
 
@@ -63,10 +82,21 @@ final class InMemoryUserRepository implements UserRepository
         $this->removeCalled = true;
     }
 
+    /**
+     * Keyed by id, like the Doctrine repository it stands in for. A double that answered the preset to any id
+     * would make every multi-row test vacuous: a sweep asking for three distinct ids would be handed the same
+     * aggregate three times and still look green.
+     */
     #[Override]
     public function findById(string $id): ?User
     {
-        return $this->preset;
+        foreach ($this->all() as $user) {
+            if ($user->getId() === $id) {
+                return $user;
+            }
+        }
+
+        return null;
     }
 
     #[Override]
@@ -100,6 +130,8 @@ final class InMemoryUserRepository implements UserRepository
      */
     private function all(): array
     {
-        return $this->preset instanceof User ? [$this->preset, ...$this->saved] : $this->saved;
+        $preset = $this->preset instanceof User ? [$this->preset] : [];
+
+        return [...$preset, ...$this->seeded, ...$this->saved];
     }
 }

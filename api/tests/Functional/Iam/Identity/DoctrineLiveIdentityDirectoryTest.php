@@ -6,6 +6,7 @@ namespace Erpify\Tests\Functional\Iam\Identity;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
+use Erpify\Iam\Identity\Application\CorruptIdentityRow;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineLiveIdentityDirectory;
@@ -84,6 +85,24 @@ final class DoctrineLiveIdentityDirectoryTest extends KernelTestCase
             // `===` diff against the list it passed in still resolves.
             $this->assertSame([$shouted], $this->directory->existingIdsAmong([$shouted]));
         });
+    }
+
+    /**
+     * A row that is not an identity id stops the reconciliation instead of shrinking it. Driven through a
+     * mocked connection because the schema cannot produce one — `identity_user.id` is a non-null `uuid` — and
+     * that is exactly why the guard needs its own red: dropping the row here would report a live person as
+     * erased, a fabricated GDPR divergence with nothing to distinguish it from a real one.
+     */
+    public function testACorruptRowStopsTheProbeRatherThanShrinkingIt(): void
+    {
+        // A stub, not a mock: the call is the test's input, not an expectation about it — the assertion is
+        // the throw. Configuring it as a mock with no expectation is what PHPUnit notices.
+        $connection = $this->createStub(Connection::class);
+        $connection->method('fetchFirstColumn')->willReturn([42]);
+
+        $this->expectException(CorruptIdentityRow::class);
+
+        (new DoctrineLiveIdentityDirectory($connection))->existingIdsAmong([Uuid::generate()]);
     }
 
     private function seedIdentity(): string

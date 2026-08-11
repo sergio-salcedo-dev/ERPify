@@ -201,3 +201,69 @@ Feature: Log in through the session firewall
     And the JSON node "type" should be equal to "unauthenticated"
     And there should be 1 event stored named "erpify.iam.identity.locked"
     And there should be 1 event stored for aggregate "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a63" named "erpify.iam.identity.locked"
+
+  # Isolated by a fixed X-Correlation-Id rather than by truncating audit_log: the table is emptied once per
+  # suite, and the request that trips this lock writes its own access-log row through the same table.
+  Scenario: The tripped lockout is projected as one security audit row naming the subject and no actor
+    Given I add "X-Correlation-Id" header equal to "0190a1de-0602-7abc-8def-000000000001"
+    When I execute the SQL query "UPDATE identity_user SET failed_attempts = 9, locked_until = NULL WHERE email = 'nora@erpify.test'"
+    And I send a POST request to "/backoffice/login" with body:
+    """
+    {
+      "email": "nora@erpify.test",
+      "password": "wrong-password"
+    }
+    """
+    Then the response status code should be 401
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id FROM audit_log WHERE correlation_id = '0190a1de-0602-7abc-8def-000000000001' AND action = 'USER_LOCKED'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "USER_LOCKED",
+        "level": "security",
+        "actor_type": "anonymous",
+        "actor_id": null,
+        "resource_type": "User",
+        "resource_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a63"
+      }
+    ]
+    """
+
+  # The only scenario that can tell a post-commit projection from an in-transaction one: with audit_log
+  # writable, both placements produce the same row and the same lock.
+  #
+  # audit_log is renamed away and back around the request alone, with no assertion in between. Every step
+  # inside that window either cannot fail or swallows its error, so the table is always restored before
+  # anything can abort the scenario — a rename left standing would break every later feature, since the
+  # per-feature restore is skipped when nothing wrote.
+  Scenario: The lockout survives its own audit projection failing
+    Given the stored events are cleared
+    And I execute the SQL query "UPDATE identity_user SET failed_attempts = 9, locked_until = NULL WHERE email = 'nora@erpify.test'" on connection "seed"
+    And I add "X-Correlation-Id" header equal to "0190a1de-0602-7abc-8def-000000000002"
+    And I execute the SQL query "ALTER TABLE audit_log RENAME TO audit_log_unavailable" on connection "seed"
+    When I send a POST request to "/backoffice/login" with body:
+    """
+    {
+      "email": "nora@erpify.test",
+      "password": "wrong-password"
+    }
+    """
+    And I execute the SQL query "ALTER TABLE audit_log_unavailable RENAME TO audit_log" on connection "seed"
+    Then the response status code should be 401
+    And I execute the SQL query "SELECT failed_attempts, locked_until > NOW() AS still_locked FROM identity_user WHERE email = 'nora@erpify.test'" on connection "seed"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "failed_attempts": 10,
+        "still_locked": true
+      }
+    ]
+    """
+    And I execute the SQL query "SELECT action FROM audit_log WHERE correlation_id = '0190a1de-0602-7abc-8def-000000000002' AND action = 'USER_LOCKED'" on connection "seed"
+    And the SQL result as JSON should be:
+    """
+    []
+    """
+    And there should be 1 event stored for aggregate "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a63" named "erpify.iam.identity.locked"

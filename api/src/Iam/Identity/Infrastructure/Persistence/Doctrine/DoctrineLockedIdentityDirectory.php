@@ -7,6 +7,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine;
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Types\Types;
+use Erpify\Iam\Identity\Application\CorruptIdentityRow;
 use Erpify\Iam\Identity\Domain\Repository\LockedIdentityDirectory;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -34,6 +35,9 @@ final readonly class DoctrineLockedIdentityDirectory implements LockedIdentityDi
     }
 
     /**
+     * @throws CorruptIdentityRow when a row holds something an identity id cannot be — the sweep's output is
+     *                            an absence, so a dropped candidate would be a notice nobody knows was skipped
+     *
      * @return list<string>
      */
     #[Override]
@@ -45,6 +49,15 @@ final readonly class DoctrineLockedIdentityDirectory implements LockedIdentityDi
             ['now' => Types::DATETIME_IMMUTABLE],
         );
 
-        return \array_values(\array_filter($ids, \is_string(...)));
+        return \array_map($this->asIdentityId(...), $ids);
+    }
+
+    private function asIdentityId(mixed $id): string
+    {
+        if (!\is_string($id)) {
+            throw CorruptIdentityRow::idIsNotAString('identity_user.id');
+        }
+
+        return $id;
     }
 }

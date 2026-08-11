@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Erpify\Iam\Identity\Application\CorruptIdentityRow;
 use Erpify\Iam\Identity\Domain\Repository\LiveIdentityDirectory;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -38,6 +39,9 @@ final readonly class DoctrineLiveIdentityDirectory implements LiveIdentityDirect
 
     /**
      * @param string[] $ids
+     *
+     * @throws CorruptIdentityRow when a row holds something an identity id cannot be — this control's output
+     *                            is an absence, so a dropped id would be reported as an erased person
      */
     #[Override]
     public function existingIdsAmong(array $ids): array
@@ -56,11 +60,23 @@ final readonly class DoctrineLiveIdentityDirectory implements LiveIdentityDirect
         // candidate, so the pair is quadratic in the number of people the installation has ever had — the
         // very size this batch exists to handle in one go. UUIDs always contain hyphens, so none of them can
         // be coerced into an integer array key.
-        $live = \array_flip(\array_map(\strtolower(...), \array_filter($found, \is_string(...))));
+        $live = \array_flip(\array_map(
+            static fn (mixed $id): string => \strtolower(self::asIdentityId($id)),
+            $found,
+        ));
 
         return \array_values(\array_filter(
             $ids,
             static fn (string $id): bool => isset($live[\strtolower($id)]),
         ));
+    }
+
+    private static function asIdentityId(mixed $id): string
+    {
+        if (!\is_string($id)) {
+            throw CorruptIdentityRow::idIsNotAString('identity_user.id');
+        }
+
+        return $id;
     }
 }
