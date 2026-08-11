@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
 use Erpify\Tests\Unit\Shared\Architecture\Support\BehatVocabularyReader;
+use Erpify\Tests\Unit\Shared\Architecture\Support\StepVocabularyRegistry;
 use Override;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 /**
  * Static gate over the Behat step vocabulary: every declared step pattern is classified in
@@ -39,14 +41,6 @@ final class BehatStepVocabularyGateTest extends TestCase
 
     private const string REGISTRY_PATH = '.behat-step-vocabulary';
 
-    private const string USED = 'used';
-
-    private const string IDLE = 'idle';
-
-    private const string MANUAL = 'manual';
-
-    private const string REFUSED = 'refused';
-
     /**
      * Classifications a feature may never reach, for two different reasons — kept apart from each
      * other and from `idle` because the count of idle vocabulary is a claim about coverage debt, and
@@ -54,7 +48,7 @@ final class BehatStepVocabularyGateTest extends TestCase
      *
      * @var list<string>
      */
-    private const array UNREACHABLE = [self::MANUAL, self::REFUSED];
+    private const array UNREACHABLE = [StepVocabularyRegistry::MANUAL, StepVocabularyRegistry::REFUSED];
 
     private ?BehatVocabularyReader $reader = null;
 
@@ -90,7 +84,7 @@ final class BehatStepVocabularyGateTest extends TestCase
     {
         $this->assertSame(
             [],
-            $this->patternsWhere(self::USED, reached: false),
+            $this->patternsWhere(StepVocabularyRegistry::USED, reached: false),
             \sprintf(
                 "%s\nPattern(s) recorded as used that no scenario reaches any more. The assertion they were "
                 . 'making is no longer being made, which is a coverage loss whether or not it was intended. '
@@ -104,7 +98,7 @@ final class BehatStepVocabularyGateTest extends TestCase
     {
         $this->assertSame(
             [],
-            $this->patternsWhere(self::IDLE, reached: true),
+            $this->patternsWhere(StepVocabularyRegistry::IDLE, reached: true),
             \sprintf(
                 "%s\nPattern(s) recorded as idle that a scenario now uses. This is the good direction — an "
                 . 'assertion that existed and nobody was making is being made. Move them to `used`.',
@@ -222,61 +216,11 @@ final class BehatStepVocabularyGateTest extends TestCase
 
         $this->assertIsString($contents, \sprintf('%s%sUnreadable at %s.', self::FAILURE_PREAMBLE, PHP_EOL, $path));
 
-        $registry = [];
-        $duplicated = [];
-
-        foreach (\explode("\n", $contents) as $line) {
-            $line = \trim($line);
-
-            if ('' === $line) {
-                continue;
-            }
-
-            if (\str_starts_with($line, '#')) {
-                continue;
-            }
-
-            $position = \strrpos($line, ' => ');
-
-            $this->assertNotFalse(
-                $position,
-                \sprintf('%s%sMalformed line: %s', self::FAILURE_PREAMBLE, PHP_EOL, $line),
-            );
-
-            $classification = \substr($line, $position + 4);
-
-            $this->assertContains(
-                $classification,
-                [self::USED, self::IDLE, self::MANUAL, self::REFUSED],
-                \sprintf('%s%sUnknown classification on: %s', self::FAILURE_PREAMBLE, PHP_EOL, $line),
-            );
-
-            $pattern = \substr($line, 0, $position);
-
-            if (\array_key_exists($pattern, $registry)) {
-                $duplicated[] = $pattern;
-            }
-
-            $registry[$pattern] = $classification;
+        try {
+            return StepVocabularyRegistry::parse($contents);
+        } catch (RuntimeException $runtimeException) {
+            $this->fail(\sprintf('%s%s%s', self::FAILURE_PREAMBLE, PHP_EOL, $runtimeException->getMessage()));
         }
-
-        $this->assertSame(
-            [],
-            $duplicated,
-            \sprintf(
-                '%s%sPattern(s) classified twice. The later line wins silently, so one of the two '
-                . 'classifications is never evaluated and the counts stop matching the lines.',
-                self::FAILURE_PREAMBLE,
-                PHP_EOL,
-            ),
-        );
-
-        $this->assertNotEmpty(
-            $registry,
-            \sprintf('%s%s%s carries no classification at all.', self::FAILURE_PREAMBLE, PHP_EOL, self::REGISTRY_PATH),
-        );
-
-        return $registry;
     }
 
     private function reader(): BehatVocabularyReader

@@ -792,6 +792,56 @@ ficheros, que no se puede montar borrando código. Lo que sí se puede afirmar, 
 estructural: antes era alcanzable desde **un** test de los cinco, y PHPUnit construye una instancia nueva por
 test, así que un `--filter` que seleccionara cualquiera de los otros cuatro los dejaba verdes sobre nada.
 
+### Segundo code review — 2026-08-11, sobre el commit ya mergeado
+
+Corrido después de que #672 mergeara (`83bdb669`), con tres capas independientes y a ciegas: adversarial
+general, cazador de casos límite y auditor de aceptación. Cada hallazgo verificado a mano —varios
+**ejecutando** en el contenedor— antes de aceptarlo. Se aplican en PR de seguimiento; el marcador de sprint
+ya estaba en `done`.
+
+**Lo que encontró es de la misma clase que el lote combate, y una parte la introdujo el primer review.**
+
+| # | Hallazgo | Verificado | Arreglo |
+|---|---|---|---|
+| **G1** | `should be one of` pasó de `in_array(…, true)` a `assertContainsEquals`, es decir `==`. **Un nodo booleano satisface cualquier lista no vacía**: `true == "open"`. Lo introdujo el arreglo R-E del primer review | `in_array(true, ["open","closed"])` → `true` | `comparableNode()`: un booleano se compara por su única forma textual |
+| **G2** | El mismo `==` en `jsonPropertyShouldBeEqualTo`, que es **el predicado de `eventMatchesTable()`** — así que una fila de tabla casaba **cualquier** evento cuya propiedad fuera `true`, dijera lo que dijera | `true == "anything"` → `true` | idem, en los dos operandos |
+| **G3** | `stringNode()` guardaba con `is_scalar`, que admite booleanos: `(string) false` es `""` y un pajar vacío satisface **todo** `should not contain` y casa `/^$/` | `str_contains("", "anything")` → `false` | `is_string \|\| is_int \|\| is_float` |
+| **G4** | Una tabla de 3 columnas da un `array` como valor, que nunca iguala un escalar → **la forma negativa pasa vacuamente**; y una primera columna repetida colapsa last-wins, **borrando la aserción de la otra fila** | `getRowsHash()` medido | `PropertyTable::rows()` rechaza ambas formas, con excepción (no aserción) para que el predicado no la trague |
+| **G5** | `new DateTime("")` **no lanza: devuelve *ahora***, así que la guardia de fecha nunca disparaba para el valor que más fácil llega por accidente | ejecutado | guarda explícita de vacío; y la tolerancia pasa de una ventana de 119 s sin mensaje a 5 s con mensaje |
+| **G6** | El séptimo rechazo (`the command output should not contain`, el que trajo `main`) **no estaba en el test**, así que era el único cuya frase canónica no pasaba por `assertSuggestionIsADeclaredStep()`. Y el docblock decía «six» | conteo | cubierto; docblock corregido |
+| **G7** | `JsonNodeTableStepsTrait` usaba `self::EXPECTED_STRING_FORMAT`, declarada `private` **sólo en el host** — un segundo host revienta en runtime. Misma clase que la colisión `describe()` que costó 9 rojos | lectura | la constante se declara en el trait |
+| **G8** | `--strict` vivía en **una receta de make**, no en la suite. Cualquier invocación que no pasara por `make php.behat` volvía a `SoftInterpretation` | `TesterOptions::withStrictResultInterpretation()` existe en Behat 4 | declarado en `behat.dist.php`; `BehatSuiteCoverageGateTest` lo pinnea |
+| **G9** | El reader divergía de Behat en la detección de regex (`str_starts_with('/')` contra la política real) y en la sensibilidad a mayúsculas (Behat cierra con `/iu`); y no veía docstrings con ``` ` ``` | medido contra `TurnipPatternPolicy` / `RegexPatternPolicy` | los tres alineados |
+| **G10** | Cuatro guardas del parser del registro y la comprobación de patrón duplicado **no tenían test**: sólo eran alcanzables desde el fichero commiteado | — | parser extraído a `StepVocabularyRegistry`, seis casos |
+| **G11** | `stringNode()` y la dirección «tipo equivocado» de `should be typed` sin test | — | cubiertos |
+
+**Y una que encontró mi propia falsificación, no las capas.** La primera versión del gate de `--strict`
+comprobaba que la llamada *existe*; `withStrictResultInterpretation(false)` la satisfacía. El mismo defecto —
+la aserción que no puede fallar contra la mutación que importa — dentro del arreglo que lo cierra. Ahora
+comprueba la lista de argumentos vacía y se pone roja en las dos direcciones.
+
+**Descartado con argumento:** un pase dio por hueco que el reader recorra todo `features/` mientras la suite
+declara tres raíces. Ya lo gatea el hermano `BehatSuiteCoverageGateTest`, que falla ante un `.feature` fuera
+de las raíces declaradas.
+
+#### Rojos provocados
+
+| # | Qué se rompió | Rojos | De |
+|---|---|---|---|
+| F1 | `comparableNode()` deja el booleano crudo | **7** | 12 |
+| F2 | `stringNode()` vuelve a `is_scalar` | **3** | 17 |
+| F3 | `dateNode()` pierde la guarda de vacío | **1** | 5 |
+| F4 | `PropertyTable::rows()` deja pasar cualquier forma | **2** | 9 |
+| F5 | el registro deja de detectar el patrón duplicado | **1** | 6 |
+| F6 | el matcher vuelve a ser sensible a mayúsculas | **2** | 6 |
+| F7 | el reader deja de ver el docstring con backticks | **1** | 6 |
+| F8 | `strict` desactivado por argumento · la opción entera borrada | **1** · **1** | 3 |
+
+#### Gates — corrida fresca
+
+`make php.quality` **0** · `php.stan` **0** · `php.unit` **0** (2604 tests) · `php.behat` **0**
+(425 escenarios / 3967 pasos) · `php.gherkin` **0** · `php.lint.step-vocabulary` **0**.
+
 ### Change Log
 
 | Fecha | Cambio |

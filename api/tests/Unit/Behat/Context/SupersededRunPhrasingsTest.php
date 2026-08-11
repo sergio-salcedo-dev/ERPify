@@ -20,7 +20,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
 use Throwable;
 
 /**
- * The six superseded phrasings stay registered and refuse, each naming the canonical form.
+ * The seven superseded phrasings stay registered and refuse, each naming the canonical form.
  *
  * Keeping them is what stops the next reader re-adding one believing it is missing, and what turns
  * reaching for one into a correction rather than "step undefined". None of that survives if a refusal
@@ -100,6 +100,13 @@ final class SupersededRunPhrasingsTest extends TestCase
             },
             InvalidArgumentException::class,
             'the last run output should contain "anything"',
+        ];
+        yield 'console: the command output should not contain' => [
+            static function (self $test): never {
+                $test->console()->theCommandOutputShouldNotContain('anything');
+            },
+            InvalidArgumentException::class,
+            'the last run output should not contain "anything"',
         ];
         yield 'console: the command output should be JSON with a field' => [
             static function (self $test): never {

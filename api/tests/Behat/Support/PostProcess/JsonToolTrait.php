@@ -30,6 +30,14 @@ trait JsonToolTrait
 {
     use PropertyPostProcessTrait;
 
+    /**
+     * How far a date node may sit from the expected instant. The steps that use it compare a value the
+     * application stamped against a scenario's `"now"`, so the window has to cover the round trip and
+     * nothing more; the previous arithmetic divided by 60 before comparing against 2, which admitted
+     * anything under two minutes and reported no message when it did not.
+     */
+    private const int DATE_TOLERANCE_SECONDS = 5;
+
     private ?JsonInspector $jsonInspector = null;
 
     public function getJsonInspector(): JsonInspector
@@ -82,11 +90,8 @@ trait JsonToolTrait
         }
 
         $value = $this->readNode($json, $property);
-        $actual = $this->propertyPostProcessValue($property, $value);
-
-        if (\is_float($actual)) {
-            $actual = (string) $actual;
-        }
+        $actual = $this->comparableNode($this->propertyPostProcessValue($property, $value));
+        $expectedValue = $this->comparableNode($expectedValue);
 
         self::assertEquals(
             $expectedValue,
@@ -116,7 +121,8 @@ trait JsonToolTrait
         }
 
         $value = $this->readNode($json, $property);
-        $actual = $this->propertyPostProcessValue($property, $value);
+        $actual = $this->comparableNode($this->propertyPostProcessValue($property, $value));
+        $expectedValue = $this->comparableNode($expectedValue);
 
         self::assertNotEquals(
             $expectedValue,
@@ -266,26 +272,71 @@ trait JsonToolTrait
             $this->stringNode($property, $value),
             'The node value',
         )->format('U');
-        self::assertLessThan(2, (int) (\abs($expectedTime - $foundTime) / 60));
+        self::assertLessThan(
+            self::DATE_TOLERANCE_SECONDS,
+            \abs($expectedTime - $foundTime),
+            \sprintf(
+                'Property %s is %s, which is more than %d seconds from the expected %s',
+                $property,
+                $this->describeNode($value),
+                self::DATE_TOLERANCE_SECONDS,
+                $expected,
+            ),
+        );
     }
 
     /**
      * Loose containment, mirroring the equality steps: Gherkin delivers the list as text, so a strict
-     * comparison would judge a JSON number against a string and answer on the type. Both operands go
-     * through the modifier for the same reason they do there.
+     * comparison would judge a JSON number against a string and answer on the type.
+     *
+     * Every member goes through the modifier too. Putting only the node through it made the step fail
+     * over a node holding literally a listed value, whenever a value-aware modifier claimed the node
+     * and rewrote it — a date-shaped node against a date-shaped list, for one.
      */
     public function jsonPropertyShouldBeOneOf(Json $json, string $property, string $list): void
     {
         $value = $this->readNode($json, $property);
-        $actual = $this->propertyPostProcessValue($property, $value);
+        $actual = $this->comparableNode($this->propertyPostProcessValue($property, $value));
 
-        $values = \array_map(trim(...), \explode(',', $list));
+        $values = \array_map(
+            fn (string $member): mixed => $this->comparableNode(
+                $this->propertyPostProcessValue($property, \trim($member)),
+            ),
+            \explode(',', $list),
+        );
 
         self::assertContainsEquals(
             $actual,
             $values,
             \sprintf('The node value is %s, which is not one of "%s"', $this->describeNode($value), $list),
         );
+    }
+
+    /**
+     * An operand as a loose comparison may safely see it.
+     *
+     * Gherkin delivers every expected value as text, so the comparison has to stay loose enough to
+     * judge a JSON number against `"5"`. PHP's `==` is far looser than that: with a boolean on either
+     * side it coerces the *other* operand to boolean, so `true == "anything"` holds — and a node
+     * carrying `true` then satisfies an assertion naming any non-empty text. That reaches further than
+     * one step: `OutboxContext::eventMatchesTable()` decides which event a table describes with this
+     * comparison, so a table row would match every event whose property is `true`, whatever it asked
+     * for.
+     *
+     * A JSON boolean has exactly two textual forms. Rendering it as one of them keeps the comparison
+     * loose where a scenario needs it and closes it where nothing does.
+     */
+    private function comparableNode(mixed $value): mixed
+    {
+        if (\is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        if (\is_float($value)) {
+            return (string) $value;
+        }
+
+        return $value;
     }
 
     /**
@@ -377,8 +428,17 @@ trait JsonToolTrait
      * is not an `AssertionFailedError`: a node holding `true`, `0` or "n/a" would abort the scenario
      * with a raw error where the step's whole subject is that the value is not the date expected.
      */
+    /**
+     * `new DateTime('')` does not throw: it answers *now*. An empty node would therefore compare equal
+     * to `"now"` and land inside the tolerance below, so the guard that exists to reject a non-date
+     * would never fire for the one value most likely to arrive by accident.
+     */
     private function dateNode(string $property, string $value, string $subject): DateTime
     {
+        if ('' === \trim($value)) {
+            self::fail(\sprintf('%s of property %s is empty, which is not a date', $subject, $property));
+        }
+
         try {
             return new DateTime($value);
         } catch (DateMalformedStringException) {
@@ -389,10 +449,15 @@ trait JsonToolTrait
     /**
      * `(string) $value` on an array raises a warning and yields "Array", which then satisfies a
      * "contains" or a pattern that happens to match that word rather than the payload.
+     *
+     * Booleans are refused for the same reason, not admitted as scalars: `(string) false` is the empty
+     * string, and an empty haystack satisfies *every* "should not contain" and matches `/^$/`. `true`
+     * fares no better, comparing as `"1"`. A step whose subject is text has no business reading a
+     * boolean — {@see booleanNode()} is where one belongs.
      */
     private function stringNode(string $property, mixed $value): string
     {
-        if (!\is_scalar($value)) {
+        if (!\is_string($value) && !\is_int($value) && !\is_float($value)) {
             self::fail(\sprintf(
                 'Property %s holds %s, which has no string form to compare',
                 $property,

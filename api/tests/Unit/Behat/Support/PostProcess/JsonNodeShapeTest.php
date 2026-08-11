@@ -122,4 +122,17 @@ final class JsonNodeShapeTest extends TestCase
 
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeTrue(new Json('{"node": false}'), self::NODE);
     }
+
+    public function testTheTypeAssertionHoldsForTheRightTypeAndNotForAnother(): void
+    {
+        $assertions = JsonAssertions::withScalarModifiers();
+
+        $assertions->jsonPropertyShouldBeTyped(new Json('{"node": "text"}'), self::NODE, 'string');
+        $assertions->jsonPropertyShouldBeTyped(new Json('{"node": 7}'), self::NODE, 'integer');
+
+        $this->expectException(AssertionFailedError::class);
+        $this->expectExceptionMessage('is typed integer whereas it should have been string');
+
+        $assertions->jsonPropertyShouldBeTyped(new Json('{"node": 7}'), self::NODE, 'string');
+    }
 }

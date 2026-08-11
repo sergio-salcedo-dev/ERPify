@@ -12,6 +12,7 @@ use Erpify\Tests\Unit\Behat\Context\Fixtures\OutboxContextFactory;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
@@ -43,17 +44,13 @@ final class OutboxTableMatchTest extends TestCase
 {
     private const string ASYNC = 'async';
 
-    public function testATableOfPropertiesTheEventCarriesFindsIt(): void
+    public function testATableTheEventAnswersMatchesAndOneItDoesNotCarryDoesNot(): void
     {
         $context = $this->contextHolding((object) ['bankId' => 'ACME', 'name' => 'Acme Bank']);
 
-        // The equality the step runs to decide the match is the assertion this test counts.
+        // The matching half is not decoration: a step that refused every table would satisfy the
+        // absent-property half on its own, and the file would prove nothing.
         $context->anOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['bankId', 'ACME']]));
-    }
-
-    public function testAPropertyTheEventDoesNotCarryDoesNotMatch(): void
-    {
-        $context = $this->contextHolding((object) ['bankId' => 'ACME']);
 
         $this->expectException(AssertionFailedError::class);
         $this->expectExceptionMessage('No outbox event found containing the expected properties');
@@ -71,22 +68,19 @@ final class OutboxTableMatchTest extends TestCase
         $context->anOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['bankId', 'OTHER']]));
     }
 
-    public function testTheNegativeFormRefusesAnEventThatDoesCarryTheProperties(): void
+    public function testTheNegativeFormAcceptsAnAbsentPropertyAndRefusesAPresentOne(): void
     {
         $context = $this->contextHolding((object) ['bankId' => 'ACME']);
+
+        $context->noOutboxEventCreatedOnQueueContaining(
+            self::ASYNC,
+            new TableNode([['absentProperty', 'ACME']]),
+        );
 
         $this->expectException(AssertionFailedError::class);
         $this->expectExceptionMessage('An outbox event was found containing the properties that should be absent');
 
         $context->noOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['bankId', 'ACME']]));
-    }
-
-    public function testTheNegativeFormAcceptsAPropertyNoEventCarries(): void
-    {
-        $context = $this->contextHolding((object) ['bankId' => 'ACME']);
-
-        // The equality the step runs to decide the match is the assertion this test counts.
-        $context->noOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['absentProperty', 'ACME']]));
     }
 
     /**
@@ -124,6 +118,44 @@ final class OutboxTableMatchTest extends TestCase
         $context->noOutboxEventCreatedOnQueueContaining(
             self::ASYNC,
             new TableNode([['bankId::nosuchmodifier', 'ACME']]),
+        );
+    }
+
+    /**
+     * A mis-shaped table is not a table that failed to match.
+     *
+     * `getRowsHash()` keys on the first column and keeps the rest, so a third column arrives as an
+     * array that can never equal a JSON scalar, and a repeated first column collapses last-wins,
+     * dropping the other row's assertion. Both would read as "no event matched" — success, in the
+     * negative form, over a table nobody could evaluate.
+     */
+    public function testATableWithMoreThanTwoColumnsIsRefusedRatherThanReadAsANonMatch(): void
+    {
+        $context = $this->contextHolding((object) ['bankId' => 'ACME']);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('more than two columns');
+
+        $context->noOutboxEventCreatedOnQueueContaining(
+            self::ASYNC,
+            new TableNode([['bankId', 'ACME', 'a stray third column']]),
+        );
+    }
+
+    /**
+     * The same, for a repeated property. See
+     * {@see testATableWithMoreThanTwoColumnsIsRefusedRatherThanReadAsANonMatch()}.
+     */
+    public function testATableRepeatingAPropertyIsRefusedRatherThanSilentlyDroppingARow(): void
+    {
+        $context = $this->contextHolding((object) ['bankId' => 'ACME']);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('repeats a property');
+
+        $context->noOutboxEventCreatedOnQueueContaining(
+            self::ASYNC,
+            new TableNode([['bankId', 'ACME'], ['bankId', 'OTHER']]),
         );
     }
 
