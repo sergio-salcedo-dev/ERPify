@@ -73,7 +73,11 @@ final class InspectStoredIdentityHandlerTest extends TestCase
 
         $this->handler($integrity, $logger)(new InspectStoredIdentityMessage());
 
-        $this->assertStringNotContainsString('GHOST_ROLE', \json_encode($logger->records, JSON_THROW_ON_ERROR));
+        $emitted = \json_encode($logger->records, JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('GHOST_ROLE', $emitted);
+        // Both, because seeding a value and then watching only its neighbour is how a leak keeps a witness
+        // that never looks at it.
+        $this->assertStringNotContainsString('RETIRED', $emitted);
     }
 
     #[Test]

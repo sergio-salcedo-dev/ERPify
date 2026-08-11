@@ -46,10 +46,13 @@ final class ScheduleDeclarationRulesGateTest extends TestCase
         // stand in for a declaration — the same rule the person-reference gate applies to its wiring check.
         // Read as raw bytes, a command explaining that it is NOT scheduled becomes a schedule, and the gate
         // demands a transport nobody wrote.
-        $names = ScheduleConsumption::declaredScheduleNames(self::FIXTURES . '/src');
-
-        $this->assertNotContains('ghost', $names);
-        $this->assertSame([...\array_unique($names)], $names, 'no name is contributed twice');
+        //
+        // `ghost` is the whole witness, and it is enough: the fixture's prose also carries the bare spelling,
+        // but a sweep that reads comments contributes BOTH, so this one assertion goes red on the mechanism
+        // either way. What it cannot see is the other direction the fixture warns about — prose contributing
+        // a name a real schedule also declares. `declaredScheduleNames()` deduplicates before returning, so
+        // two sources for one name are indistinguishable from one by construction, at any level above it.
+        $this->assertNotContains('ghost', ScheduleConsumption::declaredScheduleNames(self::FIXTURES . '/src'));
     }
 
     #[Test]

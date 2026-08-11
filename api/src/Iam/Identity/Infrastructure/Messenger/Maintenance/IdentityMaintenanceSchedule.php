@@ -20,14 +20,16 @@ use Symfony\Contracts\Cache\CacheInterface;
  * commands.
  *
  * Each tick joins this schedule rather than minting one of its own, and the boundary argument below is what
- * decides it: all three are `Iam/Identity` controls over the same table, so a separate provider per check
- * would buy a transport to wire, a pairing for the compose gate to check and a way to ship dead — each
- * multiplied by three, for no isolation anyone needs.
+ * decides it: all three are controls this context owns, so a separate provider per check would buy a
+ * transport to wire, a pairing for the compose gate to check and a way to ship dead — each multiplied by
+ * three, for no isolation anyone needs. They do not share a table: the reconciliation aggregates four
+ * sources across three contexts, while the other two read `identity_user`.
  *
- * A schedule of its own rather than a third message on the audit one, and the reason is a boundary rather
- * than the framework's one-provider-per-name rule: both controls are `Iam/Identity`'s — it is the context
- * that can say whether an id still names a live person, and the one that owns the lockout — and hanging them
- * off `Shared/Audit`'s schedule would make a shared capability the owner of an identity concern.
+ * A schedule of its own rather than more messages on the audit one, and the reason is a boundary rather
+ * than the framework's one-provider-per-name rule: all three controls are `Iam/Identity`'s — it is the
+ * context that can say whether an id still names a live person, the one that owns the lockout, and the one
+ * that knows what a readable identity row looks like — and hanging them off `Shared/Audit`'s schedule would
+ * make a shared capability the owner of an identity concern.
  *
  * **The periods are set by what each check observes, not by symmetry.** The reconciliation looks for a
  * missed erasure, which is durable rather than transient: a shorter period would re-ask a question whose
@@ -40,9 +42,11 @@ use Symfony\Contracts\Cache\CacheInterface;
  * course.
  *
  * A missed tick is caught up rather than dropped (the generator yields one message per elapsed period), so an
- * outage is followed by a burst of sweeps. That is harmless here and deliberately not special-cased: the
- * sweep carries no payload and its suppression stamp is persisted, so replaying it produces candidate queries
- * and no additional mail.
+ * outage is followed by a burst of sweeps. That is harmless for each of them and deliberately not
+ * special-cased, though for different reasons: the lockout sweep carries no payload and its suppression stamp
+ * is persisted, so replaying it produces candidate queries and no additional mail, while the reconciliation
+ * and the stored-identity inspection are read-only and idempotent — a replay repeats their queries and, if
+ * the finding still stands, its log line.
  *
  * **`stateful()` is what makes "daily" true, and without it the period is a claim the deployment cannot
  * keep.** A schedule with no persisted state builds its checkpoint in process memory, so the first run date

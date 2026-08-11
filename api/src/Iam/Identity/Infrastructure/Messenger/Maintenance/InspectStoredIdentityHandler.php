@@ -60,13 +60,17 @@ final readonly class InspectStoredIdentityHandler
             . 'malformed roles column(s), {unreadableCredentials} unreadable credential(s), '
             . '{admittedWithoutCredential} admitted identity(ies) with no credential.',
             [
+                // Every fact by name even when zero, so the line says which of the four is clean rather than
+                // leaving a reader to infer it from a message that only mentions the others. A count that
+                // silently stops being reported is the way a control shrinks without anything going red.
                 'orphanRoleValues' => \count($findings->orphanRoleValues),
                 'malformedRoles' => $findings->malformedRoles,
                 'unreadableCredentials' => $findings->unreadableCredentials,
                 'admittedWithoutCredential' => $findings->admittedWithoutCredential,
-                // Every fact by name even when zero, so the line says which of the four is clean rather than
-                // leaving a reader to infer it from a message that only mentions the others. A count that
-                // silently stops being reported is the way a control shrinks without anything going red.
+                // A label for whoever reads the line, not a measurement: it is a literal, so narrowing a
+                // probe's WHERE leaves it claiming a column the run no longer covers. Deriving it from the
+                // probes actually invoked would need each one to declare its column, which is a change to
+                // StoredIdentityIntegrity rather than to this line.
                 'columnsChecked' => ['identity_user.roles', 'identity_user.password_hash'],
                 'repairWith' => 'identity:integrity:inspect',
             ],

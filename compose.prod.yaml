@@ -173,12 +173,12 @@ services:
 
   # Single-replica scheduler. Symfony Scheduler derives every maintenance tick
   # (PruneHandledDomainEventsMessage, the audit retention PruneAuditLogMessage, ReconcileSubjectErasuresMessage,
-  # the person-reference ReconcilePersonReferencesMessage and the five-minute NotifyLockedIdentitiesMessage)
-  # from an in-process clock, so running it on the scaled `messenger_worker` pool would emit one tick per
-  # replica.
+  # the person-reference ReconcilePersonReferencesMessage, the stored-identity InspectStoredIdentityMessage and
+  # the five-minute NotifyLockedIdentitiesMessage) from an in-process clock, so running it on the scaled
+  # `messenger_worker` pool would emit one tick per replica.
   #
-  # THE STAKES OF THE PIN CHANGED with the lockout notice, and it is no longer only about waste. The other
-  # four ticks are idempotent sweeps, so N replicas cost N redundant runs a day. This one SENDS MAIL TO A
+  # THE STAKES OF THE PIN CHANGED with the lockout notice, and it is no longer only about waste. Every other
+  # tick is an idempotent sweep, so N replicas cost N redundant runs a day. This one SENDS MAIL TO A
   # PERSON, and it sends before it stamps the suppression window (deliberately — stamping first would turn a
   # mailer outage into a day of silence about a live lock). Two clocks would therefore race send-then-stamp
   # and deliver the notice twice, at someone whose account an attacker is already driving. The schedules are

@@ -172,16 +172,22 @@ php.lint.person-reference: ## Person-reference erasure-owner + detective-coverag
 # gate uses for docs/). With the mount gone the gate FAILS rather than skipping; a check that quietly does
 # nothing reports the same green as a real pass.
 #
-# Two classes, each selected BY NAME in its own run, for the reason spelled out at the sibling targets: a
-# common prefix goes green on a strict subset, so a deleted class would leave the other matching and the
-# target reporting success with half the boundary gone. Each filter's selection is verified with
-# `--list-tests`, never assumed.
+# Three classes, each selected BY NAME in its own run, for the reason spelled out at the sibling targets: a
+# common prefix goes green on a strict subset, so a deleted class would leave the others matching and the
+# target reporting success with part of the boundary gone. Each filter's selection is verified with
+# `--list-tests`, never assumed — and adding a class to the boundary means adding its run HERE, or its
+# falsification silently leaves the gate while every local run still reports green.
+#
+# The three cover the two halves plus the tree: what the sweep sees declared in PHP
+# (ScheduleDeclarationRulesGateTest), what it reads as consumed in the compose files
+# (ScheduleConsumptionRulesGateTest), and the real tree pairing both (ScheduleConsumptionGateTest).
 #
 # A green proves a transport NAME appears in a consume command. It does not prove the worker runs, that the
 # service is deployed, that --time-limit is sane, or that any tick ever reached a log.
 php.lint.schedule-consumption: ## Schedule transport-consumption gate
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleConsumptionGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleConsumptionRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=ScheduleDeclarationRulesGateTest
 
 ## —— Behat step-vocabulary gate ————————————————————————————————————————————
 
