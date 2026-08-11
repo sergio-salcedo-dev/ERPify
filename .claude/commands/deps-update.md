@@ -113,6 +113,19 @@ release), and expect peers to move packages nobody asked for — `react-dom@19.2
 peers on `react: ^19.2.8`, so `react` bumps even though its own range never changed.
 Document both in the PR.
 
+**`npm install` moves nothing whose locked version already satisfies its range**,
+so a bump needing no manifest edit is one this step drops in silence. `@types/react`
+and `@types/react-dom` are pinned `^19`, which `19.2.17` and `19.2.18` both satisfy:
+there is no range to edit, the install keeps the locked version, and the batch ships
+naming two bumps it does not contain. Nothing goes red — the PR simply asserts a
+version that is not in the lock. Step 1's `files` list is the tell: **a dependabot PR
+touching only `package-lock.json` is one of these.** Move those explicitly, after the
+install:
+
+```bash
+npm update <pkg> …   # respects the range, takes the newest version it allows
+```
+
 **Composer.** Edit the constraints in `api/composer.json`, then
 `make composer c='update <pkg> … --with-dependencies'`. Follow with
 `make composer.check.all` (platform-reqs, missing deps, unused).
@@ -122,7 +135,27 @@ in `api/Dockerfile` (`dunglas/frankenphp`, `debian`) and `pwa/Dockerfile` (`node
 Replace the digest from the PR title (`bump node from \`b46a10d\` to \`0473e7d\``);
 the short form in the title is a prefix of the full digest in the diff.
 
-## 7. Assert the lockfile gained nothing
+A digest names an image but says nothing about which **tag** it is, so — as with an
+action SHA — resolve it upstream instead of trusting the diff. Resolve *both* the
+outgoing and incoming digests and compare what they are:
+
+```bash
+curl -s "https://hub.docker.com/v2/repositories/library/<image>/tags?page_size=100" \
+ | python3 -c "
+import sys,json
+new,old='sha256:<new>','sha256:<old>'
+for r in json.load(sys.stdin).get('results',[]):
+    if r.get('digest') in (new,old):
+        print('NEW' if r['digest']==new else 'OLD', r['name'], r.get('last_updated'))
+"
+```
+
+Official images live under `library/<image>`; a vendor image is `<owner>/<image>`.
+`trixie-20260713` → `trixie-20260803` is a monthly rebuild of the same suite and is
+routine; a bump whose two sides land in *different* suites is a distro upgrade
+wearing a digest bump's clothes, and belongs in its own PR with the user's call.
+
+## 7. Assert the lockfile gained nothing — and moved everything
 
 For npm and Composer, compare the resolved lock against `main` and prove that
 **every change is a version bump of a package already present**:
@@ -133,6 +166,28 @@ git show origin/main:pwa/package-lock.json   # compare package keys, not just ve
 
 Report *added: 0, removed: 0* explicitly. A new package name is new ownership to
 vet and belongs in the PR description, not in silence.
+
+**That assertion is blind in the other direction, and the blindness is measured, not
+hypothetical:** it returned a clean *added: 0, removed: 0* over a lock missing two of
+the six bumps the batch was assembling. It proves nothing was **gained**; it never proves
+everything was **moved** — a bump that silently failed to land adds no key, removes
+no key, and passes. So read the resolved version of every package the batch claims
+back out of the lock and check it against that PR's target:
+
+```bash
+python3 - <<'PY'
+import json
+old=json.load(open('/tmp/lock-main.json'))['packages']   # git show origin/main:… > this
+new=json.load(open('pwa/package-lock.json'))['packages']
+for p in ['<pkg>', '…']:                                  # one per superseded PR
+    k=f'node_modules/{p}'
+    print(f"{p}: main={old[k]['version']}  ->  branch={new[k]['version']}")
+PY
+```
+
+A package still sitting at its `main` version is a bump that did not land. Find out
+why before committing — it is usually the lockfile-only case in step 6 — rather than
+letting the PR body assert a version the lock does not hold.
 
 ## 8. Gates — fresh run, printed exit code
 
@@ -147,10 +202,26 @@ make <target> > /tmp/gate.log 2>&1; echo "<target> EXIT=$?"
 | npm | `make pwa.quality`, `make pwa.quality.dry-run` (what CI runs — check-only; the plain target *fixes* and can mask), `make pwa.test.unit` |
 | npm, when `@playwright/test` moved | `cd pwa && ./node_modules/.bin/playwright test --list` — proves the new version parses `playwright.config.ts` and discovers every spec without needing browsers. Use the local binary: `npx playwright` may fetch a standalone package instead. |
 | composer | `make php.quality`, `make ci.api` |
-| docker | `make docker.up` (rebuilds), or lean on the `API Build (Docker)` CI job |
+| docker | build the stage that carries the pin (below), or lean on the `API Build (Docker)` CI job |
 | github_actions only | nothing local — CI is the gate |
 
 The full E2E suite is CI's job unless the user asks for it locally.
+
+**`make docker.up` is not a docker gate.** `compose.dev.yaml` builds
+`target: frankenphp_dev`; only `compose.prod.yaml` builds `frankenphp_prod` — and
+`api/Dockerfile` pins `debian` *inside the prod stage*. A default `ENV=dev` stack
+therefore comes up green having never read the digest you changed. Build the stage
+that actually carries the pin, and read the result back:
+
+```bash
+cd api && docker build --target frankenphp_prod -t deps-probe:prod . \
+  > /tmp/gate-docker.log 2>&1; echo "docker build EXIT=$?"
+docker run --rm --entrypoint cat deps-probe:prod /etc/os-release | head -2
+docker rmi deps-probe:prod
+```
+
+The `os-release` read is the load-bearing half: a digest that silently crossed a
+Debian suite builds exactly as green as one that did not.
 
 ## 9. Security review
 
