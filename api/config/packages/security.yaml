@@ -50,7 +50,9 @@ security:
         # Liveness only — a static payload that probes nothing. The anchored `$` is load-bearing: the
         # database probe lives one segment deeper and must NOT inherit this exemption. It costs a Postgres
         # round-trip per anonymous request (a DoS amplifier) and discloses dependency state to whoever asks,
-        # so it authenticates like every other backoffice route. Widening this pattern reopens both.
+        # so it falls through to the catch-all and requires a session like the rest of `/api`. That is a
+        # session, not a permission — neither health controller carries #[IsGranted], unlike every other
+        # backoffice controller. Widening this pattern reopens the anonymous half.
         - { path: '^/api/v1/backoffice/health$', roles: PUBLIC_ACCESS }
         - { path: '^/api/v1/health$', roles: PUBLIC_ACCESS }
         - { path: '^/api/v1/dev/', roles: PUBLIC_ACCESS }

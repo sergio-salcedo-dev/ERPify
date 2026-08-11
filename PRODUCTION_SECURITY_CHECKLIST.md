@@ -129,9 +129,13 @@ you change anything here.
       versions. Each carries its own `$`-anchored `PUBLIC_ACCESS` entry in
       `api/config/packages/security.yaml`, and **the anchoring is the control**: a
       pattern spanning the prefix exempts every route nested under it, which is how
-      the database probe came to be anonymous. Anonymous access is required by the
-      §8 smoke test, which targets `/api/v1/health`; the PWA reaches both from a
-      page mounted behind `RequireAuth`, so no exemption rests on it. Two
+      the database probe came to be anonymous. The two exemptions rest on different
+      consumers and must be reasoned about separately: `/api/v1/health` is reached
+      anonymously by the §8 smoke test **and by the public `/status` page**, which
+      mounts outside `RequireAuth` — retiring that exemption bounces an anonymous
+      visitor to `/login`, since the PWA's HTTP client treats a 401 outside the auth
+      handshake as an expired session. `/api/v1/backoffice/health` has no anonymous
+      consumer in the PWA (its page mounts behind `RequireAuth`). Two
       invariants: **any deep health check is authenticated** — the dependency probe
       `/api/v1/backoffice/health/database` falls through to
       `IS_AUTHENTICATED_FULLY`, pinned by an `@anonymous` 401 scenario in
