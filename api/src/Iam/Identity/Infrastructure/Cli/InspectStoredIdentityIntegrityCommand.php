@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Cli;
 
+use Erpify\Iam\Identity\Application\InspectStoredIdentity;
 use Erpify\Iam\Identity\Application\StoredIdentityDrift;
-use Erpify\Iam\Identity\Application\StoredIdentityIntegrity;
 use Erpify\Iam\Identity\Application\StoredIdentityProbeFailed;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
@@ -32,12 +32,10 @@ use Throwable;
  * empty), `FAILURE` (a row needs repairing) and `INVALID` (a read failed, so nothing was established either
  * way and no repair should be attempted on the strength of this run).
  *
- * **Nothing runs it yet.** It declares no schedule attribute and no worker names it, so today the rows are proven
- * clean only when a human types the command. That is stated rather than implied because this repository has
- * measured the alternative: a control nobody consumes ships dead with every gate green. Wiring it to the
- * identity maintenance schedule is the obvious next step and is deliberately not smuggled in here — it needs
- * the schedule-attribute plus consume-command pairing in BOTH compose files that
- * `make php.lint.schedule-consumption` enforces, and a `->stateful()` checkpoint, which is its own change.
+ * The operator's arm of a control that also runs unattended: `IdentityMaintenanceSchedule` ticks the same
+ * inspection daily and raises an `error` line on a finding. This one exists beside it because the two answer
+ * different needs — the alarm says a table drifted, and this says WHICH values did, which the alarm
+ * deliberately withholds from log storage. It is also what an operator runs after a repair to confirm it.
  *
  * What it does NOT cover: any other column, and any corruption of a shape these two queries do not describe. A
  * green here is a statement about `identity_user.roles` and `identity_user.password_hash` and nothing else,
@@ -52,7 +50,7 @@ final class InspectStoredIdentityIntegrityCommand extends Command
     private const string DRIFT_ACTION = 'STORED_IDENTITY_DRIFT_DETECTED';
 
     public function __construct(
-        private readonly StoredIdentityIntegrity $storedIdentities,
+        private readonly InspectStoredIdentity $inspectStoredIdentity,
         private readonly AuditLogger $auditLogger,
     ) {
         parent::__construct();
@@ -64,12 +62,7 @@ final class InspectStoredIdentityIntegrityCommand extends Command
         $io = new SymfonyStyle($input, $output);
 
         try {
-            $findings = new StoredIdentityDrift(
-                $this->storedIdentities->roleValuesOutsideTheEnum(),
-                $this->storedIdentities->identitiesWithMalformedRoles(),
-                $this->storedIdentities->identitiesWithAnUnreadableCredential(),
-                $this->storedIdentities->admittedIdentitiesWithoutACredential(),
-            );
+            $findings = ($this->inspectStoredIdentity)();
         } catch (StoredIdentityProbeFailed $storedIdentityProbeFailed) {
             $io->error([
                 'The inspection could not be completed, so nothing is known about the stored identity rows. '

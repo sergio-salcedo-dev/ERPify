@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Messenger\Maintenance;
 
 use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\IdentityMaintenanceSchedule;
+use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\InspectStoredIdentityMessage;
 use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\NotifyLockedIdentitiesMessage;
 use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\ReconcilePersonReferencesMessage;
 use Erpify\Tests\Support\ScheduledTicks;
@@ -20,7 +21,7 @@ use Symfony\Component\Cache\Adapter\ArrayAdapter;
 final class IdentityMaintenanceScheduleTest extends TestCase
 {
     #[Test]
-    public function itSchedulesBothMaintenanceTicksAtTheirOwnPeriods(): void
+    public function itSchedulesEveryMaintenanceTickAtItsOwnPeriod(): void
     {
         $schedule = (new IdentityMaintenanceSchedule(new ArrayAdapter()))->getSchedule();
 
@@ -28,14 +29,17 @@ final class IdentityMaintenanceScheduleTest extends TestCase
         // survives the payload becoming another message and it survives `1 day` becoming `1 year`, which
         // are precisely the two ways this control silently stops being the control it is named after.
         //
-        // It is also the ONLY red for the lockout sweep's wiring. Folding that tick into an existing
-        // schedule adds no transport, so `make php.lint.schedule-consumption` stays green whether the
-        // message is registered here or not, and nothing else in the tree would notice its removal.
+        // It is also the ONLY red for the wiring of the two ticks that mint no transport of their own.
+        // Folding a tick into an existing schedule adds no transport, so `make php.lint.schedule-consumption`
+        // stays green whether the message is registered here or not, and nothing else in the tree would
+        // notice its removal.
         //
         // The periods differ on purpose: five minutes tracks a lock that lives fifteen, while a daily sweep
-        // would meet a given lockout only by coincidence.
+        // would meet a given lockout only by coincidence. The other two observe durable state.
         $this->assertSame(
             [
+                // Sorted by the helper, so the order here is alphabetical and not the declaration order.
+                InspectStoredIdentityMessage::class . ' @ every 1 day',
                 NotifyLockedIdentitiesMessage::class . ' @ every 5 minutes',
                 ReconcilePersonReferencesMessage::class . ' @ every 1 day',
             ],

@@ -10,14 +10,16 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Falsifiability of the rules its sibling asserts with. {@see ScheduleConsumptionGateTest} runs against the
- * real tree, which is green by construction once the wiring is right — so on its own it cannot tell a rule
- * that works from one that returns "nothing wrong" no matter what it is shown. These fixtures are the states
- * the gate has to go red on.
+ * Falsifiability of the half of the gate that reads the compose files: which transports a `messenger:consume`
+ * command actually receives, and which service does the receiving. {@see ScheduleConsumptionGateTest} runs
+ * against the real tree, which is green by construction once the wiring is right — so on its own it cannot
+ * tell a rule that works from one that returns "nothing wrong" no matter what it is shown. These fixtures are
+ * the states the gate has to go red on, and each is a shape that once defeated it: a transport named only in
+ * a comment or an env var, a whole command parked in a comment, a command written as a plain string, a
+ * receiver written after an option, and consumption by the wrong service.
  *
- * The `messenger:consume` scan is the part that most needs it, and each fixture here is a shape that once
- * defeated it: a transport named only in a comment or an env var, a whole command parked in a comment, a
- * command written as a plain string, and consumption by the wrong service.
+ * The declaration half — which schedules the tree declares at all — is falsified in
+ * {@see ScheduleDeclarationRulesGateTest}.
  *
  * @internal
  */
@@ -25,24 +27,6 @@ use PHPUnit\Framework\TestCase;
 final class ScheduleConsumptionRulesGateTest extends TestCase
 {
     private const string FIXTURES = __DIR__ . '/Fixture/ScheduleConsumption';
-
-    #[Test]
-    public function itSeesEverySpellingOfTheAttributeSymfonyAccepts(): void
-    {
-        // Positional, bare (which Symfony resolves to `default`), named-argument and fully qualified. A
-        // sweep that saw only the first would let the other three ship a transport nobody consumes while
-        // this gate stayed green — the exact failure it exists to refuse, one level up.
-        $this->assertSame(
-            ['alpha', 'default', 'fqcn', 'named'],
-            ScheduleConsumption::declaredScheduleNames(self::FIXTURES . '/src'),
-        );
-    }
-
-    #[Test]
-    public function itDerivesTheTransportSymfonyCreates(): void
-    {
-        $this->assertSame('scheduler_alpha', ScheduleConsumption::transportOf('alpha'));
-    }
 
     #[Test]
     public function itReadsATransportThatIsActuallyConsumed(): void
