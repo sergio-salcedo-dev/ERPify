@@ -157,5 +157,12 @@ final class JsonNodeBooleanCoercionTest extends TestCase
         $assertions->jsonPropertyShouldContains(new Json('{"node": "a haystack"}'), self::NODE, 'hay');
         $assertions->jsonPropertyShouldContains(new Json('{"node": 1234}'), self::NODE, '23');
         $assertions->jsonPropertyShouldNotContains(new Json('{"node": "a haystack"}'), self::NODE, 'needle');
+
+        // The pairing is what makes the three calls above assertions rather than three no-ops: a step
+        // that refused every value would satisfy them just as well, so the same step over a needle the
+        // node does not carry has to fail.
+        $this->expectException(AssertionFailedError::class);
+
+        $assertions->jsonPropertyShouldContains(new Json('{"node": "a haystack"}'), self::NODE, 'needle');
     }
 }

@@ -44,17 +44,13 @@ final class OutboxTableMatchTest extends TestCase
 {
     private const string ASYNC = 'async';
 
-    public function testATableOfPropertiesTheEventCarriesFindsIt(): void
+    public function testATableTheEventAnswersMatchesAndOneItDoesNotCarryDoesNot(): void
     {
         $context = $this->contextHolding((object) ['bankId' => 'ACME', 'name' => 'Acme Bank']);
 
-        // The equality the step runs to decide the match is the assertion this test counts.
+        // The matching half is not decoration: a step that refused every table would satisfy the
+        // absent-property half on its own, and the file would prove nothing.
         $context->anOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['bankId', 'ACME']]));
-    }
-
-    public function testAPropertyTheEventDoesNotCarryDoesNotMatch(): void
-    {
-        $context = $this->contextHolding((object) ['bankId' => 'ACME']);
 
         $this->expectException(AssertionFailedError::class);
         $this->expectExceptionMessage('No outbox event found containing the expected properties');
@@ -72,22 +68,19 @@ final class OutboxTableMatchTest extends TestCase
         $context->anOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['bankId', 'OTHER']]));
     }
 
-    public function testTheNegativeFormRefusesAnEventThatDoesCarryTheProperties(): void
+    public function testTheNegativeFormAcceptsAnAbsentPropertyAndRefusesAPresentOne(): void
     {
         $context = $this->contextHolding((object) ['bankId' => 'ACME']);
+
+        $context->noOutboxEventCreatedOnQueueContaining(
+            self::ASYNC,
+            new TableNode([['absentProperty', 'ACME']]),
+        );
 
         $this->expectException(AssertionFailedError::class);
         $this->expectExceptionMessage('An outbox event was found containing the properties that should be absent');
 
         $context->noOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['bankId', 'ACME']]));
-    }
-
-    public function testTheNegativeFormAcceptsAPropertyNoEventCarries(): void
-    {
-        $context = $this->contextHolding((object) ['bankId' => 'ACME']);
-
-        // The equality the step runs to decide the match is the assertion this test counts.
-        $context->noOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['absentProperty', 'ACME']]));
     }
 
     /**
