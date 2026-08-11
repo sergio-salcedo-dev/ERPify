@@ -99,3 +99,12 @@ when@test:
         methods: [GET]
         requirements:
             token: '[\w-]+'
+
+    # Mirrors the dev-only frontoffice_dev_frankenphp_hot_reload route (config/routes/dev.yaml) so its
+    # enabled/disabled branches stay covered through a real kernel.
+    frontoffice_dev_frankenphp_hot_reload:
+        path: /api/v1/dev/frankenphp-hot-reload
+        controller: Erpify\Frontoffice\Dev\Infrastructure\Controller\FrankenPhpHotReloadController
+        methods: [GET]
+        defaults:
+            _format: json
