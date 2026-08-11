@@ -135,7 +135,11 @@ you change anything here.
       mounts outside `RequireAuth` — retiring that exemption bounces an anonymous
       visitor to `/login`, since the PWA's HTTP client treats a 401 outside the auth
       handshake as an expired session. `/api/v1/backoffice/health` has no anonymous
-      consumer in the PWA (its page mounts behind `RequireAuth`). Two
+      consumer in the PWA — its page mounts behind `RequireAuth` — but it does have
+      one **outside** it: the deploy runbooks curl it unauthenticated
+      (`api/docs/production-ready/hardening.md`, `server-setup.md`), and an operator
+      holding a shell holds no session cookie. Closing it is therefore a change to a
+      documented operational procedure, not a config edit. Two
       invariants: **any deep health check is authenticated** — the dependency probe
       `/api/v1/backoffice/health/database` falls through to
       `IS_AUTHENTICATED_FULLY`, pinned by an `@anonymous` 401 scenario in
