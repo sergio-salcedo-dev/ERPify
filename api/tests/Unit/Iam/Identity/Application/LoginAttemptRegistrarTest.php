@@ -23,6 +23,8 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(LoginAttemptRegistrar::class)]
 final class LoginAttemptRegistrarTest extends TestCase
 {
+    use BuildsLockoutRegistrar;
+
     private const string NOW = '2026-07-11T12:00:00+00:00';
 
     public function testRecordsAFailedAttemptForAKnownEmailWithoutLockingBelowTheThreshold(): void
@@ -107,12 +109,7 @@ final class LoginAttemptRegistrarTest extends TestCase
         $transactionManager = $this->createMock(TransactionManager::class);
         $transactionManager->expects($this->never())->method('transactional');
 
-        $registrar = new LoginAttemptRegistrar(
-            $repository,
-            $eventBus,
-            $transactionManager,
-            new FixedClock(new DateTimeImmutable(self::NOW)),
-        );
+        $registrar = $this->registrarWith($repository, $eventBus, $transactionManager);
 
         $registrar->clear(UserMother::DEFAULT_ID);
 
@@ -127,12 +124,7 @@ final class LoginAttemptRegistrarTest extends TestCase
         $transactionManager = $this->createMock(TransactionManager::class);
         $transactionManager->expects($this->never())->method('transactional');
 
-        $registrar = new LoginAttemptRegistrar(
-            $repository,
-            $eventBus,
-            $transactionManager,
-            new FixedClock(new DateTimeImmutable(self::NOW)),
-        );
+        $registrar = $this->registrarWith($repository, $eventBus, $transactionManager);
 
         $registrar->recordFailure(UserMother::DEFAULT_EMAIL);
 
@@ -142,12 +134,7 @@ final class LoginAttemptRegistrarTest extends TestCase
 
     private function registrar(InMemoryUserRepository $repository, RecordingEventBus $eventBus): LoginAttemptRegistrar
     {
-        return new LoginAttemptRegistrar(
-            $repository,
-            $eventBus,
-            new InlineTransactionManager(),
-            new FixedClock(new DateTimeImmutable(self::NOW)),
-        );
+        return $this->registrarWith($repository, $eventBus, new InlineTransactionManager());
     }
 
     private function lockedUser(): User

@@ -7,12 +7,15 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 use DateTimeImmutable;
 use Doctrine\DBAL\Exception as DbalException;
 use Erpify\Iam\Identity\Application\LoginAttemptRegistrar;
+use Erpify\Iam\Identity\Application\RecordLockoutAuditBestEffort;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler;
 use Erpify\Tests\Unit\Iam\Identity\Application\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
+use Psr\Log\NullLogger;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -28,6 +31,7 @@ trait BuildsFailureHandler
             new RecordingEventBus(),
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable('2026-07-11T12:00:00+00:00')),
+            new RecordLockoutAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
         );
 
         return new ProblemDetailsAuthenticationFailureHandler($registrar);

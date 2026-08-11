@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Iam\Identity\Domain\Event\UserLocked;
 use Erpify\Iam\Identity\Domain\Exception\InvalidEmail;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Clock\Domain\Clock;
@@ -29,6 +30,7 @@ final readonly class LoginAttemptRegistrar
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,
+        private RecordLockoutAuditBestEffort $lockoutAudit,
     ) {
     }
 
@@ -82,11 +84,28 @@ final readonly class LoginAttemptRegistrar
         $this->commit($user);
     }
 
+    /**
+     * The audit projection of a tripped lockout is deliberately raised AFTER the transaction, never from a
+     * handler inside it: the lock is the security control and its observability may not be able to roll it
+     * back. Placing it here also means it can only describe a lockout that actually committed — a failing
+     * commit throws, and nothing below it runs.
+     *
+     * Events are pulled before the closure only so the same list can be read afterwards; publishing still
+     * happens inside the transaction, so the aggregate, its `event_store` rows and the outbox stay atomic.
+     */
     private function commit(User $user): void
     {
-        $this->transactionManager->transactional(function () use ($user): void {
+        $events = $user->pullDomainEvents();
+
+        $this->transactionManager->transactional(function () use ($user, $events): void {
             $this->users->save($user);
-            $this->eventBus->publish(...$user->pullDomainEvents());
+            $this->eventBus->publish(...$events);
         });
+
+        foreach ($events as $event) {
+            if ($event instanceof UserLocked) {
+                $this->lockoutAudit->record($event->aggregateId());
+            }
+        }
     }
 }

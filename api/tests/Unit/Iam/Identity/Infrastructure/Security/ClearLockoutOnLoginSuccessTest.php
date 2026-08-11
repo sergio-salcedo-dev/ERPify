@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 use DateTimeImmutable;
 use Doctrine\DBAL\Exception as DbalException;
 use Erpify\Iam\Identity\Application\LoginAttemptRegistrar;
+use Erpify\Iam\Identity\Application\RecordLockoutAuditBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\LockoutStoreUnavailable;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
@@ -17,8 +18,10 @@ use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Http\Event\LoginSuccessEvent;
@@ -76,6 +79,7 @@ final class ClearLockoutOnLoginSuccessTest extends TestCase
             new RecordingEventBus(),
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),
+            new RecordLockoutAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
         );
 
         return new ClearLockoutOnLoginSuccess($registrar);
