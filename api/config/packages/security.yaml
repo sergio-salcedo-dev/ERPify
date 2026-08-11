@@ -47,7 +47,11 @@ security:
         # session. Both endpoints are same-origin-guarded (PasswordResetOriginListener) and answer uniformly.
         - { path: '^/api/v1/backoffice/forgot-password$', roles: PUBLIC_ACCESS }
         - { path: '^/api/v1/backoffice/reset-password$', roles: PUBLIC_ACCESS }
-        - { path: '^/api/v1/backoffice/health(/database)?$', roles: PUBLIC_ACCESS }
+        # Liveness only — a static payload that probes nothing. The anchored `$` is load-bearing: the
+        # database probe lives one segment deeper and must NOT inherit this exemption. It costs a Postgres
+        # round-trip per anonymous request (a DoS amplifier) and discloses dependency state to whoever asks,
+        # so it authenticates like every other backoffice route. Widening this pattern reopens both.
+        - { path: '^/api/v1/backoffice/health$', roles: PUBLIC_ACCESS }
         - { path: '^/api/v1/health$', roles: PUBLIC_ACCESS }
         - { path: '^/api/v1/dev/', roles: PUBLIC_ACCESS }
         # `/api/test/*` are when@test-only throwaway routes that drive the error pipeline through a real

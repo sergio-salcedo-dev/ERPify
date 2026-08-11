@@ -126,11 +126,17 @@ you change anything here.
 - [ ] The health endpoints (`/api/v1/health`, `/api/v1/backoffice/health`) are
       **consciously public and liveness-only**: static payload (status, service
       name, server time) with no DB / Mercure / Messenger probing, no PII, no
-      versions. Anonymous access is required by the §8 smoke test and the PWA
-      dashboard health check. Two invariants: any *deep* health check
-      (dependency status) must be authenticated or internal-only — never on
-      these routes — and when an API firewall lands, these two paths need an
-      explicit `PUBLIC_ACCESS` exemption. Tracked in
+      versions. Each carries its own `$`-anchored `PUBLIC_ACCESS` entry in
+      `api/config/packages/security.yaml`, and **the anchoring is the control**: a
+      pattern spanning the prefix exempts every route nested under it, which is how
+      the database probe came to be anonymous. Anonymous access is required by the
+      §8 smoke test, which targets `/api/v1/health`; the PWA reaches both from a
+      page mounted behind `RequireAuth`, so no exemption rests on it. Two
+      invariants: **any deep health check is authenticated** — the dependency probe
+      `/api/v1/backoffice/health/database` falls through to
+      `IS_AUTHENTICATED_FULLY`, pinned by an `@anonymous` 401 scenario in
+      `api/features/backoffice/health/database.feature` — and no liveness route
+      ever grows dependency status. Tracked in
       [#222](https://github.com/sergio-salcedo-dev/ERPify/issues/222).
 - [ ] `GET /api/v1/backoffice/banks/{id}/accounts` returns the **full canonical
       IBAN** (PII) and is **consciously public** like the rest of `/backoffice`
