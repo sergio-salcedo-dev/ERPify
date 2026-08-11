@@ -31,6 +31,15 @@ final class BehatVocabularyReader
      */
     private const string PLACEHOLDER_REGEX = '(?:"[^"]*"|\'[^\']*\'|\S+)';
 
+    /**
+     * Behat's own test for "this pattern is already a regex", copied from
+     * `RegexPatternPolicy::supportsPattern()`. Reading it as "starts with a slash" disagreed with Behat
+     * in both directions: `/api/health returns :code` is turnip to Behat and was handed to `preg_match`
+     * here (unknown modifier, matches nothing), while a `#…#`-delimited regex was quoted as literal
+     * text. Either way the pattern resolved no step and read as unreached.
+     */
+    private const string REGEX_PATTERN = '/^(?:\{.*\}|([~\/#`]).*\1)[imsxADSUXJu]*$/s';
+
     /** @var list<string>|null */
     private ?array $patterns = null;
 
@@ -96,7 +105,9 @@ final class BehatVocabularyReader
             foreach (\explode("\n", (string) \file_get_contents($path)) as $line) {
                 $line = \trim($line);
 
-                if (\str_starts_with($line, '"""')) {
+                // Both delimiters, as Behat's lexer accepts: a ```-fenced docstring left unentered
+                // hands every prose line starting with a step keyword to the scan as if it were a step.
+                if (\str_starts_with($line, '"""') || \str_starts_with($line, '```')) {
                     $insideDocString = !$insideDocString;
 
                     continue;
@@ -168,10 +179,14 @@ final class BehatVocabularyReader
      * A pattern already written as a regex is Behat's own escape hatch and is used verbatim. Otherwise
      * the turnip syntax is translated: `(x)` is an optional literal, `:name` a placeholder, the rest
      * literal text.
+     *
+     * Case-insensitive, like Behat's — `TurnipPatternPolicy` closes its generated regex with `/iu`. A
+     * case-sensitive match here would report a pattern as unreached over a feature step differing only
+     * in the capital of its first word, which Behat dispatches without hesitation.
      */
     private function regexFor(string $pattern): string
     {
-        if (\str_starts_with($pattern, '/')) {
+        if (1 === \preg_match(self::REGEX_PATTERN, $pattern)) {
             return $pattern;
         }
 
@@ -181,7 +196,7 @@ final class BehatVocabularyReader
 
         $work = \str_replace(['@@O@@', '@@C@@', '@@P@@'], ['(?:', ')?', self::PLACEHOLDER_REGEX], $work);
 
-        return '#^' . $work . '$#u';
+        return '#^' . $work . '$#iu';
     }
 
     /**

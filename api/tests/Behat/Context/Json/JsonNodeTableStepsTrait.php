@@ -19,6 +19,13 @@ use Closure;
 trait JsonNodeTableStepsTrait
 {
     /**
+     * Declared here, not on the host. A trait reaching for a constant its host happens to define
+     * composes only into that host and fatals in any other — silently, since PHP resolves `self::` at
+     * runtime and neither the compiler nor static analysis flags it.
+     */
+    private const string EXPECTED_STRING_FORMAT = 'Expected text for node %s to be a string, %s given';
+
+    /**
      * Validate the JSON `nodes` are equal to `text`.
      */
     #[Then('the JSON nodes should be equal to:')]

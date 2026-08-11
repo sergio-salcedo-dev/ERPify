@@ -6,6 +6,7 @@ use Behat\Config\Config;
 use Behat\Config\Extension;
 use Behat\Config\GherkinOptions;
 use Behat\Config\Profile;
+use Behat\Config\TesterOptions;
 use Behat\Config\Suite;
 use Behat\Gherkin\GherkinCompatibilityMode;
 use Erpify\Kernel;
@@ -57,6 +58,16 @@ return (new Config())->withProfile(
         // and mtime, not on the compatibility mode, so flipping this line alone
         // serves ASTs parsed under the old mode. Touch the features or clear the
         // cache, otherwise the first run reports the mode change as a no-op.
+        // Strict lives here, not only in `make php.behat`. Behat's default interpretation counts a
+        // step nothing defines as neither pass nor failure — UNDEFINED is 30, below FAILED's 99 — so a
+        // run whose vocabulary has quietly shrunk still exits 0. That is the blind spot the step
+        // vocabulary registry explicitly delegates to this flag, and a control attached to one shell
+        // recipe is absent from every other way the suite is invoked: `vendor/bin/behat` inside the
+        // container, an IDE run configuration, a future CI step.
+        ->withTesterOptions(
+            (new TesterOptions())
+                ->withStrictResultInterpretation(),
+        )
         ->withGherkinOptions(
             (new GherkinOptions())
                 ->withCompatibilityMode(GherkinCompatibilityMode::LEGACY),

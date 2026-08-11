@@ -16,6 +16,7 @@ use Erpify\Tests\Behat\Support\Json\Json;
 use Erpify\Tests\Behat\Support\Messenger\Outbox;
 use Erpify\Tests\Behat\Support\Messenger\OutboxEventFactory;
 use Erpify\Tests\Behat\Support\PostProcess\JsonToolTrait;
+use Erpify\Tests\Behat\Support\Table\PropertyTable;
 use JsonException;
 use PHPUnit\Framework\AssertionFailedError;
 use RuntimeException;
@@ -409,7 +410,7 @@ final class OutboxContext extends AbstractContext
         try {
             $json = $this->eventToJson($event);
 
-            foreach ($table->getRowsHash() as $property => $value) {
+            foreach (PropertyTable::rows($table) as $property => $value) {
                 $this->jsonPropertyShouldBeEqualTo($json, $property, $value);
             }
         } catch (AssertionFailedError) {

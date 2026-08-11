@@ -30,8 +30,6 @@ class JsonNodeContext extends AbstractContext
     use JsonResponseAwareTrait;
     use JsonToolTrait;
 
-    private const string EXPECTED_STRING_FORMAT = 'Expected text for node %s to be a string, %s given';
-
     /**
      * Validate that the data is a proper JSON.
      */
@@ -91,7 +89,7 @@ class JsonNodeContext extends AbstractContext
     #[Then('the JSON node :node should be equal to the response header :header')]
     public function theJsonNodeShouldBeEqualToTheResponseHeader(string $node, string $header): void
     {
-        $value = $this->getJsonInspector()->evaluate($this->getJson(), $node);
+        $value = $this->readNode($this->getJson(), $node);
         self::assertEquals(
             $this->getResponseHeaderValue($header),
             $value,
@@ -107,8 +105,8 @@ class JsonNodeContext extends AbstractContext
     #[Then('the JSON node :nodeA should not be equal to the JSON node :nodeB')]
     public function theJsonNodeShouldNotBeEqualToTheJsonNode(string $nodeA, string $nodeB): void
     {
-        $valueA = $this->getJsonInspector()->evaluate($this->getJson(), $nodeA);
-        $valueB = $this->getJsonInspector()->evaluate($this->getJson(), $nodeB);
+        $valueA = $this->readNode($this->getJson(), $nodeA);
+        $valueB = $this->readNode($this->getJson(), $nodeB);
         self::assertNotSame(
             $valueA,
             $valueB,
@@ -164,7 +162,7 @@ class JsonNodeContext extends AbstractContext
     #[Then('the JSON node :node should be a valid UUID version :version')]
     public function theJsonNodeShouldBeAValidUuid(string $node, ?string $version = null): void
     {
-        $value = $this->getJsonInspector()->evaluate($this->getJson(), $node);
+        $value = $this->readNode($this->getJson(), $node);
         self::assertIsString($value, \sprintf('JSON node "%s" is not a string.', $node));
         self::assertTrue(
             Uuid::isValid($value),

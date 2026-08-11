@@ -12,6 +12,7 @@ use Erpify\Tests\Unit\Behat\Context\Fixtures\OutboxContextFactory;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
@@ -124,6 +125,44 @@ final class OutboxTableMatchTest extends TestCase
         $context->noOutboxEventCreatedOnQueueContaining(
             self::ASYNC,
             new TableNode([['bankId::nosuchmodifier', 'ACME']]),
+        );
+    }
+
+    /**
+     * A mis-shaped table is not a table that failed to match.
+     *
+     * `getRowsHash()` keys on the first column and keeps the rest, so a third column arrives as an
+     * array that can never equal a JSON scalar, and a repeated first column collapses last-wins,
+     * dropping the other row's assertion. Both would read as "no event matched" — success, in the
+     * negative form, over a table nobody could evaluate.
+     */
+    public function testATableWithMoreThanTwoColumnsIsRefusedRatherThanReadAsANonMatch(): void
+    {
+        $context = $this->contextHolding((object) ['bankId' => 'ACME']);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('more than two columns');
+
+        $context->noOutboxEventCreatedOnQueueContaining(
+            self::ASYNC,
+            new TableNode([['bankId', 'ACME', 'a stray third column']]),
+        );
+    }
+
+    /**
+     * The same, for a repeated property. See
+     * {@see testATableWithMoreThanTwoColumnsIsRefusedRatherThanReadAsANonMatch()}.
+     */
+    public function testATableRepeatingAPropertyIsRefusedRatherThanSilentlyDroppingARow(): void
+    {
+        $context = $this->contextHolding((object) ['bankId' => 'ACME']);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('repeats a property');
+
+        $context->noOutboxEventCreatedOnQueueContaining(
+            self::ASYNC,
+            new TableNode([['bankId', 'ACME'], ['bankId', 'OTHER']]),
         );
     }
 

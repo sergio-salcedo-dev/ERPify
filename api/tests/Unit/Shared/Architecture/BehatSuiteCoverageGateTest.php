@@ -87,6 +87,23 @@ final class BehatSuiteCoverageGateTest extends TestCase
         );
     }
 
+    public function testTheDefaultProfileInterpretsResultsStrictly(): void
+    {
+        // The empty argument list is the assertion, not the call: the option takes a boolean and
+        // `withStrictResultInterpretation(false)` reads as declared while turning strictness off.
+        $this->assertStringContainsString(
+            'withStrictResultInterpretation()',
+            $this->readConfig(),
+            self::FAILURE_PREAMBLE
+            . "\nThe default profile does not declare strict result interpretation. Behat's default "
+            . 'counts a step nothing defines as neither pass nor failure — UNDEFINED is 30, below '
+            . "FAILED's 99 — so a suite whose vocabulary has quietly shrunk still exits 0, which is "
+            . 'the shape this gate exists to deny. A context dropped from the profile, or an assertion '
+            . 'whose phrase was renamed, then removes the checking and leaves every scenario reporting '
+            . 'as though it ran.',
+        );
+    }
+
     /**
      * @return list<string>
      */

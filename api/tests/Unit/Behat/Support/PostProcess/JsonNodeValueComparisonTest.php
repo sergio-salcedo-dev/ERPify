@@ -52,7 +52,22 @@ final class JsonNodeValueComparisonTest extends TestCase
     public static function provideADateComparisonOverAValueThatIsNotADateFailsAsAnAssertionCases(): iterable
     {
         yield 'unparseable string' => ['{"node": "n/a"}'];
-        yield 'boolean' => ['{"node": true}'];
+        yield 'empty string' => ['{"node": ""}'];
+    }
+
+    /**
+     * A boolean is refused a step earlier, by the string guard, and that is the right place: `(string)
+     * false` is the empty string and `new DateTime('')` answers *now* without complaint, so a boolean
+     * that reached the date parse would be read as the current time rather than rejected.
+     */
+    public function testADateComparisonOverABooleanIsRefusedBeforeItReachesTheDateParse(): void
+    {
+        $this->expectException(AssertionFailedError::class);
+        $this->expectExceptionMessage('which has no string form to compare');
+
+        JsonAssertions::withScalarModifiers()
+            ->jsonPropertyDateShouldBeEqualTo(new Json('{"node": true}'), self::NODE, '2026-01-01')
+        ;
     }
 
     public function testADateComparisonStillHoldsForARealDateAndNotForAnotherOne(): void

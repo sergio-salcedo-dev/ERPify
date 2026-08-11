@@ -38,28 +38,33 @@
 #     words both sit here as `used`, which is the split the rule warns about and the part still left
 #     to a reader. What this file gives that reader is the list to search before writing a new one.
 #   - It matches by re-implementing Behat's turnip syntax textually, not by asking Behat. A pattern
-#     shape upstream adds that is not `:placeholder`, `(optional)` or a `/regex/` would be mismatched
-#     — which is why every feature step must resolve to something: that check is what goes red first.
+#     shape upstream adds would be mismatched — which is why every feature step must resolve to
+#     something: that check is what goes red first. Behat can compute the used/idle split itself
+#     (`Profile::withPrintUnusedDefinitions()`), from the real definition repository after a real run;
+#     it is not used here because that needs a database and a full suite run, and it reports "unused"
+#     rather than a classification a diff can carry. The cost of the re-implementation is the
+#     divergence list below.
 #   - It reads only `#[Given]`/`#[When]`/`#[Then]` attributes under `tests/Behat`. A step registered
 #     any other way is invisible to it.
 #   - It says nothing about whether a context is wired into `behat.dist.php`. An unregistered context
 #     declares patterns nobody can call, and every one of them reads here as `idle`. Losing a
-#     registration is caught only by the suite going red, which needs `--strict` — Behat's default
-#     counts an undefined step as neither pass nor failure, and `make php.behat` passes `--strict`
-#     for exactly that reason.
+#     registration is caught only by the suite going red, which needs strict interpretation — Behat's
+#     default counts an undefined step as neither pass nor failure. `behat.dist.php` declares it on
+#     the default profile, so every invocation carries it and not only `make php.behat`;
+#     BehatSuiteCoverageGateTest pins that declaration.
 #   - `used` means SOME feature step matches the pattern; Behat dispatches each step to exactly ONE
 #     definition. Two patterns matching the same step would both read `used` while only one runs —
 #     the near-duplicate case above, in its more dangerous form. Measured today: 0 of the 954 step
 #     lines match more than one pattern, so nothing is currently mis-classified.
-#   - The turnip translation is re-implemented here, and diverges from Behat's in shapes Behat
-#     supports today: its match is case-insensitive and this one is not, its placeholder token is
-#     WIDER (`\S+` against Behat's `\-?[\w\.\,]+`), it reads `word/word` as an alternation and
-#     `(The )` as an optional group, and it accepts `~ # ` + {…}` as regex delimiters. Measured
-#     across all patterns × all step lines the two agree exactly. Which way a divergence fails is
-#     not uniform, and the placeholder is the one that fails OPEN: an unquoted `X-Foo` matches here
-#     and not in Behat, so the pattern reads `used` and this gate stays green over a step Behat
-#     reports undefined. What catches that one is `--strict` turning the suite red, not this file.
-#     The narrower divergences fail closed, as an unresolved feature step.
+#   - The turnip translation still diverges from Behat's in two shapes Behat supports: it reads
+#     `word/word` as an alternation and `(The )` — an optional group with a space or a capital — as
+#     one, where this accepts only `([a-z]+)`. Both fail CLOSED, as an unresolved feature step.
+#     Case-insensitivity and Behat's regex-delimiter test are no longer divergences: this matcher
+#     closes with `/iu` like Behat's, and uses Behat's own `supportsPattern()` predicate.
+#   - Its placeholder token is WIDER than Behat's (`\S+` against `\-?[\w\.\,]+`), and this is the one
+#     divergence that fails OPEN: an unquoted `X-Foo` matches here and not in Behat, so the pattern
+#     reads `used` and this gate stays green over a step Behat reports undefined. What catches that
+#     one is strict interpretation turning the suite red, not this file.
 #   - It classifies step PATTERNS, never assertion helpers. A method in a shared trait that no
 #     `#[Then]` binds cannot appear here at all, so "search this file before writing a new one"
 #     leaves a reader unable to find one — which is how two of them sat unreachable.
