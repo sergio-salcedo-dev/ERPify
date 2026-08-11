@@ -183,32 +183,29 @@ Feature: Reset a forgotten password uniformly
     And I execute the SQL query "SELECT id FROM identity_password_reset_token WHERE id = '0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e05'"
     And there should have 1 records in SQL result
 
-  # Each of the three scenarios below claims a DIFFERENT address on purpose. The audit budget lives in the
-  # rate-limiter cache pool, which no scenario boundary resets, so two of them sharing an address would leave
-  # the second asserting over a slot the first had already spent — passing whatever the code did.
+  # EVERY scenario below drives exactly ONE request after priming, and that is a hard constraint of the
+  # harness rather than a stylistic choice: the test cache pool is `cache.adapter.array` and the
+  # `services_resetter` clears it on every `kernel.terminate`, so a primed budget is visible to the very next
+  # HTTP step and to no other (`RateLimitContext`'s own docblock says so). A second request in the same
+  # scenario would arrive with a full budget, be SERVED, and assert nothing about a refusal.
+  #
+  # The consequence worth naming: **the once-per-window bound cannot be expressed here at all**, because the
+  # audit budget is reset by the same sweep. It is pinned where it can be — `RequestPasswordResetControllerTest`
+  # drives eight invocations against one persistent `InMemoryStorage` and asserts a single row.
   #
   # Isolated by a fixed X-Correlation-Id rather than by truncating audit_log: the table is emptied once per
   # suite, and every request here writes through it.
-  Scenario: An exhausted recovery budget is projected once, naming the target, however many refusals follow
+  Scenario: An exhausted recovery budget is projected as one security row naming the target
     Given I add "X-Correlation-Id" header equal to "0190a1de-0602-7abc-8def-000000000101"
     And the password-recovery budget is exhausted for email "nora@erpify.test"
+    # Primed in lower case and requested in another casing, so this single request also pins that the two
+    # budgets share ONE bucket through the real HTTP path: `RecoveryBudgetKey` end to end, not by unit test.
     When I send a POST request to "/backoffice/forgot-password" with body:
-    """
-    { "email": "nora@erpify.test" }
-    """
-    Then the response status code should be 202
-    And the response should be empty
-    And I send a POST request to "/backoffice/forgot-password" with body:
-    """
-    { "email": "nora@erpify.test" }
-    """
-    And the response status code should be 202
-    # Same mailbox in another casing: one bucket, so it is a third refusal and not a second target.
-    And I send a POST request to "/backoffice/forgot-password" with body:
     """
     { "email": "NORA@Erpify.TEST" }
     """
-    And the response status code should be 202
+    Then the response status code should be 202
+    And the response should be empty
     And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id FROM audit_log WHERE correlation_id = '0190a1de-0602-7abc-8def-000000000101' AND action = 'PASSWORD_RECOVERY_THROTTLED'"
     And the SQL result as JSON should be:
     """
@@ -262,6 +259,8 @@ Feature: Reset a forgotten password uniformly
     And I execute the SQL query "ALTER TABLE audit_log_unavailable RENAME TO audit_log" on connection "seed"
     Then the response status code should be 202
     And the response should be empty
+    # Completeness, not falsification: an empty result is also what a projection that never ran would give.
+    # The falsifiable half is the 202 above — narrowing the swallow turns this scenario, and only it, into 500.
     And I execute the SQL query "SELECT action FROM audit_log WHERE correlation_id = '0190a1de-0602-7abc-8def-000000000103'" on connection "seed"
     And the SQL result as JSON should be:
     """

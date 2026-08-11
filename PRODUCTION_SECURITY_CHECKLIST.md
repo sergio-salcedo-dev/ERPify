@@ -383,7 +383,13 @@ you change anything here.
       the rate-limiter cache pool, so a redeploy, a `cache:clear` or a second FrankenPHP worker
       produces extra rows for one siege; and the row says *that* exhaustion happened and *when*, never
       *how much* — a six-request accident and a hundred-thousand-request siege look identical, volume
-      being left to `anonymous_api` and the access log. **One property is stated rather than hidden:**
+      being left to `anonymous_api` and the access log. **A fourth, found by the adversarial pass:** the first
+      refusal of a window costs a `SELECT` plus an `INSERT` and every later one costs neither, so a caller
+      comparing its own consecutive refusals can infer whether that address's audit slot was still free — i.e.
+      whether an exhaustion for it was already observed within the hour. It is not an existence oracle (both
+      resolvable and unresolvable addresses do the same read and write) and the budget caps it at one sample
+      per address per hour, which is what stops it being averaged down; it becomes worth closing only if that
+      budget is widened or the timing floor is removed. **One property is stated rather than hidden:**
       an authorised trail reader can tell a resolvable address from an unresolvable one by the presence
       of `resource_id`. It is not reachable by the attacker — the read sits behind `auditTrail.read` —
       and it would become one only if the trail were exfiltrated or a lower tier gained that read.

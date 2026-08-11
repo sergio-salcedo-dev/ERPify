@@ -179,9 +179,12 @@ contractual, literal, para el cuerpo del PR:
       (8 peticiones ⇒ 1 fila) y la independencia por dirección, contra el limitador real.
 - [x] `api/features/backoffice/identity/password_reset.feature` — **tres** escenas: agotamiento proyectado una
       sola vez pese a tres rechazos (con una tercera petición en otro casing, que pinea `RecoveryBudgetKey` de
-      punta a punta), dirección que no nombra a nadie ⇒ fila **sin** recurso, y `ALTER TABLE audit_log RENAME`
-      probando que el `202` sobrevive. **Cero steps nuevos**: el vocabulario ya los tenía todos. Cada escena usa
-      una dirección propia porque el pool del limitador no se resetea entre escenas.
+      punta a punta, primeando en minúsculas y pidiendo en otro casing **en la misma única petición**),
+      dirección que no nombra a nadie ⇒ fila **sin** recurso, y `ALTER TABLE audit_log RENAME` probando que el
+      `202` sobrevive. **Cero steps nuevos**: el vocabulario ya los tenía todos. **Una petición por escena, y
+      es restricción del harness, no estilo**: el pool de test es `cache.adapter.array` y el `services_resetter`
+      lo limpia en cada `kernel.terminate`, así que un presupuesto primeado lo ve la petición siguiente y
+      ninguna más — lo dice el docblock de `RateLimitContext`, que es el fichero que había que leer antes.
 - [x] `docs/architecture-api.md` — cuarta acción de la ruta de identidad, en la misma frase de amplificación.
 - [x] `PRODUCTION_SECURITY_CHECKLIST.md` — el control con sus **tres** residuos abiertos y la propiedad del
       lector autorizado dicha, no escondida.
@@ -191,7 +194,10 @@ contractual, literal, para el cuerpo del PR:
 **Acceptance Criteria** — cada uno con la mutación que lo pone rojo. Los cuatro marcados **[GATE]** son
 fronteras arquitectónicas, no tests de regresión:
 
-- **[GATE] El amplificador está acotado.** 5 aceptadas → 0 filas; 6.ª → 1 fila; 7.ª y 8.ª → sigue habiendo 1.
+- **[GATE] El amplificador está acotado — y se pinea en el UNITARIO, no en aceptación.** Ocho invocaciones del
+  controlador contra un `InMemoryStorage` persistente ⇒ **1 fila**. En Behat es inexpresable: el mismo barrido
+  que resetea el presupuesto de recuperación resetea el de auditoría, así que una segunda petición llegaría con
+  cupo lleno y no sería un rechazo.
   *Rojo:* quitar la guarda del presupuesto. **Hay que provocarlo y medirlo**, porque es el único AC que separa
   esta historia de «hemos añadido un INSERT».
 - **[GATE] La respuesta no cambia.** Las seis respuestas son indistinguibles en estado, cuerpo y cabeceras
@@ -355,6 +361,77 @@ esta iteración.
    - **No negociable:** tipo por `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE`, nunca el literal `'User'`;
      derivador bajo `src/Iam/Identity/`; vía `AuditResource::of()`; **ninguna representación de la dirección en
      `metadata`**, en ninguna forma.
+
+## Pase adversarial — 2026-08-11, ANTES de abrir la PR
+
+Lectura hostil por un contexto fresco (subagente read-only, autorizado por Sergio), no por la autora. Devolvió
+**NO-GO** con 2 SERIOUS y 4 MINOR. Todos corregidos en esta misma rama, antes de `gh pr create`. Su
+verificación negativa se conserva porque vale tanto como los hallazgos.
+
+**SERIOUS — la escena de aceptación principal era VACUA, y por la tercera repetición del mismo error mío.**
+Afirmé que el pool del limitador «no se resetea entre escenas». Se resetea **entre peticiones**: el pool de
+test es `cache.adapter.array` y el `services_resetter` lo limpia en cada `kernel.terminate`. Mis peticiones 2.ª
+y 3.ª por tanto llegaban con presupuesto **lleno**, se **servían** (minteando token y correo), y no llegaban
+siquiera a `record()`. Consecuencias medidas por él: borrar la guarda del presupuesto dejaba la escena verde,
+y el pin de casing «de punta a punta» que el comentario prometía **no existía**. Corroborado de forma
+independiente: `bank/count.feature` manda sietes peticiones en una escena bajo un límite de 5 y pasa.
+**Corregido:** una sola petición por escena, primeando en minúsculas y pidiendo en otro casing — lo que sí
+pinea `RecoveryBudgetKey` de punta a punta dentro de la regla del harness. El techo de amplificación se declara
+donde de verdad vive, el unitario, y la escena dice por qué no puede vivir en aceptación. **Lo que había que
+leer antes de escribir la escena era el docblock de `RateLimitContext`, que lo explica en sus propias
+palabras.**
+
+**SERIOUS — tres documentos duraderos afirmaban lo contrario de lo medido.** El comentario de la feature, la
+lista de tareas del artefacto y un AC. **Corregidos los tres**, con el mecanismo real escrito.
+
+**MINOR — `«swallowing every fault»` era sobreafirmación en el docblock del controlador.** `claimFor()` y el
+propio `logger->warning` quedan fuera del `try`. El comportamiento es defendible —el pool ya se consumió sin
+guarda dos líneas antes, en el throttle— pero la frase prometía un invariante que el código no sostiene.
+**Corregida la frase, no el código.**
+
+**MINOR — canal lateral nuevo, ausente de la lista de residuos.** La primera denegación de una ventana cuesta
+`SELECT` + `INSERT` y las siguientes no cuestan ninguno, así que un llamante que compare sus propios rechazos
+consecutivos infiere si la ranura de auditoría de esa dirección seguía libre. No es oráculo de existencia
+(resoluble y no resoluble hacen la misma lectura y la misma escritura) y el presupuesto lo acota a **una
+muestra por dirección y hora**, que es justo lo que impide promediarlo. **Escrito como cuarto residuo** en el
+checklist.
+
+**MINOR — `api/.env.example` no nombraba la palanca** que el checklist dice que el operador puede tocar.
+Añadidas las dos variables nuevas, más las dos de `PASSWORD_CHANGE` que ya faltaban de antes (boy-scout, en un
+fichero que ya tocaba).
+
+**MINOR — la segunda aserción de la escena del `RENAME` es vacua** (`[]` es también lo que daría una proyección
+que no existe) y el `RENAME` de vuelta no es a prueba de excepciones. Ambas cosas son el patrón que BR-4b ya
+dejó en `main`. **Anotada como comprobación de completitud, no de falsación**, junto a la mitad que sí falsea:
+estrechar el swallow pone esa escena —y solo esa— en 500, medido.
+
+**Lo que atacó y NO pudo romper**, que vale tanto como lo anterior:
+- **Aritmética del limitador, MEDIDA**: `remaining` se queda en `0` por `consume()` tras 1 aceptada + 20
+  denegadas y llega a `−20` por `reserve(1)`; el `hitCount` es `1` antes y `1` después de 50 rechazos. El techo
+  «una fila por dirección canonizada e intervalo» aguanta.
+- **El test del latido es genuinamente falsable, MEDIDO**: sin mutar, aceptado a +2,2 s; con la mutación que el
+  propio test nombra, **rechazado**. Y la entrada de `InMemoryStorage` vive a +2,1 s y ha desaparecido a +3,1 s,
+  así que la aserción cae dentro de la banda que discrimina.
+- **Cegar el control forzando el fallo del INSERT: sin vector.** Toda columna influida por el atacante está
+  acotada aguas arriba — `user_agent` truncado a 512 contra una columna de 512, `correlation_id` validado
+  contra UUIDv7 o reacuñado, `ip` por `filter_var`, `metadata` vacío (`JSON_THROW_ON_ERROR` no puede dispararse)
+  y `resource_id` ya pasó `Uuid::isValid()`.
+- **La dirección no alcanza almacenamiento ni log, MEDIDO**: el mensaje de `DriverException` no lleva los
+  parámetros ligados, `zend.exception_ignore_args = On` limpia los argumentos de las trazas, `includeStacktraces`
+  no está activo en ningún handler y Sentry está comentado.
+- **Cambio de respuesta por entrada: ninguno.** `#[Assert\Email]` en modo estricto acota la entrada a ~320
+  caracteres antes del controlador; una dirección malformada nunca alcanza la rama denegada; `Email::tryFrom`
+  devuelve null sin lectura de BD; y `CacheStorage` hace sha1 del id, así que la `@` nunca llega a la
+  validación de claves PSR-6.
+- **Oráculo de temporización por existencia: no explotable**, y con un argumento mejor que el mío — el
+  presupuesto acota al atacante a una muestra por dirección y hora, así que el diferencial no se puede
+  promediar.
+- **Los unitarios afirman el sistema, no el doble**: las dos propiedades que importan corren contra el
+  `RateLimiterFactory` real.
+- **Registros y puertas limpios**: `.audit-resource-types` ya cubre el tipo, la contención del fichero se
+  respeta, la plaza única de `.person-reference-policy` gobierna *fuentes*, no escritores, los cuatro patrones
+  Behat ya estaban `used`, y `RecoveryBudgetKey::forEmail` es la expresión verbatim, así que
+  `PasswordRecoveryThrottle` no cambió de comportamiento.
 
 ## Verification
 

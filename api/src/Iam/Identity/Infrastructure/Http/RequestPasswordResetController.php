@@ -25,8 +25,11 @@ use Symfony\Component\Routing\Attribute\Route;
  * throttled answer is not distinguishable by latency either.
  *
  * Silent to the caller is not silent to the operator: {@see RecordRecoveryThrottleAuditBestEffort} projects
- * the refusal onto the `security` trail, behind its own budget and swallowing every fault, so the observation
- * can neither change this response nor be amplified by the attacker it records.
+ * the refusal onto the `security` trail, behind its own budget and swallowing every fault of the WRITE, so the
+ * observation can neither change this response nor be amplified by the attacker it records. Claiming that
+ * budget is not itself guarded, and deliberately so: it reads the same cache pool `allowRequest()` consumed
+ * two lines earlier, so a pool fault has already left through the throttle and wrapping it here would only
+ * hide where it came from.
  */
 #[Route('/forgot-password', name: 'identity_forgot_password', methods: ['POST'])]
 final readonly class RequestPasswordResetController
