@@ -177,14 +177,16 @@ contractual, literal, para el cuerpo del PR:
       contra el limitador **real**; un doble asertaría el doble.
 - [x] `api/tests/Unit/.../RequestPasswordResetControllerTest.php` — extendido con el GATE del amplificador
       (8 peticiones ⇒ 1 fila) y la independencia por dirección, contra el limitador real.
-- [ ] `api/features/backoffice/identity/password_reset.feature` — escena de agotamiento con correlation-id fijo
-      + escena de `ALTER TABLE audit_log RENAME` probando que el `202` sobrevive. Buscar el vocabulario
-      (`make php.behat c='-dl'`) y regenerar `api/.behat-step-vocabulary`.
-- [ ] `docs/architecture-api.md:265` — cuarta acción de la ruta de identidad en la misma frase de amplificación.
-- [ ] `PRODUCTION_SECURITY_CHECKLIST.md` — el control nuevo con sus residuos, incluido que un lector autorizado
-      del trail **sí** distingue dirección resoluble de no resoluble.
-- [ ] `docs/adr/administrative-recovery-channel.md` — la observabilidad es **detectivesca y sin capacidad de
-      recuperación**; no añade arista al grafo.
+- [x] `api/features/backoffice/identity/password_reset.feature` — **tres** escenas: agotamiento proyectado una
+      sola vez pese a tres rechazos (con una tercera petición en otro casing, que pinea `RecoveryBudgetKey` de
+      punta a punta), dirección que no nombra a nadie ⇒ fila **sin** recurso, y `ALTER TABLE audit_log RENAME`
+      probando que el `202` sobrevive. **Cero steps nuevos**: el vocabulario ya los tenía todos. Cada escena usa
+      una dirección propia porque el pool del limitador no se resetea entre escenas.
+- [x] `docs/architecture-api.md` — cuarta acción de la ruta de identidad, en la misma frase de amplificación.
+- [x] `PRODUCTION_SECURITY_CHECKLIST.md` — el control con sus **tres** residuos abiertos y la propiedad del
+      lector autorizado dicha, no escondida.
+- [x] `docs/adr/administrative-recovery-channel.md` — **D6**, redactado como *«detective-only»* y nunca como
+      «se monitoriza la recuperación», que induciría a leerlo como mecanismo de continuidad.
 
 **Acceptance Criteria** — cada uno con la mutación que lo pone rojo. Los cuatro marcados **[GATE]** son
 fronteras arquitectónicas, no tests de regresión:

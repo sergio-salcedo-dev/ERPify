@@ -193,6 +193,20 @@ unattributable raw SQL into one that is named and tested.
 operator. The command is therefore **governance, not continuity**: it fails I-2 by construction and must
 never be cited as the customer's recovery path.
 
+## D6 — Observing the recovery throttle is detective-only, and adds no edge to the graph
+
+`PASSWORD_RECOVERY_THROTTLED` records that an address's recovery budget was exhausted. It must be read as
+**evidence, never as a lever**: it grants nothing, reaches nobody outside `auditTrail.read`, and leaves the
+uniform 202 — status, body and latency — untouched. Wording it as "the recovery path is now monitored" would
+invite the opposite reading, that an operator watching the trail is a continuity mechanism. They are not: the
+row appears *after* the owner has already been denied, and nothing in it shortens that denial.
+
+**It does not weaken I-1 either, and the reason is what it does not carry.** The row names the subject's
+identity id when the address resolves, which rides an axis whose erasure already has an owner; it never
+carries the address, and it never carries any recovery-channel identifier — the thing I-1 forbids on this
+path. An observation keyed by the same address the attacker already consumes cannot become a channel, because
+nothing exercisable travels on it.
+
 ## Falsification
 
 **I-1 is falsified statically, not by a scenario — and this is the correction the adversarial pass

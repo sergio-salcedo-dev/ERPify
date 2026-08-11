@@ -367,6 +367,26 @@ you change anything here.
       attacker it records. Still **no CDC row**: `User` stays out of `AuditedEntity`, because a field-level diff
       is the one thing that could carry `password_hash` into the trail. The durable record of a *successful*
       change remains the `event_store` row.
+- [ ] **Recovery-throttle exhaustion is observed internally, and the observation is budgeted.**
+      A throttled `POST /forgot-password` answers the uniform 202 with the work silenced, which is
+      deliberate and unchanged — a per-account 429 would be an existence oracle and would let an
+      attacker keep superseding a live token. What used to be missing was the *internal* counterpart:
+      the refusal raises no exception and changes no response, so neither generic audit hook could see
+      it, and an administrator denied their only recovery edge left no trace. `PASSWORD_RECOVERY_THROTTLED`
+      (`security`) now records it, behind `recovery_throttle_audit_per_email` — one claim per
+      canonicalised address per hour, because the throttle cannot guard what reports it and a row per
+      refusal is a synchronous write per attempt handed to the attacker. The row names the subject when
+      the address resolves and nothing when it does not; **the address itself is never written**, in
+      any column or encoding. **Three residues, none of them closed:** the claim is spent before the
+      write, so an `audit_log` outage costs one window of silence per address (the swallowed `warning`
+      is the only signal, and the Monolog→Sentry bridge is deliberately unwired); the budget lives in
+      the rate-limiter cache pool, so a redeploy, a `cache:clear` or a second FrankenPHP worker
+      produces extra rows for one siege; and the row says *that* exhaustion happened and *when*, never
+      *how much* — a six-request accident and a hundred-thousand-request siege look identical, volume
+      being left to `anonymous_api` and the access log. **One property is stated rather than hidden:**
+      an authorised trail reader can tell a resolvable address from an unresolvable one by the presence
+      of `resource_id`. It is not reachable by the attacker — the read sits behind `auditTrail.read` —
+      and it would become one only if the trail were exfiltrated or a lower tier gained that read.
 - [ ] **Pre-identity cross-cutting hardening (login · invitation accept · forgot/reset):**
       every pre-identity rejection pays the same **constant-time floor** (`PreIdentityTimingFloor`, one password
       verification of the firewall's own hasher) — malformed/unknown login identifiers, the `INVITED` pre-auth

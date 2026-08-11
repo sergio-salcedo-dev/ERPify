@@ -183,6 +183,91 @@ Feature: Reset a forgotten password uniformly
     And I execute the SQL query "SELECT id FROM identity_password_reset_token WHERE id = '0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e05'"
     And there should have 1 records in SQL result
 
+  # Each of the three scenarios below claims a DIFFERENT address on purpose. The audit budget lives in the
+  # rate-limiter cache pool, which no scenario boundary resets, so two of them sharing an address would leave
+  # the second asserting over a slot the first had already spent — passing whatever the code did.
+  #
+  # Isolated by a fixed X-Correlation-Id rather than by truncating audit_log: the table is emptied once per
+  # suite, and every request here writes through it.
+  Scenario: An exhausted recovery budget is projected once, naming the target, however many refusals follow
+    Given I add "X-Correlation-Id" header equal to "0190a1de-0602-7abc-8def-000000000101"
+    And the password-recovery budget is exhausted for email "nora@erpify.test"
+    When I send a POST request to "/backoffice/forgot-password" with body:
+    """
+    { "email": "nora@erpify.test" }
+    """
+    Then the response status code should be 202
+    And the response should be empty
+    And I send a POST request to "/backoffice/forgot-password" with body:
+    """
+    { "email": "nora@erpify.test" }
+    """
+    And the response status code should be 202
+    # Same mailbox in another casing: one bucket, so it is a third refusal and not a second target.
+    And I send a POST request to "/backoffice/forgot-password" with body:
+    """
+    { "email": "NORA@Erpify.TEST" }
+    """
+    And the response status code should be 202
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id FROM audit_log WHERE correlation_id = '0190a1de-0602-7abc-8def-000000000101' AND action = 'PASSWORD_RECOVERY_THROTTLED'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "PASSWORD_RECOVERY_THROTTLED",
+        "level": "security",
+        "actor_type": "anonymous",
+        "actor_id": null,
+        "resource_type": "User",
+        "resource_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a63"
+      }
+    ]
+    """
+
+  # The row is written for an address that names nobody, and it is written WITHOUT a resource. Withholding it
+  # would carry the same existence bit in its absence while losing the signal of a sweep against addresses
+  # that match no identity.
+  Scenario: An exhausted budget for an address that names nobody is still recorded, without a resource
+    Given I add "X-Correlation-Id" header equal to "0190a1de-0602-7abc-8def-000000000102"
+    And the password-recovery budget is exhausted for email "ghost@erpify.test"
+    When I send a POST request to "/backoffice/forgot-password" with body:
+    """
+    { "email": "ghost@erpify.test" }
+    """
+    Then the response status code should be 202
+    And the response should be empty
+    And I execute the SQL query "SELECT action, level, resource_type, resource_id FROM audit_log WHERE correlation_id = '0190a1de-0602-7abc-8def-000000000102' AND action = 'PASSWORD_RECOVERY_THROTTLED'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "PASSWORD_RECOVERY_THROTTLED",
+        "level": "security",
+        "resource_type": null,
+        "resource_id": null
+      }
+    ]
+    """
+
+  # A `security` entry propagates by design, so without the swallow this refusal answers 500 and the uniform
+  # 202 — the whole control — is broken by its own observability.
+  Scenario: The uniform 202 survives its own audit projection failing
+    Given I add "X-Correlation-Id" header equal to "0190a1de-0602-7abc-8def-000000000103"
+    And the password-recovery budget is exhausted for email "outage@erpify.test"
+    And I execute the SQL query "ALTER TABLE audit_log RENAME TO audit_log_unavailable" on connection "seed"
+    When I send a POST request to "/backoffice/forgot-password" with body:
+    """
+    { "email": "outage@erpify.test" }
+    """
+    And I execute the SQL query "ALTER TABLE audit_log_unavailable RENAME TO audit_log" on connection "seed"
+    Then the response status code should be 202
+    And the response should be empty
+    And I execute the SQL query "SELECT action FROM audit_log WHERE correlation_id = '0190a1de-0602-7abc-8def-000000000103'" on connection "seed"
+    And the SQL result as JSON should be:
+    """
+    []
+    """
+
   # The ceiling this endpoint enforces used to be 255 while the other two credential-creating surfaces
   # enforced 128 — a live divergence, in production, that no gate could see. A 200-character password answered
   # 204 here and 422 everywhere else; it is now one policy, so it answers 422 here too.
