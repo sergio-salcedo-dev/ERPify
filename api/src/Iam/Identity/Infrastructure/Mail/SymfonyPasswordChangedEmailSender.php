@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Mail;
 
 use Erpify\Iam\Identity\Application\PasswordChangedEmailSender;
 use Erpify\Shared\Mailer\Infrastructure\BulletproofEmailChrome;
+use Erpify\Shared\Mailer\Infrastructure\DeliverableSecurityTransport;
 use Erpify\Shared\Mailer\Infrastructure\SecuritySenderAddress;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -37,12 +38,15 @@ final readonly class SymfonyPasswordChangedEmailSender implements PasswordChange
         private MailerInterface $mailer,
         private SecuritySenderAddress $securityFrom,
         private BulletproofEmailChrome $chrome,
+        private DeliverableSecurityTransport $transport,
     ) {
     }
 
     #[Override]
     public function send(string $recipientEmail): void
     {
+        $this->transport->ensureDeliverable();
+
         $from = $this->securityFrom->toString();
 
         $email = (new Email())

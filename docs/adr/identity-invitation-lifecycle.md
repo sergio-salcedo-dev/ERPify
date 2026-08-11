@@ -1,6 +1,6 @@
 # ADR — Identity & Invitation lifecycle: multi-tenant-ready identity, invitation-first onboarding, session registry
 
-> **Status:** accepted — design; not yet implemented · **Date:** 2026-07-06 · **Scope:** promotes the shipped `Backoffice/Identity` into a top-level `Iam/` context (`Identity` + `Invitation` + `Session`) and a new `Organization/` context (`Organization` + `Membership`); adds the four identity/auth state machines — identity lifecycle, invitation, authentication lockout, session — behind two transversal invariants (pre-identity indistinguishability, token opacity). Extends the auth/RBAC subsystem ([`auth-rbac-subsystem.md`](./auth-rbac-subsystem.md)) and the RBAC authorization model ([`rbac-authorization-model.md`](./rbac-authorization-model.md)) **without revoking either**: the `Role`/permission grammar is the authorization plane and stays orthogonal to this identity plane. Domain input: the UX run decision-log (`ux-ERPify-2026-07-06` — four state machines + two invariants + the three-moments rule) and its adversarial security review.
+> **Status:** accepted — implemented (tenancy operation deliberately deferred, D2) · **Date:** 2026-07-06 · **Scope:** promotes the shipped `Backoffice/Identity` into a top-level `Iam/` context (`Identity` + `Invitation` + `Session`) and a new `Organization/` context (`Organization` + `Membership`); adds the four identity/auth state machines — identity lifecycle, invitation, authentication lockout, session — behind two transversal invariants (pre-identity indistinguishability, token opacity). Extends the auth/RBAC subsystem ([`auth-rbac-subsystem.md`](./auth-rbac-subsystem.md)) and the RBAC authorization model ([`rbac-authorization-model.md`](./rbac-authorization-model.md)) **without revoking either**: the `Role`/permission grammar is the authorization plane and stays orthogonal to this identity plane. Domain input: the UX run decision-log (`ux-ERPify-2026-07-06` — four state machines + two invariants + the three-moments rule) and its adversarial security review.
 
 ## Context
 
@@ -122,6 +122,43 @@ the difference back to the plan.
 *What none of this proves:* **no real two-transaction race is exercised anywhere.** The image carries neither
 `pcntl` nor the procedural `pgsql` extension, so a second transaction cannot run concurrently inside a test
 process. Every claim here rests on acquisition instants and on statement order, never on an observed `40P01`.
+
+### D14 — Lockout observability is detective-only, and its delivery channel is why it may carry nothing exercisable
+
+D7's lock is observable in principle and was observed by nobody: `UserLocked` reached `event_store` and had no
+consumer, so an administrator whose account is driven into the lock by anyone who knows their address learned
+about it by failing to sign in. Two projections close that, and **both only report**: a `security` row in
+`audit_log` per committed lockout, and a notice to the account owner.
+
+**Neither adds an edge to the recovery graph, and that is derived rather than asserted.** The notice is
+delivered by email — the same namespace an attacker consumes to trip the lock in the first place — so by D1 of
+[`administrative-recovery-channel.md`](./administrative-recovery-channel.md) it may carry no token, selector,
+unlock link or recovery-channel identifier. It states the fact and the order to recover in (*evict first,
+rotate after*). The recovery graph therefore still has exactly the two edges #602 counted; what changes is that
+the subject is told, not what they can do about it.
+
+**The notice is emitted by a scheduler tick, never by the failing request**, and that placement is the security
+property rather than a performance one. On the request, the tenth attempt against a resolved identity would
+cost an SMTP round trip while an unknown address returned immediately — a timing oracle against D10. Off the
+request the channel is closed by construction, not by a latency property a later listener could erode.
+
+**The audit row is written post-commit and best-effort.** `event_store` already holds the durable `UserLocked`
+in the lock's own transaction, so the row is a projection of a fact that survives without it; writing it inside
+that transaction would let a failed `INSERT` roll back the brute-force defence, and silently, since PostgreSQL
+answers `COMMIT` on an aborted transaction with a `ROLLBACK` tag. The consequences are accepted and named: the
+projection is eventual, and concurrent threshold crossings produce one row per committed event rather than one
+per logical transition.
+
+Suppression is one notice per identity per day, persisted on the subject's own row (`lockout_notified_at`) so
+it survives redeployment, is shared by every worker, and dies with the `DELETE` that erases the person —
+minting no new person reference. It is stamped only behind a send that reported success: reserving the window
+first would turn a mailer outage into a day of silence about a live lock.
+
+*Discarded:* an administrative unlock — it presupposes a second reachable administrator, which is exactly what
+the vulnerable installation does not have. *Discarded:* closing the unlocked-read race behind the counter to
+make "exactly one row" true — it makes the denial cheaper without adding a recovery lever. *Discarded:* a
+cache-backed suppression bucket — a 24-hour guarantee that dies on redeploy, does not hold between workers, and
+has no seedable clock to test against.
 
 ## Load-bearing implementation challenges
 

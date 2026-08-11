@@ -57,7 +57,6 @@ trait BuildsLockoutNotifier
             $repository,
             new SendAccountLockedEmailBestEffort($sender, new NullLogger()),
             $clock,
-            new NullLogger(),
         );
     }
 

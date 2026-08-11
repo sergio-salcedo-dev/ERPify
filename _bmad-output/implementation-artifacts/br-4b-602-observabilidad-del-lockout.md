@@ -2,7 +2,7 @@
 title: 'BR-4b · #602 — observabilidad del lockout (control detectivesco)'
 type: 'feature'
 created: '2026-08-10'
-status: 'in-progress'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: 935e86dc
 context:
@@ -83,20 +83,20 @@ context:
 - [x] `api/src/Iam/Identity/Domain/Repository/LockedIdentityDirectory.php` + `Infrastructure/Persistence/Doctrine/DoctrineLockedIdentityDirectory.php` -- puerto estrecho de **UNA** operación de solo lectura, `findLockedAt($now)`, que devuelve **ids** -- ver el Change Log del 2026-08-11 (segunda ronda): el DTO se descartó y el sello pasó al agregado
 - [x] `api/src/Iam/Identity/Application/AccountLockedEmailSender.php` + `Infrastructure/Mail/SymfonyAccountLockedEmailSender.php` + `Application/SendAccountLockedEmailBestEffort.php` -- el `…BestEffort` devuelve **`bool`**, a diferencia de sus hermanos: es lo que permite sellar solo tras un envío confirmado
 - [x] `api/src/Iam/Identity/Domain/Entity/User.php` + `api/migrations/2026/Version20260811110107.php` -- columna `lockout_notified_at`, `awaitsLockoutNoticeAt($now, $staleFrom)` (los tres conjuntos) y `markLockoutNotified($at)` (que **no** toca `updatedAt`). Reversibilidad ejecutada: 1 → `down` → 0 → `up` → 1
-- [ ] `api/tests/Unit/Iam/Identity/Application/InMemoryUserRepository.php` -- **arreglar `findById()`, que ignora su argumento** y devuelve siempre el mismo preset; sin esto todo test de barrido multi-fila es vacuo. Hacerlo ANTES que el barrido
-- [ ] `api/tests/Unit/Iam/Identity/Application/RecordLockoutAuditBestEffortTest.php` -- pasa a través · traga y registra a `warning` con la excepción en contexto · **la línea de log no nombra ningún id**. Hoy: borrar su `logger->warning` deja la suite entera verde, y su cobertura reporta 0% por atribución
-- [ ] `api/src/Iam/Identity/Application/NotifyLockedIdentities.php` -- barrido: **un solo `now`**, `awaitsLockoutNoticeAt()` como única autoridad, envío, y sello SOLO si el envío devolvió `true`; `try` **por fila**, nunca envolviendo el barrido entero
-- [ ] `api/src/Iam/Identity/Infrastructure/Messenger/Maintenance/NotifyLockedIdentitiesMessage.php` + `…Handler.php` -- mensaje **sin payload**
-- [ ] `api/src/Iam/Identity/Infrastructure/Messenger/Maintenance/IdentityMaintenanceSchedule.php` -- `RecurringMessage::every('5 minutes', …)` **propio**; el schedule existente tickea a `1 day` y un barrido diario vería un lock de 15 min por casualidad
-- [ ] Dobles nuevos que los ceros de rojos exigen -- `AdvancingClock` (cada `now()` +1 s, y cuenta llamadas: un `FixedClock` **no puede** distinguir «una vez» de «por fila»), un doble de repositorio que registre el ORDEN envío↔sello, y un doble de directorio que devuelva **todo id sembrado sin filtrar** (si replica el SQL, el test prueba el fake)
-- [ ] `api/tests/Unit/Iam/Identity/Application/NotifyLockedIdentitiesTest.php` -- tres transiciones de ventana · **dos ticks con el mismo reloj ⇒ 1 correo** (lo único que fija la supresión de punta a punta) · mailer que lanza en la fila 2 y las 1 y 3 sí se intentan y sellan · `now` una sola vez
-- [ ] `api/tests/Functional/Iam/Identity/DoctrineLockedIdentityDirectoryTest.php` -- **única capa** donde el binding `DATETIME_IMMUTABLE`, el `>` y el `ORDER BY id` pueden ponerse rojos. Plantilla: `DoctrineLiveIdentityDirectoryTest.php`
-- [ ] `api/tests/Unit/.../IdentityMaintenanceScheduleTest.php` -- extender: es el **único** rojo del cableado, porque plegar el tick no añade transporte y `php.lint.schedule-consumption` sigue verde de cualquier modo
-- [ ] `api/features/backoffice/identity/login.feature` -- extender `:190-203` con correlation-id fijo + `the SQL result as JSON should be:`; **nueva** escena con `ALTER TABLE audit_log RENAME … on connection "seed"` que prueba que el bloqueo sobrevive. Buscar el vocabulario antes de escribir cualquier step (`make php.behat c='-dl'`) y regenerar `api/.behat-step-vocabulary`
-- [ ] `compose.prod.yaml` -- `MAILER_SECURITY_FROM`, `MAILER_FROM`, `MAILER_DSN` (ver *Ask First*, **sin resolver**)
-- [ ] `docs/adr/identity-invitation-lifecycle.md` -- **D14**, redactado como *«lockout observability is detective-only»* y **nunca** como «se añade un canal de notificación», que induciría a leerlo como ampliación del grafo: el aviso informa, no concede, y su canal de entrega comparte el espacio de nombres que el atacante ya consume. Más corregir la cabecera `not yet implemented`
-- [ ] `docs/architecture-api.md:265` -- añadir `USER_LOCKED` a la taxonomía con el argumento de amplificación + corregir la ruta rancia `Backoffice/Identity` → `Iam/Identity`
-- [ ] `PRODUCTION_SECURITY_CHECKLIST.md` -- corregir la entrada rancia `:636-645` (el cambio de rol **sí** se audita; #555 cerró) + entrada del control nuevo con sus residuos
+- [x] `api/tests/Unit/Iam/Identity/Application/InMemoryUserRepository.php` -- **arreglar `findById()`, que ignora su argumento** y devuelve siempre el mismo preset; sin esto todo test de barrido multi-fila es vacuo. Hacerlo ANTES que el barrido
+- [x] `api/tests/Unit/Iam/Identity/Application/RecordLockoutAuditBestEffortTest.php` -- pasa a través · traga y registra a `warning` con la excepción en contexto · **la línea de log no nombra ningún id**. Hoy: borrar su `logger->warning` deja la suite entera verde, y su cobertura reporta 0% por atribución
+- [x] `api/src/Iam/Identity/Application/NotifyLockedIdentities.php` -- barrido: **un solo `now`**, `awaitsLockoutNoticeAt()` como única autoridad, envío, y sello SOLO si el envío devolvió `true`; `try` **por fila**, nunca envolviendo el barrido entero
+- [x] `api/src/Iam/Identity/Infrastructure/Messenger/Maintenance/NotifyLockedIdentitiesMessage.php` + `…Handler.php` -- mensaje **sin payload**
+- [x] `api/src/Iam/Identity/Infrastructure/Messenger/Maintenance/IdentityMaintenanceSchedule.php` -- `RecurringMessage::every('5 minutes', …)` **propio**; el schedule existente tickea a `1 day` y un barrido diario vería un lock de 15 min por casualidad
+- [x] Dobles nuevos que los ceros de rojos exigen -- `AdvancingClock` (cada `now()` +1 s, y cuenta llamadas: un `FixedClock` **no puede** distinguir «una vez» de «por fila»), un doble de repositorio que registre el ORDEN envío↔sello, y un doble de directorio que devuelva **todo id sembrado sin filtrar** (si replica el SQL, el test prueba el fake)
+- [x] `api/tests/Unit/Iam/Identity/Application/NotifyLockedIdentitiesTest.php` -- tres transiciones de ventana · **dos ticks con el mismo reloj ⇒ 1 correo** (lo único que fija la supresión de punta a punta) · mailer que lanza en la fila 2 y las 1 y 3 sí se intentan y sellan · `now` una sola vez
+- [x] `api/tests/Functional/Iam/Identity/DoctrineLockedIdentityDirectoryTest.php` -- **única capa** donde el binding `DATETIME_IMMUTABLE`, el `>` y el `ORDER BY id` pueden ponerse rojos. Plantilla: `DoctrineLiveIdentityDirectoryTest.php`
+- [x] `api/tests/Unit/.../IdentityMaintenanceScheduleTest.php` -- extender: es el **único** rojo del cableado, porque plegar el tick no añade transporte y `php.lint.schedule-consumption` sigue verde de cualquier modo
+- [x] `api/features/backoffice/identity/login.feature` -- extender `:190-203` con correlation-id fijo + `the SQL result as JSON should be:`; **nueva** escena con `ALTER TABLE audit_log RENAME … on connection "seed"` que prueba que el bloqueo sobrevive. Buscar el vocabulario antes de escribir cualquier step (`make php.behat c='-dl'`) y regenerar `api/.behat-step-vocabulary`
+- [x] `compose.prod.yaml` -- `MAILER_DSN` + `MAILER_SECURITY_FROM` con `${VAR:?}` en los TRES servicios (`php` no declaraba ninguna), + `PROD_REQUIRED_KEYS` y `.env.prod.example`. *Ask First* RESUELTO por Sergio tras consultar a Winston
+- [x] `docs/adr/identity-invitation-lifecycle.md` -- **D14**, redactado como *«lockout observability is detective-only»* y **nunca** como «se añade un canal de notificación», que induciría a leerlo como ampliación del grafo: el aviso informa, no concede, y su canal de entrega comparte el espacio de nombres que el atacante ya consume. Más corregir la cabecera `not yet implemented`
+- [x] `docs/architecture-api.md:265` -- añadir `USER_LOCKED` a la taxonomía con el argumento de amplificación + corregir la ruta rancia `Backoffice/Identity` → `Iam/Identity`
+- [x] `PRODUCTION_SECURITY_CHECKLIST.md` -- corregir la entrada rancia `:636-645` (el cambio de rol **sí** se audita; #555 cerró) + entrada del control nuevo con sus residuos
 
 **Acceptance Criteria:**
 
@@ -186,10 +186,76 @@ Cada uno costó una sonda; ninguno vive en el código.
 
 **Trampa del entorno:** este stack segfaultea el worker de FrankenPHP (`Restarting (139)`, `zend_mm_heap corrupted`) tras bastante churn de ficheros. Se recupera con `docker compose … restart php`, y el gate se esquiva mientras tanto con `make php.stan PHP_SERVICE=messenger_worker`.
 
-## Decisiones abiertas
+## Decisiones abiertas -- AMBAS RESUELTAS (2026-08-11)
 
 1. **`${VAR:?}` en `compose.prod.yaml`** para `MAILER_SECURITY_FROM` / `MAILER_FROM` / `MAILER_DSN` (fail-fast al arrancar) frente a un valor por defecto. Es el *Ask First* del artefacto y **sigue sin resolver**. Contexto: `MAILER_SECURITY_FROM` no está en ningún compose, así que prod cae a `seguridad@erpify.local` (dominio inexistente) y **pasa la guarda en silencio**; y `MAILER_DSN` por defecto es `null://null`, que descarta sin error. Un aviso de lockout es **no solicitado**, así que nadie nota su no-entrega.
 2. **`array_filter($ids, is_string(...))` descarta una fila corrupta en silencio**, postura contraria a la que fijó `935e86dc` («fail closed on corrupt identity rows»). Hoy es consistente con su hermano `DoctrineLiveIdentityDirectory`; cambiarlo en uno solo sería incoherente. O ambos, o ninguno, o se anota como residuo.
+
+## Pase adversarial -- 2026-08-11, ANTES de abrir la PR
+
+Lectura hostil por un contexto fresco (subagente read-only, autorizado por Sergio), no por la autora. Devolvió
+**NO-GO** con 1 GRAVE y 4 SERIOUS. Todos corregidos en la misma rama, antes de `gh pr create`; ninguno queda
+para una segunda PR. Su verificación negativa se conserva porque vale tanto como los hallazgos.
+
+**GRAVE -- el invariante del que pende todo el diseño no tenía falsador.** *«El correo no contiene token,
+selector, enlace de acción ni identificador de canal de recuperación»* estaba fijado por una lectura manual en
+Mailpit y por nada más: no existía `SymfonyAccountLockedEmailSenderTest`, mientras sus tres hermanos sí tienen
+ese rojo. Meter `<a href="…token…">` en el cuerpo salía con la suite entera verde. **Corregido:** test nuevo
+con cinco casos; medido inyectando un enlace de verdad → 1 rojo (`testTheBodyCarriesNothingExercisable`).
+
+**SERIOUS -- el `try` por fila NO daba la garantía que su docblock afirmaba.** Medido en
+`vendor/doctrine/orm/src/UnitOfWork.php:448`: el `finally` llama `$this->em->close()` cuando el commit no tuvo
+éxito, así que tras un `save()` fallido todo `findById()` posterior del mismo tick lanza sobre un manager
+cerrado. El `catch` no mantenía vivo el barrido: emitía «the sweep continues» N−k veces sobre un barrido ya
+muerto. Y el test que lo certificaba asertaba el comportamiento del DOBLE, que sigue perfectamente usable tras
+lanzar. **Corregido:** se elimina el `catch` (y el logger, un colaborador menos). Un fallo de persistencia sale
+del caso de uso; el transporte del planificador ni reintenta ni enruta a `failed`, así que Messenger lo registra
+a `critical` y Sentry lo captura — la misma asimetría que ya toma `ReconcilePersonReferencesHandler`. No se
+pierde nada: ninguna identidad no enviada quedó sellada, y el tick siguiente (5 min) halla los mismos
+candidatos. El único fallo que de verdad es por fila —el mailer— nunca llega ahí: lo traga el wrapper.
+
+**SERIOUS -- la mitad (B) era inerte y se autocertificaba en un despliegue de prod por defecto.** Es la
+*Ask First* sin resolver, y resultó peor de lo que decía: `MAILER_DSN` caía a `null://null`, cuyo
+`NullTransport` —verificado en vendor— *«pretends messages have been sent»*, así que `send()` devolvía `true` y
+el tick **sellaba la ventana de 24 h por un correo que nunca existió**. **Corregido** con la recomendación de
+Winston, decidida por Sergio: `${VAR:?}` en los tres servicios (el servicio `php` no declaraba NINGUNA var de
+mailer, así que invitación y reset caían al mismo descarte), `PROD_REQUIRED_KEYS`, `.env.prod.example`, y dos
+guardas en `Shared/Mailer` con test propio — transporte de descarte y dominio remitente reservado.
+
+**SERIOUS -- `SendAccountLockedEmailBestEffort` sin test.** Arreglé el gemelo de auditoría y dejé el hueco
+idéntico en este. Borrar su `logger->warning` dejaba la suite verde, y en un canal no solicitado esa línea es
+la ÚNICA señal para el operador. **Corregido:** test con tres casos, incluido que la línea no nombra la
+dirección.
+
+**SERIOUS -- las superficies de docs/deploy que el propio artefacto lista faltaban.** Estaban a medio hacer
+cuando corrió el pase. **Corregidas** las tres, más una deriva que él detectó y yo no: `compose.prod.yaml`
+enumeraba los ticks del planificador y se había quedado incompleto, y **las apuestas del pin `replicas: 1`
+cambiaron** — los otros cuatro ticks son barridos idempotentes (N réplicas = N ejecuciones redundantes), este
+manda correo a una persona y envía antes de sellar, así que dos relojes lo duplicarían. `stateful()` no lleva
+`->lock()`, luego el pin es lo único que lo sostiene. Escrito en el compose y en el checklist como residuo.
+
+**MINOR -- `aVanishedIdentityIsSkipped…` no podía fallar por la guarda que nombra.** Con el `catch` presente,
+quitar `!$user instanceof User ||` dejaba pasar el test. **Corregido de raíz por el hallazgo 2**: sin `catch`,
+quitar la guarda hace que el tick entero muera y el test se pone rojo.
+
+**MINOR, aceptado como residuo -- fuga por el contexto del log.** `['exception' => $throwable]` sobre una
+`TransportException` de Symfony arrastra la respuesta SMTP, que suele citar al destinatario
+(`550 5.1.1 <victim@…> User unknown`): un id de persona en almacenamiento de logs sin dueño de su borrado. El
+patrón es preexistente en tres hermanos, pero este es su primer consumidor **desatendido y por fila**. Medido
+NEGATIVO en el otro brazo: `DriverException` solo lleva el mensaje del driver, nunca los parámetros ligados.
+
+**NIT, no aplicado -- ráfaga de catch-up.** El generador emite un mensaje por periodo transcurrido y no se
+llama `processOnlyLastMissedRun()`, así que tras una caída larga el primer tick emite hasta 288 barridos. Es
+inofensivo (el sello persistido suprime el correo; solo el primero envía) y así está escrito en el docblock.
+
+**Lo que atacó y NO pudo romper**, que vale tanto como lo anterior: post-commit y supervivencia del bloqueo
+(17 escenarios Behat verdes, la del rename falsificable); `now` único y sello tras envío confirmado (ambos con
+rojo real); **amplificación** — no halló ninguna vía por encima de 1 aviso por identidad y día: `email` es
+único y canónico, `clearLockout()` respeta el sello (cierra el bucle recuperar-y-rebloquear) y la ráfaga la
+suprime el sello persistido; **oráculo de existencia** refutado POR MEDICIÓN, no por argumento
+(`RequestPasswordReset` ya solo manda a identidades ACTIVE existentes, así que el aviso no añade oráculo);
+GDPR (`lockout_notified_at` es `DATETIME_IMMUTABLE`, fuera del universo `Types::GUID` del gate, y muere con la
+fila); transportes persistidos; y `CorruptIdentityRow`, que no alcanza ninguna ruta de petición.
 
 ## Verification
 

@@ -356,7 +356,7 @@ development_status:
   br-4-endurecimiento-identidad-grafo-recuperacion: done
   # Recorte de BR-4: #602 quedó fuera de aquel lote por decisión, en su propia rama y con su propia
   # autorización, así que cerró sin él. Clave propia para que el issue no quede tapado por un `done` ajeno.
-  br-4b-602-observabilidad-del-lockout: in-progress
+  br-4b-602-observabilidad-del-lockout: done
   br-5-ciclo-de-vida-iam-session: backlog
   br-6-gates-arquitectura-ci: backlog
   br-7-listas-backoffice: backlog

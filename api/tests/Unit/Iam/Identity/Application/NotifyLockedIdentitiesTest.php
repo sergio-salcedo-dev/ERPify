@@ -101,12 +101,17 @@ final class NotifyLockedIdentitiesTest extends TestCase
     }
 
     /**
-     * A repository or flush fault is absorbed per row. Without the boundary the throw would abandon every
-     * identity ordered after it — and since the order is by id and stable across ticks, one permanently
-     * unwritable row would starve the same tail on every subsequent tick rather than costing one notice.
+     * A persistence fault ends the tick instead of being logged over, and the distinction is not cosmetic:
+     * Doctrine closes the EntityManager on a failed commit, so a `catch` here would let the sweep walk a dead
+     * unit of work and emit one "the sweep continues" warning per remaining identity while continuing nothing.
+     *
+     * A double cannot show that — {@see InMemoryUserRepository} stays perfectly usable after it throws — so
+     * this asserts the property that survives the difference: the throw leaves the use case, and no identity
+     * ordered after the fault was stamped. The rows before it keep their notices, and the ones after keep
+     * their unspent windows for the next tick.
      */
     #[Test]
-    public function aPersistenceFaultOnOneRowDoesNotAbandonTheRest(): void
+    public function aPersistenceFaultEndsTheTickRatherThanBeingLoggedOver(): void
     {
         $now = new DateTimeImmutable(self::NOW);
         $repository = $this->repositoryOf(
@@ -121,17 +126,22 @@ final class NotifyLockedIdentitiesTest extends TestCase
         };
         $sender = new RecordingAccountLockedEmailSender();
 
-        $this->sweep(
-            $repository,
-            $sender,
-            new FixedClock($now),
-            self::FIRST_ID,
-            self::SECOND_ID,
-            self::THIRD_ID,
-        );
+        try {
+            $this->sweep(
+                $repository,
+                $sender,
+                new FixedClock($now),
+                self::FIRST_ID,
+                self::SECOND_ID,
+                self::THIRD_ID,
+            );
+            $this->fail('A persistence fault must leave the sweep so the scheduler logs it at critical.');
+        } catch (RuntimeException $runtimeException) {
+            $this->assertSame('the flush failed', $runtimeException->getMessage());
+        }
 
-        $this->assertSame($this->emailsOf(self::FIRST_ID, self::SECOND_ID, self::THIRD_ID), $sender->sentTo);
-        $this->assertSame([self::FIRST_ID, self::THIRD_ID], $this->idsOf($repository->saved));
+        $this->assertSame([self::FIRST_ID], $this->idsOf($repository->saved));
+        $this->assertSame($this->emailsOf(self::FIRST_ID, self::SECOND_ID), $sender->sentTo);
     }
 
     /**
@@ -245,7 +255,11 @@ final class NotifyLockedIdentitiesTest extends TestCase
         $this->assertSame([], $repository->saved);
     }
 
-    /** An id the directory returned and the repository no longer has — erased between the two statements. */
+    /**
+     * An id the directory returned and the repository no longer has — erased between the two statements, which
+     * is routine rather than exceptional. With no `catch` left in the sweep, dropping the `instanceof` guard
+     * makes this raise on `null` and take the whole tick down, so the guard is what this actually pins.
+     */
     #[Test]
     public function aVanishedIdentityIsSkippedWithoutSinkingTheSweep(): void
     {

@@ -10,8 +10,6 @@ use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Repository\LockedIdentityDirectory;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Clock\Domain\Clock;
-use Psr\Log\LoggerInterface;
-use Throwable;
 
 /**
  * Tells the owners of currently locked identities that their account is locked, once per day at most.
@@ -40,7 +38,6 @@ final readonly class NotifyLockedIdentities
         private UserRepository $users,
         private SendAccountLockedEmailBestEffort $sender,
         private Clock $clock,
-        private LoggerInterface $logger,
     ) {
     }
 
@@ -61,37 +58,42 @@ final readonly class NotifyLockedIdentities
     }
 
     /**
-     * Each row is attempted inside its own `try`, never the sweep as a whole. A repository or flush fault on
-     * one identity would otherwise abandon every identity ordered after it, and — since the ordering is by
-     * id and therefore stable across ticks — one permanently unwritable row would starve the same tail on
-     * every subsequent tick rather than costing a single notice.
+     * **A persistence fault ends the tick rather than being absorbed per row, and that is measured rather
+     * than chosen.** Doctrine's `UnitOfWork::commit()` closes the EntityManager from its `finally` whenever
+     * the commit did not succeed, so once one `save()` has failed every later `findById()` in the same tick
+     * throws on a closed manager. A per-row `catch` would therefore not keep the sweep alive: it would log
+     * "the sweep continues" once per remaining identity while the sweep was already dead — an operator
+     * reading a stream of survivable warnings for an unsurvivable fault.
+     *
+     * Letting it leave is what makes it visible. The scheduler transport neither retries nor routes to
+     * `failed`, so Messenger logs the throw at `critical` and Sentry captures it — the same asymmetry
+     * {@see \Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\ReconcilePersonReferencesHandler}
+     * takes, where a control that cannot run is an engineering fault rather than a domain outcome. Stopping
+     * costs nothing: no unsent identity was stamped, so the next tick finds exactly the same candidates five
+     * minutes later.
+     *
+     * The one failure that genuinely is per-row is the send, and it never reaches here — the mailer sits
+     * behind {@see SendAccountLockedEmailBestEffort}, which swallows it and reports `false`.
      */
     private function notifyOwner(string $userId, DateTimeImmutable $now, DateTimeImmutable $staleFrom): void
     {
-        try {
-            $user = $this->users->findById($userId);
+        $user = $this->users->findById($userId);
 
-            // Re-read rather than trusted from the query: an owner who signs in between the two clears the
-            // lock, and the aggregate is the only thing that knows a cleared lock leaves the stamp standing.
-            if (!$user instanceof User || !$user->awaitsLockoutNoticeAt($now, $staleFrom)) {
-                return;
-            }
-
-            if (!$this->sender->send($user->email())) {
-                return;
-            }
-
-            // Stamped only behind a send that reported success, so a mailer outage never buys a day of
-            // silence about a live lockout. The converse — a delivery whose stamp then fails — re-sends on
-            // the next tick, which is the at-least-once side this deliberately takes.
-            $user->markLockoutNotified($now);
-
-            $this->users->save($user);
-        } catch (Throwable $throwable) {
-            $this->logger->warning(
-                'Lockout notification skipped for one identity (sweep continues).',
-                ['exception' => $throwable],
-            );
+        // Re-read rather than trusted from the query: an owner who signs in between the two clears the
+        // lock, and the aggregate is the only thing that knows a cleared lock leaves the stamp standing.
+        if (!$user instanceof User || !$user->awaitsLockoutNoticeAt($now, $staleFrom)) {
+            return;
         }
+
+        if (!$this->sender->send($user->email())) {
+            return;
+        }
+
+        // Stamped only behind a send that reported success, so a mailer outage never buys a day of
+        // silence about a live lockout. The converse — a delivery whose stamp then fails — re-sends on
+        // the next tick, which is the at-least-once side this deliberately takes.
+        $user->markLockoutNotified($now);
+
+        $this->users->save($user);
     }
 }

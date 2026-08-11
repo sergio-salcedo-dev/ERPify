@@ -632,13 +632,34 @@ mitigated state. Accepting one means recording who accepted it and against which
       require a third. An unenforced recommendation cannot make the invariant hold in an installation
       that declined it, so this entry stays open; closing it means an enforced guarantee or an
       acceptance naming the customer.
-- [ ] **A role change leaves no attributable record.** `User` deliberately stays out of the
-      `AuditedEntity` CDC (a field-level diff would carry `password_hash` into the trail) and the
-      generic hook audits only `GET`, so who granted or revoked `ADMIN`, and when, is not in
-      `audit_log` — only a `UserRolesChanged` `event_store` row, which names no actor. The
-      erasure refusal that requires demoting an administrator first is therefore **an authorization
-      step, not a traceability control**; do not cite it as evidence. Blocked on #555, because the
-      natural implementation is exactly the row the prohibition above forbids.
+- [x] **A role change leaves an attributable record — closed by #555 (2026-07-27).** `User` still
+      stays out of the `AuditedEntity` CDC, because a field-level diff would carry `password_hash`
+      into the trail, and the generic hook still audits only `GET`. What closed the gap is an explicit
+      row: `ChangeUserRoles` writes a `USER_ROLES_CHANGED` `security` entry naming the subject in the
+      resource columns and carrying both role sets in `metadata`. Naming a person there is safe only
+      because erasure over `resource_*` is owned by the context that owns the person and runs in the
+      same transaction. The erasure refusal that requires demoting an administrator first is therefore
+      now backed by a traceability control, and may be cited as one.
+- [ ] **A lockout notice can be delivered to nobody, and the control will record it as delivered.**
+      Closed in configuration and defended in code, but it depends on a deployment value and so stays
+      listed. `NotifyLockedIdentities` stamps a 24-hour suppression window only on a send that reported
+      success — and Symfony's `null://` transport reports success for mail it silently drops. A stock
+      deploy used to reach it: `MAILER_DSN` defaulted to `null://null` in every compose file and
+      `MAILER_SECURITY_FROM` appeared in none, falling through to a reserved domain that receives
+      nothing while passing the non-blank / non-no-reply guard. Both are now `${VAR:?}` on all three
+      prod services, listed in `PROD_REQUIRED_KEYS`, and refused at send time by
+      `DeliverableSecurityTransport` (discard transport) and `SecuritySenderAddress` (reserved sender
+      domain). **The residual is that non-delivery on this channel is unobservable from the outside:**
+      the notice is unsolicited, so no recipient reports its absence — the `warning` its best-effort
+      wrapper logs on every failed tick is the only signal, and it is a log line, with the
+      Monolog→Sentry bridge deliberately unwired. Closing this means an alert on that line.
+- [ ] **The lockout notice's single-delivery property rests on a replica pin, not on a lock.**
+      The five-minute sweep sends before it stamps (stamping first would turn a mailer outage into a
+      day of silence about a live lock), and `IdentityMaintenanceSchedule` is `->stateful()` but not
+      `->lock()`ed. Two scheduler replicas would therefore race send-then-stamp and deliver the notice
+      twice — at someone whose account an attacker is already driving. `compose.prod.yaml` pins
+      `scheduler_worker` to `replicas: 1` and says so at the pin; nothing enforces it. Closing this
+      means a scheduler lock, or a deployment check that refuses to scale that service.
 - [ ] **`api/storage-test/` is outside `.gitignore`.** It is a Flysystem test-storage directory the
       suite writes into, so any `git add -A` commits whatever a test last wrote — into a **public**
       repository. Today the residue is a 91-byte 1×1 PNG; the exposure grows the day a test writes

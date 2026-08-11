@@ -37,6 +37,7 @@ final readonly class SecurityLinkMailer
         private BulletproofEmailChrome $chrome,
         #[Autowire('%kernel.environment%')]
         private string $environment,
+        private DeliverableSecurityTransport $transport,
     ) {
     }
 
@@ -46,6 +47,8 @@ final readonly class SecurityLinkMailer
         #[SensitiveParameter]
         string $token,
     ): void {
+        $this->transport->ensureDeliverable();
+
         // Defence in depth over the single link-assembly point: a deploy whose base URL is not HTTPS must
         // fail loudly here rather than email a credential-bearing link an on-path attacker could read.
         if (
