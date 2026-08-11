@@ -24,6 +24,14 @@ final readonly class SecuritySenderAddress
      */
     private const array LOCAL_ENVIRONMENTS = ['dev', 'test'];
 
+    /**
+     * Domains that resolve nowhere on the public internet: the RFC 2606 / RFC 6761 reserved names plus `.local`
+     * (RFC 6762, link-local mDNS). The repository's own default sender sits at `erpify.local`, which is
+     * non-blank and is not a no-reply, so it satisfies every other check on this class while being a mailbox no
+     * recipient can reply to.
+     */
+    private const array UNDELIVERABLE_DOMAINS = ['test', 'example', 'invalid', 'localhost', 'local'];
+
     public function __construct(
         #[Autowire('%env(MAILER_SECURITY_FROM)%')]
         private string $address,
@@ -45,6 +53,26 @@ final readonly class SecuritySenderAddress
             throw SecurityMailerMisconfigured::unmonitoredSender();
         }
 
+        $domain = $this->domain();
+
+        if (\in_array($domain, self::UNDELIVERABLE_DOMAINS, true)) {
+            throw SecurityMailerMisconfigured::undeliverableSenderDomain($domain);
+        }
+
         return $this->address;
+    }
+
+    /** The last label of the address's domain, lower-cased; empty when there is no domain part at all. */
+    private function domain(): string
+    {
+        $at = \strrpos($this->address, '@');
+
+        if (false === $at) {
+            return '';
+        }
+
+        $labels = \explode('.', \strtolower(\substr($this->address, $at + 1)));
+
+        return \end($labels);
     }
 }

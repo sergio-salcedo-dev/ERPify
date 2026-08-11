@@ -40,6 +40,11 @@ services:
       # missing. The Sentry "environment" tag is just APP_ENV (= prod).
       SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
+      # This service sends the token-bearing security mail (invitation, password reset), and declared neither
+      # of these, so prod inherited api/.env: the null:// discard transport, and a sender at a domain that
+      # receives nothing. Required rather than defaulted for the same reason as on the two workers.
+      MAILER_DSN: ${MAILER_DSN:?MAILER_DSN is required in prod (null://null discards mail silently)}
+      MAILER_SECURITY_FROM: ${MAILER_SECURITY_FROM:?MAILER_SECURITY_FROM is required in prod (a monitored, replyable mailbox)}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -135,8 +140,13 @@ services:
       APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
       AUDIT_KEK: ${AUDIT_KEK:?AUDIT_KEK is required in prod (32-byte audit crypto-shredding key-encryption key)}
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required in prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}@database:5432/${POSTGRES_DB:?POSTGRES_DB is required in prod}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
-      # null mailer by default so an unset DSN can't break the worker boot.
-      MAILER_DSN: ${MAILER_DSN:-null://null}
+      # Required, never defaulted: null://null accepts security mail and drops it while reporting success, so
+      # a caller that records state on a confirmed send (the lockout notice stamps a 24h suppression window)
+      # records it for mail that was never transmitted. An unsolicited notice produces no complaint when it
+      # fails to arrive, so nothing else would ever contradict it. MAILER_SECURITY_FROM was in no compose
+      # file: prod fell through to api/.env's seguridad@erpify.local, a domain that receives nothing.
+      MAILER_DSN: ${MAILER_DSN:?MAILER_DSN is required in prod (null://null discards mail silently)}
+      MAILER_SECURITY_FROM: ${MAILER_SECURITY_FROM:?MAILER_SECURITY_FROM is required in prod (a monitored, replyable mailbox)}
       # Sentry captures async handler failures too (same required gating as php).
       SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
@@ -162,15 +172,25 @@ services:
     command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
 
   # Single-replica scheduler. Symfony Scheduler derives every maintenance tick
-  # (PruneHandledDomainEventsMessage, the audit retention PruneAuditLogMessage, ReconcileSubjectErasuresMessage
-  # and the person-reference ReconcilePersonReferencesMessage) from an in-process clock, so running it on the
-  # scaled `messenger_worker` pool would emit one tick per replica — N redundant runs a day.
+  # (PruneHandledDomainEventsMessage, the audit retention PruneAuditLogMessage, ReconcileSubjectErasuresMessage,
+  # the person-reference ReconcilePersonReferencesMessage and the five-minute NotifyLockedIdentitiesMessage)
+  # from an in-process clock, so running it on the scaled `messenger_worker` pool would emit one tick per
+  # replica.
+  #
+  # THE STAKES OF THE PIN CHANGED with the lockout notice, and it is no longer only about waste. The other
+  # four ticks are idempotent sweeps, so N replicas cost N redundant runs a day. This one SENDS MAIL TO A
+  # PERSON, and it sends before it stamps the suppression window (deliberately — stamping first would turn a
+  # mailer outage into a day of silence about a live lock). Two clocks would therefore race send-then-stamp
+  # and deliver the notice twice, at someone whose account an attacker is already driving. The schedules are
+  # `->stateful()` but not `->lock()`ed, so the checkpoint does not serialise them either: this replica pin is
+  # the only thing standing between one notice and N.
   # Isolating the `scheduler_maintenance` + `scheduler_audit_maintenance` + `scheduler_identity_maintenance`
   # transports on this single instance keeps exactly one clock running. Every #[AsSchedule] in src/ owes its
   # transport a slot in BOTH consume commands (this one and the dev messenger_worker's) — a schedule whose
   # transport nobody consumes ships dead with every gate green, which is what
   # `make php.lint.schedule-consumption` exists to refuse.
-  # MUST stay at replicas: 1; scaling it reintroduces the duplicate-tick problem.
+  # MUST stay at replicas: 1; scaling it reintroduces the duplicate-tick problem — which now means a
+  # duplicated security notice at a person, not merely a redundant sweep (see the note above).
   # Lifting that constraint (lock the schedule, then scale freely) needs symfony/lock, which the
   # project deliberately does not install — tracked as a follow-up.
   scheduler_worker:
@@ -204,7 +224,9 @@ services:
       # Set explicitly (no base service to inherit from); the async transport is never
       # consumed here but the receiver registry still resolves the DSN at boot.
       MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default?auto_setup=0}
-      MAILER_DSN: ${MAILER_DSN:-null://null}
+      # Required for the same reason as on php: this is the worker that sends the lockout notice.
+      MAILER_DSN: ${MAILER_DSN:?MAILER_DSN is required in prod (null://null discards mail silently)}
+      MAILER_SECURITY_FROM: ${MAILER_SECURITY_FROM:?MAILER_SECURITY_FROM is required in prod (a monitored, replyable mailbox)}
       # Sentry captures prune failures too (same required gating as php/messenger_worker).
       SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}

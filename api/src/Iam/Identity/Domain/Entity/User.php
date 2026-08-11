@@ -48,8 +48,16 @@ use Symfony\Component\Validator\Constraints as Assert;
  * email value objects, the status lifecycle, the role vocabulary and the six facts it records — so the
  * coupling is deliberately allowed above the default threshold rather than dissolved into anaemic helpers.
  *
+ * Its length reads the same way, and is allowed above the default threshold for the same reason: what the
+ * line count measures here is the number of documented transitions, not a class doing several jobs. Every
+ * lockout member in particular carries the path that makes it necessary — which conjunct of the notification
+ * predicate answers which reachable sequence, why the notice stamp survives a recovery, why stamping never
+ * touches `updatedAt` — and those are the arguments that stop the next reader reintroducing the defects they
+ * were written against. Cutting them to fit is the one edit that would make this class shorter and worse.
+ *
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'identity_user')]
@@ -95,6 +103,18 @@ final class User extends AggregateRoot
      */
     #[ORM\Column(name: 'locked_until', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?DateTimeImmutable $lockedUntil = null;
+
+    /**
+     * When the owner was last told this identity had been locked, or `null` if never. Suppression state, not
+     * lifecycle, and it lives here so it dies with the subject's own row rather than minting a person
+     * reference somewhere else.
+     *
+     * Deliberately untouched by {@see clearLockout()}: the window is purely temporal, so a recovery does not
+     * reopen the budget — a fresh lock minutes later is the same sustained attack, and clearing the stamp on
+     * recovery would turn the owner's own remedy into a way to amplify mail at them.
+     */
+    #[ORM\Column(name: 'lockout_notified_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?DateTimeImmutable $lockoutNotifiedAt = null;
 
     /**
      * Every construction path funnels through here, so the aggregate's invariants — canonical
@@ -318,6 +338,44 @@ final class User extends AggregateRoot
         }
 
         return true;
+    }
+
+    /**
+     * Whether the owner still has to be told that this identity is locked at `$now`, given notices older than
+     * `$staleFrom` no longer count.
+     *
+     * **The whole rule lives here and nowhere else** — the sweep's query selects candidates and never
+     * restates the policy, because a `WHERE` clause that quietly stops matching removes rows this method is
+     * then never asked about, and no test over it could notice.
+     *
+     * Each conjunct answers a reachable path: `ACTIVE` because {@see suspend()} and {@see deactivate()} leave
+     * `lockedUntil` standing, so a retired account would otherwise be told it was locked; still-locked
+     * because {@see clearLockout()} spares the stamp, so an owner who signs in between the query and this
+     * check would get a false notice *and* burn a day of their budget; stale because that is the window.
+     */
+    public function awaitsLockoutNoticeAt(DateTimeImmutable $now, DateTimeImmutable $staleFrom): bool
+    {
+        if (IdentityStatus::ACTIVE !== $this->status || !$this->isLockedAt($now)) {
+            return false;
+        }
+
+        return !$this->lockoutNotifiedAt instanceof DateTimeImmutable || $this->lockoutNotifiedAt < $staleFrom;
+    }
+
+    /**
+     * Stamps the instant the owner was notified, so the next sweep inside the window suppresses itself. No
+     * domain event: the fact worth replaying is the lock {@see recordFailedAttempt()} already emitted, and an
+     * event per delivery would add an `event_store` row for every mail sent.
+     *
+     * The caller stamps only after a send it saw succeed — reserving the window first would turn a mailer
+     * outage into a day of silence about a live lockout.
+     *
+     * Leaves `updatedAt` alone, as its sibling lockout mutators do: it is the keyset sort key of the user
+     * register, so an unattended mailer touching it would shift rows under an open cursor.
+     */
+    public function markLockoutNotified(DateTimeImmutable $at): void
+    {
+        $this->lockoutNotifiedAt = $at;
     }
 
     /**

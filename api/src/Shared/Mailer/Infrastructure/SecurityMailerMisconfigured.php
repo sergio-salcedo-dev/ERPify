@@ -27,4 +27,30 @@ final class SecurityMailerMisconfigured extends RuntimeException
             . 'security emails tell the recipient to contact this address.',
         );
     }
+
+    /**
+     * A reserved or link-local domain can receive nothing anywhere. It reads as configured — non-blank, not a
+     * no-reply — so the sender guard passes it and the send proceeds to a mailbox that cannot exist.
+     */
+    public static function undeliverableSenderDomain(string $domain): self
+    {
+        return new self(\sprintf(
+            'MAILER_SECURITY_FROM is at "%s", a reserved domain that can receive no mail outside dev/test: '
+            . 'a security email must come from a mailbox the recipient can actually reply to.',
+            $domain,
+        ));
+    }
+
+    /**
+     * The discard transport is the dangerous default rather than an exotic misconfiguration: it reports every
+     * send as successful, so a caller that records state on a successful send records it for mail that was
+     * never transmitted.
+     */
+    public static function discardingTransport(): self
+    {
+        return new self(
+            'MAILER_DSN is the null:// discard transport, which accepts security mail and drops it while '
+            . 'reporting success; set a real transport or security notifications are silently unsent.',
+        );
+    }
 }

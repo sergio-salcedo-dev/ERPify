@@ -12,18 +12,29 @@ use Symfony\Component\Scheduler\ScheduleProviderInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 
 /**
- * Identity-owned maintenance schedule: a daily reconciliation of the places that hold a person's id against
- * the identities still alive. It gets its own `scheduler_identity_maintenance` transport — wired into the
- * `scheduler_worker` (prod) and folded into the `messenger_worker` (dev) `messenger:consume` commands.
+ * Identity-owned maintenance schedule, carrying the two recurring checks this context owns: a reconciliation
+ * of the places that hold a person's id against the identities still alive, and the sweep that tells the
+ * owner of a locked identity that it is locked. It gets its own `scheduler_identity_maintenance` transport —
+ * wired into the `scheduler_worker` (prod) and folded into the `messenger_worker` (dev) `messenger:consume`
+ * commands.
  *
  * A schedule of its own rather than a third message on the audit one, and the reason is a boundary rather
- * than the framework's one-provider-per-name rule: this control is `Iam/Identity`'s — it is the context that
- * can say whether an id still names a live person — and hanging it off `Shared/Audit`'s schedule would make a
- * shared capability the owner of an identity concern.
+ * than the framework's one-provider-per-name rule: both controls are `Iam/Identity`'s — it is the context
+ * that can say whether an id still names a live person, and the one that owns the lockout — and hanging them
+ * off `Shared/Audit`'s schedule would make a shared capability the owner of an identity concern.
  *
- * Daily, matching its siblings. The divergence it looks for is a missed erasure, which is durable rather than
- * transient: a shorter period would re-ask a question whose answer only changes when an erasure runs, and the
- * repair is an operator action that does not happen within the hour anyway.
+ * **The two periods are set by what each check observes, not by symmetry.** The reconciliation looks for a
+ * missed erasure, which is durable rather than transient: a shorter period would re-ask a question whose
+ * answer only changes when an erasure runs, and the repair is an operator action that does not happen within
+ * the hour anyway. The lockout sweep observes a state that lives fifteen minutes
+ * ({@see \Erpify\Iam\Identity\Domain\Entity\User::LOCK_DURATION}), so a daily tick would see a given
+ * lockout only by coincidence and would usually report nothing about an attack that had already run its
+ * course.
+ *
+ * A missed tick is caught up rather than dropped (the generator yields one message per elapsed period), so an
+ * outage is followed by a burst of sweeps. That is harmless here and deliberately not special-cased: the
+ * sweep carries no payload and its suppression stamp is persisted, so replaying it produces candidate queries
+ * and no additional mail.
  *
  * **`stateful()` is what makes "daily" true, and without it the period is a claim the deployment cannot
  * keep.** A schedule with no persisted state builds its checkpoint in process memory, so the first run date
@@ -48,6 +59,7 @@ final readonly class IdentityMaintenanceSchedule implements ScheduleProviderInte
         return (new Schedule())
             ->stateful($this->checkpointState)
             ->add(RecurringMessage::every('1 day', new ReconcilePersonReferencesMessage()))
+            ->add(RecurringMessage::every('5 minutes', new NotifyLockedIdentitiesMessage()))
         ;
     }
 }

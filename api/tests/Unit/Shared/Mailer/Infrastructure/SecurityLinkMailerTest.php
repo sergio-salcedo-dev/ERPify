@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Mailer\Infrastructure;
 
 use Erpify\Shared\Mailer\Infrastructure\BulletproofEmailChrome;
+use Erpify\Shared\Mailer\Infrastructure\DeliverableSecurityTransport;
 use Erpify\Shared\Mailer\Infrastructure\SecurityLinkEmailContent;
 use Erpify\Shared\Mailer\Infrastructure\SecurityLinkMailer;
 use Erpify\Shared\Mailer\Infrastructure\SecurityMailerMisconfigured;
@@ -86,7 +87,7 @@ final class SecurityLinkMailerTest extends TestCase
     public function testAnHttpsBaseUrlSendsOutsideLocalEnvironments(): void
     {
         $mailer = new CapturingMailer();
-        $this->mailer($mailer, from: 'seguridad@erpify.example', environment: 'prod')
+        $this->mailer($mailer, from: 'seguridad@erpify.com', environment: 'prod')
             ->send($this->content(), self::RECIPIENT, self::TOKEN)
         ;
 
@@ -124,6 +125,7 @@ final class SecurityLinkMailerTest extends TestCase
             $baseUrl,
             new BulletproofEmailChrome(),
             $environment,
+            new DeliverableSecurityTransport('smtp://localhost', $environment),
         );
     }
 

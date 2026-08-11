@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Messenger\Maintenance;
 
 use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\IdentityMaintenanceSchedule;
+use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\NotifyLockedIdentitiesMessage;
 use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\ReconcilePersonReferencesMessage;
 use Erpify\Tests\Support\ScheduledTicks;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -19,15 +20,25 @@ use Symfony\Component\Cache\Adapter\ArrayAdapter;
 final class IdentityMaintenanceScheduleTest extends TestCase
 {
     #[Test]
-    public function itSchedulesThePersonReferenceReconciliationDaily(): void
+    public function itSchedulesBothMaintenanceTicksAtTheirOwnPeriods(): void
     {
         $schedule = (new IdentityMaintenanceSchedule(new ArrayAdapter()))->getSchedule();
 
-        // Both facts the schedule encodes, because a count assertion goes green on either being wrong: it
+        // Both facts each tick encodes, because a count assertion goes green on either being wrong: it
         // survives the payload becoming another message and it survives `1 day` becoming `1 year`, which
         // are precisely the two ways this control silently stops being the control it is named after.
+        //
+        // It is also the ONLY red for the lockout sweep's wiring. Folding that tick into an existing
+        // schedule adds no transport, so `make php.lint.schedule-consumption` stays green whether the
+        // message is registered here or not, and nothing else in the tree would notice its removal.
+        //
+        // The periods differ on purpose: five minutes tracks a lock that lives fifteen, while a daily sweep
+        // would meet a given lockout only by coincidence.
         $this->assertSame(
-            [ReconcilePersonReferencesMessage::class . ' @ every 1 day'],
+            [
+                NotifyLockedIdentitiesMessage::class . ' @ every 5 minutes',
+                ReconcilePersonReferencesMessage::class . ' @ every 1 day',
+            ],
             ScheduledTicks::describe($schedule),
         );
     }
