@@ -3,7 +3,7 @@ title: 'BR-4c · #602 — observabilidad del agotamiento del throttle de recuper
 type: 'feature'
 created: '2026-08-11'
 status: 'ready-for-dev'
-review_loop_iteration: 1
+review_loop_iteration: 2
 baseline_commit: 0fc48fff
 context:
   - '{project-root}/docs/adr/administrative-recovery-channel.md'
@@ -54,15 +54,15 @@ contractual, literal, para el cuerpo del PR:
   (`SymfonyAuditLogger.php:21-23,65-72`) y un fallo propagado convertiría el `202` en `500`. El nivel
   `security` es el eje de taxonomía y retención; el envoltorio es la frontera de fallo. Mismo reparto que
   `RecordLockoutAuditBestEffort` en BR-4b.
-- **El presupuesto de auditoría es propio, y lo gasta LA ESCRITURA, nunca la observación suprimida.** El
-  throttle **no puede ser su propia guarda**: es exactamente lo que se está reportando, y nada en esta ruta se
+- **El presupuesto de auditoría es propio, y se reclama con un `consume()` antes de escribir.** El throttle
+  **no puede ser su propia guarda**: es exactamente lo que se está reportando, y nada en esta ruta se
   auto-limita como sí lo hacía `User::recordFailedAttempt()` en BR-4b. Sin guarda propia esto es *«a
   synchronous, per-attempt row on an unbudgeted endpoint … a write amplifier handed to the attacker it is
-  meant to record»* (`InvalidCurrentPasswordAuditListener.php:40-42`). **Que el gasto sea la escritura y no la
-  observación es load-bearing, no un detalle**: si el `consume(1)` cae también en la rama suprimida, el
-  contador del propio presupuesto se infla al ritmo del atacante y el acarreo lo mantiene agotado
-  indefinidamente — bajo ataque sostenido se escribe UNA fila en total y nunca más (medido; ver *Hechos
-  medidos*). El techo se cumpliría, la lectura operativa no.
+  meant to record»* (`InvalidCurrentPasswordAuditListener.php:40-42`).
+- **Se reclama con `consume()`, nunca con `reserve()`.** Una denegación no cuesta nada al cubo por `consume()`
+  (medido), así que la ranura vuelve un intervalo después de la fila que la gastó y el atacante no puede
+  alargar su propio silencio. `reserve()` sí infla el cubo en la rama denegada y convertiría la supresión en
+  permanente bajo ataque sostenido — tiene AC propio porque nada más lo vería.
 - **Las dos claves se canonizan idénticamente** — `mb_strtolower(trim($email))`, la misma de
   `PasswordRecoveryThrottle:38`. Si divergen, los dos cubos dejan de corresponderse, se multiplican las filas
   y **nada lo detecta**; de ahí que tenga AC propio.
@@ -108,12 +108,12 @@ contractual, literal, para el cuerpo del PR:
 |---|---|---|---|
 | Petición 1..5 sobre una dirección | presupuesto de recuperación disponible | `202` · el caso de uso corre · **ninguna fila nueva** | N/A |
 | **Primera denegación de la ventana de auditoría** | 6.ª petición | `202` idéntico · el caso de uso **no** corre · **1 fila** `PASSWORD_RECOVERY_THROTTLED` / `security` / `actor_type = anonymous` · se gasta el presupuesto de auditoría | best-effort: `warning` y sigue |
-| **N-ésima denegación en la misma ventana** | 7.ª…k-ésima | `202` idéntico · **0 filas** · el presupuesto **no** se consume (el *peek* no muta) | N/A |
+| **N-ésima denegación en la misma ventana** | 7.ª…k-ésima | `202` idéntico · **0 filas** · la denegación no cuesta nada al cubo | N/A |
 | **Ventana de auditoría rodada, ataque en curso** | ~1 h después, sigue denegando | **1 fila nueva** — latido, no repetición espuria | N/A |
 | Dirección que resuelve a identidad | agotada | fila **con** `resource_id` = UUID del sujeto, `resource_type` por la constante | N/A |
 | Dirección que no casa con ninguna identidad | barrido de un atacante | fila **sin recurso** (`resource_type`/`resource_id` NULL). **Se escribe igual**: se conserva la señal del barrido | N/A |
 | Dirección de un usuario legítimo, agotada por un atacante que la apunta | la víctima pide recuperación y es ahogada | `202` idéntico · **ninguna fila adicional** dentro de la ventana; su petición es N-ésima | N/A |
-| Dos denegaciones **concurrentes** cruzando la transición | dos workers, `lock_factory: null`, y *peek*→*consume* no atómico | `202` en ambas · **dos filas** posibles | Residuo documentado, no defecto |
+| Dos denegaciones **concurrentes** cruzando el borde de ventana | dos workers, `lock_factory: null` | `202` en ambas · **dos filas** posibles | Residuo documentado, no defecto |
 | El almacén del limitador no responde | pool de caché caído | Lo que ya ocurre hoy sin este cambio: la excepción del limitador sale del controlador. **Este cambio no la introduce ni la captura** | Preexistente; se declara, no se altera |
 | `audit_log` inescribible | tabla renombrada | `202` **idéntico** · `warning` con la excepción · **la respuesta sobrevive al fallo de su propia auditoría** | `catch (Throwable)` |
 | Redespliegue, `cache:clear` o segundo worker FrankenPHP | pool `cache.rate_limiter` reiniciado o partido | Filas **extra** para el mismo asedio | Residuo documentado |
@@ -153,41 +153,38 @@ contractual, literal, para el cuerpo del PR:
 
 **Execution:**
 
-- [ ] `api/config/packages/rate_limiter.yaml` + `api/.env` — limitador `recovery_throttle_audit_per_email`,
-      `sliding_window`, `limit: 1`, `interval: '1 hour'`, por env
-      (`RATE_LIMIT_RECOVERY_THROTTLE_AUDIT_LIMIT` / `_INTERVAL`). El comentario debe decir dos cosas que el
-      YAML no muestra: que **su gasto ES la supresión**, no una pérdida de filas, y que **solo lo gasta la
-      escritura** — un mantenedor que «simplifique» el *peek* a un `consume()` directo rompe el latido sin
-      poner nada rojo salvo el AC que lo cubre.
-- [ ] `api/src/Iam/Identity/Infrastructure/Security/PasswordRecoveryThrottle.php` — método nuevo sobre el
-      factory nuevo, con la **misma** canonización que `allowRequest()`, que **decide con `consume(0)` y solo
-      consume 1 cuando la respuesta es afirmativa**. Devuelve `bool`. Sigue sin auditar nada: solo responde
-      «¿corresponde escribir?».
-- [ ] `api/src/Iam/Identity/Application/RecordRecoveryThrottleAuditBestEffort.php` — `catch (Throwable)` +
-      `logger->warning`; la línea de log **no nombra la dirección ni ningún id**. Resuelve `email → identity`
-      y construye el `AuditResource` solo cuando hay identidad.
-- [ ] `api/src/Iam/Identity/Infrastructure/Http/RequestPasswordResetController.php` — rama denegada:
-      `equalise()` → intento de auditoría → `202`. Una llamada a un colaborador de `Application`; el
-      controlador sigue delgado.
-- [ ] `api/tests/Unit/Iam/Identity/Application/RecordRecoveryThrottleAuditBestEffortTest.php` — pasa a través ·
-      traga y registra a `warning` con la excepción en contexto · **la línea no contiene la dirección** ·
-      dirección conocida ⇒ recurso presente · desconocida ⇒ fila sin recurso.
-- [ ] `api/tests/Functional/Iam/Identity/RequestPasswordResetThrottleAuditTest.php` — la **única** capa donde
-      el presupuesto y su latido pueden ponerse rojos contra el pool real, con reloj/almacén manipulables.
-- [ ] `api/features/backoffice/identity/password_reset.feature` — escena con correlation-id fijo que agota el
-      presupuesto y afirma sobre `audit_log` con `the SQL result as JSON should be:`, **más** que el cuerpo y
-      el estado de las seis respuestas son idénticos. Buscar el vocabulario antes de escribir cualquier step
+- [x] `api/config/packages/rate_limiter.yaml` + `api/.env` — limitador `recovery_throttle_audit_per_email`,
+      `sliding_window`, `limit: 1`, `interval: '1 hour'`, por env. El comentario dice las dos cosas que el YAML
+      no muestra: que **su gasto ES la supresión**, y que se reclama con `consume()` y nunca con `reserve()`.
+- [x] `api/src/Iam/Identity/Application/RecoveryThrottleAuditBudget.php` — **puerto** de una operación
+      (`claimFor`). Es lo que mantiene legal la capa (`Application` no puede depender del adaptador) y lo que
+      hace el AC del amplificador falsable sin contenedor.
+- [x] `api/src/Iam/Identity/Infrastructure/Security/RateLimiterRecoveryThrottleAuditBudget.php` — adaptador
+      `#[AsAlias]` sobre `limiter.recovery_throttle_audit_per_email`. **Clase aparte de
+      `PasswordRecoveryThrottle`, no un tercer método suyo**: aquella responde «¿puede continuar esta
+      petición?» y sirve además `allowCompletion()`; ésta responde «¿ya se observó este rechazo?».
+- [x] `api/src/Iam/Identity/Infrastructure/Security/RecoveryBudgetKey.php` — **fold-in nombrado**: la
+      canonización `mb_strtolower(trim(...))` pasa a existir una sola vez y `PasswordRecoveryThrottle:38` la
+      consume. No es un `Email` (ése rechaza direcciones malformadas, y estos presupuestos se gastan para toda
+      dirección pedida, precisamente para que el limitador no sea sondeable).
+- [x] `api/src/Iam/Identity/Application/RecordRecoveryThrottleAuditBestEffort.php` — reclama, resuelve
+      `email → identity`, escribe y traga (`catch (Throwable)` + `warning` sin dirección ni id).
+- [x] `api/src/Iam/Identity/Infrastructure/Http/RequestPasswordResetController.php` — rama denegada:
+      `equalise()` → proyección → `202`.
+- [x] `api/tests/Unit/.../RecordRecoveryThrottleAuditBestEffortTest.php` (7 casos) + su doble
+      `FixedRecoveryThrottleAuditBudget`.
+- [x] `api/tests/Unit/.../RateLimiterRecoveryThrottleAuditBudgetTest.php` (5 casos, uno `#[Group('slow')]`) —
+      contra el limitador **real**; un doble asertaría el doble.
+- [x] `api/tests/Unit/.../RequestPasswordResetControllerTest.php` — extendido con el GATE del amplificador
+      (8 peticiones ⇒ 1 fila) y la independencia por dirección, contra el limitador real.
+- [ ] `api/features/backoffice/identity/password_reset.feature` — escena de agotamiento con correlation-id fijo
+      + escena de `ALTER TABLE audit_log RENAME` probando que el `202` sobrevive. Buscar el vocabulario
       (`make php.behat c='-dl'`) y regenerar `api/.behat-step-vocabulary`.
-- [ ] `api/features/.../password_reset.feature` — segunda escena: `ALTER TABLE audit_log RENAME … on connection
-      "seed"` y el `202` sigue siendo `202`.
-- [ ] `docs/architecture-api.md:265` — cuarta acción de la ruta de identidad en la misma frase de
-      amplificación, diciendo explícitamente que aquí **no hay auto-límite** (a diferencia de `USER_LOCKED`) y
-      que por eso lleva presupuesto propio gastado por la escritura.
-- [ ] `PRODUCTION_SECURITY_CHECKLIST.md` — el control nuevo con sus residuos, incluido que **un lector
-      autorizado del trail sí distingue** dirección resoluble de no resoluble.
-- [ ] `docs/adr/administrative-recovery-channel.md` — anotar que esta observabilidad es **detectivesca y sin
-      capacidad de recuperación**: no añade arista al grafo. Redactarlo así y nunca como «se observa la
-      recuperación», que induciría a leerlo como una palanca.
+- [ ] `docs/architecture-api.md:265` — cuarta acción de la ruta de identidad en la misma frase de amplificación.
+- [ ] `PRODUCTION_SECURITY_CHECKLIST.md` — el control nuevo con sus residuos, incluido que un lector autorizado
+      del trail **sí** distingue dirección resoluble de no resoluble.
+- [ ] `docs/adr/administrative-recovery-channel.md` — la observabilidad es **detectivesca y sin capacidad de
+      recuperación**; no añade arista al grafo.
 
 **Acceptance Criteria** — cada uno con la mutación que lo pone rojo. Los cuatro marcados **[GATE]** son
 fronteras arquitectónicas, no tests de regresión:
@@ -204,10 +201,11 @@ fronteras arquitectónicas, no tests de regresión:
   rompería el contrato de `anonymized_actor_id`. Esa mitad la sostiene la revisión, igual que en el registro.
 - **[GATE] El `202` sobrevive al fallo de su propia auditoría.** Con `audit_log` no disponible, la respuesta
   sigue siendo `202` sin cuerpo. *Rojo:* quitar el `catch (Throwable)`, o estrecharlo a `catch (Exception)`.
-- **El latido existe: el presupuesto lo gasta la escritura, no la observación suprimida.** Con el almacén
-  avanzado una ventana bajo denegación continua, llega **una segunda** fila. *Rojo:* mover el `consume(1)` a
-  la rama suprimida — el acarreo se infla y la segunda fila **desaparece**. Sin este AC ese cambio es
-  invisible: el techo sigue verde y solo se pierde la detección.
+- **[GATE] La supresión es temporal: el latido existe.** Con el almacén avanzado una ventana bajo denegación
+  continua, la ranura vuelve. *Rojo medido:* cambiar `consume()` por `reserve(1)` en el adaptador — su rama
+  denegada sí infla el cubo y la ranura no vuelve. **Y el AC necesitó su propia ventana**: a `interval = 1s`
+  pasaba con la mutación puesta, porque `InMemoryStorage` desaloja la entrada a ~1 intervalo y toda
+  implementación parece viva. A `interval = 2s` con sonda a 2,2 s el rojo sale.
 - **La supresión es por dirección.** Agotar `a@…` y provocar `b@…` da **dos** filas. *Rojo:* keyear el
   presupuesto por algo constante.
 - **Las dos canonizaciones coinciden.** Agotar con `A@Example.COM` y transicionar con `a@example.com` produce
@@ -220,6 +218,26 @@ fronteras arquitectónicas, no tests de regresión:
   `PasswordResetRequested` en `event_store` durante el agotamiento. *Rojo:* mover la llamada al caso de uso por
   delante de la guarda del throttle.
 - Ninguna escena existente de `password_reset.feature` ni de `login.feature` cambia de color.
+
+## Spec Change Log
+
+### 2026-08-11 · iteración 2 — la implementación REFUTA dos hechos que la iteración 1 daba por medidos
+
+Ninguna decisión de Sergio cambia (C + B(i), 1/1 h siguen en pie). Lo que cae es el mecanismo que yo había
+justificado debajo, y cae por sonda ejecutada, no por argumento.
+
+- **REFUTADO: «la rama denegada del sliding window suma el hit».** Es verdad del fuente y falso de `consume()`,
+  que reserva con `maxTime = 0` y sale por excepción antes de ese `add()`. Medido: `remaining` se queda en `0`
+  por `consume()` y cae a `−20` por `reserve(1)`.
+- **REFUTADO por lo anterior: «el cubo no se rellena mientras dure el ataque»**, que la iteración 1 llevaba
+  además como agravante de #602 para el cuerpo del PR. Retirado.
+- **Consecuencia de diseño:** el *peek* con `consume(0)` **se elimina**. Acotaba lo que ya estaba acotado. El
+  presupuesto es un `consume()` a secas.
+- **Cómo se descubrió, que es la parte reutilizable:** provocando el rojo del AC del latido. No salió. Dos
+  hipótesis mías seguidas —ambas derivadas de leer `vendor/`— predijeron un rojo que no ocurrió, y solo una
+  sonda ejecutada dio la respuesta. Además destapó que el propio AC era **vacuo** a `interval = 1s`, porque
+  `InMemoryStorage` desaloja la entrada a ~1 intervalo (`getExpirationTime()` trunca a `(int)`) y toda
+  implementación parece viva; a 2 s el rojo sale.
 
 ## Design Notes
 
@@ -244,24 +262,23 @@ tolera: prescribe *«equalise the store work inside this same envelope, never de
 de segundo orden a favor: la rama permitida **ya escribe y ya resuelve la identidad**, así que hacerlo en la
 denegada **acerca** las dos rutas en vez de crear una tercera con perfil propio.
 
-**Por qué el discriminador aritmético se descartó, y por qué la misma aritmética obliga a gastar el
-presupuesto en la escritura.** La tentación evidente era detectar la transición leyendo el limitador
-(`disponibles == 0`). No funciona: `getHitCount()` (`SlidingWindow.php:77-83`) es
-`floor(H·(1 − pct) + hits_actuales)`; el término de decaimiento cae a ritmo `H/T` y `H` **es** el conteo que
-produjo ese mismo atacante, así que a ritmo constante `getHitCount()` **se estanca** y la condición se cumple
-petición tras petición. Lo que la revisión de esta iteración añade es que **la misma aritmética muerde al
-presupuesto propio si lo consume la observación suprimida**: el conteo del cubo de auditoría crecería al ritmo
-del atacante, el acarreo lo mantendría agotado toda la ventana siguiente, y bajo asedio sostenido se escribiría
-**una fila en total**. El techo aguantaría; la detección no. Gastarlo solo al escribir mantiene el conteo en 1
-por ventana, el acarreo no se infla, y el régimen permanente es un latido de una fila por hora — **con el mismo
-techo duro, porque quien gasta el presupuesto es la propia fila**.
+**Por qué el presupuesto es un `consume()` a secas, y la creencia que costó dos vueltas.** El mecanismo es una
+línea: el limitador acepta la primera reclamación de cada ventana y deniega el resto. Este artefacto llegó ahí
+por el camino largo, y el desvío merece quedar escrito porque el error es fácil de repetir: leer
+`SlidingWindowLimiter::reserve()` muestra un `$window->add($tokens)` **también en la rama que deniega**
+(`:94`), de donde se sigue —y así se afirmó en la iteración 1— que las denegaciones inflan el cubo, que un
+atacante puede alargar su propio silencio, y que hace falta un *peek* con `consume(0)` para no gastar el
+presupuesto en observaciones suprimidas. **Nada de eso es cierto por `consume()`**, que reserva con
+`maxTime = 0` y sale por `MaxWaitDurationExceededException` en `:91`, antes de ese `add()`. La sonda lo mide
+en dos líneas y ninguna lectura del fuente lo dice: `remaining` se queda en `0` por `consume()` y cae a `−20`
+por `reserve(1)`. El *peek* se retiró: acotaba lo que ya estaba acotado.
 
-**Descartado: `fixed_window` para el presupuesto de auditoría.** Parecía la salida limpia (rodaje natural, sin
-acarreo ponderado) y es **peor**, medido: `Window::getCarriedHitCount()` (`Window.php:78-88`) resta solo
-`windowsElapsed × maxSize`, que con `maxSize = 1` es **1 por hora**, mientras `FixedWindowLimiter.php:109` suma
-en la rama denegada igual que su hermano. Cualquier ataque por encima de 1 pet./hora deja el cubo agotado para
-siempre. Con el gasto movido a la escritura la elección deja de importar; se deja escrito para que nadie lo
-«arregle» en esa dirección.
+**Lo que sí queda como propiedad, y por eso tiene test propio:** la supresión es temporal porque una
+denegación no cuesta nada al cubo. Cambiar `consume()` por `reserve()` —un cambio plausible, «para exponer el
+retry-after»— hace real la inflación que la lectura sugería y convierte la supresión en permanente bajo ataque
+sostenido. Ese es el rojo del latido, y hubo que buscarle la ventana: a un segundo el test es **vacuo**, porque
+`InMemoryStorage` desaloja la entrada a ~1 intervalo (`getExpirationTime()` trunca a `(int)`) y toda
+implementación parece viva.
 
 **Las dos ventanas tienen la misma duración, no la misma fase.** Ambas son `sliding_window` de 1 hora, pero
 cada cubo arranca en su primer consumo: el de recuperación en la 1.ª petición, el de auditoría en la 6.ª. Decir
@@ -270,8 +287,7 @@ Igualarlas en duración es lo que mantiene la semántica simple; sincronizarlas 
 necesario.
 
 **Residuos a escribir, no a esconder:**
-- **Concurrencia.** `lock_factory: null` y un *peek*→*consume* no atómico permiten que dos peticiones
-  simultáneas escriban dos filas. Mismo tipo de residuo que el `USER_LOCKED` duplicado de BR-4b: ruido para el
+- **Concurrencia.** `lock_factory: null` permite que dos peticiones simultáneas escriban dos filas. Mismo tipo de residuo que el `USER_LOCKED` duplicado de BR-4b: ruido para el
   operador, nunca pérdida.
 - **El presupuesto vive en el pool de caché.** Redespliegue, `cache:clear` o un segundo worker lo reinician o
   lo parten y producen filas extra. Aceptado a propósito: la alternativa persistida exige una tabla keyeada por
@@ -287,10 +303,10 @@ necesario.
   — y costaría la señal del barrido contra direcciones inexistentes.
 - **La dirección sigue siendo clave del cubo del limitador**, hoy y sin este cambio
   (`PasswordRecoveryThrottle:38`). El presupuesto nuevo no introduce una clase de dato nueva.
-- **`sliding_window` no rellena mientras dure el ataque.** `SlidingWindowLimiter.php:94` suma también al
-  denegar, así que el agotamiento de la víctima dura *lo que dure el ataque más una ventana*, no una hora desde
-  la quinta petición. **Agrava #602 respecto a como lo describe el issue** y va en el cuerpo del PR. No se
-  arregla aquí: tocarlo es endurecer o aflojar la ruta de recuperación, vetado en *Never*.
+- **RETIRADO: «el cubo no se rellena mientras dure el ataque».** La iteración 1 lo daba por medido y por
+  agravante de #602. **Es falso**, y la sonda lo dice: por `consume()` las denegaciones no tocan el conteo, así
+  que el presupuesto de la víctima se rellena a su hora y el agotamiento dura lo que dice `interval`. No hay
+  nada que llevar al cuerpo del PR por esta vía.
 
 ## Hechos medidos — no re-derivar
 
@@ -298,11 +314,12 @@ Cada uno costó una sonda o una lectura de `vendor/`; ninguno vive en el código
 
 | Hecho | Medición |
 |---|---|
-| **La rama denegada del sliding window también suma el hit** | `vendor/symfony/rate-limiter/Policy/SlidingWindowLimiter.php:94` — `$window->add($tokens)`, gemela de la aceptada en `:78`: está en el `else`, no solo en el `if`. Bajo martilleo la ventana no se vacía y **no vuelve a aceptarse ninguna petición** hasta que rueda |
-| **Consumir el presupuesto propio en la observación suprimida lo mata** | Con `H` heredado y el atacante a ritmo `R`, `getHitCount() = floor(H·(1−p) + R·p)` se queda clavado en `R` toda la ventana ⇒ `disponibles = 1 − R ≤ 0` siempre ⇒ **una sola fila en todo el asedio**. Derivado de `SlidingWindow.php:38-49,77-83`; **verificar con sonda de almacén antes de dar el AC del latido por bueno** |
-| **`consume(0)` es un *peek* gratuito y no mutante** | `SlidingWindowLimiter.php:71-75` retorna antes de tocar la ventana; `$this->storage->save($window)` en `:100` está guardado por `if (0 !== $tokens)` en `:99`. Es lo que hace implementable el gasto-solo-al-escribir |
-| **`fixed_window` es PEOR, no la salida** | `Window::getCarriedHitCount()` (`Window.php:78-88`) resta `windowsElapsed × maxSize` = **1 por hora** con `maxSize = 1`, y `FixedWindowLimiter.php:109` suma también al denegar. Cubo agotado para siempre por encima de 1 pet./hora |
-| **`getRemainingTokens()` no está acotado y se vuelve negativo** | `vendor/symfony/rate-limiter/RateLimit.php:53-56` devuelve `availableTokens` verbatim; `getAvailableTokens()` (`SlidingWindowLimiter.php:118-120`) es `limit − hitCount`. En denegación es ≤ −1 |
+| **El `add()` de la rama denegada es INALCANZABLE desde `consume()`** — y esto **refuta** lo que este artefacto afirmó en su iteración 1 | `SlidingWindowLimiter.php:94` existe y es gemela de `:78`, pero `consume()` reserva con `maxTime = 0`, así que `MaxWaitDurationExceededException` se lanza en `:91` y desenrolla **antes** del `add()` de `:94` y del `save()` de `:100`. **Sonda ejecutada** (`limit: 1`, 1 aceptada + 20 denegadas): vía `consume()` `remaining` se queda en **0** y nunca baja; vía `reserve(1)` llega a **−20** |
+| **Por tanto un cubo martilleado SÍ se rellena a su hora** | Corolario medido del anterior. No existe la «ventana que no se vacía mientras dure el ataque»: un atacante no puede alargar su propio silencio. Vale para `password_recovery_per_email` igual que para el presupuesto de auditoría |
+| **`reserve()` sí infla el cubo, y ese es el rojo del latido** | Misma sonda: tras 20 denegadas por `reserve(1)`, al rodar la ventana el cubo sigue **denegando**. Cambiar `consume()` por `reserve()` «para ver el retry-after» convierte una supresión temporal en permanente bajo ataque |
+| **`InMemoryStorage` desaloja a ~1 intervalo y eso hace VACUO todo test de ventana corta** | `getExpirationTime()` (`SlidingWindow.php:59`) **trunca a `(int)`**, así que con `interval = 1s` el desalojo colapsa sobre el rodaje: la entrada desaparece, se acuña ventana nueva y **toda implementación parece viva**. El primer test del latido pasó con la mutación puesta por esto. Con `interval = 2s` y sonda a 2,2 s el rodaje (2,0 s) y el desalojo (~3,0 s) se separan y el rojo sale |
+| **`consume(0)` es un *peek* gratuito y no mutante — pero aquí no compra nada** | `SlidingWindowLimiter.php:71-75` retorna antes de tocar la ventana; el `save()` de `:100` está guardado por `if (0 !== $tokens)` en `:99`. Cierto y sin uso: `consume()` a secas ya acota a 1 por ventana |
+| **`fixed_window` no es la salida** | `Window::getCarriedHitCount()` (`Window.php:78-88`) resta `windowsElapsed × maxSize` = 1 por ventana con `maxSize = 1`. Irrelevante una vez medido que `consume()` no infla, pero se deja escrito para que nadie lo «arregle» por ahí |
 | **`security` propaga; `activity` traga** | `SymfonyAuditLogger.php:65-72` vs `:77-92`. **Ambos escriben síncronamente en el ciclo de petición** — `activity` no va por cola; lo que corre en `kernel.terminate` es la *captura* genérica, no un diferimiento dentro del logger |
 | **La dirección en `metadata` sería una fuga INDETECTABLE, no solo sin dueño** | `.person-reference-policy:81-97`: los cuatro controles que sostienen el «cero ids en `metadata`» casan por **id** contra `identity_user` — (a) por el id del sujeto borrado, (b) y (d) por *join*. Una dirección no la ve ninguno. Y ni `DbalAuditActorAnonymiser` ni `DbalAuditResourceAnonymiser` tocan `metadata` |
 | **Nombrar al sujeto en `resource_id` NO minta obligación nueva** | `.audit-resource-types:105` ya lleva `User => person :: FulfilIdentityErasure.php :: erase.feature`, y `.person-reference-policy:168-173` confirma que `audit_log.resource_id` está **dentro** del control detectivesco como colaborador cableado. No hay línea de registro que añadir |
@@ -325,8 +342,9 @@ esta iteración.
    - **Refinamiento añadido por medición, dentro de la misma decisión:** el presupuesto lo gasta **la
      escritura**, nunca la observación suprimida. Sin eso, «1 por dirección y ventana» era falso en la
      dirección contraria — bajo asedio sostenido habría UNA fila en total. Con eso, el régimen permanente es el
-     latido que la decisión pretendía. Tiene AC propio porque es un cambio de una línea, invisible a todo lo
-     demás.
+     latido que la decisión pretendía. **Corregido en la iteración 2 tras medirlo:** el refinamiento era
+     innecesario porque su premisa era falsa — `consume()` no infla el cubo al denegar. El presupuesto es un
+     `consume()` a secas y el latido lo da el limitador; ver *Spec Change Log*.
 2. **`resource_id`: resolver `email → identity` en la rama denegada; con identidad, el UUID del sujeto; sin
    identidad, fila escrita **sin** recurso.** Se descarta la fila siempre sin recurso (desaprovecha una
    atribución que el sistema ya puede obtener por un eje **ya gobernado**, y #602 pregunta justamente *a quién*
@@ -351,10 +369,10 @@ esta iteración.
 **Manual checks:**
 - **Provocar el rojo de cada AC antes de darlo por bueno, y recontar al FINAL** — el conteo se pudre. Los dos
   que no pueden faltar: el del presupuesto (sin él la suite queda verde con una fila por petición) y el del
-  **latido** (sin él, mover el `consume(1)` a la rama suprimida no rompe nada visible y la detección
-  desaparece en silencio).
-- **Verificar con sonda de almacén la afirmación del acarreo** antes de dar por bueno el AC del latido. Está
-  derivada de `vendor/`, no medida en ejecución, y es la que sostiene el diseño.
+  **latido** (sin él, cambiar `consume()` por `reserve()` no rompe nada visible y la supresión se vuelve
+  permanente bajo ataque).
+- **La afirmación del acarreo se verificó con sonda ejecutada y salió FALSA** para `consume()`; el diseño se
+  simplificó en consecuencia. Toda afirmación futura sobre la aritmética del limitador se mide, no se lee.
 - `curl -k`: las seis respuestas del agotamiento idénticas en estado y cuerpo, sin cabecera nueva.
 - El pase adversarial es **gate para ABRIR la PR**, no para llegar a `done` (`CLAUDE.md` → *Security review on
   every change* → *Process*): corre y se escribe en este artefacto **antes** de `gh pr create`. Requiere pedir

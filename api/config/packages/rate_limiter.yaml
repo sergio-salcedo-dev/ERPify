@@ -56,6 +56,37 @@ framework:
             interval: '%env(RATE_LIMIT_PASSWORD_RECOVERY_PER_EMAIL_INTERVAL)%'
             lock_factory: null
 
+        # `recovery_throttle_audit_per_email` — a budget over the AUDIT of the budget above, keyed by the same
+        # case-folded address. It is NOT a second throttle on the endpoint: nothing about the response depends
+        # on it, and the caller that consumes it has already decided to answer 202.
+        #
+        # SPENDING IT IS THE SUPPRESSION, NOT A LOST ROW. Read as a rate limiter it looks like rows are being
+        # dropped; what is actually being bounded is the work an attacker can make the audit path do. Once the
+        # per-email recovery budget is gone every later request in the window is refused too, so a row per
+        # refusal would be a synchronous INSERT per attempt at precisely the moment somebody is hammering —
+        # the amplifier RequestPasswordResetController exists to avoid handing over. Here the throttle cannot
+        # be its own guard, because the throttle is what is being reported.
+        #
+        # IT IS SPENT BEFORE THE WRITE, NOT AFTER A CONFIRMED ONE — the opposite of how a notification seal is
+        # ordered, and deliberately so. This budget bounds WORK, not rows: a failed INSERT costs the same
+        # round-trip as a successful one, so waiting for confirmation would restore the full amplifier exactly
+        # while `audit_log` is unavailable. The price is that an outage can cost one window of silence per
+        # address, which the swallowed warning names.
+        #
+        # A refusal costs the bucket nothing, so the slot returns one interval after the row that spent it and
+        # an attacker cannot extend their own silence by hammering: `consume()` reserves with `maxTime = 0`, so
+        # a refused request leaves through MaxWaitDurationExceededException before the refusing branch of
+        # SlidingWindowLimiter::reserve() reaches its `add()`. Worth stating because that `add()` is plainly
+        # visible in the source and reading it alone suggests the opposite.
+        #
+        # `interval` mirrors password_recovery_per_email so one row means one window of the budget it observes.
+        # The two windows share a DURATION, never a PHASE: each bucket starts at its own first consume.
+        recovery_throttle_audit_per_email:
+            policy: 'sliding_window'
+            limit: '%env(int:RATE_LIMIT_RECOVERY_THROTTLE_AUDIT_LIMIT)%'
+            interval: '%env(RATE_LIMIT_RECOVERY_THROTTLE_AUDIT_INTERVAL)%'
+            lock_factory: null
+
         # `token_action_per_selector` — per-target budget on the token-consuming endpoints (reset-password,
         # invitation accept), keyed by the selector half of the presented `<id>.<secret>` link. It caps
         # brute-forcing the secret of one selector; exhaustion folds into the SAME opaque invalid-token wall
