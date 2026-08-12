@@ -12,8 +12,9 @@ use Doctrine\DBAL\Driver\AbstractException;
  * (inherited from {@see \Doctrine\DBAL\Exception\DriverException}) requires a
  * {@see \Doctrine\DBAL\Driver\Exception} plus a nullable query.
  *
- * Named rather than an anonymous `new class` so the driver exception has one definition for every test
- * that needs a real DBAL failure to translate, instead of a copy per call site.
+ * Named, never an anonymous `new class`: PDepend — which PHPMD runs under `make php.quality` — has aborted
+ * on anonymous classes, and that gate is not part of the fast unit loop, so the failure surfaces late. One
+ * definition for every test needing a real DBAL failure is the smaller reason to keep it here.
  *
  * @internal
  */

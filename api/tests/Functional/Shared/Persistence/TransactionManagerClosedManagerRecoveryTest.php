@@ -53,15 +53,20 @@ final class TransactionManagerClosedManagerRecoveryTest extends KernelTestCase
             // behind that the next operation cannot survive.
         }
 
-        // Probed with a write, and that choice is the whole test: `EntityManager::close()` only sets a flag,
+        // The retry the 503 invites, run through the seam itself rather than against the manager directly:
+        // that is the operation a client actually repeats, and it exercises `wrapInTransaction` on the
+        // recovered manager instead of stopping one indirection short.
+        //
+        // Probed with a WRITE, and that choice is the whole test: `EntityManager::close()` only sets a flag,
         // and the flag is read by `flush`, `persist`, `remove` and `refresh` alone. A read goes to the
         // Connection and answers perfectly well through a closed manager, so a query here would assert
-        // something that cannot fail. `flush()` on an empty unit of work is the smallest operation that
-        // reaches the guard, and it is the one every write use case ends with.
+        // something that cannot fail.
         $failure = null;
 
         try {
-            $entityManager->flush();
+            $transactionManager->transactional(static function () use ($entityManager): void {
+                $entityManager->flush();
+            });
         } catch (Throwable $throwable) {
             $failure = $throwable;
         }

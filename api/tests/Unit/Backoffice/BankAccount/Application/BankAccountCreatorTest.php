@@ -27,10 +27,10 @@ final class BankAccountCreatorTest extends TestCase
     public function testCreatesAccountAsActiveAndPublishesTheCreatedEventInOneTransaction(): void
     {
         $repository = new InMemoryBankAccountRepository();
-        $eventBus = new RecordingEventBus();
+        $transactions = new ImmediateTransactionManager();
+        $eventBus = new RecordingEventBus($transactions);
         $existence = new InMemoryBankExistenceChecker();
 
-        $transactions = new ImmediateTransactionManager();
         $account = $this->makeCreator($repository, $existence, $eventBus, $transactions)->create(
             new CreateBankAccountCommand(
                 BankAccountMother::DEFAULT_BANK_ID,
@@ -51,9 +51,10 @@ final class BankAccountCreatorTest extends TestCase
         $this->assertSame([$account], $repository->saved);
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(BankAccountCreatedDomainEvent::class, $eventBus->publishedEvents[0]);
-        // The write and its event share one boundary: published outside it, every assertion
-        // above still passes while the dual-write window this use case closes is reopened.
-        $this->assertSame(1, $transactions->committed);
+        // Where, not how many. A use case that publishes AFTER its unit of work returns opens exactly
+        // one boundary too, so a count leaves the dual-write window free to reopen; this is the
+        // observable that goes red when the publication moves outside the transaction.
+        $this->assertSame([true], $eventBus->publishedInsideUnitOfWork);
     }
 
     public function testRejectsCreationAndMutatesNothingWhenTheBankDoesNotExist(): void
@@ -80,6 +81,8 @@ final class BankAccountCreatorTest extends TestCase
 
         $this->assertSame([], $repository->saved);
         $this->assertSame([], $eventBus->publishedEvents);
+        // The guard refuses before the boundary: opening one and then throwing looks identical to a caller.
+        $this->assertSame(0, $transactions->opened);
     }
 
     private function makeCreator(

@@ -121,14 +121,21 @@ final class ProjectionRunnerTest extends TestCase
     {
         $checkpointStore = $this->createMock(ProjectionCheckpointStore::class);
         $checkpointStore->expects($this->exactly(2))->method('reset');
+        $transactions = new ImmediateTransactionManager();
 
         $this->runner(
             $this->eventStoreStub(),
             $this->createStub(DomainEventDeserializer::class),
             $checkpointStore,
-            new ImmediateTransactionManager(),
+            $transactions,
             [$this->projectorStub('first'), $this->projectorStub('second')],
         )->rebuildAll();
+
+        // One boundary per projector, as in catch-up — and here the count carries more, because a rebuild
+        // clears a read model before replaying it: collapsed into a single boundary, one projector failing
+        // would roll back read models that had already been rebuilt correctly.
+        $this->assertSame(2, $transactions->opened);
+        $this->assertSame(2, $transactions->committed);
     }
 
     #[Test]

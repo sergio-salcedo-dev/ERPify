@@ -13,23 +13,34 @@ use Throwable;
  * a unit test drive a use case's orchestration without a database — atomicity itself is covered by the
  * functional tests against real Postgres.
  *
- * The three counters are what make a boundary assertable at all. Without them a test can only say the writes
- * happened, which is equally true of a use case that opens no transaction and of one that opens a different
- * number than it should; and "how many" is a real guarantee where a caller loops (one transaction per item
- * versus one around the loop is the difference between a resumable checkpoint and an all-or-nothing batch).
- * {@see self::$committed} also separates "after the boundary closed" from "inside it" — a post-commit effect
- * asserted only as "it happened" passes just the same when it runs within the transaction.
+ * The counters make "how many boundaries" assertable, which is a real guarantee wherever a caller loops: one
+ * transaction per item versus one around the loop is the difference between a resumable checkpoint and an
+ * all-or-nothing batch. They count FRAMES, not logical failures — under nesting an inner failure increments
+ * {@see self::$abandoned} once per frame it propagates through.
+ *
+ * What they cannot do is place an effect on one side of the boundary: a use case that publishes AFTER its
+ * unit of work returns still leaves `committed` at 1. {@see self::isInUnitOfWork()} is what answers that, by
+ * letting a collaborator record where it was called from — see `RecordingEventBus::$publishedInsideUnitOfWork`.
  */
 final class ImmediateTransactionManager implements TransactionManager
 {
     /** Units of work entered. */
     public int $opened = 0;
 
-    /** Units of work whose operation returned, so an effect can be pinned to the far side of the boundary. */
+    /** Units of work whose operation returned. */
     public int $committed = 0;
 
     /** Units of work whose operation threw — the rollback path. */
     public int $abandoned = 0;
+
+    /** Frames currently open, so nesting does not close the boundary early. */
+    private int $depth = 0;
+
+    /** True while an operation is running, which is what tells "inside the boundary" from "after it". */
+    public function isInUnitOfWork(): bool
+    {
+        return $this->depth > 0;
+    }
 
     /**
      * @template T
@@ -42,6 +53,7 @@ final class ImmediateTransactionManager implements TransactionManager
     public function transactional(callable $operation): mixed
     {
         ++$this->opened;
+        ++$this->depth;
 
         try {
             $result = $operation();
@@ -49,6 +61,8 @@ final class ImmediateTransactionManager implements TransactionManager
             ++$this->abandoned;
 
             throw $throwable;
+        } finally {
+            --$this->depth;
         }
 
         ++$this->committed;

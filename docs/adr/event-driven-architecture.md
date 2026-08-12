@@ -136,8 +136,12 @@ ausente. CQRS separa *ejecución*, no *nombres*. Por eso hoy se nombran las **in
 suscriptores de evento son `<Efecto>OnEvento` (`#[AsMessageHandler]`, dispatch real), no `*Handler` genéricos.
 
 **Invariantes por-path (un hogar a la vez; el nombre puede ir por detrás, nunca por delante):** **I1 ·
-límite transaccional** — **ya uniforme y enforced**: puerto `TransactionManager` en cada caso de uso (D3),
-con deptrac como árbitro (ningún `EntityManagerInterface` concedido en `Application/`). **I2 ·
+límite transaccional** — **uniforme en `Application/` y enforced ahí**: puerto `TransactionManager` en cada
+caso de uso (D3), con deptrac como árbitro (ningún `EntityManagerInterface` concedido en su baseline). **No
+cerrado del todo**: `Iam/Identity/Infrastructure/Cli/CreateInitialAdministratorCommand` sigue llamando
+`wrapInTransaction` directamente, y deptrac no puede verlo porque en `Infrastructure/` Doctrine está
+permitido — ese camino no recibe ni la traducción 503/409 ni la recuperación del manager. Nada impide hoy
+un `wrapInTransaction` nuevo en `Infrastructure/`. **I2 ·
 enforcement transversal** (auth/validación) — hoy por-path; se uniforma en el borde del bus cuando exista.
 **I3 · frontera de publicación de eventos** — **ya uniforme y enforced** (puerto `EventBus` D2 + gate
 `php.lint.event-bus` D4). De las tres, sólo I2 sigue abierta.

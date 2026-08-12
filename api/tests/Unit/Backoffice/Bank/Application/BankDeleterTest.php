@@ -25,8 +25,8 @@ final class BankDeleterTest extends TestCase
     public function testDeletesBankAndDispatchesDeletedEventWhenNoAccountsReferenceIt(): void
     {
         $bankRepository = new InMemoryBankRepository(BankMother::drained());
-        $eventBus = new RecordingEventBus();
         $transactions = new ImmediateTransactionManager();
+        $eventBus = new RecordingEventBus($transactions);
         $bankDeleter = $this->makeBankDeleter(
             $bankRepository,
             accountCount: 0,
@@ -39,9 +39,8 @@ final class BankDeleterTest extends TestCase
         $this->assertTrue($bankRepository->removeCalled);
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(BankDeletedDomainEvent::class, $eventBus->publishedEvents[0]);
-        // The removal and the event share one boundary — publishing outside it would reopen the dual-write
-        // window this use case closes, and every assertion above would still pass.
-        $this->assertSame(1, $transactions->committed);
+        // Where, not how many: publishing after the unit of work returns opens exactly one boundary too.
+        $this->assertSame([true], $eventBus->publishedInsideUnitOfWork);
     }
 
     public function testThrowsBankInUseExceptionWhenAccountsReferenceTheBank(): void
@@ -94,13 +93,16 @@ final class BankDeleterTest extends TestCase
     {
         $bankRepository = new InMemoryBankRepository(BankMother::drained());
         $eventBus = new RecordingEventBus();
-        // First count 0 (guard passes), recount 2 after the flush-time FK violation.
+        // First count 0 (guard passes), recount 2 after the flush-time FK violation. The boundary fails at
+        // the commit, so the removal and the publication have already been issued — the shape production
+        // produces, and the one where "nothing survived" is a claim rather than a restatement.
+        $transactions = FailingTransactionManager::referentialIntegrityAtCommit();
         $bankDeleter = $this->makeBankDeleter(
             $bankRepository,
             accountCount: 0,
             eventBus: $eventBus,
             recount: 2,
-            transactions: FailingTransactionManager::referentialIntegrity(),
+            transactions: $transactions,
         );
 
         try {
@@ -114,7 +116,11 @@ final class BankDeleterTest extends TestCase
             );
         }
 
-        $this->assertSame([], $eventBus->publishedEvents);
+        // The callback ran and was abandoned: the removal was issued and the event published inside the
+        // boundary, so what stops either from surviving is the rollback, not the use case declining to act.
+        $this->assertTrue($bankRepository->removeCalled);
+        $this->assertCount(1, $eventBus->publishedEvents);
+        $this->assertSame(1, $transactions->opened);
     }
 
     public function testReportsAtLeastOneAccountWhenRecountAfterForeignKeyViolationIsZero(): void
@@ -126,7 +132,7 @@ final class BankDeleterTest extends TestCase
             $bankRepository,
             accountCount: 0,
             recount: 0,
-            transactions: FailingTransactionManager::referentialIntegrity(),
+            transactions: FailingTransactionManager::referentialIntegrityAtCommit(),
         );
 
         try {

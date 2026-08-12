@@ -9,10 +9,14 @@
 #
 # The discriminator is stated as a rule, not as a list of contexts: inner-layer
 # framework debt targets a vendor or Erpify\Shared\*, so ANY other Erpify\* target is
-# a sibling business module and therefore a seam. Enumerating the contexts instead
-# fails open — the list named only Backoffice and Frontoffice, so once Iam and
-# Organization existed every regen quietly grandfathered their published seams into
-# the baseline, turning a ratchet against debt into a record of it.
+# a sibling business module and therefore a seam.
+#
+# Enumerating the contexts instead fails open, and the enumeration had already gone
+# stale: it named Backoffice and Frontoffice, while deptrac.yaml carries seams for Iam
+# and Organization too. Measured, not inferred: the committed baseline held no seam of
+# theirs, so nothing had been regenerated since those contexts appeared — the defect was
+# latent, never shipped. Regenerating under the old rule produced 41 entries against 21
+# under this one, which is what a materialised version of it would have looked like.
 set -eu
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)" # -> api root
 
@@ -33,9 +37,32 @@ grep -q '^  skip_violations:' "$raw" || {
 {
     cat tools/deptrac/deptrac.baseline.header.txt
     # Drop cross-context seam item lines, and any importer key left with no items.
+    #
+    # `module()` reduces a class to Erpify\<Context>\<Module>, tolerating the quoting deptrac's YAML dumper
+    # applies to some targets — matching the raw line instead would let a quoted seam through, which is the
+    # direction that fails OPEN and puts back exactly what this strip exists to remove.
+    #
+    # A target inside the importer's OWN module is inner-layer debt (Application reaching its Infrastructure),
+    # not a published seam, so it stays: dropping it would leave a real violation with nowhere legal to be
+    # recorded, since hand-editing this file is forbidden.
     awk '
-        /^    [^ ].*:$/      { if (key != "" && n > 0) { print key; for (i = 0; i < n; i++) print item[i] } key = $0; n = 0; next }
-        /^      - /          { if ($0 ~ /^      - Erpify\\/ && $0 !~ /^      - Erpify\\Shared\\/) next; item[n++] = $0; next }
+        function module(s,   parts, count) {
+            sub(/^[[:space:]]*-[[:space:]]*/, "", s)
+            sub(/^[[:space:]]+/, "", s)
+            sub(/:[[:space:]]*$/, "", s)
+            gsub(/["'"'"']/, "", s)
+            count = split(s, parts, /\\/)
+            return count >= 3 ? parts[1] "\\" parts[2] "\\" parts[3] : s
+        }
+        /^    [^ ].*:$/      { if (key != "" && n > 0) { print key; for (i = 0; i < n; i++) print item[i] } key = $0; keyModule = module($0); n = 0; next }
+        /^      - /          {
+                                 target = $0
+                                 sub(/^[[:space:]]*-[[:space:]]*/, "", target)
+                                 gsub(/["'"'"']/, "", target)
+                                 if (target ~ /^Erpify\\/ && target !~ /^Erpify\\Shared\\/ && module($0) != keyModule) next
+                                 item[n++] = $0
+                                 next
+                             }
                              { if (key != "" && n > 0) { print key; for (i = 0; i < n; i++) print item[i] } key = ""; n = 0; print }
         END                  { if (key != "" && n > 0) { print key; for (i = 0; i < n; i++) print item[i] } }
     ' "$raw"

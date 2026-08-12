@@ -9,8 +9,9 @@
 #
 # Published cross-context seams are NOT here — they live in `skip_violations` in
 # deptrac.yaml (mirror of api/.bounded-context-allowlist). A new cross-context import
-# must FAIL the gate, never be grandfathered; that is why regen strips seam targets
-# (Erpify\Backoffice\* / Erpify\Frontoffice\*) back out of this file.
+# must FAIL the gate, never be grandfathered; that is why regen strips seam targets back
+# out of this file. A seam is recognised by rule, not by a list of context names: debt
+# targets a vendor or Erpify\Shared\*, so any other Erpify\* target is a sibling module.
 deptrac:
   skip_violations:
     Erpify\Backoffice\BankAccount\Application\BankAccountCreator:

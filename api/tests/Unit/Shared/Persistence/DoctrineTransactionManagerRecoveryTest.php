@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Persistence;
 
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Shared\Persistence\Infrastructure\DoctrineTransactionManager;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -22,6 +24,42 @@ use RuntimeException;
 final class DoctrineTransactionManagerRecoveryTest extends TestCase
 {
     use TransactionManagerDoubles;
+
+    /**
+     * The other half of the guard, and the one a stub hides: an unconfigured `isOpen()` answers false, so a
+     * doubled manager looks stranded even on the happy path. Without this expectation the condition could be
+     * inverted — resetting after every successful commit — and the suite would stay green.
+     */
+    #[Test]
+    public function itLeavesAHealthyManagerAloneAfterASuccessfulUnitOfWork(): void
+    {
+        $entityManager = $this->createStub(EntityManagerInterface::class);
+        $entityManager->method('wrapInTransaction')->willReturnCallback(
+            static fn (callable $operation): mixed => $operation(),
+        );
+        $entityManager->method('isOpen')->willReturn(true);
+
+        $registry = $this->createMock(ManagerRegistry::class);
+        $registry->expects($this->never())->method('resetManager');
+
+        (new DoctrineTransactionManager($entityManager, $registry))->transactional(static fn (): int => 1);
+    }
+
+    /**
+     * A recovery that throws would replace the exception the seam just built, because it runs in a `finally`.
+     * The wiring fault it raises on (a non-lazy manager) is real, so the swallow has to be proven, not assumed.
+     */
+    #[Test]
+    public function itKeepsTheDomainAnswerWhenTheRecoveryItselfFails(): void
+    {
+        $entityManager = $this->strandedEntityManager(transactionActive: false);
+        $registry = $this->createStub(ManagerRegistry::class);
+        $registry->method('resetManager')->willThrowException(new LogicException('non-lazy manager'));
+
+        $this->expectException(RuntimeException::class);
+
+        (new DoctrineTransactionManager($entityManager, $registry))->transactional(static fn (): int => 1);
+    }
 
     /**
      * A failed unit of work leaves the manager closed and nothing else reopens it under worker mode, so the

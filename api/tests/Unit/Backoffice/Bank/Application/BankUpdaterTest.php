@@ -25,9 +25,9 @@ final class BankUpdaterTest extends TestCase
     {
         $bank = BankMother::drained();
         $bankRepository = new InMemoryBankRepository($bank);
-        $eventBus = new RecordingEventBus();
-
         $transactions = new ImmediateTransactionManager();
+        $eventBus = new RecordingEventBus($transactions);
+
         $updated = $this->makeUpdater($bankRepository, $eventBus, $transactions)->update(
             BankMother::DEFAULT_ID,
             new UpdateBankCommand('Acme Renamed', 'ACMER'),
@@ -40,9 +40,10 @@ final class BankUpdaterTest extends TestCase
         $this->assertSame([$bank], $bankRepository->saved);
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(BankUpdatedDomainEvent::class, $eventBus->publishedEvents[0]);
-        // The write and its event share one boundary: published outside it, every assertion
-        // above still passes while the dual-write window this use case closes is reopened.
-        $this->assertSame(1, $transactions->committed);
+        // Where, not how many. A use case that publishes AFTER its unit of work returns opens exactly
+        // one boundary too, so a count leaves the dual-write window free to reopen; this is the
+        // observable that goes red when the publication moves outside the transaction.
+        $this->assertSame([true], $eventBus->publishedInsideUnitOfWork);
     }
 
     private function makeUpdater(

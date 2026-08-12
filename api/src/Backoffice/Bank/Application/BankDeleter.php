@@ -12,6 +12,7 @@ use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Persistence\Domain\Exception\ReferentialIntegrityViolation;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
+use Throwable;
 
 final readonly class BankDeleter
 {
@@ -51,14 +52,23 @@ final readonly class BankDeleter
                 $this->bankRepository->remove($bank);
                 $this->eventBus->publish(...$domainEvents);
             });
-        } catch (ReferentialIntegrityViolation) {
+        } catch (ReferentialIntegrityViolation $referentialIntegrityViolation) {
             // TOCTOU: an account was inserted between the count guard above and this flush, so the
             // bank_account FK (NOT DEFERRABLE) rejected the DELETE. The generic conflict is turned into
-            // the one this use case can name — the violation proves >= 1 account existed at flush time,
-            // and max(1, …) covers the reverse double-race where the recount also lands on zero.
-            $recount = $this->bankAccountRepository->countByBankId($id);
+            // the one this use case can name — the violation proves >= 1 row referenced this bank at flush
+            // time, and max(1, …) covers the reverse double-race where the recount also lands on zero.
+            //
+            // The recount is best-effort by construction: it runs after a boundary that has just failed,
+            // and letting it throw would replace a 409 the caller can act on with a 500. The violation is
+            // kept as `previous` so the driver's SQLSTATE and constraint name survive into the debug chain
+            // — without it a conflict raised by some other foreign key would be indistinguishable here.
+            try {
+                $recount = $this->bankAccountRepository->countByBankId($id);
+            } catch (Throwable) {
+                $recount = 0;
+            }
 
-            throw BankInUseException::withAccountCount($id, \max(1, $recount));
+            throw BankInUseException::withAccountCount($id, \max(1, $recount), $referentialIntegrityViolation);
         }
     }
 }

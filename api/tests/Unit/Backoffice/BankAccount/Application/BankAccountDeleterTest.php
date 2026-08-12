@@ -28,17 +28,18 @@ final class BankAccountDeleterTest extends TestCase
     {
         $account = BankAccountMother::drained(status: BankAccountStatus::CLOSED);
         $repository = new InMemoryBankAccountRepository($account);
-        $eventBus = new RecordingEventBus();
-
         $transactions = new ImmediateTransactionManager();
+        $eventBus = new RecordingEventBus($transactions);
+
         $this->makeDeleter($repository, $eventBus, $transactions)->delete(BankAccountMother::DEFAULT_ID);
 
         $this->assertTrue($repository->removeCalled);
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(BankAccountDeletedDomainEvent::class, $eventBus->publishedEvents[0]);
-        // The write and its event share one boundary: published outside it, every assertion
-        // above still passes while the dual-write window this use case closes is reopened.
-        $this->assertSame(1, $transactions->committed);
+        // Where, not how many. A use case that publishes AFTER its unit of work returns opens exactly
+        // one boundary too, so a count leaves the dual-write window free to reopen; this is the
+        // observable that goes red when the publication moves outside the transaction.
+        $this->assertSame([true], $eventBus->publishedInsideUnitOfWork);
     }
 
     public function testThrowsNotClosedAndMutatesNothingWhenTheAccountIsNotClosed(): void
@@ -61,6 +62,8 @@ final class BankAccountDeleterTest extends TestCase
 
         $this->assertFalse($repository->removeCalled);
         $this->assertSame([], $eventBus->publishedEvents);
+        // As above: the refusal happens before any transaction is opened.
+        $this->assertSame(0, $transactions->opened);
     }
 
     private function makeDeleter(

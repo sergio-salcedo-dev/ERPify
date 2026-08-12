@@ -17,9 +17,16 @@ use InvalidArgumentException;
  * the checkpoint advance commit together, so a `sequence` is never applied twice nor out of order.
  *
  * **One transaction per projector, not one around the fan-out.** {@see catchUpAll()} delegates to
- * {@see catchUp()}, so each projector commits its own checkpoint: a failure part-way leaves the projectors
- * that already advanced advanced, and the next run resumes from each checkpoint rather than replaying the
- * batch. Collapsing them into a single boundary would trade that resumability for an all-or-nothing batch.
+ * {@see catchUp()}, so each projector owns its own checkpoint boundary: a failure part-way leaves the
+ * projectors that already advanced advanced, and the next run resumes from each checkpoint rather than
+ * replaying the batch. Collapsing them into a single boundary would trade that resumability for an
+ * all-or-nothing batch.
+ *
+ * **That resumability holds only when this runner is the outermost boundary** — the worker consuming the
+ * transport. Reached synchronously instead, from a use case that published an event no transport routes,
+ * every boundary here is a savepoint inside the caller's transaction: DBAL releases rather than commits, so
+ * a rollback in the caller takes every checkpoint advanced under it back with it. Nothing detects that; it
+ * is a property of where the runner was called from, not of what it does.
  */
 final readonly class ProjectionRunner
 {
