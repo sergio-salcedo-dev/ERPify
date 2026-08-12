@@ -2,7 +2,7 @@
 title: 'BR-4c · #602 — observabilidad del agotamiento del throttle de recuperación'
 type: 'feature'
 created: '2026-08-11'
-status: 'ready-for-dev'
+status: 'done'
 review_loop_iteration: 3
 baseline_commit: 0fc48fff
 context:
@@ -14,7 +14,7 @@ context:
 
 > Épica: `epics-backlog-resolution.md` · BR-4 (`:127-167`), «sus dos aristas»
 > Hermana: `br-4b-602-observabilidad-del-lockout.md` (`done`, PR #683, squash `0fc48fff`)
-> Rama: **NO AUTORIZADA** — propuesta al final · Base: `origin/main` @ `0fc48fff`
+> Rama: `fix/iam-recovery-throttle-observability-602-28fc` · PR #686, squash `84f599ad` en `main`
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 

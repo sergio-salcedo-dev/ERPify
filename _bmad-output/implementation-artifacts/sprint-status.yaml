@@ -360,7 +360,7 @@ development_status:
   # Segunda arista de #602, la que el propio issue prioriza por encima del lockout. Clave propia por la misma
   # razón que la de arriba, y además porque #602 sigue OPEN: un `done` en la clave del lockout leería como si
   # el issue estuviera cerrado.
-  br-4c-602-observabilidad-throttle-recuperacion: review
+  br-4c-602-observabilidad-throttle-recuperacion: done
   br-5-ciclo-de-vida-iam-session: backlog
   br-6-gates-arquitectura-ci: backlog
   br-7-listas-backoffice: backlog
