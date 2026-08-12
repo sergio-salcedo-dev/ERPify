@@ -7,6 +7,7 @@ namespace Erpify\Tests\Behat\Support\Mercure;
 use Override;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Jwt\TokenFactoryInterface;
+use Symfony\Component\Mercure\ProtocolVersion;
 use Symfony\Component\Mercure\Update;
 
 /**
@@ -42,6 +43,27 @@ final class RecordingHub implements HubInterface
     public function getFactory(): ?TokenFactoryInterface
     {
         return null;
+    }
+
+    /**
+     * `config/packages/mercure.yaml` sets no `protocol_version`, so the real hub is the bundle's
+     * default. Pinning the double to the same case keeps a scenario that asserts on the cookie
+     * honest: under protocol 1.0 the name changes and the browser contract changes with it.
+     */
+    #[Override]
+    public function getProtocolVersion(): ProtocolVersion
+    {
+        return ProtocolVersion::Legacy;
+    }
+
+    /**
+     * Derived from the version rather than spelled out, exactly as {@see \Symfony\Component\Mercure\Hub}
+     * does — a literal here would keep returning the old name after a protocol switch.
+     */
+    #[Override]
+    public function getCookieName(): string
+    {
+        return $this->getProtocolVersion()->getDefaultCookieName();
     }
 
     /**

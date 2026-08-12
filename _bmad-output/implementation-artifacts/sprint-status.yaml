@@ -344,7 +344,8 @@ development_status:
   # NO cuentan para el cierre de esta épica tres grupos reclasificados en el fichero de la épica:
   #   · épicas disfrazadas (#268 #266 #267 #462 #549 #373) — reetiquetar `epic`, sacar del conteo
   #   · decisiones, no código (#222 #295 #263 #567) — se resuelven en conversación, no en un PR
-  #   · vigilancias ya automatizadas (#593 #196 #420) — disparadores, no tareas
+  #   · vigilancias ya automatizadas (~~#593~~ #196 #420) — disparadores, no tareas. #593 disparó el
+  #     2026-08-11 y se retiró el pin el 2026-08-12, con su vigía.
   #
   # El barrido del 2026-08-06 cerró 11 de 65 midiendo cada issue CONTRA EL CÓDIGO, no contra su título, y
   # corrigió otros 4. Los 11 eran recientes, no viejos: el backlog se pudre por lo que se entrega, no por el

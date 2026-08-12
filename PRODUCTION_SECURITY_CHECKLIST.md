@@ -712,14 +712,32 @@ mitigated state. Accepting one means recording who accepted it and against which
       deprecated in Symfony 8.1 and `failOnDeprecation="true"` turned the suite red, so the only
       alternative was suppressing a real deprecation gate. Upstream tagged `v0.4.3` on 2026-08-11
       carrying the fix (`8708c813`, verified an ancestor of the tag: `compare/v0.4.3...8708c813` →
-      `ahead 0, behind 5`), and the constraint is now `^0.4.3`. Its `stability-flags` entry dropped
-      with it, leaving two, both `require-dev`. **Verified by forcing the broken path, not by a green
-      run:** on a cold container cache (`cache:clear --env=test --no-warmup` — plain `cache:clear`
-      warms, compiling outside PHPUnit and masking the deprecation) `v0.4.2` exits 1 with
-      `Deprecations: 1` naming `HttpKernel\DependencyInjection\Extension`, and `v0.4.3` exits 0 over
-      2698 tests. The `upstream-pin-watch` CI job and `make composer.check.mercure-pin` were removed
-      with the pin they watched: anchored to a `v0.4.2` baseline they would have stayed red for
-      ever. Closed [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
+      `ahead 0, behind 5`). The pair then moved on together to `symfony/mercure ^0.8` +
+      `symfony/mercure-bundle ^0.5`, the line upstream actually maintains: `v0.4.3` narrowed its own
+      requirement to `symfony/mercure ^0.6.1|^0.7`, so staying on it would have coupled the tree to
+      the abandoned 0.4/0.7 pair and put a future advisory in Mercure's JWT-minting path out of
+      reach. The bundle keeps `protocol_version: 0.x` by default, so the hub contract is unchanged.
+      Its `stability-flags` entry dropped with the pin, leaving two, both `require-dev`.
+      **Verified by forcing the broken path, not by a green run:** on a genuinely cold container
+      cache `v0.4.2` exits 1 with `Deprecations: 1` naming
+      `HttpKernel\DependencyInjection\Extension`, and the tagged line exits 0 over 2698 tests.
+      The `upstream-pin-watch` CI job and `make composer.check.mercure-pin` were removed with the
+      pin they watched — anchored to a `v0.4.2` baseline they would have stayed red for ever — and
+      the knowledge they carried is now a gate rather than prose: `make php.lint.composer-stability`
+      fails any branch constraint or `@`-stability flag in `require`.
+      Closed [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
+- [x] **`failOnDeprecation` was structurally blind in CI — fixed 2026-08-12.** A deprecated *class*
+      triggers at file scope, so it fires once per process, while the container compiles. Any
+      `bin/console` call under `APP_ENV=test` compiles it first, and CI runs several inside
+      `php.quality.dry-run` **before** the suite (`ci.yml`: PHP lint precedes PHPUnit). `Kernel::getCacheDir()`
+      forked only for Behat, so console and PHPUnit shared `var/cache/test`: PHPUnit loaded the warm
+      container, never autoloaded the class, and reported green over a real deprecation. The gate
+      that justified the mercure pin had therefore never once fired in CI. PHPUnit now compiles into
+      its own directory (`PHPUNIT_RUNNING`, set in `tools/phpunit/bootstrap.php` the same three ways
+      Behat sets its own flag — `getenv()` sees neither `$_ENV` nor `$_SERVER` alone, which is why a
+      first attempt via phpunit.xml's `<server>` silently did nothing). **Measured on one tree, one
+      version, the CI order:** shared cache → `Tests: 2698`, 0 deprecations, green; forked cache →
+      `Tests: 2698`, `Deprecations: 1`, red.
 - [ ] **38 direct composer dependencies are behind, because dependabot's composer lane was aimed at
       a directory with no manifest.** `.github/dependabot.yaml` declared `directory: /` while the
       manifest is `api/composer.json`, so the weekly version-update lane produced **zero** PRs in
