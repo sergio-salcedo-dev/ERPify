@@ -309,6 +309,13 @@ necesario.
   presencia o ausencia de `resource_id`. No es alcanzable por el atacante; lo sería si el trail se exfiltra o
   si un tier menor gana lectura. Ocultarlo no compraría privacidad — la ausencia de fila cargaría el mismo bit
   — y costaría la señal del barrido contra direcciones inexistentes.
+- **Canal lateral de temporización sobre la propia ranura de auditoría** (hallazgo del pase adversarial). La
+  primera denegación de una ventana cuesta un `SELECT` y un `INSERT`; las siguientes no cuestan ninguno, así
+  que un llamante que compare sus **propios** rechazos consecutivos infiere si la ranura de esa dirección
+  seguía libre — es decir, si ya se observó un agotamiento suyo dentro de la hora. **No es oráculo de
+  existencia**: resoluble y no resoluble hacen la misma lectura y la misma escritura. Lo que impide
+  promediarlo es el propio presupuesto, que acota al atacante a **una muestra por dirección y hora**; se
+  vuelve digno de cerrar solo si ese presupuesto se ensancha o si desaparece el suelo de temporización.
 - **La dirección sigue siendo clave del cubo del limitador**, hoy y sin este cambio
   (`PasswordRecoveryThrottle:38`). El presupuesto nuevo no introduce una clase de dato nueva.
 - **RETIRADO: «el cubo no se rellena mientras dure el ataque».** La iteración 1 lo daba por medido y por
