@@ -6,7 +6,6 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
 use Erpify\Iam\Identity\Infrastructure\Security\RateLimiterRecoveryThrottleAuditBudget;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
@@ -53,7 +52,6 @@ final class RateLimiterRecoveryThrottleAuditBudgetTest extends TestCase
         $this->assertFalse($budget->claimFor('  Victim@ERPify.TEST '));
     }
 
-    #[Group('slow')]
     public function testTheSlotReturnsWhenTheWindowRollsHoweverManyClaimsWereRefusedInside(): void
     {
         // THE HEARTBEAT: the suppression is temporary, and an attacker cannot extend their own silence by
@@ -78,8 +76,15 @@ final class RateLimiterRecoveryThrottleAuditBudgetTest extends TestCase
             $budget->claimFor(self::TARGET);
         }
 
+        $probeAt = \microtime(true);
         \usleep(2_200_000);
+        $elapsed = \microtime(true) - $probeAt;
 
+        // Past ~3.0s InMemoryStorage evicts the entry, a fresh window is minted and the claim is granted
+        // whatever the implementation does — so a slow runner would turn this gate green instead of red.
+        // Assert the probe landed inside the discriminating band rather than trusting that it did.
+        $this->assertLessThan(3.0, $elapsed, 'Probed after the storage entry could have been evicted: not evidence.');
+        $this->assertGreaterThan(2.0, $elapsed, 'Probed before the window rolled: not evidence.');
         $this->assertTrue($budget->claimFor(self::TARGET));
     }
 

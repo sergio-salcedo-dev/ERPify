@@ -383,13 +383,17 @@ you change anything here.
       the rate-limiter cache pool, so a redeploy, a `cache:clear` or a second FrankenPHP worker
       produces extra rows for one siege; and the row says *that* exhaustion happened and *when*, never
       *how much* — a six-request accident and a hundred-thousand-request siege look identical, volume
-      being left to `anonymous_api` and the access log. **A fourth, found by the adversarial pass:** the first
-      refusal of a window costs a `SELECT` plus an `INSERT` and every later one costs neither, so a caller
-      comparing its own consecutive refusals can infer whether that address's audit slot was still free — i.e.
-      whether an exhaustion for it was already observed within the hour. It is not an existence oracle (both
-      resolvable and unresolvable addresses do the same read and write) and the budget caps it at one sample
-      per address per hour, which is what stops it being averaged down; it becomes worth closing only if that
-      budget is widened or the timing floor is removed. **One property is stated rather than hidden:**
+      being left to `anonymous_api` and the access log. A third: two callers crossing the window boundary
+      together can both be granted, because the limiter carries `lock_factory: null` — a duplicate row is
+      operator noise, an unbounded row count would be the amplifier. **A timing channel found by review was
+      measured and then closed rather than accepted:** written in-band, the first refusal of a window cost a
+      `SELECT` plus an `INSERT` while later ones cost neither, which measured 14.70 ms of median differential
+      (positive in twenty pairs of twenty, against 5.10 ms of noise) — enough for a caller to time. The
+      projection now runs on `kernel.terminate`, after the response is on the wire; re-measured identically the
+      differential is −0.37 ms, positive in ten pairs of twenty. **Two couplings an operator must know before
+      turning the knobs:** widening `RATE_LIMIT_RECOVERY_THROTTLE_AUDIT_INTERVAL` multiplies the row ceiling in
+      proportion, and narrowing `RATE_LIMIT_PASSWORD_RECOVERY_PER_EMAIL_LIMIT` as a siege response lowers the
+      cost of each row from six requests to two. **One property is stated rather than hidden:**
       an authorised trail reader can tell a resolvable address from an unresolvable one by the presence
       of `resource_id`. It is not reachable by the attacker — the read sits behind `auditTrail.read` —
       and it would become one only if the trail were exfiltrated or a lower tier gained that read.

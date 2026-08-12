@@ -3,7 +3,7 @@ title: 'BR-4c · #602 — observabilidad del agotamiento del throttle de recuper
 type: 'feature'
 created: '2026-08-11'
 status: 'ready-for-dev'
-review_loop_iteration: 2
+review_loop_iteration: 3
 baseline_commit: 0fc48fff
 context:
   - '{project-root}/docs/adr/administrative-recovery-channel.md'
@@ -32,9 +32,10 @@ contrapartida **interna**: nadie puede saber que a un administrador le están ne
 recuperación.
 
 **Enfoque:** un control **detectivesco** de una sola mitad — **como máximo una fila `security` en `audit_log`
-por dirección canonizada y ventana del presupuesto de auditoría**, escrita *best-effort* desde el borde del
-controlador, detrás de un presupuesto propio que acota el amplificador de escritura. La respuesta no cambia en
-forma, estado, cuerpo ni latencia.
+por dirección canonizada y ventana del presupuesto de auditoría**, escrita *best-effort* en
+**`kernel.terminate`**, detrás de un presupuesto propio que acota el amplificador de escritura. La respuesta no
+cambia en forma, estado, cuerpo ni latencia — y esto último es **medido**, no afirmado: en banda el diferencial
+era de 14,70 ms (20/20 pares); diferida, de −0,37 ms (10/20, azar).
 
 **La unidad NO es «un episodio».** El mecanismo no detecta un flanco de subida semántico y no hay que
 enunciarlo como si lo hiciera: detecta **una observación acotada por dirección y por ventana**. Un asedio
@@ -63,20 +64,27 @@ contractual, literal, para el cuerpo del PR:
   (medido), así que la ranura vuelve un intervalo después de la fila que la gastó y el atacante no puede
   alargar su propio silencio. `reserve()` sí infla el cubo en la rama denegada y convertiría la supresión en
   permanente bajo ataque sostenido — tiene AC propio porque nada más lo vería.
-- **Las dos claves se canonizan idénticamente** — `mb_strtolower(trim($email))`, la misma de
-  `PasswordRecoveryThrottle:38`. Si divergen, los dos cubos dejan de corresponderse, se multiplican las filas
-  y **nada lo detecta**; de ahí que tenga AC propio.
+- **Las dos claves y la resolución de identidad canonizan por la MISMA función** — `RecoveryBudgetKey`
+  delega en `Email`, que es quien define qué es «el mismo buzón». Una clave más débil no es una diferencia
+  estética: `mb_strtolower(trim(...))` deja intacto un `\u{00A0}` que `Assert\Email` estricto **admite** y que
+  `Email` sí recorta, así que cada relleno minta su propio cubo resolviendo a una sola identidad — y eso
+  evadía también `password_recovery_per_email`, no solo su auditoría.
 - **La fila nombra al sujeto cuando la dirección resuelve a una identidad**, y el tipo se alcanza por
   `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE`, jamás por el literal `'User'`; el fichero que lo derive vive
   bajo `src/Iam/Identity/` (regla de contención de `.audit-resource-types`) y pasa por `AuditResource::of()`.
-- El orden en la rama denegada es **`equalise()` primero, todo lo demás después**, replicando el de la rama
-  permitida (`RequestPasswordReset.php:52` paga el suelo antes de trabajar). El suelo es el primer trabajo tras
-  conocer la denegación; la resolución de identidad y la escritura son trabajo adicional **dentro** del sobre.
+- **La proyección entera corre en `kernel.terminate`**, no en banda. La rama denegada paga el suelo y nombra
+  el objetivo en un atributo de petición; el listener resuelve identidad y escribe cuando la respuesta ya está
+  en el cable. El listener **no puede** re-derivar el rechazo —el presupuesto ya se consumió y la respuesta es
+  idéntica a una servida—, así que el atributo es el único canal honesto, y se paga a cambio de cerrar un canal
+  medido.
 
 **Never:**
 - **Nada que cambie la respuesta.** Ni `429` por cuenta, ni cabecera `RateLimit-*`, ni cuerpo, ni una rama que
   se pueda cronometrar. `rate_limiter.yaml:47-52` fija el porqué: un `429` por objetivo sería oráculo de
-  existencia y permitiría además superponer indefinidamente el token vivo de la víctima.
+  existencia y permitiría además superponer indefinidamente el token vivo de la víctima. **Este `Never` NO se
+  renegoció**: la primera versión lo incumplía (14,70 ms, 20/20) y en vez de reescribir el invariante se movió
+  la escritura fuera del ciclo de respuesta hasta cumplirlo (−0,37 ms, 10/20). La cabecera tiene AC propio
+  porque `PasswordChangeThrottle:59-65` demuestra que estamparla son tres líneas.
 - **La dirección de correo, ni un hash, ni un digest, ni codificación alguna de ella, en `metadata` o en
   cualquier columna.** No es «desaconsejado», es un muro **medido**: `.person-reference-policy:68-100` declara
   que `audit_log.metadata` hoy sostiene **cero** ids de persona, enumera los cuatro controles que lo sostienen,
@@ -227,53 +235,61 @@ fronteras arquitectónicas, no tests de regresión:
   delante de la guarda del throttle.
 - Ninguna escena existente de `password_reset.feature` ni de `login.feature` cambia de color.
 
-### Review Findings — code review 2026-08-12 (3 capas: blind · edge · auditor)
+### Review Findings — code review 2026-08-12 · TODAS RESUELTAS
 
-**Decisiones (bloquean; el arreglo no es mío para elegirlo):**
+Tres capas (blind · edge · auditor) sobre los cuatro commits. Triaje: 3 decisiones, 16 parches, 2 diferidos,
+1 descartado. Las tres decisiones las cerró Sergio tras consultar a un AI externo; **discrepé de dos de sus
+tres recomendaciones y la discrepancia se resolvió midiendo**, no argumentando.
 
-- [ ] [Review][Decision] **Un `Never` congelado lo contradice el código enviado** — *«ni una rama que se pueda
-      cronometrar»* (`Boundaries`, bloque `<frozen-after-approval>`). La primera denegación de la ventana cuesta
-      `SELECT`+`INSERT` y las siguientes ninguno. Se resolvió anotando la excepción en los residuos y dejando el
-      `Never` absoluto en pie; el bloque es *human-owned*. O se renegocia a la forma que el código sí cumple
-      («ninguna rama cronometrable que distinga existencia de cuenta») o se cierra el canal.
-- [ ] [Review][Decision] **La divergencia Unicode también evade `password_recovery_per_email`, que es
-      preexistente** — MEDIDO: `Assert\Email` estricto acepta `\u00A0` en los bordes; `RecoveryBudgetKey` hace
-      `trim()` ASCII y `Email` normaliza NFC con una clase de bordes más ancha ⇒ cubos distintos, una identidad.
-      Arreglarlo cierra mi cota **y** un bypass del throttle de recuperación que permite superponer el token vivo
-      de una víctima sin límite. El arreglo es inequívoco (keyear por la identidad canónica, con reserva para
-      direcciones malformadas); lo que decide Sergio es si esta PR toca un control de seguridad preexistente.
-- [ ] [Review][Decision] **Carrera con `FulfilIdentityErasure`** — esta ruta escribe un id de persona sin lock ni
-      transacción, a diferencia del precedente que cita (`LoginAttemptRegistrar` serializa vía la fila de usuario).
-      Puede insertar el id después de que el anonimizador haya barrido. El reconciliador lo **detecta**, nunca lo
-      repara. ¿Residuo escrito, o guarda de diseño?
+**D1 — el `Never` de la rama cronometrable. Resuelto por 1D: NO se renegoció el invariante, se cumplió.**
+El consultor recomendaba cerrar el canal igualando trabajo (1B), que no tiene implementación barata: igualar
+una escritura en base de datos significa hacerla, que es el amplificador. Y se contradecía — argumentaba que
+D2 es lo que agrava D1, recomendaba arreglar D2 (lo que restaura el tope) y mantenía 1B a plena potencia.
+La cuarta opción que nadie puso sobre la mesa: **diferir la proyección a `kernel.terminate`**, con el
+precedente ya resuelto en `AccessLogAuditListener` (incluido el `requestStack->push/pop` sin el cual el sellado
+degrada a actor `system`). Medido antes y después: 14,70 ms / 20-de-20 → −0,37 ms / 10-de-20.
 
-**Parches (arreglo inequívoco):**
+**D2 — la divergencia Unicode. Resuelto por 2A, y de acuerdo con el consultor.** `RecoveryBudgetKey` delega
+en `Email`. Cierra la cota nueva **y** un bypass preexistente de `password_recovery_per_email`. Sus cuatro
+verificaciones previas quedaron descargadas: el coste de `Email::tryFrom` no es clase nueva (la rama servida ya
+lo llama), el limitador tiene **un** consumidor, no hay razón para distinguir whitespace RFC-válido de la
+identidad, y el fallback conserva el gasto para direcciones malformadas, así que el limitador sigue sin ser
+sondeable.
 
-- [ ] [Review][Patch] La mitad `catch (Exception)` de un GATE no puede enrojecer: todo lo que lanza la ruta ES `Exception` [spec AC + `password_reset.feature:263`]
-- [ ] [Review][Patch] El docblock justifica `Throwable` sobre `Exception` con `JsonException`, que **es** `Exception`; el hermano contrasta contra `DbalException` [`RecordRecoveryThrottleAuditBestEffort.php:23`]
-- [ ] [Review][Patch] La mitad `RateLimit-*` del GATE de respuesta no la enforcea ningún test [`RequestPasswordResetControllerTest.php:70`]
-- [ ] [Review][Patch] Tercera copia de la canonización, la que falla abierto [`api/tests/Behat/Context/RateLimitContext.php:66`]
-- [ ] [Review][Patch] `LIMIT=0` lanza `InvalidArgumentException` fuera del `try` ⇒ 500 solo en la rama agotada = oráculo de estado [`RateLimiterRecoveryThrottleAuditBudget.php:46`]
-- [ ] [Review][Patch] La matriz de E/S afirma que la excepción del pool sale del controlador; los adaptadores la tragan ⇒ falla **abierto** [spec, fila «almacén del limitador»]
-- [ ] [Review][Patch] `actor_type = anonymous` no está garantizado: la ruta es `PUBLIC_ACCESS` y no rechaza sesión viva [`RecordRecoveryThrottleAuditBestEffort.php:84`]
-- [ ] [Review][Patch] «desacoplado del número de intentos» es falso: son `intentos/6`, factor constante sobre un espacio de claves libre [spec §Decisiones abiertas 1]
-- [ ] [Review][Patch] El aserto insensible a mayúsculas es código muerto: `assertSame([], …)` corre antes [`RecordRecoveryThrottleAuditBestEffortTest.php:80`]
-- [ ] [Review][Patch] El GATE del latido degrada a **verde falso** pasados ~3,0 s (desalojo de `InMemoryStorage`), no a rojo [`RateLimiterRecoveryThrottleAuditBudgetTest.php:69`]
-- [ ] [Review][Patch] `#[Group('slow')]` es inerte y su inercia es load-bearing: quien añada `--exclude-group slow` borra el único falsador
-- [ ] [Review][Patch] El checklist omite el residuo de concurrencia que la matriz congelada sí lleva
-- [ ] [Review][Patch] Cuentas rancias en las cabeceras de `.audit-resource-types` y `.person-reference-policy`, en el párrafo que avisa de eso
-- [ ] [Review][Patch] El docblock del controlador explica mal por qué `claimFor()` va fuera del `try`: la rama denegada del throttle no escribe, así que la reclamación es la **primera** escritura de caché
-- [ ] [Review][Patch] La latencia se afirma sin medir, y `PreIdentityTimingFloor` enuncia una **condición**, no una licencia
-- [ ] [Review][Patch] `warning` fuera del swallow; el checklist enuncia un ajustable como propiedad; frontmatter y `sprint-status` rancios
+**D3 — la carrera con la erasure. Resuelto por 3A, contra la recomendación del consultor, y por medición.**
+Su argumento y el del review descansaban en que el precedente *serializa* por el lock de fila. **No lo hace**:
+`LoginAttemptRegistrar::commit()` cierra la transacción en `:103` y audita en `:105-109`, fuera. El lock ya no
+existe. El precedente tiene la misma carrera, así que 3B haría de esta ruta la única con tratamiento distinto
+para un residuo que el tratamiento establecido acepta — y a cambio daría a un atacante no autenticado un lock
+de fila sobre `identity_user` a voluntad, en el endpoint del que trata #602. Si el régimen no admite un fallo
+preventivo, el arreglo es al nivel del escritor de auditoría para **todas** las proyecciones post-commit,
+incluida la de BR-4b; eso es trabajo propio.
 
-**Diferidos (preexistentes, no causados por este cambio):**
+**Los 16 parches, aplicados.** Los de código: el reclamo entra en el swallow (un `LIMIT=0` lanzaba fuera del
+`try`); la tercera copia de la canonización pasa por `RecoveryBudgetKey`; el aserto insensible a mayúsculas
+deja de ser código muerto y barre la fila entera; el latido afirma haber caído dentro de la banda en vez de
+confiar en ello; `#[Group('slow')]` fuera, que anunciaba un interruptor inexistente cuya activación habría
+borrado el único falsador. Los de prosa: la razón `Throwable`-sobre-`Exception` era falsa (`JsonException`
+extiende `Exception`; el hermano contrasta contra `DbalException`, que sí es cierto), la fila de matriz sobre
+el pool decía lo contrario de lo que hacen los adaptadores, `actor_type = anonymous` no está garantizado, y
+las cabeceras de los dos registros llevaban cuentas rancias — re-derivadas, no incrementadas.
 
-- [x] [Review][Defer] `ip`/`user_agent` de la fila no los borra ninguna pasada — `actor_id` es NULL, así que el anonimizador de actor no casa, y el de recurso los excluye explícitamente. Misma forma que `USER_LOCKED` (BR-4b). Lo que sí se corrige aquí es la prosa, que suena exhaustiva sobre el contenido de la fila y nunca nombra esas dos columnas.
-- [x] [Review][Defer] El `RENAME` de vuelta no se asierta y `SqlQueryContext` traga errores SQL — patrón que BR-4b ya dejó en `main`.
-
-**Descartado:** la estructura del bullet de `docs/architecture-api.md` (estilo; ese documento es un único bullet por diseño previo).
+**Diferidos (preexistentes):** `ip`/`user_agent` que ninguna pasada de borrado limpia (misma forma que
+`USER_LOCKED`), y la robustez del `RENAME` en Behat. Ambos en `deferred-work.md`.
 
 ## Spec Change Log
+
+### 2026-08-12 · iteración 3 — el code review, y dos discrepancias resueltas midiendo
+
+- **1D no estaba en la lista de opciones y es la que gana.** Diferir a `kernel.terminate` cierra el canal
+  temporal sin devolverle trabajo al atacante, sin perder la cota y sin tocar el bloque congelado. Lo que lo
+  hizo posible fue leer el precedente entero: `AccessLogAuditListener` ya resolvía la parte difícil.
+- **La guarda `isMainRequest()` del listener era código muerto** y se quitó: `TerminateEvent` es `final` y pasa
+  `MAIN_REQUEST` a su padre incondicionalmente (`:33`), así que esa comprobación no puede ser falsa. El hermano
+  la lleva igualmente.
+- **Una medición mía más, refutada:** «el `INSERT` y la lectura indexada son sub-milisegundo». Eran 14,70 ms.
+  Es la quinta afirmación de este artefacto que cae, y como las otras cuatro, no cayó razonando.
+
 
 ### 2026-08-11 · iteración 2 — la implementación REFUTA dos hechos que la iteración 1 daba por medidos
 
@@ -384,6 +400,8 @@ Cada uno costó una sonda o una lectura de `vendor/`; ninguno vive en el código
 | **`security` propaga; `activity` traga** | `SymfonyAuditLogger.php:65-72` vs `:77-92`. **Ambos escriben síncronamente en el ciclo de petición** — `activity` no va por cola; lo que corre en `kernel.terminate` es la *captura* genérica, no un diferimiento dentro del logger |
 | **La dirección en `metadata` sería una fuga INDETECTABLE, no solo sin dueño** | `.person-reference-policy:81-97`: los cuatro controles que sostienen el «cero ids en `metadata`» casan por **id** contra `identity_user` — (a) por el id del sujeto borrado, (b) y (d) por *join*. Una dirección no la ve ninguno. Y ni `DbalAuditActorAnonymiser` ni `DbalAuditResourceAnonymiser` tocan `metadata` |
 | **Nombrar al sujeto en `resource_id` NO minta obligación nueva** | `.audit-resource-types:105` ya lleva `User => person :: FulfilIdentityErasure.php :: erase.feature`, y `.person-reference-policy:168-173` confirma que `audit_log.resource_id` está **dentro** del control detectivesco como colaborador cableado. No hay línea de registro que añadir |
+| **La diferida cierra el canal — antes/después con el mismo método** | En banda: mediana 333,65 ms (1.ª) vs 318,82 ms (2.ª), delta **14,70 ms**, **20/20** pares positivos. En `kernel.terminate`: 318,47 vs 318,51, delta **−0,37 ms**, **10/20** positivos — azar. Mismo script, mismo stack, 20 direcciones nuevas |
+| **`Assert\Email` estricto ADMITE `\u{00A0}` en los bordes; `\u{200B}` y `\uFEFF` no** | Sonda con el validador real sobre `ForgotPasswordRequest`: `\u00A0`+dirección y dirección+`\u00A0` pasan a 202; el viejo `trim()` ASCII los dejaba en la clave mientras `Email` los recortaba ⇒ cubos distintos, una identidad, y el propio `password_recovery_per_email` evadible repitiendo el carácter |
 | **El diferencial de latencia entre 1.ª y 2.ª denegación es de ~15 ms, NO sub-milisegundo** | 20 direcciones distintas contra el stack vivo (HTTPS, loopback): mediana **333,65 ms** (1.ª, hace `SELECT`+`INSERT`) vs **318,82 ms** (2.ª, no hace ninguno) ⇒ **delta mediano 14,70 ms**, **positivo en 20/20 pares**, contra una sd de ruido de **5,10 ms** en la línea base. ~3× el ruido y sin necesidad de promediar. **Refuta la premisa numérica con la que este artefacto justificó el canal** |
 | **D2 es la cota de D1, no un hallazgo independiente** | El argumento de bajo valor descansa en «una muestra por dirección y hora». Con la divergencia Unicode se mintan cubos ilimitados para la MISMA dirección ⇒ muestras ilimitadas de primera-denegación contra un solo buzón |
 | **El throttle no se auto-limita, a diferencia del lockout** | `PasswordRecoveryThrottle::allowRequest()` consume y devuelve `false` en cada llamada; no existe el equivalente al `recordFailedAttempt() === false` que en BR-4b cerraba la transacción. El techo sin guarda propia es `anonymous_api` = **120/min por IP** (`api/.env:83`) × nº de IPs |

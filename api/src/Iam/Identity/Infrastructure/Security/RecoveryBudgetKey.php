@@ -4,23 +4,28 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
+use Erpify\Iam\Identity\Domain\Email;
+
 /**
  * The bucket key every per-address budget over the recovery surface is keyed by.
  *
- * It exists as one function for the reason {@see \Erpify\Iam\Identity\Domain\Email} states about the value it
- * canonicalises for the unique constraint: split the function across two call sites and they acquire the
- * freedom to disagree about what "the same address" is. Here the two are the recovery budget and the budget
- * over its own observability, and a disagreement between them is silent — nothing breaks, the suppression
- * simply stops corresponding to the exhaustion it is suppressing, and the row count quietly doubles.
+ * It defers to {@see Email} rather than re-deriving the address, because that value object states — and owns —
+ * what "the same mailbox" means: it is the canonicalisation function of the unique constraint, and every lookup
+ * that resolves an identity goes through it. A budget keyed by any weaker rule silently stops corresponding to
+ * the mailbox it is meant to protect. That is not hypothetical here: `mb_strtolower(trim(...))` alone leaves
+ * U+00A0 in place while `Email` strips it, and strict RFC validation accepts an address padded with one — so
+ * every padded spelling minted its own budget while resolving to a single identity, and the limiter could be
+ * evaded by repeating the character.
  *
- * It is NOT {@see \Erpify\Iam\Identity\Domain\Email}, and cannot be: that value object refuses a malformed
- * address, while these budgets are spent for EVERY requested address, well-formed or not, precisely so the
- * limiter itself cannot be probed for which addresses exist.
+ * The fallback is what lets it stay a *budget* rather than an existence probe. `Email::tryFrom` answers null
+ * for anything it cannot canonicalise, and those requests must still spend the bucket: a limiter that declined
+ * to charge for malformed input would answer, by its own behaviour, which spellings denote a real mailbox.
+ * Hence `tryFrom` and not `from` — the refusal of the value object is a signal here, never an error.
  */
 final readonly class RecoveryBudgetKey
 {
     public static function forEmail(string $email): string
     {
-        return \mb_strtolower(\trim($email));
+        return Email::tryFrom($email)?->toString() ?? \mb_strtolower(\trim($email));
     }
 }

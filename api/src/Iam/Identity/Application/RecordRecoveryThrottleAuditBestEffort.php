@@ -19,12 +19,17 @@ use Throwable;
  * one and {@see \Erpify\Shared\Audit\Domain\AuditPolicy} audits `GET` only, so neither generic hook can see
  * a refusal that raises no exception and changes no response.
  *
- * NOTHING HERE MAY REACH THE RESPONSE, and every other decision follows from that. The write is swallowed
- * whole ({@see Throwable}, not {@see \Exception}: the audit writer encodes metadata with
- * `JSON_THROW_ON_ERROR`) because a `security` entry propagates by design in
- * {@see \Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger} — correct where a 403 becoming a 5xx is still
- * a refusal, and inadmissible here, where the uniform 202 is the control itself. The subject lookup sits
- * inside the same swallow for the same reason.
+ * NOTHING HERE ESCAPES — not the write, not the subject lookup, and not the budget claim. A `security` entry
+ * propagates by design in {@see \Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger}, which is correct where
+ * a 403 becoming a 5xx is still a refusal and inadmissible on a path whose whole contract is a uniform answer.
+ * The claim is inside the swallow because it can throw on its own account: a limiter configured with a limit
+ * below one rejects every reservation outright, which would otherwise turn a misconfiguration into an
+ * exception on exactly the refused requests and nowhere else.
+ *
+ * `Throwable` and not `\Exception` for the reason its sibling {@see RecordLockoutAuditBestEffort} gives — the
+ * guarantee is survival against *anything* the projection can raise, and narrowing it to a hierarchy invites a
+ * future collaborator to escape through the gap. It is not, as this class once claimed, because of
+ * `JSON_THROW_ON_ERROR`: `JsonException` extends `\Exception` and both spellings catch it.
  *
  * IT IS GUARDED BY ITS OWN BUDGET AND CANNOT BE GUARDED BY THE ONE IT REPORTS. Past exhaustion every later
  * request in the window is refused too, so a row per refusal would be a synchronous INSERT per attempt while
@@ -63,11 +68,11 @@ final readonly class RecordRecoveryThrottleAuditBestEffort
 
     public function record(string $email): void
     {
-        if (!$this->auditBudget->claimFor($email)) {
-            return;
-        }
-
         try {
+            if (!$this->auditBudget->claimFor($email)) {
+                return;
+            }
+
             $this->auditLogger->log(self::THROTTLED_ACTION, AuditLevel::SECURITY, $this->subjectOf($email));
         } catch (Throwable $throwable) {
             // The only signal that an observation was owed and not made: the claim is already spent, so this

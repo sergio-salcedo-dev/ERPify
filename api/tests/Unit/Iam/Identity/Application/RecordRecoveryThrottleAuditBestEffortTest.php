@@ -20,7 +20,13 @@ use RuntimeException;
  * The swallow-and-log contract of the recovery-throttle projection, and the two things about the row that
  * carry a privacy consequence: what it names, and what it must never carry.
  *
+ * Two budget doubles rather than one — granted, refused and throwing are three distinct contracts here, and
+ * the third is what a misconfigured limit does in production — which is what puts the collaborator count over
+ * the threshold.
+ *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(RecordRecoveryThrottleAuditBestEffort::class)]
 final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
@@ -77,11 +83,13 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
 
         $this->assertCount(1, $auditLogger->records);
         $metadata = $auditLogger->records[0]['metadata'];
-        $this->assertSame([], $metadata);
+        // The case-insensitive sweep runs over the WHOLE sealed row, not over `metadata` alone: asserting
+        // emptiness first would make it dead code, which is what it was.
         $this->assertStringNotContainsStringIgnoringCase(
             UserMother::DEFAULT_EMAIL,
-            \json_encode($metadata, JSON_THROW_ON_ERROR),
+            \json_encode($auditLogger->records[0], JSON_THROW_ON_ERROR),
         );
+        $this->assertSame([], $metadata);
     }
 
     public function testASpentBudgetSuppressesTheWriteEntirely(): void
@@ -93,6 +101,26 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
         ;
 
         $this->assertSame([], $auditLogger->records);
+    }
+
+    public function testAClaimThatFailsIsSwallowedAndLoggedRatherThanEscaping(): void
+    {
+        // The claim is not the write, and it can fail on its own account: `RATE_LIMIT_..._LIMIT=0` makes the
+        // limiter reject every reservation with an InvalidArgumentException. Outside the swallow that surfaced
+        // on exactly the refused requests and nowhere else.
+        $logger = new RecordingLogger();
+        $auditLogger = new RecordingAuditLogger();
+
+        (new RecordRecoveryThrottleAuditBestEffort(
+            new ThrowingRecoveryThrottleAuditBudget(),
+            new InMemoryUserRepository(UserMother::create()),
+            $auditLogger,
+            $logger,
+        ))->record(UserMother::DEFAULT_EMAIL);
+
+        $this->assertSame([], $auditLogger->records);
+        $this->assertCount(1, $logger->records);
+        $this->assertSame(LogLevel::WARNING, $logger->records[0]['level']);
     }
 
     public function testAFailedWriteIsSwallowedAndLoggedAtWarning(): void
