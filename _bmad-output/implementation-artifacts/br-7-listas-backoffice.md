@@ -101,7 +101,12 @@ persistidos — `name`, `nameNormalized`, `shortName` —, no contra los dos arg
     que lo bendice al describir la guarda mezcla dos cosas.
 - [x] **T5 — verificación completa** (ver *Gates*)
 - [ ] **T6 — pase adversarial**, registrado en esta historia **antes** de `gh pr create`
-- [ ] **T7 — cierres con evidencia**: #395, #422, #423, #272, #424, #273
+- [x] **T7 — cierres con evidencia**: #395, #422, #423, #272, #424, #273
+  - [x] Los seis llevan su comentario de evidencia medida, cada afirmación con `fichero:línea`, redactados
+    por tres agentes en sólo lectura y verificados contra el código antes de publicarse.
+  - [x] **#424 cerrado** (`not_planned`): no necesitaba código y no se escribió ninguno.
+  - [ ] **#395 #422 #423 #272 #273 cierran al mergear** — su resolución vive en esta rama, así que van como
+    `Closes #…` en el cuerpo de la PR en vez de cerrarse a mano sobre código sin mergear.
 
 ---
 
