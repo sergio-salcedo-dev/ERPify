@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Backoffice\Bank\Application;
+namespace Erpify\Tests\Unit\Shared\Persistence\Double;
 
 use Doctrine\DBAL\Driver\AbstractException;
 
@@ -12,8 +12,9 @@ use Doctrine\DBAL\Driver\AbstractException;
  * (inherited from {@see \Doctrine\DBAL\Exception\DriverException}) requires a
  * {@see \Doctrine\DBAL\Driver\Exception} plus a nullable query.
  *
- * A named class (never an anonymous `new class`) is mandatory here: PDepend/PHPMD aborts on
- * anonymous classes during {@see make php.quality}.
+ * Named, never an anonymous `new class`: PDepend — which PHPMD runs under `make php.quality` — has aborted
+ * on anonymous classes, and that gate is not part of the fast unit loop, so the failure surfaces late. One
+ * definition for every test needing a real DBAL failure is the smaller reason to keep it here.
  *
  * @internal
  */

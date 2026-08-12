@@ -12,6 +12,7 @@ use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountCreatedDomainEvent;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -26,10 +27,11 @@ final class BankAccountCreatorTest extends TestCase
     public function testCreatesAccountAsActiveAndPublishesTheCreatedEventInOneTransaction(): void
     {
         $repository = new InMemoryBankAccountRepository();
-        $eventBus = new RecordingEventBus();
+        $transactions = new ImmediateTransactionManager();
+        $eventBus = new RecordingEventBus($transactions);
         $existence = new InMemoryBankExistenceChecker();
 
-        $account = $this->makeCreator($repository, $existence, $eventBus)->create(
+        $account = $this->makeCreator($repository, $existence, $eventBus, $transactions)->create(
             new CreateBankAccountCommand(
                 BankAccountMother::DEFAULT_BANK_ID,
                 'Globex Corporation',
@@ -49,6 +51,10 @@ final class BankAccountCreatorTest extends TestCase
         $this->assertSame([$account], $repository->saved);
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(BankAccountCreatedDomainEvent::class, $eventBus->publishedEvents[0]);
+        // Where, not how many. A use case that publishes AFTER its unit of work returns opens exactly
+        // one boundary too, so a count leaves the dual-write window free to reopen; this is the
+        // observable that goes red when the publication moves outside the transaction.
+        $this->assertSame([true], $eventBus->publishedInsideUnitOfWork);
     }
 
     public function testRejectsCreationAndMutatesNothingWhenTheBankDoesNotExist(): void
@@ -60,7 +66,8 @@ final class BankAccountCreatorTest extends TestCase
         );
 
         try {
-            $this->makeCreator($repository, $existence, $eventBus)->create(
+            $transactions = new ImmediateTransactionManager();
+            $this->makeCreator($repository, $existence, $eventBus, $transactions)->create(
                 new CreateBankAccountCommand(
                     BankAccountMother::DEFAULT_BANK_ID,
                     'Globex Corporation',
@@ -74,19 +81,22 @@ final class BankAccountCreatorTest extends TestCase
 
         $this->assertSame([], $repository->saved);
         $this->assertSame([], $eventBus->publishedEvents);
+        // The guard refuses before the boundary: opening one and then throwing looks identical to a caller.
+        $this->assertSame(0, $transactions->opened);
     }
 
     private function makeCreator(
         InMemoryBankAccountRepository $repository,
         InMemoryBankExistenceChecker $existence,
         RecordingEventBus $eventBus,
+        ImmediateTransactionManager $transactions,
     ): BankAccountCreator {
         return new BankAccountCreator(
             $repository,
             $existence,
             $eventBus,
             $this->passThroughValidator(),
-            $this->inlineTransactionEntityManager(),
+            $transactions,
         );
     }
 }

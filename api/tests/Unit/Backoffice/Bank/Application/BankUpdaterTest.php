@@ -9,6 +9,7 @@ use Erpify\Backoffice\Bank\Application\BankUpdater;
 use Erpify\Backoffice\Bank\Application\Command\UpdateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -19,15 +20,15 @@ use PHPUnit\Framework\TestCase;
 final class BankUpdaterTest extends TestCase
 {
     use BankCollaboratorStubs;
-    use InlineTransactionStubs;
 
     public function testRenamesValidatesAndPublishesTheUpdatedEventInOneTransaction(): void
     {
         $bank = BankMother::drained();
         $bankRepository = new InMemoryBankRepository($bank);
-        $eventBus = new RecordingEventBus();
+        $transactions = new ImmediateTransactionManager();
+        $eventBus = new RecordingEventBus($transactions);
 
-        $updated = $this->makeUpdater($bankRepository, $eventBus)->update(
+        $updated = $this->makeUpdater($bankRepository, $eventBus, $transactions)->update(
             BankMother::DEFAULT_ID,
             new UpdateBankCommand('Acme Renamed', 'ACMER'),
         );
@@ -39,18 +40,23 @@ final class BankUpdaterTest extends TestCase
         $this->assertSame([$bank], $bankRepository->saved);
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(BankUpdatedDomainEvent::class, $eventBus->publishedEvents[0]);
+        // Where, not how many. A use case that publishes AFTER its unit of work returns opens exactly
+        // one boundary too, so a count leaves the dual-write window free to reopen; this is the
+        // observable that goes red when the publication moves outside the transaction.
+        $this->assertSame([true], $eventBus->publishedInsideUnitOfWork);
     }
 
     private function makeUpdater(
         InMemoryBankRepository $bankRepository,
         RecordingEventBus $eventBus,
+        ImmediateTransactionManager $transactions,
     ): BankUpdater {
         return new BankUpdater(
             $bankRepository,
             new BankFinder($bankRepository),
             $eventBus,
             $this->passThroughValidator(),
-            $this->inlineTransactionEntityManager(),
+            $transactions,
         );
     }
 }

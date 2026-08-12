@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Persistence;
 
-use Doctrine\DBAL\Driver\Exception as DriverException;
-use Doctrine\DBAL\Exception\DeadlockException;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
+use Erpify\Shared\Persistence\Domain\Exception\ReferentialIntegrityViolation;
 use Erpify\Shared\Persistence\Domain\Exception\TransientTransactionFailure;
 use Erpify\Shared\Persistence\Infrastructure\DoctrineTransactionManager;
-use Exception;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -21,8 +19,11 @@ use RuntimeException;
  * @internal
  */
 #[CoversClass(DoctrineTransactionManager::class)]
+#[CoversClass(ReferentialIntegrityViolation::class)]
 final class DoctrineTransactionManagerTest extends TestCase
 {
+    use TransactionManagerDoubles;
+
     private const string INSTANCE = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
 
     private const string CORRELATION_ID = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2d';
@@ -40,7 +41,7 @@ final class DoctrineTransactionManagerTest extends TestCase
             ->willReturnCallback(static fn (callable $operation): mixed => $operation())
         ;
 
-        $result = (new DoctrineTransactionManager($entityManager))->transactional(static fn (): string => $expected);
+        $result = $this->transactionManager($entityManager)->transactional(static fn (): string => $expected);
 
         $this->assertSame($expected, $result);
     }
@@ -53,15 +54,7 @@ final class DoctrineTransactionManagerTest extends TestCase
     #[Test]
     public function itTranslatesARetryableDatabaseFailureIntoTheServiceUnavailableMarker(): void
     {
-        $deadlock = new DeadlockException(
-            new class ('40P01 deadlock detected') extends Exception implements DriverException {
-                public function getSQLState(): string
-                {
-                    return '40P01';
-                }
-            },
-            null,
-        );
+        $deadlock = $this->deadlockException();
         $entityManager = $this->createStub(EntityManagerInterface::class);
         $entityManager
             ->method('wrapInTransaction')
@@ -69,7 +62,7 @@ final class DoctrineTransactionManagerTest extends TestCase
         ;
 
         try {
-            (new DoctrineTransactionManager($entityManager))->transactional(static fn (): int => 1);
+            $this->transactionManager($entityManager)->transactional(static fn (): int => 1);
             $this->fail('A retryable database failure escaped the transaction seam untranslated.');
         } catch (TransientTransactionFailure $transientTransactionFailure) {
             // The wire answer, not the marker interface: `implements ServiceUnavailable` is compile-time,
@@ -103,6 +96,35 @@ final class DoctrineTransactionManagerTest extends TestCase
 
         $this->expectExceptionObject($failure);
 
-        (new DoctrineTransactionManager($entityManager))->transactional(static fn (): int => 1);
+        $this->transactionManager($entityManager)->transactional(static fn (): int => 1);
+    }
+
+    /**
+     * The mirror of the retryable case, and its opposite for the caller: a foreign key rejected at flush is
+     * not something a retry resolves, so it becomes a 409 the client can act on rather than the bare 500 an
+     * untranslated DBAL exception produces.
+     */
+    #[Test]
+    public function itTranslatesAForeignKeyViolationIntoTheConflictMarker(): void
+    {
+        $violation = $this->foreignKeyViolation();
+        $entityManager = $this->createStub(EntityManagerInterface::class);
+        $entityManager
+            ->method('wrapInTransaction')
+            ->willThrowException($violation)
+        ;
+
+        try {
+            $this->transactionManager($entityManager)->transactional(static fn (): int => 1);
+            $this->fail('A foreign key violation escaped the transaction seam untranslated.');
+        } catch (ReferentialIntegrityViolation $referentialIntegrityViolation) {
+            $problemDetails = (new ProblemDetailsFactory('prod', new NullLogger()))
+                ->fromThrowable($referentialIntegrityViolation, self::CORRELATION_ID, self::INSTANCE)
+            ;
+
+            $this->assertSame(409, $problemDetails->status);
+            $this->assertSame('referential-integrity-violation', $problemDetails->type);
+            $this->assertSame($violation, $referentialIntegrityViolation->getPrevious());
+        }
     }
 }

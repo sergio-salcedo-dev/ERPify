@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Persistence\Infrastructure;
 
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Shared\Persistence\Domain\Exception\ReferentialIntegrityViolation;
 use Erpify\Shared\Persistence\Domain\Exception\TransientTransactionFailure;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
+use Throwable;
 
 /**
  * The Doctrine adapter for {@see TransactionManager}: delegates to {@see EntityManagerInterface::wrapInTransaction},
@@ -30,6 +34,7 @@ final readonly class DoctrineTransactionManager implements TransactionManager
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
+        private ManagerRegistry $managerRegistry,
     ) {
     }
 
@@ -63,6 +68,56 @@ final readonly class DoctrineTransactionManager implements TransactionManager
             return $this->entityManager->wrapInTransaction($operation);
         } catch (RetryableException $retryableException) {
             throw new TransientTransactionFailure($retryableException);
+        } catch (ForeignKeyConstraintViolationException $foreignKeyViolation) {
+            throw new ReferentialIntegrityViolation($foreignKeyViolation);
+        } finally {
+            $this->reopenIfStranded();
+        }
+    }
+
+    /**
+     * `wrapInTransaction` closes the entity manager on any failure, and nothing else reopens it: the listener
+     * that recomposes the connection is registered for `dev`/`test` only, so under FrankenPHP worker mode a
+     * manager closed by one request is still closed for the next. That turns the 503 this class answers into
+     * an invitation to a retry that would fail differently — reads survive a closed manager, but the first
+     * `flush` after it raises `EntityManagerClosed`, which is a 500.
+     *
+     * **Keyed on state, never on the exception type.** The reset belongs to whatever left the manager
+     * stranded, not to one failure mode: by the time a nested unit of work rethrows, what reaches the outer
+     * frame is already this class's own translation, so a type-keyed recovery would simply never match there.
+     *
+     * **Why the transaction check is the load-bearing half.** Units of work nest, and not hypothetically:
+     * a domain event that no transport routes is handled in-process, inside the publishing use case's own
+     * unit of work, and the projection runner opens one per projector underneath it. DBAL rolls the inner
+     * one back to a savepoint and leaves the outer transaction running on the connection, so a reset there
+     * would swap the manager out from under an open transaction. A reset is owed only once nothing is
+     * running: manager closed AND no transaction left.
+     *
+     * **What the guard does not rescue.** The outer unit of work is already lost at that point — `close()`
+     * hit the shared manager, so its own `flush` will raise `EntityManagerClosed`, which this class does not
+     * translate and which therefore surfaces as a 500. Standing down keeps that failure clean instead of
+     * splitting it across two managers; it does not save the caller. Giving the outer frame an answer of its
+     * own is a separate change, and a deliberate one, because it decides what an aborted nested write owes
+     * an HTTP client.
+     */
+    private function reopenIfStranded(): void
+    {
+        // A pure getter on the ORM side, so it is safe to ask a closed manager for its connection.
+        if ($this->entityManager->isOpen() || $this->entityManager->getConnection()->isTransactionActive()) {
+            return;
+        }
+
+        try {
+            // Resets the default manager, which is the one injected here while the app maps a single
+            // entity manager. A second one would need this call to name it, or the check above would be
+            // read from one manager and the recovery applied to another.
+            $this->managerRegistry->resetManager();
+        } catch (Throwable) {
+            // Swallowed deliberately, and only here. This runs in a `finally`, where a throw REPLACES the
+            // exception travelling out — so a failed recovery would turn the 409 or 503 this class just
+            // built into a 500 and discard the reason with it. `resetService` raises when the manager is
+            // not a lazy service, which is a wiring fault: losing the recovery is bad, losing the answer
+            // the caller was owed is worse.
         }
     }
 }
