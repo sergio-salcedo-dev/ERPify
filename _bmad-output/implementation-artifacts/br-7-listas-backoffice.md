@@ -244,7 +244,37 @@ Cada espía queda ahora atado a los papeles que de verdad ejerce.
 > **Requisito de proceso:** se ejecuta y se registra **aquí** **antes** de `gh pr create`. No se usan drafts.
 > Una PR abierta es una PR que puede mergear.
 
-Pendiente. Lentes propuestas, ortogonales y en sólo lectura:
+**Ejecutado el 2026-08-12, antes de `gh pr create`.** Tres subagentes en sólo lectura, una lente cada uno,
+sobre el worktree (no sobre el primario). Autor ≠ revisor. Doce hallazgos; los cinco marcados **verificados**
+los reproduje yo contra el código antes de registrarlos, porque un hallazgo de subagente es una hipótesis.
+
+### Hallazgos
+
+| # | Sev | Dónde | Qué |
+|---|---|---|---|
+| **A1** | GRAVE | `BankAccount.php` `canonicalizeIban()` | **Verificado.** El canonicalizador quita `U+0020`; `Assert\Iban` acepta además `U+00A0` y `U+202F` (`IbanValidator.php:187`). Un `PUT` con NBSP pasa validación, **no** es no-op, y persiste un IBAN con el NBSP dentro: el índice `unique` y `#[UniqueEntity]` comparan la columna cruda, así que dos filas pueden representar el mismo IBAN real, e `IbanFieldNormalizer` (que replica el mismo `str_replace`) no vuelve a encontrar la fila. Defecto **preexistente** (`create()` lo tiene igual), pero D1b afirma lo contrario y la guarda lo convierte en la autoridad de igualdad. |
+| **A2** | SERIO | `BankAccount.php` `canonicalizeBic()` | **Verificado.** `BicValidator.php:78` canonicaliza quitando espacios antes de validar longitud; el canonicalizador del agregado no quita ninguno. `bic: "DEUT DEFF"` valida y persiste con el espacio, y cada escritura posterior sin espacio se ve como cambio real. |
+| **A3** | SERIO | `Bank.php` `rename()` | **Verificado por mutación, y es una regresión de cobertura que introduje yo.** Con las dos líneas de escritura cambiadas a los argumentos crudos, `php.unit --filter Bank` (205 tests) y `bank/update.feature` (3 escenarios) siguen **verdes**: la guarda absorbe por el early-return exactamente las tres entradas no canónicas que antes ejercitaban la canonicalización en el camino de escritura. `BankAccount` no tiene el agujero — `BankAccountWriteEventTest` cambia el IBAN en forma no canónica. **La historia decía que `currency` era la única dirección sin cubrir; era falso.** |
+| **B1** | GRAVE | `EnumWireContractGateTest.php:151` | **Verificado.** El extractor lee texto sin distinguir código de comentario: un comentario dentro del literal (`"CLOSED", // "SUSPENDED" llega con…`) aporta `SUSPENDED` al conjunto extraído. **Falla en abierto**: verde mientras el guard rechaza el valor y tumba la lista entera. Y `:51` mide 91 columnas contra `printWidth: 100`, así que un estado nuevo fuerza el formato multilínea donde ese comentario es lo natural. |
+| **B2** | SERIO | `EnumWireContractGateTest.php:124-138` | **Verificado.** Un docblock que cita la declaración vieja cuenta como **la única** declaración cuando la real pasa a `new Set(CONST)`. La cláusula anti-duplicado se vuelve en contra: cuenta 1 porque la viva no casa, y el gate lee el comentario. |
+| **B3** | SERIO | `EnumWireContractGateTest.php:140` | El `.has(` sólo prueba consulta *en alguna parte*: hay **dos** predicados (`isBankAccountPrimitives` :62,:64 e `isBankAccountCollectionRow` :147,:149) y borrar las cláusulas de uno deja el gate verde. El radio de daño de la lista global es justamente el único argumento propio de #423. |
+| **B4** | MENOR | ídem | `STATUSES.has(` casa dentro de `TERMINAL_STATUSES.has(`: falta frontera de identificador. |
+| **B5** | MENOR | `BankAccountSchema.ts:29-31` | Tercer espejo del mismo vocabulario (`BANK_ACCOUNT_STATUSES`) que el gate no abre. Medido: añadir un estado deja ese array corto y **nada enrojece** (`.map()` sobre el array narrower typechequea), así que el estado nuevo no se puede seleccionar en la UI. El de monedas sí está cubierto transitivamente por `Record<BankAccountCurrency,…>`. |
+| **B6** | MENOR | `EnumWireContractGateTest.php:111,160` | `sort()` + `assertSame` es sensible a multiplicidad; un `Set` no. Un literal duplicado da **rojo falso**. El docblock y D3b dicen «conjuntos». |
+| **C1** | MENOR | `_mocks.ts:132-137` y 3 specs | `deleteRun` cuelga de los **dos** puertos de borrado, así que recuplar el bulk al caso de uso `BackOfficeDeleteBank` —la dirección que esta historia existe para deshacer— no lo detecta ningún test. La dirección contraria sí. Además, en 4 specs `BackOfficeDeleteBank` queda atado y nunca resuelto. Falsifica la frase «cada espía atado a los papeles que de verdad ejerce». |
+| **C2** | MENOR | historia, plano estático | **Verificado.** Enumeré «dos vías dinámicas»; hay **11** sitios `container.get(<identificador>)`. Todos resuelven a literales y ninguno a los tokens borrados —la conclusión aguanta—, pero la enumeración presentada como prueba no es la que se hizo. Y `useResourceMutations` tiene **cero** consumidores: por el criterio D2 es el mismo residuo que borramos, ni borrado ni nombrado. |
+| **C3** | NOTA | historia, plano runtime | La sonda se borró tras medir, y el repo ya tiene el patrón contrario (`DebugTokenObserverBinding.test.ts` resuelve del contenedor real y se queda). Hoy **ningún** test resuelve `BackOfficeBankCrudRepository`/`…ResourceNavigator`/`…CountBanks` del contenedor real: borrar uno de esos bindings deja `tsc` limpio y la suite verde. |
+| **A4** | MENOR | los dos escenarios Behat | Behat aborta al primer paso rojo, y el rojo cae en `data.updatedAt`, **antes** de las seis aserciones de cola — incluida la única evidencia en todo el repo de «una escritura redundante no deja fila de auditoría». No se han visto rojas. |
+| **A5** | MENOR | consecuencia no declarada | Tras el cambio, un `PUT` redundante no deja **ninguna** fila en `audit_log`: `AuditPolicy` sólo captura `GET` como actividad, así que la fila `change` era el único rastro de que la petición existió. Amplía un hueco que `changeStatus()` ya tenía; la historia no lo declaraba. |
+
+Lo que las lentes **no** pudieron romper queda igual de registrado: la guarda no se traga ningún cambio dentro de su
+propio modelo del estado; no hay mutación falsa; `updatedAt` viejo en la respuesta no rompe a ningún consumidor (no
+hay ETag/If-Match ni `#[ORM\Version]` en el repo); la afirmación M2 —sin changeset no hay UPDATE ni fila de
+auditoría— se verificó contra `AuditWriteCaptureListener::capture()` y `UnitOfWork`; las siembras Behat sí aterrizan
+(un INSERT fallido haría 404 antes); los tests unitarios sí mueven el reloj; el gate **sí** corre en CI
+(`ci.yml:122`, sin filtro de `paths:`); y ningún camino de payload de bank-account esquiva los dos predicados.
+
+Lentes ejecutadas:
 
 - **(A) Semántica del no-op** — ¿la guarda puede tragarse un cambio real? Recorrer los diez casos: mismo valor
   canónico · distinta capitalización · espacios equivalentes · IBAN canonicalizado · BIC canonicalizado ·
