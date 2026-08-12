@@ -29,6 +29,14 @@ interface AuditResourceAnonymiser
      * Irreversibly rewrites `$resource`'s id to `$pseudonym` across every row naming it, and raises the
      * materialised `resource_erased` flag. Idempotent — a second pass with the original id matches nothing.
      *
+     * **It also redacts request metadata, and a caller reading only this contract has to know it.** On the
+     * rows it matches whose `actor_type` is `anonymous`, `ip` and `user_agent` are overwritten with
+     * {@see \Erpify\Shared\Audit\Domain\AuditRedaction::SENTINEL}: nobody was authenticated to write such a
+     * row, so it records no discriminant for whose address it holds and that address may be the subject's
+     * own. Rows with an identified actor keep both columns untouched. This is therefore the second writer of
+     * that sentinel — `ip = '[REDACTED]'` does not imply `actor_erased` — and not a second redaction policy;
+     * `docs/adr/audit-activity-log.md` D4 states the cost it accepts.
+     *
      * The pseudonym is an **input**, not minted here: the caller has already anonymised the same subject's
      * actor rows and passes that pseudonym, so both axes of one person collapse onto one anonymous identity
      * and intra-subject correlation survives the erasure. Minting a second pseudonym would split one person

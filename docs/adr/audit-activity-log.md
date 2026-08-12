@@ -280,9 +280,70 @@ propuesta de una mutación adicional sobre cualquiera de las dos tablas es cuand
   propósito: D15 mantiene ambos borrados como operaciones distintas, así que la interfaz de actor no crece
   un verbo de recurso y su CLI sigue siendo de un solo statement.
   **Asimetría de columnas, load-bearing.** El paso de recurso escribe `resource_id` y `resource_erased`, y
-  **no toca** `actor_id`/`ip`/`user_agent`/`actor_erased`: una fila que nombra al sujeto suele haberla
-  escrito otro (un admin actuando sobre él), y redactar eso destruiría la evidencia de un tercero y lo
-  marcaría falsamente como actor borrado.
+  **no toca** `actor_id` ni `actor_erased`; tampoco `ip`/`user_agent`, **salvo cuando
+  `actor_type = anonymous`**. Es una sola regla leída con precisión, no una regla con un parche: una fila que
+  nombra al sujeto *suele* haberla escrito otro (un admin actuando sobre él), y redactar eso destruiría la
+  evidencia de un tercero y lo marcaría falsamente como actor borrado. La regla se apoya en **saber de quién
+  es** el dato: es del actor identificado, y no del sujeto. Con un actor jamás identificado no se sabe, y esa
+  es toda la diferencia: la dirección es la del solicitante, que en estos dos escritores puede ser el propio
+  sujeto provocando su bloqueo o su recuperación, o un extraño haciéndoselo. La fila no guarda discriminante
+  y el statement no puede inventarlo. **Hoy tampoco se sella ninguno en escritura**, y acuñarlo sería su
+  propio cambio con su propio coste: el solicitante está sin autenticar y solo aporta una identidad
+  *reclamada*, así que el único candidato es una heurística —¿coincide la dirección con alguna que el sujeto
+  haya tenido en `iam_session`?— pagada haciendo que el escritor de auditoría lea PII de otro contexto en el
+  momento de la captura. Sopesado y no tomado; no imposible. Se **yerra hacia el borrado**.
+  **El coste, dicho y no escondido:** cuando el solicitante era un extraño —un atacante bloqueando a una
+  víctima— su dirección se destruye también. Lo que sobrevive es el **hecho y no el valor**, aunque no por la
+  razón que parece: `ip` **sí** la influye el cliente —`getClientIp()` honra `X-Forwarded-For` desde
+  cualquier salto dentro de `SYMFONY_TRUSTED_PROXIES`—, pero Symfony descarta todo valor reenviado que
+  falle `FILTER_VALIDATE_IP`, así que el centinela en concreto no es forjable en esa columna. Un centinela
+  ahí solo puede venir, por tanto, de uno de los dos pases, y `actor_erased` los distingue (`true` el de
+  actor; `false` junto a `resource_erased = true`, éste). `user_agent` no tiene ese filtro y sí es forjable
+  como literal: la inferencia se apoya solo en `ip`. Un investigador ve que allí
+  había algo y que una erasure lo quitó. Errar al revés no es la opción segura que parece: el reconciliador
+  solo lee `resource_erased = FALSE`, así que una dirección que se deje aquí es una que ninguna
+  reconciliación podrá sacar nunca. **Es una capacidad nueva del insider, no una ampliada:** el pase de
+  actor casa `actor_id = <sujeto>`, así que cada columna que reescribe era de la persona borrada; éste casa
+  por recurso y destruye metadata de quien *actuó*, de modo que un admin borrando una cuenta atacada
+  destruye la dirección del atacante — algo que ninguna acción de admin podía hacer antes.
+  **Cuestión abierta, de DPO y no de código:** si esa IP es legalmente dato del sujeto cuando la
+  fila no puede decir de quién es. El `CASE` vive en el `SET` y no en el `WHERE`,
+  porque como filtro dejaría de seudonimizar `resource_id` en las filas escritas por un admin. `actor_erased`
+  sigue intacto: D4.1 lo define como «identificado y luego borrado», y subirlo en una fila nunca identificada
+  corrompe la única columna que responde si allí hubo una persona.
+  **El predicado es `actor_type`, nunca `actor_id IS NULL`**, que también casaría las filas `system`. Que
+  éstas no lleven metadata de petición es cierto pero *emergente*: lo sostienen dos lecturas independientes
+  del mismo `RequestStack` en dos clases, sin guarda ni test que las ate. El token del enum no puede
+  ensancharse en silencio como sí puede ese acoplamiento. Cada columna se guarda además contra la no-nulidad,
+  para no reescribir un valor jamás capturado como evidencia de una redacción que no ocurrió. Y **no-nulo no
+  basta**: `SealedAuditEntryFactory` solo comprueba `null`, así que una cabecera `User-Agent:` vacía sella
+  `''`; la guarda es por tanto no-nulo **y** no-vacío.
+  **Lo que este paso no alcanza, dicho para que no se lea como cobertura total:** el throttle de recuperación
+  también emite filas anónimas **sin recurso** cuando la dirección no resuelve a nadie, igual que toda fila
+  anónima del log de acceso. Ningún statement del eje de recurso puede casarlas —no hay sujeto al que
+  encadenarlas—, y su minimización es la **retención por nivel**, no el borrado. Decirlo importa porque una
+  IP es dato personal aunque nuestro esquema no la vincule a nadie: lo que las cubre es que caducan, no que
+  no importen.
+  **Contar las filas redactadas en `GDPR_ERASURE_EXECUTED`: pesado y declinado por el fondo, no por alcance.**
+  Se evaluó publicar ese conteo junto a `anonymized_resource_rows`. Cabe en la misma ida y vuelta (CTE
+  modificadora con `RETURNING` y `COUNT(*) FILTER`, presupuesto de consultas intacto), así que lo que decide
+  no es el precio, y son dos razones independientes. **La primera: el número no responde a la pregunta que lo
+  pide.** La fila no registra de quién es la dirección —esa es la premisa de todo este apartado—, luego el
+  conteo suma las del propio sujeto y las de extraños sin poder separarlas; y como `ip` se captura en toda
+  petición en vuelo, aproxima «cuántas veces este sujeto se bloqueó o pidió recuperación», no «cuánta
+  evidencia ajena murió». Un dato con forma de evidencia que no lo es, en el único sitio cuyo propósito
+  declarado es ser evidencia forense independiente, es peor que su ausencia. **La segunda: ya es derivable,
+  y almacenarlo sería una segunda fuente de verdad.** El mismo `UPDATE` escribe el pseudónimo y la
+  redacción, y `GDPR_ERASURE_EXECUTED` sella ese pseudónimo, así que las filas se recuperan por
+  `resource_id = <pseudónimo> AND resource_erased AND actor_type = 'anonymous' AND NOT actor_erased AND
+  (ip = '[REDACTED]' OR user_agent = '[REDACTED]')` —indexado, retroactivo a toda erasure aún en retención,
+  cobertura que un campo nuevo no tendría—. Un entero almacenado, en cambio, sobrevive a las filas que
+  cuenta: son más antiguas que la entrada de cumplimiento, luego la poda las retira primero y deja un número
+  infalsificable. **Lo que esto no es:** la derivación es una consulta que nadie ha escrito todavía, no un
+  invariante comprobado — el mismo estado en que sigue el *cross-check* de D4.1. Se revisita cuando exista un
+  consumidor que la haga falsificable, o si la fila llega a sellar un discriminante del solicitante; y no
+  antes, porque una novena clave libre en `metadata` gastaría el YAGNI con que este ADR aplazó pasar esa
+  estructura a tipos.
   **Que sea del contexto dueño lo vuelve una obligación distribuida**, así que lleva su control detectivo,
   igual que el crypto-shredding lleva el suyo: `api/.audit-resource-types` clasifica cada `resource_type`
   como persona o no, y una línea `person` declara **dos** rutas —quién lo borra y qué lo atestigua—. El gate
@@ -335,9 +396,14 @@ todos los borrados — destruye la correlación intra-sujeto que la traza de seg
 D4 fija que el *erasure* anonimiza al actor (un `UPDATE` que reescribe `actor_id` con un UUID nuevo
 aleatorio y redacta `ip`/`user_agent` a `[REDACTED]`), pero **no deja una marca consultable** de que
 la fila quedó anonimizada: tras el borrado `actor_type` sigue siendo `user` (D7) y `actor_id` es un
-UUID válido cualquiera — indistinguible de un actor normal. El único *tell* (`ip`/`user_agent =
+UUID válido cualquiera — indistinguible de un actor normal. El *tell* que queda (`ip`/`user_agent =
 [REDACTED]`) vive en campos que el read model de investigación (D5) expone **solo en el detalle**, no
-en la fila del timeline. La UI de investigación debe mostrar al actor anonimizado **como tal también
+en la fila del timeline. Y la implicación va **en un solo sentido**: el borrado de actor escribe siempre
+ese centinela, pero verlo no prueba que haya habido un borrado de actor. El paso de recurso lo escribe
+también sobre filas de actor anónimo (D4), donde significa
+`resource_erased = TRUE ∧ actor_type = anonymous ∧ actor_erased = FALSE`. Son dos rutas de mutación que
+comparten un centinela normativo, no una cuarta política; el conjunto de D4 sigue cerrado en tres. La UI
+de investigación debe mostrar al actor anonimizado **como tal también
 en la fila**, **sin** subir `ip`/`user_agent` (PII de mayor sensibilidad) a la fila esbelta.
 
 **Decisión.** Se materializa un booleano **`actor_erased`** (`NOT NULL`) en `audit_log`, **fijado en
