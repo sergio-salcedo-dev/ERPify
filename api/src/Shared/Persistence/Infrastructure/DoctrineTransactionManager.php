@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Persistence\Infrastructure;
 
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Shared\Persistence\Domain\Exception\ReferentialIntegrityViolation;
 use Erpify\Shared\Persistence\Domain\Exception\TransientTransactionFailure;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -30,6 +33,7 @@ final readonly class DoctrineTransactionManager implements TransactionManager
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
+        private ManagerRegistry $managerRegistry,
     ) {
     }
 
@@ -63,6 +67,34 @@ final readonly class DoctrineTransactionManager implements TransactionManager
             return $this->entityManager->wrapInTransaction($operation);
         } catch (RetryableException $retryableException) {
             throw new TransientTransactionFailure($retryableException);
+        } catch (ForeignKeyConstraintViolationException $foreignKeyViolation) {
+            throw new ReferentialIntegrityViolation($foreignKeyViolation);
+        } finally {
+            $this->reopenIfStranded();
+        }
+    }
+
+    /**
+     * `wrapInTransaction` closes the entity manager on any failure, and nothing else reopens it: the listener
+     * that recomposes the connection is registered for `dev`/`test` only, so under FrankenPHP worker mode a
+     * manager closed by one request is still closed for the next. That turns the 503 this class answers into
+     * an invitation to a retry that would fail differently — reads survive a closed manager, but the first
+     * `flush` after it raises `EntityManagerClosed`, which is a 500.
+     *
+     * **Keyed on state, never on the exception type.** The reset belongs to whatever left the manager
+     * stranded, not to one failure mode: by the time a nested unit of work rethrows, what reaches the outer
+     * frame is already this class's own translation, so a type-keyed recovery would simply never match there.
+     *
+     * **Why the transaction check is the load-bearing half.** Units of work nest — a use case opens one and
+     * calls another that opens its own. DBAL rolls the inner one back to a savepoint and leaves the outer
+     * running, so resetting whenever the manager is closed would destroy work the caller is still inside.
+     * A reset is owed only once nothing is running: manager closed AND no transaction left.
+     */
+    private function reopenIfStranded(): void
+    {
+        // A pure getter on the ORM side, so it is safe to ask a closed manager for its connection.
+        if (!$this->entityManager->isOpen() && !$this->entityManager->getConnection()->isTransactionActive()) {
+            $this->managerRegistry->resetManager();
         }
     }
 }
