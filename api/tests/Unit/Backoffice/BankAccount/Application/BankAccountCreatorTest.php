@@ -12,6 +12,7 @@ use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountCreatedDomainEvent;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -29,7 +30,8 @@ final class BankAccountCreatorTest extends TestCase
         $eventBus = new RecordingEventBus();
         $existence = new InMemoryBankExistenceChecker();
 
-        $account = $this->makeCreator($repository, $existence, $eventBus)->create(
+        $transactions = new ImmediateTransactionManager();
+        $account = $this->makeCreator($repository, $existence, $eventBus, $transactions)->create(
             new CreateBankAccountCommand(
                 BankAccountMother::DEFAULT_BANK_ID,
                 'Globex Corporation',
@@ -49,6 +51,9 @@ final class BankAccountCreatorTest extends TestCase
         $this->assertSame([$account], $repository->saved);
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(BankAccountCreatedDomainEvent::class, $eventBus->publishedEvents[0]);
+        // The write and its event share one boundary: published outside it, every assertion
+        // above still passes while the dual-write window this use case closes is reopened.
+        $this->assertSame(1, $transactions->committed);
     }
 
     public function testRejectsCreationAndMutatesNothingWhenTheBankDoesNotExist(): void
@@ -60,7 +65,8 @@ final class BankAccountCreatorTest extends TestCase
         );
 
         try {
-            $this->makeCreator($repository, $existence, $eventBus)->create(
+            $transactions = new ImmediateTransactionManager();
+            $this->makeCreator($repository, $existence, $eventBus, $transactions)->create(
                 new CreateBankAccountCommand(
                     BankAccountMother::DEFAULT_BANK_ID,
                     'Globex Corporation',
@@ -80,13 +86,14 @@ final class BankAccountCreatorTest extends TestCase
         InMemoryBankAccountRepository $repository,
         InMemoryBankExistenceChecker $existence,
         RecordingEventBus $eventBus,
+        ImmediateTransactionManager $transactions,
     ): BankAccountCreator {
         return new BankAccountCreator(
             $repository,
             $existence,
             $eventBus,
             $this->passThroughValidator(),
-            $this->inlineTransactionEntityManager(),
+            $transactions,
         );
     }
 }

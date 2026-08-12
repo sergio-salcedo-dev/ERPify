@@ -11,6 +11,7 @@ use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountDeletedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotClosedException;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -29,11 +30,15 @@ final class BankAccountDeleterTest extends TestCase
         $repository = new InMemoryBankAccountRepository($account);
         $eventBus = new RecordingEventBus();
 
-        $this->makeDeleter($repository, $eventBus)->delete(BankAccountMother::DEFAULT_ID);
+        $transactions = new ImmediateTransactionManager();
+        $this->makeDeleter($repository, $eventBus, $transactions)->delete(BankAccountMother::DEFAULT_ID);
 
         $this->assertTrue($repository->removeCalled);
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(BankAccountDeletedDomainEvent::class, $eventBus->publishedEvents[0]);
+        // The write and its event share one boundary: published outside it, every assertion
+        // above still passes while the dual-write window this use case closes is reopened.
+        $this->assertSame(1, $transactions->committed);
     }
 
     public function testThrowsNotClosedAndMutatesNothingWhenTheAccountIsNotClosed(): void
@@ -43,7 +48,8 @@ final class BankAccountDeleterTest extends TestCase
         $eventBus = new RecordingEventBus();
 
         try {
-            $this->makeDeleter($repository, $eventBus)->delete(BankAccountMother::DEFAULT_ID);
+            $transactions = new ImmediateTransactionManager();
+            $this->makeDeleter($repository, $eventBus, $transactions)->delete(BankAccountMother::DEFAULT_ID);
             $this->fail('Expected BankAccountNotClosedException to be thrown.');
         } catch (BankAccountNotClosedException $bankAccountNotClosedException) {
             $this->assertSame('bank-account-not-closed', $bankAccountNotClosedException->type());
@@ -60,12 +66,13 @@ final class BankAccountDeleterTest extends TestCase
     private function makeDeleter(
         InMemoryBankAccountRepository $repository,
         RecordingEventBus $eventBus,
+        ImmediateTransactionManager $transactions,
     ): BankAccountDeleter {
         return new BankAccountDeleter(
             $repository,
             new BankAccountFinder($repository),
             $eventBus,
-            $this->inlineTransactionEntityManager(),
+            $transactions,
         );
     }
 }

@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Event\Infrastructure\Messenger;
 
-use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Event\Application\DomainEventDeserializer;
 use Erpify\Shared\Event\Application\EventStore;
 use Erpify\Shared\Event\Application\ProjectionCheckpointStore;
 use Erpify\Shared\Event\Application\ProjectionRunner;
 use Erpify\Shared\Event\Application\Projector;
 use Erpify\Shared\Event\Infrastructure\Messenger\RunProjectionsOnDomainEvent;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -24,11 +24,7 @@ final class RunProjectionsOnDomainEventTest extends TestCase
     #[Test]
     public function itCatchesUpEveryProjectionWhenInvoked(): void
     {
-        $entityManager = $this->createMock(EntityManagerInterface::class);
-        $entityManager->expects($this->once())
-            ->method('wrapInTransaction')
-            ->willReturnCallback(static fn (callable $work): mixed => $work())
-        ;
+        $transactions = new ImmediateTransactionManager();
 
         $checkpointStore = $this->createStub(ProjectionCheckpointStore::class);
         $checkpointStore->method('lockAndRead')->willReturn(0);
@@ -44,10 +40,14 @@ final class RunProjectionsOnDomainEventTest extends TestCase
             $eventStore,
             $this->createStub(DomainEventDeserializer::class),
             $checkpointStore,
-            $entityManager,
+            $transactions,
             [$projector],
         );
 
         (new RunProjectionsOnDomainEvent($runner))();
+
+        // The reactor is fired once per delivered event, so one boundary per invocation is the whole
+        // cost model: a second one here would double the checkpoint locks under live traffic.
+        $this->assertSame(1, $transactions->committed);
     }
 }

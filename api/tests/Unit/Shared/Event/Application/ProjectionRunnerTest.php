@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Event\Application;
 
-use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Event\Application\DomainEventDeserializer;
 use Erpify\Shared\Event\Application\EventStore;
 use Erpify\Shared\Event\Application\ProjectionCheckpointStore;
@@ -12,6 +11,7 @@ use Erpify\Shared\Event\Application\ProjectionRunner;
 use Erpify\Shared\Event\Application\Projector;
 use Erpify\Shared\Event\Application\StoredEvent;
 use Erpify\Shared\Event\Domain\DomainEvent;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -49,7 +49,7 @@ final class ProjectionRunnerTest extends TestCase
         $deserializer = $this->createStub(DomainEventDeserializer::class);
         $deserializer->method('deserialize')->willReturn($this->createStub(DomainEvent::class));
 
-        $this->runner($eventStore, $deserializer, $checkpointStore, $this->entityManagerStub(), [$projector])
+        $this->runner($eventStore, $deserializer, $checkpointStore, new ImmediateTransactionManager(), [$projector])
             ->catchUp(self::NAME)
         ;
     }
@@ -70,7 +70,7 @@ final class ProjectionRunnerTest extends TestCase
             $this->eventStoreStub(),
             $this->createStub(DomainEventDeserializer::class),
             $checkpointStore,
-            $this->entityManagerStub(),
+            new ImmediateTransactionManager(),
             [$projector],
         )->catchUp(self::NAME);
     }
@@ -78,19 +78,22 @@ final class ProjectionRunnerTest extends TestCase
     #[Test]
     public function catchUpAllCatchesUpEveryRegisteredProjector(): void
     {
-        $entityManager = $this->createMock(EntityManagerInterface::class);
-        $entityManager->expects($this->exactly(2))
-            ->method('wrapInTransaction')
-            ->willReturnCallback(static fn (callable $work): mixed => $work())
-        ;
+        $transactions = new ImmediateTransactionManager();
 
         $this->runner(
             $this->eventStoreStub(),
             $this->createStub(DomainEventDeserializer::class),
             $this->checkpointStoreStub(),
-            $entityManager,
+            $transactions,
             [$this->projectorStub('first'), $this->projectorStub('second')],
         )->catchUpAll();
+
+        // The count is the guarantee, not an implementation detail: one boundary per projector means a
+        // failure part-way leaves the earlier checkpoints committed and the next run resumes from them.
+        // A single boundary around the fan-out would still catch both projectors up and still pass every
+        // other assertion here, while turning the run into an all-or-nothing batch.
+        $this->assertSame(2, $transactions->opened);
+        $this->assertSame(2, $transactions->committed);
     }
 
     #[Test]
@@ -108,7 +111,7 @@ final class ProjectionRunnerTest extends TestCase
             $this->eventStoreStub(),
             $this->createStub(DomainEventDeserializer::class),
             $checkpointStore,
-            $this->entityManagerStub(),
+            new ImmediateTransactionManager(),
             [$projector],
         )->rebuild(self::NAME);
     }
@@ -123,7 +126,7 @@ final class ProjectionRunnerTest extends TestCase
             $this->eventStoreStub(),
             $this->createStub(DomainEventDeserializer::class),
             $checkpointStore,
-            $this->entityManagerStub(),
+            new ImmediateTransactionManager(),
             [$this->projectorStub('first'), $this->projectorStub('second')],
         )->rebuildAll();
     }
@@ -138,7 +141,7 @@ final class ProjectionRunnerTest extends TestCase
             $this->eventStoreStub(),
             $this->createStub(DomainEventDeserializer::class),
             $this->checkpointStoreStub(),
-            $this->entityManagerStub(),
+            new ImmediateTransactionManager(),
             [$this->projectorStub(self::NAME)],
         )->catchUp('missing');
     }
@@ -150,18 +153,10 @@ final class ProjectionRunnerTest extends TestCase
         EventStore $eventStore,
         DomainEventDeserializer $deserializer,
         ProjectionCheckpointStore $checkpointStore,
-        EntityManagerInterface $entityManager,
+        ImmediateTransactionManager $transactions,
         array $projectors,
     ): ProjectionRunner {
-        return new ProjectionRunner($eventStore, $deserializer, $checkpointStore, $entityManager, $projectors);
-    }
-
-    private function entityManagerStub(): EntityManagerInterface
-    {
-        $entityManager = $this->createStub(EntityManagerInterface::class);
-        $entityManager->method('wrapInTransaction')->willReturnCallback(static fn (callable $work): mixed => $work());
-
-        return $entityManager;
+        return new ProjectionRunner($eventStore, $deserializer, $checkpointStore, $transactions, $projectors);
     }
 
     private function eventStoreStub(): EventStore

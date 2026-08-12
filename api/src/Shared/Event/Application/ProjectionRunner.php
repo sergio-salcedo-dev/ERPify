@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Event\Application;
 
-use Doctrine\ORM\EntityManagerInterface;
+use Erpify\Shared\Persistence\Application\TransactionManager;
 use InvalidArgumentException;
 
 /**
@@ -12,9 +12,14 @@ use InvalidArgumentException;
  * mechanism serves both live (a reactor fires {@see catchUpAll()} after each delivered event) and
  * rebuild (CLI: {@see rebuild()} resets the read model and the checkpoint to 0 and replays).
  *
- * Each run is one transaction (sanctioned EM `wrapInTransaction` at the orchestration boundary, like
- * the write-side use cases): the checkpoint row is locked `FOR UPDATE`, the read-model writes and the
- * checkpoint advance commit together, so a `sequence` is never applied twice nor out of order.
+ * Each run is one transaction, owned at the orchestration boundary through the {@see TransactionManager}
+ * port like the write-side use cases: the checkpoint row is locked `FOR UPDATE`, the read-model writes and
+ * the checkpoint advance commit together, so a `sequence` is never applied twice nor out of order.
+ *
+ * **One transaction per projector, not one around the fan-out.** {@see catchUpAll()} delegates to
+ * {@see catchUp()}, so each projector commits its own checkpoint: a failure part-way leaves the projectors
+ * that already advanced advanced, and the next run resumes from each checkpoint rather than replaying the
+ * batch. Collapsing them into a single boundary would trade that resumability for an all-or-nothing batch.
  */
 final readonly class ProjectionRunner
 {
@@ -31,7 +36,7 @@ final readonly class ProjectionRunner
         private EventStore $eventStore,
         private DomainEventDeserializer $deserializer,
         private ProjectionCheckpointStore $checkpointStore,
-        private EntityManagerInterface $entityManager,
+        private TransactionManager $transactionManager,
         private iterable $projectors,
     ) {
     }
@@ -40,7 +45,7 @@ final readonly class ProjectionRunner
     {
         $projector = $this->projector($name);
 
-        $this->entityManager->wrapInTransaction(function () use ($projector, $name): void {
+        $this->transactionManager->transactional(function () use ($projector, $name): void {
             $checkpoint = $this->checkpointStore->lockAndRead($name);
             $this->project($projector, $name, $checkpoint);
         });
@@ -64,7 +69,7 @@ final readonly class ProjectionRunner
     {
         $projector = $this->projector($name);
 
-        $this->entityManager->wrapInTransaction(function () use ($projector, $name): void {
+        $this->transactionManager->transactional(function () use ($projector, $name): void {
             // checkpointStore->reset() locks/zeroes the checkpoint row inside this transaction;
             // projector->reset() clears the read model. Replaying from 0 in the same transaction
             // makes the rebuild atomic.

@@ -11,6 +11,7 @@ use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountStatusChangedDomainEvent;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -28,7 +29,8 @@ final class BankAccountStatusChangerTest extends TestCase
         $repository = new InMemoryBankAccountRepository($account);
         $eventBus = new RecordingEventBus();
 
-        $changed = $this->makeChanger($repository, $eventBus)->change(
+        $transactions = new ImmediateTransactionManager();
+        $changed = $this->makeChanger($repository, $eventBus, $transactions)->change(
             BankAccountMother::DEFAULT_ID,
             new ChangeBankAccountStatusCommand(BankAccountStatus::CLOSED),
         );
@@ -38,6 +40,9 @@ final class BankAccountStatusChangerTest extends TestCase
         $this->assertSame([$account], $repository->saved);
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(BankAccountStatusChangedDomainEvent::class, $eventBus->publishedEvents[0]);
+        // The write and its event share one boundary: published outside it, every assertion
+        // above still passes while the dual-write window this use case closes is reopened.
+        $this->assertSame(1, $transactions->committed);
     }
 
     public function testARedundantTransitionToTheCurrentStatusPublishesNoEvent(): void
@@ -46,7 +51,8 @@ final class BankAccountStatusChangerTest extends TestCase
         $repository = new InMemoryBankAccountRepository($account);
         $eventBus = new RecordingEventBus();
 
-        $this->makeChanger($repository, $eventBus)->change(
+        $transactions = new ImmediateTransactionManager();
+        $this->makeChanger($repository, $eventBus, $transactions)->change(
             BankAccountMother::DEFAULT_ID,
             new ChangeBankAccountStatusCommand(BankAccountStatus::ACTIVE),
         );
@@ -57,13 +63,14 @@ final class BankAccountStatusChangerTest extends TestCase
     private function makeChanger(
         InMemoryBankAccountRepository $repository,
         RecordingEventBus $eventBus,
+        ImmediateTransactionManager $transactions,
     ): BankAccountStatusChanger {
         return new BankAccountStatusChanger(
             $repository,
             new BankAccountFinder($repository),
             $eventBus,
             $this->passThroughValidator(),
-            $this->inlineTransactionEntityManager(),
+            $transactions,
         );
     }
 }

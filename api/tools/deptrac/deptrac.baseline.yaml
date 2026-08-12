@@ -14,26 +14,14 @@
 deptrac:
   skip_violations:
     Erpify\Backoffice\BankAccount\Application\BankAccountCreator:
-      - Doctrine\ORM\EntityManagerInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
-    Erpify\Backoffice\BankAccount\Application\BankAccountDeleter:
-      - Doctrine\ORM\EntityManagerInterface
     Erpify\Backoffice\BankAccount\Application\BankAccountStatusChanger:
-      - Doctrine\ORM\EntityManagerInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
     Erpify\Backoffice\BankAccount\Application\BankAccountUpdater:
-      - Doctrine\ORM\EntityManagerInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
     Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
       - Erpify\Shared\Validation\Infrastructure\EnumType
-    Erpify\Backoffice\Bank\Application\BankCreator:
-      - Doctrine\ORM\EntityManagerInterface
-    Erpify\Backoffice\Bank\Application\BankDeleter:
-      - Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException
-      - Doctrine\ORM\EntityManagerInterface
-      - Doctrine\Persistence\ManagerRegistry
     Erpify\Backoffice\Bank\Application\BankUpdater:
-      - Doctrine\ORM\EntityManagerInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
     Erpify\Backoffice\Bank\Domain\Entity\Bank:
       - Symfony\Component\Validator\Context\ExecutionContextInterface
@@ -45,8 +33,6 @@ deptrac:
       - Symfony\Component\Security\Core\Exception\AuthenticationException
       - Symfony\Component\Validator\ConstraintViolationInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
-    Erpify\Shared\Event\Application\ProjectionRunner:
-      - Doctrine\ORM\EntityManagerInterface
     Erpify\Shared\Search\Application\Http\FilterQuery:
       - Symfony\Component\Validator\Context\ExecutionContextInterface
     Erpify\Shared\Search\Application\Http\SearchQuery:

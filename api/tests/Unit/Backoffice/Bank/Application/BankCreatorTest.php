@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\Bank\Application;
 use Erpify\Backoffice\Bank\Application\BankCreator;
 use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -17,14 +18,14 @@ use PHPUnit\Framework\TestCase;
 final class BankCreatorTest extends TestCase
 {
     use BankCollaboratorStubs;
-    use InlineTransactionStubs;
 
     public function testCreatesBankAndPublishesTheCreatedEventInOneTransaction(): void
     {
         $bankRepository = new InMemoryBankRepository();
         $eventBus = new RecordingEventBus();
 
-        $bank = $this->makeCreator($bankRepository, $eventBus)->create(
+        $transactions = new ImmediateTransactionManager();
+        $bank = $this->makeCreator($bankRepository, $eventBus, $transactions)->create(
             new CreateBankCommand('Acme Savings', 'ACME'),
         );
 
@@ -34,17 +35,21 @@ final class BankCreatorTest extends TestCase
         $this->assertSame([$bank], $bankRepository->saved);
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(BankCreatedDomainEvent::class, $eventBus->publishedEvents[0]);
+        // The write and its event share one boundary: published outside it, every assertion
+        // above still passes while the dual-write window this use case closes is reopened.
+        $this->assertSame(1, $transactions->committed);
     }
 
     private function makeCreator(
         InMemoryBankRepository $bankRepository,
         RecordingEventBus $eventBus,
+        ImmediateTransactionManager $transactions,
     ): BankCreator {
         return new BankCreator(
             $bankRepository,
             $eventBus,
             $this->passThroughValidator(),
-            $this->inlineTransactionEntityManager(),
+            $transactions,
         );
     }
 }

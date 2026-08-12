@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Backoffice\Bank\Application;
+namespace Erpify\Tests\Unit\Shared\Persistence\Double;
 
 use Doctrine\DBAL\Driver\AbstractException;
 
@@ -12,8 +12,8 @@ use Doctrine\DBAL\Driver\AbstractException;
  * (inherited from {@see \Doctrine\DBAL\Exception\DriverException}) requires a
  * {@see \Doctrine\DBAL\Driver\Exception} plus a nullable query.
  *
- * A named class (never an anonymous `new class`) is mandatory here: PDepend/PHPMD aborts on
- * anonymous classes during {@see make php.quality}.
+ * Named rather than an anonymous `new class` so the driver exception has one definition for every test
+ * that needs a real DBAL failure to translate, instead of a copy per call site.
  *
  * @internal
  */

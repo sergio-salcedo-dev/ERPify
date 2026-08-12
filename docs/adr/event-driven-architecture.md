@@ -73,23 +73,26 @@ Descartado: clases `SymfonyMessengerSyncEventBus`/`...AsyncEventBus`. Duplican l
 I/O no transaccional). El split legítimo es por binding de entorno (`in-memory` en test vs Doctrine en
 prod), no inyectar dos buses a la vez.
 
-### D3 — Atomicidad vía `wrapInTransaction` inline — **detalle transitorio**, no arquitectura permanente
+### D3 — Atomicidad vía el puerto `TransactionManager`
 
-El caso de uso envuelve `save()`/`remove()` + `publish(...)` en `EntityManager::wrapInTransaction()`:
+El caso de uso envuelve `save()`/`remove()` + `publish(...)` en `TransactionManager::transactional()`:
 la fila del agregado, el `INSERT … ON CONFLICT` de `domain_event` y el `INSERT` del transporte Doctrine
 corren en la conexión por defecto → commitean en **una sola transacción**. Si `publish` falla, rollback
-total: no queda agregado sin su evento. `EntityManagerInterface` en `Application/` está sancionado por
-`api/CLAUDE.md`.
+total: no queda agregado sin su evento.
 
-> **Este `wrapInTransaction` inline es un detalle de implementación transitorio, pendiente de migrar al
-> middleware `doctrine_transaction` + `dispatch_after_current_bus` del `CommandBus` (#263).** Cuando ese
-> bus aterrice, el límite transaccional sale del caso de uso y entra en el bus — sustitución aditiva,
-> sin retrabajo. Marcarlo así evita que se convierta en "arquitectura permanente accidental".
+El límite lo posee el caso de uso; quien sabe de Doctrine es el adaptador
+[`DoctrineTransactionManager`](../../api/src/Shared/Persistence/Infrastructure/DoctrineTransactionManager.php),
+y por eso `Application/` ya no importa `EntityManagerInterface` — deptrac es el árbitro, sin concesiones
+en su baseline. Un `CommandBus` con middleware `doctrine_transaction` (#263) se descartó como vía para
+esto: mueve el límite a la infraestructura del bus sin que el caso de uso pueda ya nombrarlo, y aquí el
+límite es una decisión de negocio (qué commitea junto con qué), no fontanería del transporte.
 
-En DELETE los eventos se capturan **antes** de `remove()` (agregado intacto) y el recount de la FK
-queda **fuera** del wrap: una violación de FK aborta toda la transacción en PostgreSQL y
-`wrapInTransaction` cierra el `EntityManager`, así que el recount que produce el `409 bank-in-use` corre
-con un manager fresco tras el rollback (opción 1, comentario de #249).
+En DELETE los eventos se capturan **antes** de `remove()` (agregado intacto) y el recount de la FK queda
+**fuera** del límite: una violación de FK aborta toda la transacción en PostgreSQL, el adaptador la
+traduce a `ReferentialIntegrityViolation` (409) y el caso de uso la convierte en el `409 bank-in-use` que
+sí sabe nombrar. El recount corre sobre el manager cerrado sin problema — `close()` solo bloquea
+`flush`/`persist`/`remove`/`refresh`, nunca una lectura — y quien devuelve el manager al siguiente
+llamante es el adaptador, en su `finally`.
 
 Descartado: repuntar el **productor** a un broker (rompe la atomicidad). Descartado: mantener el
 dual-write actual "porque casi nunca falla" (pérdida silenciosa, inaceptable en un ERP).
@@ -133,17 +136,16 @@ ausente. CQRS separa *ejecución*, no *nombres*. Por eso hoy se nombran las **in
 suscriptores de evento son `<Efecto>OnEvento` (`#[AsMessageHandler]`, dispatch real), no `*Handler` genéricos.
 
 **Invariantes por-path (un hogar a la vez; el nombre puede ir por detrás, nunca por delante):** **I1 ·
-límite transaccional** — hoy `wrapInTransaction` inline en cada caso de uso (D3); migra al middleware
-`doctrine_transaction` + `dispatch_after_current_bus` del `CommandBus` al aterrizar el bus. **I2 ·
+límite transaccional** — **ya uniforme y enforced**: puerto `TransactionManager` en cada caso de uso (D3),
+con deptrac como árbitro (ningún `EntityManagerInterface` concedido en `Application/`). **I2 ·
 enforcement transversal** (auth/validación) — hoy por-path; se uniforma en el borde del bus cuando exista.
 **I3 · frontera de publicación de eventos** — **ya uniforme y enforced** (puerto `EventBus` D2 + gate
-`php.lint.event-bus` D4): la única de las tres ya cerrada.
+`php.lint.event-bus` D4). De las tres, sólo I2 sigue abierta.
 
 **Tres fases.** (1) *Pre-bus* (hoy): intención nombrada, ejecución directa, suscriptores `<Efecto>OnEvento`.
 (2) *Aterrizaje del bus* (#263): strangler controlado, unidad = caso de uso (seguro porque el repo es
-single-aggregate-por-operación; un process-manager multi-agregado migraría entero); I1 sale del
-`wrapInTransaction` y entra en el middleware — nombre y runtime migran juntos, sustitución aditiva sin
-retrabajo. (3) *Convergencia*: espacio de creación cerrado mono-dialecto + legacy cerrado y menguante.
+single-aggregate-por-operación; un process-manager multi-agregado migraría entero); I1 ya no viaja con el bus: el
+límite lo posee el caso de uso a través de su puerto, y un middleware que lo reemplazase se lo quitaría. (3) *Convergencia*: espacio de creación cerrado mono-dialecto + legacy cerrado y menguante.
 
 **Ratchet de convergencia (ni barrido, ni coexistencia infinita).** Primario (obligatorio, gate estilo
 `deptrac.baseline`): control de generación — post-bus no nace ningún `Creator`/`Finder` nuevo. Secundario
@@ -182,7 +184,7 @@ el default).
 
 **Cero-handlers se tolera por config, nunca por catch.** Que un evento no tenga suscriptores es semántica
 legítima de un event bus, pero se expresa con `allow_no_handlers` del bus — **no** con un `try/catch` en
-`SymfonyMessengerEventBus`. Ese catch correría **dentro del `wrapInTransaction` de D3** y tragaría también un
+`SymfonyMessengerEventBus`. Ese catch correría **dentro del límite transaccional de D3** y tragaría también un
 fallo real del transporte (DB caída → el `INSERT` del outbox falla), commiteando el agregado **sin** su evento
 → reintroduce el dual-write que D3 cerró. El adaptador traduce el puerto `EventBus`, no es un punto de política.
 
@@ -212,8 +214,7 @@ roto, peor observabilidad que `failed`). Descartado: `allow_no_handlers: true` g
 
 ## Triggers de revisita
 
-(a) Adopción de `CommandBus` (#263) → el límite transaccional (I1) migra del `wrapInTransaction` al
-middleware y D3 se reescribe; los buses pasan a nombrarse por rol (`command.bus`/`query.bus`/`event.bus`)
+(a) Adopción de `CommandBus` (#263) → no toca D3: el límite transaccional (I1) se queda en el caso de uso; los buses pasan a nombrarse por rol (`command.bus`/`query.bus`/`event.bus`)
 y D6 se actualiza; se activa el ratchet de generación-control de D5 y los `Creator`/`Finder` empiezan a
 converger a handlers (`cqrs-naming.md`). (b) Construcción de la épica de auditoría → `BankAccountSearcher` pasa a
 `AuditLogger` y **sale** de la allowlist. (c) Adopción de un broker externo → se añade el relay aguas

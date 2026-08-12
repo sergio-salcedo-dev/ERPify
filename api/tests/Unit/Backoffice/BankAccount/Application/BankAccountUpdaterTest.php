@@ -11,6 +11,7 @@ use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -28,7 +29,8 @@ final class BankAccountUpdaterTest extends TestCase
         $repository = new InMemoryBankAccountRepository($account);
         $eventBus = new RecordingEventBus();
 
-        $updated = $this->makeUpdater($repository, $eventBus)->update(
+        $transactions = new ImmediateTransactionManager();
+        $updated = $this->makeUpdater($repository, $eventBus, $transactions)->update(
             BankAccountMother::DEFAULT_ID,
             new UpdateBankAccountCommand(
                 'Globex Renamed',
@@ -46,18 +48,22 @@ final class BankAccountUpdaterTest extends TestCase
         $this->assertSame([$account], $repository->saved);
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(BankAccountUpdatedDomainEvent::class, $eventBus->publishedEvents[0]);
+        // The write and its event share one boundary: published outside it, every assertion
+        // above still passes while the dual-write window this use case closes is reopened.
+        $this->assertSame(1, $transactions->committed);
     }
 
     private function makeUpdater(
         InMemoryBankAccountRepository $repository,
         RecordingEventBus $eventBus,
+        ImmediateTransactionManager $transactions,
     ): BankAccountUpdater {
         return new BankAccountUpdater(
             $repository,
             new BankAccountFinder($repository),
             $eventBus,
             $this->passThroughValidator(),
-            $this->inlineTransactionEntityManager(),
+            $transactions,
         );
     }
 }

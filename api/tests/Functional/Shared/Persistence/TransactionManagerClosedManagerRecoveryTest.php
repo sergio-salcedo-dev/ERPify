@@ -6,10 +6,8 @@ namespace Erpify\Tests\Functional\Shared\Persistence;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
-use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Persistence\Infrastructure\DoctrineTransactionManager;
-use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
@@ -68,7 +66,8 @@ final class TransactionManagerClosedManagerRecoveryTest extends KernelTestCase
             $failure = $throwable;
         }
 
-        $this->assertNull(
+        $this->assertNotInstanceOf(
+            Throwable::class,
             $failure,
             'The seam left the entity manager closed after a failed unit of work, so the next WRITE on this '
             . 'kernel dies with "The EntityManager is closed". Under worker mode the kernel outlives the '
@@ -93,7 +92,7 @@ final class TransactionManagerClosedManagerRecoveryTest extends KernelTestCase
 
         try {
             $transactionManager->transactional(
-                function () use ($transactionManager, $connection, $entityManager, &$observed): void {
+                static function () use ($transactionManager, $connection, $entityManager, &$observed): void {
                     try {
                         $transactionManager->transactional(
                             static fn (): never => throw new RuntimeException('inner rejected'),
