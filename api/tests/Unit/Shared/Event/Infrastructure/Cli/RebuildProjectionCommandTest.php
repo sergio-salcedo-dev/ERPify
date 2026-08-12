@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Event\Infrastructure\Cli;
 
-use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Event\Application\DomainEventDeserializer;
 use Erpify\Shared\Event\Application\EventStore;
 use Erpify\Shared\Event\Application\ProjectionCheckpointStore;
 use Erpify\Shared\Event\Application\ProjectionRunner;
 use Erpify\Shared\Event\Application\Projector;
 use Erpify\Shared\Event\Infrastructure\Cli\RebuildProjectionCommand;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -40,9 +40,6 @@ final class RebuildProjectionCommandTest extends TestCase
         $eventStore = $this->createStub(EventStore::class);
         $eventStore->method('stream')->willReturn([]);
 
-        $entityManager = $this->createStub(EntityManagerInterface::class);
-        $entityManager->method('wrapInTransaction')->willReturnCallback(static fn (callable $work): mixed => $work());
-
         $projector = $this->createStub(Projector::class);
         $projector->method('name')->willReturn(self::PROJECTION);
         $projector->method('subscribedTo')->willReturn([]);
@@ -51,7 +48,7 @@ final class RebuildProjectionCommandTest extends TestCase
             $eventStore,
             $this->createStub(DomainEventDeserializer::class),
             $this->checkpointStore,
-            $entityManager,
+            new ImmediateTransactionManager(),
             [$projector],
         );
 

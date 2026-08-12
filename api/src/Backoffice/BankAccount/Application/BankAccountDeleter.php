@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\BankAccount\Application;
 
-use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotClosedException;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotFoundException;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Shared\Event\Domain\EventBus;
+use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 
 final readonly class BankAccountDeleter
@@ -17,7 +17,7 @@ final readonly class BankAccountDeleter
         private BankAccountRepository $bankAccountRepository,
         private BankAccountFinder $bankAccountFinder,
         private EventBus $eventBus,
-        private EntityManagerInterface $entityManager,
+        private TransactionManager $transactionManager,
     ) {
     }
 
@@ -43,7 +43,7 @@ final readonly class BankAccountDeleter
 
         // remove + publish in one transaction (closes the dual-write window).
         // See docs/adr/event-store-and-projections.md.
-        $this->entityManager->wrapInTransaction(function () use ($account, $domainEvents): void {
+        $this->transactionManager->transactional(function () use ($account, $domainEvents): void {
             $this->bankAccountRepository->remove($account);
             $this->eventBus->publish(...$domainEvents);
         });

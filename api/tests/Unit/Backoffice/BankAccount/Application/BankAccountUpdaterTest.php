@@ -11,6 +11,7 @@ use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -26,9 +27,10 @@ final class BankAccountUpdaterTest extends TestCase
     {
         $account = BankAccountMother::drained();
         $repository = new InMemoryBankAccountRepository($account);
-        $eventBus = new RecordingEventBus();
+        $transactions = new ImmediateTransactionManager();
+        $eventBus = new RecordingEventBus($transactions);
 
-        $updated = $this->makeUpdater($repository, $eventBus)->update(
+        $updated = $this->makeUpdater($repository, $eventBus, $transactions)->update(
             BankAccountMother::DEFAULT_ID,
             new UpdateBankAccountCommand(
                 'Globex Renamed',
@@ -46,18 +48,23 @@ final class BankAccountUpdaterTest extends TestCase
         $this->assertSame([$account], $repository->saved);
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(BankAccountUpdatedDomainEvent::class, $eventBus->publishedEvents[0]);
+        // Where, not how many. A use case that publishes AFTER its unit of work returns opens exactly
+        // one boundary too, so a count leaves the dual-write window free to reopen; this is the
+        // observable that goes red when the publication moves outside the transaction.
+        $this->assertSame([true], $eventBus->publishedInsideUnitOfWork);
     }
 
     private function makeUpdater(
         InMemoryBankAccountRepository $repository,
         RecordingEventBus $eventBus,
+        ImmediateTransactionManager $transactions,
     ): BankAccountUpdater {
         return new BankAccountUpdater(
             $repository,
             new BankAccountFinder($repository),
             $eventBus,
             $this->passThroughValidator(),
-            $this->inlineTransactionEntityManager(),
+            $transactions,
         );
     }
 }

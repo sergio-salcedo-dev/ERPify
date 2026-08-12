@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\BankAccount\Application;
 
-use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker;
 use Erpify\Backoffice\BankAccount\Application\Command\CreateBankAccountCommand;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Shared\Event\Domain\EventBus;
+use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
@@ -22,7 +22,7 @@ final readonly class BankAccountCreator
         private BankExistenceChecker $bankExistence,
         private EventBus $eventBus,
         private Validator $validator,
-        private EntityManagerInterface $entityManager,
+        private TransactionManager $transactionManager,
     ) {
     }
 
@@ -53,7 +53,7 @@ final readonly class BankAccountCreator
 
         // save + publish in one transaction so the aggregate, its event_store rows and the outbox
         // commit atomically (closes the dual-write window). See docs/adr/event-store-and-projections.md.
-        $this->entityManager->wrapInTransaction(function () use ($account): void {
+        $this->transactionManager->transactional(function () use ($account): void {
             $this->bankAccountRepository->save($account);
             $this->eventBus->publish(...$account->pullDomainEvents());
         });
