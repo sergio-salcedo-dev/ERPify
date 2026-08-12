@@ -116,41 +116,12 @@ final class AuditResourceAnonymiserFunctionalTest extends KernelTestCase
             // The leaking shape: a self-service path (failed login, recovery throttle) names the subject
             // as its resource while nobody is authenticated, so the captured ip may be the subject's own.
             $anonymous = $this->seed($writer, ActorContext::anonymous(), self::PERSON_TYPE, self::SUBJECT_ID);
-            // Same shape, but the request carried neither header — "never captured" must not become
-            // "captured and then erased", which is the whole reason the sentinel is not NULL.
-            $anonymousBare = $this->seed(
-                $writer,
-                ActorContext::anonymous(),
-                self::PERSON_TYPE,
-                self::SUBJECT_ID,
-                null,
-                null,
-            );
-            // One captured and one not, on the same row. Both columns being seeded alike everywhere else is
-            // what lets a guard be pasted from one arm to the other, or the two cross-wired, undetected —
-            // and the mixed shape is ordinary: a client may send no `User-Agent` at all.
-            $anonymousHalf = $this->seed(
-                $writer,
-                ActorContext::anonymous(),
-                self::PERSON_TYPE,
-                self::SUBJECT_ID,
-                self::CLIENT_IP,
-                null,
-            );
-            // A header present but EMPTY seals '', not NULL — nothing was captured, so nothing may be
-            // reported as redacted.
-            $anonymousEmpty = $this->seed(
-                $writer,
-                ActorContext::anonymous(),
-                self::PERSON_TYPE,
-                self::SUBJECT_ID,
-                self::CLIENT_IP,
-                '',
-            );
             $anonymiser = new DbalAuditResourceAnonymiser($connection);
             $affected = $anonymiser->anonymise(AuditResource::of(self::PERSON_TYPE, self::SUBJECT_ID), $pseudonym);
 
-            $this->assertSame(4, $affected, 'every anonymous row naming the subject');
+            // Every row naming the subject, anonymous or not — the `WHERE` carries no `actor_type`, and the
+            // count is 1 here only because this test seeds one row.
+            $this->assertSame(1, $affected, 'every row naming the subject');
 
             $redacted = $this->rowById($connection, $anonymous);
             $this->assertSame(self::SENTINEL, $redacted['ip'], 'the requester ip may be the subject');
@@ -159,19 +130,48 @@ final class AuditResourceAnonymiserFunctionalTest extends KernelTestCase
             $this->assertTrue($this->isFlagSet($redacted['resource_erased']));
             // Never identified is not identified-and-then-erased: raising the flag here would corrupt it.
             $this->assertFalse($this->isFlagSet($redacted['actor_erased']), 'no actor was ever identified');
+        });
+    }
 
-            $bare = $this->rowById($connection, $anonymousBare);
+    /**
+     * The other direction, and a separate test because it fails for the opposite reason: over-reach onto a
+     * value the request never carried. "Never captured" must not become "captured and then erased" — the
+     * whole reason the sentinel is not NULL — and the guard has to hold **per column and per spelling of
+     * empty**, since a client may send no `User-Agent` at all and a bare `User-Agent:` header seals `''`.
+     * Seeding both columns alike is what lets one arm's guard be pasted into the other, or the two
+     * cross-wired, with nothing red.
+     */
+    #[Test]
+    public function itNeverReportsAValueThatWasNotCapturedAsRedacted(): void
+    {
+        $this->inRolledBackTransaction(function (Connection $connection): void {
+            $writer = new DbalAuditLogWriter($connection);
+            $pseudonym = Uuid::generate();
+
+            $bareRow = $this->seedAnonymous($writer, null, null);
+            $halfRow = $this->seedAnonymous($writer, self::CLIENT_IP, null);
+            $emptyAgentRow = $this->seedAnonymous($writer, self::CLIENT_IP, '');
+            $emptyIpRow = $this->seedAnonymous($writer, '', self::USER_AGENT);
+
+            $anonymiser = new DbalAuditResourceAnonymiser($connection);
+            $anonymiser->anonymise(AuditResource::of(self::PERSON_TYPE, self::SUBJECT_ID), $pseudonym);
+
+            $bare = $this->rowById($connection, $bareRow);
             $this->assertNull($bare['ip'], 'a value never captured is not rewritten into evidence');
             $this->assertNull($bare['user_agent']);
             $this->assertSame($pseudonym, $bare['resource_id'], 'yet the subject is still forgotten here');
 
-            $half = $this->rowById($connection, $anonymousHalf);
+            $half = $this->rowById($connection, $halfRow);
             $this->assertSame(self::SENTINEL, $half['ip'], 'the captured half is redacted');
             $this->assertNull($half['user_agent'], 'and the absent half is not invented — the guards are per column');
 
-            $empty = $this->rowById($connection, $anonymousEmpty);
-            $this->assertSame('', $empty['user_agent'], 'an empty header captured nothing to redact');
-            $this->assertSame(self::SENTINEL, $empty['ip']);
+            $emptyAgent = $this->rowById($connection, $emptyAgentRow);
+            $this->assertSame('', $emptyAgent['user_agent'], 'an empty header captured nothing to redact');
+            $this->assertSame(self::SENTINEL, $emptyAgent['ip']);
+
+            $emptyIp = $this->rowById($connection, $emptyIpRow);
+            $this->assertSame('', $emptyIp['ip'], 'an empty ip captured nothing to redact either');
+            $this->assertSame(self::SENTINEL, $emptyIp['user_agent']);
         });
     }
 
@@ -239,6 +239,22 @@ final class AuditResourceAnonymiserFunctionalTest extends KernelTestCase
                 ->anonymise(AuditResource::of(self::PERSON_TYPE, self::SUBJECT_ID), 'not-a-uuid')
             ;
         });
+    }
+
+    /**
+     * The leaking shape with its two request-metadata columns spelled explicitly, because which column
+     * carries what is the whole subject of the test that uses this.
+     */
+    private function seedAnonymous(DbalAuditLogWriter $writer, ?string $ip, ?string $userAgent): string
+    {
+        return $this->seed(
+            $writer,
+            ActorContext::anonymous(),
+            self::PERSON_TYPE,
+            self::SUBJECT_ID,
+            $ip,
+            $userAgent,
+        );
     }
 
     private function seed(

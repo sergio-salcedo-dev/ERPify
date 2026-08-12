@@ -133,9 +133,9 @@ Feature: Erase an identity (GDPR right to erasure)
 
   Scenario: Erasure redacts the request metadata of a row nobody was authenticated to write
     # A self-service path (a throttled recovery, a failed login) names the subject as its resource while no
-    # token exists, so the captured ip is the requester's — which on these paths is the subject themself.
-    # Neither GDPR pass reached it: the actor pass matches `actor_id`, NULL here, and the resource pass used
-    # to leave the actor columns alone on the strength of a third party who, on an anonymous row, is absent.
+    # token exists, so the captured ip is the requester's — and the row records no discriminant for whether
+    # that requester was the subject or a stranger acting on them. The actor pass cannot reach it either:
+    # it matches `actor_id`, which is NULL wherever nobody was authenticated.
     # Its own subject, because the scenarios above erase the fixture ones.
     Given I execute the SQL query "INSERT INTO identity_user (id, email, password_hash, roles, status, failed_attempts, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fb01', 'throttled@erpify.test', 'x', to_json(ARRAY[]::text[]), 'ACTIVE', 0, NOW(), NOW())" on connection "seed"
     And I execute the SQL query "INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, resource_type, resource_id, metadata, ip, user_agent, actor_erased, resource_erased, occurred_on) VALUES ('0190f200-0000-7000-8000-00000000fb11', 'security', 'PASSWORD_RECOVERY_THROTTLED', 'anonymous', NULL, '0190f200-0000-7000-8000-00000000fb21', 'User', '0190f200-0000-7000-8000-00000000fb01', '{}', '198.51.100.23', 'ProbeAgent/1.0', false, false, '2026-03-03 12:00:00+00')" on connection "seed"
@@ -157,6 +157,12 @@ Feature: Erase an identity (GDPR right to erasure)
     # …and the row still does not name the person on the axis that named them.
     And I execute the SQL query "SELECT id FROM audit_log WHERE resource_type = 'User' AND resource_id = '0190f200-0000-7000-8000-00000000fb01'"
     And there should have 0 records in SQL result
+    # Both halves in ONE statement, which is the claim the two functional tests can only make separately: the
+    # erasure writes its own GDPR_SUBJECT_ERASED naming this subject with the ADMIN as actor before the pass
+    # runs, so that row is matched by the same UPDATE and must come out with its request metadata intact. The
+    # CASE is in the SET and evaluates per row; a guard moved to the WHERE would take both rows or neither.
+    And I execute the SQL query "SELECT c.id FROM audit_log c JOIN audit_log t ON t.resource_id = c.resource_id WHERE t.id = '0190f200-0000-7000-8000-00000000fb11' AND c.action = 'GDPR_SUBJECT_ERASED' AND c.actor_type = 'user' AND c.resource_erased = TRUE AND COALESCE(c.ip, '') <> '[REDACTED]' AND COALESCE(c.user_agent, '') <> '[REDACTED]'"
+    And there should have 1 records in SQL result
 
   Scenario: Erasure reaches the references no foreign key would have cascaded
     # membership.user_id and iam_invitation.invited_user_id cross a bounded context, so they are referenced
