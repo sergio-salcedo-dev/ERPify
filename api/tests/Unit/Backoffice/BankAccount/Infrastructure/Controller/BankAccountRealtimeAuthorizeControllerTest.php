@@ -56,7 +56,11 @@ final class BankAccountRealtimeAuthorizeControllerTest extends TestCase
             ],
             $claims['mercure']['subscribe'] ?? null,
         );
-        $this->assertSame([], $claims['mercure']['publish'] ?? null);
+        // The security invariant is that a subscriber cookie grants no publish topic — not the shape
+        // of the claim. Mercure 0.8 omits `publish` entirely when no publish grant is present, where
+        // 0.7 emitted an empty list; under the 0.x protocol both deny publishing, and only a
+        // non-empty list would widen the cookie.
+        $this->assertSame([], $claims['mercure']['publish'] ?? [], 'the subscriber cookie must grant no publish topic');
     }
 
     private function authorize(): Response

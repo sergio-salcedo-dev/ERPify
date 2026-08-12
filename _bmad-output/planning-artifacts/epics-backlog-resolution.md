@@ -22,7 +22,7 @@ Tres grupos **no son trabajo de esta épica** y contarlos hace el objetivo inalc
 |---|---|---|
 | **Épicas disfrazadas** | #268, #266, #267, #462, #549, #373 | Cada una es una épica de producto. «Resolver los issues antes de más épicas» es contradictorio si seis de ellos *son* épicas. Reetiquetar `epic` y sacar del conteo |
 | **Decisiones, no código** | #222, #295, #263, #567 | No avanzan sin una decisión del dueño del producto. Se resuelven en una conversación de media hora, no en un PR |
-| **Vigilancias automatizadas** | #593, #196, #420 | Disparadores, no tareas. #593 ya tiene `make composer.check.mercure-pin` en el cron semanal; #420 es un tripwire («al tercer VO string») |
+| **Vigilancias automatizadas** | ~~#593~~, #196, #420 | Disparadores, no tareas. **#593 disparó el 2026-08-11** (upstream tagueó `v0.4.3`) y se retiró el pin el 2026-08-12, con su vigía. #420 es un tripwire («al tercer VO string») |
 
 Aceptadas las tres reclasificaciones: **54 → ~38 issues en 8 lotes**.
 

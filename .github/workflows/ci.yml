@@ -233,28 +233,6 @@ jobs:
           category: erpify-semgrep
 
   # -------------------------
-  # UPSTREAM PIN WATCH (scheduled only — observes upstream state, not this diff)
-  # -------------------------
-  # Deliberately absent from ci-summary/ci-success: it is not a PR gate. A red
-  # run means upstream tagged symfony/mercure-bundle past v0.4.2 — retire the
-  # 0.4.x-dev pin (issue #593); the failure log prints the steps.
-  upstream-pin-watch:
-    name: Upstream Pin Watch (mercure-bundle)
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Check for a qualifying upstream tag
-        run: make composer.check.mercure-pin
-
-  # -------------------------
   # PWA NODE (isolated, fast)
   # -------------------------
   pwa-node:
