@@ -163,7 +163,7 @@ re-medición verde al final. Los guiones quedan en `tmp/br7-t1/` (gitignored).
 | Columna suprimida de la comparación | Resultado | Lectura |
 |---|---|---|
 | `holderName` · `iban` · `bic` · `alias` | rojo | cada campo tiene su test de dirección positiva |
-| `currency` | **verde — dirección NO cubierta** | `Currency` tiene un único caso (`EUR`), así que ninguna prueba puede diferir en él. La cláusula se **conserva**: quitarla haría que el día que entre una segunda divisa un cambio de divisa se lo trague la guarda en silencio. Es coste hoy, seguro mañana — y queda declarado en vez de aparentar cobertura. |
+| `currency` | **verde — dirección NO cubierta** (y **no era la única**: ver A3 del pase adversarial) | `Currency` tiene un único caso (`EUR`), así que ninguna prueba puede diferir en él. La cláusula se **conserva**: quitarla haría que el día que entre una segunda divisa un cambio de divisa se lo trague la guarda en silencio. Es coste hoy, seguro mañana — y queda declarado en vez de aparentar cobertura. |
 | `name` | rojo | **hallazgo de la ola 3**: la primera medición salió *verde*. `nameNormalized` se deriva de `name`, así que sólo un cambio de **capitalización** mueve uno sin el otro — y ése es un cambio visible en la UI que la guarda se habría tragado. Test añadido; la mutación pasa a roja. |
 | `nameNormalized` | rojo | lo cubre el test de rehidratación (Doctrine escribe las columnas directamente, así que un gemelo rancio de una regla vieja se re-deriva) |
 | `shortName` | rojo | test de dirección positiva |
@@ -223,8 +223,13 @@ El criterio no era «no quedan imports», sino que el token no fuese alcanzable 
 
 1. **Estático** — cero apariciones de `BackOfficeSearchBanks` / `BackOfficeSearchAllBankAccounts` en todo `pwa`
    (`.ts/.tsx/.js/.json`). Las dos vías de resolución dinámica se enumeraron: los `repositoryKey`/`navigatorKey`
-   de `useResourceList`/`useResourceItem`/`useResourceMutations` (tres valores, todos `*CrudRepository`/
-   `BackOfficeUserRepository`) y el array `MONITORED_COMPONENTS` de `health/page.tsx` (dos tokens de health).
+   de `useResourceList`/`useResourceItem` (tres valores, todos `*CrudRepository`/`BackOfficeUserRepository`) y
+   el array `MONITORED_COMPONENTS` de `health/page.tsx`. **Corregido tras el pase adversarial (C2):** los
+   sitios `container.get(<identificador>)` son **once**, no dos — auth, sesiones, auditoría, debug-token y
+   los formularios de contraseña resuelven cada uno desde su propia constante de módulo. Los verifiqué todos:
+   cada argumento resuelve a un literal y ninguno a los tokens borrados, así que la conclusión aguanta; la
+   enumeración que presenté como prueba, no. `useResourceMutations` tiene además **cero** consumidores: por el
+   criterio D2 es el mismo residuo que este lote borra, y no se toca aquí.
 2. **Tipos** — `tsc --noEmit` limpio dentro de `make pwa.quality`.
 3. **Runtime** — sonda desechable contra el `Container` real (no un mock): resuelve
    `BackOfficeBankCrudRepository`, `BackOfficeBankResourceNavigator`, `BackOfficeBankAccountCrudRepository`,
@@ -291,6 +296,38 @@ Lentes ejecutadas:
   factories, arrays de configuración, strings con FQCN, alias del contenedor, imports indirectos y tests de
   integración. Y las ocho specs reescritas deben seguir ejercitando el repositorio real/mock correcto, no una
   reconstrucción del token eliminado.
+
+---
+
+## Correcciones del pase adversarial
+
+Aplicadas en esta misma rama, cada una con su rojo medido:
+
+| # | Corrección | Su rojo |
+|---|---|---|
+| **A3** | Test del camino de escritura de `rename()` (`testRenameWritesTheCanonicalFormsOfAChangedName`): cambia el valor **y** exige canonicalización, que es la única forma de alcanzar esas dos líneas con la guarda puesta | escribir los argumentos crudos pasa de verde a **rojo** (antes: 205 tests y 3 escenarios verdes) |
+| **B1** | El gate blanquea comentarios antes de extraer nada | servidor gana `SUSPENDED` + el PWA sólo lo nombra en un comentario → **rojo** (antes verde) |
+| **B2** | ídem | un docblock que cita la declaración vieja mientras la real deriva de una constante → **rojo** |
+| **B3** | El contrato incluye **cuántos predicados** consultan cada guard (2 hoy), no sólo que alguno lo haga | neutralizar uno de los dos predicados → **rojo** |
+| **B4** | Frontera de identificador en la consulta (`(?<![A-Za-z0-9_$])`) | incluida en B3 |
+| **B6** | `array_unique` antes de comparar: semántica de conjunto de verdad, no de lista ordenada | un literal duplicado ya no da rojo falso |
+| **C1** | Cada spec ata **sólo** el puerto que ejercita; el que ejercita los dos usa un espía por puerto y afirma cuál corrió | recuplar el bulk a `BackOfficeDeleteBank` → **rojo** por dos vías (token no atado + aserción por puerto) |
+| **C3** | `BackofficeListBindings.test.ts` resuelve seis tokens del contenedor **real** — el plano de runtime deja de ser desechable | quitar un binding del composition root → **rojo** (antes: `tsc` limpio y suite verde) |
+
+**A5 — consecuencia declarada, no corregida.** Tras este cambio un `PUT` redundante no deja **ninguna** fila
+en `audit_log`: `AuditPolicy` sólo captura `GET` como actividad, así que la fila `change` era el único rastro
+de que la petición existió. Amplía el hueco que `changeStatus()` ya tenía desde que se envió; se declara aquí
+y en el cuerpo de la PR en vez de corregirse, porque cambiar la política de auditoría es una decisión con su
+propio alcance.
+
+**A4 — límite conocido de los dos escenarios Behat.** Behat aborta al primer paso rojo y ése cae en
+`data.updatedAt`, antes de las seis aserciones de cola. No se han visto rojas; la afirmación «una escritura
+redundante no deja fila de auditoría» está afirmada end-to-end pero no falsificada.
+
+**Congelado a la espera de consulta externa (decisión de Sergio):** **A1/A2** (los canonicalizadores del
+agregado son más estrechos que sus validadores) y **B5** (el tercer espejo del vocabulario,
+`BANK_ACCOUNT_STATUSES`). Prompt autocontenido en
+`tmp/bmad-md/consult-br7-canonicalization-and-enum-mirrors-20260812-210731.md`. Nada de los dos se ha tocado.
 
 ---
 

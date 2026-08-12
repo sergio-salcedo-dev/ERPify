@@ -23,12 +23,7 @@ const mocks = await vi.hoisted(async () => {
     navigation: () => routerMock(),
     container: () =>
       containerMock({
-        BackOfficeBankCrudRepository: {
-          search: spies.searchRun,
-          find: spies.findRun,
-          delete: spies.deleteRun,
-        },
-        BackOfficeDeleteBank: { run: spies.deleteRun },
+        BackOfficeBankCrudRepository: { search: spies.searchRun },
         BackOfficeCountBanks: { run: spies.countRun },
       }),
     toast: () => toastNotifierMock(),

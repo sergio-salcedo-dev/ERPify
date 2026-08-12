@@ -105,6 +105,24 @@ final class BankRenameNoOpTest extends TestCase
         $this->assertMutated($bank);
     }
 
+    /**
+     * The canonicalization on the write path is only reachable when the value ALSO changes: an input
+     * that canonicalizes to what is stored takes the early return, so every non-canonical input in the
+     * cases above stops before the assignment. Without this case both write lines could hand over the
+     * raw arguments with the whole suite green.
+     */
+    public function testRenameWritesTheCanonicalFormsOfAChangedName(): void
+    {
+        $bank = $this->storedBank();
+
+        $bank->rename('   Banco Uno   ', 'bú');
+
+        $this->assertSame('Banco Uno', $bank->getName());
+        $this->assertSame('banco uno', $bank->getNameNormalized());
+        $this->assertSame('BU', $bank->getShortName());
+        $this->assertMutated($bank);
+    }
+
     public function testRenameRederivesAStaleNormalizedNameEvenWhenTheDisplayNameIsUnchanged(): void
     {
         // Doctrine hydrates the mapped columns directly, so the stored twin is only as current as the

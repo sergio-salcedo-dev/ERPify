@@ -134,7 +134,6 @@ export function banksListPageMocks() {
           find: spies.findRun,
           delete: spies.deleteRun,
         },
-        BackOfficeDeleteBank: { run: spies.deleteRun },
       }),
     toast: () => toastNotifierMock(),
     bankRealtime: () =>
