@@ -23,10 +23,14 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * Proves the resource-axis erasure against REAL Postgres — the `resource_type`/`resource_id` pair matching
  * and the `CAST(… AS UUID)` an in-memory double cannot model.
  *
- * The load-bearing assertion is the **column asymmetry**: a row naming the subject as a resource was very
- * often written by somebody else (an administrator acting on them), so the actor half of that row —
- * `actor_id`, `ip`, `user_agent`, `actor_erased` — must come out untouched. Redacting it would destroy a
- * third party's evidence and falsely flag that third party as an erased actor.
+ * The load-bearing assertions are the **two directions of the column asymmetry**, and they are separate
+ * tests because they fail for opposite reasons. Over-reach: a row naming the subject was very often written
+ * by somebody else (an administrator acting on them), so `actor_id`, `actor_erased` and — where an actor was
+ * identified — `ip`/`user_agent` must come out untouched, or a third party's evidence is destroyed and that
+ * party is falsely flagged as erased. Under-reach: where `actor_type` is `anonymous` the row records no
+ * discriminant for whose metadata it holds — it may be the subject's own — and leaving it is how that
+ * address outlives the erasure meant to forget them, unreachable by any control once `resource_erased` is
+ * raised.
  *
  * Each test runs inside a rolled-back transaction, so the shared dev DB is left as it was found.
  *
@@ -44,6 +48,17 @@ final class AuditResourceAnonymiserFunctionalTest extends KernelTestCase
     private const string BANK_ID = '0190f300-0000-7000-8000-0000000000b4';
 
     private const string CLIENT_IP = '203.0.113.7';
+
+    private const string SYSTEM_IP = '203.0.113.9';
+
+    private const string USER_AGENT = 'Mozilla/5.0';
+
+    /**
+     * Spelled out rather than read from {@see \Erpify\Shared\Audit\Domain\AuditRedaction}: the ADR asserts
+     * the compliance invariant over this literal, and a test that reads the constant would pass unchanged if
+     * somebody changed what the constant holds. The sibling actor-axis test pins it the same way.
+     */
+    private const string SENTINEL = '[REDACTED]';
 
     private const string PERSON_TYPE = 'User';
 
@@ -81,12 +96,121 @@ final class AuditResourceAnonymiserFunctionalTest extends KernelTestCase
             $this->assertSame(self::ADMIN_ID, $admin['actor_id']);
             $this->assertFalse($this->isFlagSet($admin['actor_erased']), 'the acting admin is not an erased actor');
             $this->assertSame(self::CLIENT_IP, $admin['ip'], "a third party's ip is not collateral");
+            $this->assertSame(self::USER_AGENT, $admin['user_agent'], 'nor their user agent');
 
             foreach ([$bankRow, $otherRow] as $id) {
                 $untouched = $this->rowById($connection, $id);
                 $this->assertNotSame($pseudonym, $untouched['resource_id']);
                 $this->assertFalse($this->isFlagSet($untouched['resource_erased']));
             }
+        });
+    }
+
+    #[Test]
+    public function itRedactsRequestMetadataOnlyWhereTheActorWasNeverIdentified(): void
+    {
+        $this->inRolledBackTransaction(function (Connection $connection): void {
+            $writer = new DbalAuditLogWriter($connection);
+            $pseudonym = Uuid::generate();
+
+            // The leaking shape: a self-service path (failed login, recovery throttle) names the subject
+            // as its resource while nobody is authenticated, so the captured ip may be the subject's own.
+            $anonymous = $this->seed($writer, ActorContext::anonymous(), self::PERSON_TYPE, self::SUBJECT_ID);
+            // Same shape, but the request carried neither header — "never captured" must not become
+            // "captured and then erased", which is the whole reason the sentinel is not NULL.
+            $anonymousBare = $this->seed(
+                $writer,
+                ActorContext::anonymous(),
+                self::PERSON_TYPE,
+                self::SUBJECT_ID,
+                null,
+                null,
+            );
+            // One captured and one not, on the same row. Both columns being seeded alike everywhere else is
+            // what lets a guard be pasted from one arm to the other, or the two cross-wired, undetected —
+            // and the mixed shape is ordinary: a client may send no `User-Agent` at all.
+            $anonymousHalf = $this->seed(
+                $writer,
+                ActorContext::anonymous(),
+                self::PERSON_TYPE,
+                self::SUBJECT_ID,
+                self::CLIENT_IP,
+                null,
+            );
+            // A header present but EMPTY seals '', not NULL — nothing was captured, so nothing may be
+            // reported as redacted.
+            $anonymousEmpty = $this->seed(
+                $writer,
+                ActorContext::anonymous(),
+                self::PERSON_TYPE,
+                self::SUBJECT_ID,
+                self::CLIENT_IP,
+                '',
+            );
+            $anonymiser = new DbalAuditResourceAnonymiser($connection);
+            $affected = $anonymiser->anonymise(AuditResource::of(self::PERSON_TYPE, self::SUBJECT_ID), $pseudonym);
+
+            $this->assertSame(4, $affected, 'every anonymous row naming the subject');
+
+            $redacted = $this->rowById($connection, $anonymous);
+            $this->assertSame(self::SENTINEL, $redacted['ip'], 'the requester ip may be the subject');
+            $this->assertSame(self::SENTINEL, $redacted['user_agent'], 'and so may the user agent');
+            $this->assertSame($pseudonym, $redacted['resource_id']);
+            $this->assertTrue($this->isFlagSet($redacted['resource_erased']));
+            // Never identified is not identified-and-then-erased: raising the flag here would corrupt it.
+            $this->assertFalse($this->isFlagSet($redacted['actor_erased']), 'no actor was ever identified');
+
+            $bare = $this->rowById($connection, $anonymousBare);
+            $this->assertNull($bare['ip'], 'a value never captured is not rewritten into evidence');
+            $this->assertNull($bare['user_agent']);
+            $this->assertSame($pseudonym, $bare['resource_id'], 'yet the subject is still forgotten here');
+
+            $half = $this->rowById($connection, $anonymousHalf);
+            $this->assertSame(self::SENTINEL, $half['ip'], 'the captured half is redacted');
+            $this->assertNull($half['user_agent'], 'and the absent half is not invented — the guards are per column');
+
+            $empty = $this->rowById($connection, $anonymousEmpty);
+            $this->assertSame('', $empty['user_agent'], 'an empty header captured nothing to redact');
+            $this->assertSame(self::SENTINEL, $empty['ip']);
+        });
+    }
+
+    #[Test]
+    public function itSparesASystemActorWhoseActorIdIsAlsoNull(): void
+    {
+        $this->inRolledBackTransaction(function (Connection $connection): void {
+            $writer = new DbalAuditLogWriter($connection);
+            $pseudonym = Uuid::generate();
+
+            // A system actor CARRYING request metadata. Nothing in the entry factory forbids it, so this row
+            // is what separates `actor_type = anonymous` from the `actor_id IS NULL` spelling: the latter
+            // matches here too and would redact values this axis has no claim on. That system rows normally
+            // carry none is emergent — two classes reading one RequestStack — and asserted by nothing.
+            $system = $this->seed(
+                $writer,
+                ActorContext::system(),
+                self::PERSON_TYPE,
+                self::SUBJECT_ID,
+                self::SYSTEM_IP,
+            );
+            // An anonymous actor on a resource this erasure does not name at all.
+            $unrelated = $this->seed($writer, ActorContext::anonymous(), 'Bank', self::BANK_ID);
+
+            $anonymiser = new DbalAuditResourceAnonymiser($connection);
+            $anonymiser->anonymise(AuditResource::of(self::PERSON_TYPE, self::SUBJECT_ID), $pseudonym);
+
+            $operator = $this->rowById($connection, $system);
+            $this->assertSame(self::SYSTEM_IP, $operator['ip'], 'a system actor is not an anonymous one');
+            $this->assertSame(self::USER_AGENT, $operator['user_agent'], 'and its user agent is no different');
+            $this->assertFalse($this->isFlagSet($operator['actor_erased']));
+            // The resource axis still does its own work on that row — only the metadata is spared.
+            $this->assertSame($pseudonym, $operator['resource_id']);
+            $this->assertTrue($this->isFlagSet($operator['resource_erased']));
+
+            $untouched = $this->rowById($connection, $unrelated);
+            $this->assertSame(self::CLIENT_IP, $untouched['ip'], 'another resource keeps everything');
+            $this->assertSame(self::USER_AGENT, $untouched['user_agent']);
+            $this->assertFalse($this->isFlagSet($untouched['resource_erased']));
         });
     }
 
@@ -122,6 +246,8 @@ final class AuditResourceAnonymiserFunctionalTest extends KernelTestCase
         ActorContext $actor,
         string $resourceType,
         string $resourceId,
+        ?string $ip = self::CLIENT_IP,
+        ?string $userAgent = self::USER_AGENT,
     ): string {
         $entry = AuditLogEntry::create(
             'USER_ROLES_CHANGED',
@@ -131,8 +257,8 @@ final class AuditResourceAnonymiserFunctionalTest extends KernelTestCase
             new DateTimeImmutable('2026-07-01T10:00:00+00:00'),
             AuditResource::of($resourceType, $resourceId),
             [],
-            self::CLIENT_IP,
-            'Mozilla/5.0',
+            $ip,
+            $userAgent,
         );
         $writer->write($entry);
 
@@ -140,17 +266,24 @@ final class AuditResourceAnonymiserFunctionalTest extends KernelTestCase
     }
 
     /**
-     * @return array{actor_id: mixed, ip: mixed, actor_erased: mixed, resource_id: mixed, resource_erased: mixed}
+     * @return array{
+     *     actor_id: mixed,
+     *     ip: mixed,
+     *     user_agent: mixed,
+     *     actor_erased: mixed,
+     *     resource_id: mixed,
+     *     resource_erased: mixed,
+     * }
      */
     private function rowById(Connection $connection, string $id): array
     {
         $row = $connection->fetchAssociative(
-            'SELECT actor_id, ip, actor_erased, resource_id, resource_erased '
+            'SELECT actor_id, ip, user_agent, actor_erased, resource_id, resource_erased '
             . 'FROM audit_log WHERE id = :id',
             ['id' => $id],
         );
         $this->assertIsArray($row);
-        /** @phpstan-var array{actor_id: mixed, ip: mixed, actor_erased: mixed, resource_id: mixed, resource_erased: mixed} $row */
+        /** @phpstan-var array{actor_id: mixed, ip: mixed, user_agent: mixed, actor_erased: mixed, resource_id: mixed, resource_erased: mixed} $row */
 
         return $row;
     }

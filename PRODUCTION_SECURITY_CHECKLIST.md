@@ -230,7 +230,20 @@ you change anything here.
       and redacts `ip` / `user_agent` to `[REDACTED]` and sets the materialised,
       queryable, non-PII `actor_erased` flag in one `UPDATE`, never deleting a row, and
       self-audits a `security` `GDPR_ERASURE_EXECUTED` entry carrying only the resulting
-      pseudonym (never the original id). **Subject erasure is distinct** (never merged —
+      pseudonym (never the original id). **That command is not the sentinel's only writer.**
+      The resource-axis pass writes the same `[REDACTED]` over `ip` / `user_agent`, but
+      only where `actor_type = anonymous` — a row an unauthenticated self-service path
+      (failed login, throttled recovery) wrote about the subject. There the row records
+      **no discriminant for whose address it holds**: it may be the subject triggering
+      their own lockout or recovery, and once `resource_erased` is raised no detective
+      control can ever surface it, so the erasure is the only chance. **The accepted cost,
+      stated rather than hidden:** where the requester was a stranger — an attacker locking
+      a victim out — that attacker's address is destroyed too, and nothing records that it
+      was. Weigh this before treating an admin-initiated erasure as forensically neutral.
+      It leaves `actor_erased` FALSE, because that actor was never
+      identified and so was never erased: **`ip = '[REDACTED]'` does not imply
+      `actor_erased`**, and nothing may derive one from the other. Two mutation paths
+      sharing one normative sentinel — not a fourth mutation policy on the table. **Subject erasure is distinct** (never merged —
       ADR D15): `bank-account:gdpr:erase-subject <id>` removes the live account and
       destroys its DEK, so the PII in the append-only trail becomes permanently unreadable
       while the rows survive; it self-audits `GDPR_SUBJECT_ERASED`. **The erasure is not

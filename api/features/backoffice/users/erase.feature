@@ -131,6 +131,33 @@ Feature: Erase an identity (GDPR right to erasure)
     And I execute the SQL query "SELECT id FROM audit_log WHERE id = '0190f200-0000-7000-8000-00000000ef01' AND actor_id = resource_id AND resource_erased = TRUE"
     And there should have 1 records in SQL result
 
+  Scenario: Erasure redacts the request metadata of a row nobody was authenticated to write
+    # A self-service path (a throttled recovery, a failed login) names the subject as its resource while no
+    # token exists, so the captured ip is the requester's — which on these paths is the subject themself.
+    # Neither GDPR pass reached it: the actor pass matches `actor_id`, NULL here, and the resource pass used
+    # to leave the actor columns alone on the strength of a third party who, on an anonymous row, is absent.
+    # Its own subject, because the scenarios above erase the fixture ones.
+    Given I execute the SQL query "INSERT INTO identity_user (id, email, password_hash, roles, status, failed_attempts, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fb01', 'throttled@erpify.test', 'x', to_json(ARRAY[]::text[]), 'ACTIVE', 0, NOW(), NOW())" on connection "seed"
+    And I execute the SQL query "INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, resource_type, resource_id, metadata, ip, user_agent, actor_erased, resource_erased, occurred_on) VALUES ('0190f200-0000-7000-8000-00000000fb11', 'security', 'PASSWORD_RECOVERY_THROTTLED', 'anonymous', NULL, '0190f200-0000-7000-8000-00000000fb21', 'User', '0190f200-0000-7000-8000-00000000fb01', '{}', '198.51.100.23', 'ProbeAgent/1.0', false, false, '2026-03-03 12:00:00+00')" on connection "seed"
+    # Seeded, not assumed. The negative below is satisfied by a row that was never inserted, and this repo
+    # has shipped exactly that defect — so the positive claim is made here, before anything is erased.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE id = '0190f200-0000-7000-8000-00000000fb11' AND ip = '198.51.100.23' AND user_agent = 'ProbeAgent/1.0'" on connection "seed"
+    And there should have 1 records in SQL result
+    And I am logged in as an administrator
+    When I send a "DELETE" request to "/backoffice/users/0190f200-0000-7000-8000-00000000fb01"
+    Then the response status code should be 204
+    # The negative: the captured address is gone from the whole table, not merely from this row.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE ip = '198.51.100.23'"
+    And there should have 0 records in SQL result
+    # The positive, on that exact row id: gone because it was REWRITTEN, not because the row was deleted or
+    # never existed. `actor_erased` stays false — this actor was never identified, so it was never erased,
+    # and raising the flag would corrupt the one column that answers "was there a person here?".
+    And I execute the SQL query "SELECT id FROM audit_log WHERE id = '0190f200-0000-7000-8000-00000000fb11' AND ip = '[REDACTED]' AND user_agent = '[REDACTED]' AND actor_erased = FALSE AND resource_erased = TRUE"
+    And there should have 1 records in SQL result
+    # …and the row still does not name the person on the axis that named them.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE resource_type = 'User' AND resource_id = '0190f200-0000-7000-8000-00000000fb01'"
+    And there should have 0 records in SQL result
+
   Scenario: Erasure reaches the references no foreign key would have cascaded
     # membership.user_id and iam_invitation.invited_user_id cross a bounded context, so they are referenced
     # by id. Nothing in the schema references identity_user, so deleting it cascades nowhere and each has to

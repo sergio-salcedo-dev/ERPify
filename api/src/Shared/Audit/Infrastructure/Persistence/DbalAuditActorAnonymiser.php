@@ -7,6 +7,7 @@ namespace Erpify\Shared\Audit\Infrastructure\Persistence;
 use Doctrine\DBAL\Connection;
 use Erpify\Shared\Audit\Application\ActorAnonymisationResult;
 use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
+use Erpify\Shared\Audit\Domain\AuditRedaction;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -14,8 +15,11 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 /**
  * {@link AuditActorAnonymiser} over the append-only `audit_log` via plain DBAL. The "forget me" erasure is
  * one parameterised UPDATE that overwrites a subject's `actor_id` with a single freshly minted UUIDv7,
- * redacts `ip`/`user_agent` to a sentinel and raises the materialised `actor_erased` flag — never a DELETE,
- * so the security trail survives. The original
+ * redacts `ip`/`user_agent` to {@see AuditRedaction::SENTINEL} and raises the materialised `actor_erased`
+ * flag — never a DELETE, so the security trail survives. It writes that sentinel unguarded, over a never
+ * captured value as readily as over a real one, which is sound HERE and only here: every row it matches
+ * was authored by the one person being forgotten, so nothing it overwrites belonged to anybody else.
+ * The original
  * id is neither stored nor derivable from the pseudonym, so the link to the person is broken irreversibly
  * (effective anonymisation, not keyed pseudonymisation that a leaked key could reverse). The narrowing
  * `WHERE actor_id = …` makes it idempotent: a re-run with the original id matches nothing.
@@ -41,12 +45,6 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 #[AsAlias(AuditActorAnonymiser::class)]
 final readonly class DbalAuditActorAnonymiser implements AuditActorAnonymiser
 {
-    /**
-     * Replaces `ip`/`user_agent` on erasure. A sentinel, not NULL, so a GDPR-redacted value stays
-     * distinguishable from one that was never captured (anonymous/system or off-request entries).
-     */
-    private const string REDACTED = '[REDACTED]';
-
     public function __construct(
         private Connection $connection,
     ) {
@@ -81,7 +79,7 @@ final readonly class DbalAuditActorAnonymiser implements AuditActorAnonymiser
             . ')',
             [
                 'pseudonym' => $pseudonym,
-                'redacted' => self::REDACTED,
+                'redacted' => AuditRedaction::SENTINEL,
                 'actor_id' => $actorId,
             ],
         );

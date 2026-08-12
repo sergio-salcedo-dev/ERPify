@@ -45,7 +45,7 @@
   4. Unique constraints account for it (PostgreSQL partial unique indexes: `… WHERE deleted_at IS NULL`).
 - **`audit_log` is a justified retention exception — append-only + scheduled prune, not soft delete.**
   The operational audit trail (`Shared/Audit`, raw DBAL) takes no `UPDATE`/`DELETE` on the write path; it
-  admits a **closed set of two first-class mutation policies** (ADR
+  admits a **closed set of three first-class mutation policies** (ADR
   [`audit-activity-log.md`](../adr/audit-activity-log.md), D4). The first is the **retention prune** — its
   *only* sanctioned `DELETE`: a daily Symfony Scheduler job (`AuditLogPruner`, on the
   `scheduler_audit_maintenance` transport) with **differentiated per-level windows** (`security` kept
@@ -54,7 +54,10 @@
   The row carries PII (`actor_id`, `ip`, `user_agent`), so the bounded window is also GDPR data
   minimisation; outright erasure is the second policy — the `audit:gdpr:erase` command's in-place
   anonymising `UPDATE` (`actor_id` → a fresh random UUID per subject; `ip`/`user_agent` → `[REDACTED]`),
-  never row deletion.
+  never row deletion. The third is the resource axis, which pseudonymises `resource_id` and — only where
+  `actor_type = anonymous`, the one case where the row records no discriminant for whose address it holds —
+  writes the same `[REDACTED]` sentinel over `ip`/`user_agent`. Two mutation paths sharing one normative
+  sentinel, not two redaction policies.
 
 ## Identifiers (UUID v7, app-assigned)
 - **All entity ids are UUID v7**, generated in the application layer (`Uuid::generate()` (`Shared/Uuid/Domain`)
