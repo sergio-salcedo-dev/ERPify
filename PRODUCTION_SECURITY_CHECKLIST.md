@@ -718,8 +718,23 @@ mitigated state. Accepting one means recording who accepted it and against which
       warms, compiling outside PHPUnit and masking the deprecation) `v0.4.2` exits 1 with
       `Deprecations: 1` naming `HttpKernel\DependencyInjection\Extension`, and `v0.4.3` exits 0 over
       2698 tests. The `upstream-pin-watch` CI job and `make composer.check.mercure-pin` were removed
-      with the pin they watched; dependabot's weekly composer lane now proposes `0.5.0` and beyond
-      by the ordinary route. Closed [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
+      with the pin they watched: anchored to a `v0.4.2` baseline they would have stayed red for
+      ever. Closed [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
+- [ ] **38 direct composer dependencies are behind, because dependabot's composer lane was aimed at
+      a directory with no manifest.** `.github/dependabot.yaml` declared `directory: /` while the
+      manifest is `api/composer.json`, so the weekly version-update lane produced **zero** PRs in
+      four months (npm produced ~40 over the same window). The two composer PRs that did land
+      ([#138](https://github.com/sergio-salcedo-dev/ERPify/pull/138),
+      [#536](https://github.com/sergio-salcedo-dev/ERPify/pull/536)) came through **security**
+      updates, which walk the dependency graph and ignore the config's `directory:` — the back door,
+      not the lane. Nothing went red; PRs simply never arrived. The config is fixed here
+      (`directory: /api`), which restores the lane but does **not** apply the backlog. Measured
+      2026-08-12: 38 direct packages outdated, most of them the Symfony `8.1.2`–`8.1.4` patch line
+      against an installed `8.1.0`/`8.1.1`; `composer audit` reports no known advisory, so there is
+      no live exposure — the risk is that the next one would also have gone unproposed. **Before a
+      customer deployment:** land the catch-up as one consolidated batch (`/deps-update`, which
+      re-resolves the ranges in a single install and reads every claimed version back out of the
+      lock) and re-run `composer audit`.
 - [ ] **A stolen session can deny the owner a credential *rotation*, but not an *eviction*.** Both budgets a
       session holder can reach are keyed by something they already have: `password_change_per_identity`
       (10 / 15 min, a visible 429) by the identity itself, and `password_recovery_per_email` (5 / hour, whose

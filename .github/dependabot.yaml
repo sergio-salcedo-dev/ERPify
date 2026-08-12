@@ -11,8 +11,15 @@ updates:
     cooldown:
       default-days: 7
 
+  # `/api`, not `/`: the repo root holds no composer.json — the manifest is
+  # api/composer.json. Pointed at `/` this lane produced ZERO routine PRs in
+  # four months while npm produced ~40, and the only two composer PRs ever
+  # (#138, #536) say "in the /api directory" because SECURITY updates walk the
+  # dependency graph and ignore this `directory:` entirely. A version-update
+  # lane aimed at a directory with no manifest fails silently: nothing goes
+  # red, PRs simply never arrive.
   - package-ecosystem: composer
-    directory: /
+    directory: /api
     schedule:
       interval: weekly
     commit-message:
