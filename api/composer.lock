@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1bff8404ec79e651cb16c35dd7c8ef6e",
+    "content-hash": "06b09e31181b95e967410a43bac82b1d",
     "packages": [
         {
             "name": "behat/gherkin",
@@ -4644,16 +4644,16 @@
         },
         {
             "name": "symfony/mercure-bundle",
-            "version": "dev-main",
+            "version": "v0.4.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/mercure-bundle.git",
-                "reference": "28e75026cbc494613e0b56a1ddb01cf45b4bfc8f"
+                "reference": "90e269c68fa10088e0affb02a3708ffce3e35f4e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/mercure-bundle/zipball/28e75026cbc494613e0b56a1ddb01cf45b4bfc8f",
-                "reference": "28e75026cbc494613e0b56a1ddb01cf45b4bfc8f",
+                "url": "https://api.github.com/repos/symfony/mercure-bundle/zipball/90e269c68fa10088e0affb02a3708ffce3e35f4e",
+                "reference": "90e269c68fa10088e0affb02a3708ffce3e35f4e",
                 "shasum": ""
             },
             "require": {
@@ -4662,7 +4662,7 @@
                 "symfony/config": "^6.4|^7.3|^8.0",
                 "symfony/dependency-injection": "^6.4|^7.3|^8.0",
                 "symfony/http-kernel": "^6.4|^7.3|^8.0",
-                "symfony/mercure": "*",
+                "symfony/mercure": "^0.6.1|^0.7",
                 "symfony/web-link": "^6.4|^7.3|^8.0"
             },
             "require-dev": {
@@ -4674,7 +4674,6 @@
             "suggest": {
                 "symfony/messenger": "To use the Messenger integration"
             },
-            "default-branch": true,
             "type": "symfony-bundle",
             "extra": {
                 "branch-alias": {
@@ -4710,7 +4709,7 @@
             ],
             "support": {
                 "issues": "https://github.com/symfony/mercure-bundle/issues",
-                "source": "https://github.com/symfony/mercure-bundle/tree/main"
+                "source": "https://github.com/symfony/mercure-bundle/tree/v0.4.3"
             },
             "funding": [
                 {
@@ -4722,7 +4721,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-01-19T15:19:34+00:00"
+            "time": "2026-08-11T10:28:59+00:00"
         },
         {
             "name": "symfony/messenger",
@@ -15490,8 +15489,7 @@
     "minimum-stability": "stable",
     "stability-flags": {
         "behat/behat": 15,
-        "roave/security-advisories": 20,
-        "symfony/mercure-bundle": 20
+        "roave/security-advisories": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

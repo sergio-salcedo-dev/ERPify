@@ -707,24 +707,19 @@ mitigated state. Accepting one means recording who accepted it and against which
       suite writes into, so any `git add -A` commits whatever a test last wrote — into a **public**
       repository. Today the residue is a 91-byte 1×1 PNG; the exposure grows the day a test writes
       realistic fixture data. Add the path to `.gitignore` and delete the residue.
-- [ ] **One shipped dependency tracks an untagged upstream branch: `symfony/mercure-bundle:
-      0.4.x-dev`.** It sits in `require`, so it reaches production, and it is the only breach of
-      `minimum-stability: stable` that does (the other two `stability-flags` entries are dev-only).
-      What is reviewed is a commit no maintainer tagged: `composer.lock` pins an exact ref, so builds
-      stay reproducible, but **`composer update` on this package moves it to whatever `main` HEAD
-      is** — unreviewed code into the deployed tree. The pin is deliberate, not an oversight: the
-      `v0.4.2` tag extends a class deprecated in Symfony 8.1 and `failOnDeprecation="true"` turns the
-      suite red, so the alternative was suppressing a real deprecation gate. Full argument and the
-      retirement trigger (first tag ≥ `0.4.3` carrying upstream `8708c813`) in
-      [`api/CLAUDE.md`](api/CLAUDE.md). **Before a customer deployment:** either the tag has landed
-      and the pin is gone, or re-diff the pinned ref against `v0.4.2` and record who accepted it.
-      **Accepted 2026-07-28 (Sergio):** the pinned ref `28e75026` was upstream `main` HEAD at
-      acceptance time, and its full delta against `v0.4.2` is two commits / two files / four lines —
-      upstream `8708c813` (the DI-extension fix the pin exists for) plus a branch-alias metadata
-      fix. The acceptance is void the moment the lock ref moves: re-diff and re-record. Tag watch:
-      the weekly CI cron runs `make composer.check.mercure-pin`, which goes red at the first
-      upstream tag newer than `v0.4.2`. Tracking issue:
-      [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
+- [x] **No shipped dependency tracks an untagged upstream branch — closed 2026-08-12.**
+      `symfony/mercure-bundle` was pinned to `0.4.x-dev` because the `v0.4.2` tag extended a class
+      deprecated in Symfony 8.1 and `failOnDeprecation="true"` turned the suite red, so the only
+      alternative was suppressing a real deprecation gate. Upstream tagged `v0.4.3` on 2026-08-11
+      carrying the fix (`8708c813`, verified an ancestor of the tag: `compare/v0.4.3...8708c813` →
+      `ahead 0, behind 5`), and the constraint is now `^0.4.3`. Its `stability-flags` entry dropped
+      with it, leaving two, both `require-dev`. **Verified by forcing the broken path, not by a green
+      run:** on a cold container cache (`cache:clear --env=test --no-warmup` — plain `cache:clear`
+      warms, compiling outside PHPUnit and masking the deprecation) `v0.4.2` exits 1 with
+      `Deprecations: 1` naming `HttpKernel\DependencyInjection\Extension`, and `v0.4.3` exits 0 over
+      2698 tests. The `upstream-pin-watch` CI job and `make composer.check.mercure-pin` were removed
+      with the pin they watched; dependabot's weekly composer lane now proposes `0.5.0` and beyond
+      by the ordinary route. Closed [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
 - [ ] **A stolen session can deny the owner a credential *rotation*, but not an *eviction*.** Both budgets a
       session holder can reach are keyed by something they already have: `password_change_per_identity`
       (10 / 15 min, a visible 429) by the identity itself, and `password_recovery_per_email` (5 / hour, whose
