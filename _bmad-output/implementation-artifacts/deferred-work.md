@@ -304,3 +304,8 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
   `preg_match` emitiera un warning y, con `failOnWarning="true"`, el gate muriera por un mensaje que no es
   ninguno de los cinco suyos. Ningún patrón así existe hoy. Ref:
   `api/tests/Unit/Shared/Architecture/Support/BehatVocabularyReader.php:174-176`.
+
+## Deferred from: code review of br-4c-602-observabilidad-del-throttle-de-recuperacion (2026-08-12)
+
+- **`ip`/`user_agent` on an `actor_type = anonymous` audit row are erased by neither GDPR pass.** `DbalAuditActorAnonymiser` matches on `actor_id`, which is NULL on these rows, so it never fires; `DbalAuditResourceAnonymiser` states in its own docblock that it leaves `actor_id`, `ip` and `user_agent` alone. So a subject named in `resource_id` gets pseudonymised while an IP that may be their own survives the full `security` retention window with no named owner. Pre-existing: `USER_LOCKED` (BR-4b) has the identical shape. Newly reachable from a self-service path, where the acting party and the named subject are the same person — which is the case the anonymiser's "the IP describes a third party who acted" rationale does not cover.
+- **Behat's `ALTER TABLE … RENAME` outage pattern is not exception-safe and its step swallows SQL errors.** `SqlQueryContext::iExecuteTheSQLQuery` catches `Doctrine\DBAL\Exception` into `$lastSqlError`, and nothing asserts the rename-back succeeded; on failure the table stays renamed and every later scenario cascades from a cause nothing names. Pattern inherited from BR-4b, already on `main`.
