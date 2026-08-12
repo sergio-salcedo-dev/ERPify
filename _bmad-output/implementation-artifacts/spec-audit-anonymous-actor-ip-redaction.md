@@ -2,7 +2,7 @@
 title: 'Redact ip/user_agent on anonymous-actor audit rows naming an erased subject'
 type: 'bugfix'
 created: '2026-08-12'
-status: 'done'
+status: 'in-review'
 baseline_commit: '781c75a2e66548ef8a434017dda8fe5c965fad09'
 review_loop_iteration: 0
 context:
