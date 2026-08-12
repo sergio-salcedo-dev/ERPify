@@ -79,12 +79,14 @@ persistidos — `name`, `nameNormalized`, `shortName` —, no contra los dos arg
   - [x] `BankAccount::update()` — guarda `alreadyStores()` sobre los cinco campos canonicalizados; si nada cambia, no muta, no toca `updatedAt`, no graba evento.
   - [x] `Bank::rename()` — ídem sobre `name`/`nameNormalized`/`shortName`, comparando tras `NormalizedText::from` / `toAsciiUpper`.
   - [x] Casos de uso intactos: `BankUpdater` y `BankAccountUpdater` abren la transacción y guardan igual — fijado con `$transactions->opened === 1` en sus tests, el mismo observable que `BankAccountStatusChangerTest` ya usaba.
-- [ ] **T2 — D2 · #422: borrar el residuo de migración** (PWA)
-  - [ ] Borrar `pwa/src/context/backoffice/bank/application/SearchBanks.ts` y `.../bankaccount/application/SearchAllBankAccounts.ts`.
-  - [ ] Quitar sus bindings: `Container.ts:145` y `:180` (y sus dos `import`, `:17` y `:31`).
-  - [ ] Borrar sus tests unitarios (`pwa/tests/context/backoffice/bankaccount/application/SearchAllBankAccounts.test.ts` y el homólogo de banks si existe).
-  - [ ] Reescribir las 8 specs de banks contra el token de repositorio: eliminar la síntesis de `_mocks.ts:53-68` y mockear `BackOfficeBankCrudRepository` directamente.
-  - [ ] **NO tocar** `SearchBankAccounts` ni su página.
+- [x] **T2 — D2 · #422: borrar el residuo de migración** (PWA)
+  - [x] Borrados `SearchBanks.ts` y `SearchAllBankAccounts.ts`.
+  - [x] Quitados sus dos `import` y sus dos bindings de `Container.ts`.
+  - [x] Borrado `SearchAllBankAccounts.test.ts`. **No existe homólogo de banks** —
+    `pwa/tests/context/backoffice/bank/application/` sólo contiene `schemas/`.
+  - [x] Reescritas las 8 specs contra los tokens que la página resuelve; síntesis de `_mocks.ts` eliminada
+    entera y `_fixtures.ts::searchPage` devuelve ya la `ResourceSearchPage` genérica (`items`).
+  - [x] `SearchBankAccounts` y su página, intactos.
 - [ ] **T3 — D3 · #423+#272: gate de contrato de enums**
   - [ ] Test que extrae los valores de `Currency` y `BankAccountStatus` (PHP) y los `Set` `CURRENCIES`/`STATUSES` de `ApiBankAccountRepository.ts:50-51`, y compara **conjuntos**.
   - [ ] Mecanismo según `CaddyfileAccessLogRedactionGateTest`; comparación **no** textual.
@@ -129,7 +131,7 @@ y arrastra efectos aguas abajo aunque no publique evento.
 | Gate de enums: valor eliminado **del PWA** | 1 | ☐ |
 | **Gate de enums: el parser NO encuentra la fuente** → rojo, jamás conjunto vacío válido | 1 | ☐ |
 | **Gate de enums: la declaración esperada se renombra o se duplica** → rojo | 1 | ☐ |
-| Specs de banks reescritas: romper `search` del repositorio | ≥1 | ☐ |
+| Specs de banks reescritas: romper `search` del repositorio | ≥1 | ✔ 4 mutaciones, 4 rojas (abajo) |
 
 Un gate verde cuya mutación no enrojece **no cubre esa dirección** — y el gate de enums es justamente lo que
 permite cerrar #423/#272 con garantía en vez de con una foto. Restaurar tras falsificar **copiando los bytes**,
@@ -162,6 +164,41 @@ re-medición verde al final. Los guiones quedan en `tmp/br7-t1/` (gitignored).
 
 `--list-tests` sobre el filtro de las dos clases nuevas devuelve exactamente los 16 tests esperados: el filtro
 no casa un subconjunto.
+
+### T2 — falsificación ejecutada
+
+Los specs mockean el contenedor, así que romper el adaptador de producción no probaría nada sobre ellos: lo
+falsable es la **costura**. Cuatro mutaciones sobre la suite de banks (47 ficheros, 207 tests), todas rojas:
+
+| Mutación | Rojo |
+|---|---|
+| La página pide otra `repositoryKey` | 12 ficheros · 43 tests |
+| La página pide otra `navigatorKey` | 2 ficheros · 4 tests |
+| La fixture devuelve una página sin `items` | 11 ficheros · 42 tests |
+| El kit vuelve a colgar el espía del token borrado `BackOfficeSearchBanks` | 4 ficheros · 14 tests |
+
+La última es la que importa: **es la prueba de que los specs cuelgan ahora del token que producción resuelve** y
+no del caso de uso muerto. Restauración por copia de bytes, baseline verde al final.
+
+### T2 — alcanzabilidad, medida en tres planos
+
+El criterio no era «no quedan imports», sino que el token no fuese alcanzable como servicio:
+
+1. **Estático** — cero apariciones de `BackOfficeSearchBanks` / `BackOfficeSearchAllBankAccounts` en todo `pwa`
+   (`.ts/.tsx/.js/.json`). Las dos vías de resolución dinámica se enumeraron: los `repositoryKey`/`navigatorKey`
+   de `useResourceList`/`useResourceItem`/`useResourceMutations` (tres valores, todos `*CrudRepository`/
+   `BackOfficeUserRepository`) y el array `MONITORED_COMPONENTS` de `health/page.tsx` (dos tokens de health).
+2. **Tipos** — `tsc --noEmit` limpio dentro de `make pwa.quality`.
+3. **Runtime** — sonda desechable contra el `Container` real (no un mock): resuelve
+   `BackOfficeBankCrudRepository`, `BackOfficeBankResourceNavigator`, `BackOfficeBankAccountCrudRepository`,
+   `BackOfficeSearchBankAccounts`, `BackOfficeDeleteBank` y `BackOfficeCountBanks`, y **lanza** en los dos
+   borrados. Verde; el fichero se borró tras medir.
+
+**Hallazgo que corrigió el cableado:** la síntesis mapeaba `find`/`delete` del repositorio desde los espías de
+los casos de uso, y eso ocultaba que las dos rutas de borrado son distintas en producción — el bulk llama
+`repo.find` + `repo.delete` (`useResourceList.ts:429,449`) mientras el botón de fila resuelve el caso de uso
+`BackOfficeDeleteBank` (`DeleteBankButton.tsx:66`). Atar todo al repositorio dejó 8 tests rojos hasta separarlas.
+Cada espía queda ahora atado a los papeles que de verdad ejerce.
 
 ---
 

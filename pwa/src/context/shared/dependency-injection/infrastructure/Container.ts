@@ -14,7 +14,6 @@ import { ApiBankCountReader } from "../../../backoffice/bank/infrastructure/ApiB
 import { ApiBankSearchNavigator } from "../../../backoffice/bank/infrastructure/ApiBankSearchNavigator";
 import { BankCrudRepository } from "../../../backoffice/bank/infrastructure/BankCrudRepository";
 import { BankResourceNavigator } from "../../../backoffice/bank/infrastructure/BankResourceNavigator";
-import { SearchBanks } from "../../../backoffice/bank/application/SearchBanks";
 import { CountBanks } from "../../../backoffice/bank/application/CountBanks";
 import { FindBank } from "../../../backoffice/bank/application/FindBank";
 import { CreateBank } from "../../../backoffice/bank/application/CreateBank";
@@ -28,7 +27,6 @@ import { ApiBankAccountSearchNavigator } from "../../../backoffice/bankaccount/i
 import { BankAccountCrudRepository } from "../../../backoffice/bankaccount/infrastructure/BankAccountCrudRepository";
 import { BankAccountResourceNavigator } from "../../../backoffice/bankaccount/infrastructure/BankAccountResourceNavigator";
 import { SearchBankAccounts } from "../../../backoffice/bankaccount/application/SearchBankAccounts";
-import { SearchAllBankAccounts } from "../../../backoffice/bankaccount/application/SearchAllBankAccounts";
 import { FindBankAccount } from "../../../backoffice/bankaccount/application/FindBankAccount";
 import { CreateBankAccount } from "../../../backoffice/bankaccount/application/CreateBankAccount";
 import { UpdateBankAccount } from "../../../backoffice/bankaccount/application/UpdateBankAccount";
@@ -142,7 +140,6 @@ container
   .to(BankResourceNavigator)
   .inSingletonScope();
 
-container.bind<SearchBanks>("BackOfficeSearchBanks").to(SearchBanks);
 container.bind<CountBanks>("BackOfficeCountBanks").to(CountBanks);
 container.bind<FindBank>("BackOfficeFindBank").to(FindBank);
 container.bind<CreateBank>("BackOfficeCreateBank").to(CreateBank);
@@ -177,7 +174,6 @@ container
   .inSingletonScope();
 
 container.bind<SearchBankAccounts>("BackOfficeSearchBankAccounts").to(SearchBankAccounts);
-container.bind<SearchAllBankAccounts>("BackOfficeSearchAllBankAccounts").to(SearchAllBankAccounts);
 container.bind<FindBankAccount>("BackOfficeFindBankAccount").to(FindBankAccount);
 container.bind<CreateBankAccount>("BackOfficeCreateBankAccount").to(CreateBankAccount);
 container.bind<UpdateBankAccount>("BackOfficeUpdateBankAccount").to(UpdateBankAccount);

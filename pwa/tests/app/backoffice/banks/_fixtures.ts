@@ -1,15 +1,19 @@
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
-import type { BankSearchPage } from "@/context/backoffice/bank/domain/BankRepository";
+import type { ResourceSearchPage } from "@/context/shared/resource/domain/CrudRepository";
 
 /**
- * Builds a `BankSearchPage` in the shape `BackOfficeSearchBanks.run` resolves to
- * under the cursor-only contract (PR3). Defaults to a complete single page (no
- * prev/next affordance, null links, LIGHT `count`); pass `overrides` to vary any
- * field — e.g. `{ hasNext: true, links: { next: "/api/...", prev: null } }`.
+ * Builds a `ResourceSearchPage` in the shape `BackOfficeBankCrudRepository`
+ * resolves to under the cursor-only contract (items in `items`). Defaults to a
+ * complete single page (no prev/next affordance, null links, LIGHT `count`);
+ * pass `overrides` to vary any field — e.g.
+ * `{ hasNext: true, links: { next: "/api/...", prev: null } }`.
  */
-export function searchPage(banks: Bank[], overrides: Partial<BankSearchPage> = {}): BankSearchPage {
+export function searchPage(
+  banks: Bank[],
+  overrides: Partial<ResourceSearchPage<Bank>> = {},
+): ResourceSearchPage<Bank> {
   return {
-    banks,
+    items: banks,
     hasNext: false,
     hasPrev: false,
     count: null,
