@@ -27,6 +27,7 @@ use Throwable;
  * @internal
  */
 #[CoversClass(DoctrineTransactionManager::class)]
+#[CoversClass(ReferentialIntegrityViolation::class)]
 final class TransactionManagerReferentialFailureTest extends KernelTestCase
 {
     #[Test]

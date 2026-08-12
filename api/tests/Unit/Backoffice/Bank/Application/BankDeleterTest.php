@@ -146,17 +146,44 @@ final class BankDeleterTest extends TestCase
         }
     }
 
+    /**
+     * The recount is best-effort: it runs after a boundary that has just failed, so it is the call most
+     * likely to find nothing on the other end. Letting it throw would replace a 409 the caller can act on
+     * with a 500 — and the conflict is already proven by the violation, whatever the recount says.
+     */
+    public function testStillReportsTheConflictWhenTheRecountItselfFails(): void
+    {
+        $bankRepository = new InMemoryBankRepository(BankMother::drained());
+        $bankDeleter = $this->makeBankDeleter(
+            $bankRepository,
+            accountCount: 0,
+            transactions: FailingTransactionManager::referentialIntegrityAtCommit(),
+            accounts: InMemoryBankAccountRepository::withFailingRecount(0),
+        );
+
+        try {
+            $bankDeleter->delete(BankMother::DEFAULT_ID);
+            $this->fail('Expected BankInUseException to be thrown.');
+        } catch (BankInUseException $bankInUseException) {
+            $this->assertSame(
+                ['bankId' => BankMother::DEFAULT_ID, 'accountCount' => 1],
+                $bankInUseException->context(),
+            );
+        }
+    }
+
     private function makeBankDeleter(
         InMemoryBankRepository $bankRepository,
         int $accountCount,
         ?RecordingEventBus $eventBus = null,
         ?int $recount = null,
         ?TransactionManager $transactions = null,
+        ?InMemoryBankAccountRepository $accounts = null,
     ): BankDeleter {
         return new BankDeleter(
             $bankRepository,
             new BankFinder($bankRepository),
-            new InMemoryBankAccountRepository($accountCount, $recount),
+            $accounts ?? new InMemoryBankAccountRepository($accountCount, $recount),
             $eventBus ?? new RecordingEventBus(),
             $transactions ?? new ImmediateTransactionManager(),
         );

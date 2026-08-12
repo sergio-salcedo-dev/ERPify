@@ -19,6 +19,7 @@ use RuntimeException;
  * @internal
  */
 #[CoversClass(DoctrineTransactionManager::class)]
+#[CoversClass(ReferentialIntegrityViolation::class)]
 final class DoctrineTransactionManagerTest extends TestCase
 {
     use TransactionManagerDoubles;
