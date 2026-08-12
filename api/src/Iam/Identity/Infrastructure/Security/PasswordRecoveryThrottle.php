@@ -28,14 +28,14 @@ final readonly class PasswordRecoveryThrottle
     }
 
     /**
-     * Consumes the per-email forgot budget. The key is case-folded so re-requests for the same mailbox in
-     * different casings share one bucket; the budget is spent for EVERY requested address, known or not, so
-     * the limiter itself cannot be probed for existence.
+     * Consumes the per-email forgot budget. The key is case-folded by {@see RecoveryBudgetKey} so re-requests
+     * for the same mailbox in different casings share one bucket; the budget is spent for EVERY requested
+     * address, known or not, so the limiter itself cannot be probed for existence.
      */
     public function allowRequest(string $email): bool
     {
         return $this->perEmailLimiter
-            ->create(\mb_strtolower(\trim($email)))
+            ->create(RecoveryBudgetKey::forEmail($email))
             ->consume()
             ->isAccepted()
         ;

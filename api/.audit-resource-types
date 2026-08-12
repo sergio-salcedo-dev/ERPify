@@ -44,9 +44,12 @@
 #     not persist an id it has no way of erasing. That writer declares the literal itself and reaches it
 #     through `self::`, so this sweep sees it by the same path as any other in-class constant.
 #   - The sweep ALSO resolves `OtherClass::CONSTANT` across files, which is how `src` writes it wherever a
-#     second use case audits against a type another one declares — `ChangeUserRoles`, `InviteUser` and
-#     `ReconcileErasedSubjectReferences` all reach `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE` that way,
-#     precisely so a `'User'` literal cannot mint a second, unregistered carrier of the same type. It earns
+#     second use case audits against a type another one declares — five callers reach
+#     `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE` that way (`ChangeUserRoles`, `InviteUser`,
+#     `ReconcileErasedSubjectReferences`, `RecordLockoutAuditBestEffort`,
+#     `RecordRecoveryThrottleAuditBestEffort`), precisely so a `'User'` literal cannot mint a second,
+#     unregistered carrier of the same type. Re-derive this list rather than appending to it; it shipped
+#     naming three while the tree already held four. It earns
 #     its cost because the failure it prevents is the worst shape this registry can fail in: an unseen
 #     writer means no type in the universe, so no line demanded, so nobody named as obliged to erase it.
 #     It no longer fails that way
