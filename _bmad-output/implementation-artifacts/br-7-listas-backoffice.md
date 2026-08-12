@@ -9,7 +9,7 @@ Status: review
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · Lote BR-7 · Issues #395 #422 #423 #424 #272 #273
 > Rama: `fix/backoffice-resource-lists-br7-sfb3` · Worktree: `.claude/worktrees/backoffice-resource-lists-br7-sfb3` · Base: `main` @ `3be82129` (rebasada; la medición original es contra `781c75a2`, y ninguno de los tres commits intermedios toca un fichero de este lote)
 > #425 se cerró con evidencia antes de este lote. **#426 sale a PR PROPIA** por decisión — ver *Trampa de la épica*.
-> **PR: [#705](https://github.com/sergio-salcedo-dev/ERPify/pull/705)** · > Cadena de decisión: re-medición → consulta externa → debate → Sergio. Íntegra en `tmp/bmad-md/br7-decisiones-cerradas-20260812.md`.
+> **PR: [#705](https://github.com/sergio-salcedo-dev/ERPify/pull/705)** · Cadena de decisión: re-medición → consulta externa → debate → Sergio. Íntegra en `tmp/bmad-md/br7-decisiones-cerradas-20260812.md`.
 
 ---
 
