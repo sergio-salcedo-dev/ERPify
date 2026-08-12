@@ -16,3 +16,14 @@ when@dev:
         methods: [GET]
         requirements:
             token: '[\w-]+'
+
+    # Publishes the FrankenPHP file-watch subscribe path so the PWA's dev layout can mount the hot-reload
+    # client. Declared here rather than as a #[Route] attribute because the attribute resource that loads
+    # src/Frontoffice/ carries no environment condition: an attribute would register this path in prod,
+    # where the #[When]-guarded controller behind it does not exist.
+    frontoffice_dev_frankenphp_hot_reload:
+        path: /api/v1/dev/frankenphp-hot-reload
+        controller: Erpify\Frontoffice\Dev\Infrastructure\Controller\FrankenPhpHotReloadController
+        methods: [GET]
+        defaults:
+            _format: json

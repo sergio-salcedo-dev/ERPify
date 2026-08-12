@@ -126,11 +126,25 @@ you change anything here.
 - [ ] The health endpoints (`/api/v1/health`, `/api/v1/backoffice/health`) are
       **consciously public and liveness-only**: static payload (status, service
       name, server time) with no DB / Mercure / Messenger probing, no PII, no
-      versions. Anonymous access is required by the §8 smoke test and the PWA
-      dashboard health check. Two invariants: any *deep* health check
-      (dependency status) must be authenticated or internal-only — never on
-      these routes — and when an API firewall lands, these two paths need an
-      explicit `PUBLIC_ACCESS` exemption. Tracked in
+      versions. Each carries its own `$`-anchored `PUBLIC_ACCESS` entry in
+      `api/config/packages/security.yaml`, and **the anchoring is the control**: a
+      pattern spanning the prefix exempts every route nested under it, which is how
+      the database probe came to be anonymous. The two exemptions rest on different
+      consumers and must be reasoned about separately: `/api/v1/health` is reached
+      anonymously by the §8 smoke test **and by the public `/status` page**, which
+      mounts outside `RequireAuth` — retiring that exemption bounces an anonymous
+      visitor to `/login`, since the PWA's HTTP client treats a 401 outside the auth
+      handshake as an expired session. `/api/v1/backoffice/health` has no anonymous
+      consumer in the PWA — its page mounts behind `RequireAuth` — but it does have
+      one **outside** it: the deploy runbooks curl it unauthenticated
+      (`api/docs/production-ready/hardening.md`, `server-setup.md`), and an operator
+      holding a shell holds no session cookie. Closing it is therefore a change to a
+      documented operational procedure, not a config edit. Two
+      invariants: **any deep health check is authenticated** — the dependency probe
+      `/api/v1/backoffice/health/database` falls through to
+      `IS_AUTHENTICATED_FULLY`, pinned by an `@anonymous` 401 scenario in
+      `api/features/backoffice/health/database.feature` — and no liveness route
+      ever grows dependency status. Tracked in
       [#222](https://github.com/sergio-salcedo-dev/ERPify/issues/222).
 - [ ] `GET /api/v1/backoffice/banks/{id}/accounts` returns the **full canonical
       IBAN** (PII) and is **consciously public** like the rest of `/backoffice`

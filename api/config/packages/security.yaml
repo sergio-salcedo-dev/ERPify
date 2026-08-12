@@ -47,9 +47,18 @@ security:
         # session. Both endpoints are same-origin-guarded (PasswordResetOriginListener) and answer uniformly.
         - { path: '^/api/v1/backoffice/forgot-password$', roles: PUBLIC_ACCESS }
         - { path: '^/api/v1/backoffice/reset-password$', roles: PUBLIC_ACCESS }
-        - { path: '^/api/v1/backoffice/health(/database)?$', roles: PUBLIC_ACCESS }
+        # Liveness only — a static payload that probes nothing. The anchored `$` is load-bearing: the
+        # database probe lives one segment deeper and must NOT inherit this exemption. It costs a Postgres
+        # round-trip per anonymous request (a DoS amplifier) and discloses dependency state to whoever asks,
+        # so it falls through to the catch-all and requires a session like the rest of `/api`. That is a
+        # session, not a permission — neither health controller carries #[IsGranted], unlike every other
+        # backoffice controller. Widening this pattern reopens the anonymous half.
+        - { path: '^/api/v1/backoffice/health$', roles: PUBLIC_ACCESS }
         - { path: '^/api/v1/health$', roles: PUBLIC_ACCESS }
-        - { path: '^/api/v1/dev/', roles: PUBLIC_ACCESS }
+        # Anchored to the one route it exempts, not to the `/dev/` prefix: the controllers under it are
+        # #[When]-guarded out of prod, but a prefix pattern would exempt any future `/dev/` route before its
+        # author chose a guard. An unexempted one falls through to the catch-all and fails closed.
+        - { path: '^/api/v1/dev/frankenphp-hot-reload$', roles: PUBLIC_ACCESS }
         # `/api/test/*` are when@test-only throwaway routes that drive the error pipeline through a real
         # kernel; this rule is inert in prod, where those routes are not registered.
         - { path: '^/api/test/', roles: PUBLIC_ACCESS }
