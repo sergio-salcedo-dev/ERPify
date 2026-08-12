@@ -93,9 +93,13 @@ persistidos — `name`, `nameNormalized`, `shortName` —, no contra los dos arg
   - [x] Mecanismo del hermano `CaddyfileAccessLogRedactionGateTest` (test PHP que lee un fichero no-PHP y
     resuelve la raíz del repo con fallo-no-skip); forma de comparación propia.
   - [x] Nueve rojos provocados, incluidos los cuatro de deriva y los cinco de degradación (ver abajo).
-- [ ] **T4 — D5 · #273: comentario rancio**
-  - [ ] `pwa/src/context/backoffice/bank/infrastructure/ApiBankRepository.ts:84` — explica la conducta nombrando grupos de serialización que ya no gobiernan nada. Reescribir contra la causa real (los Resource DTO por vista).
-- [ ] **T5 — verificación completa** (ver *Gates*)
+- [x] **T4 — D5 · #273: comentario rancio**
+  - [x] `ApiBankRepository.ts` — reescrito contra la causa real: cada vista tiene su Resource DTO y los de
+    create/update son deliberadamente la vista más estrecha (`BankUpdateResource` lo documenta), así que una
+    respuesta de escritura sin `accountCount` es válida, no malformada. Se retiró la frase que justificaba el
+    `?? 0` desde aquí: ese default es una falsificación semántica declarada fuera de alcance, y un comentario
+    que lo bendice al describir la guarda mezcla dos cosas.
+- [x] **T5 — verificación completa** (ver *Gates*)
 - [ ] **T6 — pase adversarial**, registrado en esta historia **antes** de `gh pr create`
 - [ ] **T7 — cierres con evidencia**: #395, #422, #423, #272, #424, #273
 
@@ -266,13 +270,16 @@ Todos en corrida fresca desde el worktree, con su exit code impreso. **Nunca «v
 
 | Gate | Resultado |
 |---|---|
-| `make php.stan` | ☐ |
-| `make php.unit` | ☐ |
-| `make php.behat` | ☐ |
-| `make php.quality` | ☐ |
-| `make pwa.quality` | ☐ |
-| `make pwa.test.unit` | ☐ |
-| `--list-tests` sobre el gate de enums — prueba de que se ejecuta, no sólo de que existe | ☐ |
+| `make php.stan` | ✔ exit 0 |
+| `make php.unit` | ✔ exit 0 — 2718 tests, 10868 aserciones |
+| `make php.behat` | ✔ exit 0 — 433 escenarios, 4063 pasos |
+| `make php.quality` | ✔ exit 0 (incluye gherkin, deptrac y los ocho `php.lint.*`) |
+| `make pwa.quality` | ✔ exit 0 (ESLint + Prettier + `tsc --noEmit`) |
+| `make pwa.test.unit` | ✔ exit 0 — 226 ficheros, 1234 tests |
+| `--list-tests` sobre el gate de enums — prueba de que se ejecuta, no sólo de que existe | ✔ los 2 casos aparecen en la selección por defecto |
+
+Los 2 *PHPUnit notices* y los 2 *skipped* de `php.unit` son ajenos a este lote: el árbol `tests/Unit/Backoffice`
+completo (183 tests) corre sin ninguno.
 
 ---
 
