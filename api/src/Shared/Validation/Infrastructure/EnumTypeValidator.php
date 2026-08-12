@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Validation\Infrastructure;
 
 use BackedEnum;
+use Erpify\Shared\Validation\Domain\EnumType;
 use Override;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;

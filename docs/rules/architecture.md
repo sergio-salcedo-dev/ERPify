@@ -57,6 +57,32 @@ validating UUIDs across versions (v4, v7). The prohibition stays absolute for **
 code in `Domain/`: this exception covers only `symfony/uid`, not `Erpify\Shared\Infrastructure\…` or any
 other framework service. Example: `api/src/Shared/Uuid/Domain/Uuid.php`.
 
+#### Documented exception — first-party validation constraints in Domain
+
+A constraint the project writes itself is passive metadata exactly like `#[Assert\NotBlank]`, so it lives
+beside the invariant it states: `Domain/` MAY declare a class extending `Symfony\Component\Validator\Constraint`
+and carrying `#[HasNamedArguments]`. Example: `api/src/Shared/Validation/Domain/EnumType.php`.
+
+**The constraint only — its validator stays in `Infrastructure/`.** The split is the whole point: the
+constraint is a declaration with no behaviour (`EnumType` holds an enum class name and a message), while
+`EnumTypeValidator extends ConstraintValidator` is framework runtime that reads a violation builder. Putting
+the constraint in `Infrastructure/` to keep the pair together is what made a `Domain/` entity import
+`Infrastructure/` — the one literal breach of this section that the rule itself had.
+
+#### Documented exception — `ExecutionContextInterface` as a callback signature
+
+`Domain/` and `Application/` MAY import `Symfony\Component\Validator\Context\ExecutionContextInterface`,
+solely as the parameter type of a method annotated `#[Assert\Callback]`. Blessing the attribute while
+refusing the signature it obliges you to write is half a decision: `#[Assert\Callback]` is already passive
+metadata, and the callback cannot be declared without naming this type. No runtime enters — the framework
+passes the context in. Examples: `Backoffice/Bank/Domain/Entity/Bank.php`,
+`Shared/Search/Application/Http/{FilterQuery,SearchQuery}.php`.
+
+Both exceptions are enforced by collector, not by baseline: `Vendor.PassiveMetadata` in
+`api/tools/deptrac/deptrac.yaml` matches these three classes **anchored** (`…\Constraint$`), because an
+unanchored prefix would also swallow `ConstraintViolation` and its `List`/`Interface` siblings — runtime
+result types that must stay in `Infrastructure/`.
+
 #### Documented exception — PSR interface-only interop contracts
 
 `Domain/` and `Application/` MAY depend directly on **interface-only PSR interop contracts** —

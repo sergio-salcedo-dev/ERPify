@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Validation\Infrastructure;
+namespace Erpify\Shared\Validation\Domain;
 
 use Attribute;
 use BackedEnum;

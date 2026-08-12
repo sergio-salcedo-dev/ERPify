@@ -9,8 +9,10 @@
 #      reaches into another module's Domain/Application/Infrastructure. This is the
 #      AST-aware sibling of tests/Unit/Shared/Architecture/BoundedContextGateTest.php
 #      (the text-walk gate stays the primary, auto-discovering check; deptrac is
-#      defence-in-depth). The three published seams blessed in
-#      api/.bounded-context-allowlist are mirrored in `skip_violations` below.
+#      defence-in-depth). The published seams blessed in
+#      api/.bounded-context-allowlist are mirrored in `skip_violations` below — read
+#      the count off that file, never off this comment: it said "three" while the
+#      allowlist held twenty-six.
 #   3. External-dependency allowlist in Domain/Application (issue #301, ADR
 #      docs/adr/external-dependencies-in-domain.md D4) — inner layers may only touch
 #      PSR interop contracts, symfony/uid, and the passive-metadata attribute
@@ -161,6 +163,22 @@ deptrac:
               - type: classLike
                 value: >-
                     ^(Doctrine\\ORM\\Mapping|Doctrine\\DBAL\\Types|Symfony\\Component\\Validator\\Constraints|Symfony\\Bridge\\Doctrine\\Validator\\Constraints)\\.*
+              # Three exact classes, anchored: the surrounding regex blesses the
+              # Constraints NAMESPACE, so its own base class and the two types the
+              # attribute API forces you to name were left out by accident of shape,
+              # not by decision. Anchors are load-bearing — unanchored,
+              # `…\Validator\Constraint` also swallows ConstraintViolation and its
+              # List/Interface siblings, which are runtime results and must stay out.
+              #   - Constraint: the base class a first-party constraint extends
+              #     (Shared\Validation\Domain\EnumType).
+              #   - HasNamedArguments: mandatory on a constraint with a promoted
+              #     constructor; carries no behaviour.
+              #   - ExecutionContextInterface: the parameter signature #[Assert\Callback]
+              #     obliges the callback to declare. The attribute is already blessed;
+              #     blessing it without the type it forces is half a decision.
+              - type: classLike
+                value: >-
+                    ^Symfony\\Component\\Validator\\(Constraint|Attribute\\HasNamedArguments|Context\\ExecutionContextInterface)$
 
         # ---- Framework vendors confined to Infrastructure (ADR Cat-1) -----------
         - name: Vendor.Doctrine

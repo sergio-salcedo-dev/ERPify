@@ -176,9 +176,16 @@ paraguas se quedó sin segundo hijo.
 ### BR-6 · Gates de arquitectura y CI
 
 **Issues:** #250 #305 #438 #356 #589
-**Concepto común:** tooling de fronteras. **#589 es el que muerde**: la mitad git-aware del gate NFR26 nunca
-corre porque `/app` no es un repositorio git dentro del contenedor, así que el contrato de error se apoya en
-revisión humana donde creíamos tener un gate.
+**Concepto común:** tooling de fronteras.
+
+> ~~**#589 es el que muerde**: la mitad git-aware del gate NFR26 nunca corre porque `/app` no es un repositorio
+> git dentro del contenedor, así que el contrato de error se apoya en revisión humana donde creíamos tener un
+> gate.~~
+> **FALSO, medido el 2026-08-12.** El gate corre: `ErrorContractGateTest.php` tiene 9 tests y cero
+> `markTestSkipped`, y las cadenas `resolveGitBase` / `ERROR_CONTRACT_GATE_BASE` / `merge-base` no aparecen en
+> el fichero. El arco #596–#601 lo resolvió el 28 de julio de 2026 **eliminando la dependencia de git**, no
+> pasándole una base. La afirmación se conserva tachada, no borrada: el error es reproducible y es el que puso
+> a BR-6 el tercero en el orden recomendado (`:204`), argumento que se quedó sin sujeto.
 
 ### BR-7 · Listas de backoffice
 

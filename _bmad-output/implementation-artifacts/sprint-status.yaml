@@ -368,7 +368,7 @@ development_status:
   # deptrac; #438 parte de una premisa falsa — su gate rechazaría 29 usos correctos de #[IsGranted]. El lote
   # real es #356 (gate de grafo en la PWA) + 4 de los 21 pares del baseline de deptrac + 5 correcciones de
   # prosa podrida. La línea :179-181 del fichero de épica que llamaba a #589 "el que muerde" es falsa.
-  br-6-gates-arquitectura-ci: ready-for-dev
+  br-6-gates-arquitectura-ci: in-progress
   br-7-listas-backoffice: review
   br-8-operabilidad: backlog
 

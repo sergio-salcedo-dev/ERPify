@@ -81,8 +81,9 @@ make pwa.test.unit.watch            # Vitest watch mode.
 make pwa.test.e2e                   # Playwright. Sharded: CI_SHARD=N CI_TOTAL_SHARDS=M make pwa.test.e2e.
 make pwa.test.e2e.reports           # Open the Playwright HTML report.
 make pwa.lint                       # ESLint --fix.
+make pwa.lint.graph                 # dependency-cruiser boundary gate over pwa/src (check-only).
 make pwa.format                     # Prettier --write.
-make pwa.quality.dry-run            # ESLint + Prettier check (no writes).
+make pwa.quality.dry-run            # ESLint + dependency-cruiser + Prettier + tsc (no writes).
 ```
 
 ### Aggregates and CI

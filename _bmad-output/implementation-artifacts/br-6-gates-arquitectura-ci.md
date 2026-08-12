@@ -4,7 +4,7 @@ baseline_commit: 781c75a2
 
 # Story BR-6: Gates de arquitectura y CI
 
-Status: ready-for-dev
+Status: in-progress
 
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · BR-6 de 8
 > Issues: #250 #305 #356 #438 #589
@@ -243,47 +243,50 @@ Lo que cabe en este PR — **4 pares, cero cambio de comportamiento**:
 
 ## Tasks / Subtasks
 
-- [ ] **T0 — #356: spike de 90 min con criterio de parada** (AC: 0) · **bloquea T1–T3**
-  - [ ] Instalar la devDep y cruzar `pwa/src` sin escribir ninguna regla todavía
-  - [ ] **Corte 1 — resolución del alias.** Expectativa medida a mano: **465 módulos, ~1540 aristas internas,
+- [x] **T0 — #356: spike de 90 min con criterio de parada** (AC: 0) · **bloquea T1–T3**
+  - [x] Instalar la devDep y cruzar `pwa/src` sin escribir ninguna regla todavía
+  - [x] **Corte 1 — resolución del alias.** Expectativa medida a mano: **465 módulos, ~1540 aristas internas,
         0 irresolubles, 0 ciclos**. `465 módulos con ~200 aristas es fallo silencioso` → parar. Si `@/…` sólo
         resuelve añadiendo `baseUrl` al tsconfig, o escribiendo el alias a mano en `enhancedResolveOptions`
         (tercera declaración) → **parar y cerrar #356 con el informe**
-  - [ ] **Corte 2 — instalación.** Si `make pwa.install` (`npm ci` pelado, `make/pwa.mk:31`) se pone rojo por
+  - [x] **Corte 2 — instalación.** Si `make pwa.install` (`npm ci` pelado, `make/pwa.mk:31`) se pone rojo por
         peers con TS 6 → parar; rompería `ci.yml:274` antes de llegar al gate
-  - [ ] **Corte 3 — el rojo transitivo.** Meter un import a `@/context/shared/…` en `cn.ts` y comprobar que
+  - [x] **Corte 3 — el rojo transitivo.** Meter un import a `@/context/shared/…` en `cn.ts` y comprobar que
         una regla `to: { reachable: true }` pone rojos los 10 de 11 ficheros de `ui/**` que importan
         `@/components/cn`, **mientras la regla literal sobre `ui/**` sigue verde**. Si ese rojo no sale, el
         cruiser es ESLint con pasos de más → **cerrar #356 como evaluado**
-  - [ ] Registrar el veredicto en §Rojos provocados **antes** de tocar T1
-- [ ] **T1 — #356: configurar las seis reglas** (AC: 1) · sólo si T0 dice seguir
-  - [ ] `ui-is-foundational` — `src/components/ui/**` no **alcanza** `context/**`, `app/**`, `components/erpify/**`
-  - [ ] `components-root-is-foundational` — `src/components/*.ts` sin aristas hacia arriba (**el hueco real**)
-  - [ ] `erpify-not-bounded-context` — enunciada **en negativo**: prohibir `context/backoffice/**`,
+  - [x] Registrar el veredicto en §Rojos provocados **antes** de tocar T1
+- [x] **T1 — #356: configurar las seis reglas** (AC: 1) · sólo si T0 dice seguir
+  - [x] `ui-is-foundational` — `src/components/ui/**` no **alcanza** `context/**`, `app/**`, `components/erpify/**`
+  - [x] `components-root-is-foundational` — `src/components/*.ts` sin aristas hacia arriba (**el hueco real**)
+  - [x] `erpify-not-bounded-context` — enunciada **en negativo**: prohibir `context/backoffice/**`,
         `context/frontoffice/**`, `app/**`. **Cero excepciones**
-  - [ ] `no-circular` · `no-unresolvable` (obligatoria: hace ruidoso el fallo silencioso del alias)
-  - [ ] `erpify/index.ts ⇏ context/shared/error/infrastructure/ui` — sólo si cabe en ~6 líneas
+  - [x] `no-circular` · `no-unresolvable` (obligatoria: hace ruidoso el fallo silencioso del alias)
+  - [x] `erpify/index.ts ⇏ context/shared/error/infrastructure/ui` — sólo si cabe en ~6 líneas
         (`pwa/CLAUDE.md:121` lo prohíbe por escrito y hoy nada lo verifica)
-  - [ ] `tsPreCompilationDeps: true` (7 de 17 aristas son `import type`), `doNotFollow: node_modules`,
+  - [x] `tsPreCompilationDeps: true` (7 de 17 aristas son `import type`), `doNotFollow: node_modules`,
         alcance `src` — **no** cruzar `pwa/tests/`
-  - [ ] Cabecera del `.cjs` declarando el reparto de roles con ESLint, como `deptrac.yaml:8-14`
-- [ ] **T2 — #356: cablear** (AC: 2, 3)
-  - [ ] Script en `pwa/package.json`; target en `make/pwa.mk`; engancharlo a `pwa.quality` y `pwa.quality.dry-run`
-  - [ ] Confirmar verde **sin baseline, sin `--cache` y sin una sola línea de excepción**
-- [ ] **T3 — #356: provocar los seis rojos** (AC: 4)
-  - [ ] Los tres literales son de una línea. `no-unresolvable` es trivial. `no-circular` es **el difícil**:
+  - [x] Cabecera del `.cjs` declarando el reparto de roles con ESLint, como `deptrac.yaml:8-14`
+- [x] **T2 — #356: cablear** (AC: 2, 3)
+  - [x] Script en `pwa/package.json`; target en `make/pwa.mk`; engancharlo a `pwa.quality` y `pwa.quality.dry-run`
+  - [x] Confirmar verde **sin baseline, sin `--cache` y sin una sola línea de excepción**
+- [x] **T3 — #356: provocar los seis rojos** (AC: 4)
+  - [x] Los tres literales son de una línea. `no-unresolvable` es trivial. `no-circular` es **el difícil**:
         exige dos ediciones coordinadas y dos restauraciones exactas, y mientras vive puede romper `tsc` y Vitest
-  - [ ] El rojo transitivo y el de la raíz de `components/` **vienen acoplados**: la evidencia vale si la salida
+  - [x] El rojo transitivo y el de la raíz de `components/` **vienen acoplados**: la evidencia vale si la salida
         capturada nombra **los dos rule ids**, no si se afirma haberlos provocado por separado
-- [ ] **T4 — #305: mover `EnumType` a `Shared/Validation/Domain/`** (AC: 5, 6)
-  - [ ] Mover sólo la constraint; el validador se queda en Infrastructure
-  - [ ] Admitir `Validator\Constraint` + `Validator\Attribute\HasNamedArguments` en `Vendor.PassiveMetadata`
-- [ ] **T5 — #305: bendecir `ExecutionContextInterface` por colector** (AC: 5, 6)
-- [ ] **T6 — #305: regenerar baseline y documentar** (AC: 5, 6)
-  - [ ] `make php.deptrac.baseline`; verificar 21 → 17 en el diff
-  - [ ] Dos secciones «Documented exception» en `docs/rules/architecture.md` + §Implementación del ADR
-- [ ] **T7 — Prosa podrida: las siete correcciones** (AC: 8)
-- [ ] **T8 — Cerrar #589, #250 y #438 con evidencia** (AC: 7)
+- [x] **T4 — #305: mover `EnumType` a `Shared/Validation/Domain/`** (AC: 5, 6)
+  - [x] Mover sólo la constraint; el validador se queda en Infrastructure
+  - [x] Admitir `Validator\Constraint` + `Validator\Attribute\HasNamedArguments` en `Vendor.PassiveMetadata`
+- [x] **T5 — #305: bendecir `ExecutionContextInterface` por colector** (AC: 5, 6)
+- [x] **T6 — #305: regenerar baseline y documentar** (AC: 5, 6)
+  - [x] `make php.deptrac.baseline`; verificar 21 → 17 en el diff — **medido 21 → 16**, ver §Baseline
+  - [x] Dos secciones «Documented exception» en `docs/rules/architecture.md` + §Implementación del ADR
+- [x] **T7 — Prosa podrida: las siete correcciones** (AC: 8)
+- [ ] **T8 — Cerrar #589, #250 y #438 con evidencia** (AC: 7) — **BLOQUEADO, no omitido.** La evidencia está
+      medida y los tres comentarios de cierre están escritos (`tmp/br6/close-{589,250,438}.md`); `gh issue close`
+      lo denegó el clasificador de permisos. Requiere que Sergio autorice el permiso o los cierre él pegando los
+      comentarios. Ver §Cierre de issues
 - [ ] **T9 — Gates y pase adversarial** (AC: 9) — el pase precede a `gh pr create`, no a `done`
 
 ## Prosa podrida — las siete correcciones
@@ -434,11 +437,220 @@ conteo del baseline (21 pares).
 
 ### Completion Notes List
 
+- **T0 dijo SEGUIR, y el spike se pagó solo.** Los tres cortes pasaron, pero el spike encontró lo que ninguna
+  de las dos consultas de escritorio podía encontrar: `exportsFields: []`. Sin ese hallazgo, `no-unresolvable`
+  nacía roja con 56 violaciones y la salida barata habría sido exceptuarlas o retirar la regla — las dos rompen
+  el AC3. Es exactamente el fallo que T0 existía para atrapar, y llegó por ejecutar la herramienta.
+- **La medida que zanja D2 es un verde, no un rojo.** ESLint sale **exit 0, cero hallazgos** sobre un árbol
+  donde `ui/**` alcanza `@/context/**` por la fachada de `cn`. El cruiser no duplica a ESLint.
+- **`no-circular` resultó más barato de provocar de lo previsto.** El artefacto anticipaba «dos ediciones
+  coordinadas y dos restauraciones exactas»; basta **una**, porque `ui/button.tsx → cn.ts` ya existe y añadir
+  `import "@/components/ui/button"` en `cn.ts` cierra el lazo. Ni `tsc` ni Vitest llegaron a verse afectados.
+- **El rojo del barril salió más caro que su regla**, y a favor: re-exportar las pantallas de error no sólo
+  cruza la frontera, **fabrica tres ciclos reales** porque esas pantallas importan `CopyButton`/`Logo` de ese
+  mismo barril. Verificado que todos pasan por la arista añadida y que el árbol limpio vuelve a 1906
+  dependencias — no había ciclo preexistente enmascarado.
+- **El baseline baja a 16, no a 17, y el 17 no era alcanzable.** Ver §Baseline: la alternativa «precisa» se
+  midió y **sube** la deuda a 20. D4 sigue intacto en lo que reserva a decisión: los cinco pares de runtime del
+  `Validator` y los siete de `ProblemDetailsFactory` siguen en el baseline.
+- **T8 está bloqueado, no omitido.** Evidencia medida y comentarios escritos; el cierre lo denegó el
+  clasificador de permisos y no se buscó otra vía.
+- **Dos trampas de medición documentadas** en §Cierre de issues (escapado zsh, y `grep` mandando *binary file
+  matches* a stderr). Las dos devolvían el número cómodo.
+
 ### File List
+
+**Nuevo**
+
+- `pwa/.dependency-cruiser.cjs`
+
+**Movido**
+
+- `api/src/Shared/Validation/Infrastructure/EnumType.php` → `api/src/Shared/Validation/Domain/EnumType.php`
+
+**Modificado**
+
+- `CLAUDE.md`
+- `make/pwa.mk`
+- `pwa/package.json` · `pwa/package-lock.json`
+- `pwa/CLAUDE.md`
+- `api/src/Backoffice/BankAccount/Domain/Entity/BankAccount.php`
+- `api/src/Shared/Validation/Infrastructure/EnumTypeValidator.php`
+- `api/tests/Unit/Shared/Validation/Infrastructure/EnumTypeValidatorTest.php`
+- `api/tools/deptrac/deptrac.yaml` · `api/tools/deptrac/deptrac.baseline.yaml` (**generado**)
+- `docs/rules/architecture.md`
+- `docs/adr/external-dependencies-in-domain.md`
+- `docs/architecture-pwa.md`
+- `docs/claude-code-quickref.md`
+- `docs/development-guide-pwa.md`
+- `_bmad-output/planning-artifacts/epics-backlog-resolution.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`
+- `_bmad-output/implementation-artifacts/epic-auth-arc-retro-2026-07-20.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/implementation-artifacts/br-6-gates-arquitectura-ci.md`
 
 ### Gates
 
+Todos desde corrida fresca, con el exit code impreso. Los logs quedan en `tmp/br6/` (gitignored).
+
+| Gate | Exit | Detalle |
+|---|---|---|
+| `make pwa.quality` | **0** | Incluye `lint:graph` — «no dependency violations found (494 modules, 1906 dependencies cruised)» |
+| `make pwa.lint.graph` | **0** | Y alcanzado por los dos agregados: `make -n pwa.quality` y `make -n pwa.quality.dry-run` nombran `lint:graph` |
+| `make php.quality` | **0** | deptrac: 0 violaciones, 0 uncovered, 3278 permitidas, 70 skipped |
+| `make php.stan` | **0** | `[OK] No errors` sobre 1349 ficheros |
+| `make php.unit` | **0** | Suite completa |
+| `make php.unit c='--filter ErrorContractGateTest'` | **0** | OK (9 tests, 15 assertions) — evidencia de #589 |
+| `make pwa.install` (`npm ci`) | **0** | Con la devDep dentro: 908 paquetes, 0 vulnerabilidades |
+
+**Un falso rojo descartado por diagnóstico, no por repetición.** Una corrida intermedia de `php.quality` murió
+con `php.stan Terminated` (exit 2). No era un hallazgo: había **cinco stacks de ERPify** levantados a la vez
+(20 de 30 GiB en uso) y PHPStan cayó por presión de memoria. Con el stack confirmado sano, exit 0. Nota
+lateral: `docker compose ps` a pelo desde un worktree **no lista nada** porque no resuelve su
+`COMPOSE_PROJECT_NAME` — hay que usar `make docker.ps`, y creer al primero es concluir que el stack ha
+desaparecido cuando está corriendo.
+
 ### Rojos provocados
+
+#### T0 · spike de #356 — **veredicto: SEGUIR a T1**
+
+Medido el 2026-08-12 sobre la rama rebasada a `3be82129`, con `dependency-cruiser@18.2.0` instalado como
+devDep de `pwa/`. Configs del spike bajo `tmp/br6/` (gitignored), nunca en el árbol.
+
+| Corte | Criterio de parada | Medido | |
+|---|---|---|---|
+| **1 · alias** | «465 módulos con ~200 aristas» = fallo silencioso; o el alias sólo resuelve con `baseUrl` / una tercera declaración a mano | **466 módulos internos, 1536 aristas internas, 0 irresolubles, 0 ciclos**, con `options.tsConfig` como **única** fuente del alias | ✅ pasa |
+| **2 · instalación** | `npm ci` rojo por peers con TS 6 | `make pwa.install` **exit 0**, 908 paquetes auditados, **0 vulnerabilidades**. Cero install-scripts nuevos: los 4 bloqueados por npm 12 son los preexistentes | ✅ pasa |
+| **3 · rojo transitivo** | Si el rojo transitivo no sale, el cruiser es ESLint con pasos de más | **10 violaciones** de `ui-reachable-transitive` (los 10 de 11 ficheros de `ui/**` que importan `@/components/cn`, `via 2`) **mientras `ui-literal-direct` se queda en CERO** | ✅ pasa |
+
+**La medida que zanja D2** no es el rojo del cruiser sino el verde de al lado: con el import falseado dentro de
+`cn.ts`, **`npx eslint src/components/ui src/components/cn.ts` sale exit 0 y no imprime un solo hallazgo**. El
+gate que hoy tenemos es ciego al escenario exacto que obligó a #349 a *mover* `cn` en vez de dejar una fachada,
+y nada verificaría su reintroducción. El cruiser no duplica a ESLint: ve lo que ESLint no puede enunciar.
+
+Control previo obligatorio: las tres reglas sobre el árbol **sin tocar** dan `{}` violaciones. Restauración de
+`cn.ts` **copiando los bytes** desde `tmp/br6/cn.ts.orig`; verificado `cmp` contra `origin/main:pwa/src/components/cn.ts`
+→ idéntico.
+
+#### Hallazgo del spike que corrige a este artefacto — `exportsFields` es obligatorio
+
+La expectativa escrita («0 irresolubles») **no se cumple con `options.tsConfig` a secas: salen 56**. No son
+fallos de alias — son dos paquetes reales, `inversify` ×54 y `uuid` ×2. Ambos son ESM-only, publican `exports`
+y **no publican `main`**, y dependency-cruiser trae `exportsFields: []` por defecto: una decisión deliberada de
+retrocompatibilidad con enhanced-resolve 4 (`src/main/resolve-options/normalize.mjs:35`, issue upstream #338).
+
+Consecuencia para el AC3: sin `enhancedResolveOptions.exportsFields: ["exports"]`, la regla `no-unresolvable`
+—la que el §La consulta de D2 declara obligatoria precisamente para hacer ruidoso el fallo silencioso del
+alias— **nace roja con 56 violaciones**, y la salida barata sería exceptuarlas o retirarla. Las dos rompen el
+lote. Con la opción puesta: **0 irresolubles**.
+
+No es una tercera declaración del alias `@/` y no toca `pwa/tsconfig.json`: es una capacidad del resolver sobre
+mapas `exports` de npm. La regresión que el artefacto enuncia (no añadir `baseUrl`) queda intacta.
+
+Ni la consulta a Winston ni la de Amelia lo predijeron, por la razón que el propio artefacto ya daba: **ninguno
+de los dos ejecutó la herramienta**. Es el hallazgo que justifica T0 por sí solo.
+
+#### T3 · los seis rojos de `pwa/.dependency-cruiser.cjs`
+
+Gate verde de nacimiento: `make pwa.lint.graph` → **exit 0**, «no dependency violations found (494 modules,
+1906 dependencies cruised)», **sin baseline, sin `--cache`, sin preset y sin una sola línea de excepción**
+(AC1/AC3). Cinco falsificaciones, una edición cada vez, restaurando siempre **copiando bytes** desde
+`tmp/br6/*.orig`. Script: `tmp/br6/provoke-reds.sh`; salidas en `tmp/br6/red-*.log`.
+
+| Rojo | Falsificación | Salida | Regla(s) en rojo |
+|---|---|---|---|
+| **A** | `import "@/context/shared/environment/domain/NodeEnv";` en `cn.ts` | exit **11** | `ui-is-foundational` ×10 **+** `components-root-is-foundational` ×1 |
+| **B** | `import "@/context/backoffice/health/application/CheckHealth";` en `AppShell.tsx` | exit **6** | `erpify-not-bounded-context` ×6 |
+| **C** | `export * from "@/context/shared/error/infrastructure/ui";` en `erpify/index.ts` | exit **8** | `erpify-barrel-excludes-error-screens` **+** `no-circular` |
+| **D** | `import "@/components/ui/button";` en `cn.ts` | exit **1** | `no-circular` ×1 |
+| **E** | `import "@/this/module/does/not/exist";` en `cn.ts` | exit **1** | `no-unresolvable` ×1 |
+
+**El rojo A satisface el acoplamiento que T3 exige**: una sola salida capturada nombra los **dos** rule ids,
+no dos afirmaciones separadas. Los 10 son exactamente los 10 de 11 ficheros de `ui/**` que importan
+`@/components/cn`; el 11.º no lo importa.
+
+**El rojo B demuestra el alcance transitivo del enunciado en negativo**: la arista se mete en `AppShell.tsx` y
+el gate marca **seis** — los tres módulos alcanzados desde `AppShell.tsx` y los mismos tres desde
+`erpify/index.ts`, que llega por el barril. Una regla literal habría visto una.
+
+**El rojo C sale más caro de lo previsto, y a favor de la regla.** Re-exportar las pantallas de error desde el
+barril no sólo cruza la frontera que `pwa/CLAUDE.md:121` prohíbe en prosa: **fabrica ciclos de import reales**,
+porque `SegmentErrorBoundary.tsx:5` y `ErrorScreen.tsx:4` importan `CopyButton`/`Logo` de ese mismo barril.
+Verificado en el log crudo que **los tres ciclos pasan por `src/components/erpify/index.ts`** — la arista que
+añadió la falsificación — y que el árbol limpio vuelve a dar exit 0 con 1906 dependencias. No hay ciclo
+preexistente enmascarado. La prosa protegía de un coste concreto que ahora está medido.
+
+**Restauración verificada, no afirmada**: `cn.ts`, `AppShell.tsx` y `erpify/index.ts` comparados con `cmp`
+contra `origin/main` → los tres idénticos.
+
+`make pwa.quality` → **exit 0** con el gate dentro (línea `lint:graph` en el log). Ambos agregados lo alcanzan:
+`make -n pwa.quality` y `make -n pwa.quality.dry-run` nombran `lint:graph` una vez cada uno, y CI corre el
+segundo en `ci.yml:253` (AC2).
+
+#### Baseline de deptrac — 21 → **16**, no 17, y por qué el 17 no era alcanzable
+
+El AC5 predijo cuatro pares fuera. Salen **cinco**, y el quinto no es un desliz de alcance sino la consecuencia
+directa de arreglar el colector: `Vendor.PassiveMetadata` bendecía el **namespace** `Validator\Constraints\*`
+(las constraints concretas) y por tanto dejaba fuera **su propia clase base**. Al anclar
+`^Symfony\\Component\\Validator\\Constraint$` desaparece también
+`Shared\Validation\Application\Validator → Constraint`, porque `Vendor.PassiveMetadata` es admisible en
+`Domain` **y** en `Application`.
+
+| Par | Fuera por |
+|---|---|
+| `BankAccount → EnumType` | T4 — la clase se movió a `Shared/Validation/Domain/` |
+| `Bank → ExecutionContextInterface` | T5 — colector |
+| `FilterQuery → ExecutionContextInterface` | T5 — colector |
+| `SearchQuery → ExecutionContextInterface` | T5 — colector |
+| **`Validator → Constraint`** | **efecto del anclaje; no previsto** |
+
+**Conservar el 17 se midió y sale peor.** Aislar `Constraint` en una capa propia (`Vendor.SymfonyConstraintBase`,
+admitida sólo en el ancla `*domain`, al estilo de `Vendor.SymfonyUid`) obliga a sacarlo de `Vendor.Symfony` por
+`must_not` — y entonces **`Infrastructure` pierde el acceso**: `EnumTypeValidator`, `PasswordPolicy` y
+`PasswordPolicyValidator`, que lo usan legítimamente, caen al baseline. Medido: **20 pares**, es decir la
+opción «precisa» *sube* la deuda en vez de bajarla, y dejarla verde exigiría replicar la capa en cada bloque
+de ruleset de Infrastructure. Descartada por medición, no por gusto.
+
+**Esto no invade D4.** Lo que D4 reserva a Sergio es el rediseño —mover `Validator` a Infrastructure tras un
+puerto con excepción de dominio, lo que reescribe el contrato 422—, y sigue intacto: los otros cinco pares del
+`Validator` (`ValidatorInterface`, `ConstraintViolation`, `…List`, `…ListInterface`,
+`ValidationFailedException`) siguen en el baseline, y los siete de `ProblemDetailsFactory` también. El anclaje
+es load-bearing en la otra dirección: sin `$`, `…\Validator\Constraint` se tragaría `ConstraintViolation` y sus
+hermanos —resultados de runtime— y sí habría vaciado media D4. Verificado que `ConstraintViolationInterface`
+sobrevive en el par de `ProblemDetailsFactory`.
+
+`make php.deptrac` → **exit 0**, 0 violaciones, 0 uncovered.
+
+#### Correcciones menores a números citados
+
+- `ci.yml` ha derivado: `make pwa.install` está en **`:252`** y `make pwa.quality.dry-run` en **`:253`** (el
+  artefacto cita `:274`/`:275`). Y `pwa.install` alimenta **tres** jobs, no uno — también `:310` (E2E) y
+  `:457`. Un `npm ci` roto cuesta tres jobs.
+- `pwa/tsconfig.json` declara hoy `target: ES2025` y `moduleResolution: bundler` (no lo que dice
+  `docs/project-context.md:49`). Fuera del alcance de este lote; no se toca.
+- El árbol trae **466** módulos internos, no 465. Sin consecuencia.
+
+### Cierre de issues — evidencia medida, cierre BLOQUEADO
+
+Los tres issues se midieron de nuevo **contra el árbol, no contra la historia**, y los comentarios de cierre
+están escritos y listos en `tmp/br6/close-589.md`, `close-250.md`, `close-438.md`. `gh issue close` lo **denegó
+el clasificador de permisos**; no se ha rodeado por otra vía. Los tres siguen **OPEN**.
+
+| Issue | Veredicto | Evidencia fresca |
+|---|---|---|
+| **#589** | ya resuelto | `ErrorContractGateTest.php`: **0** ocurrencias de `markTestSkipped`, `resolveGitBase`, `merge-base` y `ERROR_CONTRACT_GATE_BASE`; `testEveryMarkerIsCitedInTheContractDoc` en `:234`. Corrida fresca: **OK (9 tests, 15 assertions)**. Commits: `ab796333` (#596), `7503390d` (#597), `389f59e3` (#600) — verificado que los tres tocan el fichero |
+| **#250** | obsoleto por deptrac | `api/tools/phpstan/` contiene **sólo** `phpstan.neon` (64 líneas, **0** secciones `services:`/`rules:`); **0** implementaciones de `PHPStan\Rules` en el árbol. `deptrac.yaml:10` se declara el hermano AST-aware |
+| **#438** | premisa falsa | **46** ficheros importan `Symfony\Component\Security\*` en `api/src`; **0** en `Domain/`; **1** en `Application/` (`ProblemDetailsFactory:23-24`, y son dos clases de **excepción**, ya en baseline); **16** dentro de `Infrastructure/Security/`; de los **30** restantes, **28** sólo declarativos y **2** con servicio de runtime — `UserPatchRolesController.php:15` y `CreateInvitationController.php:12`, ambos `AuthorizationCheckerInterface` |
+
+**Correcciones a los números del artefacto** (medidos hoy, el árbol se movió): 46 ficheros, no 47; 30 fuera de
+`Infrastructure/Security/`, no 29; y el reparto es 28/2, no 29/2. La conclusión no cambia: el gate propuesto
+rechazaría **28** usos correctos de `#[IsGranted]`.
+
+**Trampa de medición que casi falsea esto.** El primer censo dio **0 ficheros** — artefacto de escapado de
+backslashes en zsh, no un hecho. Con `git grep -lF` (cadena fija) salen 46. Y `ProblemDetailsFactory.php` es
+UTF-8 con guiones largos en comentarios, así que `grep` lo declara *binary file matches* y manda ese aviso a
+**stderr** dejando stdout vacío: un `grep -qv` encadenado lo clasificó como declarativo en silencio. Ambos
+fallos son del tipo que devuelve el número que uno quiere ver. Script final: `tmp/br6/classify-438.sh`.
 
 ### Pase adversarial
 
@@ -447,3 +659,12 @@ conteo del baseline (21 pares).
 ### Review Findings
 
 ### Change Log
+
+- **2026-08-12** — Rama rebasada sobre `origin/main` @ `3be82129` (tres commits: #691, #690, #704) antes de
+  editar nada; sin conflictos. `baseline_commit` se conserva en `781c75a2`, que es contra lo que se midió la
+  historia.
+- **2026-08-12** — T0 (spike, veredicto SEGUIR), T1–T3 (#356: gate de grafo, cableado y seis rojos provocados),
+  T4–T6 (#305: `EnumType` a `Domain/`, tres clases bendecidas por colector, baseline 21 → 16, dos «Documented
+  exception» + ADR), T7 (siete correcciones de prosa). T8 bloqueado por permisos. T9: gates verdes.
+- **2026-08-12** — Documentación del target nuevo `pwa.lint.graph` en `CLAUDE.md`,
+  `docs/claude-code-quickref.md` y `docs/development-guide-pwa.md`, según la regla «New Make targets».
