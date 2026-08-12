@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Cli;
 
+use Erpify\Iam\Identity\Application\InspectStoredIdentity;
 use Erpify\Iam\Identity\Application\StoredIdentityIntegrity;
 use Erpify\Iam\Identity\Infrastructure\Cli\InspectStoredIdentityIntegrityCommand;
 use Erpify\Shared\Audit\Application\AuditLogger;
@@ -153,6 +154,8 @@ final class InspectStoredIdentityIntegrityCommandTest extends TestCase
 
     private function tester(StoredIdentityIntegrity $integrity, AuditLogger $auditLogger): CommandTester
     {
-        return new CommandTester(new InspectStoredIdentityIntegrityCommand($integrity, $auditLogger));
+        return new CommandTester(
+            new InspectStoredIdentityIntegrityCommand(new InspectStoredIdentity($integrity), $auditLogger),
+        );
     }
 }

@@ -189,6 +189,12 @@ final class ScheduleConsumption
     {
         $pattern = '/#\[\s*(?:\\\?[A-Za-z_]\w*\\\)*AsSchedule(?<arguments>\([^()]*\))?/';
 
+        // Comments first, or the sweep reads prose as a declaration: a command documenting that it is NOT
+        // scheduled — and what scheduling it would take — makes this gate demand a transport nobody wrote.
+        // The bare spelling turns that from a false alarm into a false negative, since it resolves to
+        // `default`: a sentence can supply a name that a real schedule added later then collides with.
+        $contents = PhpSource::withoutComments($contents);
+
         if (0 === \preg_match_all($pattern, $contents, $matches, PREG_SET_ORDER)) {
             return [];
         }

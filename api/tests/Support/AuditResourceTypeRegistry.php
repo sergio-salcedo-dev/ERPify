@@ -344,17 +344,7 @@ final readonly class AuditResourceTypeRegistry
      */
     private function codeWithoutComments(string $source): string
     {
-        $code = '';
-
-        foreach (\token_get_all($source) as $token) {
-            if (\is_array($token) && \in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
-                continue;
-            }
-
-            $code .= \is_array($token) ? $token[1] : $token;
-        }
-
-        return $code;
+        return PhpSource::withoutComments($source);
     }
 
     private function literal(string $type): string
