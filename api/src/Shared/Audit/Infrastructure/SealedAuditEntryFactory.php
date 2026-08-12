@@ -80,6 +80,15 @@ final readonly class SealedAuditEntryFactory implements AuditEntryFactory
         return $this->requestStack->getCurrentRequest()?->getClientIp();
     }
 
+    /**
+     * `mb_substr` is load-bearing beyond the length it names, and the second property is the fragile one:
+     * a `User-Agent` carrying invalid UTF-8 reaches PHP intact (measured: bytes `41fffe42`), and this call
+     * substitutes the bad ones on its way through (`413f3f42`) because it decodes rather than counts bytes.
+     * Swapping it for `substr()` — which the length argument alone would justify — puts raw invalid UTF-8 into
+     * a `jsonb`-adjacent column and **turns nothing red**, because no test asserts the encoding of a value the
+     * suite never supplies. The truncation is the stated reason; the sanitisation is the accidental one, and
+     * it is written here because it was measured once and would otherwise be rediscovered by an incident.
+     */
     private function resolveUserAgent(): ?string
     {
         $userAgent = $this->requestStack->getCurrentRequest()?->headers->get('User-Agent');
