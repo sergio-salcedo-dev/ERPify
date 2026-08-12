@@ -16,7 +16,7 @@ Status: ready-for-dev
 **Tres de los cinco issues no son trabajo de código.** El lote entra al backlog con la etiqueta «gates de
 arquitectura y CI» y con un issue designado como el que muerde; medido contra `781c75a2`, ese issue está
 resuelto y otros dos son obsoletos o falsos. Lo que queda es un gate nuevo pequeño, un pago parcial de
-baseline, y cinco correcciones de prosa que hoy generan trabajo fantasma.
+baseline, y siete correcciones de prosa que hoy generan trabajo fantasma.
 
 > **Corrección a la épica — la línea que ordenó este lote es falsa.**
 > [`epics-backlog-resolution.md:179-181`](../planning-artifacts/epics-backlog-resolution.md) afirma que
@@ -52,14 +52,48 @@ Ninguna de estas la puede tomar quien implementa. **D1–D3 fijan el alcance del
 cierra sin código); **D4 es un fork de diseño** sobre 10 de los 21 pares del baseline y es el único que
 arrastra un cambio de contrato.
 
-**Estado: sin ratificar.** Las recomendaciones son del análisis, no de Sergio.
+**Las cuatro quedaron ratificadas por Sergio el 2026-08-12.** D1 no era un fork real —es el criterio de cierre
+de la propia épica— y se aplica. D3 y D4 en el sentido recomendado. **D2 se remitió a consulta con Winston
+(arquitectura) y Amelia (implementación) antes de fijarse**, y volvió con dos correcciones a este artefacto:
+el alcance de reglas creció de 4 a 6 y la excepción que pedía el AC1 original desapareció. Ver §La consulta
+de D2.
 
 | # | Fork | Recomendación | Argumento |
 |---|---|---|---|
 | **D1** | #589, #250 y #438: ¿se cierran **en este PR** con comentario de evidencia medida, o se abre issue aparte? | ⬜ **Cerrar aquí, los tres** | Es el criterio de cierre de la propia épica (`epics-backlog-resolution.md:213`): *un issue solo se cierra con evidencia medida contra el código*. La evidencia ya está en este artefacto; moverla a otro sitio la desconecta de quien la midió |
-| **D2** | #356: ¿entra con alcance **«imponer»** (instalar + configurar + cablear `dependency-cruiser`), o se queda en «evaluar» como dice su título? | ⬜ **Imponer** | La evaluación **ya está hecha** (ver §#356). El hueco es nominal —no existe ninguna regla para `src/components/*.ts`— y el coste es un fichero de config, un script y dos líneas de `make/pwa.mk`. CI sale gratis: `.github/workflows/ci.yml:275` ya llama a `pwa.quality.dry-run`. Y **no hace falta baseline**: el grafo está limpio, el gate nace verde |
-| **D3** | #305: ¿entra el **pago parcial** (4 de 21 pares) o el baseline se deja entero fuera del lote? | ⬜ **Entra el parcial** | Los 4 pares son bendiciones/movimientos sin cambio de comportamiento, y uno de ellos (`EnumType`) es la **única violación literal de una regla escrita** en `docs/rules/architecture.md:57`. Bajan el baseline 21 → 17 |
-| **D4** | Los **10 pares restantes** (`ProblemDetailsFactory` ×7, `Validator` ×6 y los 4 `ValidationFailedException` de Application): ¿se abordan ahora, se registran, o se declaran bendecidos? | ⬜ **Fuera de este PR, y como PR propia — no como issue** | Es un solo problema: **la excepción de Symfony *es* hoy el contrato 422 de la app**. Arreglarlo bien significa mover `Validator` a Infrastructure tras un puerto que lance una excepción de dominio, lo que reescribe el contrato de error, los `@throws` de todos los casos de uso y probablemente pasos Behat. Es un cambio de diseño del pipeline de errores, no un trinquete. **Requiere decisión de Sergio antes de tocarlo** |
+| **D2** | #356: ¿entra con alcance **«imponer»** (instalar + configurar + cablear `dependency-cruiser`), o se queda en «evaluar» como dice su título? | ✅ **RATIFICADA — imponer, pero con spike y criterio de parada primero** | La evaluación de escritorio ya está hecha (§#356), pero **nadie ha ejecutado la herramienta**: las dos consultas fueron de sólo lectura. El spike de T0 convierte esa suposición en medida antes de comprometer medio día. Si cualquiera de sus tres cortes se cumple, el resultado legítimo es cerrar #356 como *evaluado, no compensa* — más barato que un gate que aparenta |
+| **D3** | #305: ¿entra el **pago parcial** (4 de 21 pares) o el baseline se deja entero fuera del lote? | ✅ **RATIFICADA — entra el parcial, los 4 pares** | Los 4 pares son bendiciones/movimientos sin cambio de comportamiento, y uno de ellos (`EnumType`) es la **única violación literal de una regla escrita** en `docs/rules/architecture.md:57`. Bajan el baseline 21 → 17 |
+| **D4** | Los **10 pares restantes** (`ProblemDetailsFactory` ×7, `Validator` ×6 y los 4 `ValidationFailedException` de Application): ¿se abordan ahora, se registran, o se declaran bendecidos? | ✅ **RATIFICADA — fuera de este PR, y como PR propia, no como issue** | Es un solo problema: **la excepción de Symfony *es* hoy el contrato 422 de la app**. Arreglarlo bien significa mover `Validator` a Infrastructure tras un puerto que lance una excepción de dominio, lo que reescribe el contrato de error, los `@throws` de todos los casos de uso y probablemente pasos Behat. Es un cambio de diseño del pipeline de errores, no un trinquete. **Requiere decisión de Sergio antes de tocarlo** |
+
+## La consulta de D2 — lo que cambió del plan
+
+Winston y Amelia respondieron por separado, sobre los mismos hechos y con preguntas distintas. **Coinciden en
+imponer**, en mantener los bloques de ESLint y en no admitir baseline. Coinciden también, por caminos
+independientes, en la distinción con #250: allí el segundo espejo era *aditivo* y su único residual —señal
+inline— no era cobrable; **aquí el cruiser expresa lo que `no-restricted-imports` es estructuralmente incapaz
+de expresar, y ESLint aporta la señal inline que el cruiser no da**. Son hermanos con roles distintos.
+
+Que converjan no es una revisión: **ninguno ejecutó la herramienta**. De ahí T0.
+
+Tres cosas del plan original cambiaron, y las tres a peor para el plan:
+
+1. **La excepción del AC1 desaparece.** El artefacto pedía exceptuar explícitamente `erpify → context/shared`
+   (17 aristas). Amelia: cero líneas de excepción — se enuncia en **negativo**, prohibiendo `backoffice` y
+   `frontoffice`, que es como ya lo enuncia ESLint. Una lista blanca de 17 es precisamente lo que alguien
+   ensancha. Winston proponía escribir la excepción; **gana el argumento de Amelia**.
+2. **`tsPreCompilationDeps` viene en `false`** y **7 de las 17 aristas son `import type`**. Sin ponerlo a
+   `true`, el gate nuevo sería **más débil que el ESLint que dice reforzar** — los dos bloques actuales no
+   llevan `allowTypeImports`, así que hoy sí los ven.
+3. **El coste real es medio día (4–6 h)**, no «un fichero de config y dos líneas». La parte pequeña es el
+   config.
+
+Y aparece un riesgo que ningún issue registra: **`pwa/tsconfig.json` declara `paths` sin `baseUrl`**. Si la
+cadena `tsconfig-paths-webpack-plugin` → `enhanced-resolve` lo exige, cada `@/…` cae a irresoluble, ninguna
+regla sobre `@/context/**` casa, y **el gate sale verde y ciego**. Añadir `baseUrl` no es el arreglo: cambia
+la resolución de Next, `tsc` y Vitest para toda la app. La alternativa —escribir el alias a mano en
+`enhancedResolveOptions`— sería una **tercera** declaración de `@/` (ya vive en `pwa/tsconfig.json` y en
+`pwa/vitest.config.ts`) que deriva en silencio de las otras dos. Por eso `no-unresolvable` es obligatoria: es
+lo único que convierte ese fallo silencioso en uno ruidoso.
 
 ## Realidad medida, issue por issue
 
@@ -182,16 +216,20 @@ Lo que cabe en este PR — **4 pares, cero cambio de comportamiento**:
 
 ## Acceptance Criteria
 
+0. **El spike de T0 ha corrido y su medida está registrada**, con su veredicto explícito: seguir a T1, o
+   cerrar #356 como *evaluado, no compensa*. Los tres cortes están en T0; ninguno se decide a ojo.
 1. **#356 entregado como gate, no como evaluación**: `dependency-cruiser` instalado como devDep de `pwa/`,
-   configurado en `pwa/.dependency-cruiser.cjs` con las tres reglas del issue más `no-circular`, resolviendo
-   el alias `@/` vía `options.tsConfig`, y con la excepción explícita `erpify → context/shared`.
+   configurado en `pwa/.dependency-cruiser.cjs` con **seis reglas** (§T1), alias `@/` resuelto vía
+   `options.tsConfig`, `tsPreCompilationDeps: true`, y alcance limitado a `src`.
 2. **El gate está cableado y CI lo corre**: script en `pwa/package.json`, target en `make/pwa.mk`, enganchado a
    `pwa.quality` **y** a `pwa.quality.dry-run`. Verificado que `.github/workflows/ci.yml:275` lo alcanza.
-3. **El gate nace verde y sin baseline** sobre el árbol actual — si necesitara excepciones para pasar, la
-   configuración está mal y hay que corregirla, no añadir baseline.
-4. **Cada una de las cuatro reglas se ha visto fallar**: por cada regla, provocar su rojo con un cambio
-   temporal, capturar la salida, y restaurar **copiando los bytes de vuelta** (nunca `git checkout --`).
-   Una regla cuyo rojo nadie ha visto no está entregada.
+3. **El gate nace verde, sin baseline y sin una sola línea de excepción.** Las 17 aristas
+   `erpify → context/shared` pasan porque la regla se enuncia **en negativo** (prohibir `backoffice` y
+   `frontoffice`), no porque se las exceptúe. Si hiciera falta una allowlist, la regla está mal escrita.
+4. **Cada una de las seis reglas se ha visto fallar**: provocar su rojo con un cambio temporal, capturar la
+   salida y restaurar **copiando los bytes de vuelta** (nunca `git checkout --`). Una regla cuyo rojo nadie ha
+   visto no está entregada. **El rojo decisivo es el transitivo** — si no se consigue, el gate no compra nada
+   sobre ESLint y el veredicto vuelve a cerrar #356.
 5. **Baseline de deptrac 21 → 17**: `EnumType` movido, `ExecutionContextInterface` bendecido por colector,
    `make php.deptrac.baseline` regenerado, y el diff del baseline muestra exactamente esos 4 pares fuera.
 6. **Las dos bendiciones están documentadas** con su sección «Documented exception» en
@@ -199,22 +237,44 @@ Lo que cabe en este PR — **4 pares, cero cambio de comportamiento**:
    `docs/adr/external-dependencies-in-domain.md` (D4: el colector y la lista se mueven juntos).
 7. **#589, #250 y #438 cerrados con evidencia medida** en el comentario de cierre, citando `fichero:línea` y
    los commits que los resolvieron. Nunca por leer el título.
-8. **Las cinco correcciones de prosa aplicadas** (ver §Prosa podrida). Cada una es hoy una fuente activa de
+8. **Las siete correcciones de prosa aplicadas** (ver §Prosa podrida). Cada una es hoy una fuente activa de
    trabajo fantasma: dos de ellas ya produjeron una recomendación equivocada durante esta misma medición.
 9. `make pwa.quality` y `make php.quality` verdes desde una corrida fresca, con el exit code impreso.
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — #356: instalar y configurar `dependency-cruiser`** (AC: 1)
-  - [ ] Añadir devDep en `pwa/`; verificar que la versión resuelta en `package-lock.json` es la que se declara
-  - [ ] Escribir `pwa/.dependency-cruiser.cjs`: 3 reglas del issue + `no-circular`, `options.tsConfig` →
-        `pwa/tsconfig.json`, `doNotFollow: node_modules`
-  - [ ] Exceptuar `erpify → context/shared` con precisión (17 aristas legítimas, una a `infrastructure/`)
+- [ ] **T0 — #356: spike de 90 min con criterio de parada** (AC: 0) · **bloquea T1–T3**
+  - [ ] Instalar la devDep y cruzar `pwa/src` sin escribir ninguna regla todavía
+  - [ ] **Corte 1 — resolución del alias.** Expectativa medida a mano: **465 módulos, ~1540 aristas internas,
+        0 irresolubles, 0 ciclos**. `465 módulos con ~200 aristas es fallo silencioso` → parar. Si `@/…` sólo
+        resuelve añadiendo `baseUrl` al tsconfig, o escribiendo el alias a mano en `enhancedResolveOptions`
+        (tercera declaración) → **parar y cerrar #356 con el informe**
+  - [ ] **Corte 2 — instalación.** Si `make pwa.install` (`npm ci` pelado, `make/pwa.mk:31`) se pone rojo por
+        peers con TS 6 → parar; rompería `ci.yml:274` antes de llegar al gate
+  - [ ] **Corte 3 — el rojo transitivo.** Meter un import a `@/context/shared/…` en `cn.ts` y comprobar que
+        una regla `to: { reachable: true }` pone rojos los 10 de 11 ficheros de `ui/**` que importan
+        `@/components/cn`, **mientras la regla literal sobre `ui/**` sigue verde**. Si ese rojo no sale, el
+        cruiser es ESLint con pasos de más → **cerrar #356 como evaluado**
+  - [ ] Registrar el veredicto en §Rojos provocados **antes** de tocar T1
+- [ ] **T1 — #356: configurar las seis reglas** (AC: 1) · sólo si T0 dice seguir
+  - [ ] `ui-is-foundational` — `src/components/ui/**` no **alcanza** `context/**`, `app/**`, `components/erpify/**`
+  - [ ] `components-root-is-foundational` — `src/components/*.ts` sin aristas hacia arriba (**el hueco real**)
+  - [ ] `erpify-not-bounded-context` — enunciada **en negativo**: prohibir `context/backoffice/**`,
+        `context/frontoffice/**`, `app/**`. **Cero excepciones**
+  - [ ] `no-circular` · `no-unresolvable` (obligatoria: hace ruidoso el fallo silencioso del alias)
+  - [ ] `erpify/index.ts ⇏ context/shared/error/infrastructure/ui` — sólo si cabe en ~6 líneas
+        (`pwa/CLAUDE.md:121` lo prohíbe por escrito y hoy nada lo verifica)
+  - [ ] `tsPreCompilationDeps: true` (7 de 17 aristas son `import type`), `doNotFollow: node_modules`,
+        alcance `src` — **no** cruzar `pwa/tests/`
+  - [ ] Cabecera del `.cjs` declarando el reparto de roles con ESLint, como `deptrac.yaml:8-14`
 - [ ] **T2 — #356: cablear** (AC: 2, 3)
   - [ ] Script en `pwa/package.json`; target en `make/pwa.mk`; engancharlo a `pwa.quality` y `pwa.quality.dry-run`
-  - [ ] Confirmar que arranca verde sin excepciones más allá de la de T1
-- [ ] **T3 — #356: provocar los cuatro rojos** (AC: 4)
-  - [ ] Uno por regla; capturar salida; restaurar copiando bytes
+  - [ ] Confirmar verde **sin baseline, sin `--cache` y sin una sola línea de excepción**
+- [ ] **T3 — #356: provocar los seis rojos** (AC: 4)
+  - [ ] Los tres literales son de una línea. `no-unresolvable` es trivial. `no-circular` es **el difícil**:
+        exige dos ediciones coordinadas y dos restauraciones exactas, y mientras vive puede romper `tsc` y Vitest
+  - [ ] El rojo transitivo y el de la raíz de `components/` **vienen acoplados**: la evidencia vale si la salida
+        capturada nombra **los dos rule ids**, no si se afirma haberlos provocado por separado
 - [ ] **T4 — #305: mover `EnumType` a `Shared/Validation/Domain/`** (AC: 5, 6)
   - [ ] Mover sólo la constraint; el validador se queda en Infrastructure
   - [ ] Admitir `Validator\Constraint` + `Validator\Attribute\HasNamedArguments` en `Vendor.PassiveMetadata`
@@ -222,11 +282,11 @@ Lo que cabe en este PR — **4 pares, cero cambio de comportamiento**:
 - [ ] **T6 — #305: regenerar baseline y documentar** (AC: 5, 6)
   - [ ] `make php.deptrac.baseline`; verificar 21 → 17 en el diff
   - [ ] Dos secciones «Documented exception» en `docs/rules/architecture.md` + §Implementación del ADR
-- [ ] **T7 — Prosa podrida: las cinco correcciones** (AC: 8)
+- [ ] **T7 — Prosa podrida: las siete correcciones** (AC: 8)
 - [ ] **T8 — Cerrar #589, #250 y #438 con evidencia** (AC: 7)
 - [ ] **T9 — Gates y pase adversarial** (AC: 9) — el pase precede a `gh pr create`, no a `done`
 
-## Prosa podrida — las cinco correcciones
+## Prosa podrida — las siete correcciones
 
 Ninguna es cosmética: **dos de ellas produjeron una recomendación equivocada durante esta misma medición**, lo
 que las califica como fuente activa de trabajo fantasma y no como deuda de estilo.
@@ -238,6 +298,8 @@ que las califica como fuente activa de trabajo fantasma y no como deuda de estil
 | P3 | `deptrac.yaml:12-13` | «The three published seams» | **26** seams en `.bounded-context-allowlist` |
 | P4 | `epic-auth-arc-retro-2026-07-20.md:39` (SI-2) | «El addendum afirma que Symfony Security vive sólo en Infrastructure porque lo impone deptrac. No lo impone» | Sí lo impone **a nivel de capa** (0 imports en Domain). Lo que no puede es sub-particionar Infrastructure. **Es la premisa exagerada que #438 heredó** |
 | P5 | `docs/architecture-pwa.md:86` | Sitúa `cn` en `context/shared/styling/` | Ese directorio **no existe** desde #349; `cn.ts` vive en la raíz de `components/` |
+| P6 | `pwa/CLAUDE.md:84` | Los barriles `@/context/shared/<capability>` son frontera de API pública «enforced in CI» | **Falso en dos niveles**: no hay enforcement **y los barriles no existen** — cero `context/shared/*/index.ts`, y **567 imports profundos** cross-capability. Gatearlo exigiría 24 ficheros nuevos y baseline de 567: imposible por AC3. El barril de `@/components/erpify` **sí** es real (0 imports profundos desde fuera) |
+| P7 | `pwa/CLAUDE.md:43` | Describe el invariante de fronteras nombrando sólo el gate ESLint | Con dos gates hay que nombrar **los dos** y qué ve cada uno, o el espejo de prosa nace desalineado el día uno. Sólo aplica si T0 dice seguir |
 
 `deferred-work.md` es registro **sólo de pendientes**: P2 se resuelve **borrando la bala**, no anotándola.
 
@@ -248,6 +310,7 @@ que las califica como fuente activa de trabajo fantasma y no como deuda de estil
 | Fichero | Issue | Nota |
 |---|---|---|
 | `pwa/.dependency-cruiser.cjs` | #356 | **Nuevo** |
+| `pwa/CLAUDE.md` | P6 · P7 | `:84` los barriles que no existen · `:43` nombrar los dos gates |
 | `pwa/package.json` · `pwa/package-lock.json` | #356 | devDep + script; leer la versión de vuelta del lock |
 | `make/pwa.mk` | #356 | Target nuevo; engancharlo a `pwa.quality` **y** `.dry-run` |
 | `api/src/Shared/Validation/Domain/EnumType.php` | #305 | **Movido** desde `Shared/Validation/Infrastructure/` |
@@ -262,10 +325,14 @@ que las califica como fuente activa de trabajo fantasma y no como deuda de estil
 
 ### Orden obligado
 
+**T0 bloquea T1–T3.** El spike no es una formalidad: sus tres cortes pueden terminar el issue sin escribir una
+regla. Empezar por el config y descubrir la trampa del alias a mitad convierte 90 minutos de hallazgo negativo
+en medio día de coste hundido — y en la tentación de parchearlo con una tercera declaración de `@/`.
+
 **T4 antes que T6.** Mover `EnumType` cambia el FQCN que el baseline nombra; regenerar antes deja una entrada
-apuntando a una clase que ya no existe. **T1–T3 son independientes de T4–T6** (lados distintos del monorepo):
-paralelizables, pero no por dos agentes a la vez sobre `make/` — `pwa.mk` y `php-quality.mk` son ficheros
-distintos, así que aquí no colisionan.
+apuntando a una clase que ya no existe. **T4–T6 son independientes de T0–T3** (lados distintos del monorepo) y
+pueden avanzar aunque T0 termine en cierre: `pwa.mk` y `php-quality.mk` son ficheros distintos, así que no
+colisionan. **P7 depende del veredicto de T0**; las otras seis correcciones de prosa, no.
 
 ### Rutas que no son adivinables
 
@@ -309,6 +376,19 @@ distintos, así que aquí no colisionan.
 8. **`ProblemDetailsFactory` recibe `ValidationFailedException` desde el framework** (`#[MapRequestPayload]` la
    lanza). En los cuatro servicios de Application la dependencia es `use` + `@throws`, **sin `catch`** —
    tentador de «arreglar» borrando el import, y eso sería **falsear el gate, no pagarlo**.
+9. **No añadir `baseUrl` a `pwa/tsconfig.json`** para que resuelva el alias. Cambia la resolución de Next,
+   `tsc` y Vitest para toda la app: no es un arreglo local del gate. Si el alias no resuelve sin él, el corte 1
+   de T0 se cumple y se para.
+10. **No retirar los dos bloques `no-restricted-imports`.** Son la señal inline en el editor, que el cruiser no
+    da — y con `tsPreCompilationDeps` mal puesto cubren **más** que él. Los dos gates son hermanos con roles
+    distintos, igual que `BoundedContextGateTest` y deptrac en el API.
+11. **Nada de `--cache`, baseline ni el preset `recommended`.** Los dos primeros son superficie de verde
+    silencioso; el tercero arrastra reglas que nadie acordó y cuyos rojos nadie va a provocar — y una regla sin
+    su rojo no está entregada (AC4).
+12. **No cruzar `pwa/tests/`** (274 ficheros) ni activar `no-orphans`: los 77 entrypoints del App Router
+    (`page`/`layout`/`error`/`not-found`/`route`/`loading`/`template`) son huérfanos por construcción.
+13. **No gatear el layering DDD dentro de `context/**`.** Es la tentación obvia y es scope creep: 24
+    capacidades × 3 capas, sin medir, y casi con seguridad nace rojo. Decisión propia con su propia medición.
 
 ### Cobertura existente y huecos
 
@@ -333,6 +413,9 @@ por «no aplica» — **declararlo explícitamente en el PR**, nunca saltarlo en
 - [`docs/adr/external-dependencies-in-domain.md`](../../docs/adr/external-dependencies-in-domain.md) — D1/D2/D4, qué exige bendecir
 - [`docs/rules/architecture.md`](../../docs/rules/architecture.md) — `:57`, la regla que `EnumType` viola hoy
 - [`pwa/CLAUDE.md`](../../pwa/CLAUDE.md) — `:20` hermanos fundacionales · `:43` el invariante del gate · `:84` barriles · `:121` la fachada prohibida
+- Consulta de D2 (2026-08-12): Winston (arquitectura) y Amelia (implementación), por separado y sobre los
+  mismos hechos. De ella salen el alcance de seis reglas, la enunciación en negativo sin excepciones,
+  `tsPreCompilationDeps: true`, los cortes de T0 y las correcciones P6/P7
 - Arco que resolvió #589: `ab796333` (#596) · `7503390d` (#597) · `389f59e3` (#600)
 - Commit que mató dos bullets de #305: `aa5db518` (#688)
 
