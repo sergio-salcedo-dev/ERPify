@@ -22,6 +22,12 @@ use Twig\Environment;
  * Wired as a route only under dev/test (config/routes/dev.yaml, config/routes/test.yaml); the
  * #[When] attributes keep the service itself out of the prod container. No #[Route] attribute, so
  * the /api/v1 attribute-route scanner ignores it — its path is declared explicitly in routing.
+ *
+ * Those #[When] attributes are load-bearing, not decoration: TwigBundle is registered only under
+ * dev/test (config/bundles.php), so without them the prod container refuses to compile — "Cannot
+ * autowire ... argument $twig ... references class Twig\Environment but no such service exists".
+ * That is also why Twig\Environment sits in the composer-require-checker symbol-whitelist: the
+ * checker reads the PSR-4 map, not #[When], so it cannot tell this class never ships.
  */
 #[AsController]
 #[When(env: 'dev')]
