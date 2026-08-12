@@ -1,5 +1,5 @@
 ---
-baseline_commit: 781c75a2e66548ef8a434017dda8fe5c965fad09
+baseline_commit: 3be821298f2d6c3e11a83c91d851cb554b0f1171
 ---
 
 # Story BR-7: Listas de backoffice — el toolkit de recursos sobre Bank/BankAccount
@@ -7,7 +7,7 @@ baseline_commit: 781c75a2e66548ef8a434017dda8fe5c965fad09
 Status: ready-for-dev
 
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · Lote BR-7 · Issues #395 #422 #423 #424 #272 #273
-> Rama: `fix/backoffice-resource-lists-br7-sfb3` · Worktree: `.claude/worktrees/backoffice-resource-lists-br7-sfb3` · Base: `main` @ `781c75a2`
+> Rama: `fix/backoffice-resource-lists-br7-sfb3` · Worktree: `.claude/worktrees/backoffice-resource-lists-br7-sfb3` · Base: `main` @ `3be82129` (rebasada; la medición original es contra `781c75a2`, y ninguno de los tres commits intermedios toca un fichero de este lote)
 > #425 se cerró con evidencia antes de este lote. **#426 sale a PR PROPIA** por decisión — ver *Trampa de la épica*.
 > Cadena de decisión: re-medición → consulta externa → debate → Sergio. Íntegra en `tmp/bmad-md/br7-decisiones-cerradas-20260812.md`.
 
@@ -20,10 +20,10 @@ El lote entró descrito como «el más grande de la épica y el de menor riesgo 
 
 | # | Afirmación heredada | Medición contra `781c75a2` |
 |---|---|---|
-| **M1** | #395: «el `update()` del módulo `Bank` se comporta igual» | **El método no existe.** `Bank` no tiene `update()`, tiene `rename()` (`Bank.php:127`). La conducta sí vive en los dos, pero el issue no puede guiar la edición. |
+| **M1** | #395: «el `update()` del módulo `Bank` se comporta igual» | **El método del agregado no existe:** `Bank` tiene `rename()` (`Bank.php:127`), no `update()`. Matiz que el pase adversarial corrigió: `BankUpdater::update()` **sí** existe (`BankUpdater.php:33`), así que el issue apunta al caso de uso, no al agregado. La conducta vive en los dos; la corrección se mantiene, su redacción original no. |
 | **M2** | #395 es una decisión de diseño abierta | **Falso: el patrón ya está enviado.** `BankAccountStatusChanger.php:29` documenta *«A transition to the current status is a no-op (no event)»*, la guarda vive en el agregado (`BankAccount.php:173`) y el caso de uso abre igualmente la transacción. Medido inocuo: `SymfonyMessengerEventBus::publish()` es un `foreach` sobre el variádico (`:35-40`) → cero eventos no dispara nada; un `save()` sin changeset no produce UPDATE ni fila de auditoría. |
-| **M3** | #422: «los `Search*` están cableados y sin consumidor» | **Parcialmente falso.** `SearchBankAccounts` **sí** se consume (`banks/[id]/accounts/page.tsx:115`). Muertos son sólo `SearchBanks` y `SearchAllBankAccounts`. |
-| **M4** | Los dos muertos son una asimetría de diseño | **Falso: son residuo de migración.** Los tres son el mismo forwarder puro línea por línea (constructor con `@inject`, un `run()` que reenvía). La única diferencia es que la página del tercero **no usa el toolkit**: `banks/[id]/accounts/page.tsx:66-83` está hecha a mano con `useState`/`useEffect`, es anterior a `useResourceList`. Los otros dos se quedaron atrás cuando sus páginas migraron. |
+| **M3** | #422: «los `Search*` están cableados y sin consumidor» | **Su prosa acierta; su glob no.** El issue nombra exactamente los dos muertos y en eso es correcto — lo que sobra es su línea `Files: Search*.ts`, que barre también `SearchBankAccounts`, vivo en `banks/[id]/accounts/page.tsx:115`. Refutar la paráfrasis en vez del issue era mío. |
+| **M4** | Los dos muertos son una asimetría de diseño | **Falso: son residuo de migración** — pero no del mismo tipo, y esto lo corrigió el pase adversarial. Los tres son el mismo forwarder puro línea por línea. `SearchBanks` **sí** quedó huérfano cuando su página migró (`7140a991`, #275). `SearchAllBankAccounts` **nació muerto**: `d8781552` (#421) creó la clase, ató el token y envió su página ya sobre el toolkit en el mismo commit. Y la página del tercero **no usa el toolkit**: `banks/[id]/accounts/page.tsx:66-83` está hecha a mano con `useState`/`useEffect`. |
 | **M5** | #422: «los tests prueban lo que hay» | **Falso.** `_mocks.ts:53-68` **sintetiza** el adaptador `BackOfficeBankCrudRepository` a partir de un handler `BackOfficeSearchBanks`. Ocho specs afirman sobre un token que producción nunca resuelve: la suite codificó una arquitectura que el código no ejecuta. |
 | **M6** | #423/#272: «un enum desconocido tumba la lista entera» | **Vivo pero inalcanzable.** `Shared/Kernel/Domain/Enum/Currency.php` tiene un único `case EUR`; `BankAccountStatus` tiene exactamente `ACTIVE/INACTIVE/CLOSED`. Idénticos a los `Set` del PWA (`ApiBankAccountRepository.ts:50-51`). El servidor **no puede** emitir un valor que la guarda rechace. |
 | **M7** | #423 y #272 son dos issues | **Son el mismo, sobre el mismo fichero.** Guardas hermanas: `:53-64` aplicada en `:80`, y `:135-149` aplicada en `:168`. #272 es de 2026-06-14, #423 de 2026-07-02. El único argumento propio de #423 es el radio de daño mayor de la lista global — que sigue condicionado al mismo disparador. |
@@ -151,7 +151,7 @@ el filtro que casa un subconjunto.
 Tres olas, todas con restauración por **copia de bytes** desde `tmp/br7-t1/*.pristine` (md5 verificado) y una
 re-medición verde al final. Los guiones quedan en `tmp/br7-t1/` (gitignored).
 
-- **Ola 1 — 9 mutaciones de la guarda** (M1–M9, suite de 16 tests): **9 rojas**, ninguna verde. Detalle en la
+- **Ola 1 — 9 mutaciones de la guarda** (M1–M9, suite de 16 tests entonces; 17 tras la corrección A3): **9 rojas**, ninguna verde. Detalle en la
   tabla de arriba. M9 salió primero como `exit 137` (OOM del contenedor, no un verde): re-medida a mano da
   4 rojos. *Un 137 no es un verde — la ola lo habría contado como cláusula sin cubrir si no se re-mide.*
 - **Ola 2 — la guarda quitada contra los casos de uso y los escenarios Behat**: roja en las cuatro
@@ -168,8 +168,8 @@ re-medición verde al final. Los guiones quedan en `tmp/br7-t1/` (gitignored).
 | `nameNormalized` | rojo | lo cubre el test de rehidratación (Doctrine escribe las columnas directamente, así que un gemelo rancio de una regla vieja se re-deriva) |
 | `shortName` | rojo | test de dirección positiva |
 
-`--list-tests` sobre el filtro de las dos clases nuevas devuelve exactamente los 16 tests esperados: el filtro
-no casa un subconjunto.
+`--list-tests` sobre el filtro de las dos clases nuevas devuelve exactamente los tests esperados —16 entonces,
+17 tras añadir el de A3—: el filtro no casa un subconjunto.
 
 ### T2 — falsificación ejecutada
 
@@ -238,7 +238,7 @@ El criterio no era «no quedan imports», sino que el token no fuese alcanzable 
 
 **Hallazgo que corrigió el cableado:** la síntesis mapeaba `find`/`delete` del repositorio desde los espías de
 los casos de uso, y eso ocultaba que las dos rutas de borrado son distintas en producción — el bulk llama
-`repo.find` + `repo.delete` (`useResourceList.ts:429,449`) mientras el botón de fila resuelve el caso de uso
+`repo.find` + `repo.delete` (`useResourceList.ts:429,450`) mientras el botón de fila resuelve el caso de uso
 `BackOfficeDeleteBank` (`DeleteBankButton.tsx:66`). Atar todo al repositorio dejó 8 tests rojos hasta separarlas.
 Cada espía queda ahora atado a los papeles que de verdad ejerce.
 
@@ -356,7 +356,7 @@ Se nombra aquí y en el cuerpo de la PR. No se deja como pendiente tácito.
 
 - **El `?? 0` de `ApiBankRepository.ts:162,171`.** Convierte «campo ausente» en «el banco tiene cero cuentas»:
   una falsificación semántica, no un default. Modelarlo bien **no es typing** — `Bank.ts` declara `accountCount`
-  obligatorio y veinte ficheros lo leen. Es un cambio de modelo de dominio con su propia PR.
+  obligatorio y lo leen **10** ficheros de `pwa/src` (34 contando tests) — la cifra de veinte era mía y estaba mal. Es un cambio de modelo de dominio con su propia PR.
 - **`SearchBankAccounts` y la migración de `banks/[id]/accounts/page.tsx` al toolkit.** El forwarder cae con su
   página, no antes.
 - **La asimetría `bic`/`alias`.** Hallazgo medido al fijar la igualdad de D1: `canonicalizeBic()` colapsa
