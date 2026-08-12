@@ -236,11 +236,17 @@ you change anything here.
       (failed login, throttled recovery) wrote about the subject. There the row records
       **no discriminant for whose address it holds**: it may be the subject triggering
       their own lockout or recovery, and once `resource_erased` is raised no detective
-      control can ever surface it, so the erasure is the only chance. **The accepted cost,
-      stated rather than hidden:** where the requester was a stranger — an attacker locking
-      a victim out — that attacker's address is destroyed too, and nothing records that it
-      was. Weigh this before treating an admin-initiated erasure as forensically neutral.
-      It leaves `actor_erased` FALSE, because that actor was never
+      control can ever surface it, so the erasure is the only chance. No discriminant can be
+      sealed at write time either: the requester is unauthenticated and supplies only a
+      *claimed* identity. **The accepted cost, stated rather than hidden:** where the
+      requester was a stranger — an attacker locking a victim out — that attacker's address
+      is destroyed too. The **fact** survives even though the value does not: `ip` is not
+      client-settable, so a sentinel there came from one of the two passes, and
+      `actor_erased` tells them apart (TRUE = actor pass; FALSE beside
+      `resource_erased = TRUE` = this one). Do not treat an admin-initiated erasure as
+      forensically neutral — though note an administrator can already destroy a non-admin's
+      whole actor-axis attribution via the actor pass, so this widens an existing insider
+      capability rather than creating one. It leaves `actor_erased` FALSE, because that actor was never
       identified and so was never erased: **`ip = '[REDACTED]'` does not imply
       `actor_erased`**, and nothing may derive one from the other. Two mutation paths
       sharing one normative sentinel — not a fourth mutation policy on the table. **Subject erasure is distinct** (never merged —

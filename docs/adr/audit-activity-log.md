@@ -287,10 +287,14 @@ propuesta de una mutación adicional sobre cualquiera de las dos tablas es cuand
   es** el dato: es del actor identificado, y no del sujeto. Con un actor jamás identificado no se sabe, y esa
   es toda la diferencia: la dirección es la del solicitante, que en estos dos escritores puede ser el propio
   sujeto provocando su bloqueo o su recuperación, o un extraño haciéndoselo. La fila no guarda discriminante
-  y el statement no puede inventarlo, así que se **yerra hacia el borrado**.
+  y el statement no puede inventarlo — **tampoco sellándolo en escritura**: el solicitante está sin autenticar
+  y solo aporta una identidad *reclamada*, así que el titular legítimo equivocándose de contraseña y un
+  atacante probando la ajena son indistinguibles en ese instante. Se **yerra hacia el borrado**.
   **El coste, dicho y no escondido:** cuando el solicitante era un extraño —un atacante bloqueando a una
-  víctima— su dirección se destruye también, y como `actor_erased` sigue en `false`, nada en la traza registra
-  siquiera que se quitó un valor. Errar al revés no es la opción segura que parece: el reconciliador solo lee
+  víctima— su dirección se destruye también. Lo que sobrevive es el **hecho y no el valor**: `ip` no lo fija
+  el cliente, así que un centinela ahí solo puede venir de uno de los dos pases, y `actor_erased` los
+  distingue (`true` el de actor; `false` junto a `resource_erased = true`, éste). Un investigador ve que allí
+  había algo y que una erasure lo quitó. Errar al revés no es la opción segura que parece: el reconciliador solo lee
   `resource_erased = FALSE`, así que una dirección que se deje aquí es una que ninguna reconciliación podrá
   sacar nunca. **Cuestión abierta, de DPO y no de código:** si esa IP es legalmente dato del sujeto cuando la
   fila no puede decir de quién es. El `CASE` vive en el `SET` y no en el `WHERE`,

@@ -105,7 +105,7 @@ Disposition of every finding below; nothing was dropped silently.
 
 | # | Finding | Fix |
 |---|---------|-----|
-| 1 | **The change's central justification was FALSE.** "On an anonymous row there is no third party, so the ip is the subject's own" — but `USER_LOCKED` seals the ip of whoever submitted the failing password and `PASSWORD_RECOVERY_THROTTLED` that of whoever exhausted the budget. In the canonical brute-force case that is the **attacker**, not the subject. The wrong reason had been replicated into four normative documents. | Argument rewritten in the docblock and all four docs: the row records **no discriminant** for whose address it holds, so this errs toward erasure, and the forensic cost — a stranger's address destroyed with `actor_erased = FALSE` recording nothing — is now stated, not hidden. |
+| 1 | **The change's central justification was FALSE.** "On an anonymous row there is no third party, so the ip is the subject's own" — but `USER_LOCKED` seals the ip of whoever submitted the failing password and `PASSWORD_RECOVERY_THROTTLED` that of whoever exhausted the budget. In the canonical brute-force case that is the **attacker**, not the subject. The wrong reason had been replicated into four normative documents. | Argument rewritten in the docblock and all four docs: the row records **no discriminant** for whose address it holds — and none can be sealed at write time, since the requester is unauthenticated and supplies only a claimed identity — so this errs toward erasure, with the forensic cost stated rather than hidden. |
 | 2 | **`''` defeated the guard.** `SealedAuditEntryFactory` only null-checks the header, so a bare `User-Agent:` seals `''`; `'' IS NOT NULL` is true, so the sentinel was written over a value never captured — precisely what the guard existed to prevent. | Guard became `COALESCE(col, :blank) <> :blank`, plus a seeded row with `user_agent = ''`. |
 | 3 | **`docs/rules/database.md` contradicted itself inside one bullet** — opened "closed set of **two** mutation policies", then enumerated a third. | Opening corrected to three (the ADR already said three; the file was stale). |
 | 4 | **The two per-column guards were not independently pinned.** Every seeded row had both columns alike, so pasting one arm's guard into the other, or cross-wiring them, passed everything. | Added an anonymous row with `ip` set and `user_agent` NULL; added `user_agent` assertions on the admin and system rows. |
@@ -129,9 +129,18 @@ statement stays idempotent on re-run including over the sentinel; the 20-query c
 Behat scenario is not vacuous (seed proven to land, negative and positive on the same row id); no
 concurrency or lock-ordering consequence; the concatenated SQL is valid; no assertion is tautological.
 
-**Still open, and NOT a code question** — see the note to the decision-maker in the summary: whether that
-IP is legally the subject's data when the row cannot say whose it is (a DPO question), and whether the
-forensic cost in finding 1 is acceptable. The ADR now records it as open rather than settling it.
+**Weighed and decided by Sergio after the pass, before the PR was opened.** The forensic cost of finding 1
+was put to him explicitly and he kept the redaction. What decided it: the leak is *systematic* (every
+erasure of anyone who ever locked themselves out or requested recovery) while the loss is *rare* (only
+where a stranger happened to be the requester on that row); both are bounded by the same 365-day `security`
+retention window; the fact of the redaction survives even though the value does not; no discriminant can be
+sealed at write time; and the abuse framing deflates because an administrator can already destroy a
+non-admin's entire actor-axis attribution through the actor pass, so this widens an existing insider
+capability rather than creating one. Two hardenings were offered and declined as out of scope: counting
+redacted rows on `GDPR_ERASURE_EXECUTED`, and freezing the branch pending DPO input.
+
+**Still open, and NOT a code question:** whether that IP is legally the subject's data when the row cannot
+say whose it is. That is a DPO question; the ADR records it as open rather than settling it.
 
 ## Spec Change Log
 

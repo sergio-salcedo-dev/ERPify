@@ -30,9 +30,12 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * actor nobody knows, and that is the whole difference. The address is the requester's, and on the two live
  * writers of this shape — the failed-login lockout and the recovery throttle — the requester may be the
  * subject triggering their own lockout or recovery, or a stranger doing it to them. The row records no
- * discriminant and the statement cannot invent one, so this errs toward erasure, and the cost is real and
- * stated here rather than hidden: where the requester WAS a stranger, their address is destroyed too, and
- * `actor_erased` stays FALSE so nothing in the trail even records that a value was removed.
+ * discriminant and the statement cannot invent one — the requester is unauthenticated and supplies only a
+ * CLAIMED identity, so no discriminant exists to be sealed at write time either. This therefore errs toward
+ * erasure, and the cost is real and stated here rather than hidden: where the requester WAS a stranger,
+ * their address is destroyed too. What survives is the FACT and not the value — `ip` is not client-settable,
+ * so the sentinel there can only have come from one of the two passes, and `actor_erased` tells them apart:
+ * `TRUE` is the actor pass, `FALSE` alongside `resource_erased = TRUE` is this one.
  *
  * Erring the other way is not the safe default it looks like. {@see
  * \Erpify\Shared\Audit\Application\PersonResourceReferences} reads only `resource_erased = FALSE` rows, so
