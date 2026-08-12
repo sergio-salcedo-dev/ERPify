@@ -194,8 +194,8 @@ implementation refutes. Renegotiated rather than deviated from:
    `AND <col> IS NOT NULL`. That conjunct was found dead during implementation (`NULL <> ''` is already
    unknown and falls to the `ELSE`) and collapsed; leaving the frozen text naming it kept a superseded
    predicate as the contract. Restated as "the column actually holding something", with both empty spellings
-   named. *(Sergio authorised item 1 explicitly; 2 and 3 are the same defect in the same block and were
-   corrected with it — flag if you want them reverted.)*
+   named. *(Sergio authorised item 1 explicitly, then ratified 2 and 3 on review: the same defect in the
+   same block, corrected together.)*
 
 **Same review — AC3 rewritten.** It committed to FIVE mutations, one of which (`drop IS NOT NULL from both`)
 names a predicate the shipped code does not contain, while eight were actually run; and its "recorded per
