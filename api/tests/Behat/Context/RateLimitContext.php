@@ -6,6 +6,7 @@ namespace Erpify\Tests\Behat\Context;
 
 use Behat\Behat\Context\Context;
 use Behat\Step\Given;
+use Erpify\Iam\Identity\Infrastructure\Security\RecoveryBudgetKey;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\RateLimiter\LimiterInterface;
@@ -63,7 +64,7 @@ final class RateLimitContext extends AbstractContext implements Context
     public function thePasswordRecoveryBudgetIsExhaustedForEmail(string $email): void
     {
         $this->exhaust(
-            $this->perEmailLimiter->create(\mb_strtolower(\trim($email))),
+            $this->perEmailLimiter->create(RecoveryBudgetKey::forEmail($email)),
             'password_recovery_per_email',
         );
     }
