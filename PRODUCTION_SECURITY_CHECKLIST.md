@@ -738,24 +738,52 @@ mitigated state. Accepting one means recording who accepted it and against which
       suite writes into, so any `git add -A` commits whatever a test last wrote — into a **public**
       repository. Today the residue is a 91-byte 1×1 PNG; the exposure grows the day a test writes
       realistic fixture data. Add the path to `.gitignore` and delete the residue.
-- [ ] **One shipped dependency tracks an untagged upstream branch: `symfony/mercure-bundle:
-      0.4.x-dev`.** It sits in `require`, so it reaches production, and it is the only breach of
-      `minimum-stability: stable` that does (the other two `stability-flags` entries are dev-only).
-      What is reviewed is a commit no maintainer tagged: `composer.lock` pins an exact ref, so builds
-      stay reproducible, but **`composer update` on this package moves it to whatever `main` HEAD
-      is** — unreviewed code into the deployed tree. The pin is deliberate, not an oversight: the
-      `v0.4.2` tag extends a class deprecated in Symfony 8.1 and `failOnDeprecation="true"` turns the
-      suite red, so the alternative was suppressing a real deprecation gate. Full argument and the
-      retirement trigger (first tag ≥ `0.4.3` carrying upstream `8708c813`) in
-      [`api/CLAUDE.md`](api/CLAUDE.md). **Before a customer deployment:** either the tag has landed
-      and the pin is gone, or re-diff the pinned ref against `v0.4.2` and record who accepted it.
-      **Accepted 2026-07-28 (Sergio):** the pinned ref `28e75026` was upstream `main` HEAD at
-      acceptance time, and its full delta against `v0.4.2` is two commits / two files / four lines —
-      upstream `8708c813` (the DI-extension fix the pin exists for) plus a branch-alias metadata
-      fix. The acceptance is void the moment the lock ref moves: re-diff and re-record. Tag watch:
-      the weekly CI cron runs `make composer.check.mercure-pin`, which goes red at the first
-      upstream tag newer than `v0.4.2`. Tracking issue:
-      [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
+- [x] **No shipped dependency tracks an untagged upstream branch — closed 2026-08-12.**
+      `symfony/mercure-bundle` was pinned to `0.4.x-dev` because the `v0.4.2` tag extended a class
+      deprecated in Symfony 8.1 and `failOnDeprecation="true"` turned the suite red, so the only
+      alternative was suppressing a real deprecation gate. Upstream tagged `v0.4.3` on 2026-08-11
+      carrying the fix (`8708c813`, verified an ancestor of the tag: `compare/v0.4.3...8708c813` →
+      `ahead 0, behind 5`). The pair then moved on together to `symfony/mercure ^0.8` +
+      `symfony/mercure-bundle ^0.5`, the line upstream actually maintains: `v0.4.3` narrowed its own
+      requirement to `symfony/mercure ^0.6.1|^0.7`, so staying on it would have coupled the tree to
+      the abandoned 0.4/0.7 pair and put a future advisory in Mercure's JWT-minting path out of
+      reach. The bundle keeps `protocol_version: 0.x` by default, so the hub contract is unchanged.
+      Its `stability-flags` entry dropped with the pin, leaving two, both `require-dev`.
+      **Verified by forcing the broken path, not by a green run:** on a genuinely cold container
+      cache `v0.4.2` exits 1 with `Deprecations: 1` naming
+      `HttpKernel\DependencyInjection\Extension`, and the tagged line exits 0 over 2698 tests.
+      The `upstream-pin-watch` CI job and `make composer.check.mercure-pin` were removed with the
+      pin they watched — anchored to a `v0.4.2` baseline they would have stayed red for ever — and
+      the knowledge they carried is now a gate rather than prose: `make php.lint.composer-stability`
+      fails any branch constraint or `@`-stability flag in `require`.
+      Closed [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
+- [x] **`failOnDeprecation` was structurally blind in CI — fixed 2026-08-12.** A deprecated *class*
+      triggers at file scope, so it fires once per process, while the container compiles. Any
+      `bin/console` call under `APP_ENV=test` compiles it first, and CI runs several inside
+      `php.quality.dry-run` **before** the suite (`ci.yml`: PHP lint precedes PHPUnit). `Kernel::getCacheDir()`
+      forked only for Behat, so console and PHPUnit shared `var/cache/test`: PHPUnit loaded the warm
+      container, never autoloaded the class, and reported green over a real deprecation. The gate
+      that justified the mercure pin had therefore never once fired in CI. PHPUnit now compiles into
+      its own directory (`PHPUNIT_RUNNING`, set in `tools/phpunit/bootstrap.php` the same three ways
+      Behat sets its own flag — `getenv()` sees neither `$_ENV` nor `$_SERVER` alone, which is why a
+      first attempt via phpunit.xml's `<server>` silently did nothing). **Measured on one tree, one
+      version, the CI order:** shared cache → `Tests: 2698`, 0 deprecations, green; forked cache →
+      `Tests: 2698`, `Deprecations: 1`, red.
+- [ ] **38 direct composer dependencies are behind, because dependabot's composer lane was aimed at
+      a directory with no manifest.** `.github/dependabot.yaml` declared `directory: /` while the
+      manifest is `api/composer.json`, so the weekly version-update lane produced **zero** PRs in
+      four months (npm produced ~40 over the same window). The two composer PRs that did land
+      ([#138](https://github.com/sergio-salcedo-dev/ERPify/pull/138),
+      [#536](https://github.com/sergio-salcedo-dev/ERPify/pull/536)) came through **security**
+      updates, which walk the dependency graph and ignore the config's `directory:` — the back door,
+      not the lane. Nothing went red; PRs simply never arrived. The config is fixed here
+      (`directory: /api`), which restores the lane but does **not** apply the backlog. Measured
+      2026-08-12: 38 direct packages outdated, most of them the Symfony `8.1.2`–`8.1.4` patch line
+      against an installed `8.1.0`/`8.1.1`; `composer audit` reports no known advisory, so there is
+      no live exposure — the risk is that the next one would also have gone unproposed. **Before a
+      customer deployment:** land the catch-up as one consolidated batch (`/deps-update`, which
+      re-resolves the ranges in a single install and reads every claimed version back out of the
+      lock) and re-run `composer audit`.
 - [ ] **A stolen session can deny the owner a credential *rotation*, but not an *eviction*.** Both budgets a
       session holder can reach are keyed by something they already have: `password_change_per_identity`
       (10 / 15 min, a visible 429) by the identity itself, and `password_recovery_per_email` (5 / hour, whose

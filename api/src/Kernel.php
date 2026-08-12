@@ -37,6 +37,19 @@ class Kernel extends BaseKernel
             return parent::getCacheDir() . '_behat';
         }
 
+        // PHPUnit gets its own directory for a different reason, and it is load-bearing for the
+        // deprecation gate rather than for speed. `trigger_deprecation` for a deprecated CLASS runs
+        // at file scope, so it fires exactly once per process, while the container is compiled. Any
+        // `bin/console` invocation under env=test compiles it first — CI runs several inside
+        // `php.quality.dry-run`, before the suite — and a warm container means PHPUnit never
+        // autoloads the class, never sees the deprecation, and reports green with
+        // `failOnDeprecation="true"` set. Sharing the directory therefore makes the gate blind to
+        // the whole class of regression it exists for. Measured: same tree, same version, red when
+        // PHPUnit compiles and green when the console compiled first.
+        if ('1' === \getenv('PHPUNIT_RUNNING')) {
+            return parent::getCacheDir() . '_phpunit';
+        }
+
         return parent::getCacheDir();
     }
 
