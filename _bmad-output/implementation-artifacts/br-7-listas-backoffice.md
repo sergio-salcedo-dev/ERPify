@@ -87,10 +87,12 @@ persistidos — `name`, `nameNormalized`, `shortName` —, no contra los dos arg
   - [x] Reescritas las 8 specs contra los tokens que la página resuelve; síntesis de `_mocks.ts` eliminada
     entera y `_fixtures.ts::searchPage` devuelve ya la `ResourceSearchPage` genérica (`items`).
   - [x] `SearchBankAccounts` y su página, intactos.
-- [ ] **T3 — D3 · #423+#272: gate de contrato de enums**
-  - [ ] Test que extrae los valores de `Currency` y `BankAccountStatus` (PHP) y los `Set` `CURRENCIES`/`STATUSES` de `ApiBankAccountRepository.ts:50-51`, y compara **conjuntos**.
-  - [ ] Mecanismo según `CaddyfileAccessLogRedactionGateTest`; comparación **no** textual.
-  - [ ] Provocar los cuatro rojos (ver *Falsificación*).
+- [x] **T3 — D3 · #423+#272: gate de contrato de enums**
+  - [x] `api/tests/Unit/Shared/Architecture/EnumWireContractGateTest.php` — extrae los casos del enum servidor
+    y los literales del `Set` del PWA y compara **conjuntos ordenados**, no texto.
+  - [x] Mecanismo del hermano `CaddyfileAccessLogRedactionGateTest` (test PHP que lee un fichero no-PHP y
+    resuelve la raíz del repo con fallo-no-skip); forma de comparación propia.
+  - [x] Nueve rojos provocados, incluidos los cuatro de deriva y los cinco de degradación (ver abajo).
 - [ ] **T4 — D5 · #273: comentario rancio**
   - [ ] `pwa/src/context/backoffice/bank/infrastructure/ApiBankRepository.ts:84` — explica la conducta nombrando grupos de serialización que ya no gobiernan nada. Reescribir contra la causa real (los Resource DTO por vista).
 - [ ] **T5 — verificación completa** (ver *Gates*)
@@ -125,12 +127,12 @@ y arrastra efectos aguas abajo aunque no publique evento.
 | **`alias: ''` frente a `alias: null`** debe MUTAR (son estados distintos) | ≥1 | ✔ M4 · A4 |
 | Un único campo realmente cambiado → muta, mueve `updatedAt` y publica | ≥1 | ✔ M5 · 4 rojos · M9 · 4 rojos |
 | `Bank`: comparación contra los argumentos en vez de contra `name`/`nameNormalized`/`shortName` | ≥1 | ✔ M7 · 3 rojos |
-| Gate de enums: valor añadido **sólo en el servidor** | 1 | ☐ |
-| Gate de enums: valor añadido **sólo en el PWA** | 1 | ☐ |
-| Gate de enums: valor eliminado **del servidor** | 1 | ☐ |
-| Gate de enums: valor eliminado **del PWA** | 1 | ☐ |
-| **Gate de enums: el parser NO encuentra la fuente** → rojo, jamás conjunto vacío válido | 1 | ☐ |
-| **Gate de enums: la declaración esperada se renombra o se duplica** → rojo | 1 | ☐ |
+| Gate de enums: valor añadido **sólo en el servidor** | 1 | ✔ M1 |
+| Gate de enums: valor añadido **sólo en el PWA** | 1 | ✔ M2 |
+| Gate de enums: valor eliminado **del servidor** | 1 | ✔ M3 |
+| Gate de enums: valor eliminado **del PWA** | 1 | ✔ M4 |
+| **Gate de enums: el parser NO encuentra la fuente** → rojo, jamás conjunto vacío válido | 1 | ✔ M5 · M7 · M9 |
+| **Gate de enums: la declaración esperada se renombra o se duplica** → rojo | 1 | ✔ M5 · M6 |
 | Specs de banks reescritas: romper `search` del repositorio | ≥1 | ✔ 4 mutaciones, 4 rojas (abajo) |
 
 Un gate verde cuya mutación no enrojece **no cubre esa dirección** — y el gate de enums es justamente lo que
@@ -179,6 +181,37 @@ falsable es la **costura**. Cuatro mutaciones sobre la suite de banks (47 ficher
 
 La última es la que importa: **es la prueba de que los specs cuelgan ahora del token que producción resuelve** y
 no del caso de uso muerto. Restauración por copia de bytes, baseline verde al final.
+
+### T3 — falsificación ejecutada
+
+Nueve mutaciones sobre el gate, **nueve rojas**, restauración por copia de bytes y baseline verde al final.
+Las cuatro primeras son deriva de vocabulario; las cinco siguientes son las formas en que la extracción
+podría degradarse en un pase sobre nada:
+
+| Mutación | Rojo por |
+|---|---|
+| M1 valor añadido sólo en el servidor | conjuntos distintos |
+| M2 valor añadido sólo en el PWA | conjuntos distintos |
+| M3 valor eliminado del servidor | conjuntos distintos |
+| M4 valor eliminado del PWA | conjuntos distintos |
+| M5 la declaración esperada se renombra | *«se esperaba exactamente una, encontradas 0»* — nunca «admite nada» |
+| M6 la declaración se duplica | *«encontradas 2»* — si no, un refactor deja el gate leyendo la vieja |
+| M7 el `Set` queda vacío | *«no admite ningún valor»* |
+| M8 el guard se declara pero no se consulta | *«declarado pero nunca consultado»* |
+| M9 la fuente del PWA no es alcanzable | falla, **no** se salta |
+
+**M8 salió verde en la primera pasada y la mutación era el problema, no la aserción**: el fichero consulta
+`CURRENCIES.has(` en **dos** sitios (`:62` y `:147`), así que neutralizar uno dejaba el otro en pie. Medido y
+repetido sobre todas las llamadas, enrojece. Eso mismo acota lo que la cláusula prueba —que el guard se
+consulta *en alguna parte* del fichero, no que la llamada esté en la rama por la que pasa una respuesta— y
+así queda escrito en el docblock del gate.
+
+`--list-tests` **sin filtro** sobre la suite por defecto (2718 tests) lista los dos casos del gate: se ejecuta,
+no sólo existe.
+
+Blind spots declarados en el propio gate: los pares los enumera una mano (un enum nuevo no se auto-incorpora),
+no prueba que el guard corra en la ruta real del payload, y no prueba que el servidor serialice esos valores
+(eso lo gobierna el Resource DTO).
 
 ### T2 — alcanzabilidad, medida en tres planos
 
