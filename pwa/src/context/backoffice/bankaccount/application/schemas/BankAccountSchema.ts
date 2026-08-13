@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BANK_ACCOUNT_CURRENCIES } from "@/context/backoffice/bankaccount/domain/BankAccount";
 
 /**
  * Zod schema for the bank-account create / edit form. Mirrors the Symfony
@@ -26,9 +27,14 @@ export const IBAN_MAX_LENGTH = 34;
 export const BIC_MAX_LENGTH = 11;
 export const ALIAS_MAX_LENGTH = 100;
 
-/** Closed sets mirroring the API enums; a new member is a typed change, not a silent string. */
-export const BANK_ACCOUNT_CURRENCIES = ["EUR"] as const;
-export const BANK_ACCOUNT_STATUSES = ["ACTIVE", "INACTIVE", "CLOSED"] as const;
+/**
+ * Re-exported from the domain, which declares both vocabularies once for the whole PWA. Kept
+ * reachable from here because the form and the status control read them alongside this schema.
+ */
+export {
+  BANK_ACCOUNT_CURRENCIES,
+  BANK_ACCOUNT_STATUSES,
+} from "@/context/backoffice/bankaccount/domain/BankAccount";
 
 /** IBAN: 2 letters + 2 check digits + up to 30 alphanumerics (canonical, no spaces). */
 const IBAN_PATTERN = /^[A-Z]{2}\d{2}[A-Z0-9]{1,30}$/;

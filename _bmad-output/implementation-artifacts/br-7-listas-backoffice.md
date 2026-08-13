@@ -38,7 +38,7 @@ El lote entró descrito como «el más grande de la épica y el de menor riesgo 
 | # | Decisión | Argumento |
 |---|---|---|
 | **D1** · #395 | **Guarda no-op en el agregado, en `BankAccount::update()` y `Bank::rename()`.** | La igualdad semántica de la entidad es una regla del agregado, no del caso de uso: que `BankUpdater` leyera los cinco campos, comparara y decidiera si llamar sería Tell-Don't-Ask al revés, y dejaría a cualquier caller futuro olvidar la guarda. No es un patrón nuevo — es el que `changeStatus()` ya envía, aplicado a los dos métodos que se lo saltaron. |
-| **D1b** | **La comparación es contra el estado PERSISTIBLE, jamás contra el input.** | `input → canonicalize/normalize → nuevo estado canónico → ¿== estado actual?`. `canonicalizeIban`, `canonicalizeBic`, `NormalizedText::from`. Así dos escrituras equivalentes del mismo IBAN no producen un cambio falso, y la implementación no depende de cómo llegó la petición. |
+| **D1b** | **La comparación es contra el estado PERSISTIBLE, jamás contra el input.** | `input → canonicalize/normalize → nuevo estado canónico → ¿== estado actual?`. `canonicalizeIban`, `canonicalizeBic`, `NormalizedText::from`. La implementación no depende de cómo llegó la petición. **Corregido tras el pase adversarial (A1/A2):** la equivalencia llega justo hasta donde llega el canonicalizador del agregado, que es **más estrecho que el validador que gatea el mismo campo** — `canonicalizeIban` quita `U+0020` y `Assert\Iban` acepta además `U+00A0` y `U+202F`. Un IBAN que difiere sólo en un espacio no-ASCII **no** es no-op: muta y persiste no canónico. La afirmación original («dos escrituras equivalentes del mismo IBAN no producen un cambio falso») era falsa para esas formas. Defecto preexistente, con consecuencia de integridad (el índice `unique` deja de ver el duplicado); sale a **PR propia**, que empieza midiendo producción. |
 | **D2** · #422 | **Borrar `SearchBanks` y `SearchAllBankAccounts`; CONSERVAR `SearchBankAccounts`.** | No es elegir arquitectura: es terminar una migración ya decidida (M4). El tercero se conserva no por asimetría sino porque su página es anterior al toolkit; cae cuando esa página migre, y eso no es BR-7. «Los tests tendrían que cambiar» no es argumento para conservar producción — revela que la suite codificó otra arquitectura (M5). |
 | **D3** · #423+#272 | **Cerrar ambos con evidencia Y añadir un gate de contrato.** | La evidencia justifica cerrar; el gate es lo que convierte una invariante **accidental** en una **verificable**, y permite cerrar con garantía permanente en vez de con una foto de `main` a 12-08-2026. Degradar por fila ahora es trabajo especulativo que el propio #272 prohíbe, y reduciría la capacidad de detectar drift de contrato. |
 | **D3b** | **El gate compara CONJUNTOS semánticos, no ficheros.** | El objetivo es `valores(enum servidor) == valores(Set PWA)`, **no** `Currency.php == ApiBankAccountRepository.ts`. `CaddyfileAccessLogRedactionGateTest` sirve como **mecanismo** (test PHP que lee un fichero no-PHP y rompe la build ante divergencia), nunca como forma de comparación: el test extrae los valores de las dos fuentes y compara los conjuntos. |
@@ -329,10 +329,44 @@ propio alcance.
 `data.updatedAt`, antes de las seis aserciones de cola. No se han visto rojas; la afirmación «una escritura
 redundante no deja fila de auditoría» está afirmada end-to-end pero no falsificada.
 
-**Congelado a la espera de consulta externa (decisión de Sergio):** **A1/A2** (los canonicalizadores del
-agregado son más estrechos que sus validadores) y **B5** (el tercer espejo del vocabulario,
-`BANK_ACCOUNT_STATUSES`). Prompt autocontenido en
-`tmp/bmad-md/consult-br7-canonicalization-and-enum-mirrors-20260812-210731.md`. Nada de los dos se ha tocado.
+**B5 — resuelto reduciendo fuentes, no vigilando más.** La consulta externa recomendó atacar la raíz y
+coincidí, con dos correcciones medidas contra el código: el PWA no escribía el vocabulario **dos** veces sino
+**tres** (la unión de tipo en `domain/`, el array `as const` en `application/schemas/`, el `Set` en
+`infrastructure/`), y la declaración única **no puede vivir en `application/`** como proponía — obligaría a
+`domain/` a importar de su propio consumidor, que es exactamente la dirección que `pwa/CLAUDE.md` prohíbe.
+
+La declaración única vive ahora en `domain/BankAccount.ts`: dos arrays `as const`, con el tipo derivado
+(`(typeof …)[number]`), y el `Set` del guard y el `z.enum` del formulario **derivan** de ellos. Seis
+declaraciones manuales quedan en **dos**.
+
+Eso abre un agujero que no existía y el gate tenía que cerrar: si alguien vuelve a escribir un `Set` literal en
+el adaptador, comparar el array de dominio contra el enum pasaría mientras el guard admite otra cosa. El gate
+pasa por tanto a vigilar **dos propiedades**: que la declaración única coincida con el enum servidor, y que el
+guard **derive de ella** (`new Set(BANK_ACCOUNT_STATUSES)`, exactamente una vez) y lo consulten los dos
+predicados de payload.
+
+**Falsificación: 14 mutaciones, 13 rojas.** Las dos nuevas —`M13` el guard reescribe el literal, `M14` el guard
+deriva del vocabulario equivocado— son las que cierran ese agujero. `M10` sale verde y ése es el veredicto
+correcto: sólo inyecta un comentario sin deriva real. El escenario de verdad (servidor gana `SUSPENDED`, el PWA
+sólo lo nombra en un comentario) se midió aparte y es **rojo**.
+
+**Incidente de método, y lo que lo salvó.** Un run de falsificación anterior murió a mitad de mutación y el
+`finally` no restauró: `Currency.php` se quedó con un `case USD` inyectado, y el run siguiente fotografió esa
+versión como «pristine». Lo cazó el chequeo de baseline del propio script, que **abortó en vez de reportar
+rojos falsos**. Restaurado copiando bytes, nunca con `git checkout --`, y las copias pristine rehechas desde el
+árbol ya correcto.
+
+**A1/A2 — sigue congelado, y ahora con decisión: PR propia.** La consulta y yo coincidimos en que no es
+documental sino de integridad (dos filas pueden representar el mismo IBAN y el índice `unique` no lo ve), y en
+que el arreglo completo toca canonicalización, búsqueda, unicidad y **posibles datos históricos**, así que no
+cabe en BR-7. En BR-7 sólo se corrige la afirmación falsa de D1b. **El primer paso de esa PR no es código: es
+medir producción** — la BD de dev tiene cero cuentas y no prueba nada. Prompt de la consulta en
+`tmp/bmad-md/consult-br7-canonicalization-and-enum-mirrors-20260812-210731.md`.
+
+Descarté una opción intermedia que la consulta no evaluó: ampliar sólo la *comparación* de la guarda sin tocar
+lo que se persiste. Impediría que el camino `update` introduzca la corrupción, pero crearía una **tercera**
+interpretación de «IBAN canónico» dentro de la misma clase — cambiar «una responsabilidad con varias
+autoridades» por «una con tres» no es progreso.
 
 ---
 
