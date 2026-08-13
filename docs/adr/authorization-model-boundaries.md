@@ -111,10 +111,14 @@ actions stays correlatable while the link to the person is severed
 
 **The retention bound is narrower than the trail as a whole.** The five-year floor covers `change` rows only
 (`AuditRetentionPolicy::COMPLIANCE_RETENTION_FLOOR`). `security` rows — which is what every row named above is:
-`AUDIT_TRAIL_READ`, `USER_ROLES_CHANGED`, `GDPR_SUBJECT_ERASED`, `GDPR_ERASURE_EXECUTED` — carry a privacy
-*ceiling* instead, 365 days by default, and are deleted by the scheduled pruner. So a year after the fact the
-pseudonymised `change` rows survive four more years while the record of who read or who pseudonymised them has
-aged out. That asymmetry is a property of the current retention policy, not of this decision, and it is the
+`AUDIT_TRAIL_READ` and `USER_ROLES_CHANGED` — carry a privacy *ceiling* instead, 365 days by default, and are
+deleted by the scheduled pruner. **The two erasure-evidence actions are the exception**: `GDPR_SUBJECT_ERASED`
+and `GDPR_ERASURE_EXECUTED` are exempt from the prune (`AuditErasureEvidence`), because evidence may not
+expire before the thing it attests — the `dek_keystore` tombstone is eternal and the reconciler anti-joins the
+two with no date bound. So a year after the fact the
+pseudonymised `change` rows survive four more years while the record of who *read* them has
+aged out, and the record of who pseudonymised them survives indefinitely — carrying that administrator's `ip`
+and `user_agent` with it on the HTTP path. That asymmetry is a property of the current retention policy, not of this decision, and it is the
 first thing to re-examine if the trail is ever asked to answer an assessor about access rather than about data.
 
 **What is deliberately not claimed.** The trail is **not tamper-evident**. No hash chain, signature or checksum

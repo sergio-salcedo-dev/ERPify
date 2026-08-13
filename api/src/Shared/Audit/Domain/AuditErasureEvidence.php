@@ -23,18 +23,29 @@ namespace Erpify\Shared\Audit\Domain;
  * case on one axis or the other: the enum fixes **how a row is written** (async, sync-before-response, or
  * inside the writing transaction) as much as how long it lives, and evidence introduces no new write mode.
  *
- * **This centralises the tokens, so the prune and the writers cannot disagree about what an evidence row
- * is.** A drifted copy here does not read as a typo; it silently returns a row to the sweep. That is the
+ * **This centralises the tokens, so the production writers and the prune cannot disagree about what an
+ * evidence row is.** A drifted copy here does not read as a typo; it silently returns a row to the sweep. That is the
  * same argument that earned {@see AuditRedaction} its extraction, and it is why the acceptance test spells
  * these literals out by hand instead of importing them.
  *
- * **What it deliberately does not settle.** The two actions do not have the same correct retention, only the
- * same floor of "longer than 365 days". `SUBJECT_ERASED` needs never, because its falsifier is eternal.
+ * **What an exempt row keeps for ever, stated in full because the exemption is what makes it immortal.**
+ * These rows are minted through {@see \Erpify\Shared\Audit\Infrastructure\SealedAuditEntryFactory}, which
+ * seals request metadata onto **every** entry, so an erasure executed over HTTP writes the acting
+ * administrator's `ip` and `user_agent` alongside their `actor_id` — and the resource-axis anonymiser
+ * deliberately leaves those two alone wherever an actor was identified, because they are that
+ * administrator's data and not the subject's. So the exemption retains all three indefinitely, not just the
+ * id: exactly the triple `docs/rules/database.md` names as the PII whose bounded window *is* the
+ * minimisation. There is a removal path and it is **discretionary**: the actor-axis erasure matches
+ * `actor_id`, so these columns clear only if that administrator is themself erased. The operator CLI paths
+ * are unaffected — they run off-request as `system`, with both columns null.
+ *
+ * **What it deliberately does not settle.** The two actions do not have the same correct retention, only
+ * the same floor of "longer than 365 days". `SUBJECT_ERASED` needs never, because its falsifier is eternal.
  * `ACTOR_TRAIL_ERASED` answers for `actor_erased` marks on `change` rows, which are themselves pruned at
- * five years — so retaining it for ever over-retains the acting administrator's `actor_id` past the point
- * anything could check it against, which is the data minimisation the prune exists to perform. Both are
- * exempt here because both must outlive the ceiling; giving the second a bounded floor instead is a privacy
- * call with its own trade-off, and it is recorded rather than decided.
+ * five years — so retaining it for ever over-retains the acting administrator past the point anything could
+ * check it against. Both are exempt here because both must outlive the ceiling; narrowing the second to a
+ * bounded floor, or keeping request metadata off these rows at write time, are privacy calls with their own
+ * trade-offs, recorded rather than decided.
  */
 final class AuditErasureEvidence
 {

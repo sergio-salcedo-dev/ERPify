@@ -202,9 +202,7 @@ Descartado: documentar la ventana async como riesgo residual (no sustituye a cer
 
 ### D4 — Niveles, retención diferenciada, append-only y GDPR
 
-**Tres niveles** (`activity`, `security`, `change`). El párrafo original decía dos, porque el eje de cambios
-de datos se consideraba cubierto por `DomainEvent` y no duplicable; `change` llegó después, con el CDC de
-`onFlush` y su suelo de retención, y este texto no se actualizó con él. El nivel no es sólo una ventana de
+**Tres niveles** (`activity`, `security`, `change`). El nivel no es sólo una ventana de
 retención: **fija también cómo se escribe la fila** —`activity` en diferido, `security` síncrono antes de la
 respuesta, `change` dentro de la transacción que describe—, de modo que una propuesta de cuarto nivel tiene
 que aportar un modo de escritura nuevo, no sólo una retención distinta. `audit_log` es **append-only**: la
@@ -220,19 +218,30 @@ siendo un solo `DELETE` con un disparador; lo que cambia es su predicado, que ah
 `AuditErasureEvidence::ACTIONS`. El principio es **la evidencia no puede caducar antes que aquello que
 atestigua**: la lápida de `dek_keystore` que responde por un `GDPR_SUBJECT_ERASED` se conserva para siempre
 a propósito y el reconciliador las anti-junta sin cota temporal, así que dejar caducar la evidencia vuelve
-ese par **insatisfacible** — cada borrado correcto pasa a reportarse como divergencia, a diario y para
+ese par **insatisfacible** — cada sujeto crypto-shredded pasa a reportarse como divergencia, a diario y para
 siempre. La exención llavea por `action` y **nunca** por `level`, porque `action` es lo que lee el control
 detectivo: discriminar por columnas distintas es exactamente cómo los dos controles derivarían en silencio.
 Va como dato en `AuditRetentionThreshold` —no como literal dentro del SQL del adaptador— y viaja en **todas**
 las líneas del plan, no sólo en la de `security`, para que mover la evidencia de nivel no reabra el agujero.
 
+**Qué se vuelve inmortal, dicho entero porque es la exención lo que lo vuelve inmortal.** Estas filas se
+acuñan por `SealedAuditEntryFactory`, que sella metadata de petición en **toda** entrada; un borrado
+ejecutado por HTTP escribe por tanto el `ip` y el `user_agent` del administrador actuante junto a su
+`actor_id`, y el anonimizador del eje de recurso deja esas dos columnas intactas allí donde el actor fue
+identificado —precisamente porque son suyas y no del sujeto—. La exención retiene **las tres**, que son el
+mismo trío que `docs/rules/database.md` nombra como el PII cuya ventana acotada *es* la minimización. Hay
+vía de eliminación y es **discrecional**: el pase de actor casa por `actor_id`, así que esas columnas se
+limpian sólo si ese administrador es borrado a su vez. Los caminos por CLI no están expuestos: corren fuera
+de petición como `system`, con ambas columnas nulas.
+
 **Lo que esto no cierra, dicho para que no se lea como cerrado.** Las dos acciones de evidencia no tienen la
 misma retención correcta, sólo el mismo suelo de «más que el techo de `security`». `SUBJECT_ERASED` necesita
 *nunca*, porque su falsador es eterno. `ACTOR_TRAIL_ERASED` responde por marcas `actor_erased` en filas
-`change`, que se podan a los cinco años: retenerla para siempre **sobre-retiene el `actor_id` del
-administrador actuante** más allá del punto en que algo pueda contrastarlo, que es justo la minimización que
-la poda ejecuta. Ambas quedan exentas porque ambas deben sobrevivir al techo; darle a la segunda un suelo
-acotado en vez de la exención es una decisión de privacidad con su propio coste, y se registra sin tomarla.
+`change`, que se podan a los cinco años: retenerla para siempre **sobre-retiene al administrador actuante**
+más allá del punto en que algo pueda contrastarlo, que es justo la minimización que la poda ejecuta. Ambas
+quedan exentas porque ambas deben sobrevivir al techo; acotar la segunda a un suelo, o no sellar metadata de
+petición en estas filas al escribirlas, son decisiones de privacidad con su propio coste y se registran sin
+tomarlas.
 
 **«Cerrado» significa cerrado por revisión, no por gate.** Nada automatizado impide una cuarta política:
 `git grep` sobre la tabla es el único control y no está cableado a ninguna puerta, de modo que una mutación

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Audit\Domain;
 
 use DateTimeImmutable;
+use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditRetentionPolicy;
 use Erpify\Shared\Audit\Domain\AuditRetentionThreshold;
@@ -76,6 +77,26 @@ final class AuditRetentionPolicyTest extends TestCase
         $this->expectException(InvalidAuditRetentionPolicy::class);
 
         new AuditRetentionPolicy(activityRetentionDays: 0, securityRetentionDays: 365);
+    }
+
+    /**
+     * The exemption is carried on **every** line, and only a test says so. Scoping it back to the level that
+     * happens to hold the evidence today would leave every functional test green — they seed `security` rows
+     * — while quietly restoring the hole the moment an evidence action is written anywhere else.
+     */
+    public function testEveryPlannedThresholdCarriesTheErasureEvidenceExemption(): void
+    {
+        $plan = (new AuditRetentionPolicy(90, 365))->thresholdsAt(new DateTimeImmutable('2026-06-25T00:00:00+00:00'));
+
+        $this->assertCount(\count(AuditLevel::cases()), $plan, 'one line per level, so none can be skipped');
+
+        foreach ($plan as $threshold) {
+            $this->assertSame(
+                AuditErasureEvidence::ACTIONS,
+                $threshold->exemptActions,
+                'level ' . $threshold->level->value . " would prune the trail's own erasure evidence",
+            );
+        }
     }
 
     private function cutoffFor(

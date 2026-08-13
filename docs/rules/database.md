@@ -56,7 +56,7 @@
   bound inside the batching `SELECT`). The rule behind it is *evidence may not expire before the thing it
   attests*: the `dek_keystore` tombstone a `GDPR_SUBJECT_ERASED` row answers for is kept for ever on
   purpose, and the reconciler anti-joins the two with no date bound — so letting the evidence age out makes
-  that pair unsatisfiable and turns every correct erasure into a permanent reported divergence. The
+  that pair unsatisfiable and turns every crypto-shredded subject into a permanent reported divergence. The
   exemption keys on `action`, never on `level`, because `action` is what the detective control reads:
   discriminating by different columns is how the two would drift apart in silence.
   The row carries PII (`actor_id`, `ip`, `user_agent`), so the bounded window is also GDPR data

@@ -128,6 +128,43 @@ final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
         return $entry->id;
     }
 
+    /**
+     * Pins the exemption to the **inner** select. Moved onto the outer `DELETE` the batch would still be
+     * filled by exempt ids, fewer rows would delete, `$deleted !== $batchSize` would end the loop, and rows
+     * genuinely past retention would survive — silently, with no error anywhere.
+     *
+     * A batch of one and an evidence row older than the control is what makes that deterministic: `ORDER BY
+     * id` alone would not, since ids are UUIDv7 and order by mint time rather than by `occurred_on`, so the
+     * two are seeded in the order the batch must visit them. Without the ordering in production this
+     * mutation is only probabilistically observable, which is why the ordering is not merely a lock-order
+     * concern.
+     */
+    public function testItDrainsThePrunableBacklogEvenWhenAnExemptRowIsFirstInTheBatch(): void
+    {
+        $this->inRolledBackTransaction(function (Connection $connection): void {
+            $anchor = new DateTimeImmutable(self::ANCHOR);
+            $writer = new DbalAuditLogWriter($connection);
+
+            $evidence = $this->seedSecurityRow($writer, 'GDPR_SUBJECT_ERASED', $this->daysBefore($anchor, 500));
+            $control = $this->seedSecurityRow($writer, 'BANK_ACCOUNTS_VIEWED', $this->daysBefore($anchor, 400));
+
+            $pruner = new DbalAuditLogPruner(
+                $connection,
+                new PostgresAdvisoryLock($connection),
+                new NullLogger(),
+                1,
+            );
+            $pruner->prune(...(new AuditRetentionPolicy(90, 365))->thresholdsAt($anchor));
+
+            $this->assertSame(
+                0,
+                $this->countRowsForId($connection, $control),
+                'an exempt row at the head of the batch must not stop the sweep draining what is prunable',
+            );
+            $this->assertSame(1, $this->countRowsForId($connection, $evidence), 'and the evidence still survives');
+        });
+    }
+
     private function daysBefore(DateTimeImmutable $anchor, int $days): DateTimeImmutable
     {
         return $anchor->modify('-' . $days . ' days');
@@ -146,7 +183,9 @@ final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
         try {
             $body($connection);
         } finally {
-            $connection->rollBack();
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
         }
     }
 

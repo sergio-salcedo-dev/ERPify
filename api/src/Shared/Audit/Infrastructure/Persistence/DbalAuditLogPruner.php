@@ -98,13 +98,17 @@ final readonly class DbalAuditLogPruner implements AuditLogPruner
         do {
             // The exemption belongs to the INNER select and must stay there. On the outer `DELETE` the inner
             // would still take `batchSize` ids, fewer rows would delete, `$deleted !== $this->batchSize` would
-            // end the loop early, and eligible rows would be left unpruned — silently, with no error and
-            // nothing red. The inner select carries no `ORDER BY`, so no black-box test can catch that.
+            // end the loop early, and eligible rows would be left unpruned — silently, with no error.
+            // `ORDER BY id` is what makes that reachable by a test at all: without it the batch is whatever
+            // the planner returns, so the mutation is only probabilistically observable. It also puts this
+            // statement's lock acquisition in the same order as both erasure `UPDATE`s, which order by `id`
+            // for exactly that reason — leaving it unordered made the prune the one member of the closed
+            // set of three mutations that could deadlock against the other two.
             $deleted = (int) $this->connection->executeStatement(
                 'DELETE FROM audit_log WHERE id IN ('
                 . 'SELECT id FROM audit_log WHERE level = :level AND occurred_on < :threshold '
                 . $exemption
-                . 'LIMIT :batch'
+                . 'ORDER BY id LIMIT :batch'
                 . ')',
                 $parameters,
                 $types,
