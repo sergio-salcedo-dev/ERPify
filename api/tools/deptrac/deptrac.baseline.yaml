@@ -20,6 +20,8 @@ deptrac:
       - Symfony\Component\Validator\Exception\ValidationFailedException
     Erpify\Backoffice\BankAccount\Application\BankAccountUpdater:
       - Symfony\Component\Validator\Exception\ValidationFailedException
+    Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
+      - Erpify\Shared\Validation\Infrastructure\EnumType
     Erpify\Backoffice\Bank\Application\BankUpdater:
       - Symfony\Component\Validator\Exception\ValidationFailedException
     Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory:
@@ -31,6 +33,7 @@ deptrac:
       - Symfony\Component\Validator\ConstraintViolationInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
     Erpify\Shared\Validation\Application\Validator:
+      - Symfony\Component\Validator\Constraint
       - Symfony\Component\Validator\ConstraintViolation
       - Symfony\Component\Validator\ConstraintViolationList
       - Symfony\Component\Validator\ConstraintViolationListInterface

@@ -57,17 +57,29 @@ validating UUIDs across versions (v4, v7). The prohibition stays absolute for **
 code in `Domain/`: this exception covers only `symfony/uid`, not `Erpify\Shared\Infrastructure\…` or any
 other framework service. Example: `api/src/Shared/Uuid/Domain/Uuid.php`.
 
-#### Documented exception — first-party validation constraints in Domain
+#### A first-party constraint cannot be split from its validator — and why that keeps one debt entry alive
 
-A constraint the project writes itself is passive metadata exactly like `#[Assert\NotBlank]`, so it lives
-beside the invariant it states: `Domain/` MAY declare a class extending `Symfony\Component\Validator\Constraint`
-and carrying `#[HasNamedArguments]`. Example: `api/src/Shared/Validation/Domain/EnumType.php`.
+`Erpify\Shared\Validation\Infrastructure\EnumType` is passive metadata by nature, so it *looks* like it
+belongs in `Domain/` beside the invariant it states — and a `Domain/` entity importing it
+(`BankAccount → EnumType`) is a literal breach of this section, grandfathered in the deptrac baseline.
 
-**The constraint only — its validator stays in `Infrastructure/`.** The split is the whole point: the
-constraint is a declaration with no behaviour (`EnumType` holds an enum class name and a message), while
-`EnumTypeValidator extends ConstraintValidator` is framework runtime that reads a violation builder. Putting
-the constraint in `Infrastructure/` to keep the pair together is what made a `Domain/` entity import
-`Infrastructure/` — the one literal breach of this section that the rule itself had.
+**Moving it is not the fix, and this is measured, not assumed.** Symfony binds a constraint to its validator
+by **name**: `Constraint::validatedBy()` returns `static::class . 'Validator'`. Move the constraint one
+directory and the derived name points at a class that does not exist — `#[EnumType]` then fatals on every
+validated property, while PHPStan, deptrac and the constraint's own unit test all stay green (that test
+instantiates the validator directly through `ConstraintValidatorTestCase::createValidator()`, so it never
+travels through `validatedBy()`). The validator itself cannot follow into `Domain/`: it extends
+`ConstraintValidator`, which is framework runtime.
+
+That leaves three ways to split the pair, and each is worse than the debt entry: a `validatedBy()` returning
+`EnumTypeValidator::class` just relocates the same Domain→Infrastructure edge; returning the FQCN as a
+**string literal** hides it from deptrac, which is falsifying the gate rather than paying it; and registering
+the validator under a service id invents DI machinery for one class and still couples through a magic string.
+The pair therefore stays co-located, exactly as `PasswordPolicy` / `PasswordPolicyValidator` already are.
+
+Enforced by `ConstraintValidatorResolutionGateTest`
+(`api/tests/Unit/Shared/Architecture/`), which resolves `validatedBy()` for every concrete `Constraint`
+subclass under `src` and fails when the target does not exist.
 
 #### Documented exception — `ExecutionContextInterface` as a callback signature
 
@@ -78,10 +90,11 @@ metadata, and the callback cannot be declared without naming this type. No runti
 passes the context in. Examples: `Backoffice/Bank/Domain/Entity/Bank.php`,
 `Shared/Search/Application/Http/{FilterQuery,SearchQuery}.php`.
 
-Both exceptions are enforced by collector, not by baseline: `Vendor.PassiveMetadata` in
-`api/tools/deptrac/deptrac.yaml` matches these three classes **anchored** (`…\Constraint$`), because an
-unanchored prefix would also swallow `ConstraintViolation` and its `List`/`Interface` siblings — runtime
-result types that must stay in `Infrastructure/`.
+This exception is enforced by collector, not by baseline: `Vendor.PassiveMetadata` in
+`api/tools/deptrac/deptrac.yaml` matches the class **anchored** (`…\ExecutionContextInterface$`). The anchor
+is load-bearing for anything added there — an unanchored `…\Validator\Constraint` entry would also swallow
+`ConstraintViolation` and its `List`/`Interface` siblings, which are runtime result types that must stay in
+`Infrastructure/`.
 
 #### Documented exception — PSR interface-only interop contracts
 

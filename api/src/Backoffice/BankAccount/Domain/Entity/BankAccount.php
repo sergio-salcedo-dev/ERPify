@@ -22,7 +22,7 @@ use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
 use Erpify\Shared\Privacy\Domain\PersonalData;
 use Erpify\Shared\Uuid\Domain\Uuid;
-use Erpify\Shared\Validation\Domain\EnumType;
+use Erpify\Shared\Validation\Infrastructure\EnumType;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 

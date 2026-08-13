@@ -275,18 +275,21 @@ Lo que cabe en este PR — **4 pares, cero cambio de comportamiento**:
         exige dos ediciones coordinadas y dos restauraciones exactas, y mientras vive puede romper `tsc` y Vitest
   - [x] El rojo transitivo y el de la raíz de `components/` **vienen acoplados**: la evidencia vale si la salida
         capturada nombra **los dos rule ids**, no si se afirma haberlos provocado por separado
-- [x] **T4 — #305: mover `EnumType` a `Shared/Validation/Domain/`** (AC: 5, 6)
-  - [x] Mover sólo la constraint; el validador se queda en Infrastructure
-  - [x] Admitir `Validator\Constraint` + `Validator\Attribute\HasNamedArguments` en `Vendor.PassiveMetadata`
+- [x] **T4 — #305: mover `EnumType` a `Shared/Validation/Domain/`** — **INTENTADA Y REVERTIDA** (AC: 5, 6)
+  - [x] Mover sólo la constraint; el validador se queda en Infrastructure — **rompe la validación en runtime**;
+        el par se ata por nombre vía `validatedBy()`. Ver §T4 REVERTIDA
+  - [x] Admitir `Validator\Constraint` + `Validator\Attribute\HasNamedArguments` en `Vendor.PassiveMetadata` —
+        retirados con la reversión: ya no hacen falta, `Infrastructure` admite `Vendor.Symfony`
+  - [x] **Guardrail en su lugar**: `ConstraintValidatorResolutionGateTest`, con su rojo provocado
 - [x] **T5 — #305: bendecir `ExecutionContextInterface` por colector** (AC: 5, 6)
 - [x] **T6 — #305: regenerar baseline y documentar** (AC: 5, 6)
-  - [x] `make php.deptrac.baseline`; verificar 21 → 17 en el diff — **medido 21 → 16**, ver §Baseline
-  - [x] Dos secciones «Documented exception» en `docs/rules/architecture.md` + §Implementación del ADR
+  - [x] `make php.deptrac.baseline`; verificar 21 → 17 en el diff — **medido 21 → 18** (los tres
+        `ExecutionContextInterface`); T4 no paga su par. Ver §Baseline
+  - [x] «Documented exception» en `docs/rules/architecture.md` + §Implementación del ADR, ambas reescritas
+        para registrar por qué el par de `EnumType` **no** es pagable con un movimiento
 - [x] **T7 — Prosa podrida: las siete correcciones** (AC: 8)
-- [ ] **T8 — Cerrar #589, #250 y #438 con evidencia** (AC: 7) — **BLOQUEADO, no omitido.** La evidencia está
-      medida y los tres comentarios de cierre están escritos (`tmp/br6/close-{589,250,438}.md`); `gh issue close`
-      lo denegó el clasificador de permisos. Requiere que Sergio autorice el permiso o los cierre él pegando los
-      comentarios. Ver §Cierre de issues
+- [x] **T8 — Cerrar #589, #250 y #438 con evidencia** (AC: 7) — los tres **CLOSED** con su comentario de
+      evidencia medida. Ver §Cierre de issues
 - [ ] **T9 — Gates y pase adversarial** (AC: 9) — el pase precede a `gh pr create`, no a `done`
 
 ## Prosa podrida — las siete correcciones
@@ -450,11 +453,12 @@ conteo del baseline (21 pares).
   cruza la frontera, **fabrica tres ciclos reales** porque esas pantallas importan `CopyButton`/`Logo` de ese
   mismo barril. Verificado que todos pasan por la arista añadida y que el árbol limpio vuelve a 1906
   dependencias — no había ciclo preexistente enmascarado.
-- **El baseline baja a 16, no a 17, y el 17 no era alcanzable.** Ver §Baseline: la alternativa «precisa» se
-  midió y **sube** la deuda a 20. D4 sigue intacto en lo que reserva a decisión: los cinco pares de runtime del
-  `Validator` y los siete de `ProblemDetailsFactory` siguen en el baseline.
-- **T8 está bloqueado, no omitido.** Evidencia medida y comentarios escritos; el cierre lo denegó el
-  clasificador de permisos y no se buscó otra vía.
+- **El baseline baja a 18, no a 17.** T4 no paga su par: mover `EnumType` rompe la validación en runtime
+  (§T4 REVERTIDA), así que `BankAccount → EnumType` se queda como deuda **documentada y ahora gateada**. Los
+  tres pares que sí caen son los `ExecutionContextInterface` de T5. D4 queda intacto.
+- **El pase adversarial se pagó solo, y llegó tarde por poco.** Encontró el GRAVE *después* del push pero
+  *antes* de abrir la PR — que es precisamente el margen que la regla «abrir la PR al final» compra.
+- **T8 cerrado**: #589, #250 y #438 CLOSED con evidencia medida contra el código.
 - **Dos trampas de medición documentadas** en §Cierre de issues (escapado zsh, y `grep` mandando *binary file
   matches* a stderr). Las dos devolvían el número cómodo.
 
@@ -463,20 +467,17 @@ conteo del baseline (21 pares).
 **Nuevo**
 
 - `pwa/.dependency-cruiser.cjs`
-
-**Movido**
-
-- `api/src/Shared/Validation/Infrastructure/EnumType.php` → `api/src/Shared/Validation/Domain/EnumType.php`
+- `api/tests/Unit/Shared/Architecture/ConstraintValidatorResolutionGateTest.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/ConstraintResolution/ResolvableFixtureConstraint.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/ConstraintResolution/ResolvableFixtureConstraintValidator.php`
+- `api/tests/Unit/Shared/Architecture/Fixture/ConstraintResolution/StrandedFixtureConstraint.php`
 
 **Modificado**
 
-- `CLAUDE.md`
+- `CLAUDE.md` · `api/CLAUDE.md`
 - `make/pwa.mk`
 - `pwa/package.json` · `pwa/package-lock.json`
 - `pwa/CLAUDE.md`
-- `api/src/Backoffice/BankAccount/Domain/Entity/BankAccount.php`
-- `api/src/Shared/Validation/Infrastructure/EnumTypeValidator.php`
-- `api/tests/Unit/Shared/Validation/Infrastructure/EnumTypeValidatorTest.php`
 - `api/tools/deptrac/deptrac.yaml` · `api/tools/deptrac/deptrac.baseline.yaml` (**generado**)
 - `docs/rules/architecture.md`
 - `docs/adr/external-dependencies-in-domain.md`
@@ -497,11 +498,13 @@ Todos desde corrida fresca, con el exit code impreso. Los logs quedan en `tmp/br
 |---|---|---|
 | `make pwa.quality` | **0** | Incluye `lint:graph` — «no dependency violations found (494 modules, 1906 dependencies cruised)» |
 | `make pwa.lint.graph` | **0** | Y alcanzado por los dos agregados: `make -n pwa.quality` y `make -n pwa.quality.dry-run` nombran `lint:graph` |
-| `make php.quality` | **0** | deptrac: 0 violaciones, 0 uncovered, 3278 permitidas, 70 skipped |
-| `make php.stan` | **0** | `[OK] No errors` sobre 1349 ficheros |
-| `make php.unit` | **0** | Suite completa |
+| `make php.quality` | **0** | deptrac: 0 violaciones, 0 uncovered, 3270 permitidas, 75 skipped |
+| `make php.unit` | **0** | Suite completa: **2721 tests, 10835 assertions** |
+| `make php.unit c='--filter ConstraintValidatorResolutionGateTest'` | **0** | OK (3 tests, 4 assertions) — y **exit 2** con el movimiento rehecho |
 | `make php.unit c='--filter ErrorContractGateTest'` | **0** | OK (9 tests, 15 assertions) — evidencia de #589 |
 | `make pwa.install` (`npm ci`) | **0** | Con la devDep dentro: 908 paquetes, 0 vulnerabilidades |
+
+El lado PWA no se ha tocado desde su corrida verde: la reversión de T4 y el guardrail son `api/` y `docs/`.
 
 **Un falso rojo descartado por diagnóstico, no por repetición.** Una corrida intermedia de `php.quality` murió
 con `php.stan Terminated` (exit 2). No era un hallazgo: había **cinco stacks de ERPify** levantados a la vez
@@ -587,7 +590,54 @@ contra `origin/main` → los tres idénticos.
 `make -n pwa.quality` y `make -n pwa.quality.dry-run` nombran `lint:graph` una vez cada uno, y CI corre el
 segundo en `ci.yml:253` (AC2).
 
-#### Baseline de deptrac — 21 → **16**, no 17, y por qué el 17 no era alcanzable
+#### ⚠️ T4 REVERTIDA — mover `EnumType` rompía la validación en runtime
+
+**Hallazgo GRAVE, encontrado durante el pase adversarial, sobre trabajo ya commiteado y empujado.** El primer
+intento de T4 movió `EnumType` a `Shared/Validation/Domain/` dejando `EnumTypeValidator` en `Infrastructure/`,
+tal y como la historia lo diseñó. Es incorrecto, y **ningún gate del repo podía verlo**.
+
+Symfony ata constraint y validador **por nombre**: `Constraint::validatedBy()` devuelve
+`static::class . 'Validator'` (`api/vendor/symfony/validator/Constraint.php:161-164`) y `EnumType` no lo
+sobreescribe. Tras el movimiento, el nombre derivado era `Erpify\Shared\Validation\Domain\EnumTypeValidator`,
+que no existe. Reproducido contra el validador real, no deducido:
+
+```
+validatedBy() resolves to : Erpify\Shared\Validation\Domain\EnumTypeValidator
+class_exists()            : >>> NO — MISSING <<<
+Validation::createValidator()->validate(Currency::EUR, $constraint)
+  THREW Error: Class "Erpify\Shared\Validation\Domain\EnumTypeValidator" not found
+```
+
+`#[EnumType]` está sobre `BankAccount::$currency` y `::$status` (`:75`, `:78`), así que **toda validación de
+un BankAccount reventaba**. Y sin embargo: `make php.stan` **0**, `make php.deptrac` **0 violaciones**,
+`make php.unit` **suite completa verde**, `make php.quality` **0**. Los cuatro.
+
+**Por qué la suite era ciega:** `EnumTypeValidatorTest` extiende `ConstraintValidatorTestCase`, que instancia
+el validador **directamente** vía `createValidator()`. Nunca pasa por `validatedBy()`. El test de la constraint
+es exactamente el que no puede ver este fallo.
+
+**El validador no puede acompañarla** a `Domain/`: extiende `ConstraintValidator`, que es runtime de framework.
+Y las tres formas de partir el par son peores que el par de deuda:
+
+| Salida | Por qué no |
+|---|---|
+| `validatedBy()` → `EnumTypeValidator::class` | Reubica la misma arista Domain→Infrastructure; deptrac la marca y vuelve al baseline. Cero ganancia, más churn |
+| `validatedBy()` → FQCN como *string literal* | La esconde de deptrac. Es **falsear el gate, no pagarlo** |
+| Registrar el validador con un service id | Inventa cableado de DI para una clase y sigue acoplando por cadena mágica |
+
+**T4 queda revertida.** `EnumType` vuelve a `Infrastructure/` junto a su validador —el mismo patrón que ya
+siguen `PasswordPolicy`/`PasswordPolicyValidator`— y `BankAccount → EnumType` vuelve al baseline como deuda
+documentada. Los cuatro ficheros verificados byte-idénticos a `origin/main` con `cmp`.
+
+**Guardrail añadido** (regla de la casa: *«every time something breaks → you add a guardrail»*):
+`api/tests/Unit/Shared/Architecture/ConstraintValidatorResolutionGateTest.php` resuelve `validatedBy()` —
+llamando al método real, no re-derivando la convención, para juzgar también a quien la sobreescriba— sobre
+toda subclase concreta de `Constraint` bajo `src`, y falla si el destino no existe. **Su rojo está provocado**:
+rehecho el movimiento, el gate sale exit 2 nombrando
+`Erpify\Shared\Validation\Domain\EnumType -> …\Domain\EnumTypeValidator (missing)`. Trae autoprotección contra
+vacuidad y dos fixtures que falsifican el predicado en ambos sentidos.
+
+#### Baseline de deptrac — 21 → **18**
 
 El AC5 predijo cuatro pares fuera. Salen **cinco**, y el quinto no es un desliz de alcance sino la consecuencia
 directa de arreglar el colector: `Vendor.PassiveMetadata` bendecía el **namespace** `Validator\Constraints\*`
@@ -630,11 +680,10 @@ sobrevive en el par de `ProblemDetailsFactory`.
   `docs/project-context.md:49`). Fuera del alcance de este lote; no se toca.
 - El árbol trae **466** módulos internos, no 465. Sin consecuencia.
 
-### Cierre de issues — evidencia medida, cierre BLOQUEADO
+### Cierre de issues — evidencia medida
 
-Los tres issues se midieron de nuevo **contra el árbol, no contra la historia**, y los comentarios de cierre
-están escritos y listos en `tmp/br6/close-589.md`, `close-250.md`, `close-438.md`. `gh issue close` lo **denegó
-el clasificador de permisos**; no se ha rodeado por otra vía. Los tres siguen **OPEN**.
+Los tres se midieron de nuevo **contra el árbol, no contra la historia**, y quedan **CLOSED** con su comentario
+de evidencia (`tmp/br6/close-{589,250,438}.md`).
 
 | Issue | Veredicto | Evidencia fresca |
 |---|---|---|
@@ -653,6 +702,27 @@ UTF-8 con guiones largos en comentarios, así que `grep` lo declara *binary file
 fallos son del tipo que devuelve el número que uno quiere ver. Script final: `tmp/br6/classify-438.sh`.
 
 ### Pase adversarial
+
+**Realizado antes de `gh pr create`**, como manda la regla — y encontró un **GRAVE** sobre trabajo ya
+commiteado y empujado (`87c50f32`), que es exactamente la ventana que abrir la PR al final elimina.
+
+El subagente hostil se lanzó con autorización explícita de Sergio y **murió por límite de sesión antes de
+devolver informe**. Su prompt sí llegó a fijar la hipótesis de mayor valor —*«¿sigue `EnumType` atado a su
+validador tras el movimiento? Symfony deriva el nombre en `validatedBy()`; el test de la constraint instancia
+el validador directamente y nunca pasa por ahí»*— y esa hipótesis se verificó a mano contra el validador real:
+**cierta, y el defecto era mío**. Ver §T4 REVERTIDA.
+
+Lo que el pase costó y lo que devolvió:
+
+- **Coste:** una reversión, un guardrail nuevo con su rojo provocado, y dos correcciones de documentación.
+- **Devolución:** un fatal de runtime en toda validación de `BankAccount` que **cuatro gates daban por verde**
+  (`php.stan`, `php.deptrac`, `php.unit`, `php.quality`), y que habría llegado a `main` si la PR se hubiera
+  abierto sobre «los gates están en verde».
+
+**Queda pendiente el pase adversarial completo** — el que se ejecutó fue de una sola hipótesis, la que el
+prompt alcanzó a fijar antes de morir. Las demás superficies del diff (las seis reglas del cruiser, el anclaje
+del colector, las siete correcciones de prosa) **no han recibido lectura hostil**. Relanzar el subagente antes
+de abrir la PR.
 
 ### PR
 

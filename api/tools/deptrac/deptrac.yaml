@@ -163,22 +163,18 @@ deptrac:
               - type: classLike
                 value: >-
                     ^(Doctrine\\ORM\\Mapping|Doctrine\\DBAL\\Types|Symfony\\Component\\Validator\\Constraints|Symfony\\Bridge\\Doctrine\\Validator\\Constraints)\\.*
-              # Three exact classes, anchored: the surrounding regex blesses the
-              # Constraints NAMESPACE, so its own base class and the two types the
-              # attribute API forces you to name were left out by accident of shape,
-              # not by decision. Anchors are load-bearing — unanchored,
-              # `…\Validator\Constraint` also swallows ConstraintViolation and its
-              # List/Interface siblings, which are runtime results and must stay out.
-              #   - Constraint: the base class a first-party constraint extends
-              #     (Shared\Validation\Domain\EnumType).
-              #   - HasNamedArguments: mandatory on a constraint with a promoted
-              #     constructor; carries no behaviour.
-              #   - ExecutionContextInterface: the parameter signature #[Assert\Callback]
-              #     obliges the callback to declare. The attribute is already blessed;
-              #     blessing it without the type it forces is half a decision.
+              # One exact class, ANCHORED: the parameter signature #[Assert\Callback]
+              # obliges the callback to declare. The attribute is already blessed by the
+              # namespace regex above, so blessing it without the type it forces you to
+              # write was half a decision. No runtime enters — the framework passes the
+              # context in.
+              #
+              # The anchor is load-bearing, and the reason generalises to anything added
+              # here: unanchored, a `…\Validator\Constraint` entry would also swallow
+              # ConstraintViolation and its List/Interface siblings, which are runtime
+              # RESULTS and must stay confined to Infrastructure.
               - type: classLike
-                value: >-
-                    ^Symfony\\Component\\Validator\\(Constraint|Attribute\\HasNamedArguments|Context\\ExecutionContextInterface)$
+                value: ^Symfony\\Component\\Validator\\Context\\ExecutionContextInterface$
 
         # ---- Framework vendors confined to Infrastructure (ADR Cat-1) -----------
         - name: Vendor.Doctrine
