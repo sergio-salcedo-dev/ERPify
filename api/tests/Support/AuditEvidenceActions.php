@@ -55,6 +55,13 @@ final readonly class AuditEvidenceActions
     }
 
     /**
+     * The verdict is validated rather than compared, and that is the difference between a gate and a
+     * decoration: every comparison downstream is `self::EVIDENCE === $verdict`, so an unrecognised spelling
+     * — `Evidence`, `evidenc`, a trailing comment — would fall through to "ordinary" in silence, and the
+     * silence points at DELETION. A registry whose only unknown value means "prunable" fails open in the one
+     * direction it exists to close. A duplicate key is refused for the same reason: last-wins lets a later
+     * line shadow an earlier `evidence` with nothing to read in the diff.
+     *
      * @return array<string, string> action token => {@see self::EVIDENCE} or {@see self::ORDINARY}
      */
     public function classification(): array
@@ -72,7 +79,30 @@ final readonly class AuditEvidenceActions
                 ));
             }
 
-            $classification[$parts[0]] = $parts[1];
+            [$token, $verdict] = $parts;
+
+            if (self::EVIDENCE !== $verdict && self::ORDINARY !== $verdict) {
+                throw new RuntimeException(\sprintf(
+                    'Unrecognised classification for "%s" in %s: "%s". Write exactly `%s` or `%s` — anything '
+                    . 'else would read as ordinary, and ordinary means the prune deletes the row.',
+                    $token,
+                    self::REGISTRY,
+                    $verdict,
+                    self::EVIDENCE,
+                    self::ORDINARY,
+                ));
+            }
+
+            if (\array_key_exists($token, $classification)) {
+                throw new RuntimeException(\sprintf(
+                    'Duplicate registry line for "%s" in %s: the later classification silently shadows the '
+                    . 'earlier one.',
+                    $token,
+                    self::REGISTRY,
+                ));
+            }
+
+            $classification[$token] = $verdict;
         }
 
         return $classification;

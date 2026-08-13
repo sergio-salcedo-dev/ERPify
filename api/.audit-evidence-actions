@@ -20,26 +20,39 @@
 #   <ACTION_TOKEN> => evidence
 #   <ACTION_TOKEN> => ordinary
 #
-# There is no third spelling and no default. A new token is unclassified until somebody writes the line, and
-# unclassified fails the build — so the decision is made by whoever mints the action, in the diff that mints
-# it, rather than inherited by whoever next reads the pruner.
+# There is no third spelling and no default, and the gate ENFORCES that rather than assuming it: an
+# unrecognised verdict and a duplicated token each throw. Both would otherwise fail toward deletion, because
+# every comparison downstream is equality with `evidence` — so `=> Evidence` would read as ordinary, the
+# prune would take the row, and every check below would stay green. A new token is unclassified until
+# somebody writes the line, and unclassified fails the build, so the decision is made by whoever mints the
+# action in the diff that mints it, rather than inherited by whoever next reads the pruner.
 #
 # ---------------------------------------------------------------------------------------------------------
 # WHAT A GREEN BUILD HERE PROVES, AND WHAT IT DOES NOT. `make php.lint.audit-evidence` derives the universe by
 # reflection — every string constant matching an action token on a class whose constructor takes
-# `AuditLogger` — then checks completeness (every derived token is classified), staleness (every classified
-# token still exists in the tree), and agreement in BOTH directions (`evidence` here ⇔ a member of
-# `AuditErasureEvidence::ACTIONS`). Its limits:
+# `AuditLogger` — refuses an unrecognised verdict and a duplicated token outright, then checks completeness
+# (every derived token is classified), staleness (every classified token still exists in the tree), and
+# agreement in BOTH directions (`evidence` here ⇔ a member of `AuditErasureEvidence::ACTIONS`). Its limits:
 #
 #   - IT NEVER JUDGES THE CLASSIFICATION. `ordinary` over an action that really is erasure evidence passes,
 #     exactly as `non-person` passes in `.person-reference-policy`. The human classifies, the automation
 #     verifies. Architecture review is the only control on that direction, and it is the direction that
 #     loses data, so a new `ordinary` line deserves the same scrutiny as a new `person ::` owner.
-#   - IT ONLY SEES ACTIONS DECLARED AS A CONSTANT ON AN `AuditLogger` COLLABORATOR. An action passed as an
-#     inline literal at the `log()` call site, read from configuration, or composed at runtime is invisible.
-#     The route-derived actions are the standing example and are safe for a different reason: `AuditPolicy`
-#     prefixes them `ROUTE_` unconditionally, so no user-influenced value can ever equal an exempt token.
-#     A future erasure path that inlines its action instead of naming it is the shape this cannot see.
+#   - IT ONLY SEES ACTIONS DECLARED AS A CONSTANT ON AN `AuditLogger` COLLABORATOR, and "collaborator" is
+#     narrower than it reads: the sweep asks `ConstructorCollaboratorTypes`, so it is CONSTRUCTOR PARAMETER
+#     TYPES ONLY. A logger arriving by setter or property injection, or a class that declares the token and
+#     delegates the write to another writer, is outside the universe. So is a file whose FQCN does not
+#     resolve under PSR-4: `class_exists()` returns false and the file is skipped with no error and no count.
+#     An action passed as an inline literal at the `log()` call site, read from configuration, or composed at
+#     runtime is invisible for the same reason. The route-derived actions are the standing example and are
+#     safe on other grounds: `AuditPolicy` prefixes them `ROUTE_` unconditionally, so no user-influenced
+#     value can ever equal an exempt token — they are audit actions and they are deliberately NOT in this
+#     file, which is why "every audit action" is the wrong way to describe what is classified here.
+#   - IT ONLY SEES STRING CONSTANTS, so A BACKED ENUM IS INVISIBLE TWICE OVER. `enum AuditAction: string`
+#     would carry its tokens as cases rather than constants, and the enum itself takes no constructor so it
+#     would never be counted an audit writer. This repo already models closed string sets that way
+#     (`AuditLevel`, `ActorType`, `Role`), so it is the likeliest shape a future author reaches for, and it
+#     is named here because nothing would go red.
 #   - IT PROVES THE TOKEN IS CLASSIFIED, NEVER THAT THE PRUNE RETAINS THE ROW. That the exemption reaches the
 #     statement, and reaches it in the INNER select where it has to be, is pinned by
 #     `tests/Functional/Shared/Audit/ErasureEvidenceRetentionFunctionalTest.php` against real Postgres — not

@@ -23,7 +23,8 @@ use PHPUnit\Framework\TestCase;
  * green. The omission failed toward deletion, which is why it earned a registry rather than a comment.
  *
  * What it cannot do is judge a classification: `ordinary` over real evidence passes. The registry header
- * states that limit and the rest in full.
+ * states that limit and the rest in full. Falsifiability of the rules themselves — that each direction can
+ * still go red at all — is {@see AuditEvidenceActionRulesGateTest}, against synthetic input.
  *
  * @internal
  */
@@ -112,63 +113,6 @@ final class AuditEvidenceActionRegistryGateTest extends TestCase
                 $action,
             ));
         }
-    }
-
-    #[Test]
-    public function theRuleGoesRedOnAnUnclassifiedAction(): void
-    {
-        $disagreements = AuditEvidenceActions::disagreements(
-            ['GDPR_ACCOUNT_ERASED' => ['Fixture::ACTION'], 'GDPR_SUBJECT_ERASED' => ['Fixture::SUBJECT']],
-            ['GDPR_SUBJECT_ERASED' => AuditEvidenceActions::EVIDENCE],
-            ['GDPR_SUBJECT_ERASED'],
-        );
-
-        $this->assertSame(['GDPR_ACCOUNT_ERASED'], $disagreements['unclassified']);
-    }
-
-    #[Test]
-    public function theRuleGoesRedOnAStaleClassification(): void
-    {
-        $disagreements = AuditEvidenceActions::disagreements(
-            [],
-            ['DELETED_ACTION' => AuditEvidenceActions::ORDINARY],
-            [],
-        );
-
-        $this->assertSame(['DELETED_ACTION'], $disagreements['stale']);
-    }
-
-    #[Test]
-    public function theRuleGoesRedWhenTheRegistryAndTheClosedSetDisagree(): void
-    {
-        $disagreements = AuditEvidenceActions::disagreements(
-            ['CLASSIFIED_ONLY' => ['Fixture::A'], 'EXEMPT_ONLY' => ['Fixture::B']],
-            [
-                'CLASSIFIED_ONLY' => AuditEvidenceActions::EVIDENCE,
-                'EXEMPT_ONLY' => AuditEvidenceActions::ORDINARY,
-            ],
-            ['EXEMPT_ONLY'],
-        );
-
-        $this->assertSame(['CLASSIFIED_ONLY'], $disagreements['evidenceButNotExempt']);
-        $this->assertSame(['EXEMPT_ONLY'], $disagreements['exemptButOrdinary']);
-    }
-
-    #[Test]
-    public function theRuleStaysGreenOnAnAgreeingTree(): void
-    {
-        // Otherwise "everything fails" would masquerade as "the rule is enforced".
-        $this->assertSame(
-            ['unclassified' => [], 'stale' => [], 'exemptButOrdinary' => [], 'evidenceButNotExempt' => []],
-            AuditEvidenceActions::disagreements(
-                ['ORDINARY_ONE' => ['Fixture::A'], 'EVIDENCE_ONE' => ['Fixture::B']],
-                [
-                    'ORDINARY_ONE' => AuditEvidenceActions::ORDINARY,
-                    'EVIDENCE_ONE' => AuditEvidenceActions::EVIDENCE,
-                ],
-                ['EVIDENCE_ONE'],
-            ),
-        );
     }
 
     /**

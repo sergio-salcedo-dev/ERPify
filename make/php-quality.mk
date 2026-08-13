@@ -136,8 +136,15 @@ php.lint.audit-resource: ## Person-resource erasure classification gate
 #
 # Centralising the two literals already made a DRIFTED token impossible. This is the other direction — a
 # MISSING member, which fails toward deletion and which nothing detected.
+#
+# Two classes — the assertions over the real tree, and the falsifiability of the rules against synthetic
+# input — and each is selected BY NAME in its own run. A common prefix would keep both under this target
+# while going green on a strict subset: rename or delete one and the other still matches, the suite is
+# non-empty, and the target reports success with half the boundary gone. One filter per class makes a
+# vanished class an empty suite, which `failOnEmptyTestSuite` turns into exit 1.
 php.lint.audit-evidence: ## Audit erasure-evidence action classification gate
 	@$(PHP_TEST) bin/phpunit --filter=AuditEvidenceActionRegistryGateTest
+	@$(PHP_TEST) bin/phpunit --filter=AuditEvidenceActionRulesGateTest
 
 ## —— Persistent-transport policy gate ——————————————————————————————————————
 
