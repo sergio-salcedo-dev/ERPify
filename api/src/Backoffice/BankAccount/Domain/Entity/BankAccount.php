@@ -14,6 +14,7 @@ use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountSnapshot;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountStatusChangedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotClosedException;
+use Erpify\Backoffice\BankAccount\Domain\Iban;
 use Erpify\Shared\Audit\Domain\AuditedEntity;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Domain\AuditWriteOperation;
@@ -264,21 +265,27 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
 
     private static function canonicalizeIban(string $iban): string
     {
-        return \strtoupper(\str_replace(' ', '', $iban));
+        return Iban::canonicalize($iban);
     }
 
     /**
+     * Spaces go first because {@see Assert\Bic} strips them before it validates, so a grouped
+     * "DEUT DEFF" is accepted at the edge and must not then persist with the space inside.
+     *
      * An absent BIC is the empty value `null`: an empty string from a direct API caller (the
-     * {@see Assert\Bic} constraint skips empty input) would otherwise
-     * persist as `''` and surface as `bic: ""` instead of `null`.
+     * {@see Assert\Bic} constraint skips empty input) would otherwise persist as `''` and surface as
+     * `bic: ""` instead of `null`. The check runs after stripping, so a BIC of nothing but spaces is
+     * the same absence rather than a blank string.
      */
     private static function canonicalizeBic(?string $bic): ?string
     {
-        if (null === $bic || '' === $bic) {
+        $canonical = \str_replace(' ', '', $bic ?? '');
+
+        if ('' === $canonical) {
             return null;
         }
 
-        return \strtoupper($bic);
+        return \strtoupper($canonical);
     }
 
     private function snapshot(string $updatedAt): BankAccountSnapshot
