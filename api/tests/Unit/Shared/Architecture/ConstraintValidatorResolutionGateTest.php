@@ -66,6 +66,7 @@ final class ConstraintValidatorResolutionGateTest extends TestCase
         // a constraint is legitimately added.
         $this->assertSame(
             [
+                \Erpify\Backoffice\BankAccount\Application\Validation\BicMatchingIban::class,
                 \Erpify\Shared\Validation\Infrastructure\EnumType::class,
                 \Erpify\Shared\Validation\Infrastructure\PasswordPolicy::class,
             ],

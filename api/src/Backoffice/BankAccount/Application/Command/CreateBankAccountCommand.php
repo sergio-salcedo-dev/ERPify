@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\BankAccount\Application\Command;
 
+use Erpify\Backoffice\BankAccount\Application\Validation\BicMatchingIban;
+use Erpify\Backoffice\BankAccount\Domain\Iban;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -35,15 +37,23 @@ final readonly class CreateBankAccountCommand
         #[Assert\NotBlank(message: 'The iban field is required.')]
         #[Assert\Iban(message: 'This is not a valid IBAN.')]
         public string $iban = '',
-        #[Assert\Bic(
-            message: 'This is not a valid BIC.',
-            ibanPropertyPath: 'iban',
-            mode: Assert\Bic::VALIDATION_MODE_CASE_INSENSITIVE,
-        )]
+        #[BicMatchingIban]
         public ?string $bic = null,
         #[Assert\Length(max: 100, maxMessage: 'The alias must not exceed {{ limit }} characters.')]
         public ?string $alias = null,
         public Currency $currency = Currency::EUR,
     ) {
+    }
+
+    /**
+     * The country half of {@see Assert\Bic} reads its paired IBAN as submitted and takes the country
+     * from the first two characters, so any spelling not starting with two letters — a copy-paste that
+     * leads with a separator — makes `ctype_alpha()` false and skips the comparison in silence. It
+     * reads this instead: the same canonical form the aggregate compares and stores, so the pair is
+     * judged at the edge in every spelling the IBAN field itself accepts.
+     */
+    public function canonicalIban(): string
+    {
+        return Iban::canonicalize($this->iban);
     }
 }
