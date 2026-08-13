@@ -6,6 +6,7 @@ namespace Erpify\Shared\Audit\Infrastructure\Persistence;
 
 use Doctrine\DBAL\Connection;
 use Erpify\Shared\Audit\Application\SubjectErasureReconciler;
+use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -18,7 +19,7 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 #[AsAlias(SubjectErasureReconciler::class)]
 final readonly class DbalSubjectErasureReconciler implements SubjectErasureReconciler
 {
-    private const string ERASURE_ACTION = 'GDPR_SUBJECT_ERASED';
+    private const string ERASURE_ACTION = AuditErasureEvidence::SUBJECT_ERASED;
 
     public function __construct(
         private Connection $connection,

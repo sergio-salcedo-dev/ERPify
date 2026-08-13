@@ -203,9 +203,23 @@ you change anything here.
       which is the finding an assessor raises. The trail is **append-only by construction
       and access-restricted, but NOT tamper-evident**: no hash chain, signature or checksum
       column exists, so never assert integrity beyond what the mutation paths give. Note the
-      **five-year floor covers `change` rows only**; `security` rows (access, denials, the
-      GDPR and role-change records) carry a 365-day privacy *ceiling* and are pruned — do
-      not cite the floor as a retention guarantee over access evidence.
+      **five-year floor covers `change` rows only**; `security` rows (access, denials and
+      role-change records) carry a 365-day privacy *ceiling* and are pruned — do
+      not cite the floor as a retention guarantee over access evidence. **The one exception
+      is the trail's own proof that it executed an erasure** (`GDPR_SUBJECT_ERASED`,
+      `GDPR_ERASURE_EXECUTED`, listed in `AuditErasureEvidence`): the prune skips those,
+      because the `dek_keystore` tombstone they answer for is kept for ever and the
+      reconciler anti-joins the two with no date bound, so an expiring proof makes that
+      pair unsatisfiable. Be exact about the cost when citing it: those rows are minted in
+      the request cycle on the HTTP path, so **the acting administrator's `ip` and
+      `user_agent` are retained indefinitely along with their `actor_id`** — clearable only
+      if that administrator is themself erased, since the actor-axis pass matches by
+      `actor_id`. The CLI paths write both columns NULL. **Weighed and accepted:** stripping
+      request metadata at write time would take attribution off the one class of row whose
+      purpose is attribution, and a bounded floor for `GDPR_ERASURE_EXECUTED` alone splits
+      one rule in two for a difference no reader infers from the rows. Revisit at the first
+      of — a production deployment that erases a real subject, an administrator who leaves
+      without being erased, or a DPO review.
       Because the operating role can read the record that audits it, the record's
       attribution is guarded on the write side: **erasure refuses any subject still
       carrying `ADMIN`** (409 `administrator-erasure-requires-demotion`), so an

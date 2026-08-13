@@ -21,10 +21,12 @@ Tres grupos **no son trabajo de esta épica** y contarlos hace el objetivo inalc
 | Grupo | Issues | Qué son en realidad |
 |---|---|---|
 | **Épicas disfrazadas** | #268, #266, #267, #462, #549, #373 | Cada una es una épica de producto. «Resolver los issues antes de más épicas» es contradictorio si seis de ellos *son* épicas. Reetiquetar `epic` y sacar del conteo |
-| **Decisiones, no código** | #222, #295, #263, #567 | No avanzan sin una decisión del dueño del producto. Se resuelven en una conversación de media hora, no en un PR |
-| **Vigilancias automatizadas** | ~~#593~~, #196, #420 | Disparadores, no tareas. **#593 disparó el 2026-08-11** (upstream tagueó `v0.4.3`) y se retiró el pin el 2026-08-12, con su vigía. #420 es un tripwire («al tercer VO string») |
+| **Decisiones, no código** | #222, #295, #263, #567, #413, #372 | No avanzan sin una decisión del dueño del producto. Se resuelven en una conversación de media hora, no en un PR. **#413 y #372 llegaron de BR-3** al re-medirla: ninguno era código, y la mitad mecánica de #372 salió a #708 |
+| **Vigilancias automatizadas** | ~~#593~~, #196, #420, #418 | Disparadores, no tareas. **#593 disparó el 2026-08-11** (upstream tagueó `v0.4.3`) y se retiró el pin el 2026-08-12, con su vigía. #420 es un tripwire («al tercer VO string»). **#418 llegó de BR-3**: su disparador es el primer llamador de `EnvelopeEncryptor::decrypt()` fuera de `Shared/Crypto` |
 
-Aceptadas las tres reclasificaciones: **54 → ~38 issues en 8 lotes**.
+Aceptadas las tres reclasificaciones: **54 → ~38 issues en 8 lotes**. Ese conteo es del día del plan y no se
+recalcula solo: re-medir BR-3 le quitó cuatro de sus cinco issues y le añadió uno nuevo (#708). Cuenta con
+que cada lote encoja al medirlo — el número de arriba es el punto de partida, no un saldo.
 
 ## Los ocho lotes
 
@@ -116,13 +118,51 @@ gdpr-hardening no cubrió. **Es el único lote con consecuencia legal.**
   latente enmascararía la escritura futura que lo olvide — así que ponérselo sería un **fail-open** sobre la
   columna que lee la admisión de sesión. Se cierra con esas dos más un gate de trinquete.
 
-### BR-3 · Auditoría y crypto — cierres del eje 3
+### BR-3 · Auditoría y crypto — la evidencia que no sobrevive a lo que atestigua
 
-**Issues:** #405 #409 #413 #418 #372
-**Toca:** `Shared/Crypto`, `Shared/Audit`
-**Concepto común:** el keystore y la DEK destruida. **#372 está a medias**: su mitad de *advisory lock* ya
-está hecha (`DbalAuditLogPruner` recibe `PostgresAdvisoryLock`), así que su título debe reescribirse a lo que
-queda — la retención GDPR-proof.
+**Issues:** #405, #708
+**Toca:** `Shared/Audit` (retención, reconciliación), `Shared/Crypto` (el keystore como fixture)
+**Concepto común:** **la evidencia de un borrado debe sobrevivir a aquello que atestigua.** No lo hace, y eso
+es un defecto mecánico con fecha de activación, no una cuestión de cumplimiento.
+**Riesgo:** medio en #708 (toca la política de retención), nulo en #405 (solo aserciones).
+
+> **Re-medido el 2026-08-13 contra `3be82129`, y la medición desmiente la ficha en sus dos afirmaciones.**
+> De los cinco issues, **cuatro no eran trabajo de este lote**: uno llevaba cerrado desde el barrido inicial,
+> uno se acota a sí mismo a una ruta que no existe, y dos son decisiones. Y el «concepto común» declarado
+> —el keystore y la DEK destruida— **no describe a ninguno de los dos supervivientes**. El error es el que
+> esta épica existe para corregir: se agrupó por el nombre del subsistema, no por lo que cada issue pide.
+
+- **#409** — **ya estaba cerrado**, y el cierre se sostiene: puerto `SubjectErasureReconciler`, adaptador
+  `DbalSubjectErasureReconciler.php:31-38`, handler, comando y `AuditLogMaintenanceSchedule.php:41`, con el
+  transporte realmente consumido (`compose.yaml:129`, `compose.prod.yaml:247`). Lo entregó `414a701a` — la
+  propia PR #403 cuya review lo abrió. No cuenta para esta épica.
+- **#418** — **no alcanzable**: `EnvelopeEncryptor::decrypt()` tiene cero llamadores fuera de `Shared/Crypto`,
+  y la lectura que existe devuelve el marcador `{"__enc__": …}` sin descifrar. La decisión que pide ya está
+  escrita en `docs/api-error-contract.md:176`, el fichero que NFR26 obliga a tocar cuando la ruta llegue. →
+  **Vigilancias automatizadas**, con disparador falsable: el primer llamador de `decrypt()` fuera de
+  `Shared/Crypto`.
+- **#413** — **no es código**: el filtro vive en `AuditChangeDiff.tsx:71-72` y la cabecera que sigue
+  prometiendo instantánea completa en `:224-231`. La premisa se confirma en las dos direcciones (DELETE y
+  CREATE emiten ambos `[null, null]`) y el caso que esgrime es real hoy — `BankAccount.alias` es nullable
+  **y** `#[PersonalData]`. Qué puede prometer la palabra «instantánea» en un trail regulatorio no lo resuelve
+  un PR. → **Decisiones, no código**.
+- **#372** — **se parte en dos.** Su mitad de *accountability* (¿basta un año de prueba para el Art. 5(2)?)
+  es decisión del dueño y **ninguna retención la cierra**: la fila sella el pseudónimo, nunca el id original,
+  así que no puede responder «¿honraron la solicitud de Jane Doe?». → **Decisiones, no código**. Su mitad
+  mecánica sale a **#708**. Nota de la ficha anterior, ya obsoleta: la mitad de *advisory lock* está hecha.
+- **#708** — **el defecto vivo, y el que da nombre al lote.** `DbalKeystore::destroy():80-84` entumba la fila
+  del keystore y la conserva a propósito; `DbalSubjectErasureReconciler.php:31-38` anti-junta esas claves
+  contra `audit_log WHERE action = 'GDPR_SUBJECT_ERASED'` **sin cota temporal**; y esa fila es `security`, así
+  que el `DELETE` de `DbalAuditLogPruner.php:82-92` —sin predicado sobre `action`— se la lleva a los 365 días.
+  Cada borrado de cuenta bancaria entra en un conjunto de divergencia **permanente** en su propio +365, con
+  `error` diario y conteo creciente, y `audit:gdpr:reconcile-erasures` en `FAILURE` perpetuo. Los borrados de
+  identidad están exentos por construcción. Hay una **segunda instancia sin control alguno**: el pase de actor
+  sube `actor_erased` en filas `change` (5 años) cuya prueba es `security` (365 días).
+- **#405** — **vivo, con la premisa invertida.** Dice que los tests solo vuelcan una entidad auditada a la
+  vez; no en `main`: `DoctrineBankAccountCollectionSearchRepositoryTest` vuelca **tres** `BankAccount` en un
+  `flush()` dentro de transacción, así que el caso multi-mint **se recorre en cada ejecución** y está verde.
+  Falta la **aserción**, no el recorrido, y se descarta la mitad de endurecimiento (`postFlush`): no hay mal
+  comportamiento medido que endurecer.
 
 ### BR-4 · Endurecimiento de identidad — el grafo de recuperación
 

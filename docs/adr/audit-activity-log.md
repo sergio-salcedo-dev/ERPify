@@ -202,13 +202,54 @@ Descartado: documentar la ventana async como riesgo residual (no sustituye a cer
 
 ### D4 — Niveles, retención diferenciada, append-only y GDPR
 
-Dos niveles (`activity`, `security`); el tercer eje (cambios de datos) **ya** lo cubre `DomainEvent`
-y **no se duplica**. `audit_log` es **append-only**: la ruta caliente sólo inserta.
+**Tres niveles** (`activity`, `security`, `change`). El nivel no es sólo una ventana de
+retención: **fija también cómo se escribe la fila** —`activity` en diferido, `security` síncrono antes de la
+respuesta, `change` dentro de la transacción que describe—, de modo que una propuesta de cuarto nivel tiene
+que aportar un modo de escritura nuevo, no sólo una retención distinta. `audit_log` es **append-only**: la
+ruta caliente sólo inserta.
 
 `audit_log` **es PII** (`actor_id`, `ip`, `user_agent`). Las mutaciones no-append **no** son scripts
 operativos sueltos: el log admite un **conjunto cerrado de tres políticas de mutación de primera clase**
 —la poda, el borrado GDPR del eje **actor** y el del eje **recurso**—, cada una con semántica definida y
 disparador propio; cualquier otra escritura es append.
+
+**La poda exime la evidencia del propio borrado, y eso no la convierte en una cuarta política.** Sigue
+siendo un solo `DELETE` con un disparador; lo que cambia es su predicado, que ahora excluye
+`AuditErasureEvidence::ACTIONS`. El principio es **la evidencia no puede caducar antes que aquello que
+atestigua**: la lápida de `dek_keystore` que responde por un `GDPR_SUBJECT_ERASED` se conserva para siempre
+a propósito y el reconciliador las anti-junta sin cota temporal, así que dejar caducar la evidencia vuelve
+ese par **insatisfacible** — cada sujeto crypto-shredded pasa a reportarse como divergencia, a diario y para
+siempre. La exención llavea por `action` y **nunca** por `level`, porque `action` es lo que lee el control
+detectivo: discriminar por columnas distintas es exactamente cómo los dos controles derivarían en silencio.
+Va como dato en `AuditRetentionThreshold` —no como literal dentro del SQL del adaptador— y viaja en **todas**
+las líneas del plan, no sólo en la de `security`, para que mover la evidencia de nivel no reabra el agujero.
+
+**Qué se vuelve inmortal, dicho entero porque es la exención lo que lo vuelve inmortal.** Estas filas se
+acuñan por `SealedAuditEntryFactory`, que sella metadata de petición en **toda** entrada; un borrado
+ejecutado por HTTP escribe por tanto el `ip` y el `user_agent` del administrador actuante junto a su
+`actor_id`, y el anonimizador del eje de recurso deja esas dos columnas intactas allí donde el actor fue
+identificado —precisamente porque son suyas y no del sujeto—. La exención retiene **las tres**, que son el
+mismo trío que `docs/rules/database.md` nombra como el PII cuya ventana acotada *es* la minimización. Hay
+vía de eliminación y es **discrecional**: el pase de actor casa por `actor_id`, así que esas columnas se
+limpian sólo si ese administrador es borrado a su vez. Los caminos por CLI no están expuestos: corren fuera
+de petición como `system`, con ambas columnas nulas.
+
+**Sopesado y aceptado, no pasado por alto.** Las dos acciones de evidencia no tienen la misma retención
+correcta, sólo el mismo suelo de «más que el techo de `security`». `SUBJECT_ERASED` necesita *nunca*, porque
+su falsador es eterno. `ACTOR_TRAIL_ERASED` responde por marcas `actor_erased` en filas `change`, que se
+podan a los cinco años: retenerla para siempre **sobre-retiene al administrador actuante** más allá del punto
+en que algo pueda contrastarlo, que es justo la minimización que la poda ejecuta. Aun así quedan exentas las
+dos, y las dos formas más estrechas se consideraron y se descartaron: un suelo acotado para
+`ACTOR_TRAIL_ERASED` parte una regla en dos por una diferencia que ningún lector inferiría de las filas, y no
+sellar metadata de petición al escribirlas le quitaría atribución a la única clase de fila cuyo propósito
+**es** la atribución — un borrado que nadie puede situar es evidencia más débil de lo que una dirección
+sobre-retenida es un daño. La exposición está acotada en la práctica: los administradores son pocos, la vía
+de eliminación existe vía su propio borrado, y los caminos por CLI escriben ambas columnas nulas.
+
+**Disparador de revisita**, para que la aceptación no se vuelva invisible: lo primero que ocurra entre un
+despliegue en producción que borre a un sujeto real, un administrador que se marche y no sea borrado, o una
+revisión de DPO. En ese momento la opción es el suelo acotado, y este párrafo es el registro de que fue una
+elección.
 
 **«Cerrado» significa cerrado por revisión, no por gate.** Nada automatizado impide una cuarta política:
 `git grep` sobre la tabla es el único control y no está cableado a ninguna puerta, de modo que una mutación

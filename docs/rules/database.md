@@ -51,6 +51,14 @@
   `scheduler_audit_maintenance` transport) with **differentiated per-level windows** (`security` kept
   longer than `activity`, `AuditRetentionPolicy` enforcing `security > activity`), deleting in `id`-keyed
   batches under a Postgres advisory lock so a sweep neither holds a long lock nor races a second worker.
+  **The window is not the whole predicate: the prune also exempts the trail's own proof that it executed
+  an erasure** (`AuditErasureEvidence::ACTIONS`, carried as data on every `AuditRetentionThreshold` and
+  bound inside the batching `SELECT`). The rule behind it is *evidence may not expire before the thing it
+  attests*: the `dek_keystore` tombstone a `GDPR_SUBJECT_ERASED` row answers for is kept for ever on
+  purpose, and the reconciler anti-joins the two with no date bound — so letting the evidence age out makes
+  that pair unsatisfiable and turns every crypto-shredded subject into a permanent reported divergence. The
+  exemption keys on `action`, never on `level`, because `action` is what the detective control reads:
+  discriminating by different columns is how the two would drift apart in silence.
   The row carries PII (`actor_id`, `ip`, `user_agent`), so the bounded window is also GDPR data
   minimisation; outright erasure is the second policy — the `audit:gdpr:erase` command's in-place
   anonymising `UPDATE` (`actor_id` → a fresh random UUID per subject; `ip`/`user_agent` → `[REDACTED]`),

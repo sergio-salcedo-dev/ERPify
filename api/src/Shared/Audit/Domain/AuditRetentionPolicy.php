@@ -48,7 +48,9 @@ final readonly class AuditRetentionPolicy
 
     /**
      * The full deletion plan at the given instant: for every level, the cutoff before which its rows are
-     * out of retention — its privacy ceiling for `activity`/`security`, its compliance floor for `change`.
+     * out of retention — its privacy ceiling for `activity`/`security`, its compliance floor for `change` —
+     * and the actions no cutoff may take, which is the trail's own proof that it executed an erasure
+     * ({@see AuditErasureEvidence}).
      *
      * @return list<AuditRetentionThreshold>
      */
@@ -57,7 +59,11 @@ final readonly class AuditRetentionPolicy
         $plan = [];
 
         foreach (AuditLevel::cases() as $level) {
-            $plan[] = new AuditRetentionThreshold($level, $now->sub($this->retentionWindowFor($level)));
+            $plan[] = new AuditRetentionThreshold(
+                $level,
+                $now->sub($this->retentionWindowFor($level)),
+                AuditErasureEvidence::ACTIONS,
+            );
         }
 
         return $plan;
