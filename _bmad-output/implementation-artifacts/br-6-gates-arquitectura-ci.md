@@ -4,7 +4,7 @@ baseline_commit: 781c75a2
 
 # Story BR-6: Gates de arquitectura y CI
 
-Status: review
+Status: done
 
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · BR-6 de 8
 > Issues: #250 #305 #356 #438 #589

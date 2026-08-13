@@ -370,7 +370,7 @@ development_status:
   # prosa podrida. La línea :179-181 del fichero de épica que llamaba a #589 "el que muerde" es falsa.
   # Tres, no cuatro: mover EnumType a Domain/ rompía la validación en runtime (Symfony ata constraint y
   # validador por nombre) y se revirtió; su par sigue en el baseline, ahora con gate propio.
-  br-6-gates-arquitectura-ci: review
+  br-6-gates-arquitectura-ci: done
   br-7-listas-backoffice: review
   br-8-operabilidad: backlog
 
