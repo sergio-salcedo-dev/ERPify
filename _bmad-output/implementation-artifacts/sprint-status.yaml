@@ -371,7 +371,7 @@ development_status:
   # Tres, no cuatro: mover EnumType a Domain/ rompía la validación en runtime (Symfony ata constraint y
   # validador por nombre) y se revirtió; su par sigue en el baseline, ahora con gate propio.
   br-6-gates-arquitectura-ci: done
-  br-7-listas-backoffice: review
+  br-7-listas-backoffice: done
   br-8-operabilidad: backlog
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
