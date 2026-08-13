@@ -50,8 +50,9 @@ Browser opens at `http://localhost` (and `https://localhost`). Accept the dev ce
 ## Lint / format
 
 ```bash
-make pwa.quality                    # ESLint + Prettier check
+make pwa.quality                    # ESLint + dependency-cruiser + Prettier + tsc
 make pwa.lint                       # ESLint --fix
+make pwa.lint.graph                 # dependency-cruiser boundary gate over pwa/src (check-only)
 make pwa.format                     # Prettier --write
 ```
 
