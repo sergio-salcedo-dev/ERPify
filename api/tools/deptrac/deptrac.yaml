@@ -9,8 +9,10 @@
 #      reaches into another module's Domain/Application/Infrastructure. This is the
 #      AST-aware sibling of tests/Unit/Shared/Architecture/BoundedContextGateTest.php
 #      (the text-walk gate stays the primary, auto-discovering check; deptrac is
-#      defence-in-depth). The three published seams blessed in
-#      api/.bounded-context-allowlist are mirrored in `skip_violations` below.
+#      defence-in-depth). The published seams blessed in
+#      api/.bounded-context-allowlist are mirrored in `skip_violations` below — read
+#      the count off that file, never off this comment: it said "three" while the
+#      allowlist held twenty-six.
 #   3. External-dependency allowlist in Domain/Application (issue #301, ADR
 #      docs/adr/external-dependencies-in-domain.md D4) — inner layers may only touch
 #      PSR interop contracts, symfony/uid, and the passive-metadata attribute
@@ -161,6 +163,23 @@ deptrac:
               - type: classLike
                 value: >-
                     ^(Doctrine\\ORM\\Mapping|Doctrine\\DBAL\\Types|Symfony\\Component\\Validator\\Constraints|Symfony\\Bridge\\Doctrine\\Validator\\Constraints)\\.*
+              # One exact class, ANCHORED: the parameter signature #[Assert\Callback]
+              # obliges the callback to declare. The attribute is already blessed by the
+              # namespace regex above, so blessing it without the type it forces you to
+              # write was half a decision.
+              #
+              # It is NOT runtime-free, and the docs say so: the inner layer does not
+              # construct the runtime but it does drive it (buildViolation()…addViolation()),
+              # and getValidator() returns ValidatorInterface — a gateway this gate cannot
+              # see through, because deptrac reads declared and named references, never a
+              # method call's return type. Scoped by REVIEW to the callback signature.
+              #
+              # The anchor is load-bearing, and the reason generalises to anything added
+              # here: unanchored, a `…\Validator\Constraint` entry would also swallow
+              # ConstraintViolation and its List/Interface siblings, which are runtime
+              # RESULTS and must stay confined to Infrastructure.
+              - type: classLike
+                value: ^Symfony\\Component\\Validator\\Context\\ExecutionContextInterface$
 
         # ---- Framework vendors confined to Infrastructure (ADR Cat-1) -----------
         - name: Vendor.Doctrine

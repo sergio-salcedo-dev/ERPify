@@ -29,15 +29,15 @@ const PREV_LINK = "/api/banks?before=cursor-page-1";
 vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock());
 
 const searchRun = vi.hoisted(() => vi.fn());
-const deleteRun = vi.hoisted(() => vi.fn());
+const rowDeleteRun = vi.hoisted(() => vi.fn());
+const bulkDeleteRun = vi.hoisted(() => vi.fn());
 const findRun = vi.hoisted(() => vi.fn());
 const followRun = vi.hoisted(() => vi.fn());
 vi.mock("@/context/shared/dependency-injection/infrastructure/Container", async () =>
   (await import("./_mocks")).containerMock({
-    BackOfficeSearchBanks: { run: searchRun },
-    BackOfficeDeleteBank: { run: deleteRun },
-    BackOfficeFindBank: { run: findRun },
-    BackOfficeBankSearchNavigator: { follow: followRun },
+    BackOfficeBankCrudRepository: { search: searchRun, find: findRun, delete: bulkDeleteRun },
+    BackOfficeDeleteBank: { run: rowDeleteRun },
+    BackOfficeBankResourceNavigator: { follow: followRun },
   }),
 );
 
@@ -54,7 +54,8 @@ vi.mock("@/context/backoffice/bank/infrastructure/bankRealtime", async () =>
 describe("BanksListPage — emptied page recovers to the previous page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    deleteRun.mockResolvedValue(undefined);
+    rowDeleteRun.mockResolvedValue(undefined);
+    bulkDeleteRun.mockResolvedValue(undefined);
     findRun.mockImplementation((id: string) => Promise.resolve(id === ACME.id ? ACME : BETA));
     // The previous page the backward affordance points at — page-1 rows (GAMMA),
     // with no further backward affordance.
@@ -81,6 +82,9 @@ describe("BanksListPage — emptied page recovers to the previous page", () => {
     expect(await screen.findByTestId(`banks-table__row-${GAMMA.id}`)).toBeInTheDocument();
     // The misleading filtered-to-zero panel is never shown — no filter is active.
     expect(screen.queryByTestId("banks-list__empty-filtered")).toBeNull();
+    // A row's own button deletes through the use case, never through the list's repository.
+    expect(rowDeleteRun).toHaveBeenCalledWith(ACME.id);
+    expect(bulkDeleteRun).not.toHaveBeenCalled();
   });
 
   it("auto-follows links.prev when a bulk delete empties a non-first page", async () => {
@@ -101,5 +105,9 @@ describe("BanksListPage — emptied page recovers to the previous page", () => {
     });
     expect(await screen.findByTestId(`banks-table__row-${GAMMA.id}`)).toBeInTheDocument();
     expect(screen.queryByTestId("banks-list__empty-filtered")).toBeNull();
+    // The bulk deletes through the generic repository, never through the bank-specific use case:
+    // that coupling is what the toolkit migration removed, and only naming both ports catches it.
+    expect(bulkDeleteRun).toHaveBeenCalledTimes(2);
+    expect(rowDeleteRun).not.toHaveBeenCalled();
   });
 });

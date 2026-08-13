@@ -199,6 +199,33 @@ php.lint.schedule-consumption: ## Schedule transport-consumption gate
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleConsumptionRulesGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleDeclarationRulesGateTest
 
+## —— Prod-container compile gate ———————————————————————————————————————————
+
+# Compiles the service container in the prod environment and fails if it cannot be built.
+#
+# It exists because a class can declare itself out of production and nothing checks that the
+# declaration is true. `WebDebugToolbarLoaderController` autowires `Twig\Environment`, and TwigBundle
+# is registered only under dev/test — so the class is correct only for as long as its
+# `#[When(env: 'dev')]` / `#[When(env: 'test')]` attributes survive. Strip them and the prod container
+# stops compiling ("Cannot autowire ... references class Twig\Environment but no such service exists"),
+# while PHPStan, deptrac, PHPUnit, Behat, composer.check.all and the whole of CI stay green: the only
+# thing that reads the prod container is `composer run-script post-install-cmd` inside the
+# `frankenphp_prod` image build, and no workflow builds that image — CI bakes `compose.yaml` +
+# `compose.dev.yaml` only. The first reader was therefore the deploy.
+#
+# A green proves the prod container COMPILES against the vendor tree that is installed here, which is
+# the dev one. It does NOT prove the prod image builds: `composer install --no-dev` prunes require-dev,
+# so a src class importing a require-dev package still compiles under this gate and dies in the image.
+# That direction belongs to composer.check.missing-deps, which is why the two are wired in together.
+# It also proves nothing about runtime — only that every service definition can be resolved.
+#
+# Not strictly read-only, unlike its neighbours in php.quality.dry-run: it rewrites var/cache/prod.
+# Nothing else in the sweep touches that directory (the rest run under APP_ENV=test, PHPStan owns
+# var/cache/phpstan), so it stays safe under the -j4 fan-out CI uses.
+php.lint.prod-container: ## Prod service-container compile gate
+	@$(PHP_PROD) php bin/console cache:clear --env=prod --no-warmup
+	@$(PHP_PROD) php bin/console cache:warmup --env=prod
+
 ## —— Behat step-vocabulary gate ————————————————————————————————————————————
 
 # Fails CI when the Behat step vocabulary drifts from api/.behat-step-vocabulary: a declared pattern
@@ -254,7 +281,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.composer-stability php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -272,7 +299,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.composer-stability php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -282,6 +309,6 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource \
         php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary \
-        php.lint.composer-stability \
+        php.lint.composer-stability php.lint.prod-container \
         php.deptrac php.deptrac.baseline \
         php.quality php.quality.dry-run

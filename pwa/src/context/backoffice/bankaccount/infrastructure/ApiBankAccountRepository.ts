@@ -5,6 +5,8 @@ import { buildSearchParams } from "@/context/shared/search/infrastructure";
 import { WIRE_MAX_LIMIT, type PageEnvelope } from "@/context/shared/search/domain";
 import {
   BankAccount,
+  BANK_ACCOUNT_CURRENCIES,
+  BANK_ACCOUNT_STATUSES,
   type BankAccountCurrency,
   type BankAccountPrimitives,
   type BankAccountStatus,
@@ -47,8 +49,9 @@ function isNumberOrNull(value: unknown): value is number | null {
   return value === null || typeof value === "number";
 }
 
-const CURRENCIES: ReadonlySet<BankAccountCurrency> = new Set(["EUR"]);
-const STATUSES: ReadonlySet<BankAccountStatus> = new Set(["ACTIVE", "INACTIVE", "CLOSED"]);
+// Membership structures derived from the domain vocabularies — never a second declaration of them.
+const CURRENCIES: ReadonlySet<BankAccountCurrency> = new Set(BANK_ACCOUNT_CURRENCIES);
+const STATUSES: ReadonlySet<BankAccountStatus> = new Set(BANK_ACCOUNT_STATUSES);
 
 function isBankAccountPrimitives(value: unknown): value is BankAccountPrimitives {
   return (

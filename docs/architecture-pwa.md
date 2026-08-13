@@ -83,7 +83,8 @@ Cross-cutting code has several homes; pick by **purpose**, not just "is it reuse
 | `app/_components/` (or a route's own `_components/`) | a **landing/marketing** presentational component (its own raw-palette + `tw-animate-css` / CSS language) used only by its `app/` route — co-located, not shared | `Navbar`, `Footer`, `FeatureCard` |
 | `components/erpify/` | an **entity-agnostic backoffice / app-shell design-system primitive**, reused across surfaces, barrel-exported from `@/components/erpify` | `DataTable`, `AsyncBoundary`, `EmptyState`, `StatusBadge`, `Spinner`, `Logo`, `SidebarItem`, `StatCard` |
 | `components/ui/` | a raw **Shadcn** primitive | `button`, `dialog`, `input` |
-| `context/shared/<capability>/` | a **pure helper or generic hook** with no domain identity (promoted from the former `src/lib/`) | `cn` (`styling/`), `safeHref` (`navigation/`), `uuidV7` (`uuid/`), `useDebouncedValue` (`search/`) |
+| `context/shared/<capability>/` | a **pure helper or generic hook** with no domain identity (promoted from the former `src/lib/`) | `safeHref` (`navigation/`), `uuidV7` (`uuid/`), `useDebouncedValue` (`search/`) |
+| `components/` (root) | the **one** foundational helper `components/ui/` is allowed to import — it must not reach up into the context tree for it | `cn` (`components/cn.ts`) |
 
 The back-office (token-driven Shadcn + `@/components/erpify`) and the landing/marketing surface (raw-palette + `tw-animate-css` / CSS, under `app/_components/`) are two deliberate design languages — use the one matching the surface; don't cross-import. App-shell primitives reused by both (e.g. `Logo`) live in `@/components/erpify`. The former `context/shared/infrastructure/ui/components/` folder (atomic-design `atoms`/`molecules`/`organisms`) was retired: app-shell primitives → `@/components/erpify`, marketing components → `app/_components/`.
 
@@ -185,7 +186,7 @@ The PWA consumes the API's [RFC 9457 Problem Details](./api-error-contract.md) c
 | E2E           | **Playwright 1.59**  | `pwa/playwright.config.ts`, run via `make pwa.test.e2e`                                          |
 | Watch         | Vitest               | `make pwa.test.unit.watch`                                                                       |
 | Reports       | Playwright HTML      | `make pwa.test.e2e.reports`                                                                      |
-| Lint / format | ESLint + Prettier    | `make pwa.quality` (check), `make pwa.lint` (ESLint --fix), `make pwa.format` (Prettier --write) |
+| Lint / format | ESLint + dependency-cruiser + Prettier + `tsc` | `make pwa.quality` (all four), `make pwa.lint.graph` (graph boundaries only), `make pwa.lint` (ESLint --fix), `make pwa.format` (Prettier --write) |
 
 `tests/` mirrors `src/`. Tests are colocated by bounded context.
 

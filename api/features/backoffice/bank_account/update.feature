@@ -47,6 +47,85 @@ Feature: Update a bank account
     And The Mercure update property "id" should be equal to "acc1ed00-0000-7000-8000-000000000001"
     And The Mercure update property "bankId" should be equal to "11111111-1111-7000-8000-000000000003"
 
+  # The idempotence lives in the aggregate, so a PUT whose canonical forms match what is stored writes
+  # nothing: no UPDATE, no regulatory change row, no stored event, no outbox message — and `updated_at`
+  # stands. The payload is deliberately not byte-identical to the stored row (the IBAN differs in case
+  # and spacing, and the absent BIC arrives as the empty string a direct API caller may send) so the
+  # scenario also pins that equality is decided after canonicalization, never on the raw request body.
+  Scenario: A redundant update to the stored values is an idempotent no-op with no event
+    Given I add "Content-Type" header equal to "application/json"
+    And I add "Accept" header equal to "application/json"
+    And I add "X-Correlation-Id" header equal to "0190ffff-0000-7abc-8def-00cc00cc00cc"
+    And I execute the SQL query "INSERT INTO bank_account (id, bank_id, holder_name, iban, bic, alias, currency, status, created_at, updated_at) VALUES ('acc1ed00-0000-7000-8000-000000000002', '11111111-1111-7000-8000-000000000003', 'Steady Holder', 'AT611904300234573201', NULL, NULL, 'EUR', 'ACTIVE', '2026-01-01 10:00:00', '2026-01-01 10:00:00')" on connection "seed"
+    When I send a PUT request to "/backoffice/bank-accounts/acc1ed00-0000-7000-8000-000000000002" with body:
+    """
+    {
+      "holderName": "Steady Holder",
+      "iban": "at61 1904 3002 3457 3201",
+      "bic": "",
+      "currency": "EUR"
+    }
+    """
+    Then the response status code should be 200
+    And the JSON node "data.iban" should be equal to "AT611904300234573201"
+    And the JSON node "data.bic" should be null
+    And the JSON node "data.alias" should be null
+    And the JSON node "data.updatedAt" should be equal to "2026-01-01T10:00:00+00:00"
+    And there should be 0 events stored for aggregate "acc1ed00-0000-7000-8000-000000000002" named "erpify.backoffice.bankaccount.updated"
+    And 0 outbox events were created on the queue "async"
+    And I execute the SQL query "SELECT holder_name, iban, bic, alias, updated_at::text AS updated_at FROM bank_account WHERE id = 'acc1ed00-0000-7000-8000-000000000002'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "holder_name": "Steady Holder",
+        "iban": "AT611904300234573201",
+        "bic": null,
+        "alias": null,
+        "updated_at": "2026-01-01 10:00:00"
+      }
+    ]
+    """
+    And I execute the SQL query "SELECT action FROM audit_log WHERE level = 'change' AND correlation_id = '0190ffff-0000-7abc-8def-00cc00cc00cc'"
+    And the SQL result as JSON should be:
+    """
+    []
+    """
+
+  # The separator a copy-paste out of a bank statement or a PDF carries. `Assert\Iban` strips it before
+  # validating, so the request is accepted; if the canonical form did not absorb it too, the write would
+  # look like a change and persist an IBAN with the byte inside — which the `unique` column cannot then
+  # match against the canonical spelling, leaving two rows for one real IBAN. Written as a JSON `\u00a0`
+  # escape rather than a raw byte so the character is visible to whoever reads this next.
+  Scenario: An IBAN differing only by a non-ASCII separator is the same account, not a change
+    Given I add "Content-Type" header equal to "application/json"
+    And I add "Accept" header equal to "application/json"
+    And I execute the SQL query "INSERT INTO bank_account (id, bank_id, holder_name, iban, bic, alias, currency, status, created_at, updated_at) VALUES ('acc1ed00-0000-7000-8000-000000000003', '11111111-1111-7000-8000-000000000003', 'Steady Holder', 'CH9300762011623852957', NULL, NULL, 'EUR', 'ACTIVE', '2026-01-01 10:00:00', '2026-01-01 10:00:00')" on connection "seed"
+    When I send a PUT request to "/backoffice/bank-accounts/acc1ed00-0000-7000-8000-000000000003" with body:
+    """
+    {
+      "holderName": "Steady Holder",
+      "iban": "CH93\u00a00076 2011\u00a06238 52957",
+      "currency": "EUR"
+    }
+    """
+    Then the response status code should be 200
+    And the JSON node "data.iban" should be equal to "CH9300762011623852957"
+    And the JSON node "data.updatedAt" should be equal to "2026-01-01T10:00:00+00:00"
+    And there should be 0 events stored for aggregate "acc1ed00-0000-7000-8000-000000000003" named "erpify.backoffice.bankaccount.updated"
+    And 0 outbox events were created on the queue "async"
+    # The column keeps one canonical spelling: anything else is a duplicate the unique index cannot see.
+    And I execute the SQL query "SELECT iban, updated_at::text AS updated_at FROM bank_account WHERE id = 'acc1ed00-0000-7000-8000-000000000003'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "iban": "CH9300762011623852957",
+        "updated_at": "2026-01-01 10:00:00"
+      }
+    ]
+    """
+
   Scenario: Update an account that does not exist returns a 404 bank-account-not-found Problem Details body
     Given I add "Content-Type" header equal to "application/json"
     And I add "Accept" header equal to "application/json"

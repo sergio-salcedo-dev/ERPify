@@ -24,8 +24,6 @@ deptrac:
       - Erpify\Shared\Validation\Infrastructure\EnumType
     Erpify\Backoffice\Bank\Application\BankUpdater:
       - Symfony\Component\Validator\Exception\ValidationFailedException
-    Erpify\Backoffice\Bank\Domain\Entity\Bank:
-      - Symfony\Component\Validator\Context\ExecutionContextInterface
     Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory:
       - Symfony\Component\DependencyInjection\Attribute\Autowire
       - Symfony\Component\HttpFoundation\Response
@@ -34,10 +32,6 @@ deptrac:
       - Symfony\Component\Security\Core\Exception\AuthenticationException
       - Symfony\Component\Validator\ConstraintViolationInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
-    Erpify\Shared\Search\Application\Http\FilterQuery:
-      - Symfony\Component\Validator\Context\ExecutionContextInterface
-    Erpify\Shared\Search\Application\Http\SearchQuery:
-      - Symfony\Component\Validator\Context\ExecutionContextInterface
     Erpify\Shared\Validation\Application\Validator:
       - Symfony\Component\Validator\Constraint
       - Symfony\Component\Validator\ConstraintViolation

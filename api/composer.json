@@ -67,14 +67,14 @@
         "symfony/rate-limiter": "^8.1.1",
         "symfony/routing": "^8.1.0",
         "symfony/runtime": "^8.1.0",
-        "symfony/scheduler": "^8.1.0",
+        "symfony/scheduler": "^8.1.2",
         "symfony/security-bundle": "^8.1.1",
-        "symfony/security-core": "^8.1.1",
+        "symfony/security-core": "^8.1.2",
         "symfony/security-http": "^8.1.1",
         "symfony/serializer": "^8.1.1",
         "symfony/uid": "^8.1.0",
         "symfony/validator": "^8.1.1",
-        "symfony/yaml": "^8.1.1"
+        "symfony/yaml": "^8.1.2"
     },
     "config":{
         "allow-plugins":{
@@ -147,13 +147,13 @@
         "phpstan/phpstan": "^2.2.5",
         "phpstan/phpstan-phpunit": "^2.0.18",
         "phpstan/phpstan-symfony": "^2.0.20",
-        "phpunit/phpunit": "^13.2.4",
+        "phpunit/phpunit": "^13.3.0",
         "rector/rector": "^2.5.7",
         "roave/security-advisories": "dev-latest",
         "squizlabs/php_codesniffer": "^4.0.4",
         "symfony/browser-kit": "^8.1.1",
         "symfony/debug-bundle": "^8.1.0",
         "symfony/stopwatch": "^8.1.0",
-        "symfony/web-profiler-bundle": "^8.1.1"
+        "symfony/web-profiler-bundle": "^8.1.4"
     }
 }

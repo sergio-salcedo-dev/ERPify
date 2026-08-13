@@ -46,6 +46,26 @@ final class BankUpdaterTest extends TestCase
         $this->assertSame([true], $eventBus->publishedInsideUnitOfWork);
     }
 
+    public function testARedundantRenameToTheStoredValuesPublishesNoEvent(): void
+    {
+        $bank = BankMother::drained();
+        $bankRepository = new InMemoryBankRepository($bank);
+        $eventBus = new RecordingEventBus();
+        $transactions = new ImmediateTransactionManager();
+
+        $this->makeUpdater($bankRepository, $eventBus, $transactions)->update(
+            BankMother::DEFAULT_ID,
+            new UpdateBankCommand('Acme Savings', 'ACME'),
+        );
+
+        $this->assertSame([], $eventBus->publishedEvents);
+        // The idempotence lives in the aggregate, so the use case is untouched by it: it still opens
+        // its boundary and saves an unchanged entity, exactly as the redundant status transition does.
+        // This is the observable that would notice if the guard were ever hoisted up here.
+        $this->assertSame([$bank], $bankRepository->saved);
+        $this->assertSame(1, $transactions->opened);
+    }
+
     private function makeUpdater(
         InMemoryBankRepository $bankRepository,
         RecordingEventBus $eventBus,

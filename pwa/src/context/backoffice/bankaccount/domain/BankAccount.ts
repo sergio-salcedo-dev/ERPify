@@ -1,17 +1,31 @@
 /**
- * Currency code the API serializes for a bank account (`Currency` enum value).
- * Only EUR exists today; kept as a closed union so a new code is a typed
- * change, not a silent string.
+ * The two wire vocabularies of a bank account, declared once for the whole PWA and derived
+ * everywhere else — the payload guard's `Set`, the form's Zod enum and the status control's options
+ * all read these arrays rather than restating them. A vocabulary written in more than one place
+ * drifts in the direction nothing checks: adding a member to a second copy is invisible to the
+ * compiler, because a narrower array is assignable wherever the wider union is expected.
+ *
+ * They live in `domain/` because dependencies point inward: the schema and the adapter may read
+ * them, and the reverse would make the domain depend on its own consumers.
+ *
+ * The server enum is the authority over both. `EnumWireContractGateTest` (API side) compares these
+ * arrays against `Currency` and `BankAccountStatus` and fails the build on divergence, so a value
+ * added on one deployable and not the other cannot ship.
  */
-export type BankAccountCurrency = "EUR";
+
+/** Currency code the API serializes under `currency` (`Currency` enum value). */
+export const BANK_ACCOUNT_CURRENCIES = ["EUR"] as const;
+
+export type BankAccountCurrency = (typeof BANK_ACCOUNT_CURRENCIES)[number];
 
 /**
- * Account lifecycle as the API emits it under `status`: the enum's identity
- * value in SCREAMING_SNAKE (`BankAccountStatus->value`), never a display label.
- * Human-readable text is the presentation layer's job (see `STATUS_LABEL` in
- * `BankAccountsTable`).
+ * Account lifecycle as the API emits it under `status`: the enum's identity value in
+ * SCREAMING_SNAKE (`BankAccountStatus->value`), never a display label. Human-readable text is the
+ * presentation layer's job (see `STATUS_LABEL` in `BankAccountsTable`).
  */
-export type BankAccountStatus = "ACTIVE" | "INACTIVE" | "CLOSED";
+export const BANK_ACCOUNT_STATUSES = ["ACTIVE", "INACTIVE", "CLOSED"] as const;
+
+export type BankAccountStatus = (typeof BANK_ACCOUNT_STATUSES)[number];
 
 export interface BankAccountPrimitives {
   id: string;

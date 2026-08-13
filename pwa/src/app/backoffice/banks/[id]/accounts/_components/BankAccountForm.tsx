@@ -29,8 +29,7 @@ import { bankAccountRoutes } from "../_lib/bankAccountRoutes";
 
 /** The two `PersistenceAction` values this form can be in. */
 export type BankAccountFormMode =
-  | typeof PersistenceAction.CREATING
-  | typeof PersistenceAction.UPDATING;
+  typeof PersistenceAction.CREATING | typeof PersistenceAction.UPDATING;
 
 interface BankAccountFormInitial {
   id: string;

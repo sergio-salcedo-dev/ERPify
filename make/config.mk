@@ -105,11 +105,15 @@ PHPUNIT_MEMORY_LIMIT ?= 512M
 ifeq ($(IN_CONTAINER),false)
   PHP_CONT  := cd $(API_ROOT) &&
   PHP_TEST  := cd $(API_ROOT) && APP_ENV=test
+  PHP_PROD  := cd $(API_ROOT) && APP_ENV=prod APP_DEBUG=0
   PHP_TEST_COVERAGE := cd $(API_ROOT) && APP_ENV=test XDEBUG_MODE=coverage
   PHP_BEHAT := cd $(API_ROOT) && APP_ENV=test MINK_BASE_URL=$(MINK_BASE_URL)
 else
   PHP_CONT  := $(DOCKER_COMPOSE_EXEC) $(PHP_SERVICE)
   PHP_TEST  := $(DOCKER_COMPOSE_EXEC) -e APP_ENV=test $(PHP_SERVICE)
+  # The dev image serves prod-env console runs too: only the container that gets
+  # compiled differs, which is the whole point of the prod-container gate.
+  PHP_PROD  := $(DOCKER_COMPOSE_EXEC) -e APP_ENV=prod -e APP_DEBUG=0 $(PHP_SERVICE)
   # Xdebug ships in the image with XDEBUG_MODE=off; flip it to coverage just for
   # the coverage run so the default test/lint targets keep Xdebug's overhead off.
   PHP_TEST_COVERAGE := $(DOCKER_COMPOSE_EXEC) -e APP_ENV=test -e XDEBUG_MODE=coverage $(PHP_SERVICE)

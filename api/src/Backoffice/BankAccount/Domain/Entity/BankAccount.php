@@ -14,6 +14,7 @@ use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountSnapshot;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountStatusChangedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotClosedException;
+use Erpify\Backoffice\BankAccount\Domain\Iban;
 use Erpify\Shared\Audit\Domain\AuditedEntity;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Domain\AuditWriteOperation;
@@ -118,7 +119,9 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
 
     /**
      * Re-canonicalizes the IBAN and upper-cases the BIC exactly as {@see create()} does, so an edited
-     * account stores the same canonical forms as a freshly created one. Records an updated event whose
+     * account stores the same canonical forms as a freshly created one. An edit that canonicalizes to
+     * the state already stored is a no-op — nothing mutates, `updatedAt` stands and nothing is
+     * recorded — so a redundant PUT stays idempotent. Otherwise records an updated event whose
      * PII-free snapshot reflects the new state and bumped `updatedAt`.
      */
     public function update(
@@ -128,9 +131,16 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         ?string $alias,
         Currency $currency,
     ): void {
+        $canonicalIban = self::canonicalizeIban($iban);
+        $canonicalBic = self::canonicalizeBic($bic);
+
+        if ($this->alreadyStores($holderName, $canonicalIban, $canonicalBic, $alias, $currency)) {
+            return;
+        }
+
         $this->holderName = $holderName;
-        $this->iban = self::canonicalizeIban($iban);
-        $this->bic = self::canonicalizeBic($bic);
+        $this->iban = $canonicalIban;
+        $this->bic = $canonicalBic;
         $this->alias = $alias;
         $this->currency = $currency;
 
@@ -237,23 +247,45 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         };
     }
 
+    /**
+     * Equality of the state the aggregate would persist, never of the raw arguments: `iban` and `bic`
+     * arrive canonicalized, `alias` deliberately does not — it is a nullable column with no
+     * normalization anywhere, so `''` and `null` are two different stored states.
+     */
+    private function alreadyStores(
+        string $holderName,
+        string $canonicalIban,
+        ?string $canonicalBic,
+        ?string $alias,
+        Currency $currency,
+    ): bool {
+        return [$this->holderName, $this->iban, $this->bic, $this->alias, $this->currency]
+            === [$holderName, $canonicalIban, $canonicalBic, $alias, $currency];
+    }
+
     private static function canonicalizeIban(string $iban): string
     {
-        return \strtoupper(\str_replace(' ', '', $iban));
+        return Iban::canonicalize($iban);
     }
 
     /**
+     * Spaces go first because {@see Assert\Bic} strips them before it validates, so a grouped
+     * "DEUT DEFF" is accepted at the edge and must not then persist with the space inside.
+     *
      * An absent BIC is the empty value `null`: an empty string from a direct API caller (the
-     * {@see Assert\Bic} constraint skips empty input) would otherwise
-     * persist as `''` and surface as `bic: ""` instead of `null`.
+     * {@see Assert\Bic} constraint skips empty input) would otherwise persist as `''` and surface as
+     * `bic: ""` instead of `null`. The check runs after stripping, so a BIC of nothing but spaces is
+     * the same absence rather than a blank string.
      */
     private static function canonicalizeBic(?string $bic): ?string
     {
-        if (null === $bic || '' === $bic) {
+        $canonical = \str_replace(' ', '', $bic ?? '');
+
+        if ('' === $canonical) {
             return null;
         }
 
-        return \strtoupper($bic);
+        return \strtoupper($canonical);
     }
 
     private function snapshot(string $updatedAt): BankAccountSnapshot
