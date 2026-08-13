@@ -186,7 +186,7 @@ The PWA consumes the API's [RFC 9457 Problem Details](./api-error-contract.md) c
 | E2E           | **Playwright 1.59**  | `pwa/playwright.config.ts`, run via `make pwa.test.e2e`                                          |
 | Watch         | Vitest               | `make pwa.test.unit.watch`                                                                       |
 | Reports       | Playwright HTML      | `make pwa.test.e2e.reports`                                                                      |
-| Lint / format | ESLint + Prettier    | `make pwa.quality` (check), `make pwa.lint` (ESLint --fix), `make pwa.format` (Prettier --write) |
+| Lint / format | ESLint + dependency-cruiser + Prettier + `tsc` | `make pwa.quality` (all four), `make pwa.lint.graph` (graph boundaries only), `make pwa.lint` (ESLint --fix), `make pwa.format` (Prettier --write) |
 
 `tests/` mirrors `src/`. Tests are colocated by bounded context.
 

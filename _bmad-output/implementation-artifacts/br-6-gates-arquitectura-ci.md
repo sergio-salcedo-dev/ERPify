@@ -200,9 +200,13 @@ traducido a `ReferentialIntegrityViolation`). **No queda ni un target Doctrine e
 De los 9 bullets del issue: **4 vivos** (18 pares), **5 muertos**, y **3 pares nuevos** que el issue no
 menciona (los `ValidationFailedException` de `BankAccount*`, del módulo que nació en #393).
 
-Lo que cabe en este PR — **4 pares, cero cambio de comportamiento**:
+Lo que cabe en este PR — **4 pares, cero cambio de comportamiento** *(planificado; entregados 3 — el de
+`EnumType` resultó no ser pagable con un movimiento, ver §T4 REVERTIDA)*:
 
-- **`BankAccount → EnumType`**: `EnumType` es sólo el atributo-constraint (`extends …Validator\Constraint`);
+- ~~**`BankAccount → EnumType`**~~ — **DESCARTADO en implementación**, ver §T4 REVERTIDA: Symfony ata
+  constraint y validador por nombre, así que separarlos rompe la validación en runtime con todos los gates en
+  verde. El razonamiento original, conservado porque el error es reproducible: `EnumType` es sólo el
+  atributo-constraint (`extends …Validator\Constraint`);
   el runtime vive en `EnumTypeValidator`. Se mueve a `src/Shared/Validation/Domain/EnumType.php` dejando el
   validador en Infrastructure, y se admite `Symfony\Component\Validator\Constraint` +
   `Validator\Attribute\HasNamedArguments` en `Vendor.PassiveMetadata`. Mismo estatuto que `#[Assert\…]`, pero
@@ -231,7 +235,8 @@ Lo que cabe en este PR — **4 pares, cero cambio de comportamiento**:
    visto no está entregada. **El rojo decisivo es el transitivo** — si no se consigue, el gate no compra nada
    sobre ESLint y el veredicto vuelve a cerrar #356.
 5. **Baseline de deptrac 21 → 17**: `EnumType` movido, `ExecutionContextInterface` bendecido por colector,
-   `make php.deptrac.baseline` regenerado, y el diff del baseline muestra exactamente esos 4 pares fuera.
+   `make php.deptrac.baseline` regenerado, y el diff del baseline muestra exactamente esos pares fuera.
+   *(Entregado: 21 → 18, tres pares; el cuarto no es pagable así — §T4 REVERTIDA.)*
 6. **Las dos bendiciones están documentadas** con su sección «Documented exception» en
    `docs/rules/architecture.md` y el §Implementación del ADR actualizado — es lo que exige
    `docs/adr/external-dependencies-in-domain.md` (D4: el colector y la lista se mueven juntos).
@@ -322,7 +327,7 @@ que las califica como fuente activa de trabajo fantasma y no como deuda de estil
 | `pwa/CLAUDE.md` | P6 · P7 | `:84` los barriles que no existen · `:43` nombrar los dos gates |
 | `pwa/package.json` · `pwa/package-lock.json` | #356 | devDep + script; leer la versión de vuelta del lock |
 | `make/pwa.mk` | #356 | Target nuevo; engancharlo a `pwa.quality` **y** `.dry-run` |
-| `api/src/Shared/Validation/Domain/EnumType.php` | #305 | **Movido** desde `Shared/Validation/Infrastructure/` |
+| ~~`api/src/Shared/Validation/Domain/EnumType.php`~~ | #305 | ~~**Movido** desde `Shared/Validation/Infrastructure/`~~ — **descartado**, rompía la validación en runtime (§T4 REVERTIDA) |
 | `api/tools/deptrac/deptrac.yaml` | #305 · P3 | `Vendor.PassiveMetadata` (T4, T5) y el comentario `:12-13` |
 | `api/tools/deptrac/deptrac.baseline.yaml` | #305 | **Generado** — nunca a mano |
 | `docs/rules/architecture.md` | #305 | Dos «Documented exception»; `:57` es la regla que hoy se viola |
@@ -645,35 +650,28 @@ vacuidad y dos fixtures que falsifican el predicado en ambos sentidos.
 
 #### Baseline de deptrac — 21 → **18**
 
-El AC5 predijo cuatro pares fuera. Salen **cinco**, y el quinto no es un desliz de alcance sino la consecuencia
-directa de arreglar el colector: `Vendor.PassiveMetadata` bendecía el **namespace** `Validator\Constraints\*`
-(las constraints concretas) y por tanto dejaba fuera **su propia clase base**. Al anclar
-`^Symfony\\Component\\Validator\\Constraint$` desaparece también
-`Shared\Validation\Application\Validator → Constraint`, porque `Vendor.PassiveMetadata` es admisible en
-`Domain` **y** en `Application`.
+El AC5 predijo cuatro pares fuera. Salen **tres**, y los tres son los `ExecutionContextInterface` de T5. El
+cuarto —`BankAccount → EnumType`— **no es pagable con un movimiento** y vuelve al baseline: ver §T4 REVERTIDA.
 
 | Par | Fuera por |
 |---|---|
-| `BankAccount → EnumType` | T4 — la clase se movió a `Shared/Validation/Domain/` |
-| `Bank → ExecutionContextInterface` | T5 — colector |
-| `FilterQuery → ExecutionContextInterface` | T5 — colector |
-| `SearchQuery → ExecutionContextInterface` | T5 — colector |
-| **`Validator → Constraint`** | **efecto del anclaje; no previsto** |
+| `Bank → ExecutionContextInterface` | T5 — colector anclado |
+| `FilterQuery → ExecutionContextInterface` | T5 — colector anclado |
+| `SearchQuery → ExecutionContextInterface` | T5 — colector anclado |
 
-**Conservar el 17 se midió y sale peor.** Aislar `Constraint` en una capa propia (`Vendor.SymfonyConstraintBase`,
-admitida sólo en el ancla `*domain`, al estilo de `Vendor.SymfonyUid`) obliga a sacarlo de `Vendor.Symfony` por
-`must_not` — y entonces **`Infrastructure` pierde el acceso**: `EnumTypeValidator`, `PasswordPolicy` y
-`PasswordPolicyValidator`, que lo usan legítimamente, caen al baseline. Medido: **20 pares**, es decir la
-opción «precisa» *sube* la deuda en vez de bajarla, y dejarla verde exigiría replicar la capa en cada bloque
-de ruleset de Infrastructure. Descartada por medición, no por gusto.
+**Dos pares que llegó a salir el primer intento vuelven a entrar.** `BankAccount → EnumType`, con la reversión.
+Y `Shared\Validation\Application\Validator → Constraint`, que había desaparecido como efecto colateral de
+bendecir la clase base `Constraint` — bendición que ya no hace falta, porque con `EnumType` de vuelta en
+`Infrastructure/` nadie necesita esa clase hacia dentro. **Retirarla devuelve intacto el conjunto que D4
+reserva a Sergio**: los seis pares del `Validator` y los siete de `ProblemDetailsFactory` siguen todos en el
+baseline. El rediseño que D4 nombra —mover `Validator` a Infrastructure tras un puerto con excepción de
+dominio, reescribiendo el contrato 422— no se ha tocado.
 
-**Esto no invade D4.** Lo que D4 reserva a Sergio es el rediseño —mover `Validator` a Infrastructure tras un
-puerto con excepción de dominio, lo que reescribe el contrato 422—, y sigue intacto: los otros cinco pares del
-`Validator` (`ValidatorInterface`, `ConstraintViolation`, `…List`, `…ListInterface`,
-`ValidationFailedException`) siguen en el baseline, y los siete de `ProblemDetailsFactory` también. El anclaje
-es load-bearing en la otra dirección: sin `$`, `…\Validator\Constraint` se tragaría `ConstraintViolation` y sus
-hermanos —resultados de runtime— y sí habría vaciado media D4. Verificado que `ConstraintViolationInterface`
-sobrevive en el par de `ProblemDetailsFactory`.
+**El anclaje sigue siendo load-bearing, y ahora está probado en la dirección que importa.** Cuando el colector
+llegó a incluir `^Symfony\Component\Validator\Constraint$`, los cuatro `ConstraintViolation*` **sobrevivieron**
+en el baseline; sin `$` se los habría tragado, vaciando media D4 en silencio. Confirmado además contra la
+fuente de deptrac: `AbstractTypeCollector::getPattern()` hace un `preg_match` crudo y sin anclar por su cuenta,
+de modo que `^`/`$` son efectivamente los del autor.
 
 `make php.deptrac` → **exit 0**, 0 violaciones, 0 uncovered.
 
@@ -762,6 +760,49 @@ deshizo. Un `head` sobre una salida ordenada es una medida sesgada.
 
 **Superficies que NO recibieron lectura hostil**: si `to:` de cada regla es el correcto (sólo se comprobó
 `from:`), y el cuerpo del `.cjs` frente a una config de dependency-cruiser idiomática.
+
+#### Tercera ronda — LECTURA HOSTIL AJENA, tres agentes en paralelo
+
+El agente único había muerto tres veces por su tamaño. Se cambió la táctica: **tres encargos estrechos y
+simultáneos**, cada uno con una superficie y con la lista explícita de lo ya verificado para que no la
+repitiera. Los tres volvieron. **13 hallazgos, 0 GRAVE, 6 SERIOS, 5 MINOR, 4 NIT.** Todos aplicados salvo uno,
+rechazado por medida.
+
+**Los seis SERIOS, y por qué duelen:**
+
+| # | Hallazgo | Por qué importaba |
+|---|---|---|
+| 1 | `erpify-barrel-excludes-error-screens` **sin `reachable`** | Un fichero intermedio dentro de `erpify/` blanquea las pantallas de error a través del barril y la regla se queda verde. Tres reglas usaban `reachable` y ésta no: ciega **al mismo escenario de fachada que justifica todo el gate** |
+| 2 | `erpify-not-bounded-context` **enumeraba los dos contextos de hoy** | Un tercer contexto queda permitido por defecto. Su propio comentario decía «enunciada en negativo» y la cabecera presumía de no tener listas — enumerar contextos *es* una lista invertida. Y ESLint enumera los mismos dos, así que no había hermano que compensara. Reescrita como `^src/context/` menos `shared` |
+| 3 | «**No runtime enters**» sobre `ExecutionContextInterface` es **falso** | `Bank.php` llama `$context->buildViolation(…)->addViolation()` — eso *es* conducir el runtime. Y `getValidator(): ValidatorInterface` es una pasarela al validador entero que deptrac **no puede ver**, porque lee referencias declaradas, nunca el tipo de retorno de una llamada. La excepción está acotada por **revisión**, no por el gate, y ahora lo dice |
+| 4 | P4 sustituyó cifras falsas por **otras cifras falsas** | La corrección al retro escribía 47 ficheros y 29 usos; este mismo PR mide 46 y 28 seiscientas líneas más abajo. El PR se contradecía a sí mismo |
+| 5 | P1 tachó el párrafo de apoyo y **dejó viva la frase operativa** | La entrada 3 de §Orden recomendado seguía afirmando «un gate que no corre…», que es justo lo declarado FALSO arriba. Y el puntero `:204` que introduje **lo invalidó mi propia inserción** de 7 líneas |
+| 6 | P6 **sobrepasaba**: «no existe barril» | Existen **nueve** barriles reales bajo `context/shared/**`, por capa (`…/infrastructure/index.ts`), uno de ellos documentado en `architecture-pwa.md`. Lo que no existe es el de **raíz de capacidad**. Tal como quedó escrito, contradecía a `pwa/CLAUDE.md:112` y leía como licencia para disolver los nueve |
+
+**MINOR y NIT aplicados:** `conditionNames` **sí es load-bearing** (quitarla deja 25 irresolubles — mi
+comprobación anterior la había dado por inocua, y estaba mal); el `from` de `components-root-is-foundational`
+era file-shaped, así que promover `cn.ts` a `cn/index.ts` la habría retirado en silencio; el prefijo `ui` sin
+barra final se tragaba hermanos como `uiTone.ts`; `"types"` en `conditionNames` era inerte y hacía resolver a
+entrypoints `.d.ts`; la afirmación «ninguno es subconjunto del otro» es **falsa** en cobertura (el grafo
+contiene a ESLint; lo que ESLint aporta es la señal inline); la descripción de `pwa.quality` seguía rancia en
+`pwa/CLAUDE.md`, `docs/architecture-pwa.md` y `pwa/README.md`; el ADR sobreafirmaba «imposible reintentarlo en
+silencio» cuando el **string literal** pasa los dos gates; y tres pasajes del plan seguían describiendo el
+movimiento descartado.
+
+**El hallazgo más incómodo, y es sobre el guard que escribí en la ronda anterior:** el test de vacuidad
+**tenía su propio punto ciego de vacuidad**. Filtraba reglas por `from.path`, así que `from: { pathNot }`,
+`from: { orphan: true }` y `from: { path: [] }` no generaban caso alguno, y un `pathNot` que vaciara la
+selección pasaba verde — precisamente después de que yo añadiera `pathNot` a dos reglas. Ahora aplica
+`pathNot` y **falla ante cualquier clave de `from` que no entienda**, en vez de saltarla. Sus dos rojos nuevos
+están provocados.
+
+**Un hallazgo rechazado, por medida.** Se reportó el `instanceof SplFileInfo` del gate PHP como dead code.
+Lo es en runtime, pero quitarlo pone PHPStan en rojo con `Cannot call method isFile() on mixed` (4 errores):
+el iterador no está tipado. Restaurado con un comentario que explica por qué no se puede quitar, para que
+nadie repita el intento.
+
+**Los rojos de las tres reglas enmendadas están provocados de nuevo**, y el de la del barril **antes no
+salía**: el escenario de blanqueo pasaba verde y ahora da 9 violaciones.
 
 ### PR
 

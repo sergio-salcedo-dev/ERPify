@@ -2,13 +2,15 @@
 //
 // Run via `make pwa.lint.graph`; wired into `pwa.quality` and `pwa.quality.dry-run`.
 //
-// ROLE SPLIT WITH ESLINT — the two gates are siblings, not duplicates, and neither
-// is a subset of the other. Retiring either one loses cases:
+// ROLE SPLIT WITH ESLINT — different eyes, and retiring either one loses something.
+// Be precise about which: on COVERAGE this ruleset strictly CONTAINS the ESLint
+// blocks (same `from` paths, same targets, plus `reachable` and no extension
+// filter), so every edge they red, this reds too. What it cannot give is the
+// squiggle under the offending line before anything is run.
 //
 //   - `no-restricted-imports` (eslint.config.mjs) matches an import SPECIFIER, one
-//     file at a time. It is what puts the red squiggle under the offending line in
-//     the editor, before anything is run. That inline signal is the whole reason it
-//     stays.
+//     file at a time. That inline editor signal is the whole reason it stays — not
+//     a coverage gap this ruleset leaves it.
 //   - This ruleset walks the resolved MODULE GRAPH. Three shapes are structurally
 //     inexpressible as a specifier match, and all three have bitten this tree:
 //       1. Facades / transitivity. `ui -> @/components/cn -> @/context/**` is green
@@ -21,7 +23,7 @@
 //          specifier match; pwa/CLAUDE.md forbids re-exporting the error UI through
 //          it in prose, and nothing verified that prose until this rule.
 //
-// TWO OPTIONS BELOW ARE LOAD-BEARING, not defaults worth tidying away:
+// THREE OPTIONS BELOW ARE LOAD-BEARING, not defaults worth tidying away:
 //
 //   - `tsPreCompilationDeps: true` — 7 of the 17 `erpify -> context/shared` edges
 //     are `import type`. With the default `false` this gate would see 10 of 17 and
@@ -33,6 +35,10 @@
 //     unresolvable: `inversify` (54 edges) and `uuid` (2) go dark, and
 //     `no-unresolvable` is born red with 56 violations. Honouring the field is what
 //     lets that rule exist at all.
+//   - `enhancedResolveOptions.conditionNames` — honouring `exports` is only half of
+//     it; without a condition set to match against, 25 further specifiers go
+//     unresolvable (`class-variance-authority` among them). dependency-cruiser
+//     defaults it to nothing, so the pair moves together or not at all.
 //
 // The `@/` alias is resolved from `options.tsConfig` — pwa/tsconfig.json's `paths`,
 // read as-is. It is deliberately NOT restated here: a third declaration of `@/`
@@ -61,9 +67,12 @@ module.exports = {
     {
       name: "components-root-is-foundational",
       comment:
-        "Files at the root of src/components/ (today: cn.ts) sit below the context tree and must not reach up into it. No ESLint block covers this path — it is the hole this gate exists to close.",
+        "Everything under src/components/ that is not ui/ or erpify/ (today: cn.ts) sits below the context tree and must not reach up into it. No ESLint block covers this path — it is the hole this gate exists to close. Stated by directory rather than by file shape: anchoring on `[^/]+\\.tsx?$` would retire the rule the day cn.ts is promoted to cn/index.ts, which is an ordinary refactor.",
       severity: "error",
-      from: { path: "^src/components/[^/]+\\.tsx?$" },
+      from: {
+        path: "^src/components/",
+        pathNot: "^src/components/(ui|erpify)/",
+      },
       to: {
         path: ["^src/context/", "^src/app/", "^src/components/erpify/"],
         reachable: true,
@@ -72,21 +81,22 @@ module.exports = {
     {
       name: "erpify-not-bounded-context",
       comment:
-        "components/erpify is a business-agnostic design system. Stated in the negative — it may build on context/shared (17 edges today, all legitimate); what it may never reach is a bounded context or app/.",
+        "components/erpify is a business-agnostic design system. Stated in the negative — it may build on context/shared (17 edges today, all legitimate); what it may never reach is ANY bounded context, or app/. `shared` is carved out by what it is, not by naming the contexts that exist today: enumerating backoffice and frontoffice is an inverse allowlist that admits the third context by default, and the ESLint block enumerates the same two, so nothing would catch it.",
       severity: "error",
       from: { path: "^src/components/erpify/" },
       to: {
-        path: ["^src/context/backoffice/", "^src/context/frontoffice/", "^src/app/"],
+        path: ["^src/context/", "^src/app/"],
+        pathNot: "^src/context/shared/",
         reachable: true,
       },
     },
     {
       name: "erpify-barrel-excludes-error-screens",
       comment:
-        "The error SCREENS are exported from @/context/shared/error/infrastructure/ui and must keep that boundary explicit; only the reusable error PRIMITIVES belong to the design system. pwa/CLAUDE.md states this in prose — this rule is what checks it.",
+        "The error SCREENS are exported from @/context/shared/error/infrastructure/ui and must keep that boundary explicit; only the reusable error PRIMITIVES belong to the design system. pwa/CLAUDE.md states this in prose — this rule is what checks it. `reachable` because a re-exporting file inside erpify/ launders the screens through the barrel just as effectively as a direct line, and the trailing slash because the unanchored prefix also swallowed siblings merely starting with `ui`.",
       severity: "error",
       from: { path: "^src/components/erpify/index\\.ts$" },
-      to: { path: "^src/context/shared/error/infrastructure/ui" },
+      to: { path: "^src/context/shared/error/infrastructure/ui/", reachable: true },
     },
     {
       name: "no-circular",
@@ -111,7 +121,7 @@ module.exports = {
     tsConfig: { fileName: "tsconfig.json" },
     enhancedResolveOptions: {
       exportsFields: ["exports"],
-      conditionNames: ["import", "require", "node", "default", "types"],
+      conditionNames: ["import", "require", "node", "default"],
     },
   },
 };

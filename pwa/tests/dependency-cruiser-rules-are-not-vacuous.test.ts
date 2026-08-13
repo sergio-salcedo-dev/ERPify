@@ -10,24 +10,28 @@ import config from "../.dependency-cruiser.cjs";
  *
  * Why: a `from.path` that matches nothing cannot fire. The rule keeps printing
  * green, indistinguishable from a rule that ran and found nothing — which is the
- * exact failure mode the graph gate exists to close, one level up. Two of the
- * rules are anchored on a single file today (`src/components/cn.ts` and
- * `src/components/erpify/index.ts`), so renaming or dissolving either one would
- * retire its rule in silence.
+ * exact failure mode the graph gate exists to close, one level up.
+ * `erpify-barrel-excludes-error-screens` is anchored on a single file
+ * (`src/components/erpify/index.ts`), so dissolving that barrel would retire its
+ * rule in silence; the other scoped rules select directories and are only one
+ * careless `pathNot` away from the same fate.
  *
  * This mirrors the `assertNotEmpty` self-protection every gate under
  * `api/tests/Unit/Shared/Architecture/` carries, and it generalises: a rule added
  * later with a typo'd path fails here rather than shipping as decoration.
  *
- * `from.path` may be a single pattern or an array of them; both are covered,
- * because skipping the array form would reintroduce the same blind spot inside
- * the guard against it.
+ * `from.path` may be a single pattern or an array of them, and `from.pathNot`
+ * subtracts from the selection; all of it is applied, because a guard against
+ * vacuity that quietly skips a shape carries the very blind spot it exists to
+ * close. A `from` key this file does not understand FAILS rather than being
+ * skipped — silent skipping is how the population being checked shrinks to
+ * nothing without anyone noticing.
  *
  * What a green proves: each rule's `from:` selects real modules. What it does NOT
- * prove: that the rule's `to:` is right, that the rule can actually go red
- * (provoking that is a human step, recorded per rule in the story artifact), or
- * anything about rules whose `from:` is deliberately unscoped — `no-circular` and
- * `no-unresolvable` state `from: {}` on purpose and have no pattern to check.
+ * prove: that the rule's `to:` is right, or that the rule can actually go red
+ * (provoking that is a human step, recorded per rule in the story artifact).
+ * `no-circular` and `no-unresolvable` state a bare `from: {}` on purpose — they
+ * are unscoped by design and have no pattern to check.
  */
 
 const PWA_ROOT = path.resolve(__dirname, "..");
@@ -51,20 +55,33 @@ function sourceModules(directory: string): string[] {
   });
 }
 
-const scopedRules = (config.forbidden ?? []).flatMap((rule) => {
-  const pattern = "path" in rule.from ? rule.from.path : undefined;
+const UNDERSTOOD_FROM_KEYS = new Set(["path", "pathNot"]);
 
-  if (pattern === undefined) {
+function asPatterns(value: string | string[] | undefined): string[] {
+  if (value === undefined) {
     return [];
   }
 
-  const patterns = Array.isArray(pattern) ? pattern : [pattern];
+  return Array.isArray(value) ? value : [value];
+}
 
-  return patterns.map((expression, index) => ({
-    label: `${rule.name ?? "(unnamed rule)"}${patterns.length > 1 ? ` [${index}]` : ""}`,
-    expression,
-  }));
+const rules = (config.forbidden ?? []).map((rule) => {
+  // Read as a bag of keys on purpose: the point is to notice a `from` shape this
+  // file does not model, which a narrowed type would hide rather than surface.
+  const from = rule.from as Record<string, unknown>;
+
+  return {
+    label: rule.name ?? "(unnamed rule)",
+    unknownKeys: Object.keys(from).filter((key) => !UNDERSTOOD_FROM_KEYS.has(key)),
+    include: asPatterns(from.path as string | string[] | undefined),
+    exclude: asPatterns(from.pathNot as string | string[] | undefined),
+  };
 });
+
+// A rule with a bare `from: {}` is unscoped on purpose and has nothing to select.
+const scopedRules = rules.filter(
+  (rule) => rule.include.length > 0 || rule.exclude.length > 0 || rule.unknownKeys.length > 0,
+);
 
 describe("dependency-cruiser rules", () => {
   const modules = sourceModules(SRC_ROOT);
@@ -78,9 +95,16 @@ describe("dependency-cruiser rules", () => {
     expect(scopedRules.length).toBeGreaterThan(0);
   });
 
-  it.each(scopedRules)("$label selects at least one module", ({ expression }) => {
-    const matcher = new RegExp(expression);
+  it.each(scopedRules)("$label selects at least one module", (rule) => {
+    // An unrecognised `from` key would silently narrow the selection behind this
+    // check's back, so it fails here instead of being skipped.
+    expect(rule.unknownKeys).toStrictEqual([]);
 
-    expect(modules.filter((module) => matcher.test(module))).not.toHaveLength(0);
+    const included = (module: string) =>
+      rule.include.length === 0 || rule.include.some((pattern) => new RegExp(pattern).test(module));
+    const excluded = (module: string) =>
+      rule.exclude.some((pattern) => new RegExp(pattern).test(module));
+
+    expect(modules.filter((module) => included(module) && !excluded(module))).not.toHaveLength(0);
   });
 });

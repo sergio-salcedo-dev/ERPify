@@ -74,4 +74,7 @@ salidas para partir el par son peores que el par de deuda: `validatedBy()` devol
 reubica la misma arista Domain→Infrastructure; devolverla como *string literal* la esconde de deptrac, que es
 falsear el gate en vez de pagarlo; y registrar el validador bajo un service id inventa cableado de DI para una
 clase y sigue acoplando por cadena mágica. Queda como deuda documentada, con
-`ConstraintValidatorResolutionGateTest` haciendo imposible reintentarlo en silencio. La prohibición del "puerto pass-through 1:1 sobre un PSR permitido" (D2) sigue siendo revisión humana — no se automatiza de forma fiable.
+`ConstraintValidatorResolutionGateTest` cerrando **una** de las tres salidas: la del movimiento silencioso.
+Las otras dos siguen invisibles a los gates — un `validatedBy()` que devuelva el FQCN como **cadena literal**
+pasa el test nuevo (`class_exists()` es cierto) y pasa deptrac (que no tiene nodo para literales de cadena),
+y un service id igual. Ahí sólo llega la revisión humana.

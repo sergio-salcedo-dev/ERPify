@@ -86,9 +86,17 @@ subclass under `src` and fails when the target does not exist.
 `Domain/` and `Application/` MAY import `Symfony\Component\Validator\Context\ExecutionContextInterface`,
 solely as the parameter type of a method annotated `#[Assert\Callback]`. Blessing the attribute while
 refusing the signature it obliges you to write is half a decision: `#[Assert\Callback]` is already passive
-metadata, and the callback cannot be declared without naming this type. No runtime enters — the framework
-passes the context in. Examples: `Backoffice/Bank/Domain/Entity/Bank.php`,
-`Shared/Search/Application/Http/{FilterQuery,SearchQuery}.php`.
+metadata, and the callback cannot be declared without naming this type. Examples:
+`Backoffice/Bank/Domain/Entity/Bank.php`, `Shared/Search/Application/Http/{FilterQuery,SearchQuery}.php`.
+
+**Be exact about what this costs, because "no runtime enters" would be false.** The inner layer does not
+*construct* the runtime — the framework injects the context — but it does **drive** it:
+`Bank.php` calls `$context->buildViolation(…)->atPath(…)->addViolation()`. Worse,
+`ExecutionContextInterface::getValidator(): ValidatorInterface` is a typed gateway to the entire validator
+runtime, and deptrac cannot see through it: its extractors read declared and named references, never the
+return type of a method call, so `$context->getValidator()->validate(…)` inside `Domain/` would pass the gate
+green. **The exception is therefore scoped by review to the `#[Assert\Callback]` parameter signature and the
+violation-builder calls that follow it; reaching any other member is a breach the gate will not catch.**
 
 This exception is enforced by collector, not by baseline: `Vendor.PassiveMetadata` in
 `api/tools/deptrac/deptrac.yaml` matches the class **anchored** (`…\ExecutionContextInterface$`). The anchor

@@ -60,10 +60,18 @@ final class ConstraintValidatorResolutionGateTest extends TestCase
         $constraints = $this->firstPartyConstraints();
 
         // A walk that finds no constraint passes vacuously and looks identical to a healthy tree — the
-        // exact shape of failure this directory exists to deny.
-        $this->assertNotEmpty(
+        // exact shape of failure this directory exists to deny. `assertNotEmpty` alone is too weak to
+        // say it: the population is two, so a walk regression that drops one of them still satisfies it.
+        // Pinning the set is what makes the walk itself falsifiable, and it costs a deliberate edit when
+        // a constraint is legitimately added.
+        $this->assertSame(
+            [
+                \Erpify\Shared\Validation\Infrastructure\EnumType::class,
+                \Erpify\Shared\Validation\Infrastructure\PasswordPolicy::class,
+            ],
             $constraints,
-            self::RULE . PHP_EOL . 'No Constraint subclass found under src/; the gate scanned nothing.',
+            self::RULE . PHP_EOL . 'The set of first-party constraints under src/ changed. If that is '
+                . 'deliberate, update this list; if the walk stopped reaching one, fix the walk.',
         );
 
         $stranded = [];
@@ -146,6 +154,8 @@ final class ConstraintValidatorResolutionGateTest extends TestCase
         );
 
         foreach ($tree as $file) {
+            // Unreachable at runtime — the iterator only ever yields SplFileInfo — but not removable:
+            // the iterator is untyped, so PHPStan sees `mixed` and rejects the calls below without it.
             if (!$file instanceof SplFileInfo) {
                 continue;
             }

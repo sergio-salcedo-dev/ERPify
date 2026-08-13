@@ -185,7 +185,8 @@ paraguas se quedó sin segundo hijo.
 > `markTestSkipped`, y las cadenas `resolveGitBase` / `ERROR_CONTRACT_GATE_BASE` / `merge-base` no aparecen en
 > el fichero. El arco #596–#601 lo resolvió el 28 de julio de 2026 **eliminando la dependencia de git**, no
 > pasándole una base. La afirmación se conserva tachada, no borrada: el error es reproducible y es el que puso
-> a BR-6 el tercero en el orden recomendado (`:204`), argumento que se quedó sin sujeto.
+> a BR-6 el tercero en el orden recomendado — la entrada 3 de §Orden recomendado, corregida ahí también. Sin
+> ese argumento, BR-6 no era el urgente que la ordenación suponía.
 
 ### BR-7 · Listas de backoffice
 
@@ -208,7 +209,9 @@ petición 60 s).
    alcanzable por el rollback, no por el despliegue rodante. Sigue primero **porque el re-medido lo abarató**,
    no porque los cuatro fueran defectos vivos.
 2. **BR-4** — porque #602 es lo único que queda del residual de sesión robada tras la corrección de #645, y hasta que cierre lo que el producto debe es **guía de orden** en el copy, no código.
-3. **BR-6** — un gate que no corre invalida la confianza en todos los demás; barato y sin producción.
+3. ~~**BR-6** — un gate que no corre invalida la confianza en todos los demás; barato y sin producción.~~
+   **El argumento se cayó** (ver §BR-6): el gate NFR26 corre, así que la posición no está justificada por
+   urgencia. BR-6 sigue teniendo trabajo real, pero es #356 más un pago parcial de baseline.
 4. **BR-1** — el re-medido lo **encareció**, al revés que BR-2: tres de sus siete issues se cierran con
    evidencia y sin código, pero lo que queda (#320 sobre 13 métodos, no 2; #319; #430) es real, y el hueco
    que da nombre al lote pedía un mecanismo, no una nota. Sigue sin consecuencia de producción.

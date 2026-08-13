@@ -365,9 +365,11 @@ development_status:
   br-5-ciclo-de-vida-iam-session: backlog
   # Medido el 2026-08-12 contra 781c75a2: TRES de los cinco issues no son código. #589 lo resolvió el arco
   # #596-#601 (el mismo de BR-1) y el gate NFR26 corre hoy con 9 tests y cero skips; #250 quedó obsoleto por
-  # deptrac; #438 parte de una premisa falsa — su gate rechazaría 29 usos correctos de #[IsGranted]. El lote
-  # real es #356 (gate de grafo en la PWA) + 4 de los 21 pares del baseline de deptrac + 5 correcciones de
+  # deptrac; #438 parte de una premisa falsa — su gate rechazaría 28 usos correctos de #[IsGranted]. El lote
+  # real es #356 (gate de grafo en la PWA) + 3 de los 21 pares del baseline de deptrac + 7 correcciones de
   # prosa podrida. La línea :179-181 del fichero de épica que llamaba a #589 "el que muerde" es falsa.
+  # Tres, no cuatro: mover EnumType a Domain/ rompía la validación en runtime (Symfony ata constraint y
+  # validador por nombre) y se revirtió; su par sigue en el baseline, ahora con gate propio.
   br-6-gates-arquitectura-ci: review
   br-7-listas-backoffice: review
   br-8-operabilidad: backlog
