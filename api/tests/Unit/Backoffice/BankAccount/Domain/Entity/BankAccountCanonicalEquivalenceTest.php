@@ -38,10 +38,10 @@ final class BankAccountCanonicalEquivalenceTest extends TestCase
     }
 
     /**
-     * `DEUT DEFF` is the only grouped BIC the edge lets through: `Assert\Bic` strips the space before it
-     * checks length and alphabet, and 9 raw characters still clear the command's `Length(max: 11)`. An
-     * 11-character BIC written with any grouping is 12 or more and is rejected before the aggregate,
-     * which is why this case uses the 8-character form and not the longer one.
+     * `Assert\Bic` strips the space before it checks length and alphabet, so any grouped spelling of a
+     * valid BIC reaches the aggregate — the 8-character form here and the 11-character one alike. What
+     * this case pins is the aggregate's own half: two spellings of one BIC must compare equal after
+     * canonicalization, or a re-key of the same value would read as a change and write.
      */
     public function testUpdateComparesTheCanonicalBicSoSpacingOnlyDifferencesAreANoOp(): void
     {

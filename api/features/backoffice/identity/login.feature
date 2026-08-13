@@ -233,10 +233,11 @@ Feature: Log in through the session firewall
   # The only scenario that can tell a post-commit projection from an in-transaction one: with audit_log
   # writable, both placements produce the same row and the same lock.
   #
-  # audit_log is renamed away and back around the request alone, with no assertion in between. Every step
-  # inside that window either cannot fail or swallows its error, so the table is always restored before
-  # anything can abort the scenario — a rename left standing would break every later feature, since the
-  # per-feature restore is skipped when nothing wrote.
+  # audit_log is renamed away and back around the request alone, with no assertion in between, so the
+  # only step that can abort before the table is restored is the request itself — and it answers 401
+  # rather than throwing. A rename left standing would break every later feature, since the per-feature
+  # restore is skipped when nothing wrote through the ORM; the restoring step failing is therefore the
+  # one thing that must surface here, loudly, instead of twenty unrelated features going red.
   Scenario: The lockout survives its own audit projection failing
     Given the stored events are cleared
     And I execute the SQL query "UPDATE identity_user SET failed_attempts = 9, locked_until = NULL WHERE email = 'nora@erpify.test'" on connection "seed"

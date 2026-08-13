@@ -4,7 +4,7 @@ baseline_commit: 3be821298f2d6c3e11a83c91d851cb554b0f1171
 
 # Story BR-7: Listas de backoffice — el toolkit de recursos sobre Bank/BankAccount
 
-Status: review
+Status: done
 
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · Lote BR-7 · Issues #395 #422 #423 #424 #272 #273
 > Rama: `fix/backoffice-resource-lists-br7-sfb3` · Worktree: `.claude/worktrees/backoffice-resource-lists-br7-sfb3` · Base: `main` @ `3be82129` (rebasada; la medición original es contra `781c75a2`, y ninguno de los tres commits intermedios toca un fichero de este lote)

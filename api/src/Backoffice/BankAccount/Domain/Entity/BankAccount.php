@@ -65,8 +65,16 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         #[Assert\Length(max: 34)]
         #[PersonalData]
         private string $iban,
+        /**
+         * Stored canonicalized like the IBAN beside it (see {@see canonicalizeBic()}). The width is
+         * asserted here rather than left to {@see Assert\Bic}'s 8-or-11 rule alone: that rule holds
+         * only while the canonicalizer strips exactly what the constraint strips, and the two are
+         * separate literals. If they ever drift apart, this is what answers 422 instead of the column
+         * answering 500.
+         */
         #[ORM\Column(length: 11, nullable: true)]
         #[Assert\Bic(ibanPropertyPath: 'iban')]
+        #[Assert\Length(max: 11)]
         private ?string $bic,
         #[ORM\Column(length: 100, nullable: true)]
         #[Assert\Length(max: 100)]

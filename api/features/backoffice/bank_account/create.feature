@@ -50,6 +50,57 @@ Feature: Create a bank account
     And The Mercure update property "type" should be equal to "bank_account.created"
     And The Mercure update property "bankId" should be equal to "11111111-1111-7000-8000-000000000003"
 
+  # Grouping is what makes the typed value longer than the value the system keeps: this Maltese IBAN is
+  # 31 characters canonical and 38 as a statement prints it, past the ISO 13616 ceiling the aggregate
+  # asserts over the canonical form — and the BIC beside it is 11 against 13. The wire contract is
+  # therefore whatever the field's own constraint accepts, never what fits the column. Only a direct API
+  # client reaches this shape: the PWA compacts both fields before it validates them.
+  Scenario: Create an account from the grouped spelling a bank statement carries
+    When I send a POST request to "/backoffice/bank-accounts" with body:
+    """
+    {
+      "bankId": "11111111-1111-7000-8000-000000000003",
+      "holderName": "Valletta Holdings",
+      "iban": "MT84 MALT 0110 0001 2345 MTLC AST0 01S",
+      "bic": "VALL MTMT XXX",
+      "currency": "EUR"
+    }
+    """
+    Then the response status code should be 201
+    And the JSON node "data.iban" should be equal to "MT84MALT011000012345MTLCAST001S"
+    And the JSON node "data.bic" should be equal to "VALLMTMTXXX"
+    And I execute the SQL query "SELECT iban, bic FROM bank_account WHERE holder_name = 'Valletta Holdings'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "iban": "MT84MALT011000012345MTLCAST001S",
+        "bic": "VALLMTMTXXX"
+      }
+    ]
+    """
+
+  # The transport declares no width for `iban`, so the guard against a value that is not an IBAN is the
+  # field's own constraint — which refuses it at any length, with its own message. What must never
+  # happen is the column deciding: that would be a 500 on a request the edge should have refused.
+  Scenario: Fail to create an account with a value that is not an IBAN at any length
+    Given the stored events are cleared
+    When I send a POST request to "/backoffice/bank-accounts" with body:
+    """
+    {
+      "bankId": "11111111-1111-7000-8000-000000000003",
+      "holderName": "Overlong Holder",
+      "iban": "ES91210004184502000513320000000000000000"
+    }
+    """
+    Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0].field" should be equal to "iban"
+    And the JSON node "violations[0].message" should be equal to "This is not a valid IBAN."
+    And there should be 0 events stored named "erpify.backoffice.bankaccount.created"
+
   Scenario: It should fail when the payload is empty
     Given the stored events are cleared
     And I reset the stats for all doctrine connections
