@@ -8,6 +8,7 @@
         "Symfony\\Bundle\\TwigBundle\\TwigBundle",
         "Symfony\\Bundle\\DebugBundle\\DebugBundle",
         "FriendsOfBehat\\SymfonyExtension\\Bundle\\FriendsOfBehatSymfonyExtensionBundle",
+        "Twig\\Environment",
         "null",
         "true",
         "false",
