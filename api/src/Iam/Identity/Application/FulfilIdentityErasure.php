@@ -13,6 +13,7 @@ use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Audit\Application\ActorContextFactory;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Application\AuditSubjectTrailErasure;
+use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
@@ -98,7 +99,7 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  */
 final readonly class FulfilIdentityErasure
 {
-    private const string ERASURE_ACTION = 'GDPR_ERASURE_EXECUTED';
+    private const string ERASURE_ACTION = AuditErasureEvidence::ACTOR_TRAIL_ERASED;
 
     /**
      * The identity module's own compliance entry. It is written here rather than inside
@@ -106,7 +107,7 @@ final readonly class FulfilIdentityErasure
      * that clears that identifier is three lines below — a use case must not persist an id it has no way
      * of erasing.
      */
-    private const string SUBJECT_ERASURE_ACTION = 'GDPR_SUBJECT_ERASED';
+    private const string SUBJECT_ERASURE_ACTION = AuditErasureEvidence::SUBJECT_ERASED;
 
     /**
      * The audit `resource_type` under which this context's subject appears. It lives here, not in

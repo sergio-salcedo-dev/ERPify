@@ -6,6 +6,7 @@ namespace Erpify\Shared\Audit\Infrastructure\Cli;
 
 use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
 use Erpify\Shared\Audit\Application\AuditLogger;
+use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
@@ -33,7 +34,7 @@ use Throwable;
 )]
 final class EraseActorAuditTrailCommand extends Command
 {
-    private const string ERASURE_ACTION = 'GDPR_ERASURE_EXECUTED';
+    private const string ERASURE_ACTION = AuditErasureEvidence::ACTOR_TRAIL_ERASED;
 
     public function __construct(
         private readonly AuditActorAnonymiser $anonymiser,

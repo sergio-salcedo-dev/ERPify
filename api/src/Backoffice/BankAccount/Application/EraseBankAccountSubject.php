@@ -7,6 +7,7 @@ namespace Erpify\Backoffice\BankAccount\Application;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Shared\Audit\Application\AuditLogger;
+use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
@@ -30,7 +31,7 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  */
 final readonly class EraseBankAccountSubject
 {
-    private const string ERASURE_ACTION = 'GDPR_SUBJECT_ERASED';
+    private const string ERASURE_ACTION = AuditErasureEvidence::SUBJECT_ERASED;
 
     public function __construct(
         private BankAccountRepository $bankAccountRepository,

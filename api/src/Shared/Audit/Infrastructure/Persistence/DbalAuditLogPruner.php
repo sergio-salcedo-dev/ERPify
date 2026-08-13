@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Audit\Infrastructure\Persistence;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Types\Types;
 use Erpify\Shared\Audit\Application\AuditLogPruner;
@@ -78,17 +79,35 @@ final readonly class DbalAuditLogPruner implements AuditLogPruner
     {
         $removed = 0;
 
+        $parameters = [
+            'level' => $threshold->level->value,
+            'threshold' => $threshold->deleteBefore,
+            'batch' => $this->batchSize,
+        ];
+        $types = ['threshold' => Types::DATETIMETZ_IMMUTABLE, 'batch' => Types::INTEGER];
+        $exemption = '';
+
+        // Composed rather than always bound: DBAL expands an empty list to `NOT IN (NULL)`, which is unknown
+        // for every row and would silently stop the prune altogether. An empty exemption means no clause.
+        if ([] !== $threshold->exemptActions) {
+            $exemption = 'AND action NOT IN (:exemptActions) ';
+            $parameters['exemptActions'] = $threshold->exemptActions;
+            $types['exemptActions'] = ArrayParameterType::STRING;
+        }
+
         do {
+            // The exemption belongs to the INNER select and must stay there. On the outer `DELETE` the inner
+            // would still take `batchSize` ids, fewer rows would delete, `$deleted !== $this->batchSize` would
+            // end the loop early, and eligible rows would be left unpruned — silently, with no error and
+            // nothing red. The inner select carries no `ORDER BY`, so no black-box test can catch that.
             $deleted = (int) $this->connection->executeStatement(
                 'DELETE FROM audit_log WHERE id IN ('
-                . 'SELECT id FROM audit_log WHERE level = :level AND occurred_on < :threshold LIMIT :batch'
+                . 'SELECT id FROM audit_log WHERE level = :level AND occurred_on < :threshold '
+                . $exemption
+                . 'LIMIT :batch'
                 . ')',
-                [
-                    'level' => $threshold->level->value,
-                    'threshold' => $threshold->deleteBefore,
-                    'batch' => $this->batchSize,
-                ],
-                ['threshold' => Types::DATETIMETZ_IMMUTABLE, 'batch' => Types::INTEGER],
+                $parameters,
+                $types,
             );
             $removed += $deleted;
         } while ($deleted === $this->batchSize);

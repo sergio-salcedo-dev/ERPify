@@ -202,13 +202,37 @@ Descartado: documentar la ventana async como riesgo residual (no sustituye a cer
 
 ### D4 — Niveles, retención diferenciada, append-only y GDPR
 
-Dos niveles (`activity`, `security`); el tercer eje (cambios de datos) **ya** lo cubre `DomainEvent`
-y **no se duplica**. `audit_log` es **append-only**: la ruta caliente sólo inserta.
+**Tres niveles** (`activity`, `security`, `change`). El párrafo original decía dos, porque el eje de cambios
+de datos se consideraba cubierto por `DomainEvent` y no duplicable; `change` llegó después, con el CDC de
+`onFlush` y su suelo de retención, y este texto no se actualizó con él. El nivel no es sólo una ventana de
+retención: **fija también cómo se escribe la fila** —`activity` en diferido, `security` síncrono antes de la
+respuesta, `change` dentro de la transacción que describe—, de modo que una propuesta de cuarto nivel tiene
+que aportar un modo de escritura nuevo, no sólo una retención distinta. `audit_log` es **append-only**: la
+ruta caliente sólo inserta.
 
 `audit_log` **es PII** (`actor_id`, `ip`, `user_agent`). Las mutaciones no-append **no** son scripts
 operativos sueltos: el log admite un **conjunto cerrado de tres políticas de mutación de primera clase**
 —la poda, el borrado GDPR del eje **actor** y el del eje **recurso**—, cada una con semántica definida y
 disparador propio; cualquier otra escritura es append.
+
+**La poda exime la evidencia del propio borrado, y eso no la convierte en una cuarta política.** Sigue
+siendo un solo `DELETE` con un disparador; lo que cambia es su predicado, que ahora excluye
+`AuditErasureEvidence::ACTIONS`. El principio es **la evidencia no puede caducar antes que aquello que
+atestigua**: la lápida de `dek_keystore` que responde por un `GDPR_SUBJECT_ERASED` se conserva para siempre
+a propósito y el reconciliador las anti-junta sin cota temporal, así que dejar caducar la evidencia vuelve
+ese par **insatisfacible** — cada borrado correcto pasa a reportarse como divergencia, a diario y para
+siempre. La exención llavea por `action` y **nunca** por `level`, porque `action` es lo que lee el control
+detectivo: discriminar por columnas distintas es exactamente cómo los dos controles derivarían en silencio.
+Va como dato en `AuditRetentionThreshold` —no como literal dentro del SQL del adaptador— y viaja en **todas**
+las líneas del plan, no sólo en la de `security`, para que mover la evidencia de nivel no reabra el agujero.
+
+**Lo que esto no cierra, dicho para que no se lea como cerrado.** Las dos acciones de evidencia no tienen la
+misma retención correcta, sólo el mismo suelo de «más que el techo de `security`». `SUBJECT_ERASED` necesita
+*nunca*, porque su falsador es eterno. `ACTOR_TRAIL_ERASED` responde por marcas `actor_erased` en filas
+`change`, que se podan a los cinco años: retenerla para siempre **sobre-retiene el `actor_id` del
+administrador actuante** más allá del punto en que algo pueda contrastarlo, que es justo la minimización que
+la poda ejecuta. Ambas quedan exentas porque ambas deben sobrevivir al techo; darle a la segunda un suelo
+acotado en vez de la exención es una decisión de privacidad con su propio coste, y se registra sin tomarla.
 
 **«Cerrado» significa cerrado por revisión, no por gate.** Nada automatizado impide una cuarta política:
 `git grep` sobre la tabla es el único control y no está cableado a ninguna puerta, de modo que una mutación
