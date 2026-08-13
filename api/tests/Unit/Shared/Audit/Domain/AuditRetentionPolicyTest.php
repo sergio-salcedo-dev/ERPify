@@ -99,6 +99,21 @@ final class AuditRetentionPolicyTest extends TestCase
         }
     }
 
+    /**
+     * The exemption is a deletion instruction, so an empty one is a licence to delete the evidence rather
+     * than a threshold that happens to exempt nothing. Binding it empty is not the loud failure it looks
+     * like either: DBAL renders an empty list parameter as the literal `NULL`, so the predicate becomes
+     * unknown for every row and the prune deletes nothing while reporting success.
+     */
+    #[Test]
+    public function itRejectsAThresholdThatExemptsNothing(): void
+    {
+        $this->expectException(InvalidAuditRetentionPolicy::class);
+
+        // @phpstan-ignore new.resultUnused, argument.type (empty on purpose, to exercise the runtime guard)
+        new AuditRetentionThreshold(AuditLevel::SECURITY, new DateTimeImmutable(self::NOW), []);
+    }
+
     private function cutoffFor(
         AuditRetentionPolicy $policy,
         AuditLevel $level,

@@ -63,7 +63,9 @@
   minimisation — **on every row the window still covers.** On an exempt row it is not, and that is the price
   of the exemption rather than an oversight: those rows keep the same triple indefinitely, and their only
   removal path is the actor-axis erasure below, which matches on `actor_id` and so reaches an acting
-  administrator's row only if that administrator is themself erased (the operator CLI paths run off-request
+  administrator's row only if that administrator is themself erased — which is **refused while they carry
+  `ADMIN`**, so it needs a demotion first and therefore a second administrator to perform it, leaving a
+  single-administrator installation with no removal path at all (the operator CLI paths run off-request
   as `system`, with `ip` and `user_agent` null). The cost is weighed, and carries a revisit trigger, at
   `AuditErasureEvidence`. Outright erasure is the second policy — the `audit:gdpr:erase` command's in-place
   anonymising `UPDATE` (`actor_id` → a fresh random UUID per subject; `ip`/`user_agent` → `[REDACTED]`),

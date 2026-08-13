@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
+use Erpify\Backoffice\BankAccount\Domain\Iban;
 use Erpify\Shared\Audit\Application\AuditPiiAad;
 use Erpify\Shared\Audit\Application\PiiFieldPosition;
 use Erpify\Shared\Audit\Infrastructure\Persistence\PiiDiffSealer;
@@ -117,26 +118,36 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
             $secondId = Uuid::generate();
             $firstHolder = 'Ana Ruiz';
             $secondHolder = 'Bruno Salas';
-            $iban = 'ES9121000418450200051332';
-            $em->persist(BankAccount::create($firstId, $bankId, $firstHolder, $iban, 'CAIXESBBXXX'));
-            $em->persist(
-                BankAccount::create($secondId, $bankId, $secondHolder, 'DE89370400440532013000', 'DEUTDEFFXXX'),
-            );
+            // Canonical, because that is the spelling the aggregate stores and therefore the only one an
+            // assertion can compare against: a grouped or lower-case fixture would be searched for in the
+            // metadata as a string that was never written, and pass while saying nothing.
+            $firstIban = Iban::canonicalize('ES9121000418450200051332');
+            $secondIban = Iban::canonicalize('DE89370400440532013000');
+            $em->persist(BankAccount::create($firstId, $bankId, $firstHolder, $firstIban, 'CAIXESBBXXX'));
+            $em->persist(BankAccount::create($secondId, $bankId, $secondHolder, $secondIban, 'DEUTDEFFXXX'));
             $em->flush(); // one flush, two mints
 
             $encryptor = $this->encryptor();
-            $first = $this->sealedHolderOf($connection, $firstId, $firstHolder);
-            $second = $this->sealedHolderOf($connection, $secondId, $secondHolder);
+            $first = $this->sealedPiiOf($connection, $firstId, $firstHolder, $firstIban);
+            $second = $this->sealedPiiOf($connection, $secondId, $secondHolder, $secondIban);
 
-            $sealedPairs = [[$firstId, $firstHolder, $first], [$secondId, $secondHolder, $second]];
+            $sealedAccounts = [
+                [$firstId, ['holderName' => $firstHolder, 'iban' => $firstIban], $first],
+                [$secondId, ['holderName' => $secondHolder, 'iban' => $secondIban], $second],
+            ];
 
-            foreach ($sealedPairs as [$id, $holder, $sealed]) {
-                $aad = AuditPiiAad::for('holderName', PiiFieldPosition::New, $sealed['auditLogId'])->toString();
-                $this->assertSame(
-                    $holder,
-                    $encryptor->decrypt(EncryptionScopeId::forBankAccount($id), $sealed['ciphertext'], $aad),
-                    'each account opens under its own scope and its own row id',
-                );
+            // Per field, not just per account: the scope is one per aggregate, so what separates two sealed
+            // fields of the SAME row is the AAD alone. Opening only `holderName` would leave a shared-AAD
+            // sealing of both fields green.
+            foreach ($sealedAccounts as [$id, $expected, $sealed]) {
+                foreach ($expected as $field => $plaintext) {
+                    $aad = AuditPiiAad::for($field, PiiFieldPosition::New, $sealed['auditLogId'])->toString();
+                    $this->assertSame(
+                        $plaintext,
+                        $encryptor->decrypt(EncryptionScopeId::forBankAccount($id), $sealed[$field], $aad),
+                        $field . ' opens under its own scope, its own row id and its own field',
+                    );
+                }
             }
 
             // The cross-open: the first account's ciphertext under the second account's scope and row id.
@@ -145,7 +156,7 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
             try {
                 $encryptor->decrypt(
                     EncryptionScopeId::forBankAccount($secondId),
-                    $first['ciphertext'],
+                    $first['holderName'],
                     $crossAad,
                 );
                 $this->fail("a sibling minted in the same flush must not open the other account's ciphertext");
@@ -156,12 +167,16 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
     }
 
     /**
-     * The per-account checks that must hold whatever else shared the flush, plus the sealed holder the
-     * cross-open needs afterwards.
+     * The per-account checks that must hold whatever else shared the flush, plus the sealed ciphertexts the
+     * per-field opens and the cross-open need afterwards.
      *
-     * @return array{ciphertext: string, auditLogId: string}
+     * Both personal fields are checked twice over, because the two directions fail differently and only one
+     * of them is a leak: the plaintext search catches a value written in clear, and {@see sealedCiphertext}
+     * catches a field that never reached the diff at all — which the search alone would report as success.
+     *
+     * @return array{holderName: string, iban: string, auditLogId: string}
      */
-    private function sealedHolderOf(Connection $connection, string $accountId, string $holder): array
+    private function sealedPiiOf(Connection $connection, string $accountId, string $holder, string $iban): array
     {
         $row = $this->changeRow($connection, $accountId, 'BANK_ACCOUNT_CREATED');
         $metadata = $row['metadata'] ?? null;
@@ -171,6 +186,7 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
 
         $this->assertSame('BankAccount:' . $accountId, $row['encryption_scope_id'] ?? null);
         $this->assertStringNotContainsString($holder, $metadata, 'no holder survives in clear');
+        $this->assertStringNotContainsString($iban, $metadata, 'no iban survives in clear');
         $this->assertSame(
             1,
             $this->keystoreRowsFor($connection, 'BankAccount:' . $accountId),
@@ -180,7 +196,11 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
         $decoded = \json_decode($metadata, true, 512, JSON_THROW_ON_ERROR);
         $this->assertIsArray($decoded);
 
-        return ['ciphertext' => $this->sealedCiphertext($decoded, 'holderName'), 'auditLogId' => $auditLogId];
+        return [
+            'holderName' => $this->sealedCiphertext($decoded, 'holderName'),
+            'iban' => $this->sealedCiphertext($decoded, 'iban'),
+            'auditLogId' => $auditLogId,
+        ];
     }
 
     /**

@@ -220,7 +220,12 @@ you change anything here.
       the request cycle on the HTTP path, so **the acting administrator's `ip` and
       `user_agent` are retained indefinitely along with their `actor_id`** — clearable only
       if that administrator is themself erased, since the actor-axis pass matches by
-      `actor_id`. The CLI paths write both columns NULL. **Weighed and accepted:** stripping
+      `actor_id`. **Say the precondition with it, or the sentence promises a route that is
+      refused:** erasure is rejected while the subject still carries `ADMIN` (409
+      `administrator-erasure-requires-demotion`), so clearing those columns requires demoting
+      them first, and demotion requires a second administrator to perform it. On a
+      single-administrator installation there is therefore **no** removal path at all while
+      that user holds `ADMIN`. The CLI paths write both columns NULL. **Weighed and accepted:** stripping
       request metadata at write time would take attribution off the one class of row whose
       purpose is attribution, and a bounded floor for `GDPR_ERASURE_EXECUTED` alone splits
       one rule in two for a difference no reader infers from the rows. Revisit at the first

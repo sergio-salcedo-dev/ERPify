@@ -239,9 +239,11 @@ ejecutado por HTTP escribe por tanto el `ip` y el `user_agent` del administrador
 `actor_id`, y el anonimizador del eje de recurso deja esas dos columnas intactas allí donde el actor fue
 identificado —precisamente porque son suyas y no del sujeto—. La exención retiene **las tres**, que son el
 mismo trío que `docs/rules/database.md` nombra como el PII cuya ventana acotada *es* la minimización. Hay
-vía de eliminación y es **discrecional**: el pase de actor casa por `actor_id`, así que esas columnas se
-limpian sólo si ese administrador es borrado a su vez. Los caminos por CLI no están expuestos: corren fuera
-de petición como `system`, con ambas columnas nulas.
+vía de eliminación, es **discrecional** y está **condicionada**: el pase de actor casa por `actor_id`, así
+que esas columnas se limpian sólo si ese administrador es borrado a su vez — y ese borrado se **rechaza**
+mientras conserve `ADMIN` (409 `administrator-erasure-requires-demotion`), de modo que exige degradarlo
+antes, y la degradación exige un segundo administrador que la ejecute. Los caminos por CLI no están
+expuestos: corren fuera de petición como `system`, con ambas columnas nulas.
 
 **Sopesado y aceptado, no pasado por alto.** Las dos acciones de evidencia no tienen la misma retención
 correcta, sólo el mismo suelo de «más que el techo de `security`». `SUBJECT_ERASED` necesita *nunca*, porque
@@ -252,8 +254,11 @@ dos, y las dos formas más estrechas se consideraron y se descartaron: un suelo 
 `ACTOR_TRAIL_ERASED` parte una regla en dos por una diferencia que ningún lector inferiría de las filas, y no
 sellar metadata de petición al escribirlas le quitaría atribución a la única clase de fila cuyo propósito
 **es** la atribución — un borrado que nadie puede situar es evidencia más débil de lo que una dirección
-sobre-retenida es un daño. La exposición está acotada en la práctica: los administradores son pocos, la vía
-de eliminación existe vía su propio borrado, y los caminos por CLI escriben ambas columnas nulas.
+sobre-retenida es un daño. Lo que acota la exposición en la práctica es la **forma del despliegue**, no una
+propiedad del sistema, y no deben leerse como lo mismo: nada limita el conjunto `ADMIN` —existe
+`users.grantAdmin`— y la vía de eliminación de arriba está rechazada hasta que un segundo administrador
+degrade al titular, así que en una instalación con un solo administrador no hay ninguna. Lo que el sistema
+sí garantiza es la mitad estrecha: los caminos por CLI escriben ambas columnas nulas.
 
 **Disparador de revisita**, para que la aceptación no se vuelva invisible: lo primero que ocurra entre un
 despliegue en producción que borre a un sujeto real, un administrador que se marche y no sea borrado, o una
