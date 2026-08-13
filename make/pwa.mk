@@ -9,14 +9,14 @@
 #   pwa.install / pwa.update / pwa.upgrade / pwa.dev
 #   pwa.production.build / pwa.production.start
 #   pwa.quality.dry-run / pwa.quality
-#   pwa.lint[.dry-run] / pwa.format[.dry-run]
+#   pwa.lint[.dry-run] / pwa.lint.graph / pwa.format[.dry-run]
 #   pwa.test / pwa.test.unit[.watch] / pwa.test.e2e[.reports]
 #   pwa.clean.soft / pwa.clean.all (destructive)
 
 .PHONY: pwa.install pwa.install.if-missing pwa.update pwa.upgrade pwa.dev \
         pwa.production.build pwa.production.start \
         pwa.quality.dry-run pwa.quality \
-        pwa.lint.dry-run pwa.lint pwa.format.dry-run pwa.format pwa.typecheck \
+        pwa.lint.dry-run pwa.lint pwa.lint.graph pwa.format.dry-run pwa.format pwa.typecheck \
         pwa.test pwa.test.unit pwa.test.unit.coverage pwa.test.unit.watch pwa.test.e2e pwa.test.e2e.reports npm.dev.e2e \
         pwa.util.extract.testids pwa.chown.next pwa.clean.soft pwa.clean.all pwa.clean.sudo
 
@@ -57,9 +57,9 @@ pwa.production.start: ## Start production server on port 80
 
 ## —— PWA quality ——
 
-pwa.quality.dry-run: pwa.lint.dry-run pwa.format.dry-run pwa.typecheck ## Full PWA lint (ESLint + Prettier + Typecheck)
+pwa.quality.dry-run: pwa.lint.dry-run pwa.lint.graph pwa.format.dry-run pwa.typecheck ## Full PWA lint (ESLint + dependency-cruiser + Prettier + Typecheck)
 
-pwa.quality: pwa.lint pwa.format pwa.typecheck ## Full PWA lint (ESLint + Prettier + Typecheck)
+pwa.quality: pwa.lint pwa.lint.graph pwa.format pwa.typecheck ## Full PWA lint (ESLint + dependency-cruiser + Prettier + Typecheck)
 
 ## —— PWA lint (ESLint) ——
 
@@ -68,6 +68,14 @@ pwa.lint.dry-run: pwa.install.if-missing ## ESLint (check only); pass c='…' fo
 
 pwa.lint: pwa.install.if-missing ## ESLint --fix
 	@$(call pwa_cmd,npm run lint:fix)
+
+## —— PWA graph boundaries (dependency-cruiser) ——
+
+# Check-only by nature, so one target serves both pwa.quality and .dry-run.
+# Sibling of ESLint's no-restricted-imports, not a replacement — see the role
+# split in pwa/.dependency-cruiser.cjs.
+pwa.lint.graph: pwa.install.if-missing ## dependency-cruiser boundary gate over pwa/src; pass c='…' for extra args
+	@$(call pwa_cmd,npm run lint:graph -- $(c))
 
 ## —— PWA format (Prettier) ——
 

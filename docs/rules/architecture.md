@@ -57,6 +57,53 @@ validating UUIDs across versions (v4, v7). The prohibition stays absolute for **
 code in `Domain/`: this exception covers only `symfony/uid`, not `Erpify\Shared\Infrastructure\…` or any
 other framework service. Example: `api/src/Shared/Uuid/Domain/Uuid.php`.
 
+#### A first-party constraint cannot be split from its validator — and why that keeps one debt entry alive
+
+`Erpify\Shared\Validation\Infrastructure\EnumType` is passive metadata by nature, so it *looks* like it
+belongs in `Domain/` beside the invariant it states — and a `Domain/` entity importing it
+(`BankAccount → EnumType`) is a literal breach of this section, grandfathered in the deptrac baseline.
+
+**Moving it is not the fix, and this is measured, not assumed.** Symfony binds a constraint to its validator
+by **name**: `Constraint::validatedBy()` returns `static::class . 'Validator'`. Move the constraint one
+directory and the derived name points at a class that does not exist — `#[EnumType]` then fatals on every
+validated property, while PHPStan, deptrac and the constraint's own unit test all stay green (that test
+instantiates the validator directly through `ConstraintValidatorTestCase::createValidator()`, so it never
+travels through `validatedBy()`). The validator itself cannot follow into `Domain/`: it extends
+`ConstraintValidator`, which is framework runtime.
+
+That leaves three ways to split the pair, and each is worse than the debt entry: a `validatedBy()` returning
+`EnumTypeValidator::class` just relocates the same Domain→Infrastructure edge; returning the FQCN as a
+**string literal** hides it from deptrac, which is falsifying the gate rather than paying it; and registering
+the validator under a service id invents DI machinery for one class and still couples through a magic string.
+The pair therefore stays co-located, exactly as `PasswordPolicy` / `PasswordPolicyValidator` already are.
+
+Enforced by `ConstraintValidatorResolutionGateTest`
+(`api/tests/Unit/Shared/Architecture/`), which resolves `validatedBy()` for every concrete `Constraint`
+subclass under `src` and fails when the target does not exist.
+
+#### Documented exception — `ExecutionContextInterface` as a callback signature
+
+`Domain/` and `Application/` MAY import `Symfony\Component\Validator\Context\ExecutionContextInterface`,
+solely as the parameter type of a method annotated `#[Assert\Callback]`. Blessing the attribute while
+refusing the signature it obliges you to write is half a decision: `#[Assert\Callback]` is already passive
+metadata, and the callback cannot be declared without naming this type. Examples:
+`Backoffice/Bank/Domain/Entity/Bank.php`, `Shared/Search/Application/Http/{FilterQuery,SearchQuery}.php`.
+
+**Be exact about what this costs, because "no runtime enters" would be false.** The inner layer does not
+*construct* the runtime — the framework injects the context — but it does **drive** it:
+`Bank.php` calls `$context->buildViolation(…)->atPath(…)->addViolation()`. Worse,
+`ExecutionContextInterface::getValidator(): ValidatorInterface` is a typed gateway to the entire validator
+runtime, and deptrac cannot see through it: its extractors read declared and named references, never the
+return type of a method call, so `$context->getValidator()->validate(…)` inside `Domain/` would pass the gate
+green. **The exception is therefore scoped by review to the `#[Assert\Callback]` parameter signature and the
+violation-builder calls that follow it; reaching any other member is a breach the gate will not catch.**
+
+This exception is enforced by collector, not by baseline: `Vendor.PassiveMetadata` in
+`api/tools/deptrac/deptrac.yaml` matches the class **anchored** (`…\ExecutionContextInterface$`). The anchor
+is load-bearing for anything added there — an unanchored `…\Validator\Constraint` entry would also swallow
+`ConstraintViolation` and its `List`/`Interface` siblings, which are runtime result types that must stay in
+`Infrastructure/`.
+
 #### Documented exception — PSR interface-only interop contracts
 
 `Domain/` and `Application/` MAY depend directly on **interface-only PSR interop contracts** —
