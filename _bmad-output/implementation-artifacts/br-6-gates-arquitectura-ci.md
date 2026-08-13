@@ -4,7 +4,7 @@ baseline_commit: 781c75a2
 
 # Story BR-6: Gates de arquitectura y CI
 
-Status: in-progress
+Status: review
 
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · BR-6 de 8
 > Issues: #250 #305 #356 #438 #589
@@ -290,7 +290,10 @@ Lo que cabe en este PR — **4 pares, cero cambio de comportamiento**:
 - [x] **T7 — Prosa podrida: las siete correcciones** (AC: 8)
 - [x] **T8 — Cerrar #589, #250 y #438 con evidencia** (AC: 7) — los tres **CLOSED** con su comentario de
       evidencia medida. Ver §Cierre de issues
-- [ ] **T9 — Gates y pase adversarial** (AC: 9) — el pase precede a `gh pr create`, no a `done`
+- [x] **T9 — Gates y pase adversarial** (AC: 9) — el pase precede a `gh pr create`, no a `done`. Gates verdes
+      con exit code impreso; el pase se ejecutó **antes** de abrir la PR y encontró un GRAVE y un SERIO, ambos
+      corregidos. Su segunda ronda es **autorevisión** por muerte repetida del subagente — limitación declarada
+      en §Pase adversarial
 
 ## Prosa podrida — las siete correcciones
 
@@ -471,6 +474,7 @@ conteo del baseline (21 pares).
 - `api/tests/Unit/Shared/Architecture/Fixture/ConstraintResolution/ResolvableFixtureConstraint.php`
 - `api/tests/Unit/Shared/Architecture/Fixture/ConstraintResolution/ResolvableFixtureConstraintValidator.php`
 - `api/tests/Unit/Shared/Architecture/Fixture/ConstraintResolution/StrandedFixtureConstraint.php`
+- `pwa/tests/dependency-cruiser-rules-are-not-vacuous.test.ts`
 
 **Modificado**
 
@@ -502,6 +506,8 @@ Todos desde corrida fresca, con el exit code impreso. Los logs quedan en `tmp/br
 | `make php.unit` | **0** | Suite completa: **2721 tests, 10835 assertions** |
 | `make php.unit c='--filter ConstraintValidatorResolutionGateTest'` | **0** | OK (3 tests, 4 assertions) — y **exit 2** con el movimiento rehecho |
 | `make php.unit c='--filter ErrorContractGateTest'` | **0** | OK (9 tests, 15 assertions) — evidencia de #589 |
+| `make pwa.test.unit` | **0** | 228 ficheros, **1241 tests** |
+| `make pwa.test.unit c='…rules-are-not-vacuous…'` | **0** | 6 tests — y **exit 2** con la ruta del barril tipografiada |
 | `make pwa.install` (`npm ci`) | **0** | Con la devDep dentro: 908 paquetes, 0 vulnerabilidades |
 
 El lado PWA no se ha tocado desde su corrida verde: la reversión de T4 y el guardrail son `api/` y `docs/`.
@@ -719,10 +725,43 @@ Lo que el pase costó y lo que devolvió:
   (`php.stan`, `php.deptrac`, `php.unit`, `php.quality`), y que habría llegado a `main` si la PR se hubiera
   abierto sobre «los gates están en verde».
 
-**Queda pendiente el pase adversarial completo** — el que se ejecutó fue de una sola hipótesis, la que el
-prompt alcanzó a fijar antes de morir. Las demás superficies del diff (las seis reglas del cruiser, el anclaje
-del colector, las siete correcciones de prosa) **no han recibido lectura hostil**. Relanzar el subagente antes
-de abrir la PR.
+#### Segunda ronda — AUTOREVISIÓN, con su limitación declarada
+
+El subagente hostil se intentó **tres veces** y murió las tres sin devolver informe (una por límite de sesión,
+dos por corte de proceso). La segunda ronda la ejecutó el propio autor. **Eso vale menos que una lectura
+hostil ajena y así queda registrado**: la regla de la casa pide un contexto distinto precisamente porque el
+autor no ve lo que dio por supuesto. Sergio decide si esto basta o si el pase se repite antes de mergear.
+
+Cubierto, con medida y comando:
+
+| Superficie | Resultado |
+|---|---|
+| **Vacuidad de las seis reglas** | Ninguna casa cero: `ui-is-foundational` 11 módulos, `components-root-is-foundational` **1**, `erpify-not-bounded-context` 31, `erpify-barrel-excludes-error-screens` **1** |
+| **`to.path` como array bajo `reachable`** | Se OR-ea en **todas** las entradas. Probado aislando: un array cuya 1.ª entrada no casa nada y la 2.ª es `^src/app/` sale rojo (1 violación); ídem con la 3.ª (31) |
+| **Anclaje del colector `classLike` de deptrac** | El `$` **restringe**, probado: con `…\Constraint$` bendecido, los cuatro `ConstraintViolation*` **sobrevivieron** en el baseline; un prefijo sin anclar se los habría tragado |
+| **Alcance del cruiser** | 0 módulos de `tests/`, 0 fuera de `src/` |
+| **`conditionNames`** | `uuid` resuelve a `dist/index.d.ts` y `inversify` a `lib/index.js`; con `doNotFollow: node_modules` no se entra en ellos, así que no hay riesgo de grafo browser-vs-node |
+| **Las siete cifras de prosa** | Reproducen **exactas**: 17 aristas / 7 `type-only`, 24 capacidades, 0 barriles, 567 imports profundos, 0 profundos a `erpify`, 10 de 11 ficheros de `ui`, 26 seams |
+| **Cifras de #438** | Reproducen: 46 / 0 Domain / 1 Application / 16 en `Infrastructure/Security/` / 28 declarativos + 2 runtime |
+| **Enlaces markdown añadidos** | Los 8 resuelven a fichero concreto |
+| **Comentarios prohibidos** | Cero story IDs y cero comentarios relativos al cambio en el código añadido |
+
+**Hallazgo — SERIO, corregido.** Dos reglas se anclan hoy en **un solo fichero** (`src/components/cn.ts` y
+`src/components/erpify/index.ts`). Si cualquiera se renombra o se disuelve, su regla pasa a casar cero y
+**aprueba en silencio para siempre** — indistinguible de una regla que corrió y no encontró nada. Es el mismo
+patrón que todo este lote combate, y el config no traía la autoprotección que sí lleva cada gate de
+`api/tests/Unit/Shared/Architecture/`. Añadido
+`pwa/tests/dependency-cruiser-rules-are-not-vacuous.test.ts`: lee el config, extrae cada `from.path` y exige
+que seleccione ≥1 módulo. **Su rojo está provocado** — con la ruta del barril tipografiada, exit 2 nombrando
+exactamente la regla vacua y las otras tres en verde.
+
+**Falsa alarma propia, y merece registro porque es del tipo que engaña.** Al probar el array leí las primeras
+seis líneas de la salida y concluí que la 2.ª entrada no disparaba. No era cierto: la 3.ª generaba 31
+violaciones que ordenaban primero y tapaban la única de la 2.ª. Contar por regla en vez de leer `head` lo
+deshizo. Un `head` sobre una salida ordenada es una medida sesgada.
+
+**Superficies que NO recibieron lectura hostil**: si `to:` de cada regla es el correcto (sólo se comprobó
+`from:`), y el cuerpo del `.cjs` frente a una config de dependency-cruiser idiomática.
 
 ### PR
 
