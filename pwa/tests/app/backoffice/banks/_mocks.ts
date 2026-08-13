@@ -1,7 +1,5 @@
 import { vi } from "vitest";
 import type { BankRealtimeHandlers } from "@/context/backoffice/bank/infrastructure/bankRealtime";
-import type { BankSearchPage } from "@/context/backoffice/bank/domain/BankRepository";
-import { toResourcePage } from "@/context/backoffice/bank/infrastructure/bankResourcePage";
 
 /**
  * Shared `vi.mock` factories for the banks test suite. Each test still declares
@@ -26,68 +24,22 @@ export function routerMock(
   };
 }
 
-function required<T>(fn: T | undefined, name: string): T {
-  if (!fn) throw new Error(`${name} stub not provided to containerMock`);
-  return fn;
-}
-
-function runOf(handler: object | undefined): ((arg: unknown) => Promise<unknown>) | undefined {
-  return handler && "run" in handler
-    ? (handler as { run: (arg: unknown) => Promise<unknown> }).run
-    : undefined;
-}
-
-function followOf(handler: object | undefined): ((link: string) => Promise<unknown>) | undefined {
-  return handler && "follow" in handler
-    ? (handler as { follow: (link: string) => Promise<unknown> }).follow
-    : undefined;
-}
-
 /**
- * Synthesizes the generic resource-toolkit adapter keys the banks list page now
- * resolves (`BackOfficeBankCrudRepository` / `BackOfficeBankResourceNavigator`)
- * from the bespoke use-case / navigator stubs a spec already wires up — mirroring
- * the production adapters (`{ banks }` → `{ items }` via `toResourcePage`). Specs
- * keep asserting on the same `searchRun`/`deleteRun`/`findRun`/`follow` spies.
- */
-function synthesizeAdapter(token: string, handlers: Record<string, object>): object | undefined {
-  if (token === "BackOfficeCountBanks") {
-    // The list header reads the banks total through this use case. Specs that
-    // don't care about the count get a stub resolving to 0; one that does wires
-    // its own `BackOfficeCountBanks` stub, which `containerMock` returns first.
-    return { run: async () => 0 };
-  }
-  if (token === "BackOfficeBankCrudRepository") {
-    const search = runOf(handlers.BackOfficeSearchBanks);
-    const find = runOf(handlers.BackOfficeFindBank);
-    const remove = runOf(handlers.BackOfficeDeleteBank);
-    if (!search && !find && !remove) return undefined;
-    return {
-      search: async (criteria: unknown) =>
-        toResourcePage(
-          (await required(search, "BackOfficeSearchBanks")(criteria)) as BankSearchPage,
-        ),
-      find: (id: string) => required(find, "BackOfficeFindBank")(id),
-      delete: (id: string) => required(remove, "BackOfficeDeleteBank")(id),
-    };
-  }
-  if (token === "BackOfficeBankResourceNavigator") {
-    const follow = followOf(handlers.BackOfficeBankSearchNavigator);
-    if (!follow) return undefined;
-    return {
-      follow: async (link: string) => toResourcePage((await follow(link)) as BankSearchPage),
-    };
-  }
-  return undefined;
-}
-
-/**
- * DI container mock that resolves the given tokens to their use-case stubs and
- * throws on anything unexpected — mirroring the real container's behaviour.
- * Handlers are typed loosely (a use case may expose `run`, a navigator `follow`,
- * etc.); call sites recover the precise type through `container.get<T>(token)`.
- * The two generic bank resource-toolkit adapter keys are synthesized on demand
- * from the bespoke bank stubs, so list-page specs need not wire them explicitly.
+ * DI container mock that resolves the given tokens to their stubs and throws on
+ * anything unexpected — mirroring the real container's behaviour. Handlers are
+ * typed loosely (a repository exposes `search`/`find`/`delete`, a navigator
+ * `follow`, a use case `run`); call sites recover the precise type through
+ * `container.get<T>(token)`.
+ *
+ * Bind each token in the role the page resolves it. The resource toolkit reads
+ * and bulk-mutates through `BackOfficeBankCrudRepository` (`search` for a page
+ * load, `find` + `delete` for the bulk pre-probe and removal) and paginates
+ * through `BackOfficeBankResourceNavigator` (`follow`) — both already in the
+ * generic `{ items }` page shape — while a row's own delete button resolves the
+ * `BackOfficeDeleteBank` use case directly, so a spec exercising both delete
+ * paths points them at the same spy. Leaving `BackOfficeCountBanks` unbound is a
+ * supported case: `useBanksCount` swallows the resolution failure and the header
+ * total stays at its default.
  */
 export function containerMock(handlers: Record<string, object>) {
   return {
@@ -95,8 +47,6 @@ export function containerMock(handlers: Record<string, object>) {
       get: (token: string) => {
         const handler = handlers[token];
         if (handler) return handler;
-        const adapter = synthesizeAdapter(token, handlers);
-        if (adapter) return adapter;
         throw new Error(`Unexpected DI token ${token}`);
       },
     },
@@ -157,10 +107,10 @@ export async function bankRealtimeMock(capture?: (handlers: BankRealtimeHandlers
 /**
  * Complete mock kit for `BanksListPage` specs: each field named after a module
  * is the ready-made `vi.mock` FACTORY for it (navigation, DI container wired to
- * the search/delete/find use cases, toast, `bankRealtime`), alongside the spies
- * they resolve to. The page's realtime handlers land on `realtime.handlers`, so
- * specs can drive Mercure events directly (reset it in `beforeEach`). Build the
- * kit inside `vi.hoisted` and hand each factory to the matching `vi.mock`:
+ * the tokens the page resolves, toast, `bankRealtime`), alongside the spies they
+ * resolve to. The page's realtime handlers land on `realtime.handlers`, so specs
+ * can drive Mercure events directly (reset it in `beforeEach`). Build the kit
+ * inside `vi.hoisted` and hand each factory to the matching `vi.mock`:
  *
  * ```ts
  * const mocks = await vi.hoisted(async () => (await import("./_mocks")).banksListPageMocks());
@@ -179,9 +129,11 @@ export function banksListPageMocks() {
     navigation: () => routerMock(),
     container: () =>
       containerMock({
-        BackOfficeSearchBanks: { run: spies.searchRun },
-        BackOfficeDeleteBank: { run: spies.deleteRun },
-        BackOfficeFindBank: { run: spies.findRun },
+        BackOfficeBankCrudRepository: {
+          search: spies.searchRun,
+          find: spies.findRun,
+          delete: spies.deleteRun,
+        },
       }),
     toast: () => toastNotifierMock(),
     bankRealtime: () =>

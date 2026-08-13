@@ -6,7 +6,7 @@ vi.mock("next/navigation", async () => (await import("./_mocks")).routerMock());
 
 const searchRun = vi.hoisted(() => vi.fn());
 vi.mock("@/context/shared/dependency-injection/infrastructure/Container", async () =>
-  (await import("./_mocks")).containerMock({ BackOfficeSearchBanks: { run: searchRun } }),
+  (await import("./_mocks")).containerMock({ BackOfficeBankCrudRepository: { search: searchRun } }),
 );
 
 vi.mock("@/context/shared/notification/infrastructure/Toast", async () =>

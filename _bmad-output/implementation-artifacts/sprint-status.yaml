@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-08-10
+last_updated: 2026-08-12
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -364,7 +364,7 @@ development_status:
   br-4c-602-observabilidad-throttle-recuperacion: done
   br-5-ciclo-de-vida-iam-session: backlog
   br-6-gates-arquitectura-ci: backlog
-  br-7-listas-backoffice: backlog
+  br-7-listas-backoffice: review
   br-8-operabilidad: backlog
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.

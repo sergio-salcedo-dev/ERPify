@@ -81,9 +81,10 @@ export function isBankSingleResponse(value: unknown): value is BankSingleRespons
   return isObjectRecord(value) && isBankPrimitives(value.data);
 }
 
-// Write-path responses (POST/PUT) omit accountCount — the serialization groups on
-// those controllers don't include GROUP_ACCOUNT_COUNT, which is reserved for reads.
-// Default to 0 when the field is absent so create()/update() never throw a guard error.
+// Write-path responses (POST/PUT) carry no accountCount: each view has its own Resource
+// DTO on the server, and the create/update ones are deliberately the narrowest bank view —
+// the count belongs to the read views, which compose it from the account projection. So the
+// field is optional here, and a write response that omits it is valid rather than malformed.
 function isBankWriteSingleResponse(
   value: unknown,
 ): value is { data: Omit<BankPrimitives, "accountCount"> & { accountCount?: number } } {

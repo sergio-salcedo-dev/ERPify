@@ -27,7 +27,7 @@ const searchRun = vi.hoisted(() => vi.fn());
 const deleteRun = vi.hoisted(() => vi.fn());
 vi.mock("@/context/shared/dependency-injection/infrastructure/Container", async () =>
   (await import("./_mocks")).containerMock({
-    BackOfficeSearchBanks: { run: searchRun },
+    BackOfficeBankCrudRepository: { search: searchRun },
     BackOfficeDeleteBank: { run: deleteRun },
   }),
 );

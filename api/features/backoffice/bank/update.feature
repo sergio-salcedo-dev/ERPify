@@ -45,6 +45,45 @@ Feature: Update a bank
     And The Mercure update property "type" should be equal to "bank.updated"
     And The Mercure update property "bank.shortName" should be equal to "UB"
 
+  # The idempotence lives in the aggregate, so a PUT whose canonical forms match what is stored writes
+  # nothing: no UPDATE, no regulatory change row, no stored event, no outbox message — and `updated_at`
+  # stands. The payload is deliberately not byte-identical to the stored row (untrimmed name, lower-case
+  # short name) so the scenario also pins that equality is decided after canonicalization, never on the
+  # raw request body.
+  Scenario: A redundant update to the stored values is an idempotent no-op with no event
+    Given I add "Content-Type" header equal to "application/json"
+    And I add "Accept" header equal to "application/json"
+    And I add "X-Correlation-Id" header equal to "0190ffff-0000-7abc-8def-00bb00bb00bb"
+    And I execute the SQL query "INSERT INTO bank (id, name, name_normalized, short_name, created_at, updated_at) VALUES ('ed17ed00-0000-7000-8000-000000000002', 'Steady Bank', 'steady bank', 'SB', '2026-01-01 10:00:00', '2026-01-01 10:00:00')" on connection "seed"
+    When I send a PUT request to "/backoffice/banks/ed17ed00-0000-7000-8000-000000000002" with body:
+    """
+    {"name": "  Steady Bank  ", "shortName": "sb"}
+    """
+    Then the response status code should be 200
+    And the JSON node "data.name" should be equal to "Steady Bank"
+    And the JSON node "data.shortName" should be equal to "SB"
+    And the JSON node "data.updatedAt" should be equal to "2026-01-01T10:00:00+00:00"
+    And there should be 0 events stored for aggregate "ed17ed00-0000-7000-8000-000000000002" named "erpify.backoffice.bank.updated"
+    And 0 outbox events were created on the queue "async"
+    And 0 notification emails were sent
+    And I execute the SQL query "SELECT name, name_normalized, short_name, updated_at::text AS updated_at FROM bank WHERE id = 'ed17ed00-0000-7000-8000-000000000002'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "name": "Steady Bank",
+        "name_normalized": "steady bank",
+        "short_name": "SB",
+        "updated_at": "2026-01-01 10:00:00"
+      }
+    ]
+    """
+    And I execute the SQL query "SELECT action FROM audit_log WHERE level = 'change' AND correlation_id = '0190ffff-0000-7abc-8def-00bb00bb00bb'"
+    And the SQL result as JSON should be:
+    """
+    []
+    """
+
   Scenario: Update a bank that does not exist returns a 404 bank-not-found Problem Details body
     Given I add "Content-Type" header equal to "application/json"
     And I add "Accept" header equal to "application/json"

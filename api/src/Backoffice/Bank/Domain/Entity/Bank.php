@@ -124,13 +124,22 @@ final class Bank extends AggregateRoot implements AuditedEntity
         };
     }
 
+    /**
+     * A rename whose canonical forms match the ones already stored is a no-op — nothing mutates,
+     * `updatedAt` stands and nothing is recorded — so a redundant PUT stays idempotent.
+     */
     public function rename(string $name, string $shortName): void
     {
         $normalizedText = NormalizedText::from($name);
+        $canonicalShortName = NormalizedText::toAsciiUpper($shortName);
+
+        if ($this->alreadyStores($normalizedText, $canonicalShortName)) {
+            return;
+        }
 
         $this->name = $normalizedText->display;
         $this->nameNormalized = $normalizedText->normalized;
-        $this->shortName = NormalizedText::toAsciiUpper($shortName);
+        $this->shortName = $canonicalShortName;
         $now = SystemClock::now();
         $this->updatedAt = $now;
 
@@ -178,5 +187,17 @@ final class Bank extends AggregateRoot implements AuditedEntity
             ->atPath('name')
             ->addViolation()
         ;
+    }
+
+    /**
+     * Equality of the three persisted columns against the forms a rename would write, never of the two
+     * raw arguments — the display name is trimmed and the short name accent-folded to upper-case ASCII
+     * first. Comparing the stored `nameNormalized` rather than re-deriving it from the display name is
+     * what lets a rename repair a twin that an older normalization rule left out of step.
+     */
+    private function alreadyStores(NormalizedText $normalizedText, string $shortName): bool
+    {
+        return [$this->name, $this->nameNormalized, $this->shortName]
+            === [$normalizedText->display, $normalizedText->normalized, $shortName];
     }
 }

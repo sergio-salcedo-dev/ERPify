@@ -118,7 +118,9 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
 
     /**
      * Re-canonicalizes the IBAN and upper-cases the BIC exactly as {@see create()} does, so an edited
-     * account stores the same canonical forms as a freshly created one. Records an updated event whose
+     * account stores the same canonical forms as a freshly created one. An edit that canonicalizes to
+     * the state already stored is a no-op — nothing mutates, `updatedAt` stands and nothing is
+     * recorded — so a redundant PUT stays idempotent. Otherwise records an updated event whose
      * PII-free snapshot reflects the new state and bumped `updatedAt`.
      */
     public function update(
@@ -128,9 +130,16 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         ?string $alias,
         Currency $currency,
     ): void {
+        $canonicalIban = self::canonicalizeIban($iban);
+        $canonicalBic = self::canonicalizeBic($bic);
+
+        if ($this->alreadyStores($holderName, $canonicalIban, $canonicalBic, $alias, $currency)) {
+            return;
+        }
+
         $this->holderName = $holderName;
-        $this->iban = self::canonicalizeIban($iban);
-        $this->bic = self::canonicalizeBic($bic);
+        $this->iban = $canonicalIban;
+        $this->bic = $canonicalBic;
         $this->alias = $alias;
         $this->currency = $currency;
 
@@ -235,6 +244,22 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
             AuditWriteOperation::UPDATED => 'BANK_ACCOUNT_UPDATED',
             AuditWriteOperation::DELETED => 'BANK_ACCOUNT_DELETED',
         };
+    }
+
+    /**
+     * Equality of the state the aggregate would persist, never of the raw arguments: `iban` and `bic`
+     * arrive canonicalized, `alias` deliberately does not — it is a nullable column with no
+     * normalization anywhere, so `''` and `null` are two different stored states.
+     */
+    private function alreadyStores(
+        string $holderName,
+        string $canonicalIban,
+        ?string $canonicalBic,
+        ?string $alias,
+        Currency $currency,
+    ): bool {
+        return [$this->holderName, $this->iban, $this->bic, $this->alias, $this->currency]
+            === [$holderName, $canonicalIban, $canonicalBic, $alias, $currency];
     }
 
     private static function canonicalizeIban(string $iban): string
