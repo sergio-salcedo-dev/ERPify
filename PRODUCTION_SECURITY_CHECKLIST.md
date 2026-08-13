@@ -214,7 +214,12 @@ you change anything here.
       the request cycle on the HTTP path, so **the acting administrator's `ip` and
       `user_agent` are retained indefinitely along with their `actor_id`** — clearable only
       if that administrator is themself erased, since the actor-axis pass matches by
-      `actor_id`. The CLI paths write both columns NULL.
+      `actor_id`. The CLI paths write both columns NULL. **Weighed and accepted:** stripping
+      request metadata at write time would take attribution off the one class of row whose
+      purpose is attribution, and a bounded floor for `GDPR_ERASURE_EXECUTED` alone splits
+      one rule in two for a difference no reader infers from the rows. Revisit at the first
+      of — a production deployment that erases a real subject, an administrator who leaves
+      without being erased, or a DPO review.
       Because the operating role can read the record that audits it, the record's
       attribution is guarded on the write side: **erasure refuses any subject still
       carrying `ADMIN`** (409 `administrator-erasure-requires-demotion`), so an

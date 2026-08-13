@@ -234,14 +234,22 @@ vía de eliminación y es **discrecional**: el pase de actor casa por `actor_id`
 limpian sólo si ese administrador es borrado a su vez. Los caminos por CLI no están expuestos: corren fuera
 de petición como `system`, con ambas columnas nulas.
 
-**Lo que esto no cierra, dicho para que no se lea como cerrado.** Las dos acciones de evidencia no tienen la
-misma retención correcta, sólo el mismo suelo de «más que el techo de `security`». `SUBJECT_ERASED` necesita
-*nunca*, porque su falsador es eterno. `ACTOR_TRAIL_ERASED` responde por marcas `actor_erased` en filas
-`change`, que se podan a los cinco años: retenerla para siempre **sobre-retiene al administrador actuante**
-más allá del punto en que algo pueda contrastarlo, que es justo la minimización que la poda ejecuta. Ambas
-quedan exentas porque ambas deben sobrevivir al techo; acotar la segunda a un suelo, o no sellar metadata de
-petición en estas filas al escribirlas, son decisiones de privacidad con su propio coste y se registran sin
-tomarlas.
+**Sopesado y aceptado, no pasado por alto.** Las dos acciones de evidencia no tienen la misma retención
+correcta, sólo el mismo suelo de «más que el techo de `security`». `SUBJECT_ERASED` necesita *nunca*, porque
+su falsador es eterno. `ACTOR_TRAIL_ERASED` responde por marcas `actor_erased` en filas `change`, que se
+podan a los cinco años: retenerla para siempre **sobre-retiene al administrador actuante** más allá del punto
+en que algo pueda contrastarlo, que es justo la minimización que la poda ejecuta. Aun así quedan exentas las
+dos, y las dos formas más estrechas se consideraron y se descartaron: un suelo acotado para
+`ACTOR_TRAIL_ERASED` parte una regla en dos por una diferencia que ningún lector inferiría de las filas, y no
+sellar metadata de petición al escribirlas le quitaría atribución a la única clase de fila cuyo propósito
+**es** la atribución — un borrado que nadie puede situar es evidencia más débil de lo que una dirección
+sobre-retenida es un daño. La exposición está acotada en la práctica: los administradores son pocos, la vía
+de eliminación existe vía su propio borrado, y los caminos por CLI escriben ambas columnas nulas.
+
+**Disparador de revisita**, para que la aceptación no se vuelva invisible: lo primero que ocurra entre un
+despliegue en producción que borre a un sujeto real, un administrador que se marche y no sea borrado, o una
+revisión de DPO. En ese momento la opción es el suelo acotado, y este párrafo es el registro de que fue una
+elección.
 
 **«Cerrado» significa cerrado por revisión, no por gate.** Nada automatizado impide una cuarta política:
 `git grep` sobre la tabla es el único control y no está cableado a ninguna puerta, de modo que una mutación

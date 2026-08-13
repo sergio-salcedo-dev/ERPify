@@ -39,13 +39,21 @@ namespace Erpify\Shared\Audit\Domain;
  * `actor_id`, so these columns clear only if that administrator is themself erased. The operator CLI paths
  * are unaffected — they run off-request as `system`, with both columns null.
  *
- * **What it deliberately does not settle.** The two actions do not have the same correct retention, only
+ * **Weighed and accepted, not overlooked.** The two actions do not have the same correct retention, only
  * the same floor of "longer than 365 days". `SUBJECT_ERASED` needs never, because its falsifier is eternal.
  * `ACTOR_TRAIL_ERASED` answers for `actor_erased` marks on `change` rows, which are themselves pruned at
  * five years — so retaining it for ever over-retains the acting administrator past the point anything could
- * check it against. Both are exempt here because both must outlive the ceiling; narrowing the second to a
- * bounded floor, or keeping request metadata off these rows at write time, are privacy calls with their own
- * trade-offs, recorded rather than decided.
+ * check it against. Both are exempt anyway. The two narrower shapes were considered and declined: a bounded
+ * floor for `ACTOR_TRAIL_ERASED` splits one rule into two for a difference no reader would infer from the
+ * rows, and keeping request metadata off these rows at write time would strip attribution from the one class
+ * of row whose purpose *is* attribution — an erasure nobody can place is weaker evidence than an
+ * over-retained address is a harm. The exposure is bounded in practice: administrators are few, the removal
+ * path exists through their own erasure, and the CLI paths write both columns null.
+ *
+ * **Revisit trigger**, so the acceptance does not become invisible: the first of a production deployment
+ * that erases a real subject, an administrator who leaves and is not erased, or a DPO review — whichever
+ * comes first. At that point the choice is the bounded floor, and this paragraph is the record that it was
+ * a choice.
  */
 final class AuditErasureEvidence
 {
