@@ -95,6 +95,95 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
     }
 
     /**
+     * Several PII-bearing entities in ONE flush, which is what puts several keystore mints inside a single
+     * `onFlush`: `AuditWriteCaptureListener` loops the scheduled entities and each iteration reaches
+     * `SodiumEnvelopeEncryptor::mint()`, an `INSERT` plus a follow-up `SELECT` issued on the flush
+     * connection while the UnitOfWork is still being iterated. Running side queries there is the hazard.
+     *
+     * The load-bearing assertion is the **cross-open**, not the count: every account is sealed under its
+     * own scope AND its own row id, so a ciphertext from one account must fail to authenticate under the
+     * sibling minted microseconds earlier in the same flush. A per-account count would stay green if the
+     * listener reused one scope, or one AAD, for every entity in the batch.
+     */
+    public function testSeveralPersonalEntitiesInOneFlushEachGetTheirOwnScopeAndAad(): void
+    {
+        $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
+            $bankId = Uuid::generate();
+            $token = \strtoupper(\substr(\str_replace('-', '', $bankId), 0, 8));
+            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token));
+            $em->flush(); // the bank must exist before either account's foreign key
+
+            $firstId = Uuid::generate();
+            $secondId = Uuid::generate();
+            $firstHolder = 'Ana Ruiz';
+            $secondHolder = 'Bruno Salas';
+            $iban = 'ES9121000418450200051332';
+            $em->persist(BankAccount::create($firstId, $bankId, $firstHolder, $iban, 'CAIXESBBXXX'));
+            $em->persist(
+                BankAccount::create($secondId, $bankId, $secondHolder, 'DE89370400440532013000', 'DEUTDEFFXXX'),
+            );
+            $em->flush(); // one flush, two mints
+
+            $encryptor = $this->encryptor();
+            $first = $this->sealedHolderOf($connection, $firstId, $firstHolder);
+            $second = $this->sealedHolderOf($connection, $secondId, $secondHolder);
+
+            $sealedPairs = [[$firstId, $firstHolder, $first], [$secondId, $secondHolder, $second]];
+
+            foreach ($sealedPairs as [$id, $holder, $sealed]) {
+                $aad = AuditPiiAad::for('holderName', PiiFieldPosition::New, $sealed['auditLogId'])->toString();
+                $this->assertSame(
+                    $holder,
+                    $encryptor->decrypt(EncryptionScopeId::forBankAccount($id), $sealed['ciphertext'], $aad),
+                    'each account opens under its own scope and its own row id',
+                );
+            }
+
+            // The cross-open: the first account's ciphertext under the second account's scope and row id.
+            $crossAad = AuditPiiAad::for('holderName', PiiFieldPosition::New, $second['auditLogId'])->toString();
+
+            try {
+                $encryptor->decrypt(
+                    EncryptionScopeId::forBankAccount($secondId),
+                    $first['ciphertext'],
+                    $crossAad,
+                );
+                $this->fail("a sibling minted in the same flush must not open the other account's ciphertext");
+            } catch (DecryptionFailed) {
+                // expected: scope and row id are both bound, per entity, not per flush
+            }
+        });
+    }
+
+    /**
+     * The per-account checks that must hold whatever else shared the flush, plus the sealed holder the
+     * cross-open needs afterwards.
+     *
+     * @return array{ciphertext: string, auditLogId: string}
+     */
+    private function sealedHolderOf(Connection $connection, string $accountId, string $holder): array
+    {
+        $row = $this->changeRow($connection, $accountId, 'BANK_ACCOUNT_CREATED');
+        $metadata = $row['metadata'] ?? null;
+        $auditLogId = $row['id'] ?? null;
+        $this->assertIsString($metadata);
+        $this->assertIsString($auditLogId);
+
+        $this->assertSame('BankAccount:' . $accountId, $row['encryption_scope_id'] ?? null);
+        $this->assertStringNotContainsString($holder, $metadata, 'no holder survives in clear');
+        $this->assertSame(
+            1,
+            $this->keystoreRowsFor($connection, 'BankAccount:' . $accountId),
+            'each account mints exactly one wrapped DEK, even sharing a flush',
+        );
+
+        $decoded = \json_decode($metadata, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($decoded);
+
+        return ['ciphertext' => $this->sealedCiphertext($decoded, 'holderName'), 'auditLogId' => $auditLogId];
+    }
+
+    /**
      * @param callable(EntityManagerInterface, Connection): void $work
      */
     private function inRolledBackTransaction(callable $work): void
