@@ -133,6 +133,16 @@
 #     the control, in exactly the same silence. Concretely, and worth naming because the exception below
 #     invites the opposite reading: `audit_log.actor_id` and `event_store.aggregate_id` hold person ids,
 #     have no entity, and are OUTSIDE the control. It reaches four columns plus one.
+#   - ON THE ACTOR AXIS THERE IS NO LONGER A CEILING BEHIND THAT GAP EITHER. Retention used to bound
+#     `audit_log.actor_id` residue whatever this control missed: a row whose erasure never ran aged out with
+#     its level. `Erpify\Shared\Audit\Domain\AuditErasureEvidence::ACTIONS` exempts `GDPR_ERASURE_EXECUTED`
+#     and `GDPR_SUBJECT_ERASED` from the prune for ever, because evidence may not expire before the thing it
+#     attests — so on those two actions the residue is unbounded in TIME as well as undetected, and the only
+#     removal path is `DbalAuditActorAnonymiser`, which matches on `actor_id` and therefore runs only if that
+#     administrator is themself erased. The reachable case is an administrator offboarded by disabling the
+#     account instead of through `identity:gdpr:erase-subject`: their `actor_id`, `ip` and `user_agent` then
+#     persist indefinitely, and nothing here reports it. The trade-off is argued at `AuditErasureEvidence`
+#     with a revisit trigger; this line is the record that no control covers it meanwhile.
 #   - IT PROVES THE WIRING IS DECLARED, NOT THAT THE COLLECTION WAS BUILT. The coverage gate compares declared
 #     keys against these lines and reads `config/services.yaml` for the tag and the tagged iterator — all
 #     static. Whether the compiled container actually holds one source per line is pinned by

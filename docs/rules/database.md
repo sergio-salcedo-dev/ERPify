@@ -60,7 +60,12 @@
   exemption keys on `action`, never on `level`, because `action` is what the detective control reads:
   discriminating by different columns is how the two would drift apart in silence.
   The row carries PII (`actor_id`, `ip`, `user_agent`), so the bounded window is also GDPR data
-  minimisation; outright erasure is the second policy — the `audit:gdpr:erase` command's in-place
+  minimisation — **on every row the window still covers.** On an exempt row it is not, and that is the price
+  of the exemption rather than an oversight: those rows keep the same triple indefinitely, and their only
+  removal path is the actor-axis erasure below, which matches on `actor_id` and so reaches an acting
+  administrator's row only if that administrator is themself erased (the operator CLI paths run off-request
+  as `system`, with `ip` and `user_agent` null). The cost is weighed, and carries a revisit trigger, at
+  `AuditErasureEvidence`. Outright erasure is the second policy — the `audit:gdpr:erase` command's in-place
   anonymising `UPDATE` (`actor_id` → a fresh random UUID per subject; `ip`/`user_agent` → `[REDACTED]`),
   never row deletion. The third is the resource axis, which pseudonymises `resource_id` and — only where
   `actor_type = anonymous`, the one case where the row records no discriminant for whose address it holds —

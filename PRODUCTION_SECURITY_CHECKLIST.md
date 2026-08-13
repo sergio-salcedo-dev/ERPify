@@ -207,7 +207,13 @@ you change anything here.
       role-change records) carry a 365-day privacy *ceiling* and are pruned — do
       not cite the floor as a retention guarantee over access evidence. **The one exception
       is the trail's own proof that it executed an erasure** (`GDPR_SUBJECT_ERASED`,
-      `GDPR_ERASURE_EXECUTED`, listed in `AuditErasureEvidence`): the prune skips those,
+      `GDPR_ERASURE_EXECUTED`, listed in `AuditErasureEvidence` and classified in
+      `api/.audit-evidence-actions`, which `make php.lint.audit-evidence` keeps equal to that
+      closed set in both directions — be exact about what that buys: it proves the two agree
+      for actions a writer declares as a **string constant taken through its constructor**, and
+      it never judges a classification, so an `ordinary` line over real evidence, an inline
+      literal, or a backed enum all pass; the registry header enumerates the rest):
+      the prune skips those,
       because the `dek_keystore` tombstone they answer for is kept for ever and the
       reconciler anti-joins the two with no date bound, so an expiring proof makes that
       pair unsatisfiable. Be exact about the cost when citing it: those rows are minted in

@@ -43,6 +43,17 @@ final class AuditLogPrunerFunctionalTest extends KernelTestCase
         $this->inRolledBackTransaction(function (Connection $connection): void {
             $anchor = new DateTimeImmutable(self::ANCHOR);
             $writer = new DbalAuditLogWriter($connection);
+            $policy = new AuditRetentionPolicy(90, 365);
+
+            // At a batch of 2 the drain loop, which stops only on a short batch, issues one DELETE per
+            // eligible row at all three levels — so without this the runtime tracks whatever the shared
+            // database happens to hold rather than what this case seeds, and `$removed` can only be
+            // asserted as a lower bound. One statement bounds it and makes the count exact; the cut-off is
+            // the latest of the plan's own thresholds, so it is a superset of everything the sweep can take.
+            $connection->executeStatement(
+                'DELETE FROM audit_log WHERE occurred_on < :cutoff',
+                ['cutoff' => $this->leastRestrictiveThreshold($policy, $anchor)],
+            );
 
             // Three stale activity rows so a batch of 2 must loop (2 then 1) to drain them.
             $staleActivity = [
@@ -60,9 +71,9 @@ final class AuditLogPrunerFunctionalTest extends KernelTestCase
                 new NullLogger(),
                 self::SMALL_BATCH,
             );
-            $removed = $pruner->prune(...(new AuditRetentionPolicy(90, 365))->thresholdsAt($anchor));
+            $removed = $pruner->prune(...$policy->thresholdsAt($anchor));
 
-            $this->assertGreaterThanOrEqual(4, $removed, 'three stale activity + one stale security removed');
+            $this->assertSame(4, $removed, 'three stale activity + one stale security, and nothing else');
 
             foreach ($staleActivity as $id) {
                 $this->assertSame(0, $this->countRowsForId($connection, $id), 'activity past 90d is pruned');
@@ -156,6 +167,29 @@ final class AuditLogPrunerFunctionalTest extends KernelTestCase
     private function daysBefore(DateTimeImmutable $anchor, int $days): DateTimeImmutable
     {
         return $anchor->sub(new DateInterval('P' . $days . 'D'));
+    }
+
+    /**
+     * The latest of the plan's per-level cut-offs, derived rather than written as a literal so a change to
+     * the policy cannot quietly return the backlog while every assertion here stays green.
+     */
+    private function leastRestrictiveThreshold(AuditRetentionPolicy $policy, DateTimeImmutable $anchor): string
+    {
+        $latest = null;
+
+        foreach ($policy->thresholdsAt($anchor) as $auditRetentionThreshold) {
+            if (null === $latest || $auditRetentionThreshold->deleteBefore > $latest) {
+                $latest = $auditRetentionThreshold->deleteBefore;
+            }
+        }
+
+        $this->assertInstanceOf(
+            DateTimeImmutable::class,
+            $latest,
+            'the policy produced no threshold, so this bound covers nothing',
+        );
+
+        return $latest->format(DateTimeImmutable::ATOM);
     }
 
     private function inRolledBackTransaction(callable $body): void

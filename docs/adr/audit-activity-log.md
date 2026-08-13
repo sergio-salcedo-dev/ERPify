@@ -224,6 +224,15 @@ detectivo: discriminar por columnas distintas es exactamente cómo los dos contr
 Va como dato en `AuditRetentionThreshold` —no como literal dentro del SQL del adaptador— y viaja en **todas**
 las líneas del plan, no sólo en la de `security`, para que mover la evidencia de nivel no reabra el agujero.
 
+Centralizar los literales en `AuditErasureEvidence` impide que un token **derive**: renombrarlo rompe la
+compilación en vez de devolver la fila a la barrida en silencio. No dice nada del otro sentido —un miembro
+**ausente**, un tercer contexto que acuña su propia acción de evidencia sin apuntar a esa clase—, y esa
+omisión falla hacia el borrado. Por eso el conjunto cerrado tiene registro: `api/.audit-evidence-actions`
+clasifica cada acción que `src` declara como constante en un colaborador de `AuditLogger`, y
+`make php.lint.audit-evidence` comprueba completitud, obsolescencia y acuerdo en **ambos** sentidos con
+`AuditErasureEvidence::ACTIONS`. Lo que un verde no prueba está en la cabecera del registro —sobre todo que
+nunca juzga la clasificación: un `ordinary` sobre evidencia real pasa.
+
 **Qué se vuelve inmortal, dicho entero porque es la exención lo que lo vuelve inmortal.** Estas filas se
 acuñan por `SealedAuditEntryFactory`, que sella metadata de petición en **toda** entrada; un borrado
 ejecutado por HTTP escribe por tanto el `ip` y el `user_agent` del administrador actuante junto a su

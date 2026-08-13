@@ -138,12 +138,24 @@ final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
      * two are seeded in the order the batch must visit them. Without the ordering in production this
      * mutation is only probabilistically observable, which is why the ordering is not merely a lock-order
      * concern.
+     *
+     * The batch of one is also why the backlog is cleared first: the drain loop stops only on a short batch,
+     * so at `batchSize = 1` it issues one `DELETE` per eligible row at all three levels — making the runtime
+     * a function of whatever the shared test database happens to hold rather than of what this case seeds.
+     * One statement bounds it, and the cutoff is the least restrictive of the three windows, so it is a
+     * superset of everything the sweep could take.
      */
     public function testItDrainsThePrunableBacklogEvenWhenAnExemptRowIsFirstInTheBatch(): void
     {
         $this->inRolledBackTransaction(function (Connection $connection): void {
             $anchor = new DateTimeImmutable(self::ANCHOR);
             $writer = new DbalAuditLogWriter($connection);
+
+            $policy = new AuditRetentionPolicy(90, 365);
+            $connection->executeStatement(
+                'DELETE FROM audit_log WHERE occurred_on < :cutoff',
+                ['cutoff' => $this->leastRestrictiveThreshold($policy, $anchor)],
+            );
 
             $evidence = $this->seedSecurityRow($writer, 'GDPR_SUBJECT_ERASED', $this->daysBefore($anchor, 500));
             $control = $this->seedSecurityRow($writer, 'BANK_ACCOUNTS_VIEWED', $this->daysBefore($anchor, 400));
@@ -154,7 +166,7 @@ final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
                 new NullLogger(),
                 1,
             );
-            $pruner->prune(...(new AuditRetentionPolicy(90, 365))->thresholdsAt($anchor));
+            $pruner->prune(...$policy->thresholdsAt($anchor));
 
             $this->assertSame(
                 0,
@@ -168,6 +180,31 @@ final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
     private function daysBefore(DateTimeImmutable $anchor, int $days): DateTimeImmutable
     {
         return $anchor->modify('-' . $days . ' days');
+    }
+
+    /**
+     * The latest of the plan's per-level cut-offs, so the bound is a superset of everything the sweep could
+     * take whatever the windows are. Derived rather than written as a literal: a duplicated `90` would let a
+     * change to the policy quietly return the backlog — and the O(backlog) round-trips with it — while every
+     * assertion here stayed green.
+     */
+    private function leastRestrictiveThreshold(AuditRetentionPolicy $policy, DateTimeImmutable $anchor): string
+    {
+        $latest = null;
+
+        foreach ($policy->thresholdsAt($anchor) as $auditRetentionThreshold) {
+            if (null === $latest || $auditRetentionThreshold->deleteBefore > $latest) {
+                $latest = $auditRetentionThreshold->deleteBefore;
+            }
+        }
+
+        $this->assertInstanceOf(
+            DateTimeImmutable::class,
+            $latest,
+            'the policy produced no threshold, so this bound covers nothing',
+        );
+
+        return $latest->format(DateTimeImmutable::ATOM);
     }
 
     /**
