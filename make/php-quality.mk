@@ -126,6 +126,19 @@ php.lint.event-bus: ## Event-dispatch boundary gate
 php.lint.audit-resource: ## Person-resource erasure classification gate
 	@$(PHP_TEST) bin/phpunit --filter='PersonResourceErasure.*GateTest'
 
+## —— Audit erasure-evidence action gate —————————————————————————————————————
+
+# Fails CI when an audit action declared as a constant on an AuditLogger collaborator carries no line in
+# api/.audit-evidence-actions, when a classified token no longer exists in src, or when the registry's
+# `evidence` half disagrees in either direction with AuditErasureEvidence::ACTIONS — the closed set the
+# retention prune binds. Evidence may not expire before the thing it attests: an erasure-evidence row taken
+# by the prune turns every correctly-shredded subject into a permanent reported divergence.
+#
+# Centralising the two literals already made a DRIFTED token impossible. This is the other direction — a
+# MISSING member, which fails toward deletion and which nothing detected.
+php.lint.audit-evidence: ## Audit erasure-evidence action classification gate
+	@$(PHP_TEST) bin/phpunit --filter=AuditEvidenceActionRegistryGateTest
+
 ## —— Persistent-transport policy gate ——————————————————————————————————————
 
 # Fails CI when a domain event whose AGGREGATE is a natural person is reachable from a
@@ -281,7 +294,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -299,7 +312,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -307,7 +320,7 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.md php.cs php.cs.dry-run \
         php.gherkin php.gherkin.rules \
         php.lint.doctrine php.lint.yaml \
-        php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource \
+        php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence \
         php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary \
         php.lint.composer-stability php.lint.prod-container \
         php.deptrac php.deptrac.baseline \

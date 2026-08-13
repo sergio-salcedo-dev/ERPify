@@ -138,12 +138,23 @@ final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
      * two are seeded in the order the batch must visit them. Without the ordering in production this
      * mutation is only probabilistically observable, which is why the ordering is not merely a lock-order
      * concern.
+     *
+     * The batch of one is also why the backlog is cleared first: the drain loop stops only on a short batch,
+     * so at `batchSize = 1` it issues one `DELETE` per eligible row at all three levels — making the runtime
+     * a function of whatever the shared test database happens to hold rather than of what this case seeds.
+     * One statement bounds it, and the cutoff is the least restrictive of the three windows, so it is a
+     * superset of everything the sweep could take.
      */
     public function testItDrainsThePrunableBacklogEvenWhenAnExemptRowIsFirstInTheBatch(): void
     {
         $this->inRolledBackTransaction(function (Connection $connection): void {
             $anchor = new DateTimeImmutable(self::ANCHOR);
             $writer = new DbalAuditLogWriter($connection);
+
+            $connection->executeStatement(
+                'DELETE FROM audit_log WHERE occurred_on < :cutoff',
+                ['cutoff' => $this->daysBefore($anchor, 90)->format(DateTimeImmutable::ATOM)],
+            );
 
             $evidence = $this->seedSecurityRow($writer, 'GDPR_SUBJECT_ERASED', $this->daysBefore($anchor, 500));
             $control = $this->seedSecurityRow($writer, 'BANK_ACCOUNTS_VIEWED', $this->daysBefore($anchor, 400));
