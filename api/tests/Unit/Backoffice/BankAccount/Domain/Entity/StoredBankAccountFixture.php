@@ -28,8 +28,6 @@ trait StoredBankAccountFixture
 
     private const string IBAN = 'DE89370400440532013000';
 
-    private const string BIC = 'DEUTDEFFXXX';
-
     protected function tearDown(): void
     {
         SystemClock::reset();

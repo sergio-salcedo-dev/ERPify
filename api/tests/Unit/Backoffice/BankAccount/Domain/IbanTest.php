@@ -41,5 +41,4 @@ final class IbanTest extends TestCase
         yield 'the three separators mixed' => ["at61\u{00A0}1904 3002\u{202F}3457 3201", $canonical];
         yield 'empty stays empty' => ['', ''];
     }
-
 }

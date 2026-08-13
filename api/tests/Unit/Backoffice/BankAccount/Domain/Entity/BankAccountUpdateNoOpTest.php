@@ -25,6 +25,8 @@ final class BankAccountUpdateNoOpTest extends TestCase
 {
     use StoredBankAccountFixture;
 
+    private const string BIC = 'DEUTDEFFXXX';
+
     public function testUpdateWithTheStoredValuesRecordsNothingAndLeavesUpdatedAtUntouched(): void
     {
         $account = $this->storedAccount(bic: self::BIC, alias: 'Treasury');
