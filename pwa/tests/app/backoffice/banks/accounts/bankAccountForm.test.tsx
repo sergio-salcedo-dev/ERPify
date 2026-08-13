@@ -218,4 +218,36 @@ describe("BankAccountForm — persistent mutation-error surface", () => {
     );
     expect(updateRun.mock.calls[0][1]).not.toHaveProperty("status");
   });
+
+  it("sends a canonicalised BIC and a filled alias, and collapses either back to null when cleared", async () => {
+    updateRun.mockResolvedValue(undefined);
+    render(
+      <BankAccountForm mode={PersistenceAction.UPDATING} bankId={BANK_ID} initial={INITIAL} />,
+    );
+
+    fireEvent.change(screen.getByTestId("bank-account-form__bic"), {
+      target: { value: "caix esbb xxx" },
+    });
+    fireEvent.change(screen.getByTestId("bank-account-form__alias"), {
+      target: { value: "Payroll" },
+    });
+    submit();
+
+    await waitFor(() => expect(updateRun).toHaveBeenCalled());
+    expect(updateRun).toHaveBeenCalledWith(
+      INITIAL.id,
+      expect.objectContaining({ bic: "CAIXESBBXXX", alias: "Payroll" }),
+    );
+
+    // Cleared back to empty: the optional collapses to null rather than "".
+    fireEvent.change(screen.getByTestId("bank-account-form__bic"), { target: { value: "" } });
+    fireEvent.change(screen.getByTestId("bank-account-form__alias"), { target: { value: "" } });
+    submit();
+
+    await waitFor(() => expect(updateRun).toHaveBeenCalledTimes(2));
+    expect(updateRun).toHaveBeenLastCalledWith(
+      INITIAL.id,
+      expect.objectContaining({ bic: null, alias: null }),
+    );
+  });
 });
