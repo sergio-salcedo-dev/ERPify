@@ -17,7 +17,7 @@ final class IbanFieldNormalizerTest extends TestCase
 {
     /**
      * The search value must be reduced to the same compact upper-case form the IBAN is stored in
-     * (spaces stripped, upper-cased), so a human-grouped or lower-case fragment still matches the
+     * (every separator the validator accepts stripped, upper-cased), so a human-grouped or lower-case fragment still matches the
      * column under eq/in/contains.
      */
     #[DataProvider('provideItReducesTheSearchValueToTheStoredCompactUpperFormCases')]

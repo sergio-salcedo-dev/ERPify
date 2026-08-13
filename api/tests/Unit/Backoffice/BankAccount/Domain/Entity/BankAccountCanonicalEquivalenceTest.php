@@ -37,16 +37,29 @@ final class BankAccountCanonicalEquivalenceTest extends TestCase
         $this->assertNoOp($account);
     }
 
+    /**
+     * `DEUT DEFF` is the only grouped BIC the edge lets through: `Assert\Bic` strips the space before it
+     * checks length and alphabet, and 9 raw characters still clear the command's `Length(max: 11)`. An
+     * 11-character BIC written with any grouping is 12 or more and is rejected before the aggregate,
+     * which is why this case uses the 8-character form and not the longer one.
+     */
     public function testUpdateComparesTheCanonicalBicSoSpacingOnlyDifferencesAreANoOp(): void
     {
-        $account = $this->storedAccount(bic: self::BIC);
+        $account = $this->storedAccount(bic: 'DEUTDEFF');
 
-        $account->update(self::HOLDER_NAME, self::IBAN, 'DEUT DEFF XXX', null, Currency::EUR);
+        $account->update(self::HOLDER_NAME, self::IBAN, 'DEUT DEFF', null, Currency::EUR);
 
-        $this->assertSame(self::BIC, $account->getBic());
+        $this->assertSame('DEUTDEFF', $account->getBic());
         $this->assertNoOp($account);
     }
 
+    /**
+     * Deliberately wider than `Assert\Bic`, which refuses a whitespace-only BIC rather than reading it
+     * as absent — so this is a domain choice, not a mirror of the edge. It is defensible in the one
+     * direction that matters: the widening can only ever produce absence, never a stored value the
+     * validator would have refused. No HTTP caller reaches it (the command's own `Assert\Bic` rejects
+     * the input first); it exists for the direct constructors the command docblock declares supported.
+     */
     public function testUpdateTreatsABicOfNothingButSpacesAsTheStoredAbsentOne(): void
     {
         $account = $this->storedAccount();

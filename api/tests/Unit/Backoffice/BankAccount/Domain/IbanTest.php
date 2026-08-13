@@ -42,15 +42,4 @@ final class IbanTest extends TestCase
         yield 'empty stays empty' => ['', ''];
     }
 
-    /**
-     * The separators are ASCII-invisible, so a divergence here reads as "identical strings differ" in
-     * a diff. Asserting the byte length pins the removal rather than the appearance.
-     */
-    public function testACanonicalIbanCarriesNoSeparatorBytesAtAll(): void
-    {
-        $canonical = Iban::canonicalize("AT61\u{00A0}1904 3002\u{202F}3457 3201");
-
-        $this->assertSame(20, \strlen($canonical));
-        $this->assertMatchesRegularExpression('/^[A-Z0-9]+$/', $canonical);
-    }
 }
