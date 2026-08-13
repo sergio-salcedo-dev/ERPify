@@ -60,38 +60,42 @@ final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
                 ['scope' => $scope],
             );
 
-            $evidence = AuditLogEntry::create(
+            $evidence = $this->seedSecurityRow(
+                $writer,
                 'GDPR_SUBJECT_ERASED',
-                AuditLevel::SECURITY,
-                ActorContext::system(),
-                Uuid::generate(),
                 $this->daysBefore($anchor, 400),
-                null,
                 ['encryption_scope_id' => $scope],
             );
-            $writer->write($evidence);
-
-            $control = AuditLogEntry::create(
-                'BANK_ACCOUNTS_VIEWED',
-                AuditLevel::SECURITY,
-                ActorContext::anonymous(),
-                Uuid::generate(),
+            // The OTHER evidence action, and the one with no detective control at all: nothing in `api/src`
+            // reads `GDPR_ERASURE_EXECUTED`, so where the subject-axis proof at least surfaces as a false
+            // divergence when it ages out, this one simply disappears and nothing notices. Seeded because an
+            // exemption covering only the action the reconciler happens to name would leave it dying
+            // silently — and every assertion below would still pass.
+            $actorAxisEvidence = $this->seedSecurityRow(
+                $writer,
+                'GDPR_ERASURE_EXECUTED',
                 $this->daysBefore($anchor, 400),
+                ['anonymized_actor_id' => Uuid::generate()],
             );
-            $writer->write($control);
+            $control = $this->seedSecurityRow($writer, 'BANK_ACCOUNTS_VIEWED', $this->daysBefore($anchor, 400));
 
             $pruner = new DbalAuditLogPruner($connection, new PostgresAdvisoryLock($connection), new NullLogger());
             $pruner->prune(...(new AuditRetentionPolicy(90, 365))->thresholdsAt($anchor));
 
             $this->assertSame(
                 0,
-                $this->countRowsForId($connection, $control->id),
+                $this->countRowsForId($connection, $control),
                 'the sweep did run at security and at this age — without this the assertions below are vacuous',
             );
             $this->assertSame(
                 1,
-                $this->countRowsForId($connection, $evidence->id),
+                $this->countRowsForId($connection, $evidence),
                 'the proof that an erasure was honoured outlives the tombstone it answers for',
+            );
+            $this->assertSame(
+                1,
+                $this->countRowsForId($connection, $actorAxisEvidence),
+                'and so does the actor-axis proof, which no detective control would miss for us',
             );
             $this->assertNotContains(
                 $scope,
@@ -99,6 +103,29 @@ final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
                 'a correctly-executed erasure never becomes a reported divergence through ageing alone',
             );
         });
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    private function seedSecurityRow(
+        DbalAuditLogWriter $writer,
+        string $action,
+        DateTimeImmutable $occurredOn,
+        array $metadata = [],
+    ): string {
+        $entry = AuditLogEntry::create(
+            $action,
+            AuditLevel::SECURITY,
+            ActorContext::system(),
+            Uuid::generate(),
+            $occurredOn,
+            null,
+            $metadata,
+        );
+        $writer->write($entry);
+
+        return $entry->id;
     }
 
     private function daysBefore(DateTimeImmutable $anchor, int $days): DateTimeImmutable
