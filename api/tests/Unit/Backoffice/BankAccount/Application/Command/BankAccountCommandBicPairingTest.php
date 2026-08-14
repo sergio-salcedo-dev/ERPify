@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Backoffice\BankAccount\Application\Command;
 
 use Erpify\Backoffice\BankAccount\Application\Command\CreateBankAccountCommand;
 use Erpify\Backoffice\BankAccount\Application\Command\UpdateBankAccountCommand;
+use Erpify\Backoffice\BankAccount\Application\Validation\BicMatchingIban;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -34,6 +35,7 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
  *
  * @internal
  */
+#[CoversClass(BicMatchingIban::class)]
 #[CoversClass(CreateBankAccountCommand::class)]
 #[CoversClass(UpdateBankAccountCommand::class)]
 final class BankAccountCommandBicPairingTest extends TestCase
