@@ -41,6 +41,16 @@ final class InvalidAuditRetentionPolicyTest extends TestCase
     }
 
     #[Test]
+    public function anEmptyExemptionNamesTheLevelWhosePlanLineWouldDeleteTheEvidence(): void
+    {
+        $exception = InvalidAuditRetentionPolicy::exemptActionsMustNotBeEmpty('security');
+
+        $this->assertSame('invalid-audit-retention-policy', $exception->type());
+        $this->assertSame('Audit retention threshold must exempt at least one action.', $exception->title());
+        $this->assertSame(['level' => 'security'], $exception->context());
+    }
+
+    #[Test]
     public function itIsMarkerLessSoAMisconfiguredWindowSurfacesAsAServerFaultNotA4xx(): void
     {
         $interfaces = (new ReflectionClass(InvalidAuditRetentionPolicy::class))->getInterfaceNames();

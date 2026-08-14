@@ -170,9 +170,15 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
      * The per-account checks that must hold whatever else shared the flush, plus the sealed ciphertexts the
      * per-field opens and the cross-open need afterwards.
      *
-     * Both personal fields are checked twice over, because the two directions fail differently and only one
-     * of them is a leak: the plaintext search catches a value written in clear, and {@see sealedCiphertext}
-     * catches a field that never reached the diff at all — which the search alone would report as success.
+     * The two personal fields the fixtures populate are checked twice over, because the two directions fail
+     * differently and only one of them is a leak: the plaintext search catches a value written in clear, and
+     * {@see sealedCiphertext} catches a field that never reached the diff at all — which the search alone
+     * would report as success.
+     *
+     * `alias` is the third `#[PersonalData]` property of the aggregate and is deliberately **not** covered
+     * here: both fixtures leave it null, so the sealer stores a null and there is no ciphertext to inspect.
+     * Nothing else in the suite asserts it either, so read this helper as covering the fields it names and
+     * not as covering the classifier's output.
      *
      * @return array{holderName: string, iban: string, auditLogId: string}
      */

@@ -136,6 +136,45 @@ razón, siguiendo el precedente ya establecido en el repo para esta misma forma
 tocó otra frase del checklist— y vive en **cuatro** ficheros, no en tres: el ADR repite ambas frases en
 castellano.
 
+## Pase adversarial (antes de abrir la PR)
+
+Lectura hostil por un contexto distinto del autor, sobre el cambio **ya hecho** — no sobre el estado del que
+partió, que es el fallo que originó esta cadena. Devolvió **2 GRAVE, 1 SERIOUS y 4 MINOR**, y los dos GRAVE
+estaban en las ediciones de documentación de esta misma rama: prosa afirmando una garantía que el código no
+da, exactamente la clase de defecto que la rama existe para cerrar.
+
+- **G1 — «la degradación exige un segundo administrador que la ejecute» era falso.** *Verificado*:
+  `ChangeUserRoles::guardActiveAdministratorsSurvive()` solo consulta
+  `keepsAnActiveAdminWithout($userId)`, que pregunta si **existe** otro admin activo; no hay ninguna
+  comparación actor-contra-objetivo en la clase, así que la auto-degradación no está guardada. El invariante
+  es sobre quién **sobrevive**, no sobre quién actúa — y `docs/adr/authorization-model-boundaries.md:163-166`
+  ya lo decía. Corregido en las cuatro sedes.
+- **G2 — «en una instalación de un solo administrador no hay vía de eliminación» era falso.** *Verificado*:
+  `EraseActorAuditTrailCommand` (`audit:gdpr:erase`) acepta cualquier UUID, valida **solo** la forma, no
+  inyecta nada que pueda consultar un rol, y su `UPDATE` redacta `ip`/`user_agent` casando por `actor_id`. El
+  409 citado pertenece a **otra** puerta de entrada (`FulfilIdentityErasure`, la ruta de identidad). Peor: los
+  mismos dos ficheros describen ese comando pocas líneas más abajo, así que la frase se contradecía sola. La
+  corrección cambiaba una imprecisión por un **absoluto falso**, que es peor que la frase que sustituía.
+  Corregido en las cuatro sedes distinguiendo ruta de identidad de ruta de operador.
+- **S1 — el docblock decía «ambos campos personales»; el agregado tiene tres.** `alias` es `#[PersonalData]`,
+  queda `null` en ambos fixtures y **no lo asierta nada en todo el repo**. Reformulado para nombrar lo que
+  cubre y declarar `alias` como no cubierto, en vez de sobre-prometer.
+- **M1** comentario agramatical en el pruner, reescrito. **M3** `ACTIONS` declaraba `list<string>` mientras el
+  llamador ya exige `non-empty-list<string>`; estrechado. **M4** la factoría nueva no tenía test propio y la
+  atribución de cobertura la habría contado como línea nueva sin cubrir; añadido.
+- **M2 declinado con argumento**: usar `Iban::canonicalize()` en el fixture funde el valor esperado y el
+  almacenado en una sola implementación. Cierto, pero el sujeto de este test es `PiiDiffSealer`, no el
+  canonicalizador —que tiene sus propios tests—, y protege contra el riesgo real de un fixture futuro no
+  canónico, que haría la búsqueda vacua.
+
+**Verificado limpio por el pase**, tras intentarlo: el caso vacío del threshold es realmente inalcanzable
+(un solo sitio de construcción, sin transporte Messenger, sin reflexión, sin hidratación —
+`newInstanceWithoutConstructor|ReflectionProperty|unserialize(` da cero coincidencias en `api/src`); el SQL
+byte-idéntico, re-derivado leyendo y no fiándose de la sonda; los dos `@phpstan-ignore` son portantes y no
+tapan nada (PHPStan `max`, sin baseline, reporta los ignores que no casan); el bucle sí prueba la ligadura
+del AAD **por campo**; y ninguna aserción es vacua. Sin hallazgos en inyección, autorización, secretos,
+migraciones, RFC 9457 ni Messenger — el diff no los toca.
+
 ## Design Notes
 
 **Guarda-y-colapso, no un test para la rama.** La rama cubre un estado que el dominio declara inválido;

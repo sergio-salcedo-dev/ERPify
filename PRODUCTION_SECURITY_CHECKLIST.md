@@ -221,11 +221,17 @@ you change anything here.
       `user_agent` are retained indefinitely along with their `actor_id`** — clearable only
       if that administrator is themself erased, since the actor-axis pass matches by
       `actor_id`. **Say the precondition with it, or the sentence promises a route that is
-      refused:** erasure is rejected while the subject still carries `ADMIN` (409
-      `administrator-erasure-requires-demotion`), so clearing those columns requires demoting
-      them first, and demotion requires a second administrator to perform it. On a
-      single-administrator installation there is therefore **no** removal path at all while
-      that user holds `ADMIN`. The CLI paths write both columns NULL. **Weighed and accepted:** stripping
+      refused:** *identity* erasure is rejected while the subject still carries `ADMIN` (409
+      `administrator-erasure-requires-demotion`, `FulfilIdentityErasure`), so on that route
+      clearing those columns requires demoting them first — which the ≥1-admin invariant
+      permits only while a **second active administrator exists**. It does not require that
+      administrator to *act*: nothing guards self-demotion, so one principal may drop their own
+      `ADMIN` unilaterally, and the invariant is about who survives, not who performs. Be
+      equally exact about the other direction: this gates the identity route, **not** the
+      actor-axis anonymiser. The operator CLI `audit:gdpr:erase` reaches those same columns for
+      any UUID with **no role check at all**, so a sole administrator's rows are clearable
+      there. What the CLI paths do not do is *write* `ip`/`user_agent` on rows they mint — they
+      run off-request as `system`, with both columns NULL. **Weighed and accepted:** stripping
       request metadata at write time would take attribution off the one class of row whose
       purpose is attribution, and a bounded floor for `GDPR_ERASURE_EXECUTED` alone splits
       one rule in two for a difference no reader infers from the rows. Revisit at the first

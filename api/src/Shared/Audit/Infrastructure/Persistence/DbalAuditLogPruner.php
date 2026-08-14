@@ -91,11 +91,11 @@ final readonly class DbalAuditLogPruner implements AuditLogPruner
     {
         $removed = 0;
 
-        // Bound unconditionally, which `AuditRetentionThreshold` is what makes safe: it refuses an empty
+        // Bound unconditionally, and `AuditRetentionThreshold` is what makes that safe: it refuses an empty
         // exemption at construction, so the one input that would render this placeholder as the literal
         // `NULL` — unknown for every row, and a prune that deletes nothing while reporting success — cannot
-        // reach here. Composing the clause instead would move that guarantee into this adapter, where the
-        // branch is unreachable and therefore untestable.
+        // reach here. Composing the clause instead would restate that guarantee in this adapter, on a branch
+        // no caller can enter and therefore no test can pin.
         $parameters = [
             'level' => $threshold->level->value,
             'threshold' => $threshold->deleteBefore,

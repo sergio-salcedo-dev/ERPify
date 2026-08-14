@@ -35,11 +35,14 @@ namespace Erpify\Shared\Audit\Domain;
  * deliberately leaves those two alone wherever an actor was identified, because they are that
  * administrator's data and not the subject's. So the exemption retains all three indefinitely, not just the
  * id: exactly the triple `docs/rules/database.md` names as the PII whose bounded window *is* the
- * minimisation. There is a removal path, it is **discretionary**, and it is **gated**: the actor-axis
- * erasure matches `actor_id`, so these columns clear only if that administrator is themself erased — and
- * that erasure is refused while they still carry `ADMIN`, so it requires demoting them first, which in turn
- * requires a second administrator to do the demoting. The operator CLI paths are unaffected — they run
- * off-request as `system`, with both columns null.
+ * minimisation. There is a removal path and it is **discretionary**: the actor-axis erasure matches
+ * `actor_id`, so these columns clear only if that administrator's trail is erased. Which route reaches it
+ * matters, because only one of them is gated. The *identity* route refuses a subject still carrying `ADMIN`,
+ * so it needs a demotion first — and the ≥1-admin invariant permits that only while a second active
+ * administrator **exists**, never requiring one to perform it, since nothing guards self-demotion. The
+ * operator CLI `audit:gdpr:erase` carries no such gate: it anonymises by `actor_id` for any UUID, with no
+ * role check. Separately, and not to be read as the same fact: the CLI paths do not *write* these columns on
+ * the rows they mint — they run off-request as `system`, with both null.
  *
  * **Weighed and accepted, not overlooked.** The two actions do not have the same correct retention, only
  * the same floor of "longer than 365 days". `SUBJECT_ERASED` needs never, because its falsifier is eternal.
@@ -51,9 +54,10 @@ namespace Erpify\Shared\Audit\Domain;
  * of row whose purpose *is* attribution — an erasure nobody can place is weaker evidence than an
  * over-retained address is a harm. What bounds the exposure in practice is deployment shape, not a system
  * property, and the two must not be read as one: nothing caps the `ADMIN` set — `users.grantAdmin` exists —
- * and the removal path above is refused until the holder is demoted by a second administrator, so on a
- * single-administrator installation there is none. What the system does guarantee is the narrower half: the
- * CLI paths write both columns null.
+ * and on a single-administrator installation the identity route above is closed until someone else holds
+ * `ADMIN`. That is a bound on one route, not on the exposure: the operator CLI still clears those columns
+ * for any actor id. What the system guarantees is the narrower half — the CLI paths write both columns null
+ * on the rows they mint.
  *
  * **Revisit trigger**, so the acceptance does not become invisible: the first of a production deployment
  * that erases a real subject, an administrator who leaves and is not erased, or a DPO review — whichever
@@ -69,7 +73,11 @@ final class AuditErasureEvidence
     public const string SUBJECT_ERASED = 'GDPR_SUBJECT_ERASED';
 
     /**
-     * @var list<string>
+     * Declared non-empty because {@see AuditRetentionThreshold} requires it:
+     * emptying this constant would otherwise be caught only by PHPStan inferring the literal, not by the
+     * contract.
+     *
+     * @var non-empty-list<string>
      */
     public const array ACTIONS = [self::ACTOR_TRAIL_ERASED, self::SUBJECT_ERASED];
 
