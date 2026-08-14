@@ -68,8 +68,10 @@
   only while a second active administrator **exists** — it never requires one to perform it, since
   self-demotion is unguarded. The `audit:gdpr:erase` command below carries no role check, so it stays a
   removal path even on a single-administrator installation (a separate fact from the CLI writing `ip` and
-  `user_agent` null on the rows it mints, which it does, running off-request as `system`). The cost is weighed, and carries a revisit trigger, at
-  `AuditErasureEvidence`. Outright erasure is the second policy — the `audit:gdpr:erase` command's in-place
+  `user_agent` null on the rows it mints, which it does, running off-request as `system`). The cost is
+  weighed, and carries a revisit trigger, at `AuditErasureEvidence`; what *observes* that trigger is issue
+  #718, not the prose — and it observes only the first of its three conditions.
+  Outright erasure is the second policy — the `audit:gdpr:erase` command's in-place
   anonymising `UPDATE` (`actor_id` → a fresh random UUID per subject; `ip`/`user_agent` → `[REDACTED]`),
   never row deletion. The third is the resource axis, which pseudonymises `resource_id` and — only where
   `actor_type = anonymous`, the one case where the row records no discriminant for whose address it holds —

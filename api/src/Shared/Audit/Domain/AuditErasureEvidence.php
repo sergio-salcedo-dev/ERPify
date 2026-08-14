@@ -62,7 +62,9 @@ namespace Erpify\Shared\Audit\Domain;
  * **Revisit trigger**, so the acceptance does not become invisible: the first of a production deployment
  * that erases a real subject, an administrator who leaves and is not erased, or a DPO review — whichever
  * comes first. At that point the choice is the bounded floor, and this paragraph is the record that it was
- * a choice.
+ * a choice. Only the first condition is machine-observable, and this paragraph is not what observes it:
+ * issue #718 carries the candidate predicate and is the artefact with an inbox. Prose in four files is a
+ * record, never a wake-up.
  */
 final class AuditErasureEvidence
 {

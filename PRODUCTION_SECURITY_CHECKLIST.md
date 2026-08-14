@@ -236,7 +236,10 @@ you change anything here.
       purpose is attribution, and a bounded floor for `GDPR_ERASURE_EXECUTED` alone splits
       one rule in two for a difference no reader infers from the rows. Revisit at the first
       of — a production deployment that erases a real subject, an administrator who leaves
-      without being erased, or a DPO review.
+      without being erased, or a DPO review. Only the first is machine-observable, and **this
+      paragraph does not observe it**: issue #718 holds the candidate predicate (a production
+      count of exempt rows still carrying `ip`/`user_agent` with `actor_erased = FALSE`) and is
+      the artefact with an inbox. Do not read a record in four files as a wake-up.
       Because the operating role can read the record that audits it, the record's
       attribution is guarded on the write side: **erasure refuses any subject still
       carrying `ADMIN`** (409 `administrator-erasure-requires-demotion`), so an

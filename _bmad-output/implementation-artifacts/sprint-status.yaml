@@ -353,7 +353,7 @@ development_status:
   epic-backlog-resolution: in-progress
   br-1-behat-vocabulario-falsabilidad: done
   br-2-residuos-eje-referencias-persona: done
-  br-3-auditoria-crypto-cierres-eje-3: backlog
+  br-3-auditoria-crypto-cierres-eje-3: done
   br-4-endurecimiento-identidad-grafo-recuperacion: done
   # Recorte de BR-4: #602 quedó fuera de aquel lote por decisión, en su propia rama y con su propia
   # autorización, así que cerró sin él. Clave propia para que el issue no quede tapado por un `done` ajeno.

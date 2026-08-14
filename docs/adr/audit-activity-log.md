@@ -267,7 +267,10 @@ CLI escriben ambas columnas nulas en las filas que acuñan.
 **Disparador de revisita**, para que la aceptación no se vuelva invisible: lo primero que ocurra entre un
 despliegue en producción que borre a un sujeto real, un administrador que se marche y no sea borrado, o una
 revisión de DPO. En ese momento la opción es el suelo acotado, y este párrafo es el registro de que fue una
-elección.
+elección. Sólo la primera condición es observable por máquina, y no la observa este párrafo: el issue #718
+lleva el predicado candidato y es el artefacto que tiene bandeja de entrada. Un registro repetido en cuatro
+ficheros es memoria, nunca un despertador — y no se automatiza porque no hay sumidero correcto: a `error`
+alarmaría a diario sobre comportamiento aceptado, y por debajo de `error` producción lo descarta.
 
 **«Cerrado» significa cerrado por revisión, no por gate.** Nada automatizado impide una cuarta política:
 `git grep` sobre la tabla es el único control y no está cableado a ninguna puerta, de modo que una mutación

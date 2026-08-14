@@ -123,18 +123,25 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
             // metadata as a string that was never written, and pass while saying nothing.
             $firstIban = Iban::canonicalize('ES9121000418450200051332');
             $secondIban = Iban::canonicalize('DE89370400440532013000');
-            $em->persist(BankAccount::create($firstId, $bankId, $firstHolder, $firstIban, 'CAIXESBBXXX'));
-            $em->persist(BankAccount::create($secondId, $bankId, $secondHolder, $secondIban, 'DEUTDEFFXXX'));
+            // `alias` is the aggregate's third personal field and the only one a null fixture hides: the
+            // sealer stores a null unsealed, so leaving it unset is what let it go unasserted everywhere.
+            $firstAlias = 'Nomina Ana';
+            $secondAlias = 'Nomina Bruno';
+            $em->persist(
+                BankAccount::create($firstId, $bankId, $firstHolder, $firstIban, 'CAIXESBBXXX', $firstAlias),
+            );
+            $em->persist(
+                BankAccount::create($secondId, $bankId, $secondHolder, $secondIban, 'DEUTDEFFXXX', $secondAlias),
+            );
             $em->flush(); // one flush, two mints
 
             $encryptor = $this->encryptor();
-            $first = $this->sealedPiiOf($connection, $firstId, $firstHolder, $firstIban);
-            $second = $this->sealedPiiOf($connection, $secondId, $secondHolder, $secondIban);
+            $firstPii = ['holderName' => $firstHolder, 'iban' => $firstIban, 'alias' => $firstAlias];
+            $secondPii = ['holderName' => $secondHolder, 'iban' => $secondIban, 'alias' => $secondAlias];
+            $first = $this->sealedPiiOf($connection, $firstId, $firstPii);
+            $second = $this->sealedPiiOf($connection, $secondId, $secondPii);
 
-            $sealedAccounts = [
-                [$firstId, ['holderName' => $firstHolder, 'iban' => $firstIban], $first],
-                [$secondId, ['holderName' => $secondHolder, 'iban' => $secondIban], $second],
-            ];
+            $sealedAccounts = [[$firstId, $firstPii, $first], [$secondId, $secondPii, $second]];
 
             // Per field, not just per account: the scope is one per aggregate, so what separates two sealed
             // fields of the SAME row is the AAD alone. Opening only `holderName` would leave a shared-AAD
@@ -170,19 +177,20 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
      * The per-account checks that must hold whatever else shared the flush, plus the sealed ciphertexts the
      * per-field opens and the cross-open need afterwards.
      *
-     * The two personal fields the fixtures populate are checked twice over, because the two directions fail
-     * differently and only one of them is a leak: the plaintext search catches a value written in clear, and
-     * {@see sealedCiphertext} catches a field that never reached the diff at all — which the search alone
-     * would report as success.
+     * Every field is checked twice over, because the two directions fail differently and only one of them is
+     * a leak: the plaintext search catches a value written in clear, and {@see sealedCiphertext} catches a
+     * field that never reached the diff at all — which the search alone would report as success.
      *
-     * `alias` is the third `#[PersonalData]` property of the aggregate and is deliberately **not** covered
-     * here: both fixtures leave it null, so the sealer stores a null and there is no ciphertext to inspect.
-     * Nothing else in the suite asserts it either, so read this helper as covering the fields it names and
-     * not as covering the classifier's output.
+     * The caller passes all three `#[PersonalData]` properties of the aggregate, `alias` included. It is the
+     * one a null fixture hides — the sealer stores a null unsealed, so a test that leaves it unset asserts
+     * nothing about it in either direction, which is how it came to be covered nowhere in the suite.
      *
-     * @return array{holderName: string, iban: string, auditLogId: string}
+     * @param array{holderName: string, iban: string, alias: string} $personal the plaintexts the aggregate
+     *                                                                         stored, keyed by field
+     *
+     * @return array{auditLogId: string, holderName: string, iban: string, alias: string}
      */
-    private function sealedPiiOf(Connection $connection, string $accountId, string $holder, string $iban): array
+    private function sealedPiiOf(Connection $connection, string $accountId, array $personal): array
     {
         $row = $this->changeRow($connection, $accountId, 'BANK_ACCOUNT_CREATED');
         $metadata = $row['metadata'] ?? null;
@@ -191,8 +199,11 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
         $this->assertIsString($auditLogId);
 
         $this->assertSame('BankAccount:' . $accountId, $row['encryption_scope_id'] ?? null);
-        $this->assertStringNotContainsString($holder, $metadata, 'no holder survives in clear');
-        $this->assertStringNotContainsString($iban, $metadata, 'no iban survives in clear');
+
+        foreach ($personal as $field => $plaintext) {
+            $this->assertStringNotContainsString($plaintext, $metadata, \sprintf('no %s survives in clear', $field));
+        }
+
         $this->assertSame(
             1,
             $this->keystoreRowsFor($connection, 'BankAccount:' . $accountId),
@@ -203,9 +214,10 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
         $this->assertIsArray($decoded);
 
         return [
+            'auditLogId' => $auditLogId,
             'holderName' => $this->sealedCiphertext($decoded, 'holderName'),
             'iban' => $this->sealedCiphertext($decoded, 'iban'),
-            'auditLogId' => $auditLogId,
+            'alias' => $this->sealedCiphertext($decoded, 'alias'),
         ];
     }
 

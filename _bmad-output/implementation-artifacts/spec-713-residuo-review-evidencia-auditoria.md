@@ -175,6 +175,33 @@ tapan nada (PHPStan `max`, sin baseline, reporta los ignores que no casan); el b
 del AAD **por campo**; y ninguna aserción es vacua. Sin hallazgos en inyección, autorización, secretos,
 migraciones, RFC 9457 ni Messenger — el diff no los toca.
 
+## Punto 11 — resuelto (A), tras tres lecturas independientes
+
+Winston, Amelia y un AI externo convergieron en **(A)**: issue de vigilancia, no gate ni silencio. Que
+converjan no es la prueba —el consenso no sustituye a la medición— así que lo que decidió fue lo medido:
+(C) sería **rojo el día uno** (`features/backoffice/users/erase.feature` borra por HTTP y el cliente de test
+manda `REMOTE_ADDR`, así que la fila existe en dev/test tras cada tirada), no tiene sumidero (a `error`
+alarmaría a diario sobre comportamiento aceptado; por debajo, `fingers_crossed` con `action_level: error` lo
+descarta; el canal `observability` existe pero sin dashboard ni regla de alerta), y cubriría **1 de 3**
+condiciones aparentando completitud.
+
+El AI externo no ratificó: trajo tres refinamientos, y uno era falsable. **Medido contra el esquema vivo:**
+`audit_log.actor_erased` es `NOT NULL` (`is_nullable = NO`; `Version20260626215406` la añade
+`NOT NULL DEFAULT FALSE` y luego quita el default), así que `actor_erased = FALSE` es total y ninguna fila se
+escapa como NULL — la preocupación queda cerrada, no asumida. Los otros dos entraron en el issue: el
+predicado se declara **candidato observable, no la definición** del disparador de tres condiciones, y se
+acota explícitamente a producción por la clase de falso positivo de dev/test.
+
+Issue **#718**, nombrado desde las cuatro sedes para que el registro apunte al artefacto que sí tiene bandeja.
+
+## `alias` — hueco destapado por el pase, cerrado aquí
+
+No estaba en el handoff. Es el tercer campo `#[PersonalData]` de `BankAccount` y **no lo asertaba nada en
+todo el repo**: quedaba `null` en ambos fixtures, el sellador guarda un null sin sellar, y una aserción sobre
+un null no dice nada en ninguna de las dos direcciones. Los fixtures ahora lo pueblan y el helper recorre los
+tres campos. **Falsificado:** retirando `#[PersonalData]` de `alias` la suite enrojece por
+`no alias survives in clear` y solo por eso; restaurado copiando bytes, SHA verificado.
+
 ## Design Notes
 
 **Guarda-y-colapso, no un test para la rama.** La rama cubre un estado que el dominio declara inválido;
