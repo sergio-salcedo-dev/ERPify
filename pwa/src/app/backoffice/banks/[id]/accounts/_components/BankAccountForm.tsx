@@ -142,12 +142,14 @@ export function BankAccountForm({
   };
 
   const onSubmit = handleSubmit(async (values) => {
-    // `bic`/`alias` collapse an empty string to null (clearing the optional);
-    // the IBAN is already canonicalised by the schema. No eager clear here: a
-    // previous error stays visible during the retry and is replaced only at the
-    // outcome (an explicit clear on success, a new failure through setProblem).
-    const bic = values.bic && values.bic !== "" ? values.bic.toUpperCase() : null;
-    const alias = values.alias && values.alias !== "" ? values.alias : null;
+    // `bic`/`alias` collapse an empty string to null (clearing the optional) —
+    // one test, because "" is already falsy and a second !== "" arm can never be
+    // reached. IBAN and BIC are both already canonicalised by the schema. No
+    // eager clear here: a previous error stays visible during the retry and is
+    // replaced only at the outcome (an explicit clear on success, a new failure
+    // through setProblem).
+    const bic = values.bic || null;
+    const alias = values.alias || null;
     try {
       if (isCreating) {
         const useCase = container.get<CreateBankAccount>("BackOfficeCreateBankAccount");

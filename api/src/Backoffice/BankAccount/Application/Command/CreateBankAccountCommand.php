@@ -10,11 +10,18 @@ use Symfony\Component\Validator\Constraints as Assert;
 /**
  * Input command for {@see \Erpify\Backoffice\BankAccount\Application\BankAccountCreator}.
  *
- * HTTP maps it from the request body via #[StrictRequestPayload]; a console command (or CQRS command bus)
- * builds it directly with `new`. The #[Assert] attributes are passive validation metadata, enforced at
- * the HTTP boundary and re-checkable via Validator::ensure() for non-HTTP callers; BankAccount entity
- * invariants (IBAN uniqueness via UniqueEntity) are the final guard. A new account has no `status` on
- * the wire — it is always created ACTIVE.
+ * HTTP maps it from the request body via #[StrictRequestPayload], which is the only caller today; the
+ * #[Assert] attributes are passive validation metadata, enforced there and re-checkable via
+ * Validator::ensure() by anything that later builds it with `new`. BankAccount entity invariants (IBAN
+ * uniqueness via UniqueEntity) are the final guard. A new account has no `status` on the wire — it is
+ * always created ACTIVE.
+ *
+ * `iban` and `bic` carry no width here on purpose. Whatever arrives is canonicalized before the
+ * aggregate stores or measures it — separators stripped, cased up — so a width declared at this layer
+ * measures a value the system never keeps, and refuses grouped spellings that #[Assert\Iban] and
+ * #[Assert\Bic] both accept. Each field's width belongs to its canonical value and is asserted where
+ * that value exists, on the entity; the two constraints below already refuse anything that is not an
+ * IBAN or a BIC at all, at any length.
  */
 final readonly class CreateBankAccountCommand
 {
@@ -27,9 +34,7 @@ final readonly class CreateBankAccountCommand
         public string $holderName = '',
         #[Assert\NotBlank(message: 'The iban field is required.')]
         #[Assert\Iban(message: 'This is not a valid IBAN.')]
-        #[Assert\Length(max: 34, maxMessage: 'The iban must not exceed {{ limit }} characters.')]
         public string $iban = '',
-        #[Assert\Length(max: 11, maxMessage: 'The bic must not exceed {{ limit }} characters.')]
         #[Assert\Bic(
             message: 'This is not a valid BIC.',
             ibanPropertyPath: 'iban',

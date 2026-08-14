@@ -32,6 +32,23 @@ describe("BankAccountSchema", () => {
     }
   });
 
+  it("canonicalises the BIC the same way, so a grouped copy-paste is not measured as typed", () => {
+    const result = validator.validate({ ...VALID, bic: "caix esbb xxx" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.bic).toBe("CAIXESBBXXX");
+    }
+  });
+
+  it("accepts a grouped IBAN whose typed form is longer than the canonical ceiling", () => {
+    // Malta: 31 canonical characters, 38 as a statement groups them.
+    const result = validator.validate({ ...VALID, iban: "MT84 MALT 0110 0001 2345 MTLC AST0 01S" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.iban).toBe("MT84MALT011000012345MTLCAST001S");
+    }
+  });
+
   it("requires holderName (NotBlank)", () => {
     for (const value of ["", "   "]) {
       const result = validator.validate({ ...VALID, holderName: value });

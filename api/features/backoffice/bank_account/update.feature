@@ -126,6 +126,39 @@ Feature: Update a bank account
     ]
     """
 
+  # The same asymmetry on the write path, where the account already exists: the stored IBAN is short
+  # enough that grouping it stays inside 34, the new one is not. A PUT is the endpoint where a customer
+  # re-keys an account from a fresh statement, so the grouped long spelling is the ordinary case, not
+  # the exotic one — and both fields have to land canonical for the `unique` column to keep seeing one
+  # account.
+  Scenario: Update an account to a grouped IBAN whose typed form passes the canonical ceiling
+    Given I add "Content-Type" header equal to "application/json"
+    And I add "Accept" header equal to "application/json"
+    And I execute the SQL query "INSERT INTO bank_account (id, bank_id, holder_name, iban, bic, alias, currency, status, created_at, updated_at) VALUES ('acc1ed00-0000-7000-8000-000000000004', '11111111-1111-7000-8000-000000000003', 'Rekeyed Holder', 'NO9386011117947', NULL, NULL, 'EUR', 'ACTIVE', '2026-01-01 10:00:00', '2026-01-01 10:00:00')" on connection "seed"
+    When I send a PUT request to "/backoffice/bank-accounts/acc1ed00-0000-7000-8000-000000000004" with body:
+    """
+    {
+      "holderName": "Rekeyed Holder",
+      "iban": "MT84 MALT 0110 0001 2345 MTLC AST0 01S",
+      "bic": "VALL MTMT XXX",
+      "currency": "EUR"
+    }
+    """
+    Then the response status code should be 200
+    And the JSON node "data.iban" should be equal to "MT84MALT011000012345MTLCAST001S"
+    And the JSON node "data.bic" should be equal to "VALLMTMTXXX"
+    And there should be 1 event stored for aggregate "acc1ed00-0000-7000-8000-000000000004" named "erpify.backoffice.bankaccount.updated"
+    And I execute the SQL query "SELECT iban, bic FROM bank_account WHERE id = 'acc1ed00-0000-7000-8000-000000000004'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "iban": "MT84MALT011000012345MTLCAST001S",
+        "bic": "VALLMTMTXXX"
+      }
+    ]
+    """
+
   Scenario: Update an account that does not exist returns a 404 bank-account-not-found Problem Details body
     Given I add "Content-Type" header equal to "application/json"
     And I add "Accept" header equal to "application/json"

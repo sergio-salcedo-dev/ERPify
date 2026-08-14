@@ -6,8 +6,8 @@ import { BANK_ACCOUNT_CURRENCIES } from "@/context/backoffice/bankaccount/domain
  * constraints on the API `Create`/`Update` command DTOs:
  *
  *   - `holderName` — `#[Assert\NotBlank]`, `#[Assert\Length(max: 255)]`
- *   - `iban`       — `#[Assert\NotBlank]`, `#[Assert\Iban]`, `#[Assert\Length(max: 34)]`
- *   - `bic`        — optional `#[Assert\Bic(ibanPropertyPath: 'iban')]`, `#[Assert\Length(max: 11)]`
+ *   - `iban`       — `#[Assert\NotBlank]`, `#[Assert\Iban]`
+ *   - `bic`        — optional `#[Assert\Bic(ibanPropertyPath: 'iban')]`
  *   - `alias`      — optional `#[Assert\Length(max: 100)]`
  *   - `currency`   — `Currency` enum (EUR today)
  *
@@ -16,10 +16,22 @@ import { BANK_ACCOUNT_CURRENCIES } from "@/context/backoffice/bankaccount/domain
  *
  * The per-field messages mirror the API's 422 violation strings field-by-field
  * (the API messages are dev-facing; the form copy is user-facing, so they read
- * differently — the mapping keys off the violation `field`, not the message). The
- * IBAN is canonicalised here (spaces stripped, upper-cased) the same way the API
- * canonicalises before persisting, so the validated value is the value sent —
- * no needless 422 round-trip on casing/spacing. Limits live ONLY in the schema
+ * differently — the mapping keys off the violation `field`, not the message).
+ *
+ * IBAN and BIC are canonicalised here (whitespace stripped, upper-cased) before
+ * anything measures them, so the validated value is the value sent — no needless
+ * 422 round-trip on casing/spacing, and no width measured against a spelling the
+ * system never keeps. A statement or PDF copy-paste carries its grouping into both
+ * fields, so both must absorb it. This strip is JS `\s`, deliberately wider than
+ * the three separators the API's own canonicaliser removes: a character it absorbs
+ * and the API would have refused leaves here as the canonical value the API
+ * accepts, so the extra tolerance costs a rejection nobody wanted and changes no
+ * stored value.
+ *
+ * The two `.max()` bounds below mirror the ENTITY, not the command DTOs listed
+ * above: 34 is the aggregate's `#[Assert\Length(max: 34)]` over the canonical IBAN,
+ * and 11 the same over the canonical BIC. Both are live API constraints — do not
+ * delete them for being absent from the DTO list. Limits live ONLY in the schema
  * (`.max()`), never as a `maxLength` that would silently truncate input.
  */
 export const HOLDER_NAME_MAX_LENGTH = 255;
@@ -61,10 +73,12 @@ export const BankAccountSchema = z.object({
   bic: z
     .string()
     .trim()
-    .max(BIC_MAX_LENGTH, "The BIC must not exceed 11 characters.")
-    .refine(
-      (value) => value === "" || BIC_PATTERN.test(value.toUpperCase()),
-      "Please enter a valid BIC.",
+    .transform((value) => value.replace(/\s+/g, "").toUpperCase())
+    .pipe(
+      z
+        .string()
+        .max(BIC_MAX_LENGTH, "The BIC must not exceed 11 characters.")
+        .refine((value) => value === "" || BIC_PATTERN.test(value), "Please enter a valid BIC."),
     )
     .optional(),
   alias: z
