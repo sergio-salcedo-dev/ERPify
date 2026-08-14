@@ -151,6 +151,12 @@ final readonly class FulfilIdentityErasure
                 // this chain is the member that conforms, and why the refusal still comes first.
                 $invitationsDeleted = $this->purgeUserInvitations->purge($subjectId);
 
+                // The refusal above decides nothing — it takes no lock. This is the one that holds at
+                // commit, and it belongs HERE and nowhere earlier: see the port for both halves.
+                if ($this->administrators->holdsAdministratorRoleForUpdate($subjectId)) {
+                    throw AdministratorErasureRequiresDemotion::forUser($subjectId);
+                }
+
                 // One value, three uses: the axis lock, the compliance entry's resource, and the pass that
                 // clears it. Whoever writes the subject's real id into the trail is the one that clears it,
                 // and they cannot disagree about which resource that is because there is only one to
@@ -162,17 +168,7 @@ final readonly class FulfilIdentityErasure
                 // statements individually cannot prevent the deadlock they can reach.
                 $anonymisation = $this->auditTrail->beginForSubject($subject);
 
-                // The write has to come first — the anonymiser's UPDATE matches rows that already exist —
-                // and it is a `security` entry, so it is inserted synchronously on this connection rather
-                // than deferred past the statement that clears it.
-                if ($identity->erasedAnything()) {
-                    $this->auditLogger->log(
-                        self::SUBJECT_ERASURE_ACTION,
-                        AuditLevel::SECURITY,
-                        $subject,
-                        ['reset_tokens_deleted' => $identity->resetTokensDeleted],
-                    );
-                }
+                $this->recordSubjectErasure($identity, $subject);
 
                 // Same pseudonym for both axes: one person must not split into two anonymous identities.
                 // It re-links nothing, because the original id is gone from both columns.
@@ -199,6 +195,30 @@ final readonly class FulfilIdentityErasure
 
                 return $result;
             },
+        );
+    }
+
+    /**
+     * The compliance entry naming the subject as its audit RESOURCE, written between the identity delete and
+     * the pass that clears it.
+     *
+     * Both halves of that position are load-bearing. It comes AFTER the axis lock and the identity delete
+     * because the anonymiser's `UPDATE` matches rows that already exist, and BEFORE
+     * {@see AuditSubjectTrailErasure::completeForSubject()} because this entry persists the subject's real id
+     * a second time and that pass is the only thing that clears it. It is a `security` entry, so it is
+     * inserted synchronously on this connection rather than deferred past the statement that erases it.
+     */
+    private function recordSubjectErasure(IdentityErasureResult $identity, AuditResource $subject): void
+    {
+        if (!$identity->erasedAnything()) {
+            return;
+        }
+
+        $this->auditLogger->log(
+            self::SUBJECT_ERASURE_ACTION,
+            AuditLevel::SECURITY,
+            $subject,
+            ['reset_tokens_deleted' => $identity->resetTokensDeleted],
         );
     }
 

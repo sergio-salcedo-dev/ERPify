@@ -102,4 +102,29 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
             ],
         );
     }
+
+    /**
+     * The predicate is computed in the projection rather than in a `WHERE`, because the row has to be LOCKED
+     * whatever the answer is: `WHERE roles @> …` would return no row — and take no lock — for the subject who
+     * is not an administrator, which is precisely the subject whose role is about to change underneath. An
+     * absent row yields `false`, the same answer the unlocked reading gives, since there is nothing to erase.
+     *
+     * `FOR UPDATE` cannot sit inside an `EXISTS` subquery, so this returns the boolean as a column instead.
+     */
+    #[Override]
+    public function holdsAdministratorRoleForUpdate(string $userId): bool
+    {
+        return (bool) $this->connection->fetchOne(
+            <<<'SQL'
+                SELECT roles::jsonb @> CAST(:adminRole AS jsonb)
+                FROM identity_user
+                WHERE id = CAST(:userId AS UUID)
+                FOR UPDATE
+                SQL,
+            [
+                'userId' => $userId,
+                'adminRole' => \json_encode([Role::ADMIN->value], JSON_THROW_ON_ERROR),
+            ],
+        );
+    }
 }

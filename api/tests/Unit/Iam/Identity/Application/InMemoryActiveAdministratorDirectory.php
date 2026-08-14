@@ -32,6 +32,9 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
     /** @var list<string> */
     public array $askedWhetherAdministrator = [];
 
+    /** @var list<string> */
+    public array $askedUnderRowLock = [];
+
     public int $setLocksTaken = 0;
 
     /**
@@ -94,6 +97,21 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
     public function holdsAdministratorRole(string $userId): bool
     {
         $this->askedWhetherAdministrator[] = $userId;
+
+        return \array_key_exists($userId, $this->adminUserIsActive);
+    }
+
+    /**
+     * Same verdict as the unlocked reading — in memory there is no snapshot to be stale against — recorded
+     * separately and journalled as a row lock on `identity_user`, because what a caller must get right about
+     * this member is not the answer but WHERE it asks: the lock lands on that table, so taking it before the
+     * invitations inverts an order the accept path cannot reverse.
+     */
+    #[Override]
+    public function holdsAdministratorRoleForUpdate(string $userId): bool
+    {
+        $this->lockOrderJournal?->locked(LockOrderJournal::IDENTITY_USER);
+        $this->askedUnderRowLock[] = $userId;
 
         return \array_key_exists($userId, $this->adminUserIsActive);
     }

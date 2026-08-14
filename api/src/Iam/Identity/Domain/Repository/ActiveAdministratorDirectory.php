@@ -56,8 +56,20 @@ interface ActiveAdministratorDirectory
 
     /**
      * Whether this identity carries `ADMIN`, regardless of its status — a suspended administrator still holds
-     * the role. A per-subject precondition rather than a set invariant, so it needs no lock: losing the race
-     * against a concurrent role change costs at most an interleaving in which both operations are audited.
+     * the role. A per-subject precondition rather than a set invariant, and it takes NO lock, so its answer is
+     * only true of the instant it was asked. That makes it a fast refusal, never a guarantee: use it to reject
+     * early and cheaply, and {@see holdsAdministratorRoleForUpdate()} to decide.
      */
     public function holdsAdministratorRole(string $userId): bool;
+
+    /**
+     * The same question asked of the subject's row under `FOR UPDATE`, so the answer still holds at commit.
+     *
+     * The unlocked reading cannot carry this precondition: between it and the `DELETE` it guards, a concurrent
+     * grant commits and an administrator is erased having never been demoted — with no `USER_ROLES_CHANGED`
+     * ahead of it in the trail, which is the whole reason the refusal exists. Costs one row lock on a row the
+     * erasure is about to delete anyway, and it must be taken where the chain already reaches `identity_user`
+     * — after the invitations, never before, or it inverts the order the accept path cannot reverse.
+     */
+    public function holdsAdministratorRoleForUpdate(string $userId): bool;
 }

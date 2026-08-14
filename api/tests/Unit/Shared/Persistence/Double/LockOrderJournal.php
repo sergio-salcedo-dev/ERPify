@@ -40,4 +40,31 @@ final class LockOrderJournal
     {
         $this->tablesLockedInOrder[] = $table;
     }
+
+    /**
+     * The same sequence with CONSECUTIVE repeats folded — the cross-table order, which is the whole of what a
+     * cross-table deadlock can be built from.
+     *
+     * This does not contradict the property above, it is its complement. Taking one table twice AROUND
+     * another (`A B A`) is a different arrangement and survives here untouched, because those repeats are not
+     * consecutive. Taking it twice in a ROW (`A A B`) cannot contribute an edge no single acquisition already
+     * contributes — the second one waits on nothing the first did not already hold. Asserting the raw list
+     * therefore pins how MANY times a path acquires as well as in what order, and the count is implementation:
+     * a use case that reads a row under `FOR UPDATE` and then deletes it acquires twice where one that only
+     * deletes acquires once, with the same order and the same safety.
+     *
+     * @return list<string>
+     */
+    public function crossTableOrder(): array
+    {
+        $order = [];
+
+        foreach ($this->tablesLockedInOrder as $tableLockedInOrder) {
+            if ($tableLockedInOrder !== \end($order)) {
+                $order[] = $tableLockedInOrder;
+            }
+        }
+
+        return $order;
+    }
 }

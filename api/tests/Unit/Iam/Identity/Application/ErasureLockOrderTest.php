@@ -97,7 +97,7 @@ final class ErasureLockOrderTest extends TestCase
                 LockOrderJournal::IDENTITY_USER,
                 LockOrderJournal::PASSWORD_RESET_TOKEN,
             ],
-            $journal->tablesLockedInOrder,
+            $journal->crossTableOrder(),
             'The erasure chain no longer acquires in the order the accept, revoke and reset paths agree on. '
             . 'Swapping any adjacent pair re-opens an ABBA deadlock with a path that cannot reorder itself, '
             . 'and the deadlock surfaces as a 503 with nothing in the code to explain it.',
