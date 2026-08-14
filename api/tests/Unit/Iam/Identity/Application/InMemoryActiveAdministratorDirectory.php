@@ -97,4 +97,18 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
 
         return \array_key_exists($userId, $this->adminUserIsActive);
     }
+
+    /**
+     * Same verdict as the unlocked reading — in memory there is no snapshot to be stale against — recorded
+     * separately and journalled as a row lock on `identity_user`, because what a caller must get right about
+     * this member is not the answer but WHERE it asks: the lock lands on that table, so taking it before the
+     * invitations inverts an order the accept path cannot reverse.
+     */
+    #[Override]
+    public function holdsAdministratorRoleForUpdate(string $userId): bool
+    {
+        $this->lockOrderJournal?->locked(LockOrderJournal::IDENTITY_USER);
+
+        return \array_key_exists($userId, $this->adminUserIsActive);
+    }
 }

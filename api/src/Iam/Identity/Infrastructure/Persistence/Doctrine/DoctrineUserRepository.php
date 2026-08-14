@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine;
 
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
+use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -27,8 +29,12 @@ final readonly class DoctrineUserRepository implements UserRepository
     #[Override]
     public function save(User $user): void
     {
-        $this->entityManager->persist($user);
-        $this->entityManager->flush();
+        try {
+            $this->entityManager->persist($user);
+            $this->entityManager->flush();
+        } catch (UniqueConstraintViolationException) {
+            throw ConcurrentUniqueWrite::onWrite('identity-user');
+        }
     }
 
     #[Override]

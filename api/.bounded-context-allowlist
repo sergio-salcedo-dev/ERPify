@@ -133,3 +133,12 @@ src/Iam/Identity/Application/FulfilIdentityErasure.php => Erpify\Iam\Session\App
 # person orchestrates, and each owning context erases what it stores.
 src/Iam/Identity/Application/FulfilIdentityErasure.php => Erpify\Organization\Membership\Application\PurgeUserMembership
 src/Iam/Identity/Application/FulfilIdentityErasure.php => Erpify\Iam\Invitation\Application\PurgeUserInvitations
+
+# Session retention sweep → the daily tick. The handler consumes the published PruneRetiredSessions use case
+# (Iam/Session) to drop the registry rows past their retention window, so the ip/device the aggregate calls
+# short-lived operational PII stop outliving that claim. It sits in Iam/Identity because the schedule does, and
+# the schedule is shared rather than duplicated because a provider of its own would mint a transport needing a
+# consume argument in both root compose files — the argument is at IdentityMaintenanceSchedule. Fourth entry in
+# the same published-Application-service family as the minting, reset-teardown and erasure seams above; it is
+# the only one of the four that is not about a specific person, which is exactly why it carries no payload.
+src/Iam/Identity/Infrastructure/Messenger/Maintenance/PruneRetiredSessionsHandler.php => Erpify\Iam\Session\Application\PruneRetiredSessions

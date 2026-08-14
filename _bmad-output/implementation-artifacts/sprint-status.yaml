@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-08-13
+last_updated: 2026-08-14
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -362,7 +362,7 @@ development_status:
   # razón que la de arriba, y además porque #602 sigue OPEN: un `done` en la clave del lockout leería como si
   # el issue estuviera cerrado.
   br-4c-602-observabilidad-throttle-recuperacion: done
-  br-5-ciclo-de-vida-iam-session: backlog
+  br-5-ciclo-de-vida-iam-session: done
   # Medido el 2026-08-12 contra 781c75a2: TRES de los cinco issues no son código. #589 lo resolvió el arco
   # #596-#601 (el mismo de BR-1) y el gate NFR26 corre hoy con 9 tests y cero skips; #250 quedó obsoleto por
   # deptrac; #438 parte de una premisa falsa — su gate rechazaría 28 usos correctos de #[IsGranted]. El lote

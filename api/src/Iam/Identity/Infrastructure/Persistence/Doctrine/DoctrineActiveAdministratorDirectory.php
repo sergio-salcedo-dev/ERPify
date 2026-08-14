@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
 use Erpify\Shared\Access\Domain\Role;
+use JsonException;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -30,6 +31,17 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
 {
     public function __construct(private Connection $connection)
     {
+    }
+
+    /**
+     * The containment operand every statement here binds, encoded once: three copies of the same
+     * `json_encode` is three places a future role rename has to be found.
+     *
+     * @throws JsonException
+     */
+    private function adminRoleOperand(): string
+    {
+        return \json_encode([Role::ADMIN->value], JSON_THROW_ON_ERROR);
     }
 
     #[Override]
@@ -75,7 +87,7 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
                 SQL,
             [
                 'active' => IdentityStatus::ACTIVE->value,
-                'adminRole' => \json_encode([Role::ADMIN->value], JSON_THROW_ON_ERROR),
+                'adminRole' => $this->adminRoleOperand(),
             ],
         );
     }
@@ -98,7 +110,32 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
                 SQL,
             [
                 'userId' => $userId,
-                'adminRole' => \json_encode([Role::ADMIN->value], JSON_THROW_ON_ERROR),
+                'adminRole' => $this->adminRoleOperand(),
+            ],
+        );
+    }
+
+    /**
+     * The predicate is computed in the projection rather than in a `WHERE`, because the row has to be LOCKED
+     * whatever the answer is: `WHERE roles @> …` would return no row — and take no lock — for the subject who
+     * is not an administrator, which is precisely the subject whose role is about to change underneath. An
+     * absent row yields `false`, the same answer the unlocked reading gives, since there is nothing to erase.
+     *
+     * `FOR UPDATE` cannot sit inside an `EXISTS` subquery, so this returns the boolean as a column instead.
+     */
+    #[Override]
+    public function holdsAdministratorRoleForUpdate(string $userId): bool
+    {
+        return (bool) $this->connection->fetchOne(
+            <<<'SQL'
+                SELECT roles::jsonb @> CAST(:adminRole AS jsonb)
+                FROM identity_user
+                WHERE id = CAST(:userId AS UUID)
+                FOR UPDATE
+                SQL,
+            [
+                'userId' => $userId,
+                'adminRole' => $this->adminRoleOperand(),
             ],
         );
     }

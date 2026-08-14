@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Iam\Session\Fixtures;
 
+use DateTimeImmutable;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Tests\Unit\Iam\Session\Infrastructure\Persistence\Doctrine\Fixtures\DbalStoreFailure;
 use Override;
 
 /**
@@ -56,5 +58,18 @@ final readonly class UnavailableSessionRepository implements SessionRepository
     public function deleteAllForUser(string $userId): int
     {
         throw SessionStoreUnavailable::storeUnreachable();
+    }
+
+    /**
+     * Raises the RAW DBAL failure rather than the domain one, unlike every other method here, because that is
+     * what the real adapter does: `deleteRetired()` is the one statement with no `try`/`DbalException`
+     * translation, since it runs off-request from a command and a tick where there is no response to fail
+     * closed on. A double promising the domain exception would invite a test to assert a 503 the port never
+     * states and production cannot produce.
+     */
+    #[Override]
+    public function deleteRetired(DateTimeImmutable $revokedBefore, DateTimeImmutable $expiredBefore): int
+    {
+        throw new DbalStoreFailure('Session store unreachable.');
     }
 }

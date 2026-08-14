@@ -9,7 +9,12 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Static gate over the one statement that orders every `identity_user` acquisition.
+ * Static gate over the one statement that orders the `identity_user` SET acquisition.
+ *
+ * Not every acquisition on that table: `DoctrineActiveAdministratorDirectory::holdsAdministratorRoleForUpdate()`
+ * takes a single row under an UNORDERED `FOR UPDATE`, and neither regex below matches it — deliberately, since
+ * a one-row acquisition has no order to get wrong. What this pins is that the SET is taken sorted and locked,
+ * by exactly one statement.
  *
  * It exists because that statement's clauses are load-bearing and **none of them is reachable by a behavioural
  * test**. Delete `ORDER BY id` and: every verdict test still returns the same boolean, because the answer is an
