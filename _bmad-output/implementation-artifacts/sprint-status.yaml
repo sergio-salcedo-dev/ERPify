@@ -372,7 +372,12 @@ development_status:
   # validador por nombre) y se revirtió; su par sigue en el baseline, ahora con gate propio.
   br-6-gates-arquitectura-ci: done
   br-7-listas-backoffice: done
-  br-8-operabilidad: backlog
+  # Último lote de la épica. La medición contra a4af085f refutó la base de #255/#256 (el backup NUNCA produjo
+  # el par db+objects que ambos describen; la superficie de objetos se retiró en 08f8199b/#557) y ascendió #612
+  # de latente a vivo: su premisa —«ninguna configuración apunta a un SMTP remoto»— la tumbó 0fc48fff el
+  # 2026-08-11, de esta misma épica. Cuatro de los seis issues traen una decisión que su propio texto declara
+  # no-automatizable; están planteadas como DEC-1..DEC-5 en la historia, sin resolver.
+  br-8-operabilidad: ready-for-dev
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.
