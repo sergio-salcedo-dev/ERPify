@@ -11,7 +11,12 @@ use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Override;
 
 /**
- * The real {@see UserRepository}, with a hook at the one statement that takes the `identity_user` row lock.
+ * The real {@see UserRepository}, with a hook at the statement that DELETES the `identity_user` row.
+ *
+ * Not the only statement that locks that row: the erasure's administrator refusal reads it under
+ * `FOR UPDATE` first, so by the time this fires the transaction already holds it. A contender driven from
+ * here therefore always loses — which is why the window between the two refusals has a seam of its own,
+ * {@see ProbingActiveAdministratorDirectory}.
  *
  * A lock ORDER is only observable from a contender, and a second transaction cannot be made to race this one
  * inside a single PHPUnit process — the image carries neither `pcntl` (no fork) nor the procedural `pgsql`
@@ -28,7 +33,7 @@ final readonly class ProbingUserRepository implements UserRepository
 {
     /**
      * @param Closure(): void $beforeRowLock runs immediately before the delete, while the transaction holds
-     *                                       whatever it acquired earlier and nothing it acquires later
+     *                                       whatever it acquired earlier — the subject's own row included
      */
     public function __construct(
         private UserRepository $inner,

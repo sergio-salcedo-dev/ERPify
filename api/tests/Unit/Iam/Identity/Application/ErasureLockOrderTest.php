@@ -97,7 +97,7 @@ final class ErasureLockOrderTest extends TestCase
                 LockOrderJournal::IDENTITY_USER,
                 LockOrderJournal::PASSWORD_RESET_TOKEN,
             ],
-            $journal->tablesLockedInOrder,
+            $journal->crossTableOrder(),
             'The erasure chain no longer acquires in the order the accept, revoke and reset paths agree on. '
             . 'Swapping any adjacent pair re-opens an ABBA deadlock with a path that cannot reorder itself, '
             . 'and the deadlock surfaces as a 503 with nothing in the code to explain it.',
@@ -107,11 +107,14 @@ final class ErasureLockOrderTest extends TestCase
     #[Test]
     public function anAdministratorIsRefusedBeforeAnyOfTheThreeTablesIsReachedFor(): void
     {
-        // The guard is a precondition, so it belongs ahead of every acquisition — including the invitation
-        // purge, whose new position is immediately after it. Moving the purge one statement earlier would
-        // take write locks on `iam_invitation` for a transaction that is about to abort, blocking exactly the
+        // The UNLOCKED guard is a precondition and belongs ahead of every acquisition — including the
+        // invitation purge, whose position is immediately after it. Moving the purge one statement earlier
+        // would take write locks on `iam_invitation` for a transaction about to abort, blocking exactly the
         // accept-versus-revoke pair this ordering exists to protect. The rollback hides the damage; the
-        // contention is the cost, and this is what measures it.
+        // contention is the cost, and this is what measures it. The guard that DECIDES runs after the purge
+        // and cannot run before it — it locks the subject's row, which the chain may not take first — so what
+        // this case pins is that the ordinary refusal, the one that fires when the subject was already an
+        // administrator, still costs no write lock at all.
         $journal = new LockOrderJournal();
         $invitations = new InMemoryInvitationRepository($this->invitationFor(UserMother::DEFAULT_ID));
         $tokens = new InMemoryPasswordResetTokenRepository($this->resetTokenFor(UserMother::DEFAULT_ID));
