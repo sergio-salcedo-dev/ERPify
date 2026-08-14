@@ -9,7 +9,8 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 /**
  * Thrown when an {@see \Erpify\Shared\Audit\Domain\AuditRetentionPolicy} is built with windows that break
  * the legal separation between the audit axes — a non-positive window, or a `security` window that does
- * not strictly outlive `activity`.
+ * not strictly outlive `activity` — or when a line of the plan it produces is not a deletion instruction
+ * anyone may execute.
  *
  * Deliberately marker-less: the windows come from trusted operational config (the scheduled message's
  * defaults), so a breach is a server-side configuration fault, not bad client input. Leaving it unmarked
@@ -34,6 +35,15 @@ final class InvalidAuditRetentionPolicy extends DomainException
             type: self::TYPE,
             title: 'Audit security retention window must strictly exceed the activity window.',
             context: ['activityDays' => $activityDays, 'securityDays' => $securityDays],
+        );
+    }
+
+    public static function exemptActionsMustNotBeEmpty(string $level): self
+    {
+        return new self(
+            type: self::TYPE,
+            title: 'Audit retention threshold must exempt at least one action.',
+            context: ['level' => $level],
         );
     }
 }

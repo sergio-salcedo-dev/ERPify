@@ -240,8 +240,13 @@ ejecutado por HTTP escribe por tanto el `ip` y el `user_agent` del administrador
 identificado —precisamente porque son suyas y no del sujeto—. La exención retiene **las tres**, que son el
 mismo trío que `docs/rules/database.md` nombra como el PII cuya ventana acotada *es* la minimización. Hay
 vía de eliminación y es **discrecional**: el pase de actor casa por `actor_id`, así que esas columnas se
-limpian sólo si ese administrador es borrado a su vez. Los caminos por CLI no están expuestos: corren fuera
-de petición como `system`, con ambas columnas nulas.
+limpian sólo si se borra el rastro de ese administrador. Cuál de las dos rutas lo alcanza importa, porque
+sólo una está condicionada. La ruta de *identidad* se **rechaza** mientras el sujeto conserve `ADMIN` (409
+`administrator-erasure-requires-demotion`), de modo que exige degradarlo antes — y el invariante de ≥1 admin
+sólo lo permite mientras **exista** un segundo administrador activo; nunca exige que lo ejecute, porque nada
+guarda la auto-degradación. El comando `audit:gdpr:erase` no lleva esa puerta: anonimiza por `actor_id` para
+cualquier UUID, sin comprobación de rol. Aparte, y sin leerlo como el mismo hecho: los caminos por CLI no
+*escriben* estas columnas en las filas que acuñan — corren fuera de petición como `system`, con ambas nulas.
 
 **Sopesado y aceptado, no pasado por alto.** Las dos acciones de evidencia no tienen la misma retención
 correcta, sólo el mismo suelo de «más que el techo de `security`». `SUBJECT_ERASED` necesita *nunca*, porque
@@ -252,13 +257,20 @@ dos, y las dos formas más estrechas se consideraron y se descartaron: un suelo 
 `ACTOR_TRAIL_ERASED` parte una regla en dos por una diferencia que ningún lector inferiría de las filas, y no
 sellar metadata de petición al escribirlas le quitaría atribución a la única clase de fila cuyo propósito
 **es** la atribución — un borrado que nadie puede situar es evidencia más débil de lo que una dirección
-sobre-retenida es un daño. La exposición está acotada en la práctica: los administradores son pocos, la vía
-de eliminación existe vía su propio borrado, y los caminos por CLI escriben ambas columnas nulas.
+sobre-retenida es un daño. Lo que acota la exposición en la práctica es la **forma del despliegue**, no una
+propiedad del sistema, y no deben leerse como lo mismo: nada limita el conjunto `ADMIN` —existe
+`users.grantAdmin`— y en una instalación con un solo administrador la ruta de identidad queda cerrada hasta
+que otro tenga `ADMIN`. Eso acota una ruta, no la exposición: el comando de operador sigue limpiando esas
+columnas para cualquier id de actor. Lo que el sistema sí garantiza es la mitad estrecha: los caminos por
+CLI escriben ambas columnas nulas en las filas que acuñan.
 
 **Disparador de revisita**, para que la aceptación no se vuelva invisible: lo primero que ocurra entre un
 despliegue en producción que borre a un sujeto real, un administrador que se marche y no sea borrado, o una
 revisión de DPO. En ese momento la opción es el suelo acotado, y este párrafo es el registro de que fue una
-elección.
+elección. Sólo la primera condición es observable por máquina, y no la observa este párrafo: el issue #718
+lleva el predicado candidato y es el artefacto que tiene bandeja de entrada. Un registro repetido en cuatro
+ficheros es memoria, nunca un despertador — y no se automatiza porque no hay sumidero correcto: a `error`
+alarmaría a diario sobre comportamiento aceptado, y por debajo de `error` producción lo descarta.
 
 **«Cerrado» significa cerrado por revisión, no por gate.** Nada automatizado impide una cuarta política:
 `git grep` sobre la tabla es el único control y no está cableado a ninguna puerta, de modo que una mutación

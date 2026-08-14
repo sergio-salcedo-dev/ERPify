@@ -63,9 +63,15 @@
   minimisation — **on every row the window still covers.** On an exempt row it is not, and that is the price
   of the exemption rather than an oversight: those rows keep the same triple indefinitely, and their only
   removal path is the actor-axis erasure below, which matches on `actor_id` and so reaches an acting
-  administrator's row only if that administrator is themself erased (the operator CLI paths run off-request
-  as `system`, with `ip` and `user_agent` null). The cost is weighed, and carries a revisit trigger, at
-  `AuditErasureEvidence`. Outright erasure is the second policy — the `audit:gdpr:erase` command's in-place
+  administrator's row only if that administrator's trail is erased. Only the *identity* route is gated: it
+  is **refused while they carry `ADMIN`**, so it needs a demotion first, which the ≥1-admin invariant permits
+  only while a second active administrator **exists** — it never requires one to perform it, since
+  self-demotion is unguarded. The `audit:gdpr:erase` command below carries no role check, so it stays a
+  removal path even on a single-administrator installation (a separate fact from the CLI writing `ip` and
+  `user_agent` null on the rows it mints, which it does, running off-request as `system`). The cost is
+  weighed, and carries a revisit trigger, at `AuditErasureEvidence`; what *observes* that trigger is issue
+  #718, not the prose — and it observes only the first of its three conditions.
+  Outright erasure is the second policy — the `audit:gdpr:erase` command's in-place
   anonymising `UPDATE` (`actor_id` → a fresh random UUID per subject; `ip`/`user_agent` → `[REDACTED]`),
   never row deletion. The third is the resource axis, which pseudonymises `resource_id` and — only where
   `actor_type = anonymous`, the one case where the row records no discriminant for whose address it holds —

@@ -220,12 +220,26 @@ you change anything here.
       the request cycle on the HTTP path, so **the acting administrator's `ip` and
       `user_agent` are retained indefinitely along with their `actor_id`** — clearable only
       if that administrator is themself erased, since the actor-axis pass matches by
-      `actor_id`. The CLI paths write both columns NULL. **Weighed and accepted:** stripping
+      `actor_id`. **Say the precondition with it, or the sentence promises a route that is
+      refused:** *identity* erasure is rejected while the subject still carries `ADMIN` (409
+      `administrator-erasure-requires-demotion`, `FulfilIdentityErasure`), so on that route
+      clearing those columns requires demoting them first — which the ≥1-admin invariant
+      permits only while a **second active administrator exists**. It does not require that
+      administrator to *act*: nothing guards self-demotion, so one principal may drop their own
+      `ADMIN` unilaterally, and the invariant is about who survives, not who performs. Be
+      equally exact about the other direction: this gates the identity route, **not** the
+      actor-axis anonymiser. The operator CLI `audit:gdpr:erase` reaches those same columns for
+      any UUID with **no role check at all**, so a sole administrator's rows are clearable
+      there. What the CLI paths do not do is *write* `ip`/`user_agent` on rows they mint — they
+      run off-request as `system`, with both columns NULL. **Weighed and accepted:** stripping
       request metadata at write time would take attribution off the one class of row whose
       purpose is attribution, and a bounded floor for `GDPR_ERASURE_EXECUTED` alone splits
       one rule in two for a difference no reader infers from the rows. Revisit at the first
       of — a production deployment that erases a real subject, an administrator who leaves
-      without being erased, or a DPO review.
+      without being erased, or a DPO review. Only the first is machine-observable, and **this
+      paragraph does not observe it**: issue #718 holds the candidate predicate (a production
+      count of exempt rows still carrying `ip`/`user_agent` with `actor_erased = FALSE`) and is
+      the artefact with an inbox. Do not read a record in four files as a wake-up.
       Because the operating role can read the record that audits it, the record's
       attribution is guarded on the write side: **erasure refuses any subject still
       carrying `ADMIN`** (409 `administrator-erasure-requires-demotion`), so an

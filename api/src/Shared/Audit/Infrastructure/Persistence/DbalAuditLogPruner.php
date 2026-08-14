@@ -91,21 +91,22 @@ final readonly class DbalAuditLogPruner implements AuditLogPruner
     {
         $removed = 0;
 
+        // Bound unconditionally, and `AuditRetentionThreshold` is what makes that safe: it refuses an empty
+        // exemption at construction, so the one input that would render this placeholder as the literal
+        // `NULL` — unknown for every row, and a prune that deletes nothing while reporting success — cannot
+        // reach here. Composing the clause instead would restate that guarantee in this adapter, on a branch
+        // no caller can enter and therefore no test can pin.
         $parameters = [
             'level' => $threshold->level->value,
             'threshold' => $threshold->deleteBefore,
             'batch' => $this->batchSize,
+            'exemptActions' => $threshold->exemptActions,
         ];
-        $types = ['threshold' => Types::DATETIMETZ_IMMUTABLE, 'batch' => Types::INTEGER];
-        $exemption = '';
-
-        // Composed rather than always bound: DBAL expands an empty list to `NOT IN (NULL)`, which is unknown
-        // for every row and would silently stop the prune altogether. An empty exemption means no clause.
-        if ([] !== $threshold->exemptActions) {
-            $exemption = 'AND action NOT IN (:exemptActions) ';
-            $parameters['exemptActions'] = $threshold->exemptActions;
-            $types['exemptActions'] = ArrayParameterType::STRING;
-        }
+        $types = [
+            'threshold' => Types::DATETIMETZ_IMMUTABLE,
+            'batch' => Types::INTEGER,
+            'exemptActions' => ArrayParameterType::STRING,
+        ];
 
         do {
             // The exemption belongs to the INNER select and must stay there. On the outer `DELETE` the inner
@@ -140,7 +141,7 @@ final readonly class DbalAuditLogPruner implements AuditLogPruner
             $deleted = (int) $this->connection->executeStatement(
                 'DELETE FROM audit_log WHERE id IN ('
                 . 'SELECT id FROM audit_log WHERE level = :level AND occurred_on < :threshold '
-                . $exemption
+                . 'AND action NOT IN (:exemptActions) '
                 . 'ORDER BY id LIMIT :batch FOR UPDATE'
                 . ')',
                 $parameters,
