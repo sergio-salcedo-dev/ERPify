@@ -15,6 +15,8 @@ context:
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · Lote BR-5 · Issues #474 #468
 > Rama: `feat/iam-session-retention-5zzw` · Worktree: `.claude/worktrees/iam-session-retention-5zzw` · Base: `main` @ `d07ba35f`
 > Una rama, una PR — decisión de Sergio, no separar los dos issues.
+> **PR: [#722](https://github.com/sergio-salcedo-dev/ERPify/pull/722)** · Pase adversarial registrado abajo,
+> escrito **antes** de abrirla.
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
