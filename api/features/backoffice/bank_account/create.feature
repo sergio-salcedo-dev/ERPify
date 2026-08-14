@@ -172,6 +172,34 @@ Feature: Create a bank account
     And the JSON node "type" should be equal to "validation-failed"
     And the JSON node "violations" should have 1 element
     And the JSON node "violations[0].field" should be equal to "bic"
+    And the JSON node "violations[0].message" should be equal to "The BIC does not match the IBAN country."
+    And there should be 0 events stored named "erpify.backoffice.bankaccount.created"
+
+  # The country half of `Assert\Bic` takes the IBAN's country from the first two characters of the
+  # value as submitted, so a spelling that leads with a separator — the ordinary shape of a
+  # copy-paste — is the one that can slip past it. The refusal happens at the EDGE, which is what the
+  # query counter pins: the aggregate would refuse the same pair with the same message, one layer and
+  # one bank lookup later, so without that assertion this scenario cannot tell the two apart. The
+  # message names the country rather than the account because an IBAN is personal data and a violation
+  # message is rendered into the error log, which no erasure path reaches.
+  Scenario: Refuse a mismatched BIC even when the IBAN leads with a separator
+    Given the stored events are cleared
+    And I reset the stats for all doctrine connections
+    When I send a POST request to "/backoffice/bank-accounts" with body:
+    """
+    {
+      "bankId": "11111111-1111-7000-8000-000000000003",
+      "holderName": "Mismatch Holder",
+      "iban": " ES91 2100 0418 4502 0005 1332",
+      "bic": "DEUTDEFFXXX"
+    }
+    """
+    Then the response status code should be 422
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations" should have 1 element
+    And the JSON node "violations[0].field" should be equal to "bic"
+    And the JSON node "violations[0].message" should be equal to "The BIC does not match the IBAN country."
+    And 0 requests got executed across all doctrine connections
     And there should be 0 events stored named "erpify.backoffice.bankaccount.created"
 
   Scenario: Fail to create an account for a bank that does not exist

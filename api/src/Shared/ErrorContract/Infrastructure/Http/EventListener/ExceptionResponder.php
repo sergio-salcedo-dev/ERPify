@@ -16,6 +16,7 @@ use Error;
 use LogicException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
+use ReflectionClass;
 use RuntimeException;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
@@ -23,6 +24,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Throwable;
 
 /**
@@ -53,6 +55,11 @@ use Throwable;
  * `request_uri` carries the path and the query's SHAPE, never its sensitive values: it goes
  * through {@see RequestUriRedaction} on both emission paths, because {@see RedactionDenylist}
  * matches key names of the context map and cannot see inside one of its values.
+ * `exception_message` is subject to the same distinction and for the same reason — see
+ * {@see describeForLog()}: a validation failure renders its violation list, and violation messages
+ * are interpolated with the payload, so anywhere in the chain one is found the field is rebuilt from
+ * the validated type, the failing paths and the constraint codes. Like `request_uri` it holds on
+ * BOTH emission paths, the last-resort one included.
  *
  * `exception_category` is an SRE-facing taxonomy: stable, queryable, derived from the
  * SPL hierarchy and the project's `DomainException` marker. Values:
@@ -129,6 +136,15 @@ final readonly class ExceptionResponder
      * bytes for any non-36-char input).
      */
     private const int UUIDV7_LENGTH = 36;
+
+    /**
+     * Caps on what a validation failure may contribute to one log line. A property path can be
+     * caller-chosen (see {@see describeForLog()}), and the violation count is bounded only by how many
+     * surplus members a request body carries — so neither is allowed to size the record.
+     */
+    private const int LOGGED_VIOLATION_LIMIT = 10;
+
+    private const int LOGGED_PATH_LIMIT = 64;
 
     private const string LOG_MESSAGE = 'API error response built';
 
@@ -242,7 +258,7 @@ final readonly class ExceptionResponder
                 'self_failure_class' => $selfFailure::class,
                 'self_failure_message' => $selfFailure->getMessage(),
                 'original_exception_class' => $originalThrowable::class,
-                'original_exception_message' => $originalThrowable->getMessage(),
+                'original_exception_message' => $this->describeForLog($originalThrowable),
                 'correlation_id' => $correlationId,
                 'instance' => $instance,
                 'request_uri' => RequestUriRedaction::redact($request->getRequestUri()),
@@ -326,9 +342,138 @@ final readonly class ExceptionResponder
             'status' => $problemDetails->status,
             'exception_class' => $throwable::class,
             'exception_category' => $this->resolveExceptionCategory($throwable),
-            'exception_message' => $throwable->getMessage(),
+            'exception_message' => $this->describeForLog($throwable),
             'request_uri' => RequestUriRedaction::redact($request->getRequestUri()),
             'request_method' => $request->getMethod(),
         ]);
+    }
+
+    /**
+     * A validation failure's own message is its whole violation list rendered, and a violation message
+     * is interpolated with the values it is about — which here means the request payload, and this
+     * application's payloads carry a natural person's IBAN, holder name and alias. Writing it verbatim
+     * spells them into a log file no erasure path touches, and {@see RedactionDenylist} cannot help:
+     * it strips by KEY, and the key is `exception_message`.
+     *
+     * The search is over the whole `getPrevious()` chain, not the top-level type: `#[MapRequestPayload]`
+     * throws an `HttpException(422)` **wrapping** the `ValidationFailedException`, and its message is
+     * the violation list already imploded. A top-level `instanceof` therefore reduces the aggregate's
+     * failures and misses every DTO's — i.e. exactly the layer holding the raw request. The envelope
+     * side of this listener has always walked the chain ({@see ProblemDetailsFactory}); this is the
+     * same walk, cycle-safe the same way, because a malformed chain must not stall the worker.
+     *
+     * What replaces the message is what stays diagnostic without carrying input: the validated type,
+     * the failing property paths and each violation's constraint code — a UUID constant, so an
+     * operator can still tell a BIC/IBAN country mismatch from a malformed BIC. Paths are bounded in
+     * length and number because a path is NOT always shape: {@see UnknownPayloadMemberListener} builds
+     * violations whose path is the surplus member's own name, i.e. caller-chosen bytes.
+     */
+    private function describeForLog(Throwable $throwable): string
+    {
+        $validationFailure = $this->findValidationFailure($throwable);
+
+        if (!$validationFailure instanceof ValidationFailedException) {
+            return $throwable->getMessage();
+        }
+
+        $violations = $validationFailure->getViolations();
+        $declared = $this->declaredPropertiesOf($validationFailure->getValue());
+        $described = [];
+
+        foreach ($violations as $violation) {
+            if (self::LOGGED_VIOLATION_LIMIT === \count($described)) {
+                break;
+            }
+
+            $described[] = \sprintf(
+                '%s (%s)',
+                $this->safePath($violation->getPropertyPath(), $declared),
+                $violation->getCode() ?? 'no-code',
+            );
+        }
+
+        $omitted = \count($violations) - \count($described);
+
+        return \sprintf(
+            '%s: %d violation(s) on %s%s',
+            \get_debug_type($validationFailure->getValue()),
+            \count($violations),
+            [] === $described ? '(none)' : \implode(', ', $described),
+            $omitted > 0 ? \sprintf(' (+%d more)', $omitted) : '',
+        );
+    }
+
+    /**
+     * Cycle-safe by `spl_object_id` seen-set: a rewrap that reuses an instance must not spin here.
+     */
+    private function findValidationFailure(Throwable $throwable): ?ValidationFailedException
+    {
+        $seen = [];
+
+        for ($current = $throwable; $current instanceof Throwable; $current = $current->getPrevious()) {
+            $id = \spl_object_id($current);
+
+            if (isset($seen[$id])) {
+                return null;
+            }
+
+            $seen[$id] = true;
+
+            if ($current instanceof ValidationFailedException) {
+                return $current;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A property path is shape only when it names something the validated type declares.
+     * {@see \Erpify\Shared\Http\Infrastructure\UnknownPayloadMemberListener} raises violations whose
+     * path IS the surplus member's name, so a body of `{"ES91…": 1}` puts an IBAN there — measured,
+     * it reached the log through exactly this field. A path the type does not declare is therefore
+     * input: the count still says a member was refused, and the caller gets the name itself back in
+     * `violations[]`, where it came from.
+     *
+     * @param list<string> $declared
+     */
+    private function safePath(string $path, array $declared): string
+    {
+        if ('' === $path) {
+            return '(root)';
+        }
+
+        $segments = \preg_split('/[.\[]/', $path);
+
+        if (false === $segments || !\in_array($segments[0], $declared, true)) {
+            return '(unrecognised member)';
+        }
+
+        if (\mb_strlen($path) <= self::LOGGED_PATH_LIMIT) {
+            return $path;
+        }
+
+        return \mb_substr($path, 0, self::LOGGED_PATH_LIMIT) . '…';
+    }
+
+    /**
+     * The validated value is an object on every path that reaches here through a DTO or an aggregate.
+     * When it is not, nothing declares a vocabulary of paths and every one of them is unrecognised.
+     *
+     * @return list<string>
+     */
+    private function declaredPropertiesOf(mixed $value): array
+    {
+        if (!\is_object($value)) {
+            return [];
+        }
+
+        $declared = [];
+
+        foreach ((new ReflectionClass($value))->getProperties() as $reflectionProperty) {
+            $declared[] = $reflectionProperty->getName();
+        }
+
+        return $declared;
     }
 }

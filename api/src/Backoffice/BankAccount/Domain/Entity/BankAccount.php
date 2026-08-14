@@ -73,7 +73,14 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
          * answering 500.
          */
         #[ORM\Column(length: 11, nullable: true)]
-        #[Assert\Bic(ibanPropertyPath: 'iban')]
+        /**
+         * The default `ibanMessage` interpolates the IBAN it was compared against, and this one is
+         * `#[PersonalData]`. That message is rendered into `ValidationFailedException::getMessage()`,
+         * which reaches both the HTTP violation list and the error log — so the default spells a
+         * person's bank account into a file no erasure path touches. The country is what failed; the
+         * account number adds nothing the caller does not already hold.
+         */
+        #[Assert\Bic(ibanPropertyPath: 'iban', ibanMessage: 'The BIC does not match the IBAN country.')]
         #[Assert\Length(max: 11)]
         private ?string $bic,
         #[ORM\Column(length: 100, nullable: true)]

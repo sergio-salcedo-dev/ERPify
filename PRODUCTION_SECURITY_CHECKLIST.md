@@ -155,6 +155,23 @@ you change anything here.
       **not** a public-by-design endpoint, unlike health). Tracked in
       [#240](https://github.com/sergio-salcedo-dev/ERPify/issues/240) (auth rollout,
       sibling of the health exemption #222).
+- [ ] **A validation message may name the rule, never the value.** "The IBAN value is never
+      logged" was an invariant nobody enforced: `Assert\Bic`'s default `ibanMessage`
+      interpolates `{{ iban }}`, `ValidationFailedException::getMessage()` renders the whole
+      violation list, and `ExceptionResponder` wrote it into `exception_message` — measured
+      end to end, a real IBAN in `var/log` on a live request. `RedactionDenylist` cannot see
+      it: it strips by KEY, and the key is `exception_message`. Two controls now hold the
+      invariant: `ConstraintMessageValueGateTest` refuses any constraint message under `src`
+      that interpolates a non-configuration placeholder, and `ExceptionResponder` rebuilds
+      `exception_message` from the validated type, the declared property paths and the
+      constraint codes whenever a validation failure appears **anywhere in the throwable
+      chain** (the HTTP edge wraps it in an `HttpException`, so a top-level check misses every
+      mapped DTO). A property path is emitted only when the validated type declares it —
+      `UnknownPayloadMemberListener` uses the surplus member's own name as the path, so a body
+      keyed by an IBAN would otherwise put it back. **Still open:** the same unreduced message
+      reaches **Sentry**, whose `SentryEventFilter` drops only project `ClientError` markers —
+      a validation 422 is not one — and whose scrubber declares exception messages out of
+      scope.
 - [ ] The **standalone Bank Accounts UI** (`/backoffice/bank-accounts` list +
       `/backoffice/bank-accounts/{id}` detail) surfaces the **full canonical IBAN**
       (PII) sourced from `GET /api/v1/backoffice/bank-accounts` (global list) and

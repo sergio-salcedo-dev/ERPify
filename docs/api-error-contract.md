@@ -273,7 +273,7 @@ The denylist is applied AFTER the reserved-key `unset()` layer and BEFORE the wh
 
 ## Redacting the logged `request_uri`
 
-`RedactionDenylist` matches KEY names of a map and never looks inside a value, so it cannot protect the one log field built from caller-controlled bytes. `request_uri` therefore goes through [`api/src/Shared/ErrorContract/Application/RequestUriRedaction.php`](../api/src/Shared/ErrorContract/Application/RequestUriRedaction.php) on **both** emission paths — `buildLogContext()` and `emitLastResort()`. What it redacts:
+`RedactionDenylist` matches KEY names of a map and never looks inside a value, so it cannot protect a log field whose VALUE is built from caller-controlled bytes. Two are: `request_uri`, and `exception_message` when a validation failure is in the throwable chain (see the per-error log line above). `request_uri` goes through [`api/src/Shared/ErrorContract/Application/RequestUriRedaction.php`](../api/src/Shared/ErrorContract/Application/RequestUriRedaction.php) on **both** emission paths — `buildLogContext()` and `emitLastResort()`. What it redacts:
 
 | Key                            | Match                | Why                                                              |
 |--------------------------------|----------------------|------------------------------------------------------------------|
@@ -335,6 +335,25 @@ instance, correlation_id, type, status,
 exception_class, exception_category, exception_message,
 request_uri, request_method
 ```
+
+`exception_message` is the throwable's own message unless a `ValidationFailedException` is found
+anywhere in the `getPrevious()` chain — the chain and not the top-level type, because
+`#[MapRequestPayload]` throws an `HttpException(422)` wrapping it whose own message is the violation
+list already imploded, and that is the shape every command DTO produces. When one is found the field
+becomes `<validated type>: N violation(s) on <path> (<constraint code>), …`, bounded in path length
+and violation count.
+The reason is that a validation failure's message is its whole violation list rendered, and a
+violation message is interpolated with the values it is about — i.e. the request payload. This
+application's payloads carry a natural person's IBAN, holder name and alias, and a log file is a
+sink no erasure path reaches, so the values are what does not get written. Which fields failed is
+shape, not payload: it is what makes the record diagnostic and it survives. `RedactionDenylist`
+cannot cover this — it strips by KEY, and the key here is `exception_message` (see *Redaction*).
+The client still receives the violation messages through `violations[]` (subject to the body cap
+documented above, which pops from the tail); the constraint
+messages themselves are what must avoid interpolating a value worth protecting, which is why
+`BankAccount`'s `#[Assert\Bic]` and the commands' `BicMatchingIban` both declare an `ibanMessage`
+of their own instead of taking the Symfony default that spells the IBAN into the text. The reduction
+holds on **both** emission paths, `emitLastResort()` included.
 
 Level tiering (in order, first match wins):
 
@@ -455,6 +474,8 @@ The bench is **not** CI-blocking. The contract tests above are CI-blocking (NFR4
 | `RedactionDenylistTest`                                                                           | denylist semantics + extension procedure (NFR8) |
 | `RequestUriRedactionTest`                                                                         | logged `request_uri` carries no secret or person id |
 | `ErrorContractGateTest`                                                                           | no catch-and-respond; this page documents every marker |
+| `ConstraintMessageValueGateTest`                                                                  | no constraint message interpolates the value it rejected |
+| `ExceptionResponderValidationRedactionTest`                                                       | `exception_message` carries no violation value, on either emission path and through the mapping wrapper |
 
 Behat features under `api/features/shared/error_contract/` pin the wire contract end-to-end (correlation-id propagation, instance UUIDv7, violations extension).
 
@@ -466,6 +487,7 @@ Use this when reviewing a PR that touches `api/src/Shared/ErrorContract/Domain/E
 - [ ] Did the PR change a value in `MARKER_STATUS_MAP` or `MARKER_DEFAULT_TYPE_MAP`? **Update the table above** (the table is a navigation aid; the values themselves come from the constant).
 - [ ] Did the PR change the body shape (`ProblemDetails::toArray()`)? **Update the "Body shape" section.**
 - [ ] Did the PR add a key to `RedactionDenylist::KEYS`? **Update the "Extending the redaction denylist" section** if the procedure changed; the new key itself does not need to be listed here (it lives in the constant).
+- [ ] Did the PR add or configure a **validation constraint** whose message interpolates the value it rejected (`{{ value }}`, `{{ iban }}`, …)? Violation messages are rendered into `exception_message` and into the Sentry event — **give the constraint a message that names the rule**. Gate: `ConstraintMessageValueGateTest`.
 - [ ] Did the PR add a query parameter that carries a secret or a person id? **Extend `RequestUriRedaction`** (and the Caddy access-log filter, which is a separate enumeration) — a value the logged `request_uri` keeps has no owner of erasure.
 - [ ] Did the PR change the env-aware `debug` shape? **Update the "Environment-aware `debug` extension" section.**
 - [ ] Did the PR change the listener priority or CORS interaction? **Update the "Listener layout" section.**
