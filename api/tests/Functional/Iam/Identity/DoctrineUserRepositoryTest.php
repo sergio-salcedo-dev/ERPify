@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Iam\Identity;
 
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
@@ -13,10 +12,12 @@ use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineUserRepository;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Throwable;
 
 /**
  * Proves the adapter against REAL Postgres: an aggregate round-trips through `save`/`findById`, the
@@ -29,6 +30,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * @internal
  */
 #[CoversClass(DoctrineUserRepository::class)]
+#[CoversClass(ConcurrentUniqueWrite::class)]
 final class DoctrineUserRepositoryTest extends KernelTestCase
 {
     private EntityManagerInterface $entityManager;
@@ -83,15 +85,38 @@ final class DoctrineUserRepositoryTest extends KernelTestCase
         });
     }
 
-    public function testDuplicateEmailIsRejectedByTheUniqueIndex(): void
+    /**
+     * The index refuses it, and what the port hands back is a conflict rather than the driver's own
+     * message — which names the offending value, and an email address identifies a natural person.
+     * Untranslated this is an `unhandled-exception` 500, and a 500 is not a `ClientError`, so the
+     * message reaches the error log AND the Sentry event, whose retention no erasure path can touch.
+     */
+    public function testDuplicateEmailArrivesAsAConflictAndNotAsTheDriversMessage(): void
     {
         $this->inRolledBackTransaction(function (): void {
             $this->repository->save($this->newUser('erin@erpify.test'));
 
-            $this->expectException(UniqueConstraintViolationException::class);
+            try {
+                // Canonicalises to the same stored email, so the UNIQUE index catches it.
+                $this->repository->save($this->newUser('ERIN@erpify.test'));
 
-            // Canonicalises to the same stored email, so the UNIQUE index catches it.
-            $this->repository->save($this->newUser('ERIN@erpify.test'));
+                $this->fail('Postgres accepted a second row on a unique index.');
+            } catch (ConcurrentUniqueWrite $concurrentUniqueWrite) {
+                $this->assertSame('concurrent-unique-write', $concurrentUniqueWrite->type());
+                // Three ports raise this one type, so `resource` is the only payload telling them
+                // apart — and the only one of the three assertions here that a wrong literal reds.
+                $this->assertSame('identity-user', $concurrentUniqueWrite->context()['resource'] ?? null);
+                // `previous` is the reachable leak vector: both siblings in that namespace keep the
+                // driver exception there on purpose, so harmonising the three would carry
+                // `Key (email)=(…) already exists.` into the dev/test `debug.previous_chain`.
+                $this->assertNotInstanceOf(Throwable::class, $concurrentUniqueWrite->getPrevious());
+                // The message is a literal on the class, so this cannot fail for any implementation of
+                // the port; it watches the title itself never coming to name what it refused.
+                $this->assertStringNotContainsStringIgnoringCase(
+                    'erin@erpify.test',
+                    $concurrentUniqueWrite->getMessage(),
+                );
+            }
         });
     }
 
