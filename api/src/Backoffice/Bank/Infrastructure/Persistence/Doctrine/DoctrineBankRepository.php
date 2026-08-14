@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine;
 
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\Bank\Domain\Repository\BankSearchRepository;
+use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Erpify\Shared\Search\Domain\FilterOperator;
 use Erpify\Shared\Search\Domain\NavigationDirection;
 use Erpify\Shared\Search\Domain\Page;
@@ -58,8 +60,12 @@ final readonly class DoctrineBankRepository implements
         // The port keeps persist+flush as its observable contract (POST/PUT/DELETE Behat depends on
         // it). When a use case wraps this in a transaction the flush synchronizes but does not commit
         // until that transaction commits. See docs/adr/event-driven-architecture.md.
-        $this->entityManager->persist($bank);
-        $this->entityManager->flush();
+        try {
+            $this->entityManager->persist($bank);
+            $this->entityManager->flush();
+        } catch (UniqueConstraintViolationException) {
+            throw ConcurrentUniqueWrite::onWrite('bank');
+        }
     }
 
     #[Override]

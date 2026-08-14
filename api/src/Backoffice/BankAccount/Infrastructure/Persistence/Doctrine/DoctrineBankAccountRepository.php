@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine;
 
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
+use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -30,8 +32,12 @@ final readonly class DoctrineBankAccountRepository implements BankAccountReposit
         // The port keeps persist+flush as its observable contract (POST/PUT Behat depends on it).
         // When a use case wraps this in a transaction the flush synchronizes but does not commit until
         // that transaction commits.
-        $this->entityManager->persist($account);
-        $this->entityManager->flush();
+        try {
+            $this->entityManager->persist($account);
+            $this->entityManager->flush();
+        } catch (UniqueConstraintViolationException) {
+            throw ConcurrentUniqueWrite::onWrite('bank-account');
+        }
     }
 
     #[Override]
