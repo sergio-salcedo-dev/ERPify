@@ -9,12 +9,14 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine\DoctrineBankRepository;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountRepository;
+use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineUserRepository;
 use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\AsciiUpperTextFieldNormalizer;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\NormalizedTextFieldNormalizer;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Exception;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -34,11 +36,16 @@ use Throwable;
  *
  * Unhandled, that message becomes an unhandled-exception 500 and lands verbatim in `exception_message`
  * and in the Sentry event. The value it names can be personal data: `bank_account.iban` is
- * `#[PersonalData]`. So the port translates at the boundary, which is also where DBAL is allowed to be
- * known, and the translation carries no value.
+ * `#[PersonalData]`, and `identity_user.email` is the address of a natural person. So the port
+ * translates at the boundary, which is also where DBAL is allowed to be known, and the translation
+ * carries no value.
  *
- * The coupling is the two ports under test plus the collaborators their constructors demand; driving a
- * persistence boundary end to end is what it costs.
+ * Every port raising {@see ConcurrentUniqueWrite} belongs here: the `resource` extension is the only
+ * payload telling them apart, so a port left out of the provider can ship the wrong one — or start
+ * carrying the driver exception as `previous` — with nothing red.
+ *
+ * The coupling is the three ports under test plus the collaborators their constructors demand; driving
+ * a persistence boundary end to end is what it costs.
  *
  * @internal
  *
@@ -46,21 +53,29 @@ use Throwable;
  */
 #[CoversClass(DoctrineBankAccountRepository::class)]
 #[CoversClass(DoctrineBankRepository::class)]
+#[CoversClass(DoctrineUserRepository::class)]
 #[CoversClass(ConcurrentUniqueWrite::class)]
 final class RepositoryUniqueViolationTest extends TestCase
 {
     private const string IBAN = 'DE89370400440532013000';
 
+    /**
+     * Postgres' 23505 as DBAL hands it over; the two placeholders are the column and the value it
+     * names — the pair the application must never adopt.
+     */
     private const string DRIVER_MESSAGE = 'An exception occurred while executing a query: SQLSTATE[23505]: '
         . 'Unique violation: 7 ERROR:  duplicate key value violates unique constraint "uniq_53a23e0afad56e62" '
-        . 'DETAIL:  Key (iban)=(' . self::IBAN . ') already exists.';
+        . 'DETAIL:  Key (%s)=(%s) already exists.';
 
     #[Test]
     #[DataProvider('provideARefusedWriteBecomesAConflictThatNamesNoValueCases')]
-    public function aRefusedWriteBecomesAConflictThatNamesNoValue(string $resource): void
-    {
+    public function aRefusedWriteBecomesAConflictThatNamesNoValue(
+        string $resource,
+        string $column,
+        string $offendingValue,
+    ): void {
         $entityManager = $this->createStub(EntityManagerInterface::class);
-        $entityManager->method('flush')->willThrowException($this->driverViolation());
+        $entityManager->method('flush')->willThrowException($this->driverViolation($column, $offendingValue));
 
         try {
             $this->save($resource, $entityManager);
@@ -69,7 +84,7 @@ final class RepositoryUniqueViolationTest extends TestCase
         } catch (ConcurrentUniqueWrite $concurrentUniqueWrite) {
             $this->assertSame('concurrent-unique-write', $concurrentUniqueWrite->type());
             $this->assertSame($resource, $concurrentUniqueWrite->context()['resource'] ?? null);
-            // The message is a literal on the class, so asserting the IBAN is absent from it proves
+            // The message is a literal on the class, so asserting the value is absent from it proves
             // nothing on its own. `previous` is the reachable vector: both siblings in this namespace
             // keep the driver exception there on purpose, so harmonising the three would carry the
             // value into the dev/test debug chain — and only this assertion would notice.
@@ -77,26 +92,33 @@ final class RepositoryUniqueViolationTest extends TestCase
                 Throwable::class,
                 $concurrentUniqueWrite->getPrevious(),
                 'The driver exception was kept as `previous`, so its message — which names the '
-                . 'offending value, and `bank_account.iban` is personal data — reaches the dev/test '
-                . '`debug.previous_chain`.',
+                . "offending value, and both `bank_account.iban` and a person's email address are "
+                . 'personal data — reaches the dev/test `debug.previous_chain`.',
             );
-            $this->assertStringNotContainsString(self::IBAN, $concurrentUniqueWrite->getMessage());
+            $this->assertStringNotContainsString($offendingValue, $concurrentUniqueWrite->getMessage());
         }
     }
 
     /**
-     * @return iterable<string, array{string}>
+     * @return iterable<string, array{string, string, string}>
      */
     public static function provideARefusedWriteBecomesAConflictThatNamesNoValueCases(): iterable
     {
-        yield 'bank account' => ['bank-account'];
-        yield 'bank' => ['bank'];
+        yield 'bank account' => ['bank-account', 'iban', self::IBAN];
+        yield 'bank' => ['bank', 'short_name', 'BNK'];
+        yield 'identity user' => ['identity-user', 'email', UserMother::DEFAULT_EMAIL];
     }
 
     private function save(string $resource, EntityManagerInterface $entityManager): void
     {
         if ('bank-account' === $resource) {
             (new DoctrineBankAccountRepository($entityManager))->save($this->account());
+
+            return;
+        }
+
+        if ('identity-user' === $resource) {
+            (new DoctrineUserRepository($entityManager))->save(UserMother::create());
 
             return;
         }
@@ -134,13 +156,15 @@ final class RepositoryUniqueViolationTest extends TestCase
      * chain it wants says nothing about the behaviour under test — only the message the application
      * must not adopt.
      */
-    private function driverViolation(): UniqueConstraintViolationException
+    private function driverViolation(string $column, string $offendingValue): UniqueConstraintViolationException
     {
         $violation = (new ReflectionClass(UniqueConstraintViolationException::class))
             ->newInstanceWithoutConstructor()
         ;
 
-        (new ReflectionProperty(Exception::class, 'message'))->setValue($violation, self::DRIVER_MESSAGE);
+        (new ReflectionProperty(Exception::class, 'message'))
+            ->setValue($violation, \sprintf(self::DRIVER_MESSAGE, $column, $offendingValue))
+        ;
 
         return $violation;
     }

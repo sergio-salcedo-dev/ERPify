@@ -15,10 +15,10 @@ use Erpify\Shared\Validation\Application\Validator;
  * Registers a new user: the server mints the id (UUID v7), the aggregate enforces its invariants (canonical
  * email, distinct roles) and {@see Validator::ensure()} runs the entity constraints — `#[Assert\Email]` and
  * the `#[UniqueEntity(email)]` uniqueness guard — before persisting, propagating its validation failure (e.g.
- * a duplicate email) to the caller. That guard is a SELECT and the write is an INSERT, so an
- * address committed in between still reaches the unique index; the port answers that with a 409
- * rather than the driver's own message, which names the address. The credential arrives already
- * hashed; hashing stays in Infrastructure.
+ * a duplicate email) to the caller. That guard is a SELECT and the write is an INSERT, so an address
+ * committed in between still reaches the unique index; the port answers that with a conflict carrying no
+ * address, rather than the driver's own message, which names one. The credential arrives already hashed;
+ * hashing stays in Infrastructure.
  */
 final readonly class CreateUser
 {

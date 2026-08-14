@@ -30,6 +30,7 @@ use Throwable;
  * @internal
  */
 #[CoversClass(DoctrineUserRepository::class)]
+#[CoversClass(ConcurrentUniqueWrite::class)]
 final class DoctrineUserRepositoryTest extends KernelTestCase
 {
     private EntityManagerInterface $entityManager;
@@ -102,7 +103,15 @@ final class DoctrineUserRepositoryTest extends KernelTestCase
                 $this->fail('Postgres accepted a second row on a unique index.');
             } catch (ConcurrentUniqueWrite $concurrentUniqueWrite) {
                 $this->assertSame('concurrent-unique-write', $concurrentUniqueWrite->type());
+                // Three ports raise this one type, so `resource` is the only payload telling them
+                // apart — and the only one of the three assertions here that a wrong literal reds.
+                $this->assertSame('identity-user', $concurrentUniqueWrite->context()['resource'] ?? null);
+                // `previous` is the reachable leak vector: both siblings in that namespace keep the
+                // driver exception there on purpose, so harmonising the three would carry
+                // `Key (email)=(…) already exists.` into the dev/test `debug.previous_chain`.
                 $this->assertNotInstanceOf(Throwable::class, $concurrentUniqueWrite->getPrevious());
+                // The message is a literal on the class, so this cannot fail for any implementation of
+                // the port; it watches the title itself never coming to name what it refused.
                 $this->assertStringNotContainsStringIgnoringCase(
                     'erin@erpify.test',
                     $concurrentUniqueWrite->getMessage(),
