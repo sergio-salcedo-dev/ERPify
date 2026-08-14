@@ -2,7 +2,7 @@
 title: 'BR-5: ciclo de vida de `iam_session` — predicado compartido y suelo de retención'
 type: 'feature'
 created: '2026-08-14'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 1
 baseline_commit: d07ba35f92a3ef550462b854ec31892d14c9ef04
 context:
@@ -38,8 +38,13 @@ dos entradas — un comando `iam:session:prune` para el operador y un cuarto `Re
   **una sola** renderización en código de la regla: el docblock de `InMemorySessionRepository` *cuenta* las
   renderizaciones ("deja dos … en vez de tres") y esa cuenta debe seguir siendo cierta.
 - **`findActiveById` sigue llamando a `createQueryBuilder()` dentro de su propio `try`.** El test de
-  indisponibilidad mockea ese método para lanzar; un helper que construya el QB antes del `try` lo pone rojo
-  y convierte un 503 en un 500.
+  indisponibilidad mockea ese método para lanzar, así que sacar el QB del `try` lo pone rojo.
+  ~~y convierte un 503 en un 500~~ — **falso, corregido tras el pase adversarial (2026-08-14):**
+  `EntityManager::createQueryBuilder()` es `return new QueryBuilder($this)`, no abre conexión y no puede
+  lanzar `DbalException`. Lo que en producción debe quedar dentro del `try` es la **ejecución**
+  (`getOneOrNullResult()`), no la construcción. La restricción sobre el código sigue en pie porque el test
+  la impone; lo que era falso es la razón. Se conserva tachado en vez de borrado: el error es reproducible
+  —deducir un requisito de producción a partir de la forma de un mock— y es el que produjo el único GRAVE.
 - **`deleteAllForUser` sigue siendo una sola sentencia.** `erase.feature:92-97` fija 16 queries para toda la
   cadena de borrado.
 - La poda clavea en `expiresAt` y en `revokedAt`, **nunca** en un status nuevo.
@@ -318,3 +323,54 @@ desde `expiresAt`, no desde el alta: ~97 días desde que se acuñó la sesión.
   `findByUserId`), contar los rojos de cada una y restaurar **copiando los bytes**.
 - Pase adversarial registrado, por un contexto distinto del autor, con sus hallazgos escritos en este
   artefacto **antes** de `gh pr create`.
+
+## Suggested Review Order
+
+**La política de retención — empieza aquí**
+
+- Dueño único de las dos ventanas; ambas entradas delegan aquí, así que no pueden divergir.
+  [`PruneRetiredSessions.php:35`](../../api/src/Iam/Session/Application/PruneRetiredSessions.php#L35)
+
+- El contrato: gana la ventana que venza primero, y por qué sólo una rama nombra un status.
+  [`SessionRepository.php:85`](../../api/src/Iam/Session/Domain/Repository/SessionRepository.php#L85)
+
+- La sentencia. Ramas parentizadas, semántica de `NULL`, y el análisis de concurrencia aceptado.
+  [`DoctrineSessionRepository.php:166`](../../api/src/Iam/Session/Infrastructure/Persistence/Doctrine/DoctrineSessionRepository.php#L166)
+
+**El refactor de #474 — conducta preservada**
+
+- El aplicador compartido. Su docblock dice dónde ocurre de verdad el fallo de store.
+  [`DoctrineSessionRepository.php:230`](../../api/src/Iam/Session/Infrastructure/Persistence/Doctrine/DoctrineSessionRepository.php#L230)
+
+- El desempate: `created_at` es TIMESTAMP(0), así que sin el id el orden no es total.
+  [`DoctrineSessionRepository.php:102`](../../api/src/Iam/Session/Infrastructure/Persistence/Doctrine/DoctrineSessionRepository.php#L102)
+
+**El cableado y su frontera**
+
+- El cuarto tick. Ningún gate lo ve: el argumento de coste está en el docblock.
+  [`IdentityMaintenanceSchedule.php:91`](../../api/src/Iam/Identity/Infrastructure/Messenger/Maintenance/IdentityMaintenanceSchedule.php#L91)
+
+- El handler cruza a `Iam/Session` por un caso de uso publicado, como las otras tres seams.
+  [`PruneRetiredSessionsHandler.php:35`](../../api/src/Iam/Identity/Infrastructure/Messenger/Maintenance/PruneRetiredSessionsHandler.php#L35)
+
+- La seam declarada por ruta; su gemela por FQCN vive en `deptrac.yaml` y nada las sincroniza.
+  [`.bounded-context-allowlist:144`](../../api/.bounded-context-allowlist#L144)
+
+- El brazo del operador, delgado a propósito: no decide nada sobre las ventanas.
+  [`PruneRetiredSessionsCommand.php:9`](../../api/src/Iam/Session/Infrastructure/Cli/PruneRetiredSessionsCommand.php#L9)
+
+**La consecuencia sobre el control detective de GDPR**
+
+- El barrido acota la ventana de DETECCIÓN: trade opuesto al de `audit_log`, dicho explícitamente.
+  [`DbalSessionPersonReferences.php:30`](../../api/src/Iam/Session/Infrastructure/Persistence/Doctrine/DbalSessionPersonReferences.php#L30)
+
+**Los tests que sostienen las afirmaciones**
+
+- La garantía que salió del pase adversarial: una revocación no alarga una fila ya caducada.
+  [`PruneRetiredSessionsTest.php:86`](../../api/tests/Unit/Iam/Session/Application/PruneRetiredSessionsTest.php#L86)
+
+- Siembra invertida a propósito: en el orden esperado, esta aserción pasaba sin el desempate.
+  [`DoctrineSessionRepositoryTest.php:141`](../../api/tests/Functional/Iam/Session/DoctrineSessionRepositoryTest.php#L141)
+
+- La única aserción del árbol que se pone roja si el tick desaparece.
+  [`IdentityMaintenanceScheduleTest.php:47`](../../api/tests/Unit/Iam/Identity/Infrastructure/Messenger/Maintenance/IdentityMaintenanceScheduleTest.php#L47)
