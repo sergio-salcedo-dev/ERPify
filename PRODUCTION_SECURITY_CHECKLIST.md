@@ -592,13 +592,31 @@ you change anything here.
       `device` (**normalised server-side** from the `User-Agent` to a bounded label, **never** the raw client string,
       closing stored-injection + free-text PII). The table is **not** an `AuditedEntity`, so the IP never enters the
       five-year audit trail; lawful basis is **legitimate interest** (account security / session management), not
-      consent. **Retention policy:** the native GC prunes the file store, **not** this table — a prune command
-      (`REVOKED` older than 30 days; `ACTIVE` whose `expiresAt` is older than 90 days; immediate deletion on subject
-      erasure) is follow-up [#468](https://github.com/sergio-salcedo-dev/ERPify/issues/468). Because there is no
-      physical FK on `user_id`, a user hard-delete does not cascade — the purge-on-erasure reactor is deferred to
-      [#470](https://github.com/sergio-salcedo-dev/ERPify/issues/470) (no user-erasure event exists yet). **Deploy
-      note (one-time):** native sessions minted **before** this
-      ships carry no `iamSessionId`, so the gate 401s them — a single forced global logout at the II-7 deploy
+      consent. **Retention policy — wired and unattended; see the limits below before calling it enforced:** the
+      native GC prunes the file store, **not** this table, and nothing else removes a row for age — revocation is
+      logical and keeps the row, expiry is a read predicate — so this sweep is the only thing bounding how long
+      `ip`/`device` live. `PruneRetiredSessions` drops a row when the **first** of its windows elapses: 30 days
+      after `revokedAt` for a revoked row, 90 days after `expiresAt` for any row. Only the revocation branch
+      names a status, deliberately — a bulk revocation stamps `revokedAt = now` on rows already long expired, so
+      judging a revoked row by its revocation alone would let a password change *extend* the life of a row dead
+      for months. With the seven-day session TTL the ceiling is ~97 days after the login that minted the row.
+      It runs on demand as `iam:session:prune` and daily as a tick on `IdentityMaintenanceSchedule`.
+      **Subject erasure never waits for it:**
+      `FulfilIdentityErasure` hard-deletes the subject's rows through `PurgeUserSessions` inside the erasure
+      transaction, and because there is no physical FK on `user_id` that explicit deletion is the whole of what
+      the erasure owes here — nothing cascades. `DbalSessionPersonReferences` is the detective half, reporting any
+      `user_id` in this table that no live identity backs — though only while the row survives, so a broken
+      erasure path stops being reported once the sweep removes its evidence. **What a green build does not
+      prove:** that the daily tick ever fired. Folding it into an existing schedule mints no transport, so
+      `make php.lint.schedule-consumption` is satisfied by a transport that already existed and never sees the
+      tick; one unit assertion is the only mechanical guard that it is registered at all, and nothing at any
+      level observes that it *ran* — the handler is silent on success, as both sibling prunes are. **Closing
+      that** means an operational signal (a log line the prune emits, or an alert on the tick), not another
+      test. **Concurrency, accepted:** the sweep is one unbounded `DELETE` with no ordering or advisory lock,
+      unlike `audit_log`'s batched prune, so it can deadlock with the erasure transaction that deletes from the
+      same table; one daily tick against an operator action, and the loser gets a retryable 503. **Deploy note
+      (one-time):** native sessions minted **before** the registry
+      shipped carry no `iamSessionId`, so the gate 401s them — a single forced global logout at the II-7 deploy
       (acceptable, named).
 - [x] **Corrupt identity rows fail closed on the auth path, at BOTH re-hydration sites.** The identity is
       re-read on every authenticated request, and two stored shapes are unrepresentable in the domain: a
