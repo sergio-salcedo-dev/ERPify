@@ -32,9 +32,6 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
     /** @var list<string> */
     public array $askedWhetherAdministrator = [];
 
-    /** @var list<string> */
-    public array $askedUnderRowLock = [];
-
     public int $setLocksTaken = 0;
 
     /**
@@ -111,7 +108,6 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
     public function holdsAdministratorRoleForUpdate(string $userId): bool
     {
         $this->lockOrderJournal?->locked(LockOrderJournal::IDENTITY_USER);
-        $this->askedUnderRowLock[] = $userId;
 
         return \array_key_exists($userId, $this->adminUserIsActive);
     }

@@ -213,8 +213,8 @@ final class AdministratorErasureRaceFunctionalTest extends KernelTestCase
             Role::AUDIT_READER,
         );
         $user->pullDomainEvents();
+        // `save()` flushes; only the identity map needs clearing so the erasure re-hydrates from the row.
         $this->service(UserRepository::class)->save($user);
-        $this->entityManager->flush();
         $this->entityManager->clear();
     }
 

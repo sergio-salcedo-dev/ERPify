@@ -67,9 +67,21 @@ interface ActiveAdministratorDirectory
      *
      * The unlocked reading cannot carry this precondition: between it and the `DELETE` it guards, a concurrent
      * grant commits and an administrator is erased having never been demoted — with no `USER_ROLES_CHANGED`
-     * ahead of it in the trail, which is the whole reason the refusal exists. Costs one row lock on a row the
-     * erasure is about to delete anyway, and it must be taken where the chain already reaches `identity_user`
-     * — after the invitations, never before, or it inverts the order the accept path cannot reverse.
+     * ahead of it in the trail, which is the whole reason the refusal exists.
+     *
+     * **Must run inside the caller's transaction**, like the two locking members above: outside one Postgres
+     * releases the lock at statement end and this silently becomes the unlocked reading again.
+     *
+     * **It takes a single `identity_user` row without the set lock, and that is the second sanctioned
+     * exception to the rule stated above.** It is safe for a reason the accept path's is not: the erasure
+     * acquires exactly one row on this table and never waits on a second, so it can block a set scan but can
+     * never be one end of a cycle.
+     *
+     * Two boundaries it does not cover, stated because the sentence above ("still holds at commit") reads
+     * wider than it is. A `FOR UPDATE` matching NO row takes no lock, so an absent subject is answered
+     * `false` and locked against nothing — harmless only because every creation path mints a server-side
+     * UUID, so no concurrent `INSERT` can claim that id. And the lock is not free on the paths that matter:
+     * on a refusal nothing is deleted, so it is held on a live administrator's row until the rollback.
      */
     public function holdsAdministratorRoleForUpdate(string $userId): bool;
 }

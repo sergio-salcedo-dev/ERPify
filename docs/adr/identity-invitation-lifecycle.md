@@ -100,9 +100,21 @@ the other four yield — three of them cannot, and the fourth has no reason to. 
 order over all seven resources the erasure touches — only two pairs close a cycle, and nothing can enforce a
 total order (neither deptrac nor PHPStan sees statement order), so declaring one would be unfalsifiable.
 
-The purge that leads still follows the administrator refusal: in front of it, a transaction about to abort
-would take write locks on `iam_invitation`, and the contention would fall on the very pair the order exists to
-keep apart. The rollback hides the damage; the waiting does not.
+The purge that leads still follows the administrator refusal — the **unlocked** one. In front of it, a
+transaction about to abort would take write locks on `iam_invitation`, and the contention would fall on the
+very pair the order exists to keep apart. The rollback hides the damage; the waiting does not.
+
+**A second, locking refusal was added behind the purge (#655), and it is a deliberate narrowing of that
+property rather than an abandonment of it.** The unlocked reading decides nothing: it takes no lock, so a
+concurrent grant commits between it and the `DELETE` it guards and an administrator is erased having never
+been demoted — with no `USER_ROLES_CHANGED` ahead of it in the trail, which is the entire reason the refusal
+exists. Deciding requires holding at commit; holding requires locking the subject's `identity_user` row; and
+that row cannot be acquired before `iam_invitation` without inverting the order the accept path is unable to
+reverse. So the deciding guard goes behind the purge, and a doomed transaction takes invitation write locks
+**only in the race case** — the ordinary refusal, where the subject was already an administrator when the
+request arrived, is still served by the unlocked reading in front and still costs nothing. Keeping both is
+what buys that, and both are pinned: deleting the locked one reds
+`AdministratorErasureRaceFunctionalTest`, deleting the unlocked one reds `FulfilIdentityErasureTest`.
 
 *Enforcement, because nothing in the pre-existing suite went red in either direction:* `ErasureLockOrderTest`
 asserts the acquisition **sequence** over the use cases (a call-count assertion cannot see an order), and
@@ -119,9 +131,16 @@ opposite directions; the cost is one round trip on an operation that runs once p
 unfiltered by status because the delete is, and locking a narrower set than the one being deleted would hand
 the difference back to the plan.
 
-*What none of this proves:* **no real two-transaction race is exercised anywhere.** The image carries neither
-`pcntl` nor the procedural `pgsql` extension, so a second transaction cannot run concurrently inside a test
-process. Every claim here rests on acquisition instants and on statement order, never on an observed `40P01`.
+*What none of this proves:* **no `40P01` is ever observed.** The image carries neither `pcntl` nor the
+procedural `pgsql` extension, so two transactions cannot be made to run *concurrently* inside a test process,
+and every ordering claim here rests on acquisition instants and statement order instead.
+
+That is a bound on concurrency, not on two-transaction tests, and the distinction became load-bearing with
+#655: a contender only has to be *blocked* when the first transaction holds a lock, so where it holds none the
+interleaving is deterministic on two connections in one process, and where it does hold one the contender's
+`lock_timeout` turns "blocked" into an assertable outcome.
+`AdministratorErasureRaceFunctionalTest` drives both. What stays out of reach is a genuine deadlock, which
+needs each side to hold and wait at once.
 
 ### D14 — Lockout observability is detective-only, and its delivery channel is why it may carry nothing exercisable
 

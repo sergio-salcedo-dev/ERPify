@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
 use Erpify\Shared\Access\Domain\Role;
+use JsonException;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -30,6 +31,17 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
 {
     public function __construct(private Connection $connection)
     {
+    }
+
+    /**
+     * The containment operand every statement here binds, encoded once: three copies of the same
+     * `json_encode` is three places a future role rename has to be found.
+     *
+     * @throws JsonException
+     */
+    private function adminRoleOperand(): string
+    {
+        return \json_encode([Role::ADMIN->value], JSON_THROW_ON_ERROR);
     }
 
     #[Override]
@@ -75,7 +87,7 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
                 SQL,
             [
                 'active' => IdentityStatus::ACTIVE->value,
-                'adminRole' => \json_encode([Role::ADMIN->value], JSON_THROW_ON_ERROR),
+                'adminRole' => $this->adminRoleOperand(),
             ],
         );
     }
@@ -98,7 +110,7 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
                 SQL,
             [
                 'userId' => $userId,
-                'adminRole' => \json_encode([Role::ADMIN->value], JSON_THROW_ON_ERROR),
+                'adminRole' => $this->adminRoleOperand(),
             ],
         );
     }
@@ -123,7 +135,7 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
                 SQL,
             [
                 'userId' => $userId,
-                'adminRole' => \json_encode([Role::ADMIN->value], JSON_THROW_ON_ERROR),
+                'adminRole' => $this->adminRoleOperand(),
             ],
         );
     }

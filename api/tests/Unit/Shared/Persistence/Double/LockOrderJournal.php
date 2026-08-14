@@ -47,11 +47,15 @@ final class LockOrderJournal
      *
      * This does not contradict the property above, it is its complement. Taking one table twice AROUND
      * another (`A B A`) is a different arrangement and survives here untouched, because those repeats are not
-     * consecutive. Taking it twice in a ROW (`A A B`) cannot contribute an edge no single acquisition already
-     * contributes — the second one waits on nothing the first did not already hold. Asserting the raw list
-     * therefore pins how MANY times a path acquires as well as in what order, and the count is implementation:
-     * a use case that reads a row under `FOR UPDATE` and then deletes it acquires twice where one that only
-     * deletes acquires once, with the same order and the same safety.
+     * consecutive.
+     *
+     * What justifies folding the adjacent ones is NOT that the second acquisition waits on nothing new — at
+     * this granularity the entries are TABLE names, so a row lock followed by a set lock on the same table
+     * are two consecutive entries and the second genuinely waits on rows the first did not hold. It is that
+     * folding adjacent duplicates leaves the set of ordered DISTINCT-TABLE pairs exactly unchanged, and a
+     * cross-table cycle is built from nothing else. What the fold does lose is the acquisition COUNT, which
+     * is implementation — a use case that reads a row under `FOR UPDATE` and then deletes it acquires twice
+     * where one that only deletes acquires once, with the same cross-table order and the same safety.
      *
      * @return list<string>
      */

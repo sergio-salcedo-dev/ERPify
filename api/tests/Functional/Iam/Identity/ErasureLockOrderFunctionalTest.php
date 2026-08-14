@@ -147,7 +147,7 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
 
         $invitationLockedAtIdentityLock = null;
         $resetTokenLockedAtIdentityLock = null;
-        $identityLockedAtTokenDelete = null;
+        $identityGoneAtTokenDelete = null;
 
         $result = $this->chainProbing(
             function () use (&$invitationLockedAtIdentityLock, &$resetTokenLockedAtIdentityLock): void {
@@ -157,8 +157,8 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
                     $this->resetTokenId,
                 );
             },
-            function () use (&$identityLockedAtTokenDelete): void {
-                $identityLockedAtTokenDelete = $this->isLocked('identity_user', $this->subjectId);
+            function () use (&$identityGoneAtTokenDelete): void {
+                $identityGoneAtTokenDelete = $this->identityRowIsGoneOnOurOwnConnection();
             },
         )->execute($this->subjectId);
 
@@ -181,12 +181,31 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
             . "deadlock reachable by a password reset completing during the same subject's erasure.",
         );
         $this->assertTrue(
-            $identityLockedAtTokenDelete,
-            'The chain reached the reset-token delete without holding the `identity_user` row. The two '
-            . 'assertions above cannot see this: they fire where `remove()` is CALLED, and a `remove()` that '
-            . 'stopped flushing would defer its DELETE past the bulk delete below while leaving both of them '
-            . 'true. That is ABBA #2 again, reached by an adapter change instead of by a reordering.',
+            $identityGoneAtTokenDelete,
+            'The chain reached the reset-token delete without having issued the `identity_user` DELETE. The '
+            . 'two assertions above cannot see this: they fire where `remove()` is CALLED, and a `remove()` '
+            . 'that stopped flushing would defer its DELETE past the bulk delete below while leaving both of '
+            . 'them true. That is ABBA #2 again, reached by an adapter change instead of by a reordering. '
+            . 'This asks whether the row is GONE rather than whether it is LOCKED, because the refusal now '
+            . 'locks it before the delete either way — a lock answer would be true whether or not `remove()` '
+            . 'flushed, which is the witness going quiet rather than passing.',
         );
+    }
+
+    /**
+     * Whether the subject's row is already gone from the erasure's OWN view — the uncommitted `DELETE` is
+     * visible to the transaction that issued it and to nothing else, which is exactly the property wanted:
+     * the second connection cannot answer this, because to it the row is still there until commit.
+     */
+    private function identityRowIsGoneOnOurOwnConnection(): bool
+    {
+        $rows = $this->entityManager->getConnection()->fetchOne(
+            'SELECT COUNT(*) FROM identity_user WHERE id = CAST(:id AS UUID)',
+            ['id' => $this->subjectId],
+        );
+        $this->assertIsNumeric($rows);
+
+        return 0 === (int) $rows;
     }
 
     /**

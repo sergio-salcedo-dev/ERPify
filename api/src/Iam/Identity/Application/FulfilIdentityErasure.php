@@ -40,10 +40,15 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * `ErasureLockOrderTest` and its functional sibling are what hold it there, one over the use cases and one
  * over the real adapters; nothing in the rest of the suite goes red on a reordering.
  *
- * It leads the purges but still follows the administrator refusal, and that is not a compromise between the
- * two: a purge in front of the guard would take write locks on behalf of a transaction about to abort, and
- * the contention would fall on the very pair the ordering above exists to keep apart. The rollback would hide
- * the damage; the waiting would not.
+ * It leads the purges and sits between the two halves of the administrator refusal, which is a trade and is
+ * argued rather than assumed. A purge in front of a guard takes write locks on behalf of a transaction about
+ * to abort, and the contention falls on the very pair the ordering above exists to keep apart — the rollback
+ * hides the damage, the waiting does not. That is why the UNLOCKED refusal still leads: it is the one that
+ * fires in the ordinary case, where the subject was already an administrator when the request arrived, and
+ * there the property is preserved exactly. The refusal that DECIDES cannot lead, because deciding means
+ * holding at commit, holding means locking the subject's row, and that row cannot be taken before
+ * `iam_invitation` without inverting the order the accept path is unable to reverse. So the cost is paid in
+ * the one case that cannot avoid it — a concurrent grant landing mid-erasure — and nowhere else.
  *
  * The three purges are here for the same reason as each other: no column in the schema references
  * `identity_user`, so deleting that row cascades nowhere and every reference owes its removal to a use case
