@@ -18,7 +18,10 @@ use Erpify\Shared\Validation\Application\Validator;
  * sibling of {@see CreateUser}. The server mints the id (UUID v7), the aggregate enforces its invariants
  * (canonical email, distinct roles) and {@see Validator::ensure()} runs the entity constraints (`#[Assert\Email]`
  * and the `#[UniqueEntity(email)]` guard) before persisting, so a duplicate email surfaces as a clean validation
- * failure rather than a raw DB error. The owner sets the password later by accepting the invitation.
+ * failure. That check is a SELECT and the write is an INSERT, so a request that commits the same
+ * address in between still reaches the unique index; the port translates that into a 409 rather
+ * than letting the driver's message — which names the address — become the answer. The owner sets
+ * the password later by accepting the invitation.
  *
  * This is the published seam the invitation orchestrator funnels through, so it never touches the {@see User}
  * aggregate factory across the context boundary — the same shape the bootstrap uses via {@see CreateUser}.
