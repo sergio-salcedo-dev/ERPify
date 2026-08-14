@@ -53,6 +53,18 @@ make sf c='iam:invitation:create <email> --show-token'          # also print the
 The accept link is printed only under `--show-token`, or unconditionally when the mailer refused the send (with
 a warning saying so). Locally the link also lands in Mailpit, which is usually the easier place to read it.
 
+Two retention sweeps are reachable by hand. Both are idempotent, both touch only rows already dead, and a
+missed run only defers the cleanup:
+
+```bash
+make sf c='iam:session:prune'                        # iam_session: revoked >30d, or >90d past expiry
+make sf c='identity:password-reset-tokens:prune'     # expired reset tokens
+```
+
+The session sweep also runs unattended, as a daily tick on `IdentityMaintenanceSchedule`; the token one has no
+scheduled arm and must be driven by cron in production. Neither prints anything but its count, so running one
+by hand is the only way to see how much either is actually removing.
+
 ## Run / stop / inspect
 
 | Task                           | Command                          |

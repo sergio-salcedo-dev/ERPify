@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Session\Application;
 
 use Closure;
+use DateTimeImmutable;
 use Erpify\Iam\Session\Domain\Entity\Session;
+use Erpify\Iam\Session\Domain\Enum\SessionStatus;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\SystemClock;
@@ -23,7 +25,9 @@ use RuntimeException;
  * They coincide at whole-second granularity, which is all `expires_at TIMESTAMP(0)` preserves anyway.
  *
  * `now` is read once per query, mirroring the single `:now` the adapter binds for a whole statement, so a
- * multi-row read cannot straddle the boundary mid-scan.
+ * multi-row read cannot straddle the boundary mid-scan. The listing's newest-first order is mirrored for the
+ * same reason the predicate is: it is a promise of the port, so a double that answered in another order would
+ * let a use-case test assert a sequence production cannot produce.
  *
  * The instant comes from {@see SystemClock} rather than an injected {@see \Erpify\Shared\Clock\Domain\Clock}:
  * the constructor is variadic, so a clock parameter would have to precede the presets, and no consumer has yet
@@ -51,6 +55,9 @@ final class InMemorySessionRepository implements SessionRepository
 
     /** @var list<string> userIds passed to deleteAllForUser */
     public array $deleteAllCalls = [];
+
+    /** @var list<array{revokedBefore: DateTimeImmutable, expiredBefore: DateTimeImmutable}> */
+    public array $deleteRetiredCalls = [];
 
     /** Makes deleteAllForUser throw, so a test can drive the "a failed session purge aborts the erasure" path. */
     public bool $failOnDelete = false;
@@ -91,10 +98,26 @@ final class InMemorySessionRepository implements SessionRepository
     {
         $now = SystemClock::now();
 
-        return \array_values(\array_filter(
+        $admissible = \array_values(\array_filter(
             $this->byId,
             static fn (Session $s): bool => $s->userId() === $userId && $s->isActive($now),
         ));
+
+        // Newest first, mirroring the adapter's `ORDER BY s.createdAt DESC, s.id DESC`. Answering in insertion
+        // order instead would let a use-case test assert a sequence production cannot produce — the same way a
+        // looser temporal predicate would, which is why the ordering is mirrored rather than left to chance.
+        //
+        // The id tiebreaker is mirrored too, and it is the half that would rot unnoticed: PHP's sort is stable,
+        // so without it this double answers ties in insertion order — deterministically, while Postgres answers
+        // them however the plan runs. A double that is MORE ordered than production is the same defect as one
+        // that is less strict about admissibility.
+        \usort(
+            $admissible,
+            static fn (Session $a, Session $b): int => [$b->getCreatedAt(), $b->getId()]
+                <=> [$a->getCreatedAt(), $a->getId()],
+        );
+
+        return $admissible;
     }
 
     #[Override]
@@ -133,6 +156,49 @@ final class InMemorySessionRepository implements SessionRepository
         }
 
         return $deleted;
+    }
+
+    #[Override]
+    public function deleteRetired(DateTimeImmutable $revokedBefore, DateTimeImmutable $expiredBefore): int
+    {
+        $this->deleteRetiredCalls[] = ['revokedBefore' => $revokedBefore, 'expiredBefore' => $expiredBefore];
+
+        $deleted = 0;
+
+        foreach ($this->byId as $key => $session) {
+            if ($this->isRetired($session, $revokedBefore, $expiredBefore)) {
+                unset($this->byId[$key]);
+                ++$deleted;
+            }
+        }
+
+        return $deleted;
+    }
+
+    /**
+     * Mirrors the adapter's two branches, whichever elapses first. Only the revocation branch is conditioned
+     * on a status, exactly as the DQL is: the expiry branch applies to every row, so a revocation cannot
+     * lengthen the life of a row that lapsed earlier and no future status can fall through both.
+     *
+     * A revoked row with no `revokedAt` fails the first branch here as `NULL < :threshold` fails it in SQL,
+     * and reaches the second one on its own clock.
+     */
+    private function isRetired(
+        Session $session,
+        DateTimeImmutable $revokedBefore,
+        DateTimeImmutable $expiredBefore,
+    ): bool {
+        $revokedAt = $session->revokedAt();
+
+        if (
+            SessionStatus::REVOKED === $session->status()
+            && $revokedAt instanceof DateTimeImmutable
+            && $revokedAt < $revokedBefore
+        ) {
+            return true;
+        }
+
+        return $session->expiresAt() < $expiredBefore;
     }
 
     private function index(Session $session): void

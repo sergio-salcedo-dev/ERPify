@@ -91,7 +91,7 @@ deptrac:
         - name: Iam.Identity.Infrastructure
           collectors: [{ type: directory, value: src/Iam/Identity/Infrastructure/.* }]
 
-        # ---- Iam / Invitation (skeleton — reserved namespace, no classes yet) ----
+        # ---- Iam / Invitation ---------------------------------------------------
         - name: Iam.Invitation.Domain
           collectors: [{ type: directory, value: src/Iam/Invitation/Domain/.* }]
         - name: Iam.Invitation.Application
@@ -99,7 +99,7 @@ deptrac:
         - name: Iam.Invitation.Infrastructure
           collectors: [{ type: directory, value: src/Iam/Invitation/Infrastructure/.* }]
 
-        # ---- Iam / Session (skeleton — reserved namespace, no classes yet) -------
+        # ---- Iam / Session ------------------------------------------------------
         - name: Iam.Session.Domain
           collectors: [{ type: directory, value: src/Iam/Session/Domain/.* }]
         - name: Iam.Session.Application
@@ -504,3 +504,5 @@ deptrac:
             - Erpify\Iam\Session\Application\PurgeUserSessions
             - Erpify\Organization\Membership\Application\PurgeUserMembership
             - Erpify\Iam\Invitation\Application\PurgeUserInvitations
+        Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\PruneRetiredSessionsHandler:
+            - Erpify\Iam\Session\Application\PruneRetiredSessions
