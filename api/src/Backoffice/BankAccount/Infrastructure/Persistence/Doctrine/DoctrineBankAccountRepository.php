@@ -8,7 +8,7 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
-use Erpify\Shared\Persistence\Domain\ConcurrentUniqueWrite;
+use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 

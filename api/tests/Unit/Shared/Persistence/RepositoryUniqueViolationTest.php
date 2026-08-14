@@ -6,11 +6,10 @@ namespace Erpify\Tests\Unit\Shared\Persistence;
 
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
-use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine\DoctrineBankRepository;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountRepository;
-use Erpify\Shared\Persistence\Domain\ConcurrentUniqueWrite;
+use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\AsciiUpperTextFieldNormalizer;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\NormalizedTextFieldNormalizer;
@@ -23,6 +22,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionProperty;
+use Throwable;
 
 /**
  * Losing the uniqueness race must not be the database's message to deliver.
@@ -37,14 +37,10 @@ use ReflectionProperty;
  * `#[PersonalData]`. So the port translates at the boundary, which is also where DBAL is allowed to be
  * known, and the translation carries no value.
  *
- * The window was NOT reproducible over HTTP against this stack — 16 rounds of 12 simultaneous creates,
- * each on a fresh IBAN, gave one 201 and eleven honest 422s every time. This pins the consequence
- * instead of the timing: given what the driver raises, the port must raise the conflict.
+ * The coupling is the two ports under test plus the collaborators their constructors demand; driving a
+ * persistence boundary end to end is what it costs.
  *
  * @internal
- *
- * The coupling is the two ports under test plus the collaborators their constructors demand; driving a
- * persistence boundary end to end is what it costs
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
@@ -63,7 +59,7 @@ final class RepositoryUniqueViolationTest extends TestCase
     #[DataProvider('provideARefusedWriteBecomesAConflictThatNamesNoValueCases')]
     public function aRefusedWriteBecomesAConflictThatNamesNoValue(string $resource): void
     {
-        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager = $this->createStub(EntityManagerInterface::class);
         $entityManager->method('flush')->willThrowException($this->driverViolation());
 
         try {
@@ -73,12 +69,18 @@ final class RepositoryUniqueViolationTest extends TestCase
         } catch (ConcurrentUniqueWrite $concurrentUniqueWrite) {
             $this->assertSame('concurrent-unique-write', $concurrentUniqueWrite->type());
             $this->assertSame($resource, $concurrentUniqueWrite->context()['resource'] ?? null);
-            $this->assertStringNotContainsString(self::IBAN, $concurrentUniqueWrite->getMessage(), \sprintf(
-                'The driver names the offending value in its own message. Carrying it means writing a '
-                . '%s into the error log and the Sentry event, neither of which any erasure path '
-                . 'reaches.',
-                "person's bank account number",
-            ));
+            // The message is a literal on the class, so asserting the IBAN is absent from it proves
+            // nothing on its own. `previous` is the reachable vector: both siblings in this namespace
+            // keep the driver exception there on purpose, so harmonising the three would carry the
+            // value into the dev/test debug chain — and only this assertion would notice.
+            $this->assertNotInstanceOf(
+                Throwable::class,
+                $concurrentUniqueWrite->getPrevious(),
+                'The driver exception was kept as `previous`, so its message — which names the '
+                . 'offending value, and `bank_account.iban` is personal data — reaches the dev/test '
+                . '`debug.previous_chain`.',
+            );
+            $this->assertStringNotContainsString(self::IBAN, $concurrentUniqueWrite->getMessage());
         }
     }
 
