@@ -11,6 +11,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use ReflectionAttribute;
 use ReflectionClass;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -223,7 +224,13 @@ final class BankAccountCommandAcceptsEveryValidSpellingTest extends TestCase
             $field,
         ));
 
-        $attributes = $reflection->getProperty($field)->getAttributes($constraintClass);
+        // IS_INSTANCEOF, because a command may declare a module-specific subclass of the stock
+        // constraint (BicMatchingIban does). Exact matching would report "declares 0" for a field the
+        // command in fact gates, and the gate would be asserting nothing while looking green.
+        $attributes = $reflection->getProperty($field)->getAttributes(
+            $constraintClass,
+            ReflectionAttribute::IS_INSTANCEOF,
+        );
 
         $this->assertCount(1, $attributes, \sprintf(
             '`%s` must declare exactly one `%s` on `%s` for this equivalence to mean anything; it '
