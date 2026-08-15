@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance;
 
 use Override;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Scheduler\Attribute\AsSchedule;
 use Symfony\Component\Scheduler\RecurringMessage;
 use Symfony\Component\Scheduler\Schedule;
@@ -68,16 +69,25 @@ use Symfony\Contracts\Cache\CacheInterface;
  * is computed from the moment the worker booted — `now + 1 day`. Both workers run `messenger:consume`
  * under `--time-limit=3600` with `restart: unless-stopped`, so the process is replaced every hour and the
  * clock restarts with it: the next tick is permanently ~23 hours beyond the life of the process meant to
- * emit it, and a daily schedule never fires at all while every gate stays green. The cache pool is the
- * `app` one, whose backing store survives the restart in both deployments (a named volume over the dev
- * worker's `var/cache`, the container's own writable layer in prod). A deploy legitimately resets it — that
- * only delays the first tick of the new release by one period.
+ * emit it, and a daily schedule never fires at all while every gate stays green.
+ *
+ * **Surviving the restart is not enough; it has to survive the DEPLOY, and that is why the pool is named
+ * rather than autowired.** The `app` pool is the filesystem adapter, and in production its backing store is
+ * the container's own writable layer — no service mounts a volume over `var/cache` there. A deploy therefore
+ * recreates the container with an empty checkpoint, `Checkpoint::acquire()` seeds it to `now`, and the period
+ * is anchored at that instant. The delay is not one period paid once: at a deploy cadence of one period or
+ * less the tick is re-anchored before it ever comes due and never fires.
+ * `cache.scheduler_checkpoint` is Postgres-backed and outlives the container; the measurement is in
+ * `cache.yaml`. `NotifyLockedIdentitiesMessage` is the one member of this schedule the defect spares, its
+ * five-minute period being far shorter than any deploy.
  */
 #[AsSchedule('identity_maintenance')]
 final readonly class IdentityMaintenanceSchedule implements ScheduleProviderInterface
 {
-    public function __construct(private CacheInterface $checkpointState)
-    {
+    public function __construct(
+        #[Autowire(service: 'cache.scheduler_checkpoint')]
+        private CacheInterface $checkpointState,
+    ) {
     }
 
     #[Override]

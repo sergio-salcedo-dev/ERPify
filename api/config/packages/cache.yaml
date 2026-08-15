@@ -17,3 +17,22 @@ framework:
         # Namespaced pools use the above "app" backend by default
         #pools:
             #my.dedicated.cache: null
+
+        # The scheduler checkpoint is the one piece of state that MUST outlive the container, so it is
+        # the one pool that may not sit on the "app" backend. That backend is the filesystem adapter
+        # (every alternative above is commented out) writing under var/cache, and no prod service mounts
+        # a volume there — so a deploy recreates the container and the checkpoint starts empty.
+        # Checkpoint::acquire() then seeds it to `now`, and PeriodicalTrigger anchors the period at that
+        # instant: '1 day' does not match its canBeConvertedToSeconds() regex (sec|second|min|minute|hour),
+        # so it takes the DatePeriod branch and the first run lands a full day after the deploy.
+        # Measured over 7 simulated days, a worker polling every 5 min: a deploy cadence of 6 h, 12 h or
+        # 24 h fires the daily ticks 0 times, against the 7 expected. That is not a delay, it is
+        # starvation, and it silently covers the audit retention prune and both GDPR reconciliations.
+        #
+        # Postgres is the only store in this stack that survives a container it does not live in. The
+        # pool is deliberately narrow: widening "app" itself would move the rate limiter, whose local
+        # pool is a documented trade-off (see rate_limiter.yaml).
+        default_doctrine_dbal_provider: doctrine.dbal.default_connection
+        pools:
+            cache.scheduler_checkpoint:
+                adapter: cache.adapter.doctrine_dbal

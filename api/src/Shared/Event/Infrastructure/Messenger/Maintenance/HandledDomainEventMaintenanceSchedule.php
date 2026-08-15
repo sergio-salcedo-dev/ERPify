@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Event\Infrastructure\Messenger\Maintenance;
 
 use Override;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Scheduler\Attribute\AsSchedule;
 use Symfony\Component\Scheduler\RecurringMessage;
 use Symfony\Component\Scheduler\Schedule;
@@ -26,13 +27,21 @@ use Symfony\Contracts\Cache\CacheInterface;
  * date is computed from the moment the process booted, and `messenger:consume` runs under
  * `--time-limit=3600` with `restart: unless-stopped` — so the daily prune is re-seeded every hour and never
  * comes due, and the hourly backlog check sits exactly on the boundary, racing the process that would emit
- * it. The `app` pool backs it, and its store survives the restart in both deployments.
+ * it.
+ *
+ * **The pool is named rather than autowired, and that is the load-bearing half.** The autowired `app` pool
+ * is the filesystem adapter under `var/cache`, which no production service mounts a volume over, so a
+ * deploy recreates the container with an empty checkpoint; `Checkpoint::acquire()` seeds it to `now` and
+ * the period is anchored there, putting the first run a full day after every deploy. `cache.scheduler_checkpoint`
+ * is Postgres-backed and outlives the container. The arithmetic and its measurement live in `cache.yaml`.
  */
 #[AsSchedule('maintenance')]
 final readonly class HandledDomainEventMaintenanceSchedule implements ScheduleProviderInterface
 {
-    public function __construct(private CacheInterface $checkpointState)
-    {
+    public function __construct(
+        #[Autowire(service: 'cache.scheduler_checkpoint')]
+        private CacheInterface $checkpointState,
+    ) {
     }
 
     #[Override]
