@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Event\Infrastructure\Messenger\Maintenance;
 
+use InvalidArgumentException;
+
 /**
  * Scheduler tick that triggers the retention prune of the Messenger failure transport.
  *
@@ -16,8 +18,23 @@ namespace Erpify\Shared\Event\Infrastructure\Messenger\Maintenance;
  */
 final readonly class PruneFailedMessagesMessage
 {
+    /**
+     * The floor is the dead-letter alarm's own age threshold, not a round number. Below it the prune reaches
+     * rows the alarm has not had time to raise, which is the one failure this window exists to avoid — and a
+     * zero would make the threshold *now* and empty the queue on the first tick, silently, with every gate
+     * green. A negative would build `'--30 days'` and kill the tick with an unparseable date, daily, for ever.
+     */
+    private const int MINIMUM_RETENTION_DAYS = 2;
+
     public function __construct(
         public int $retentionDays = 30,
     ) {
+        if ($retentionDays < self::MINIMUM_RETENTION_DAYS) {
+            throw new InvalidArgumentException(\sprintf(
+                'Failed-transport retention must be at least %d days, got %d.',
+                self::MINIMUM_RETENTION_DAYS,
+                $retentionDays,
+            ));
+        }
     }
 }

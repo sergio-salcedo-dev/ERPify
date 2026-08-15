@@ -336,7 +336,57 @@ Los dos siguientes los encontró T7, y el tercero es de la misma familia que los
         `Throwable` y en nada más.
   - [x] Deja de ser espejo de `ReportDeadLetterBacklogHandler`: aquel cuenta filas que **existen**, aquí el
         fallo es que la fila **no se escribió**. Ese es el motivo de que no haya contador.
-### T3 — resultado medido
+- [ ] **T5 — DEC-3 · #261**: implementar Option B, o cerrar `wontfix` con el argumento de `compose.prod.yaml:180-186`.
+- [ ] **T6 — verificación completa** (ver *Gates*)
+- [ ] **T7 — segundo pase adversarial** sobre el código que se escriba, antes de la PR que lo lleve.
+- [ ] **T8 — cierres con evidencia** para cada issue que cierre sin código
+
+### T4 — resultado medido
+
+**El rojo es la llegada, y salió limpio.** Con `warning(`, el test funcional falla así:
+
+```
+the request appended to the log; without growth there is nothing to search
+Failed asserting that 9240 is greater than 9240.
+```
+
+**Ni un byte.** No es que la línea llegue distinta: es que el fichero no crece, con el `write()` habiendo
+lanzado de verdad (`assertSame(1, $writer->attempts)` pasa antes, entre las 9 aserciones que sí corren). Eso
+separa *«descartada»* de *«nunca intentada»*, que era la vacuidad a evitar. Con `error(`, verde: 1 test / 11
+aserciones.
+
+**Lo que el instrumento tuvo que respetar para no mentir:** la suite comparte **un solo `test.log` que nadie
+trunca** (`sf.clear.var.log` es manual y ningún target de test lo invoca) y varios tests provocan 5xx que
+activan el mismo handler. Por eso la evidencia es sólo la **cola** añadida desde un offset tomado justo antes
+de la petición, y se afirma el mensaje literal, no «el fichero no está vacío». Y se afirma `assertResponseIsSuccessful()`
+porque un 404/405 está en `excluded_http_codes`: la línea ausente se leería como «descartada» cuando sería
+«nunca auditada».
+
+**La ruta:** `GET /api/v1/me` (`iam_me`), que `AuditPolicy` audita como `activity` por ser un `GET` con
+semántica de negocio y sin `_audit_canonical`. **No hay disparador más barato sin autenticar**: `^/api` es
+deny-by-default, y las cuatro rutas públicas o no son `GET` o son health, que la política excluye.
+
+**Dos hechos del cableado que la decisión daba por supuestos y no lo estaban:**
+
+1. **El canal es `app`, no `audit`.** `SymfonyAuditLogger` recibe un `LoggerInterface` pelado; no hay ni un
+   `#[WithMonologChannel]` en `api/`, y el único cableado por canal del repo es `SearchObservabilityListener`
+   con `#[Autowire(service: 'monolog.logger.observability')]`. El canal `audit` declarado en `monolog.yaml:6`
+   **no lo consume nadie**. La premisa se sostiene a pesar de esa declaración, no gracias a ella.
+2. **La coincidencia `when@test`/`when@prod` es más ancha que `action_level`** — también el `type` del
+   handler, el `level` del `nested`, y que ninguno excluya el canal `app` — **y ya está rota en una clave**:
+   test excluye `!event`, prod excluye `!deprecation`. Benigno hoy sólo porque ninguno excluye `app`.
+   Declarado en el docblock del test; el gate de paridad es trabajo derivado y va en su propia PR (sin el
+   test de llegada no protegía nada).
+
+**No es un patrón nuevo, es una regla ya escrita que este sitio se saltó.** `InspectStoredIdentityHandler:20`
+y `ReconcileSubjectErasuresHandler:16` ya razonan lo mismo palabra por palabra —*«una alarma que no puede
+dispararse en producción no es una alarma»*— y `ReconcileSubjectErasuresHandlerTest` la pina en un test
+llamado `itAlarmsAtErrorLevelSoProductionDoesNotDiscardIt`. Lo que ninguno de los dos tiene es el rojo de
+llegada: los tres pinan **lo que la fuente llama**, nunca si Monolog lo conserva.
+
+---
+
+## T3 — resultado medido
 
 **La advertencia más ruidosa del traspaso no aplicaba, y comprobarlo la desactivó entera.** Decía que un
 `#[AsSchedule]` nuevo obliga a cablear su transporte en los dos compose «o sale muerto». No hace falta ninguno:
@@ -386,54 +436,6 @@ llegada— y un backfill la rompería igual.
 recorrido de la PK sobre los datos que hubiera en la base. Medido: la misma mutación salió **verde** con una
 población y **roja** con otra. Ahora siembra su propia población y hace `ANALYZE` dentro de la transacción que
 revierte — y por eso «quitar `ORDER BY id`» rojea los dos instrumentos de forma estable en vez de uno.
-
-- [ ] **T5 — DEC-3 · #261**: implementar Option B, o cerrar `wontfix` con el argumento de `compose.prod.yaml:180-186`.
-- [ ] **T6 — verificación completa** (ver *Gates*)
-- [ ] **T7 — segundo pase adversarial** sobre el código que se escriba, antes de la PR que lo lleve.
-- [ ] **T8 — cierres con evidencia** para cada issue que cierre sin código
-
-### T4 — resultado medido
-
-**El rojo es la llegada, y salió limpio.** Con `warning(`, el test funcional falla así:
-
-```
-the request appended to the log; without growth there is nothing to search
-Failed asserting that 9240 is greater than 9240.
-```
-
-**Ni un byte.** No es que la línea llegue distinta: es que el fichero no crece, con el `write()` habiendo
-lanzado de verdad (`assertSame(1, $writer->attempts)` pasa antes, entre las 9 aserciones que sí corren). Eso
-separa *«descartada»* de *«nunca intentada»*, que era la vacuidad a evitar. Con `error(`, verde: 1 test / 11
-aserciones.
-
-**Lo que el instrumento tuvo que respetar para no mentir:** la suite comparte **un solo `test.log` que nadie
-trunca** (`sf.clear.var.log` es manual y ningún target de test lo invoca) y varios tests provocan 5xx que
-activan el mismo handler. Por eso la evidencia es sólo la **cola** añadida desde un offset tomado justo antes
-de la petición, y se afirma el mensaje literal, no «el fichero no está vacío». Y se afirma `assertResponseIsSuccessful()`
-porque un 404/405 está en `excluded_http_codes`: la línea ausente se leería como «descartada» cuando sería
-«nunca auditada».
-
-**La ruta:** `GET /api/v1/me` (`iam_me`), que `AuditPolicy` audita como `activity` por ser un `GET` con
-semántica de negocio y sin `_audit_canonical`. **No hay disparador más barato sin autenticar**: `^/api` es
-deny-by-default, y las cuatro rutas públicas o no son `GET` o son health, que la política excluye.
-
-**Dos hechos del cableado que la decisión daba por supuestos y no lo estaban:**
-
-1. **El canal es `app`, no `audit`.** `SymfonyAuditLogger` recibe un `LoggerInterface` pelado; no hay ni un
-   `#[WithMonologChannel]` en `api/`, y el único cableado por canal del repo es `SearchObservabilityListener`
-   con `#[Autowire(service: 'monolog.logger.observability')]`. El canal `audit` declarado en `monolog.yaml:6`
-   **no lo consume nadie**. La premisa se sostiene a pesar de esa declaración, no gracias a ella.
-2. **La coincidencia `when@test`/`when@prod` es más ancha que `action_level`** — también el `type` del
-   handler, el `level` del `nested`, y que ninguno excluya el canal `app` — **y ya está rota en una clave**:
-   test excluye `!event`, prod excluye `!deprecation`. Benigno hoy sólo porque ninguno excluye `app`.
-   Declarado en el docblock del test; el gate de paridad es trabajo derivado y va en su propia PR (sin el
-   test de llegada no protegía nada).
-
-**No es un patrón nuevo, es una regla ya escrita que este sitio se saltó.** `InspectStoredIdentityHandler:20`
-y `ReconcileSubjectErasuresHandler:16` ya razonan lo mismo palabra por palabra —*«una alarma que no puede
-dispararse en producción no es una alarma»*— y `ReconcileSubjectErasuresHandlerTest` la pina en un test
-llamado `itAlarmsAtErrorLevelSoProductionDoesNotDiscardIt`. Lo que ninguno de los dos tiene es el rojo de
-llegada: los tres pinan **lo que la fuente llama**, nunca si Monolog lo conserva.
 
 ---
 
@@ -1083,3 +1085,206 @@ contaminó la primera medición y las dos dieron el mismo mensaje; una a una dan
 El segundo es el que prueba que el nuevo instrumento lee el nivel de los **bytes** que Monolog escribió, no de
 un doble. La mutación del canal dispara además la aserción de no-activación del buffer; el orden hace que
 reporte primero la de llegada.
+
+---
+
+---
+
+## Review Findings — bmad-code-review (2026-08-15) · T2 / PR #728
+
+Tres capas en paralelo, sólo lectura, sobre el árbol final. Lo que sobrevive al pase adversarial propio de T2.
+
+- [x] [Review][Patch] **Un `BACKUP_DIR` que sea enlace simbólico deja la retención muda para siempre** — `find`
+      por defecto es `-P` y NO desciende un enlace pasado como punto de partida; `cd … && pwd` es lógico y no lo
+      normaliza. **Medido: 1 coincidencia por la ruta real, 0 por el enlace; `pwd -P` lo arregla.** Mover los
+      backups a otro disco es la maniobra de operación más normal que hay, y el fallo aparece días después como
+      «los backups han dejado de correr». Alcanza también a `list_stamps()`.
+      [scripts/deploy/backup-prod.sh:53]
+- [x] [Review][Patch] **El bloque publicado borra antes de que el operador pueda leer lo que se le dice que
+      lea** — `ls` y `find … -delete` son dos comandos sin encadenar dentro de un mismo bloque: pegarlo entero
+      ejecuta el borrado en la misma pulsación, y un `ls` que falle no lo detiene. [docs/vps-deployment.md:231]
+- [x] [Review][Patch] **Se retira la única expiración automática de archivos que llevan la MISMA PII que el
+      dump** (`b0dce6ef` lo dice en su propio comentario), y la revisión de seguridad de T2 tomó «borra menos»
+      como seguro. Para un control de retención sobre datos personales, borrar menos es la dirección de fallo.
+      [scripts/deploy/backup-prod.sh:95]
+- [x] [Review][Patch] **El barrido «one-off» no puede barrer los archivos que más probablemente están ahí** —
+      filtra por `-mtime +N`, y los que existen al desplegar son justo los de los últimos días. El operador lo
+      corre, no borra nada, y no vuelve. [docs/vps-deployment.md:234]
+- [x] [Review][Patch] **Los `:-` del bloque hacen lo contrario de lo que su propio párrafo ordena** — «toma los
+      dos knobs de tu línea de cron» no lo puede imponer la prosa; sin variables puestas, los defaults se
+      aplican en silencio. [docs/vps-deployment.md:232]
+- [x] [Review][Patch] **`find … -delete` no imprime nada**, así que «no barrió nada» y «barrió doce» se ven
+      igual — es el multiplicador que vuelve infalsificables los demás no-ops. [docs/vps-deployment.md:234]
+- [x] [Review][Patch] **La sustitución de procesos descarta el exit status de `find`**, y un salto de línea en
+      un nombre parte la ruta y hace que `rm` dispare relativo a `$REPO_ROOT`. [scripts/deploy/backup-prod.sh:92]
+- [x] [Review][Patch] **El conteo de bytes: producido DESPUÉS del borrado que podría haber gateado, emitido por
+      `log_success` con color ANSI incondicional (menos greppable que el `ls -lh` al que venía a superar), y
+      `$(wc -c)` bajo `set -e` puede abortar la ejecución tras un dump bueno y ANTES del sync offsite.
+      **Medido: exit 1.** [scripts/deploy/backup-prod.sh:101]
+- [x] [Review][Patch] **`RETENTION_DAYS=0` en el bloque publicado** — valor que el propio script acepta, y
+      `-mtime +0` se lleva el archivo emparejado con el dump de ayer. [docs/vps-deployment.md:235]
+- [x] [Review][Patch] **Le dije al autor de #256 que una frase suya era falsa, y era cierta cuando la
+      escribió** — la guarda de volumen-existe SÍ existía (`b0dce6ef:lib/common.sh:36-40`, `docker volume
+      inspect`) y la borró #557. M5 del propio artefacto lo dice; mis líneas nuevas lo contradicen. **Verificado
+      con `git show`.** Hay que corregir el issue otra vez y reconciliar el artefacto.
+- [x] [Review][Patch] **Nada avisa de que hay huérfanos** — el diseño pasa a depender de que alguien lea el
+      runbook. `backup-prod.sh` ya recorre el directorio; falta la mitad detectiva que el repo aplica en otros
+      ejes. [scripts/deploy/backup-prod.sh:92]
+- [x] [Review][Patch] **La retención sigue borrando en silencio**, en el mismo bloque que este cambio edita
+      para observabilidad. [scripts/deploy/backup-prod.sh:94]
+- [x] [Review][Patch] **`[x] #255 cerrado con evidencia` se afirma en pasado** cuando `Closes #255` sólo dispara
+      al mergear — el mismo patrón «decisión resuelta ≠ código enviado» que este commit corrige para T4 y no
+      aplica a T2. Y el comentario del sprint fija estado transitorio de PRs que nada actualizará.
+- [x] [Review][Patch] **Dos encabezados `##` quedaron dentro de la lista de *Alcance***, así que T3–T8 cuelgan
+      de «Revisión de seguridad — T2»; y el `###` de T2 va pegado a la última viñeta sin línea en blanco.
+- [x] [Review][Patch] **El conteo de bytes no tiene viñeta en el checklist de T2**, y la sección *Gates* nunca
+      dice «no se corrieron, y por qué» — lo importante está bien (no reclama verde falso), falta la frase.
+- [x] [Review][Patch] **Prosa de T1 en pie y citas desplazadas por mi propio diff** — «No entra en este PR: T2…»
+      sigue ahí, la *File List* no lista ningún fichero de T2, y las tres citas `restore-prod.sh:89-92` pasaron
+      a `:90-93` al bajar el comentario de lectura completa.
+- [x] [Review][Patch] **El banner de sección quedó un bloque por encima de lo que nombra** — efecto colateral
+      de mi propio movimiento boy-scout. [scripts/deploy/restore-prod.sh:89]
+- [x] [Review][Patch] **Cuatro precisiones del runbook**: `ls` falla en un host limpio y no hay nota de permisos
+      (el directorio es 700); el barrido esquiva el `flock` que ambos scripts consideran obligatorio; el párrafo
+      del offsite confunde el archivo con el dump que el barrido no toca; y el glob es más ancho que la forma
+      del stamp. [docs/vps-deployment.md:224-254]
+- [x] [Review][Patch] **Tras el barrido, el aviso de restore que la sección defiende deja de dispararse**, y
+      «Abort now» no tiene punto de aborto en el camino `RESTORE_YES=1`. [scripts/deploy/restore-prod.sh:90-93]
+- [x] [Review][Defer] **Un solo marcador de sprint no puede representar cuatro tareas que salen por separado**
+      — `bmad.status.audit` queda rojo con una prescripción equivocada. El fichero ya tiene el precedente
+      (`br-4b`, `br-4c` con clave propia); partir `br-8` es cambio de la historia, no de esta PR.
+
+**Resultado.** Los diecinueve `patch` aplicados; el `defer` intacto. Dos cambian lo que el PR *significa*, no
+sólo cómo está escrito:
+
+1. **`pwd -P`.** `find` es `-P` por defecto y **no desciende** un enlace simbólico pasado como punto de
+   partida; `cd … && pwd` es lógico y no lo resuelve. Medido: 1 coincidencia por la ruta real, **0** por el
+   enlace. Mover `BACKUP_DIR` a otro disco —la maniobra de operación más común que hay— dejaba la retención
+   muda para siempre, reportando éxito, hasta que el preflight de espacio empezara a abortar backups días
+   después. Es un defecto **preexistente** que mi runbook heredaba; se arregla en los dos scripts.
+2. **La revisión de seguridad estaba invertida.** Decía que «borra menos» es la dirección segura. Para un
+   control de retención sobre datos personales no lo es: el archivo de objetos lleva la misma PII que el dump,
+   así que retirar su única expiración automática no es tranquilidad, es una **obligación de retención que
+   pasa a manos de una persona**. De ahí el aviso en cada ejecución, la sección del runbook que ya no se llama
+   *one-off*, y la entrada **sin marcar** en `PRODUCTION_SECURITY_CHECKLIST.md`, que se cierra cuando el
+   despliegue haya aterrizado y el barrido se haya corrido dos veces.
+
+**Y una corrección que salió del repositorio.** Le dije al autor de #256 que su frase sobre la guarda de
+volumen era falsa. Era **cierta cuando la escribió** (`b0dce6ef:lib/common.sh:36-40`, `docker volume inspect`
+con su propio `exit 1`) y la borró #557. M5 de este mismo documento lo tenía medido veinte líneas más arriba
+del sitio donde escribí lo contrario. El issue lleva ya la corrección de la corrección, con el commit citado.
+
+---
+
+## Review Findings — bmad-code-review (2026-08-15) · T3 / PR #729
+
+Tres capas en paralelo, sólo lectura, sobre el árbol final. Lo que sobrevive al pase adversarial propio de T3.
+
+- [x] [Review][Patch] **`PruneFailedMessagesHandler` y `PruneFailedMessagesMessage` no tienen NI UN test, y
+      `retentionDays` no se valida** — los cuatro hermanos sí los tienen (`PruneHandledDomainEventsHandlerTest`,
+      `…MessageTest`, y sus dos de dead-letter), y el del mensaje afirma literalmente `assertSame(30, …)`. Con
+      `retentionDays = 0` el umbral es *ahora* y la primera ejecución **vacía la cola `failed` entera**; con un
+      negativo, `'-' . -30` da `'--30 days'` y el tick muere cada día para siempre. **Las nueve mutaciones que
+      declaré siguen todas verdes ante cualquiera de las dos.** Es la familia de la siembra vacua, cometida
+      dentro de la historia que existe para denunciarla.
+      [api/src/Shared/Event/Infrastructure/Messenger/Maintenance/PruneFailedMessagesHandler.php:24]
+- [x] [Review][Patch] **El test de plan admite exactamente la mutación que existe para cazar** — la alternativa
+      `messenger_messages_pkey` de la regex casa con el `Index Scan` del **DELETE exterior**, que aparece aunque
+      la subconsulta pierda su `ORDER BY id`; y sembrar 2000 filas no acota lo que la tabla compartida ya tiene.
+      Hay que hacer `EXPLAIN` de la SELECT interna por separado, o afirmar sobre el hijo directo de `LockRows`.
+      [api/tests/Functional/Shared/Event/FailedMessagePrunePlanFunctionalTest.php:50]
+- [x] [Review][Patch] **El comentario de `compose.prod.yaml` SIGUE drifted: falta `PruneRetiredSessionsMessage`**
+      — M10 nombraba DOS ticks ausentes; arreglé uno y añadí el mío. **Verificado: existe en
+      `IdentityMaintenanceSchedule.php:91` y aparece 0 veces en ambos compose.** Es el defecto que la propia
+      historia levantó como acta, cometido otra vez en el commit que venía a corregirlo. [compose.prod.yaml:175]
+- [x] [Review][Patch] **El 30 sólo está acotado por abajo** — el funcional usa su propia constante privada
+      desacoplada de la de producción, y el test del margen sólo exige `> 10 días`. Subir la ventana a 300 deja
+      toda la suite verde. [api/tests/Functional/Shared/Event/FailedMessagePrunerFunctionalTest.php:34]
+- [x] [Review][Patch] **Las dos líneas del pruner son `info` y producción no las lee** — y el control
+      compensatorio que el docblock nombra no sirve: `ReportDeadLetterBacklogHandler` tiene `maxBacklog = 0`, o
+      sea que alarma ante cualquier fila esté la poda viva o muerta, y calla cuando la tabla está vacía. No
+      distingue «poda rota» de «hay fallos». Mismo canal `observability` que #727.
+      [api/src/Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php:111]
+- [x] [Review][Patch] **La premisa de seguridad del docblock es fácticamente falsa** — «both DSNs are
+      `doctrine://default?queue_name=…`»: el de `async` es `%env(MESSENGER_TRANSPORT_DSN)%` y su `queue_name`
+      vive en `options:`. El gate de este mismo diff dice lo contrario en su propio docblock.
+      [api/src/Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php:21]
+- [x] [Review][Patch] **El gate fija el nombre de la cola pero no la tabla ni el driver, y resuelve la clave
+      `failed` a mano en vez de leer `failure_transport`** — añadir `&table_name=`, mover el DSN a AMQP/Redis, o
+      repuntar `failure_transport` dejando el bloque viejo, y el pruner casa cero filas para siempre con todos
+      los gates verdes. Literalmente el no-op que el gate se escribió para refutar.
+      [api/tests/Unit/Shared/Architecture/FailedMessagePruneStatementGateTest.php:44]
+- [x] [Review][Patch] **«la alarma no puede ser silenciada por la poda» está sobrevendido** — con
+      `maxBacklog = 0` lo que apaga la alarma es que la poda vacíe la tabla, y a los 30 días la vacía. El margen
+      retrasa el silenciamiento, no lo impide; y la aserción degenera a nada si `maxAgeHours` llega a 0.
+      [docs/architecture-api.md:272]
+- [x] [Review][Patch] **Los funcionales toman el nombre de lock de PRODUCCIÓN sobre la BD compartida de dev**,
+      donde el `messenger_worker` vivo corre ese mismo tick: si lo sostiene, `pruneFailedBefore` devuelve 0 y la
+      aserción falla con un mensaje que no menciona el lock.
+      [api/tests/Functional/Shared/Event/FailedMessagePrunerFunctionalTest.php:214]
+- [x] [Review][Patch] **Los tests emiten `DELETE FROM messenger_messages` SIN predicado de cola** — la forma
+      exacta que el gate declara peligrosa, y el gate no mira `tests/`.
+      [api/tests/Functional/Shared/Event/FailedMessagePrunerFunctionalTest.php:50]
+- [x] [Review][Patch] **La colisión de `hashtext` pasa de hipotética a alcanzable y no se refuta con nada** —
+      dos nombres vivos, mismo worker, lock reentrante en una conexión: una colisión no haría esperar a uno,
+      haría que **ambos creyeran tener exclusividad**. Una aserción de una línea cierra el «despreciable».
+      [api/src/Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php:29]
+- [x] [Review][Patch] **`FOR UPDATE` no excluye a un consumidor que ya reclamó el mensaje** — el transporte
+      commitea de inmediato y libera el lock de fila; el docblock afirma una garantía que el lock no compra.
+      [api/src/Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php:40]
+- [x] [Review][Patch] **El umbral se acuña en el timezone por defecto de PHP contra una columna
+      `TIMESTAMP WITHOUT TIME ZONE` escrita en UTC** — hoy coincide sólo porque un `.ini` fija `date.timezone`,
+      y nada en este código lo enuncia. El pruner de `audit_log` esquiva la clase entera usando `timestamptz`.
+      [api/src/Shared/Event/Infrastructure/Messenger/Maintenance/PruneFailedMessagesHandler.php:24]
+- [x] [Review][Patch] **El drenaje termina antes de tiempo si un borrador concurrente acorta un lote** — la
+      condición de salida es igualdad con el tamaño de lote, y `FOR UPDATE` garantiza que esa clase de
+      contendiente existe. `$deleted > 0` es estrictamente más seguro y termina por la misma razón.
+      [api/src/Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php:145]
+- [x] [Review][Patch] **Un drenaje truncado por presupuesto es indistinguible de uno completo** — misma línea
+      `info` en los dos casos, y ninguna llega a producción.
+      [api/src/Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php:116]
+- [x] [Review][Patch] **El gate de un-solo-borrador sólo casa el literal** — `TRUNCATE`, `$qb->delete(…)` o
+      `'DELETE FROM ' . self::TABLE` pasan de largo, y su docblock afirma la propiedad sin matizar.
+      [api/tests/Unit/Shared/Architecture/FailedMessagePruneStatementGateTest.php:101]
+- [x] [Review][Patch] **Las dos guías que un operador lee para saber qué hace el `scheduler_worker` no mencionan
+      el nuevo trabajo** — el comentario del compose sí se actualizó, así que la omisión es asimétrica.
+      [docs/deployment-guide.md:32]
+- [x] [Review][Defer] **No hay índice para `(queue_name, created_at)`** — medido: a 100k filas el plan es
+      `LockRows` sobre recorrido de la PK, 18/35 ms por lote en las dos correlaciones, así que no hace falta
+      hoy. Queda anotado como el disparador a vigilar si la cola crece un orden de magnitud.
+
+**Resultado.** Los diecisiete `patch` aplicados; el `defer` (el índice) intacto, con su medición al lado. Tres
+merecen constar porque cambian lo que el PR garantiza:
+
+1. **El handler no tenía testigo, y el peor valor era el más plausible.** `retentionDays = 0` pone el umbral en
+   *ahora* y la primera ejecución vacía la cola entera; un negativo construye `'--30 days'` y mata el tick cada
+   día. Las nueve mutaciones declaradas seguían verdes ante las dos. Ahora hay guarda en el mensaje (suelo de 2
+   días, atado al umbral de la alarma), un test del mensaje que pina el 30 como hace su hermano, y un test del
+   handler sobre el único paso que nada cubría: convertir días en instante. Con UTC explícito, porque la
+   coincidencia de zona horaria descansaba en un `php.ini` que este código no nombra.
+2. **El test de plan admitía la mutación que existe para cazar.** La alternativa `messenger_messages_pkey`
+   casaba con el `Index Scan` del **DELETE exterior**, presente aunque la subconsulta perdiera su `ORDER BY`.
+   Ahora se hace `EXPLAIN` de la SELECT interna **por separado**, extraída del propio statement emitido.
+3. **El drenaje terminaba antes de tiempo por diseño.** Salir con `=== batchSize` lee un lote acortado por un
+   borrador concurrente como «no queda nada» — y `FOR UPDATE` es justo la cláusula que garantiza que ese
+   contendiente existe. Sale con un lote vacío, y un drenaje truncado por presupuesto ya no se confunde con uno
+   completo: dice `warning` con lo que lleva y avisa de que queda trabajo.
+
+**Y el defecto que la historia levantó como acta, cometido por segunda vez dentro de ella:** el comentario de
+`compose.prod.yaml` seguía sin `PruneRetiredSessionsMessage`. M10 nombraba **dos** ticks ausentes; arreglé uno
+y añadí el mío. Ahora están los nueve, y el comentario dice en su última línea que nada recomputa esa lista y
+que ha derivado dos veces — porque el gate razona por nombre de schedule y un tick ausente le es invisible.
+
+**Las líneas del pruner pasan al canal `observability`**, por la misma medición que movió las de T4: en el canal
+por defecto un `info` se descarta y un `error` activa el buffer. Y se corrige la afirmación de que «la alarma no
+puede ser silenciada por la poda»: con `maxBacklog = 0` lo que la calla es que la tabla se vacíe, y a los 30
+días se vacía. El margen **retrasa** el silencio, no lo impide.
+
+**El barrido de mutaciones, re-medido sobre el árbol enviado: trece mutaciones, trece rojos.** Cuatro son
+nuevas y existen porque la revisión las pidió (suelo de retención, umbral al futuro, zona horaria, y salir con
+lote corto). La de «salir con lote corto» salió **con cero rojos** en la primera vuelta — había arreglado el
+defecto sin ponerle testigo, que es la misma familia que este lote persigue — y ahora lo tiene: un `Connection`
+de doble que devuelve `[2, 1, 3, 0]` con lote 2, donde la condición vieja para en 3 y la nueva llega a 6.
+
+**Puertas finales:** `php.stan` **0**, `php.quality` **0**, `php.test` **0** (PHPUnit 2891 / 11468; Behat
+439 / 4132). Contra `main` (2869 / 11373) son 22 tests nuevos.

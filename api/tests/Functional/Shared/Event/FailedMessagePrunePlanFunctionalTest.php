@@ -44,14 +44,32 @@ final class FailedMessagePrunePlanFunctionalTest extends KernelTestCase
             . 'outer DELETE re-locks in the order of whatever node unique-ified the subquery, and a drain '
             . 'can meet the transport consumer head-on. Plan: ' . $plan,
         );
-        // Matched qualified-or-bare: the outer DELETE targets the same table, so the subquery is aliased and
-        // Postgres prints `messenger_messages_1.id` where a standalone statement prints `id`.
+
+        // Explained on its own, because the outer DELETE probes the same table by primary key and that node
+        // matched the ordering assertion whether or not the subquery still carried `ORDER BY id` — the
+        // mutation this exists to catch was measured green through exactly that alternative.
+        $inner = $this->planFor($this->innerSelectOf($this->statementThePrunerEmits()));
         $this->assertMatchesRegularExpression(
             '/"Sort Key": \["(?:\w+\.)?id"\]|messenger_messages_pkey/',
-            $plan,
-            'The batch no longer establishes an order over the rows it locks: the plan has neither a Sort on '
-            . '`id` nor a primary-key walk. Plan: ' . $plan,
+            $inner,
+            'The batching SELECT no longer establishes an order over the rows it locks: its own plan has '
+            . 'neither a Sort on `id` nor a primary-key walk. Plan: ' . $inner,
         );
+    }
+
+    /**
+     * The subquery the outer `DELETE` wraps, taken from the emitted statement rather than restated so a
+     * change to the batching shape reaches this assertion instead of going around it.
+     */
+    private function innerSelectOf(string $statement): string
+    {
+        $opened = \strpos($statement, '(');
+        $this->assertIsInt($opened, 'the emitted statement has no subquery to explain');
+
+        $inner = \rtrim(\substr($statement, $opened + 1));
+        $this->assertStringEndsWith(')', $inner);
+
+        return \substr($inner, 0, -1);
     }
 
     private function statementThePrunerEmits(): string

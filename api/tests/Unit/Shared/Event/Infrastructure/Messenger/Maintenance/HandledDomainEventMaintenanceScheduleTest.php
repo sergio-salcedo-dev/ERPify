@@ -29,6 +29,13 @@ final class HandledDomainEventMaintenanceScheduleTest extends TestCase
      */
     private const int MIN_ALARM_MARGIN = 10;
 
+    /**
+     * An absolute floor as well as a ratio. `maxBacklog` already defaults to zero on the reasoning that any
+     * backlog is worth an alarm; the day `maxAgeHours` follows it there, a pure ratio expects
+     * `> 0` and this assertion stops constraining anything while still claiming to.
+     */
+    private const int MIN_RETENTION_HOURS = 168;
+
     #[Test]
     public function itSchedulesTheDailyPruneAndTheHourlyDeadLetterCheck(): void
     {
@@ -57,7 +64,7 @@ final class HandledDomainEventMaintenanceScheduleTest extends TestCase
         // ceiling on that age: the queue would go quiet because the pruner removed the evidence, not
         // because the backlog cleared. Tuning either constant toward the other has to go red here.
         $this->assertGreaterThan(
-            $alarmAgeHours * self::MIN_ALARM_MARGIN,
+            \max($alarmAgeHours * self::MIN_ALARM_MARGIN, self::MIN_RETENTION_HOURS),
             $retentionHours,
             'the prune must not reach rows the dead-letter alarm has not had ample time to raise',
         );

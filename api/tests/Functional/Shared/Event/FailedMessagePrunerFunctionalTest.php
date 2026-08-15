@@ -9,6 +9,7 @@ use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Types\Types;
 use Erpify\Shared\Event\Infrastructure\Messenger\DbalFailedMessagePruner;
+use Erpify\Shared\Event\Infrastructure\Messenger\Maintenance\PruneFailedMessagesMessage;
 use Erpify\Shared\Persistence\Infrastructure\PostgresAdvisoryLock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -31,8 +32,6 @@ final class FailedMessagePrunerFunctionalTest extends KernelTestCase
 {
     private const string ANCHOR = '2026-06-25T00:00:00+00:00';
 
-    private const int RETENTION_DAYS = 30;
-
     private const int SMALL_BATCH = 2;
 
     private const int ELIGIBLE_ROWS = 3;
@@ -42,13 +41,13 @@ final class FailedMessagePrunerFunctionalTest extends KernelTestCase
     {
         $this->inRolledBackTransaction(function (Connection $connection): void {
             $anchor = new DateTimeImmutable(self::ANCHOR);
-            $threshold = $this->daysBefore($anchor, self::RETENTION_DAYS);
+            $threshold = $this->daysBefore($anchor, (new PruneFailedMessagesMessage())->retentionDays);
 
             // Bound what the sweep can find to what this case seeds: at a batch of 2 the drain loop ends
             // only on a short batch, so any pre-existing stale row would make `$removed` an unknown.
             $connection->executeStatement(
-                'DELETE FROM messenger_messages WHERE created_at < :cutoff',
-                ['cutoff' => $threshold],
+                'DELETE FROM messenger_messages WHERE queue_name = :queue AND created_at < :cutoff',
+                ['queue' => DbalFailedMessagePruner::FAILED_QUEUE, 'cutoff' => $threshold],
                 ['cutoff' => Types::DATETIME_IMMUTABLE],
             );
 
@@ -100,7 +99,7 @@ final class FailedMessagePrunerFunctionalTest extends KernelTestCase
     {
         $this->inRolledBackTransaction(function (Connection $connection): void {
             $anchor = new DateTimeImmutable(self::ANCHOR);
-            $threshold = $this->daysBefore($anchor, self::RETENTION_DAYS);
+            $threshold = $this->daysBefore($anchor, (new PruneFailedMessagesMessage())->retentionDays);
 
             // Same table, same age, past the same window — the ONLY thing that must save it is its queue.
             $inFlight = $this->seed($connection, 'async', $this->daysBefore($anchor, 90));
@@ -123,11 +122,11 @@ final class FailedMessagePrunerFunctionalTest extends KernelTestCase
     {
         $this->inRolledBackTransaction(function (Connection $connection): void {
             $anchor = new DateTimeImmutable(self::ANCHOR);
-            $threshold = $this->daysBefore($anchor, self::RETENTION_DAYS);
+            $threshold = $this->daysBefore($anchor, (new PruneFailedMessagesMessage())->retentionDays);
 
             $connection->executeStatement(
-                'DELETE FROM messenger_messages WHERE created_at < :cutoff',
-                ['cutoff' => $threshold],
+                'DELETE FROM messenger_messages WHERE queue_name = :queue AND created_at < :cutoff',
+                ['queue' => DbalFailedMessagePruner::FAILED_QUEUE, 'cutoff' => $threshold],
                 ['cutoff' => Types::DATETIME_IMMUTABLE],
             );
 

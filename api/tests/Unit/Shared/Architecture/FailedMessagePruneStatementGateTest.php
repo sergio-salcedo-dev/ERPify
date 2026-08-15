@@ -41,7 +41,7 @@ final class FailedMessagePruneStatementGateTest extends TestCase
 {
     private const string PRUNER = 'Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php';
 
-    private const string FAILURE_TRANSPORT = 'failed';
+    private const string TABLE = 'messenger_messages';
 
     #[Test]
     public function theBatchingSelectIsOrderedAndLocked(): void
@@ -66,6 +66,30 @@ final class FailedMessagePruneStatementGateTest extends TestCase
             . 'a statement without the predicate deletes messages that are in flight — not dead letters '
             . 'early, but live work, with nothing downstream to report their absence.',
         );
+    }
+
+    #[Test]
+    public function itPrunesTheTableTheFailureTransportActuallyWritesTo(): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/DELETE\s+FROM\s+' . self::TABLE . '\b/i',
+            $this->prunerSource(),
+            'The pruner no longer deletes from the table this gate pins.',
+        );
+
+        $dsn = $this->failureTransportDsn();
+        $this->assertStringStartsWith('doctrine://', $dsn, \sprintf(
+            'The failure transport is no longer a Doctrine one (%s), so a raw `DELETE` against a table is not '
+            . 'what prunes it — the pruner would match zero rows for ever, in the safe direction, with every '
+            . 'gate green.',
+            $dsn,
+        ));
+
+        \parse_str((string) \parse_url($dsn, PHP_URL_QUERY), $query);
+        $this->assertSame(self::TABLE, $query['table_name'] ?? self::TABLE, \sprintf(
+            'The failure transport writes a table other than `%s`, which the pruner has hard-coded.',
+            self::TABLE,
+        ));
     }
 
     #[Test]
@@ -98,7 +122,10 @@ final class FailedMessagePruneStatementGateTest extends TestCase
                 continue;
             }
 
-            if (0 === \preg_match_all('/DELETE\s+FROM\s+messenger_messages/i', PhpSource::withoutComments($source))) {
+            $deletes = '/DELETE\s+FROM\s+' . self::TABLE . '|TRUNCATE\s+(?:TABLE\s+)?' . self::TABLE
+                . '|->\s*delete\s*\(\s*[\'"]' . self::TABLE . '/i';
+
+            if (0 === \preg_match_all($deletes, PhpSource::withoutComments($source))) {
                 continue;
             }
 
@@ -128,6 +155,23 @@ final class FailedMessagePruneStatementGateTest extends TestCase
      * for `failed` and the second for `async` — so both shapes are honoured, and a transport that declares
      * neither fails the gate instead of defaulting.
      */
+    private function failureTransportDsn(): string
+    {
+        $configFile = \dirname(__DIR__, 4) . '/config/packages/messenger.yaml';
+        $parsed = Yaml::parseFile($configFile);
+        $this->assertIsArray($parsed);
+
+        $messenger = $this->mappingAt($parsed, ['framework', 'messenger']);
+        $failureTransport = $messenger['failure_transport'] ?? null;
+        $this->assertIsString($failureTransport);
+
+        $transport = $this->mappingAt($parsed, ['framework', 'messenger', 'transports', $failureTransport]);
+        $dsn = $transport['dsn'] ?? null;
+        $this->assertIsString($dsn, 'the failure transport declares no dsn');
+
+        return $dsn;
+    }
+
     private function configuredFailureQueue(): string
     {
         $configFile = \dirname(__DIR__, 4) . '/config/packages/messenger.yaml';
@@ -136,7 +180,15 @@ final class FailedMessagePruneStatementGateTest extends TestCase
         $parsed = Yaml::parseFile($configFile);
         $this->assertIsArray($parsed);
 
-        $transport = $this->mappingAt($parsed, ['framework', 'messenger', 'transports', self::FAILURE_TRANSPORT]);
+        $messenger = $this->mappingAt($parsed, ['framework', 'messenger']);
+
+        // The transport is resolved through `failure_transport`, never by the literal `failed`: repointing it
+        // while the old block survives — dead config routinely outlives the edit that orphaned it — would
+        // leave this gate reading a transport nothing writes and calling it agreement.
+        $failureTransport = $messenger['failure_transport'] ?? null;
+        $this->assertIsString($failureTransport, 'messenger.yaml declares no `failure_transport`.');
+
+        $transport = $this->mappingAt($parsed, ['framework', 'messenger', 'transports', $failureTransport]);
 
         $options = $transport['options'] ?? null;
         $fromOptions = \is_array($options) ? ($options['queue_name'] ?? null) : null;

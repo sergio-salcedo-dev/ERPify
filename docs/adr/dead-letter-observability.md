@@ -76,8 +76,13 @@ been made by not being made.
 **The window is not a free parameter, because the prune and D3's alarm read the same rows.** The alarm reports
 the age of the *oldest surviving* message, so a retention window near its `maxAgeHours` would cap that age:
 the queue would go quiet because the pruner deleted the evidence, not because the backlog cleared. At 30 days
-against 24 hours the margin is thirty-fold, and it is asserted in the schedule's test rather than left to
-whoever next tunes either constant.
+against 24 hours the margin is thirty-fold, asserted in the schedule's test with an absolute floor as well as
+a ratio — a pure ratio degenerates to no constraint the day `maxAgeHours` follows `maxBacklog` to zero.
+
+Be precise about what that margin buys: it **delays** the silence, it does not prevent it. `maxBacklog` is 0,
+so the alarm fires on any resting row and goes quiet when the table empties — which at thirty days is exactly
+what the prune does. What the margin guarantees is that nothing is deleted before the alarm has had ample
+time to raise it.
 
 **The window is the triage SLA**, which #525 asked for separately and which nothing else in the repo states:
 a failure not looked at within 30 days is deleted. That is the whole deadline, and it is deliberately the same
