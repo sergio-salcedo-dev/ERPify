@@ -86,11 +86,15 @@ final class SymfonyAuditLoggerTest extends TestCase
 
         $this->assertCount(1, $recordingLogger->records, 'the gap is recorded, never silent');
         $record = $recordingLogger->records[0];
-        $this->assertSame('warning', $record['level']);
+        // Prod routes Monolog through `fingers_crossed` with `action_level: error`
+        // (config/packages/monolog.yaml), which buffers anything lower and discards it when no error follows —
+        // and nothing on an audited path does, since `activity` is captured on successful reads. Below `error`
+        // the line is unreachable in the only environment where it would matter.
+        $this->assertSame('error', $record['level']);
         $this->assertSame(
             ['action' => 'BANK_ACCOUNTS_VIEWED', 'level' => 'activity', 'exception' => $failure],
             $record['context'],
-            'the warning carries only safe keys — never metadata, actor id, or resource id',
+            'the line carries only safe keys — never metadata, actor id, or resource id',
         );
     }
 

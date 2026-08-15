@@ -285,22 +285,70 @@ Los dos siguientes los encontró T7, y el tercero es de la misma familia que los
   - [ ] Un `#[AsSchedule]` nuevo obliga a añadir su transporte al `messenger:consume` de **`compose.yaml`
         (dev) y `compose.prod.yaml`**. Y a **actualizar el comentario de `:174-178`**, que ya va dos ticks
         por detrás (M10).
-- [ ] **T4 — DEC-5 · #526: hacer que la señal exista** (resuelta: umbral 1, sin contador)
-  - [ ] `warning(` → `error(` en `SymfonyAuditLogger.php:86`. **Nada más**: ni contador, ni tabla, ni
+- [x] **T4 — DEC-5 · #526: hacer que la señal exista** (resuelta: umbral 1, sin contador)
+  - [x] `warning(` → `error(` en `SymfonyAuditLogger.php:86`. **Nada más**: ni contador, ni tabla, ni
         `#[AsSchedule]`, ni transporte — y esa ausencia es la propiedad, no la falta de trabajo: **un cambio
         que no declara transporte no puede enviarse muerto.**
-  - [ ] **El `assertSame` del array de contexto (`SymfonyAuditLoggerTest.php:92`) se queda intacto** — es el
+  - [x] **El `assertSame` del array de contexto (`SymfonyAuditLoggerTest.php:92`) se queda intacto** — es el
         guardián del residuo M13. Se mueve sólo el nivel (`:89`).
-  - [ ] Actualizar el docblock de la clase y `docs/architecture-api.md`: ambos dicen «swallowed and logged at
-        warning», que deja de describir el código.
-  - [ ] **No reenviar el mensaje del `Throwable` sin acotarlo** (M13), y declarar que subir el nivel
+  - [x] Actualizar el docblock de la clase y `docs/architecture-api.md`: ambos dicen «swallowed and logged at
+        warning», que deja de describir el código. **Medido: la frase de `architecture-api.md` no nombra el
+        nivel** («swallowed and logged»), así que sobrevivía al cambio siendo cierta y vacía; se reescribe
+        para que diga *por qué* el nivel es `error`. Los que sí lo nombraban y no estaban en la lista son
+        tres del ADR (`audit-activity-log.md`, D3.1) — el cuarto, `:101`, **no se toca**: cae dentro del
+        bloque de D3 marcado como registro histórico en `:87`.
+  - [x] **No reenviar el mensaje del `Throwable` sin acotarlo** (M13), y declarar que subir el nivel
         **aumenta** su exposición: la línea ahora sí se escribe, y arrastra hasta 50 registros del buffer.
-  - [ ] Deja de ser espejo de `ReportDeadLetterBacklogHandler`: aquel cuenta filas que **existen**, aquí el
+        Declarado en el docblock; el `Throwable` sigue viajando entero porque el guardián de `:92` lo pina.
+  - [x] Deja de ser espejo de `ReportDeadLetterBacklogHandler`: aquel cuenta filas que **existen**, aquí el
         fallo es que la fila **no se escribió**. Ese es el motivo de que no haya contador.
 - [ ] **T5 — DEC-3 · #261**: implementar Option B, o cerrar `wontfix` con el argumento de `compose.prod.yaml:180-186`.
 - [ ] **T6 — verificación completa** (ver *Gates*)
 - [ ] **T7 — segundo pase adversarial** sobre el código que se escriba, antes de la PR que lo lleve.
 - [ ] **T8 — cierres con evidencia** para cada issue que cierre sin código
+
+### T4 — resultado medido
+
+**El rojo es la llegada, y salió limpio.** Con `warning(`, el test funcional falla así:
+
+```
+the request appended to the log; without growth there is nothing to search
+Failed asserting that 9240 is greater than 9240.
+```
+
+**Ni un byte.** No es que la línea llegue distinta: es que el fichero no crece, con el `write()` habiendo
+lanzado de verdad (`assertSame(1, $writer->attempts)` pasa antes, entre las 9 aserciones que sí corren). Eso
+separa *«descartada»* de *«nunca intentada»*, que era la vacuidad a evitar. Con `error(`, verde: 1 test / 11
+aserciones.
+
+**Lo que el instrumento tuvo que respetar para no mentir:** la suite comparte **un solo `test.log` que nadie
+trunca** (`sf.clear.var.log` es manual y ningún target de test lo invoca) y varios tests provocan 5xx que
+activan el mismo handler. Por eso la evidencia es sólo la **cola** añadida desde un offset tomado justo antes
+de la petición, y se afirma el mensaje literal, no «el fichero no está vacío». Y se afirma `assertResponseIsSuccessful()`
+porque un 404/405 está en `excluded_http_codes`: la línea ausente se leería como «descartada» cuando sería
+«nunca auditada».
+
+**La ruta:** `GET /api/v1/me` (`iam_me`), que `AuditPolicy` audita como `activity` por ser un `GET` con
+semántica de negocio y sin `_audit_canonical`. **No hay disparador más barato sin autenticar**: `^/api` es
+deny-by-default, y las cuatro rutas públicas o no son `GET` o son health, que la política excluye.
+
+**Dos hechos del cableado que la decisión daba por supuestos y no lo estaban:**
+
+1. **El canal es `app`, no `audit`.** `SymfonyAuditLogger` recibe un `LoggerInterface` pelado; no hay ni un
+   `#[WithMonologChannel]` en `api/`, y el único cableado por canal del repo es `SearchObservabilityListener`
+   con `#[Autowire(service: 'monolog.logger.observability')]`. El canal `audit` declarado en `monolog.yaml:6`
+   **no lo consume nadie**. La premisa se sostiene a pesar de esa declaración, no gracias a ella.
+2. **La coincidencia `when@test`/`when@prod` es más ancha que `action_level`** — también el `type` del
+   handler, el `level` del `nested`, y que ninguno excluya el canal `app` — **y ya está rota en una clave**:
+   test excluye `!event`, prod excluye `!deprecation`. Benigno hoy sólo porque ninguno excluye `app`.
+   Declarado en el docblock del test; el gate de paridad es trabajo derivado y va en su propia PR (sin el
+   test de llegada no protegía nada).
+
+**No es un patrón nuevo, es una regla ya escrita que este sitio se saltó.** `InspectStoredIdentityHandler:20`
+y `ReconcileSubjectErasuresHandler:16` ya razonan lo mismo palabra por palabra —*«una alarma que no puede
+dispararse en producción no es una alarma»*— y `ReconcileSubjectErasuresHandlerTest` la pina en un test
+llamado `itAlarmsAtErrorLevelSoProductionDoesNotDiscardIt`. Lo que ninguno de los dos tiene es el rojo de
+llegada: los tres pinan **lo que la fuente llama**, nunca si Monolog lo conserva.
 
 ---
 
@@ -317,12 +365,13 @@ Los dos siguientes los encontró T7, y el tercero es de la misma familia que los
   `make php.stan`— y el límite de esquema no tiene testigo en runtime, sólo el docblock.
 - **#525** — si se poda: rojo de la ventana (una fila justo dentro y otra justo fuera) y rojo del orden de
   borrado, con la disciplina de `DbalAuditLogPruner`, no la del pruner desnudo.
-- **#526** — el rojo **no es el umbral**, es la **llegada**: un test funcional que sustituye el writer por un
-  doble que lanza, golpea una ruta auditada y lee `api/var/log/test.log`. Antes del cambio la línea **no
-  está** (buffer, descartada); después **sí**. `when@test` comparte con `when@prod` el `action_level: error`,
-  que es lo que se pina — y esa coincidencia es hoy una casualidad de la que el test depende: declararlo.
-  Contra vacuidad: afirmar que el doble **lanzó** (`assertSame(1, $writer->attempts)`) y que el fichero
-  **creció** respecto del offset previo, **antes** de buscar el mensaje.
+- **#526 — cumplido.** El rojo **no es el umbral**, es la **llegada**, y salió: con `warning` el fichero no
+  crece **ni un byte** (`Failed asserting that 9240 is greater than 9240`) habiendo lanzado el `write()`; con
+  `error`, verde. Las tres guardas contra vacuidad se sostienen en ese orden — el doble **lanzó**
+  (`assertSame(1, $writer->attempts)`), el fichero **creció** contra el offset previo, y sólo entonces se
+  busca el mensaje en la **cola** añadida (la suite comparte un `test.log` que nadie trunca). La coincidencia
+  `when@test`/`when@prod` resultó ser más ancha que `action_level` y **ya rota en `channels`**: declarada en
+  el docblock del test, con el gate de paridad como trabajo derivado en su propia PR.
 - **Siembra no vacua** — cualquier aserción de ausencia afirma primero que la siembra insertó N filas.
 - **Una aserción cuyo valor esperado coincide con su valor de fallo no es una aserción.** El lote lleva ya
   **tres** de esa familia (`BOUND = 1.0`; `assertNotInstanceOf` sobre un hecho ajeno; y la siembra vacua de
@@ -350,6 +399,20 @@ compose de raíz por el bind mount de sólo lectura y **falla en vez de saltar**
 
 El delta de PHPUnit contra el arranque de la sesión (2855) son exactamente los **14 tests nuevos**: 11 en el
 unitario y 3 en el funcional de cableado.
+
+**T4 — corridas frescas sobre el árbol final, con su exit code impreso:**
+
+| Puerta | Exit | Nota |
+|---|---|---|
+| `make php.stan` | **0** | 1392 ficheros, `No errors` |
+| `make php.quality` | **0** | |
+| `make php.test` | **0** | PHPUnit 2870 tests / 11384 aserciones; Behat 439 escenarios / 4132 pasos |
+
+El delta contra T1 (2869 / 11373) es **exactamente** el test de llegada: +1 test, +11 aserciones. Behat no se
+mueve. **`make pwa.quality` / `make pwa.test` no se corren**: el diff no toca ni un fichero de `pwa/`.
+
+**El verde del test de llegada se midió también en la suite completa**, no sólo con `--filter`: la suite
+comparte un `test.log` que nadie trunca, así que un verde aislado no es evidencia de un verde acompañado.
 
 **Dos decisiones de herramienta, nombradas para que sean revisables:**
 
@@ -445,6 +508,91 @@ mailer — se dice en la PR en vez de saltárselo en silencio.
 
 ---
 
+## Pase adversarial (código) — T4
+
+Ejecutado **antes de `gh pr create`**, sobre el árbol final, por tres lectores independientes en sólo lectura
+con lentes distintas —¿pueden fallar estos tests?, ¿es cierta la afirmación sobre producción?, ¿toda frase
+escrita o dejada atrás es cierta?—, cada uno instruido a refutar. **Siete hallazgos: uno GRAVE, cuatro MEDIA,
+dos LEVE. Todos aplicados.** Cada cita se re-verificó contra el árbol antes de tocar nada.
+
+**GRAVE · «esta escritura corre en `kernel.terminate`» era falso, y lo escribí cinco veces.** `activity` tiene
+**dos** caminos de captura, no uno: el hook genérico post-respuesta, y las llamadas explícitas de
+`BankAccountSearcher:51` y `BankAccountCollectionSearcher:41`, **en plena petición**, antes de construir la
+respuesta — sus rutas llevan `_audit_canonical` justo para que el hook genérico ceda. Lo contradecían el
+docblock de `AuditPolicy` y una aserción preexistente del propio unitario («writes the sealed entry **in the
+request cycle**»), y hasta la misma línea de `architecture-api.md` que edité, unas cláusulas más adelante.
+
+Y no era sólo fraseo: **la cota de exposición dependía de la premisa falsa**. `FingersCrossedHandler` trae
+`stopBuffering = true` por defecto (`:79`), así que tras activarse deja de bufferear y **todo lo que la
+petición registre después sale directo**. En el hook post-respuesta apenas queda nada detrás; en una escritura
+en plena petición queda el resto de la petición entera. El techo de «hasta 50» no acota ahí. Reformulado en
+los cinco sitios, y de paso corregido el párrafo **preexistente** del mismo docblock que decía lo mismo de
+más (regla del boy scout, declarada).
+
+**MEDIA · «Doctrine queries included» es falso en producción.** `api/config/packages/doctrine.yaml` no fija
+`dbal.logging`, y doctrine-bundle lo default-ea a `%kernel.debug%` (`Configuration.php:178`), que en `prod` es
+false. El SQL de Doctrine **no** entra en ese flush salvo que alguien encienda `APP_DEBUG` en prod. En dev y
+test sí. Corregido con la mecánica, no con un hedge.
+
+**MEDIA · «nunca actor ni resource id» era una garantía sobre el CONTEXTO vendida como garantía sobre el
+registro.** El array de contexto no los lleva, cierto — pero el `Throwable` viaja entero, y
+`Driver\PDO\Exception::new()` propaga el mensaje del driver **verbatim** (`Exception.php:24`), y PostgreSQL
+incrusta el literal ofensor en `invalid input syntax for type uuid: "…"`. Un id malformado llegando al INSERT
+de `DbalAuditLogWriter` acaba en el log dentro del mensaje, bajo ninguna clave nuestra. Atenuante medida:
+`JsonFormatter::$includeStacktraces` es `false` por defecto (`:37`), así que la traza con argumentos no sale.
+Reescrito para decir de qué es la garantía.
+
+**MEDIA · existir no es alertar, y el docblock lo insinuaba.** El puente Monolog→Sentry está desconectado a
+propósito (`sentry.yaml:14-17`) y **ningún compose declara driver de logging**, así que la línea llega a
+stderr del contenedor y a nada más. Sigue siendo estrictamente más que una línea que ningún entorno escribía —
+pero se dice dónde para el cambio en vez de dejar leer que la operabilidad queda resuelta.
+
+**MEDIA · la medición del ADR se presentaba como afirmación sobre producción.** Se midió bajo `when@test`;
+transfiere sólo mientras el acuerdo con `when@prod` aguante, y ese acuerdo **no está gateado**. Acotada al
+entorno en el que se tomó, con el riesgo nombrado al lado.
+
+**LEVE ×2, aplicados.** (1) La razón escrita para `assertResponseIsSuccessful()` era incompleta: `AccessLogAuditListener:60`
+ya cede ante una respuesta no exitosa, así que un no-2xx no llega ni a intentar la escritura — son dos razones,
+no una. (2) `RecordingLogger:13` seguía diciendo «exactly one warning»; es el doble que sostiene el test que
+cambié, así que entra por boy scout.
+
+**Lo que el pase intentó y NO consiguió**, que vale tanto como lo que encontró: fabricar un verde falso.
+Descartado que el estado del `FingersCrossedHandler` se filtre entre tests (cada `createClient()` da contenedor
+nuevo; `$buffering`/`$buffer` son de instancia; los 12 `tearDown()` de `tests/Functional` llaman a
+`parent::tearDown()`), y descartado que `attempts === 1` pueda venir de otra escritura (`loginUser()` no hace
+HTTP; sólo `Bank` y `BankAccount` son `AuditedEntity`, así que los `flush()` de `User`/`Session` no tocan el
+writer; y una escritura `security` en el doble **propagaría** antes de tomar el offset). El rojo medido con
+`--filter` reproduce en la suite completa.
+
+**Un agujero declarado, no tapado:** subir el nivel a `critical` dejaría el test de llegada **verde**. Lo caza
+el unitario (`assertSame('error', …)`). Ninguno de los dos basta solo, y el docblock del test lo dice.
+
+---
+
+## Revisión de seguridad — T4
+
+Recorrida la checklist del `CLAUDE.md` raíz por fichero del diff. **No aplican por construcción:** inyección
+(cero SQL/DQL nuevo), authn/authz (ni controller ni handler nuevos), validación de entrada, mass assignment,
+codificación de salida, CORS/CSRF/Mercure, migraciones, dependencias. Sin ficheros `pwa/`: la lista de frontend
+está vacía.
+
+**El eje que sí aplica es uno solo, y es el que el cambio mueve: qué llega al almacenamiento de logs**, que
+tiene retención propia y ningún dueño declarado de su borrado. Tres medidas, todas arriba: el SQL de Doctrine
+**no** entra en el flush en prod; la traza con argumentos **no** sale (`includeStacktraces = false`); y el
+mensaje del `Throwable` **sí** puede llevar un id que el driver citó. Ese último es el residuo M13, ahora con
+su vector nombrado en vez de descrito de más.
+
+**Coste de volumen, aceptado y declarado:** la línea no lleva presupuesto. Una caída acotada a `audit_log`
+emite una por lectura auditada con éxito, donde las proyecciones `security` hermanas de `Iam/Identity` sí
+gastan un budget antes de escribir. Con umbral 1 y sin alerting aguas abajo se acepta; si la forma resulta
+inaceptable, la palanca es el canal `observability`, no un contador.
+
+`PRODUCTION_SECURITY_CHECKLIST.md` no se toca: subir el nivel de un log ya tragado no introduce patrón de
+seguridad nuevo ni está en sus disparadores. `docs/api-error-contract.md` tampoco: gobierna la respuesta HTTP
+RFC 9457, y aquí la respuesta sigue siendo 2xx — la excepción nunca llega a `kernel.exception`.
+
+---
+
 ## Pase adversarial (medición)
 
 Ejecutado **antes** de abrir la PR, por tres lectores independientes en sólo lectura, uno por grupo, cada uno
@@ -521,6 +669,19 @@ Todas las sondas son desechables, viven en el `tmp/` gitignoreado y **no entran 
   `api/.env`, en `docs-info/production-deployment.md` y en el cuerpo de la PR, y es la pregunta 4.
 - **No entra en este PR:** T2 (#255), T3 (#525) y T4 (#526) tienen decisión pero salen en PRs propias; #256 y
   #261 se quedan abiertos por decisión de Sergio. **BR-8 no se cierra con este PR.**
+- **T4 (#526) entregado en PR propia.** Una línea de producción, y un test que la hace falsable donde el
+  unitario no podía: el unitario pina **lo que la fuente llama**, nunca si Monolog lo conserva. Rojo medido —
+  con `warning` el log no crece ni un byte.
+- **No es un patrón nuevo, es una regla ya escrita que este sitio se saltó.** `InspectStoredIdentityHandler:20`
+  y `ReconcileSubjectErasuresHandler:16` ya razonan lo mismo palabra por palabra. Lo que ninguno tiene es el
+  rojo de llegada, y por eso los tres siguen sin poder distinguir «lo llamé» de «llegó».
+- **El pase adversarial de T4 corrigió la premisa central del cambio, otra vez.** «Corre en `kernel.terminate`»
+  era falso —hay un segundo camino de captura, en plena petición— y de esa premisa colgaba la cota de
+  exposición. Es el mismo patrón que T7 encontró en T1: la frase que el código cuenta sobre sí mismo es
+  exactamente la que hay que mandar a refutar.
+- **Dos hermanos fuera de alcance, medidos y por decidir:** `RecordLockoutAuditBestEffort:60` y
+  `RecordRecoveryThrottleAuditBestEffort:81` pierden una fila **`security`** y la reportan al mismo nivel
+  invisible. DEC-5 decidió una línea; ampliarlo es decisión de Sergio, no efecto colateral de esta PR.
 
 ### File List
 
@@ -533,3 +694,14 @@ Todas las sondas son desechables, viven en el `tmp/` gitignoreado y **no entran 
 - `make/deploy.mk` — validación de rango en `prod.env.check`
 - `docs-info/production-deployment.md`, `docs/deployment-guide.md`,
   `api/docs/production-ready/secrets.md` — la variable, y la corrección de los tres servicios
+
+**T4 (#526)** — PR propia, rama `fix/shared-audit-write-loss-invisible`:
+
+- `api/src/Shared/Audit/Infrastructure/SymfonyAuditLogger.php` — `warning(` → `error(`, y el docblock
+  reescrito (nivel, coste del buffer, alcance de la garantía sobre el contexto, dónde para el cambio)
+- `api/tests/Functional/Shared/Audit/ActivityAuditWriteFailureArrivalTest.php` — nuevo; el test de llegada
+- `api/tests/Functional/Shared/Audit/Fixtures/ThrowingAuditLogWriter.php` — nuevo; el doble que lanza y cuenta
+- `api/tests/Unit/Shared/Audit/Infrastructure/SymfonyAuditLoggerTest.php` — sólo el nivel (`:89`); el
+  `assertSame` del array de contexto queda intacto
+- `api/tests/Unit/Shared/Audit/Infrastructure/Double/RecordingLogger.php` — docblock, boy scout
+- `docs/architecture-api.md`, `docs/adr/audit-activity-log.md` (D3.1, tres frases) — el nivel y su porqué

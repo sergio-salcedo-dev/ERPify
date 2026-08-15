@@ -10,7 +10,8 @@ use Stringable;
 
 /**
  * Spy PSR-3 logger capturing each record's level, message and context, so a test can assert the
- * activity best-effort branch logs exactly one warning carrying only safe keys.
+ * activity best-effort branch logs exactly one record, at the level production delivers, carrying only
+ * safe keys.
  *
  * @internal
  */
