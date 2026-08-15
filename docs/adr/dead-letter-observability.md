@@ -65,9 +65,54 @@ breaches `maxBacklog` (default 0 → any backlog) or `maxAgeHours` (default 24);
   metric and `Backoffice/Health` already owns HTTP health; a third surface for the same data buys
   nothing (YAGNI). Promote to an endpoint only if a scraper needs HTTP.
 
+### D4 — The queue is bounded at 30 days, and the window is coupled to D3's alarm
+
+`failed` was the only sibling of `audit_log` and `handled_domain_event` with no retention at all: durable on
+purpose, so an operator can see, decide and replay — but "durable" had been standing in for "unbounded", and
+nothing capped a table that only ever grows. A daily prune on the same maintenance schedule deletes rows past
+**30 days**, matching `handled_domain_event` and the revoked-session sweep. Past that window the decision has
+been made by not being made.
+
+**The window is not a free parameter, because the prune and D3's alarm read the same rows.** The alarm reports
+the age of the *oldest surviving* message, so a retention window near its `maxAgeHours` would cap that age:
+the queue would go quiet because the pruner deleted the evidence, not because the backlog cleared. At 30 days
+against 24 hours the margin is thirty-fold, and it is asserted in the schedule's test rather than left to
+whoever next tunes either constant.
+
+**The window is the triage SLA**, which #525 asked for separately and which nothing else in the repo states:
+a failure not looked at within 30 days is deleted. That is the whole deadline, and it is deliberately the same
+number as the window rather than a second one to keep in sync.
+
+**What it costs, named because `event_store` does not cover it.** The domain event survives — it is appended
+before dispatch, atomically with the aggregate write. The *failure context* does not: the exception class and
+message, the retry count and the redelivery stamp live only in `messenger_messages.headers` and go with the
+row. The prune keeps the *what* and discards the *why*.
+
+**The honest limit of the safety argument.** "The alarm will have fired for twenty-nine days first" is only as
+good as the alarm's reach, and by D3 that reach is one line on container stderr: the Monolog→Sentry bridge is
+unwired, no compose file declares a logging driver, and nothing scrapes `messenger:failed:status`. So the
+margin protects against the pruner *masking* a backlog; it does not deliver the backlog to anyone. Wiring an
+alerting sink is D3's debt, not this decision's, and this decision does not pretend to have paid it.
+
+Discarded: **operator-only deletion** (`messenger:failed:remove`) — it is the status quo, and the status quo
+is a table nobody prunes; **pruning by `available_at`/`delivered_at`** — those track redelivery state, not age
+since failure, so a redelivered message would reset its own clock; **a longer window matching `audit_log`'s
+90-day `activity` tier** — that tier serves a trail somebody may need to reconstruct later, while a dead letter
+is a work item, and a work item nobody claimed in a month is not going to be claimed in three.
+
+The prune imitates `DbalAuditLogPruner` — advisory lock (I1 of
+[`maintenance-job-execution-contract.md`](./maintenance-job-execution-contract.md)), batched,
+`ORDER BY id … FOR UPDATE` — and not the bare `DELETE` of the dedup pruner, because it contends with the
+transport's own consumer. Its statement carries a predicate the audit one has no analogue for: `async` and
+`failed` are one physical table discriminated by `queue_name`, so a statement missing it deletes work that is
+in flight.
+
 ## Consequences
 
-- No schema change, no new transport, no compose change — the hourly tick rides the existing
-  maintenance schedule. `Shared/Event` folds into the deptrac `Shared.*` layers, so no gate edit.
+- No schema change, no new transport, no compose change — the hourly tick and the daily prune both ride the
+  existing maintenance schedule. `Shared/Event` folds into the deptrac `Shared.*` layers, so no gate edit.
+- The GDPR argument for keeping person-aggregate events off persisted transports is **unchanged**: a 30-day
+  sweep is not an erasure path, so a queued person id still outlives the erasure the application confirmed.
+  The registry (`api/.persistent-transport-policy`) and its gate keep their teeth.
 - The operational runbook (safe replay order *clear claim → retry*) lives in
   [`architecture-api.md`](../architecture-api.md), not here.

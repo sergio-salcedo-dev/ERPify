@@ -16,9 +16,10 @@ use PHPUnit\Framework\TestCase;
  * aggregate type as person-denoting or not, cross-checked against Messenger's routing map. The resolution
  * rules live in {@see PersistentTransportPolicy}; this class is the assertions over them.
  *
- * A queued message outlives the erasure of whoever it is about. `async` and `failed` are Doctrine tables with
- * no TTL and no prune, and no erasure path touches them, so an id that reaches one of them survives the
- * deletion the application confirmed to the subject. This repo shipped exactly that: `PasswordResetCompleted`
+ * A queued message outlives the erasure of whoever it is about. No erasure path touches `async` or `failed`,
+ * and neither clears one in time — the first is unbounded, the second swept only at 30 days — so an id that
+ * reaches either survives the deletion the application confirmed to the subject. This repo shipped exactly
+ * that: `PasswordResetCompleted`
  * was routed to `async` under a comment reasoning that its payload is the aggregate id alone — true, and
  * beside the point, because that aggregate is a user, so the id IS the personal datum.
  *
@@ -45,9 +46,10 @@ final class PersistentTransportPolicyGateTest extends TestCase
      */
     public const string FAILURE_PREAMBLE
         = 'An "aggregate id alone" payload is safe on a persisted transport if and only if the aggregate is '
-        . 'not a natural person. `async` and `failed` have no TTL and no prune and no erasure path touches '
-        . 'them, so a queued person aggregate id outlives the erasure the application confirmed to the '
-        . 'subject. Unroute the event and handle it in-process, or declare the exception with an ADR in '
+        . 'not a natural person. No erasure path touches `async` or `failed`, and their retention does not '
+        . 'stand in for one — `async` is unbounded and `failed` is swept at 30 days — so a queued person '
+        . 'aggregate id outlives the erasure the application confirmed to the subject. Unroute the event '
+        . 'and handle it in-process, or declare the exception with an ADR in '
         . 'api/.persistent-transport-policy.';
 
     #[Test]

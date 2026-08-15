@@ -23,9 +23,10 @@ framework:
             Erpify\Backoffice\BankAccount\Domain\Event\BankAccountDeletedDomainEvent: async
             Erpify\Backoffice\BankAccount\Domain\Event\BankAccountStatusChangedDomainEvent: async
 
-        # A queued event outlives the erasure of whoever it is about. `async` and `failed` are Doctrine tables
-        # with no TTL and no prune, and nothing in the erasure chain touches them — so an id that reaches one
-        # of them survives the deletion the application confirmed to the subject.
+        # A queued event outlives the erasure of whoever it is about. Nothing in the erasure chain touches
+        # either queue: `async` has no TTL and no prune, and `failed`'s 30-day retention sweep bounds the
+        # window rather than closing it — so an id that reaches one of them survives the deletion the
+        # application confirmed to the subject.
         #
         # The rule, which the events above satisfy and no event named after a person can: an "aggregate id
         # alone" payload is safe to queue if and only if the aggregate is not a natural person. For an event

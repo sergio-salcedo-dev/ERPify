@@ -18,9 +18,10 @@ use Override;
  * credential.
  *
  * It is not PII-free, and that is exactly why it stays off every persisted transport: the subject is the
- * aggregate id alone, and that id is a user id — the personal datum itself. `async` and `failed` are Doctrine
- * tables with no TTL and no prune that no erasure path touches, so a queued copy would outlive the erasure the
- * application confirmed to the person it names. Unrouted, it is appended to `event_store` and handled in
+ * aggregate id alone, and that id is a user id — the personal datum itself. No erasure path touches `async`
+ * or `failed`, and neither the first (unbounded) nor the second (swept at 30 days) clears one in time, so a
+ * queued copy would outlive the erasure the application confirmed to the person it names. Unrouted, it is
+ * appended to `event_store` and handled in
  * process; the session teardown and the notification are performed post-commit by
  * {@see \Erpify\Iam\Identity\Application\ChangeMyPassword} itself, never by a queued handler. See
  * api/.persistent-transport-policy.

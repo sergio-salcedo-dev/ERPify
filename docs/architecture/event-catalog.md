@@ -70,8 +70,9 @@ wire-on-consumer default awaiting its first consumer:
 
 > An "aggregate id alone" payload is safe on a persisted transport **if and only if** the aggregate is not a
 > natural person. `Iam.Identity`'s aggregate is a user, so the envelope id IS the personal datum and an empty
-> payload proves nothing. `async` and `failed` are Doctrine tables with no TTL and no prune that no erasure
-> path touches, so a queued id outlives the erasure the application confirmed to the subject.
+> payload proves nothing. `async` and `failed` are Doctrine tables no erasure path touches — `async`
+> unbounded, `failed` swept at 30 days — so a queued id outlives the erasure the application confirmed to
+> the subject.
 
 Declared in [`api/.persistent-transport-policy`](../../api/.persistent-transport-policy) and enforced by
 `make php.lint.persistent-transport`, which resolves each event to the transports Messenger would
