@@ -152,7 +152,8 @@ un oráculo de re-identificación, estrictamente más débil que el HMAC→UUID 
 
 **La justificación de D3 no se sostiene.** D3 justificaba la cola con «libera el request path de IO de auditoría» y
 «latencia p95». Pero el transporte es `doctrine://default` —la cola `audit` es una tabla Postgres en la **misma base y
-conexión** que `audit_log`—, y la captura de `activity` corre en `kernel.terminate`, **después** de enviar la respuesta.
+conexión** que `audit_log`—, y la captura genérica de `activity` corre en `kernel.terminate`, **después** de enviar la respuesta (un
+módulo que nombra su propia acción escribe en plena petición).
 Medido (microbenchmark de una conexión + pgbench bajo carga concurrente, tablas scratch de DDL idéntico): el `INSERT`
 directo no añade latencia visible al cliente (post-terminate), y bajo carga los dos caminos son **indistinguibles** en
 throughput/latencia (el coste de commit/fsync domina y es idéntico). La vía async hacía **~3,2x el trabajo total de BD**
@@ -169,18 +170,23 @@ nueva. La cola convertía esa ventana de milisegundos en una **ilimitada** (rein
 enmienda la devuelve a su duración natural.
 
 **Contrato preservado.** El SLA por nivel de D3 es ortogonal al mecanismo y **no cambia**: `activity` sigue siendo
-best-effort (fallo tragado + `warning` sin contexto tainted), `security` sigue propagando el fallo. La rama `change`
-(síncrona en la transacción de flush) es intacta.
+best-effort (fallo tragado + una línea de log sin contexto tainted), `security` sigue propagando el fallo. La rama
+`change` (síncrona en la transacción de flush) es intacta.
 
 **Riesgo aceptado (best-effort, explícito).** Con la cola, un hipo transitorio de BD dejaba la entrada `activity` en el
-transporte `failed` para reintentar; ahora ese mismo hipo **la pierde** (se traga + `warning`). Es la contrapartida
+transporte `failed` para reintentar; ahora ese mismo hipo **la pierde** (se traga y se reporta). Es la contrapartida
 consciente de retirar la cola, y cae dentro del best-effort que D3 ya declara. **No se añade reintento síncrono:** para
 este write —`INSERT` autocommit de una fila con `id` v7 acuñado por el cliente, esquema con solo PK (sin FK ni otro
 UNIQUE)— las clases reintentables (deadlock/serialization) no contienden, y la que sí ocurre (conexión perdida) no se
 recupera sobre la misma `Connection` (DBAL 4 no reconecta) sin arrastrar gestión de ciclo de vida de conexión al camino
-best-effort. La pérdida se cubre por **observabilidad** (alarma sobre el pico de ese `warning`), no por durabilidad:
-best-effort significa pérdida **visible**, no pérdida evitada. El vector dominante de pérdida sigue siendo que
-`kernel.terminate` no dispare (SIGTERM/reciclado del worker), que ningún reintento de BD toca.
+best-effort. La pérdida se cubre por **observabilidad**, no por durabilidad: best-effort significa pérdida
+**visible**, no pérdida evitada — y visible exige un nivel que producción entregue. El reporte es `error` por eso:
+`main` es `fingers_crossed` con `action_level: error`, y nada en un camino auditado eleva ese buffer, porque
+`activity` se captura sobre lecturas con éxito. Medido en `when@test` —que comparte `type` y `action_level` con
+`when@prod`, acuerdo hoy **no gateado**—: con `warning` el fichero de log no crece **ni un byte** tras un
+`write()` que sí lanzó. Visible **no** es alertable: el puente Monolog→Sentry sigue desconectado a propósito y
+la línea llega a stderr y a nada más. El vector dominante de pérdida sigue siendo que `kernel.terminate` no
+dispare (SIGTERM/reciclado del worker), que ningún reintento de BD toca.
 
 **Alcance de esa decisión: el `INSERT` de `activity`, no toda contención de la aplicación.** El argumento mide un
 write concreto —una fila, autocommit, esquema con solo PK— y para ése se sostiene. No cubre la transacción del
