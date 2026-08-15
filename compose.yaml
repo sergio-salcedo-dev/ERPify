@@ -26,6 +26,9 @@ services:
       MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default?auto_setup=0}
       MAILER_DSN: ${MAILER_DSN:-null://null}
       MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
+      # Seconds an SMTP server may hold a caller. Forwarded rather than left to api/.env so setting it
+      # here is not a silent no-op; unset, the socket falls back to default_socket_timeout (60s).
+      MAILER_SMTP_TIMEOUT: ${MAILER_SMTP_TIMEOUT:-10}
       DEFAULT_NOTIFICATION_EMAIL: ${DEFAULT_NOTIFICATION_EMAIL:-sergio.salcedo.dev@gmail.com}
     volumes:
       - caddy_data:/data
@@ -120,6 +123,9 @@ services:
       MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default?auto_setup=0}
       MAILER_DSN: ${MAILER_DSN:-null://null}
       MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
+      # Seconds an SMTP server may hold a caller. Forwarded rather than left to api/.env so setting it
+      # here is not a silent no-op; unset, the socket falls back to default_socket_timeout (60s).
+      MAILER_SMTP_TIMEOUT: ${MAILER_SMTP_TIMEOUT:-10}
       DEFAULT_NOTIFICATION_EMAIL: ${DEFAULT_NOTIFICATION_EMAIL:-sergio.salcedo.dev@gmail.com}
       # The worker is a separate service that PUBLISHES Mercure updates (async handlers); it needs the
       # hub URL + signing key just like php, or HubInterface::publish() throws 'Failed to send an update'.
