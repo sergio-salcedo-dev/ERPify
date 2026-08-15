@@ -272,10 +272,20 @@ Los dos siguientes los encontró T7, y el tercero es de la misma familia que los
         `restore-prod.sh:92-95`**, reformulando sólo su segunda línea y sin tacharlo de obsoleto
         (sub-decisión de DEC-1). El barrido de huérfanos locales es tarea de operación, no de código,
         y va documentado en `docs/vps-deployment.md` § Backups.
-  - [ ] Corregir en ambos issues la **deriva de nombre** `object_storage_data` → `storage_data` — **la
-        dependencia a #252 es correcta y se mantiene** (M5).
-  - [ ] Corregir el checklist de #256 a sus pasos ejecutables; el paso 5 nombra además un `pg_restore -l` que
-        el `verify_dump` de hoy no usa (M6).
+  - [x] Corregir en ambos issues la **deriva de nombre** `object_storage_data` → `storage_data` — **la
+        dependencia a #252 es correcta y se mantiene** (M5). **Corregido más allá del nombre**, porque el pase
+        adversarial midió que la frase que lo rodea es falsa: #256 dice que sin el volumen `make backup.prod`
+        «aborts on its volume-exists guard», y esa guarda **no existe** (`lib/common.sh:25-36` no mira ningún
+        volumen). Cambiar sólo el sustantivo habría dejado la falsedad con aspecto de revisada. La dependencia
+        se conserva como **hecho histórico**, no como precondición viva.
+  - [x] Corregir el checklist de #256 a sus pasos ejecutables; el paso 5 nombra además un `pg_restore -l` que
+        el `verify_dump` de hoy no usa (M6). Reescrito el cuerpo a los pasos que corren, **con el original
+        preservado verbatim en un comentario** — borrarlo habría eliminado el registro de que el drill
+        emparejado existió de verdad. Añadido el único dato que sólo el host tiene: si `$BACKUP_DIR` guarda
+        huérfanos, el barrido documentado aplica.
+  - [x] **#255 cerrado con evidencia** (#728): tabla de disposición ask-por-ask en un comentario, con los
+        commits que construyeron (#253, `b0dce6ef`) y desmontaron (#557, `08f8199b`) la superficie, y con lo
+        que el cierre **no** afirma — que un host vivo no tenga huérfanos no se lee desde el repositorio.
 ### T2 — resultado medido
 
 **No hay ningún gate que lea este cambio, y eso es lo primero que hay que decir.** `.github/workflows/ci.yml`
