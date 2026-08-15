@@ -35,6 +35,7 @@ import { useSession } from "@/context/shared/access/application/useSession";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { Role } from "@/context/shared/access/domain/Role";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
+import { SharedProblemType } from "@/context/shared/error/domain/SharedProblemType";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
@@ -89,6 +90,18 @@ function renderForm() {
   );
 }
 
+/** The 409 a lost uniqueness race produces: a `Conflict`, and deliberately without `violations`. */
+function conflict(): HttpError {
+  return new HttpError({
+    type: SharedProblemType.CONCURRENT_UNIQUE_WRITE,
+    title: "That value was taken by a concurrent request.",
+    status: HttpStatus.CONFLICT,
+    instance: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+    "correlation-id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6c",
+    resource: "identity-user",
+  });
+}
+
 function fillValidInvitation() {
   fireEvent.change(screen.getByTestId("invite-user-form__email"), {
     target: { value: "newbie@erpify.test" },
@@ -139,6 +152,68 @@ describe("InviteUserForm", () => {
 
     expect(await screen.findByText("This email is already in use.")).toBeInTheDocument();
     expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("marks the email field and offers a retry when the address is taken mid-flight", async () => {
+    mocks.inviteRun.mockRejectedValue(conflict());
+    renderForm();
+
+    fillValidInvitation();
+    fireEvent.submit(screen.getByTestId("invite-user-form"));
+
+    // Both surfaces, because they answer different questions: the field says WHICH input collided,
+    // the persistent surface carries the only action that can resolve it.
+    expect(
+      await screen.findByText(
+        "That email was just taken by another request. Try sending it again.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("invite-user-form__mutation-error")).toBeInTheDocument();
+    expect(screen.getByTestId("invite-user-form__conflict-retry")).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("resubmits the invitation from the retry action", async () => {
+    // The success is the default, not a second queued `Once`: `vi.clearAllMocks()` clears usage data
+    // and leaves an unconsumed queue behind, so a `Once` this test failed to reach would serve the
+    // NEXT test's first call and decide its outcome.
+    mocks.inviteRun.mockRejectedValueOnce(conflict()).mockResolvedValue(undefined);
+    renderForm();
+
+    fillValidInvitation();
+    fireEvent.submit(screen.getByTestId("invite-user-form"));
+
+    fireEvent.click(await screen.findByTestId("invite-user-form__conflict-retry"));
+
+    // The retry is what distinguishes this from a dead banner: the second attempt reaches the use
+    // case with the same payload and, on success, completes the navigation the first one could not.
+    await waitFor(() => expect(mocks.inviteRun).toHaveBeenCalledTimes(2));
+    expect(mocks.inviteRun).toHaveBeenLastCalledWith({
+      email: "newbie@erpify.test",
+      roles: [Role.EDITOR],
+    });
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+  });
+
+  it("offers no retry action for a conflict the resubmit cannot resolve", async () => {
+    mocks.inviteRun.mockRejectedValue(
+      new HttpError({
+        type: "user-already-member",
+        title: "That user already belongs to the organization.",
+        status: HttpStatus.CONFLICT,
+        instance: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+        "correlation-id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6c",
+      }),
+    );
+    renderForm();
+
+    fillValidInvitation();
+    fireEvent.submit(screen.getByTestId("invite-user-form"));
+
+    // A 409 alone must not mint the action — the branch keys off the type, so a sibling conflict
+    // whose remedy is not a resubmit gets the surface without a button that cannot help.
+    expect(await screen.findByTestId("invite-user-form__mutation-error")).toBeInTheDocument();
+    expect(screen.queryByTestId("invite-user-form__conflict-retry")).not.toBeInTheDocument();
   });
 
   it("disables the submit button while an invitation is in flight, blocking a second submit", async () => {
