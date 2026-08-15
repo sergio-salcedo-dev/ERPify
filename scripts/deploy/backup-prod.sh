@@ -48,9 +48,11 @@ umask 077
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
 
-# Normalise to an absolute path so the lock file, the artifact and every logged
-# path name the same directory whatever the caller passed in.
-BACKUP_DIR="$(cd "$BACKUP_DIR" && pwd)"
+# Normalise to an absolute, SYMLINK-RESOLVED path. `pwd` alone is logical, and `find` defaults to `-P`: given
+# a symlink as its starting point it examines the link, not the directory behind it — so on a host where
+# BACKUP_DIR was relocated the usual way (a link to a bigger disk) retention would match nothing, report
+# success, and let the directory grow until the free-space preflight starts aborting backups days later.
+BACKUP_DIR="$(cd "$BACKUP_DIR" && pwd -P)"
 
 # Prevent overlapping runs (a cron tick overrunning into the next, or a manual
 # run racing cron — or a restore racing a backup; restore-prod.sh takes the same
@@ -81,6 +83,16 @@ compose exec -T database sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -F
 # Prove the dump is fully restorable (magic + full read-back), not just headed.
 verify_dump "$db_file" || exit 1
 
+# The byte count is the cheap smoke signal a cron log can be grepped or thresholded on: verify_dump proves
+# the archive is readable, never that it holds what you expect, and an empty schema dumps clean. It is taken
+# BEFORE anything is deleted, so a run that produced a suspicious artifact can be judged before retention has
+# acted on its strength; `|| echo unknown` keeps a cosmetic value from aborting a run under `set -e` after a
+# good dump and before the offsite sync. `stat` is exact and unpadded, unlike `wc -c`.
+db_bytes=$(stat -c %s "$db_file" 2>/dev/null || echo unknown)
+# A plain line as well as the decorated one: log_success emits unconditional ANSI colour, and the cron log
+# this number exists to be compared in is a file, not a terminal.
+echo "backup_bytes=$db_bytes"
+
 # —— 2) Local retention ———————————————————————————————————————————————————
 # Retention intentionally runs before offsite sync.
 # Local backups are the source of truth; offsite storage is a secondary copy.
@@ -89,16 +101,25 @@ verify_dump "$db_file" || exit 1
 # $BACKUP_DIR holding an objects-<stamp>.tar.gz beside a dump is holding an
 # archive no run here produces or expires: sweeping those is a one-off operator
 # task, documented in docs/vps-deployment.md § Backups.
-while IFS= read -r expired_artifact; do
-  [[ -n "$expired_artifact" ]] || continue
-  rm -f -- "$expired_artifact"
-done < <(find "$BACKUP_DIR" -maxdepth 1 -name 'db-*.dump' -mtime +"$RETENTION_DAYS")
+# A pipeline rather than a process substitution, so `pipefail` sees a `find` that failed instead of the loop
+# reading zero lines and the run reporting success over a retention that degraded to a no-op. `-print0` is
+# what makes a filename containing a newline impossible to split into two paths, the second of which would
+# resolve relative to the repo root.
+find "$BACKUP_DIR" -maxdepth 1 -name 'db-*.dump' -mtime +"$RETENTION_DAYS" -print0 |
+  while IFS= read -r -d '' expired_artifact; do
+    rm -f -- "$expired_artifact"
+    log_info "Expired $expired_artifact"
+  done
 
-# The byte count is the cheap smoke signal a cron log can be grepped or
-# thresholded on: verify_dump proves the archive is readable, never that it holds
-# what you expect, and an empty schema dumps clean. `ls -lh` rounds, so state
-# both — the exact number is what a comparison against yesterday's run needs.
-db_bytes=$(wc -c < "$db_file")
+# The detective half of the decision to stop expiring object archives: this script steps over them, so
+# without a line here the only thing that knows they exist is a runbook nobody is prompted to read. They
+# carry the same personal data as the dump, so an unbounded pile of them is a retention problem, not clutter.
+orphan_objects=$(find "$BACKUP_DIR" -maxdepth 1 -name 'objects-*.tar.gz' -printf . 2>/dev/null | wc -c)
+if (( orphan_objects > 0 )); then
+  log_warn "$orphan_objects object archive(s) in $BACKUP_DIR that nothing here produces or expires."
+  log_warn "They hold the same personal data as the dump — see docs/vps-deployment.md § Backups."
+fi
+
 log_success "Backup $STAMP complete: $db_file ($db_bytes bytes)"
 ls -lh "$db_file"
 

@@ -683,6 +683,16 @@ mitigated state. Accepting one means recording who accepted it and against which
       and `identity:gdpr:reconcile-subject-references` reports any erased identity the trail still
       names. Verify when adding a person-denoting `resource_type`: classify it, wire its erasure, and
       cover it with a Behat scenario — the gate checks declaration and wiring, not runtime reach.
+- [ ] **Backup object archives carry the dump's personal data and no longer expire on their own.** The
+      paired backup wrote `objects-<stamp>.tar.gz` beside each dump, and its retention `find` was the only
+      thing that ever deleted them. That surface was removed, so the pattern named an artifact nothing
+      produces and it was retired — which means a host that ran the paired backup keeps those archives, with
+      the same PII as the dump, until an operator sweeps them by hand
+      (`docs/vps-deployment.md` § Backups → *Orphan object archives*). `backup-prod.sh` warns on every run
+      when it finds any, so the obligation is surfaced rather than only documented; the sweep is not a
+      one-off, because a host still on a pre-removal checkout keeps producing them. **Unchecked on purpose:
+      it closes when the deploy has landed and the sweep has been run twice, `RETENTION_DAYS + 1` days
+      apart.**
 - [x] **GDPR erasure is not defeated by the Messenger transport tables** — closed for the one event that
       reached them. `messenger_messages` and the `failed` queue have neither TTL nor prune and no erasure
       path touches them, so a queued message naming a person outlives that person's erasure. The rule is

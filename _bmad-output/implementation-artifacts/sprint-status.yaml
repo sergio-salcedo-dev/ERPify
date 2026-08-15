@@ -380,8 +380,9 @@ development_status:
   # DEC-5 está resuelta y la resolución rechaza LAS DOS opciones de #526: ningún registro de Monolog llega a
   # Sentry (decisión escrita en sentry.yaml:14-17), así que la 1 es imposible sin revertirla; y con umbral 1
   # no hay nada que agregar, así que la 2 compra maquinaria por nada. De DEC-1..DEC-5 hay cuatro resueltas y
-  # sólo DEC-3 (#261) sigue abierta. Decisión resuelta no es código enviado: T1 MERGEADA (#725); T4 en PR
-  # ABIERTA sin mergear (#727), así que #526 sigue open; T2 y T3 salen en PRs propias.
+  # sólo DEC-3 (#261) sigue abierta. Decisión resuelta no es código enviado, y este fichero no es el sitio
+  # donde comprobarlo: T1/T2/T3/T4 salen cada una en su PR (#725, #728, #729, #727) y el estado de cada una
+  # se lee en git, no aquí. Esta clave seguirá en `in-progress` mientras #256 y #261 sigan abiertos.
   br-8-operabilidad: in-progress
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.

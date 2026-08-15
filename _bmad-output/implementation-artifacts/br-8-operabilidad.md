@@ -33,7 +33,7 @@ dos primeros envejecieron.
 | **M4** | **`:93` es `ls -lh "$db_file"`, pero no es evidencia de que la petición de #255 se haya cumplido.** El mismo `ls -lh` ya estaba en `b0dce6ef:117` (sobre **ambos** artefactos), y #255 se abrió el 2026-06-13, **revisando ese PR**. La petición se hizo con el `ls -lh` delante. Además, `:93` es `ls` crudo a stdout, no pasa por los helpers `log_*` del script, así que en un log de cron no se distingue. Si eso cuenta como «observabilidad» es un juicio, no una medición. |
 | **M5** | **La dependencia que #255/#256 declaran es CORRECTA; lo único que derivó es el nombre.** El volumen existió como **`storage_data`** (`85f55b72:compose.prod.yaml:232`, montado en php `:53` y messenger_worker `:155`), y `b0dce6ef:scripts/deploy/backup-prod.sh:37` lo resolvía como `STORAGE_VOLUME="${COMPOSE_PROJECT_NAME}_storage_data"`. **#252 es exactamente el PR que lo desplegó** — su mensaje de commit dice *«fix(deploy): persist prod object storage on a named volume»* y *«pair `object_storage_data` with `database_data` in backup/restore»*; de ahí nace la deriva de nombre. La **guarda de volumen-existe también era real**: vivía en `scripts/deploy/lib/common.sh::require_running_stack()` (`b0dce6ef`, `:36-40`), que `backup-prod.sh:36` invoca, y la borró #557. |
 | **M6** | **Cuatro de los ocho pasos del checklist de #256 están rotos, no tres.** La superficie de objetos salió en `08f8199b` (#557): no hay `api/src/Shared/Storage` ni `StoredObject` en `api/src`. Paso 2 (sembrar un `stored_object`) es inejecutable entero; pasos 3 y 6 lo son a medias; y el **paso 5** —«watch the up-front verification pass (PGDMP + `pg_restore -l` + `tar -tzf`)»— nombra **dos** comprobaciones que ya no existen: `verify_objects` lo borró #557, y el `verify_dump` de hoy (`lib/common.sh:45-51`) usa `pg_restore -f /dev/null`, **no** `-l`, con un comentario que explica por qué `-l` no sirve. |
-| **M7** | **El código ya reconoce el hueco.** `restore-prod.sh:92-95` avisa: *«`$STAMP` carries `objects-$STAMP.tar.gz`, an object archive this restore does not unpack»* (`:93`) *«The recovery point will be database-only. Abort now if that archive still matters.»* (`:94`). Lo añadió `08f8199b` — **el mismo commit que borró el productor**. |
+| **M7** | **El código ya reconoce el hueco.** `restore-prod.sh:89-92` avisa: *«`$STAMP` carries `objects-$STAMP.tar.gz`, an object archive this restore does not unpack»* (`:93`) *«The recovery point will be database-only. Abort now if that archive still matters.»* (`:94`). Lo añadió `08f8199b` — **el mismo commit que borró el productor**. |
 
 ### Grupo B · El mailer (#612)
 
@@ -77,7 +77,7 @@ de naturaleza distinta, y **sólo uno es trabajo de escribir código ahora**:
 **Resueltas** (2026-08-15): **DEC-2** → opción 1, el decorador de transporte (T1, hecho). **DEC-4** → 30 días
 con poda automática. **DEC-5** → umbral **1** y **sin contador**: `warning` → `error`, nada más. **DEC-1** →
 #255 se cierra con evidencia, se retira de la retención el patrón `objects-*.tar.gz` y **el aviso de
-`restore-prod.sh:92-95` se conserva**; **#256 se queda abierto** como tarea de ejecución, no de código.
+`restore-prod.sh:89-92` se conserva**; **#256 se queda abierto** como tarea de ejecución, no de código.
 **DEC-3** → **sigue abierta**: #261 no entra en el lote. Las dos últimas en resolverse —la sub-decisión de
 DEC-1 y el mecanismo de DEC-5— se detallan bajo la tabla, porque en ambas la resolución **corrige una
 medición** de este mismo documento.
@@ -87,7 +87,7 @@ criterio de cierre de la épica (barrer el backlog otra vez contra `main`) no se
 
 | # | Decisión | Lo que la medición aporta |
 |---|---|---|
-| **DEC-1** · #255/#256 | **Resuelta** — se retira el patrón de la retención, **el aviso de restore se conserva**, #256 sigue abierto. Detalle y corrección de M3: *Sub-decisión de DEC-1*, bajo esta tabla. | La superficie se retiró deliberadamente (#557) y `restore-prod.sh:92-95` ya lleva el aviso. **Sub-decisión obligatoria**: `backup-prod.sh:90` es el único expirador de los `objects-*.tar.gz` de despliegues reales entre #253 y #557 (M3); borrarlo sin más los inmortaliza. |
+| **DEC-1** · #255/#256 | **Resuelta** — se retira el patrón de la retención, **el aviso de restore se conserva**, #256 sigue abierto. Detalle y corrección de M3: *Sub-decisión de DEC-1*, bajo esta tabla. | La superficie se retiró deliberadamente (#557) y `restore-prod.sh:89-92` ya lleva el aviso. **Sub-decisión obligatoria**: `backup-prod.sh:90` es el único expirador de los `objects-*.tar.gz` de despliegues reales entre #253 y #557 (M3); borrarlo sin más los inmortaliza. |
 | **DEC-2** · #612 | Decorador de transporte (opción 1 del issue) vs `default_socket_timeout` global (opción 2). | El decorador está verificado alcanzable y suficiente **para `smtp`/`smtps`** (M15), y **sólo** para eso (M15b) — la opción 2 no tiene ese punto ciego, a cambio de un radio global. El radio real son seis casos de uso, cuatro seams y **dos** superficies de worker (M9, M9b). |
 | **DEC-3** · #261 | ¿`wontfix` (seguir en Option A) o instalar `symfony/lock`? | `compose.prod.yaml:180-186` ya escribió el argumento a favor de A **después** de abrirse el issue, y el código lo sostiene (ninguna schedule `->lock()`). Son ocho ticks, no uno (M10). Suelo técnico: `symfony/lock >= 7.4` por el `conflict` de messenger (M11). |
 | **DEC-4** · #525 | Ventana de retención de `failed`, borrado automático vs herramienta de operador, y SLA de triage. | `failed` es durable **a propósito**; podarlo cambia el contrato. Es la única tabla hermana sin retención (M12), y el pruner tendría que convivir con una alarma **horaria**. |
@@ -95,7 +95,7 @@ criterio de cierre de la épica (barrer el backlog otra vez contra `main`) no se
 
 ### Sub-decisión de DEC-1 · los `objects-*.tar.gz` de legado
 
-**Se retira `-o -name 'objects-*.tar.gz'` de `backup-prod.sh:90`. El aviso de `restore-prod.sh:92-95` se
+**Se retira `-o -name 'objects-*.tar.gz'` de `backup-prod.sh:90`. El aviso de `restore-prod.sh:89-92` se
 conserva**, reformulando sólo su segunda línea y **sin** describir el archivo como obsoleto o retirado: un
 snapshot antiguo puede contenerlo legítimamente, y ésa es exactamente la condición que detecta.
 
@@ -269,7 +269,7 @@ Los dos siguientes los encontró T7, y el tercero es de la misma familia que los
    cota 4× lenta.
 - [x] **T2 — DEC-1 · #255/#256: reconciliar el backup con la superficie que existe**
   - [x] **Retirar `-o -name 'objects-*.tar.gz'` de la retención (`:90`) y conservar el aviso de
-        `restore-prod.sh:92-95`**, reformulando sólo su segunda línea y sin tacharlo de obsoleto
+        `restore-prod.sh:89-92`**, reformulando sólo su segunda línea y sin tacharlo de obsoleto
         (sub-decisión de DEC-1). El barrido de huérfanos locales es tarea de operación, no de código,
         y va documentado en `docs/vps-deployment.md` § Backups.
   - [x] Corregir en ambos issues la **deriva de nombre** `object_storage_data` → `storage_data` — **la
@@ -278,15 +278,51 @@ Los dos siguientes los encontró T7, y el tercero es de la misma familia que los
         «aborts on its volume-exists guard», y esa guarda **no existe** (`lib/common.sh:25-36` no mira ningún
         volumen). Cambiar sólo el sustantivo habría dejado la falsedad con aspecto de revisada. La dependencia
         se conserva como **hecho histórico**, no como precondición viva.
+  - [x] **Loguear el tamaño del artefacto** — la mitad de #255 que sobrevive a la retirada de la superficie de
+        objetos, y que el `ls -lh` preexistente NO cumplía (es de `b0dce6ef`, la PR que #255 revisaba). Se
+        emite como línea plana `backup_bytes=<n>`, **antes** de la retención, para que un artefacto sospechoso
+        pueda juzgarse antes de que se borre nada en su virtud.
+  - [x] **Denunciar los huérfanos en cada ejecución** — la mitad detectiva. Sin ella el único que sabe que
+        existen es un runbook que nadie está obligado a leer, y llevan la misma PII que el dump.
   - [x] Corregir el checklist de #256 a sus pasos ejecutables; el paso 5 nombra además un `pg_restore -l` que
         el `verify_dump` de hoy no usa (M6). Reescrito el cuerpo a los pasos que corren, **con el original
         preservado verbatim en un comentario** — borrarlo habría eliminado el registro de que el drill
         emparejado existió de verdad. Añadido el único dato que sólo el host tiene: si `$BACKUP_DIR` guarda
         huérfanos, el barrido documentado aplica.
-  - [x] **#255 cerrado con evidencia** (#728): tabla de disposición ask-por-ask en un comentario, con los
+  - [x] **#255 con su cierre preparado y su evidencia publicada** (#728) — `Closes #255` dispara al mergear,
+        no ahora; el comentario de disposición ya está en el issue: tabla de disposición ask-por-ask en un comentario, con los
         commits que construyeron (#253, `b0dce6ef`) y desmontaron (#557, `08f8199b`) la superficie, y con lo
         que el cierre **no** afirma — que un host vivo no tenga huérfanos no se lee desde el repositorio.
-### T2 — resultado medido
+- [ ] **T3 — DEC-4 · #525: retención de `failed`** (sólo tras la decisión)
+  - [ ] **Reutilizar, no reinventar — y elegir bien el patrón**: los dos pruners existentes **no son
+        intercambiables**. `Shared/Event/Infrastructure/Messenger/DbalHandledDomainEventPruner.php` es un
+        `DELETE` desnudo; el que la sección de *Falsificación* obliga a imitar es
+        `Shared/Audit/Infrastructure/Persistence/DbalAuditLogPruner.php:142`, con `ORDER BY id … FOR UPDATE`.
+  - [ ] Colgarlo de `Maintenance/HandledDomainEventMaintenanceSchedule.php`; convive con
+        `Maintenance/ReportDeadLetterBacklogHandler.php` (horario) y lee por `MessengerDeadLetterReader`.
+  - [ ] Un `#[AsSchedule]` nuevo obliga a añadir su transporte al `messenger:consume` de **`compose.yaml`
+        (dev) y `compose.prod.yaml`**. Y a **actualizar el comentario de `:174-178`**, que ya va dos ticks
+        por detrás (M10).
+- [ ] **T4 — DEC-5 · #526: hacer que la señal exista** (resuelta: umbral 1, sin contador)
+  - [ ] `warning(` → `error(` en `SymfonyAuditLogger.php:86`. **Nada más**: ni contador, ni tabla, ni
+        `#[AsSchedule]`, ni transporte — y esa ausencia es la propiedad, no la falta de trabajo: **un cambio
+        que no declara transporte no puede enviarse muerto.**
+  - [ ] **El `assertSame` del array de contexto (`SymfonyAuditLoggerTest.php:92`) se queda intacto** — es el
+        guardián del residuo M13. Se mueve sólo el nivel (`:89`).
+  - [ ] Actualizar el docblock de la clase y `docs/architecture-api.md`: ambos dicen «swallowed and logged at
+        warning», que deja de describir el código.
+  - [ ] **No reenviar el mensaje del `Throwable` sin acotarlo** (M13), y declarar que subir el nivel
+        **aumenta** su exposición: la línea ahora sí se escribe, y arrastra hasta 50 registros del buffer.
+  - [ ] Deja de ser espejo de `ReportDeadLetterBacklogHandler`: aquel cuenta filas que **existen**, aquí el
+        fallo es que la fila **no se escribió**. Ese es el motivo de que no haya contador.
+- [ ] **T5 — DEC-3 · #261**: implementar Option B, o cerrar `wontfix` con el argumento de `compose.prod.yaml:180-186`.
+- [ ] **T6 — verificación completa** (ver *Gates*)
+- [ ] **T7 — segundo pase adversarial** sobre el código que se escriba, antes de la PR que lo lleve.
+- [ ] **T8 — cierres con evidencia** para cada issue que cierre sin código
+
+---
+
+## T2 — resultado medido
 
 **No hay ningún gate que lea este cambio, y eso es lo primero que hay que decir.** `.github/workflows/ci.yml`
 no tiene paso de shell; `make/ci.mk` es `php.quality`/`pwa.quality` + los tests, ninguno toca `scripts/`;
@@ -343,12 +379,18 @@ estaba revisando. Citarlo como cumplimiento habría sido citar como evidencia lo
 delante cuando pidió más. Se implementa aquí (`log_success` con el conteo de bytes exacto, que es lo que un log
 de cron puede comparar contra el de ayer) en vez de cerrar por encima.
 
-**GRAVE · La corrección de nombre en #256 dejaba en pie una frase falsa, disfrazada de corregida.** El issue
-dice que el volumen «must exist, or `make backup.prod` **aborts on its volume-exists guard**». **Esa guarda no
-existe**: `require_running_stack()` (`lib/common.sh:25-36`) comprueba `compose.yaml`, el fichero de entorno,
-`docker` y que el servicio `database` esté corriendo — y `git grep 'STORAGE\|volume' -- scripts/deploy/` no
-devuelve nada. Cambiar sólo el sustantivo habría dejado una afirmación falsa sobre el comportamiento de hoy con
-aspecto de haber sido revisada. Se reescribe la sustancia, no el nombre.
+**GRAVE · La corrección de nombre en #256 dejaba en pie una frase que ya no describe el código.** El issue dice
+que el volumen «must exist, or `make backup.prod` **aborts on its volume-exists guard**», y hoy
+`require_running_stack()` (`lib/common.sh:25-36`) comprueba `compose.yaml`, el fichero de entorno, `docker` y
+que `database` esté corriendo, nada más. Se reescribe la sustancia, no el nombre.
+
+**Y la primera versión de esa corrección estaba mal, en la dirección que más daño hace: le decía al autor que
+su frase era falsa.** Era **cierta cuando la escribió** — la guarda existió, en
+`b0dce6ef:lib/common.sh:36-40` (`docker volume inspect "$STORAGE_VOLUME"` con su propio `exit 1`), y la borró
+#557. Lo dice M5 de este mismo documento veinte líneas más arriba, y lo verifiqué con `git show`. Es
+exactamente el error que M5 existe para registrar («M5 era falso, y su acción habría hecho daño»), cometido
+sobre M5. El issue se corrige por segunda vez, con el tiempo verbal puesto: cierta al abrirse, retirada por
+#557.
 
 **MEDIA ×3, todos sobre el one-liner que yo publicaba para que un operador lo pegue.** (1) Ruta fija
 `/var/backups/erpify` ignorando el knob `BACKUP_DIR`: en un host con el directorio movido **y** la ruta por
@@ -379,8 +421,13 @@ Recorrida la checklist del `CLAUDE.md` raíz. **No aplican por construcción:** 
 PHP en el diff) y todo el de `pwa/`. Lo que sí aplica es la clase que este diff sí toca: **borrado de datos y
 secretos en logs.**
 
-- **Borrado.** El cambio *reduce* lo que la retención borra: de dos patrones a uno. Medido, el delta es un
-  fichero. Ningún camino nuevo borra nada. El comando que sí borra está en el runbook, lo ejecuta una persona,
+- **Borrado — y aquí el razonamiento de la primera versión estaba invertido.** Decía que el cambio «reduce lo
+  que la retención borra», y lo tomaba como la dirección segura. Para un control de retención sobre **datos
+  personales** no lo es: el archivo de objetos lleva la misma PII que el dump (lo dice el comentario de
+  `b0dce6ef`), así que retirar su única expiración automática deja esa PII en disco indefinidamente. No es
+  «borra menos», es **una obligación de retención que pasa a manos de una persona**. Por eso el script ahora
+  la denuncia en cada ejecución, el runbook dice que la sección no es un one-off, y esto entra en
+  `PRODUCTION_SECURITY_CHECKLIST.md`: no por patrón nuevo, sino por cambio a un control existente. El comando que sí borra está en el runbook, lo ejecuta una persona,
   y lleva su comando de inspección **delante** — con el mismo predicado que el borrado, más ancho por el lado
   seguro (`ls` sin `-mtime` enseña más de lo que `find -delete` se lleva, nunca menos).
 - **PII.** Los dumps llevan datos de negocio y el runbook ya lo dice. El barrido de huérfanos **no** propaga al
@@ -393,33 +440,6 @@ secretos en logs.**
 
 `PRODUCTION_SECURITY_CHECKLIST.md` no se toca: no se introduce patrón de seguridad nuevo y un `find` con un
 patrón menos no está en sus disparadores.
-
-- [ ] **T3 — DEC-4 · #525: retención de `failed`** (sólo tras la decisión)
-  - [ ] **Reutilizar, no reinventar — y elegir bien el patrón**: los dos pruners existentes **no son
-        intercambiables**. `Shared/Event/Infrastructure/Messenger/DbalHandledDomainEventPruner.php` es un
-        `DELETE` desnudo; el que la sección de *Falsificación* obliga a imitar es
-        `Shared/Audit/Infrastructure/Persistence/DbalAuditLogPruner.php:142`, con `ORDER BY id … FOR UPDATE`.
-  - [ ] Colgarlo de `Maintenance/HandledDomainEventMaintenanceSchedule.php`; convive con
-        `Maintenance/ReportDeadLetterBacklogHandler.php` (horario) y lee por `MessengerDeadLetterReader`.
-  - [ ] Un `#[AsSchedule]` nuevo obliga a añadir su transporte al `messenger:consume` de **`compose.yaml`
-        (dev) y `compose.prod.yaml`**. Y a **actualizar el comentario de `:174-178`**, que ya va dos ticks
-        por detrás (M10).
-- [ ] **T4 — DEC-5 · #526: hacer que la señal exista** (resuelta: umbral 1, sin contador)
-  - [ ] `warning(` → `error(` en `SymfonyAuditLogger.php:86`. **Nada más**: ni contador, ni tabla, ni
-        `#[AsSchedule]`, ni transporte — y esa ausencia es la propiedad, no la falta de trabajo: **un cambio
-        que no declara transporte no puede enviarse muerto.**
-  - [ ] **El `assertSame` del array de contexto (`SymfonyAuditLoggerTest.php:92`) se queda intacto** — es el
-        guardián del residuo M13. Se mueve sólo el nivel (`:89`).
-  - [ ] Actualizar el docblock de la clase y `docs/architecture-api.md`: ambos dicen «swallowed and logged at
-        warning», que deja de describir el código.
-  - [ ] **No reenviar el mensaje del `Throwable` sin acotarlo** (M13), y declarar que subir el nivel
-        **aumenta** su exposición: la línea ahora sí se escribe, y arrastra hasta 50 registros del buffer.
-  - [ ] Deja de ser espejo de `ReportDeadLetterBacklogHandler`: aquel cuenta filas que **existen**, aquí el
-        fallo es que la fila **no se escribió**. Ese es el motivo de que no haya contador.
-- [ ] **T5 — DEC-3 · #261**: implementar Option B, o cerrar `wontfix` con el argumento de `compose.prod.yaml:180-186`.
-- [ ] **T6 — verificación completa** (ver *Gates*)
-- [ ] **T7 — segundo pase adversarial** sobre el código que se escriba, antes de la PR que lo lleve.
-- [ ] **T8 — cierres con evidencia** para cada issue que cierre sin código
 
 ---
 
@@ -452,7 +472,10 @@ patrón menos no está en sus disparadores.
 
 ## Gates
 
-`make php.quality`, `make php.stan` sobre cada fichero PHP tocado, `make app.test`. Si T3/T5 tocan schedules o
+`make php.quality`, `make php.stan` sobre cada fichero PHP tocado, `make app.test`. **T2 no corre ninguno de
+los tres, y la razón se dice en vez de callarse:** su diff no toca ni un fichero PHP ni de `pwa/`, así que las
+tres puertas no leerían nada suyo. Lo que sustituye a un verde ahí está en *T2 — resultado medido*: `bash -n`,
+shellcheck traído a mano, el `find` instrumentado y el one-liner del runbook ejecutado. Si T3/T5 tocan schedules o
 transportes, además `make php.lint.schedule-consumption` (`make/php-quality.mk:217-220`; tres clases de gate
 bajo `api/tests/Unit/Shared/Architecture/`, cableado en `php.quality` y en `php.quality.dry-run`). Lee los
 compose de raíz por el bind mount de sólo lectura y **falla en vez de saltar** cuando no está —
@@ -637,8 +660,8 @@ Todas las sondas son desechables, viven en el `tmp/` gitignoreado y **no entran 
   diferido. Corrigió la garantía central del cambio y bajó el default de 10 a 3.
 - **Lo que este PR NO promete:** un techo sobre el tiempo total de un envío. Está dicho en el docblock, en
   `api/.env`, en `docs-info/production-deployment.md` y en el cuerpo de la PR, y es la pregunta 4.
-- **No entra en este PR:** T2 (#255), T3 (#525) y T4 (#526) tienen decisión pero salen en PRs propias; #256 y
-  #261 se quedan abiertos por decisión de Sergio. **BR-8 no se cierra con este PR.**
+- **No entra en el PR de T1:** T2 (#255), T3 (#525) y T4 (#526) salen en PRs propias; #256 y #261 se quedan
+  abiertos por decisión de Sergio. **BR-8 no se cierra con ninguna de las cuatro.**
 
 ### File List
 
@@ -651,3 +674,98 @@ Todas las sondas son desechables, viven en el `tmp/` gitignoreado y **no entran 
 - `make/deploy.mk` — validación de rango en `prod.env.check`
 - `docs-info/production-deployment.md`, `docs/deployment-guide.md`,
   `api/docs/production-ready/secrets.md` — la variable, y la corrección de los tres servicios
+
+**T2 (#255)** — PR propia, rama `fix/shared-backup-retention-drift`:
+
+- `scripts/deploy/backup-prod.sh` — retención a un solo patrón, `pwd -P`, pipeline `-print0`, conteo de bytes
+  antes del borrado, aviso de huérfanos
+- `scripts/deploy/restore-prod.sh` — `pwd -P`, segunda línea del aviso, banner de sección a su sitio
+- `docs/vps-deployment.md` — sección del barrido de huérfanos, y el conteo de bytes en *Taking a backup*
+- `PRODUCTION_SECURITY_CHECKLIST.md` — la expiración automática de PII que pasa a manos de un operador
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — marcador y comentario
+
+---
+
+## Review Findings — bmad-code-review (2026-08-15) · T2 / PR #728
+
+Tres capas en paralelo, sólo lectura, sobre el árbol final. Lo que sobrevive al pase adversarial propio de T2.
+
+- [x] [Review][Patch] **Un `BACKUP_DIR` que sea enlace simbólico deja la retención muda para siempre** — `find`
+      por defecto es `-P` y NO desciende un enlace pasado como punto de partida; `cd … && pwd` es lógico y no lo
+      normaliza. **Medido: 1 coincidencia por la ruta real, 0 por el enlace; `pwd -P` lo arregla.** Mover los
+      backups a otro disco es la maniobra de operación más normal que hay, y el fallo aparece días después como
+      «los backups han dejado de correr». Alcanza también a `list_stamps()`.
+      [scripts/deploy/backup-prod.sh:53]
+- [x] [Review][Patch] **El bloque publicado borra antes de que el operador pueda leer lo que se le dice que
+      lea** — `ls` y `find … -delete` son dos comandos sin encadenar dentro de un mismo bloque: pegarlo entero
+      ejecuta el borrado en la misma pulsación, y un `ls` que falle no lo detiene. [docs/vps-deployment.md:231]
+- [x] [Review][Patch] **Se retira la única expiración automática de archivos que llevan la MISMA PII que el
+      dump** (`b0dce6ef` lo dice en su propio comentario), y la revisión de seguridad de T2 tomó «borra menos»
+      como seguro. Para un control de retención sobre datos personales, borrar menos es la dirección de fallo.
+      [scripts/deploy/backup-prod.sh:95]
+- [x] [Review][Patch] **El barrido «one-off» no puede barrer los archivos que más probablemente están ahí** —
+      filtra por `-mtime +N`, y los que existen al desplegar son justo los de los últimos días. El operador lo
+      corre, no borra nada, y no vuelve. [docs/vps-deployment.md:234]
+- [x] [Review][Patch] **Los `:-` del bloque hacen lo contrario de lo que su propio párrafo ordena** — «toma los
+      dos knobs de tu línea de cron» no lo puede imponer la prosa; sin variables puestas, los defaults se
+      aplican en silencio. [docs/vps-deployment.md:232]
+- [x] [Review][Patch] **`find … -delete` no imprime nada**, así que «no barrió nada» y «barrió doce» se ven
+      igual — es el multiplicador que vuelve infalsificables los demás no-ops. [docs/vps-deployment.md:234]
+- [x] [Review][Patch] **La sustitución de procesos descarta el exit status de `find`**, y un salto de línea en
+      un nombre parte la ruta y hace que `rm` dispare relativo a `$REPO_ROOT`. [scripts/deploy/backup-prod.sh:92]
+- [x] [Review][Patch] **El conteo de bytes: producido DESPUÉS del borrado que podría haber gateado, emitido por
+      `log_success` con color ANSI incondicional (menos greppable que el `ls -lh` al que venía a superar), y
+      `$(wc -c)` bajo `set -e` puede abortar la ejecución tras un dump bueno y ANTES del sync offsite.
+      **Medido: exit 1.** [scripts/deploy/backup-prod.sh:101]
+- [x] [Review][Patch] **`RETENTION_DAYS=0` en el bloque publicado** — valor que el propio script acepta, y
+      `-mtime +0` se lleva el archivo emparejado con el dump de ayer. [docs/vps-deployment.md:235]
+- [x] [Review][Patch] **Le dije al autor de #256 que una frase suya era falsa, y era cierta cuando la
+      escribió** — la guarda de volumen-existe SÍ existía (`b0dce6ef:lib/common.sh:36-40`, `docker volume
+      inspect`) y la borró #557. M5 del propio artefacto lo dice; mis líneas nuevas lo contradicen. **Verificado
+      con `git show`.** Hay que corregir el issue otra vez y reconciliar el artefacto.
+- [x] [Review][Patch] **Nada avisa de que hay huérfanos** — el diseño pasa a depender de que alguien lea el
+      runbook. `backup-prod.sh` ya recorre el directorio; falta la mitad detectiva que el repo aplica en otros
+      ejes. [scripts/deploy/backup-prod.sh:92]
+- [x] [Review][Patch] **La retención sigue borrando en silencio**, en el mismo bloque que este cambio edita
+      para observabilidad. [scripts/deploy/backup-prod.sh:94]
+- [x] [Review][Patch] **`[x] #255 cerrado con evidencia` se afirma en pasado** cuando `Closes #255` sólo dispara
+      al mergear — el mismo patrón «decisión resuelta ≠ código enviado» que este commit corrige para T4 y no
+      aplica a T2. Y el comentario del sprint fija estado transitorio de PRs que nada actualizará.
+- [x] [Review][Patch] **Dos encabezados `##` quedaron dentro de la lista de *Alcance***, así que T3–T8 cuelgan
+      de «Revisión de seguridad — T2»; y el `###` de T2 va pegado a la última viñeta sin línea en blanco.
+- [x] [Review][Patch] **El conteo de bytes no tiene viñeta en el checklist de T2**, y la sección *Gates* nunca
+      dice «no se corrieron, y por qué» — lo importante está bien (no reclama verde falso), falta la frase.
+- [x] [Review][Patch] **Prosa de T1 en pie y citas desplazadas por mi propio diff** — «No entra en este PR: T2…»
+      sigue ahí, la *File List* no lista ningún fichero de T2, y las tres citas `restore-prod.sh:89-92` pasaron
+      a `:90-93` al bajar el comentario de lectura completa.
+- [x] [Review][Patch] **El banner de sección quedó un bloque por encima de lo que nombra** — efecto colateral
+      de mi propio movimiento boy-scout. [scripts/deploy/restore-prod.sh:89]
+- [x] [Review][Patch] **Cuatro precisiones del runbook**: `ls` falla en un host limpio y no hay nota de permisos
+      (el directorio es 700); el barrido esquiva el `flock` que ambos scripts consideran obligatorio; el párrafo
+      del offsite confunde el archivo con el dump que el barrido no toca; y el glob es más ancho que la forma
+      del stamp. [docs/vps-deployment.md:224-254]
+- [x] [Review][Patch] **Tras el barrido, el aviso de restore que la sección defiende deja de dispararse**, y
+      «Abort now» no tiene punto de aborto en el camino `RESTORE_YES=1`. [scripts/deploy/restore-prod.sh:90-93]
+- [x] [Review][Defer] **Un solo marcador de sprint no puede representar cuatro tareas que salen por separado**
+      — `bmad.status.audit` queda rojo con una prescripción equivocada. El fichero ya tiene el precedente
+      (`br-4b`, `br-4c` con clave propia); partir `br-8` es cambio de la historia, no de esta PR.
+
+**Resultado.** Los diecinueve `patch` aplicados; el `defer` intacto. Dos cambian lo que el PR *significa*, no
+sólo cómo está escrito:
+
+1. **`pwd -P`.** `find` es `-P` por defecto y **no desciende** un enlace simbólico pasado como punto de
+   partida; `cd … && pwd` es lógico y no lo resuelve. Medido: 1 coincidencia por la ruta real, **0** por el
+   enlace. Mover `BACKUP_DIR` a otro disco —la maniobra de operación más común que hay— dejaba la retención
+   muda para siempre, reportando éxito, hasta que el preflight de espacio empezara a abortar backups días
+   después. Es un defecto **preexistente** que mi runbook heredaba; se arregla en los dos scripts.
+2. **La revisión de seguridad estaba invertida.** Decía que «borra menos» es la dirección segura. Para un
+   control de retención sobre datos personales no lo es: el archivo de objetos lleva la misma PII que el dump,
+   así que retirar su única expiración automática no es tranquilidad, es una **obligación de retención que
+   pasa a manos de una persona**. De ahí el aviso en cada ejecución, la sección del runbook que ya no se llama
+   *one-off*, y la entrada **sin marcar** en `PRODUCTION_SECURITY_CHECKLIST.md`, que se cierra cuando el
+   despliegue haya aterrizado y el barrido se haya corrido dos veces.
+
+**Y una corrección que salió del repositorio.** Le dije al autor de #256 que su frase sobre la guarda de
+volumen era falsa. Era **cierta cuando la escribió** (`b0dce6ef:lib/common.sh:36-40`, `docker volume inspect`
+con su propio `exit 1`) y la borró #557. M5 de este mismo documento lo tenía medido veinte líneas más arriba
+del sitio donde escribí lo contrario. El issue lleva ya la corrección de la corrección, con el commit citado.
