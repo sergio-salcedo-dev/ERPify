@@ -53,7 +53,7 @@ command -v flock >/dev/null || { log_error "flock not found (util-linux)."; exit
 
 # Normalise to an absolute path so the lock file, the dump and every logged path
 # name the same directory whatever the caller passed in.
-BACKUP_DIR="$(cd "$BACKUP_DIR" && pwd)"
+BACKUP_DIR="$(cd "$BACKUP_DIR" && pwd -P)"
 
 # Serialize against backup-prod.sh via the shared lock: a cron backup must not
 # dump the DB while this restore is reloading it (which would produce a silently
@@ -86,14 +86,14 @@ db_file="$BACKUP_DIR/db-$STAMP.dump"
 
 [[ -f "$db_file" ]] || { log_error "missing dump: $db_file"; exit 1; }
 
+if [[ -f "$BACKUP_DIR/objects-$STAMP.tar.gz" ]]; then
+  log_warn "$STAMP carries objects-$STAMP.tar.gz, an object archive this restore does not unpack."
+  log_warn "The recovery point is database-only. Abort now if the object data in that archive matters."
+fi
+
 # —— Verify the artifact BEFORE touching live data ————————————————————————
 # Full read-back (not just the TOC), so a dump truncated in its data section is
 # rejected here rather than failing halfway through the destructive restore.
-if [[ -f "$BACKUP_DIR/objects-$STAMP.tar.gz" ]]; then
-  log_warn "$STAMP carries objects-$STAMP.tar.gz, an object archive this restore does not unpack."
-  log_warn "The recovery point will be database-only. Abort now if that archive still matters."
-fi
-
 log_info "Verifying backup $STAMP …"
 verify_dump "$db_file" || exit 1
 log_success "Dump verified (size below)."

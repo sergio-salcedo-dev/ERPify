@@ -181,6 +181,16 @@ against the Let's Encrypt duplicate-certificate rate limit, so snapshot
   proven restorable by a full `pg_restore` read-back before the run reports
   success.
 
+The run emits the dump's exact byte count twice: once as a plain `backup_bytes=<n>` line for grepping (the
+decorated status lines carry ANSI colour unconditionally, and a cron log is a file, not a terminal), and once
+on the success line. It is taken **before** retention runs, so a suspicious artifact can be judged before
+anything has been deleted on its strength. That number is the signal worth watching over time: the read-back
+proves the archive is *readable*, never that it holds what you expect — an empty schema dumps perfectly
+cleanly — so a run whose size falls off a cliff against yesterday's is the cheapest thing you can alert on.
+
+The run also warns when it finds `objects-*.tar.gz` in `BACKUP_DIR`: nothing produces or expires those any
+more, and they carry the same personal data as the dump. See *Orphan object archives* below.
+
 Knobs (env vars): `BACKUP_DIR`, `RETENTION_DAYS` (default 14, local pruning),
 `BACKUP_MIN_FREE_MB` (default 500, abort if the target FS is below it),
 `COMPOSE_PROJECT_NAME` (default `erpify` — `make docker.info` prints the
@@ -214,6 +224,55 @@ independent location via `BACKUP_SYNC_CMD` — e.g. `rclone sync` to S3/B2/Drive
 The backup strategy assumes local storage is the primary retention layer.
 Offsite sync failures do not block local retention management — retention prunes
 before the sync hook runs, by design.
+
+### Orphan object archives (an operator sweep, not a one-off)
+
+Retention expires `db-*.dump` and nothing else. A `BACKUP_DIR` may also hold `objects-<stamp>.tar.gz`, from a
+host that ran the paired backup or from a snapshot-based offsite (`restic`/`borg`) restoring the whole
+directory back. **Those archives carry the same personal data as the dump**, and nothing expires them any
+more — so this is a retention obligation you now own by hand, not housekeeping.
+
+**It is not one-off, and the reason is a date this repository does not know.** The producer is the script
+running on the VPS, so a host still on a pre-removal checkout keeps writing them, and its deployed retention
+keeps expiring them. Sweeping before that deploy is undone by the next cron tick. Sweep **after** the deploy
+lands, and then once more after `RETENTION_DAYS + 1` days, when the last archives the old code wrote have
+aged past the window.
+
+Look first. Run as the same user cron runs as — `BACKUP_DIR` is `chmod 700`, so a different user gets
+permission errors that `find` will not make obvious:
+
+```bash
+export BACKUP_DIR="${BACKUP_DIR:?set it to the value your cron line uses}"
+ls -lh "$BACKUP_DIR"/objects-*.tar.gz 2>/dev/null || echo '(none)'
+```
+
+Then delete, only if the listing is what you expect. `-print` is not decoration: without it "swept nothing"
+and "swept twelve" look identical, and every failure mode below reports as success.
+
+```bash
+find "$BACKUP_DIR" -maxdepth 1 -name 'objects-????-??-??_??????.tar.gz' -print -delete
+```
+
+The name pattern is anchored to the stamp shape on purpose — a bare `objects-*.tar.gz` also matches an
+`objects-before-migration.tar.gz` somebody parked there. There is deliberately **no `-mtime`**: the archives
+still present are the freshest ones, so an age filter spares exactly what you came to remove. If instead you
+are pruning a directory that a snapshot offsite handed back intact, add
+`-mtime +"${RETENTION_DAYS:?}"` to keep an archive whose paired dump is still inside the window — and note
+`find` discards the fractional part of an age, so **`-mtime +N` needs at least N+1 whole days**.
+
+Two consequences worth knowing before you run it:
+
+- **The offsite copy does not follow.** A mirroring backend (`rclone sync`) propagates the deletion on the
+  *next* `make backup.prod`, not when you sweep; a snapshot backend (`restic`/`borg`) does not propagate it at
+  all until an explicit `restic forget --prune` / `borg prune`. Until then the archive, and the personal data
+  in it, is still offsite.
+- **`restore-prod.sh` warns when the stamp you are restoring carries one of these**, and that warning is what
+  tells you a recovery point is database-only. Sweeping removes the file the warning tests for, so record the
+  stamps you swept (or leave a marker beside them) if that distinction may still matter.
+
+The sweep does not take the `.backup.lock` that `backup-prod.sh` and `restore-prod.sh` share. It does not need
+to: those two contend over `db-*.dump` and the lock file itself, which this touches neither of. Do not extend
+the pattern without taking the lock.
 
 ### Restore — `make restore.prod`
 

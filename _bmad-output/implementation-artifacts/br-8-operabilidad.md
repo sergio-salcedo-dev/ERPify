@@ -33,7 +33,7 @@ dos primeros envejecieron.
 | **M4** | **`:93` es `ls -lh "$db_file"`, pero no es evidencia de que la petición de #255 se haya cumplido.** El mismo `ls -lh` ya estaba en `b0dce6ef:117` (sobre **ambos** artefactos), y #255 se abrió el 2026-06-13, **revisando ese PR**. La petición se hizo con el `ls -lh` delante. Además, `:93` es `ls` crudo a stdout, no pasa por los helpers `log_*` del script, así que en un log de cron no se distingue. Si eso cuenta como «observabilidad» es un juicio, no una medición. |
 | **M5** | **La dependencia que #255/#256 declaran es CORRECTA; lo único que derivó es el nombre.** El volumen existió como **`storage_data`** (`85f55b72:compose.prod.yaml:232`, montado en php `:53` y messenger_worker `:155`), y `b0dce6ef:scripts/deploy/backup-prod.sh:37` lo resolvía como `STORAGE_VOLUME="${COMPOSE_PROJECT_NAME}_storage_data"`. **#252 es exactamente el PR que lo desplegó** — su mensaje de commit dice *«fix(deploy): persist prod object storage on a named volume»* y *«pair `object_storage_data` with `database_data` in backup/restore»*; de ahí nace la deriva de nombre. La **guarda de volumen-existe también era real**: vivía en `scripts/deploy/lib/common.sh::require_running_stack()` (`b0dce6ef`, `:36-40`), que `backup-prod.sh:36` invoca, y la borró #557. |
 | **M6** | **Cuatro de los ocho pasos del checklist de #256 están rotos, no tres.** La superficie de objetos salió en `08f8199b` (#557): no hay `api/src/Shared/Storage` ni `StoredObject` en `api/src`. Paso 2 (sembrar un `stored_object`) es inejecutable entero; pasos 3 y 6 lo son a medias; y el **paso 5** —«watch the up-front verification pass (PGDMP + `pg_restore -l` + `tar -tzf`)»— nombra **dos** comprobaciones que ya no existen: `verify_objects` lo borró #557, y el `verify_dump` de hoy (`lib/common.sh:45-51`) usa `pg_restore -f /dev/null`, **no** `-l`, con un comentario que explica por qué `-l` no sirve. |
-| **M7** | **El código ya reconoce el hueco.** `restore-prod.sh:92-95` avisa: *«`$STAMP` carries `objects-$STAMP.tar.gz`, an object archive this restore does not unpack»* (`:93`) *«The recovery point will be database-only. Abort now if that archive still matters.»* (`:94`). Lo añadió `08f8199b` — **el mismo commit que borró el productor**. |
+| **M7** | **El código ya reconoce el hueco.** `restore-prod.sh:89-92` avisa: *«`$STAMP` carries `objects-$STAMP.tar.gz`, an object archive this restore does not unpack»* (`:93`) *«The recovery point will be database-only. Abort now if that archive still matters.»* (`:94`). Lo añadió `08f8199b` — **el mismo commit que borró el productor**. |
 
 ### Grupo B · El mailer (#612)
 
@@ -77,7 +77,7 @@ de naturaleza distinta, y **sólo uno es trabajo de escribir código ahora**:
 **Resueltas** (2026-08-15): **DEC-2** → opción 1, el decorador de transporte (T1, hecho). **DEC-4** → 30 días
 con poda automática. **DEC-5** → umbral **1** y **sin contador**: `warning` → `error`, nada más. **DEC-1** →
 #255 se cierra con evidencia, se retira de la retención el patrón `objects-*.tar.gz` y **el aviso de
-`restore-prod.sh:92-95` se conserva**; **#256 se queda abierto** como tarea de ejecución, no de código.
+`restore-prod.sh:89-92` se conserva**; **#256 se queda abierto** como tarea de ejecución, no de código.
 **DEC-3** → **sigue abierta**: #261 no entra en el lote. Las dos últimas en resolverse —la sub-decisión de
 DEC-1 y el mecanismo de DEC-5— se detallan bajo la tabla, porque en ambas la resolución **corrige una
 medición** de este mismo documento.
@@ -87,7 +87,7 @@ criterio de cierre de la épica (barrer el backlog otra vez contra `main`) no se
 
 | # | Decisión | Lo que la medición aporta |
 |---|---|---|
-| **DEC-1** · #255/#256 | **Resuelta** — se retira el patrón de la retención, **el aviso de restore se conserva**, #256 sigue abierto. Detalle y corrección de M3: *Sub-decisión de DEC-1*, bajo esta tabla. | La superficie se retiró deliberadamente (#557) y `restore-prod.sh:92-95` ya lleva el aviso. **Sub-decisión obligatoria**: `backup-prod.sh:90` es el único expirador de los `objects-*.tar.gz` de despliegues reales entre #253 y #557 (M3); borrarlo sin más los inmortaliza. |
+| **DEC-1** · #255/#256 | **Resuelta** — se retira el patrón de la retención, **el aviso de restore se conserva**, #256 sigue abierto. Detalle y corrección de M3: *Sub-decisión de DEC-1*, bajo esta tabla. | La superficie se retiró deliberadamente (#557) y `restore-prod.sh:89-92` ya lleva el aviso. **Sub-decisión obligatoria**: `backup-prod.sh:90` es el único expirador de los `objects-*.tar.gz` de despliegues reales entre #253 y #557 (M3); borrarlo sin más los inmortaliza. |
 | **DEC-2** · #612 | Decorador de transporte (opción 1 del issue) vs `default_socket_timeout` global (opción 2). | El decorador está verificado alcanzable y suficiente **para `smtp`/`smtps`** (M15), y **sólo** para eso (M15b) — la opción 2 no tiene ese punto ciego, a cambio de un radio global. El radio real son seis casos de uso, cuatro seams y **dos** superficies de worker (M9, M9b). |
 | **DEC-3** · #261 | ¿`wontfix` (seguir en Option A) o instalar `symfony/lock`? | `compose.prod.yaml:180-186` ya escribió el argumento a favor de A **después** de abrirse el issue, y el código lo sostiene (ninguna schedule `->lock()`). Son ocho ticks, no uno (M10). Suelo técnico: `symfony/lock >= 7.4` por el `conflict` de messenger (M11). |
 | **DEC-4** · #525 | Ventana de retención de `failed`, borrado automático vs herramienta de operador, y SLA de triage. | `failed` es durable **a propósito**; podarlo cambia el contrato. Es la única tabla hermana sin retención (M12), y el pruner tendría que convivir con una alarma **horaria**. |
@@ -95,7 +95,7 @@ criterio de cierre de la épica (barrer el backlog otra vez contra `main`) no se
 
 ### Sub-decisión de DEC-1 · los `objects-*.tar.gz` de legado
 
-**Se retira `-o -name 'objects-*.tar.gz'` de `backup-prod.sh:90`. El aviso de `restore-prod.sh:92-95` se
+**Se retira `-o -name 'objects-*.tar.gz'` de `backup-prod.sh:90`. El aviso de `restore-prod.sh:89-92` se
 conserva**, reformulando sólo su segunda línea y **sin** describir el archivo como obsoleto o retirado: un
 snapshot antiguo puede contenerlo legítimamente, y ésa es exactamente la condición que detecta.
 
@@ -278,14 +278,32 @@ Los dos siguientes los encontró T7, y el tercero es de la misma familia que los
    *«60.06186 is less than 60.0»*, un margen del 0,1 % que depende de que el timeout del socket se pase de
    largo y no se quede corto. Retirada; el techo se aprieta a `BOUND * 2`, porque `BOUND * 5` no cazaba una
    cota 4× lenta.
-- [ ] **T2 — DEC-1 · #255/#256: reconciliar el backup con la superficie que existe**
-  - [ ] **Retirar `-o -name 'objects-*.tar.gz'` de la retención (`:90`) y conservar el aviso de
-        `restore-prod.sh:92-95`**, reformulando sólo su segunda línea y sin tacharlo de obsoleto
-        (sub-decisión de DEC-1). El barrido de huérfanos locales es tarea de operación, no de código.
-  - [ ] Corregir en ambos issues la **deriva de nombre** `object_storage_data` → `storage_data` — **la
-        dependencia a #252 es correcta y se mantiene** (M5).
-  - [ ] Corregir el checklist de #256 a sus pasos ejecutables; el paso 5 nombra además un `pg_restore -l` que
-        el `verify_dump` de hoy no usa (M6).
+- [x] **T2 — DEC-1 · #255/#256: reconciliar el backup con la superficie que existe**
+  - [x] **Retirar `-o -name 'objects-*.tar.gz'` de la retención (`:90`) y conservar el aviso de
+        `restore-prod.sh:89-92`**, reformulando sólo su segunda línea y sin tacharlo de obsoleto
+        (sub-decisión de DEC-1). El barrido de huérfanos locales es tarea de operación, no de código,
+        y va documentado en `docs/vps-deployment.md` § Backups.
+  - [x] Corregir en ambos issues la **deriva de nombre** `object_storage_data` → `storage_data` — **la
+        dependencia a #252 es correcta y se mantiene** (M5). **Corregido más allá del nombre**, porque el pase
+        adversarial midió que la frase que lo rodea es falsa: #256 dice que sin el volumen `make backup.prod`
+        «aborts on its volume-exists guard», y esa guarda **no existe** (`lib/common.sh:25-36` no mira ningún
+        volumen). Cambiar sólo el sustantivo habría dejado la falsedad con aspecto de revisada. La dependencia
+        se conserva como **hecho histórico**, no como precondición viva.
+  - [x] **Loguear el tamaño del artefacto** — la mitad de #255 que sobrevive a la retirada de la superficie de
+        objetos, y que el `ls -lh` preexistente NO cumplía (es de `b0dce6ef`, la PR que #255 revisaba). Se
+        emite como línea plana `backup_bytes=<n>`, **antes** de la retención, para que un artefacto sospechoso
+        pueda juzgarse antes de que se borre nada en su virtud.
+  - [x] **Denunciar los huérfanos en cada ejecución** — la mitad detectiva. Sin ella el único que sabe que
+        existen es un runbook que nadie está obligado a leer, y llevan la misma PII que el dump.
+  - [x] Corregir el checklist de #256 a sus pasos ejecutables; el paso 5 nombra además un `pg_restore -l` que
+        el `verify_dump` de hoy no usa (M6). Reescrito el cuerpo a los pasos que corren, **con el original
+        preservado verbatim en un comentario** — borrarlo habría eliminado el registro de que el drill
+        emparejado existió de verdad. Añadido el único dato que sólo el host tiene: si `$BACKUP_DIR` guarda
+        huérfanos, el barrido documentado aplica.
+  - [x] **#255 con su cierre preparado y su evidencia publicada** (#728) — `Closes #255` dispara al mergear,
+        no ahora; el comentario de disposición ya está en el issue: tabla de disposición ask-por-ask en un comentario, con los
+        commits que construyeron (#253, `b0dce6ef`) y desmontaron (#557, `08f8199b`) la superficie, y con lo
+        que el cierre **no** afirma — que un host vivo no tenga huérfanos no se lee desde el repositorio.
 - [ ] **T3 — DEC-4 · #525: retención de `failed`** (sólo tras la decisión)
   - [ ] **Reutilizar, no reinventar — y elegir bien el patrón**: los dos pruners existentes **no son
         intercambiables**. `Shared/Event/Infrastructure/Messenger/DbalHandledDomainEventPruner.php` es un
@@ -365,6 +383,127 @@ llegada: los tres pinan **lo que la fuente llama**, nunca si Monolog lo conserva
 
 ---
 
+## T2 — resultado medido
+
+**No hay ningún gate que lea este cambio, y eso es lo primero que hay que decir.** `.github/workflows/ci.yml`
+no tiene paso de shell; `make/ci.mk` es `php.quality`/`pwa.quality` + los tests, ninguno toca `scripts/`;
+`make/super-lint.mk` es local, manual y con `GITHUB_TOKEN`, y su único bloque que pondría `VALIDATE_BASH` está
+comentado. No hay `.pre-commit-config.yaml`. **«Los tests pasan» no prueba nada sobre este diff.** Por eso la
+evidencia se fabricó a mano.
+
+**El `find`, instrumentado en vez de razonado** (`tmp/`, cinco ficheros sembrados con `touch -d`):
+
+| Expresión | Borra |
+|---|---|
+| la de `main` | `db-old.dump` **y** `objects-old.tar.gz` |
+| esta rama | `db-old.dump` |
+
+El delta es **exactamente un fichero**, y es el que se quería.
+
+**Y la cifra que el runbook publica se midió en vez de citarse, que es lo que la salvó de salir mal.** El
+enunciado de partida —«`-mtime +N` es estrictamente mayor que N días enteros»— es **impreciso**: `find` tira la
+parte fraccionaria de la edad, así que `+N` exige **al menos N+1 días enteros**. Un fichero de **14 días y
+medio** no casa con `+14` (medido: sin línea) y sí con `+13` (medido: casa). El de 14 justos sobrevive con
+cualquiera de las dos lecturas, que es por lo que el error habría pasado desapercibido.
+
+**Precedencia, comprobada y no supuesta:** el original ya venía con paréntesis explícitos —
+`\( -name A -o -name B \) -mtime +N`— así que **no** era el bug clásico de precedencia. Para un `db-*.dump`,
+`(A -o B)` vale lo que vale `A`, de modo que retirar la rama `B` no cambia nada de lo que expira. Los
+paréntesis se van con ella por quedar envolviendo un solo test.
+
+**Shellcheck, traído a mano en contenedor porque no existe ni en CI ni en la máquina:** cinco hallazgos sobre
+los dos scripts, **todos preexistentes y ninguno en las líneas tocadas** — `SC2016` ×2 (falsos positivos por
+diseño: las variables las expande el `sh` de dentro del contenedor), `SC1091` ×2 (no sigue el `source`),
+`SC2034` sobre `ENV_FILE` (lo consume `lib/common.sh`, que no sigue). Sobre `lib/common.sh` aparte sale un
+`SC2148` (sin shebang), el único de nivel `error` del directorio. Ese inventario es lo que el trabajo derivado
+de meter shellcheck en CI se encontrará el primer día. `bash -n` limpio en los dos.
+
+**El one-liner del runbook está ejecutado, no sólo escrito.** Contra el mismo directorio de sondeo:
+`RETENTION_DAYS=30` no borra nada (el fichero de 30 días no llega a los 31), y con el default 14 borra el
+huérfano de 30 días y respeta el de 2. Es la comprobación que convierte la cifra del texto en un hecho.
+
+---
+
+## Pase adversarial (código) — T2
+
+Ejecutado **antes de `gh pr create`**, sobre el árbol final, por tres lectores independientes en sólo lectura
+con lentes distintas —pérdida de datos y daño al operador, prosa contra árbol, y honestidad del cierre de
+issues—, cada uno instruido a refutar. **Ocho hallazgos: dos GRAVE, cuatro MEDIA, dos LEVE. Todos aplicados.**
+Cada cita se re-verificó contra el árbol antes de tocar nada.
+
+**GRAVE · Cerrar #255 con este cambio habría tirado una petición viva.** El argumento del cierre es «la
+superficie emparejada ya no existe», y eso vale para **tres de sus cuatro** secciones (ratio de completitud del
+par, P3, P9). No vale para la mitad que sobrevive: **loguear el tamaño del `db-<stamp>.dump`**, que es el
+artefacto que este script sigue produciendo. Y el `ls -lh` que parecía cumplirlo **ya estaba ahí cuando se
+abrió el issue** — verificado: `b0dce6ef:117` es la línea, y `b0dce6ef` es #253, exactamente la PR que #255
+estaba revisando. Citarlo como cumplimiento habría sido citar como evidencia lo que el autor del issue ya tenía
+delante cuando pidió más. Se implementa aquí (`log_success` con el conteo de bytes exacto, que es lo que un log
+de cron puede comparar contra el de ayer) en vez de cerrar por encima.
+
+**GRAVE · La corrección de nombre en #256 dejaba en pie una frase que ya no describe el código.** El issue dice
+que el volumen «must exist, or `make backup.prod` **aborts on its volume-exists guard**», y hoy
+`require_running_stack()` (`lib/common.sh:25-36`) comprueba `compose.yaml`, el fichero de entorno, `docker` y
+que `database` esté corriendo, nada más. Se reescribe la sustancia, no el nombre.
+
+**Y la primera versión de esa corrección estaba mal, en la dirección que más daño hace: le decía al autor que
+su frase era falsa.** Era **cierta cuando la escribió** — la guarda existió, en
+`b0dce6ef:lib/common.sh:36-40` (`docker volume inspect "$STORAGE_VOLUME"` con su propio `exit 1`), y la borró
+#557. Lo dice M5 de este mismo documento veinte líneas más arriba, y lo verifiqué con `git show`. Es
+exactamente el error que M5 existe para registrar («M5 era falso, y su acción habría hecho daño»), cometido
+sobre M5. El issue se corrige por segunda vez, con el tiempo verbal puesto: cierta al abrirse, retirada por
+#557.
+
+**MEDIA ×3, todos sobre el one-liner que yo publicaba para que un operador lo pegue.** (1) Ruta fija
+`/var/backups/erpify` ignorando el knob `BACKUP_DIR`: en un host con el directorio movido **y** la ruta por
+defecto todavía existente, el barrido no casa nada, no falla, y el operador se va creyendo que lo hizo. (2)
+`+14` fijo ignorando `RETENTION_DAYS`: con retención a 30 expira el archivo **antes** que el dump con el que
+estaba emparejado. (3) El offsite no sigue al borrado local: un backend espejo (`rclone sync`) lo propaga en el
+**siguiente** `make backup.prod`, no al barrer, y uno de instantáneas (`restic`/`borg`) no lo propaga en
+absoluto sin un `forget`/`prune` explícito — y son justo los que el propio texto cita como los que devuelven
+huérfanos. Los tres corregidos en el bloque.
+
+**MEDIA · El marcador del sprint confundía decisión resuelta con código enviado.** Decía «#526 está resuelta» y
+«Enviadas T1 (#725) y T4 (#727)» con #727 **abierta y sin mergear** y #526, por tanto, todavía `OPEN`. Es
+exactamente el patrón por el que este repo ya se ha quemado. Separadas las dos claúsulas.
+
+**LEVE ×2.** (1) Pronombre ambiguo en el aviso reformulado: «retention leaves **it** in place» ata por
+proximidad a *the recovery point*, no al archivo — y además la retención es ortogonal al motivo de abortar, así
+que la cláusula se retira y la línea dice lo que el operador tiene que sopesar. (2) El comentario de lectura
+completa estaba sobre el bloque equivocado (describía `verify_dump`, seis líneas más abajo, con un `if` ajeno
+en medio); bajado a su sitio, regla del boy scout, declarado aquí.
+
+**Y una imprecisión mía que el pase cazó y que la medición confirmó**: ver *T2 — resultado medido*.
+
+---
+
+## Revisión de seguridad — T2
+
+Recorrida la checklist del `CLAUDE.md` raíz. **No aplican por construcción:** todo el bloque de `api/` (no hay
+PHP en el diff) y todo el de `pwa/`. Lo que sí aplica es la clase que este diff sí toca: **borrado de datos y
+secretos en logs.**
+
+- **Borrado — y aquí el razonamiento de la primera versión estaba invertido.** Decía que el cambio «reduce lo
+  que la retención borra», y lo tomaba como la dirección segura. Para un control de retención sobre **datos
+  personales** no lo es: el archivo de objetos lleva la misma PII que el dump (lo dice el comentario de
+  `b0dce6ef`), así que retirar su única expiración automática deja esa PII en disco indefinidamente. No es
+  «borra menos», es **una obligación de retención que pasa a manos de una persona**. Por eso el script ahora
+  la denuncia en cada ejecución, el runbook dice que la sección no es un one-off, y esto entra en
+  `PRODUCTION_SECURITY_CHECKLIST.md`: no por patrón nuevo, sino por cambio a un control existente. El comando que sí borra está en el runbook, lo ejecuta una persona,
+  y lleva su comando de inspección **delante** — con el mismo predicado que el borrado, más ancho por el lado
+  seguro (`ls` sin `-mtime` enseña más de lo que `find -delete` se lleva, nunca menos).
+- **PII.** Los dumps llevan datos de negocio y el runbook ya lo dice. El barrido de huérfanos **no** propaga al
+  offsite, y eso ahora está escrito: un archivo huérfano sigue en las instantáneas hasta un `forget`/`prune`.
+  Es la mitad que se habría quedado sin decir.
+- **Secretos.** `BACKUP_SYNC_CMD` puede llevar credenciales; el script lo sabe (`:96`, *«log a static line,
+  never the value»*) y el diff no lo toca. El nuevo `log_success` emite una ruta y un entero, nada más.
+- **Superficie destructiva.** `restore-prod.sh` sigue con sus dos puertas (`ALLOW_PROD_RESTORE` y la frase
+  tecleada); el diff no roza ninguna.
+
+`PRODUCTION_SECURITY_CHECKLIST.md` no se toca: no se introduce patrón de seguridad nuevo y un `find` con un
+patrón menos no está en sus disparadores.
+
+---
+
 ## Falsificación — cada cláusula tiene su rojo
 
 **Regla del lote, heredada de BR-7: una aserción que pasa no prueba nada hasta que la has visto fallar.**
@@ -395,7 +534,10 @@ llegada: los tres pinan **lo que la fuente llama**, nunca si Monolog lo conserva
 
 ## Gates
 
-`make php.quality`, `make php.stan` sobre cada fichero PHP tocado, `make app.test`. Si T3/T5 tocan schedules o
+`make php.quality`, `make php.stan` sobre cada fichero PHP tocado, `make app.test`. **T2 no corre ninguno de
+los tres, y la razón se dice en vez de callarse:** su diff no toca ni un fichero PHP ni de `pwa/`, así que las
+tres puertas no leerían nada suyo. Lo que sustituye a un verde ahí está en *T2 — resultado medido*: `bash -n`,
+shellcheck traído a mano, el `find` instrumentado y el one-liner del runbook ejecutado. Si T3/T5 tocan schedules o
 transportes, además `make php.lint.schedule-consumption` (`make/php-quality.mk:217-220`; tres clases de gate
 bajo `api/tests/Unit/Shared/Architecture/`, cableado en `php.quality` y en `php.quality.dry-run`). Lee los
 compose de raíz por el bind mount de sólo lectura y **falla en vez de saltar** cuando no está —
@@ -670,16 +812,15 @@ Todas las sondas son desechables, viven en el `tmp/` gitignoreado y **no entran 
 - **T1 (#612) entregado.** Decorador de transporte, no arreglo por llamante. Verificado en tres planos, que no
   son sustituibles entre sí: el unitario (valor de `getTimeout()`), el socket real (un servidor que acepta y
   calla, 60.06 s → dentro de la cota) y el contenedor vivo (`debug:container` + sonda).
-- **La falsificación encontró dos tests que no podían fallar**, ambos corregidos y ambos ahora con rojo propio
-  (guarda `is_numeric` sin caso que la cubriera; `BOUND = 1.0` coincidiendo con el valor de fallo del cast de
-  array). El artefacto los documenta arriba porque el segundo es la familia de la siembra vacua.
+- **La falsificación encontró CUATRO tests que no podían fallar** a lo largo de las dos vueltas, todos
+  corregidos y todos ahora con rojo propio. La primera vuelta dio dos (guarda `is_numeric` sin caso que la
+  cubriera; `BOUND = 1.0` coincidiendo con el valor de fallo del cast de array) y T7 los otros dos. La
+  tercera (`assertNotInstanceOf` sobre un hecho ajeno) sólo apareció con una mutación que **nadie había
+  pedido**: vaciar `create()` entero. La lección para el lote está en *Falsificación*.
 - **Punto ciego declarado, no tapado:** la cota vale para `smtp`/`smtps`. Un bridge de API o `sendmail://` no
   la recibe; está escrito en el docblock de la clase.
 - **T7 ejecutado y aplicado** — ver *Pase adversarial (código)*. Dieciséis hallazgos, uno GRAVE, ninguno
   diferido. Corrigió la garantía central del cambio y bajó el default de 10 a 3.
-- **La falsificación encontró CUATRO tests que no podían fallar** a lo largo de las dos vueltas, no dos. La
-  tercera (`assertNotInstanceOf` sobre un hecho ajeno) sólo apareció con una mutación que **nadie había
-  pedido**: vaciar `create()` entero. La lección para el lote está en *Falsificación*.
 - **Lo que este PR NO promete:** un techo sobre el tiempo total de un envío. Está dicho en el docblock, en
   `api/.env`, en `docs-info/production-deployment.md` y en el cuerpo de la PR, y es la pregunta 4.
 - **No entra en este PR:** T2 (#255), T3 (#525) y T4 (#526) tienen decisión pero salen en PRs propias; #256 y
