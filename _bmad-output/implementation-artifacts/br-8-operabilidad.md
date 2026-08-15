@@ -1288,3 +1288,29 @@ de doble que devuelve `[2, 1, 3, 0]` con lote 2, donde la condición vieja para 
 
 **Puertas finales:** `php.stan` **0**, `php.quality` **0**, `php.test` **0** (PHPUnit 2891 / 11468; Behat
 439 / 4132). Contra `main` (2869 / 11373) son 22 tests nuevos.
+
+---
+
+## Incidente de merge — el squash de #728 se comió su propia sección de hallazgos
+
+Medido al rebasar #729 sobre `main` tras mergear #727 y #728.
+
+**Los cuatro ficheros de código de #728 llegaron byte a byte** (`scripts/deploy/backup-prod.sh`,
+`restore-prod.sh`, `docs/vps-deployment.md`, `PRODUCTION_SECURITY_CHECKLIST.md` — comparados con `cmp` contra
+`eb93b13b`). Lo que no llegó es su `## Review Findings … T2 / PR #728`: **20 bullets, cero en `main`**. El
+artefacto de `main` tenía 14, que son exactamente los de #727.
+
+**Por qué.** Las tres PRs parten del mismo commit y **las tres añaden una sección al FINAL del mismo fichero**.
+#727 mergeó primero; el squash de #728 aplicó su diff contra una cola de fichero que ya había cambiado y
+resolvió quedándose con un lado. GitHub no reportó conflicto, la PR aparece `MERGED`, y nada avisó — que es
+justo la forma del fallo que este lote lleva toda la sesión persiguiendo: *un PR mergeado tiene el mismo
+aspecto haya llegado tu trabajo o no*.
+
+**Cómo se detectó.** No por una alarma: por contar. `grep -c '\[Review\]'` sobre `main` daba 14 donde la suma
+esperada era 34. La sección se restaura aquí, desde `eb93b13b`, porque #729 es la única PR abierta que ya toca
+ese fichero.
+
+**La lección para el resto del lote.** Cuando varias PRs de un lote escriben en el mismo artefacto, el mergeo
+no es una operación sin pérdida y el instrumento para comprobarlo es **contar en `main`**, no mirar el estado
+de la PR. Con T5/T6/T8 y la PR de los hermanos aún por venir sobre este mismo fichero, se cuenta después de
+cada merge.
