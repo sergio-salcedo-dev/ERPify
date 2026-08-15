@@ -74,7 +74,14 @@ de naturaleza distinta, y **sólo uno es trabajo de escribir código ahora**:
 
 ## Decisiones que Sergio debe tomar
 
-Ninguna se toma en esta historia.
+**Resueltas** (2026-08-15): **DEC-2** → opción 1, el decorador de transporte (T1, hecho). **DEC-4** → 30 días
+con poda automática. **DEC-5** → umbral in-app, que es a donde M14 ya la había colapsado; queda el valor del
+umbral y de dónde sale el contador. **DEC-1** → #255 se cierra con evidencia y se retira lo que quedó a
+medias; **#256 se queda abierto** como tarea de ejecución, no de código. **DEC-3** → **sigue abierta**: #261
+no entra en el lote.
+
+**Consecuencia para el cierre de la épica:** con #256 y #261 abiertos, este PR **no cierra BR-8**, y el
+criterio de cierre de la épica (barrer el backlog otra vez contra `main`) no se dispara todavía.
 
 | # | Decisión | Lo que la medición aporta |
 |---|---|---|
@@ -88,18 +95,56 @@ Ninguna se toma en esta historia.
 
 ## Alcance
 
-- [ ] **T1 — #612: acotar el socket del mailer** (API) — *sólo bloqueado por DEC-2*
-  - [ ] **El arreglo va en el transporte, no en los llamantes** (M15): decorar `EsmtpTransportFactory` para
-        llamar a `SocketStream::setTimeout()`. Clase nueva en `Infrastructure/` (`Shared/Mailer/Infrastructure/`,
-        donde ya viven `SecurityLinkMailer` y `PlainTextNotificationMailer`) — **nunca en `Domain/`**, que
-        deptrac le prohíbe importar Symfony Mailer (`deptrac.yaml:190-195`, `:211-215`).
-  - [ ] **Declarar el punto ciego en vez de esconderlo** (M15b): la cota vale para `smtp`/`smtps`; un DSN de
-        bridge o `sendmail://` la deja sin efecto. Si eso no es aceptable, es DEC-2 otra vez.
-  - [ ] Radio a cubrir, que el issue no enumera: **dos** superficies de worker además de la petición — el
-        `scheduler_worker` de una réplica (`NotifyLockedIdentities`, tick de 5 min) y el `messenger_worker`
-        del `async` (`SendEmailOnBankChanged`), este último **sin** la guarda de `DeliverableSecurityTransport`.
-  - [ ] Actualizar #612 con M8/M9/M9b/M15 **antes** de implementar: su premisa de latencia ya no describe el
-        repositorio, y su «both call sites» era inexacto el día que se escribió.
+- [x] **T1 — #612: acotar el socket del mailer** (API) — DEC-2 resuelta por Sergio a favor de la opción 1
+  - [x] **El arreglo va en el transporte, no en los llamantes** (M15):
+        `Shared/Mailer/Infrastructure/TimeBoundedSmtpTransportFactory` decora `mailer.transport_factory.smtp`
+        vía `#[AsDecorator]` y llama a `SocketStream::setTimeout()`. Cableado verificado contra el contenedor
+        vivo, no deducido: `debug:container` reporta `container.decorator (id: mailer.transport_factory.smtp,
+        inner: …\TimeBoundedSmtpTransportFactory.inner)` y el id original quedó como alias privado del decorador.
+  - [x] **Un solo valor cubre las dos formas de colgarse**, y esto es lo que hace suficiente un único knob:
+        `SocketStream::initialize()` pasa el mismo `$timeout` a `stream_socket_client()` (no acepta) **y** a
+        `stream_set_timeout()` (acepta y calla), que `AbstractStream::readLine():84` convierte en
+        `TransportException`. La segunda es la forma que toma una caída real y la que un timeout de conexión
+        solo no vería.
+  - [x] **Declarar el punto ciego en vez de esconderlo** (M15b): declarado en el docblock de la clase — la cota
+        vale para `smtp://`/`smtps://`; un bridge de API o `sendmail://` construye otra factory sin socket
+        nuestro que acotar.
+  - [x] **La opción `?timeout=` del DSN se honra por encima del default configurado.** El issue la nombra como
+        no-op silencioso; leerla cierra la trampa en vez de dejarla al lado del knob nuevo.
+  - [x] Radio cubierto sin enumerar llamantes: la petición, el `scheduler_worker` de una réplica y el
+        `messenger_worker` del `async` resuelven todos por esa factory.
+  - [x] **`MAILER_SMTP_TIMEOUT` reenviado por compose** (`compose.yaml` php + messenger_worker,
+        `compose.prod.yaml` scheduler_worker, que no hereda de ninguna base). Sin ese reenvío, ponerlo en
+        `.env.prod` habría sido **otro no-op silencioso** — el mismo defecto que este issue ataca. Probado
+        moviendo el valor: `MAILER_SMTP_TIMEOUT=7 make docker.up` → el transporte real sale a 7 s.
+  - [ ] Actualizar #612 con M8/M9/M9b/M15 (pendiente de T8; la premisa de latencia ya no describe el repo).
+
+### T1 — resultado medido
+
+`api/.env` = 10 s por defecto (`api/.env.example` y `.env.prod.example` documentados). Contra el transporte
+que construye la app de verdad: **10 s** con el default, **3 s** honrando `?timeout=3`, con
+`default_socket_timeout = 60`.
+
+**Falsificación, una mitad cada vez** (10 tests / 28 aserciones en verde; el grupo `slow` aparte):
+
+| Mutación | Rojos |
+|---|---|
+| Quitar `setTimeout()` | 6 tests, **y el del socket colgado a 60.06 s** contra la cota — el defecto, medido |
+| Ignorar la opción del DSN | `testTheDsnOptionOverridesTheConfiguredDefault` |
+| Quitar la guarda `> 0.0` | casos `zero`, `negative` |
+| Quitar la guarda `is_numeric` | caso `?timeout[]=` |
+| Quitar el early-return `instanceof SmtpTransport` | `testLeavesATransportWithoutASocketStreamUntouched` |
+| `supports()` deja de delegar | `testDelegatesSupportsToTheDecoratedFactory` |
+
+**Dos defectos en los tests, encontrados por la propia falsificación y corregidos:**
+
+1. `is_numeric` empezó midiendo **cero rojos** y parecía código muerto. No lo era: `Dsn::fromString` parsea la
+   query con `parse_str`, así que `?timeout[]=99` llega como **array**, y `(float)['99']` es `1.0` — pasaría
+   la guarda de positividad y fijaría una cota de un segundo que nadie pidió. Faltaba el caso, no sobraba la
+   guarda.
+2. Añadido el caso, **seguía sin rojo**: la constante `BOUND` valía `1.0`, exactamente el valor al que castea
+   un array no vacío, así que la aserción afirmaba su propio valor de fallo. `BOUND = 2.5` y el rojo aparece.
+   Es la misma familia que la siembra vacua de G-1b/G-5: una aserción que no puede fallar.
 - [ ] **T2 — DEC-1 · #255/#256: reconciliar el backup con la superficie que existe**
   - [ ] **No borrar el `-name 'objects-*.tar.gz'` de `:90` sin resolver antes los archivos de legado** (M3).
   - [ ] Corregir en ambos issues la **deriva de nombre** `object_storage_data` → `storage_data` — **la
@@ -205,6 +250,29 @@ claude-opus-5[1m]
 
 ### Debug Log References
 
+Sonda desechable (borrada) contra el contenedor vivo: construyó el transporte que la app usa de verdad y
+volcó `getTimeout()` — 10 s por defecto, 3 s con `?timeout=3`, `default_socket_timeout = 60`. Repetida con
+`MAILER_SMTP_TIMEOUT=7 make docker.up` para probar que el reenvío por compose no es un no-op.
+
 ### Completion Notes List
 
+- **T1 (#612) entregado.** Decorador de transporte, no arreglo por llamante. Verificado en tres planos, que no
+  son sustituibles entre sí: el unitario (valor de `getTimeout()`), el socket real (un servidor que acepta y
+  calla, 60.06 s → dentro de la cota) y el contenedor vivo (`debug:container` + sonda).
+- **La falsificación encontró dos tests que no podían fallar**, ambos corregidos y ambos ahora con rojo propio
+  (guarda `is_numeric` sin caso que la cubriera; `BOUND = 1.0` coincidiendo con el valor de fallo del cast de
+  array). El artefacto los documenta arriba porque el segundo es la familia de la siembra vacua.
+- **Punto ciego declarado, no tapado:** la cota vale para `smtp`/`smtps`. Un bridge de API o `sendmail://` no
+  la recibe; está escrito en el docblock de la clase.
+- **Pendiente en T1:** actualizar el cuerpo de #612 con M8/M9/M9b/M15 (va en T8).
+- **No entra en este PR:** T3 (#525) y T4 (#526) tienen decisión pero no código todavía; T2 (#255) es cierre
+  con evidencia más retirada de código muerto; #256 y #261 se quedan abiertos por decisión de Sergio.
+- **Sin pase adversarial todavía (T7).** El lote toca superficie de auditoría en T4, así que el pase debe
+  correr y quedar registrado aquí **antes** de `gh pr create`, no después.
+
 ### File List
+
+- `api/src/Shared/Mailer/Infrastructure/TimeBoundedSmtpTransportFactory.php` — nuevo
+- `api/tests/Unit/Shared/Mailer/Infrastructure/TimeBoundedSmtpTransportFactoryTest.php` — nuevo
+- `api/.env`, `api/.env.example`, `.env.prod.example` — `MAILER_SMTP_TIMEOUT` y su porqué
+- `compose.yaml` (php, messenger_worker), `compose.prod.yaml` (scheduler_worker) — reenvío de la variable

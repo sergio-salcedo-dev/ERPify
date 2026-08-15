@@ -34,6 +34,13 @@ use Symfony\Component\Mailer\Transport\TransportInterface;
  * wrong: the lockout notice sends from a five-minute scheduler tick on a single-replica worker, where a
  * blocked socket does not cost one slow request — it costs the clock.
  *
+ * **The bound is only as wide as the scheme, and that limit is real.** This decorates the `smtp` factory, so
+ * it covers `smtp://` and `smtps://` and nothing else: point `MAILER_DSN` at an API bridge or at
+ * `sendmail://` and a different factory builds a transport with no socket of ours to bound. Those carry
+ * their own timeouts (an HTTP client, a local binary) rather than `default_socket_timeout`, which is why
+ * this is a declared edge and not a silent hole — but a deployment that changes scheme changes what holds
+ * it, and nothing here will say so.
+ *
  * The `timeout` DSN option is honoured above the configured default because it is the spelling an operator
  * reaches for first (`smtp://host?timeout=5`) and upstream discards it in silence; leaving it unread would
  * park a second no-op next to the knob that fixes the first. A non-numeric or non-positive option falls back

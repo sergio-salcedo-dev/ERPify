@@ -23,7 +23,11 @@ use Symfony\Component\Mime\Email;
 #[CoversClass(TimeBoundedSmtpTransportFactory::class)]
 final class TimeBoundedSmtpTransportFactoryTest extends TestCase
 {
-    private const float BOUND = 1.0;
+    /**
+     * Deliberately not 1.0: casting a non-empty array to float yields exactly 1.0, so a bound of 1.0 would
+     * make the `?timeout[]=` case assert its own failure value and pass whether or not the guard exists.
+     */
+    private const float BOUND = 2.5;
 
     /**
      * `EsmtpTransportFactory` reads no `timeout` option, and `SocketStream::getTimeout()` falls back to
@@ -33,7 +37,7 @@ final class TimeBoundedSmtpTransportFactoryTest extends TestCase
     {
         $transport = $this->factory()->create(new Dsn('smtp', 'mail.example.com', null, null, 587));
 
-        self::assertSame(self::BOUND, $this->socketOf($transport)->getTimeout());
+        $this->assertSame(self::BOUND, $this->socketOf($transport)->getTimeout());
     }
 
     /**
@@ -46,21 +50,21 @@ final class TimeBoundedSmtpTransportFactoryTest extends TestCase
 
         $transport = $this->factory()->create($dsn);
 
-        self::assertSame(5.0, $this->socketOf($transport)->getTimeout());
+        $this->assertEqualsWithDelta(5.0, $this->socketOf($transport)->getTimeout(), PHP_FLOAT_EPSILON);
     }
 
     #[DataProvider('provideIgnoresADsnOptionThatIsNotAPositiveNumberCases')]
-    public function testIgnoresADsnOptionThatIsNotAPositiveNumber(string $option): void
+    public function testIgnoresADsnOptionThatIsNotAPositiveNumber(mixed $option): void
     {
         $dsn = new Dsn('smtp', 'mail.example.com', null, null, 587, ['timeout' => $option]);
 
         $transport = $this->factory()->create($dsn);
 
-        self::assertSame(self::BOUND, $this->socketOf($transport)->getTimeout());
+        $this->assertSame(self::BOUND, $this->socketOf($transport)->getTimeout());
     }
 
     /**
-     * @return iterable<string, array{string}>
+     * @return iterable<string, array{mixed}>
      */
     public static function provideIgnoresADsnOptionThatIsNotAPositiveNumberCases(): iterable
     {
@@ -68,6 +72,11 @@ final class TimeBoundedSmtpTransportFactoryTest extends TestCase
         yield 'not a number' => ['soon'];
         yield 'zero would mean no timeout at all' => ['0'];
         yield 'negative' => ['-1'];
+
+        // `Dsn::fromString` parses the query with `parse_str`, so `?timeout[]=99` arrives as an array — and
+        // casting a non-empty array to float yields 1.0, which a positivity check alone would wave through
+        // as a one-second bound nobody asked for.
+        yield 'an array, as ?timeout[]= produces' => [['99']];
     }
 
     /**
@@ -80,15 +89,15 @@ final class TimeBoundedSmtpTransportFactoryTest extends TestCase
 
         $transport = $factory->create(new Dsn('null', 'null'));
 
-        self::assertNotInstanceOf(SmtpTransport::class, $transport);
+        $this->assertNotInstanceOf(SmtpTransport::class, $transport);
     }
 
     public function testDelegatesSupportsToTheDecoratedFactory(): void
     {
         $factory = $this->factory();
 
-        self::assertTrue($factory->supports(new Dsn('smtp', 'mail.example.com')));
-        self::assertFalse($factory->supports(new Dsn('null', 'null')));
+        $this->assertTrue($factory->supports(new Dsn('smtp', 'mail.example.com')));
+        $this->assertFalse($factory->supports(new Dsn('null', 'null')));
     }
 
     /**
@@ -100,32 +109,30 @@ final class TimeBoundedSmtpTransportFactoryTest extends TestCase
     #[Group('slow')]
     public function testAHungServerFailsWithinTheBoundInsteadOfTheSocketDefault(): void
     {
-        $server = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-        self::assertIsResource($server, \sprintf('could not open the probe socket: %s (%d)', $errstr, $errno));
+        $server = \stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $this->assertIsResource($server, \sprintf('could not open the probe socket: %s (%d)', $errstr, $errno));
 
-        $address = stream_socket_get_name($server, false);
-        self::assertIsString($address);
-        $port = (int) substr($address, strrpos($address, ':') + 1);
+        $address = \stream_socket_get_name($server, false);
+        $this->assertIsString($address);
+        $port = (int) \substr($address, \strrpos($address, ':') + 1);
 
         $transport = $this->factory()->create(new Dsn('smtp', '127.0.0.1', null, null, $port));
 
-        $startedAt = microtime(true);
+        $startedAt = \microtime(true);
 
         try {
             $transport->send($this->anEmail());
-            self::fail('a server that never answers must not produce a successful send');
+            $this->fail('a server that never answers must not produce a successful send');
         } catch (TransportException) {
-            $elapsed = microtime(true) - $startedAt;
+            $elapsed = \microtime(true) - $startedAt;
         } finally {
-            fclose($server);
+            \fclose($server);
         }
 
-        self::assertLessThan(
-            (float) \ini_get('default_socket_timeout'),
-            $elapsed,
-            'the send blocked for the unbounded socket default, so the transport is not time-bounded',
-        );
-        self::assertLessThan(self::BOUND * 5, $elapsed, 'the send outlived its own bound by more than a margin');
+        $unbounded = (float) \ini_get('default_socket_timeout');
+
+        $this->assertLessThan($unbounded, $elapsed, 'the send blocked for the unbounded socket default');
+        $this->assertLessThan(self::BOUND * 5, $elapsed, 'the send outlived its own bound by a wide margin');
     }
 
     private function factory(): TimeBoundedSmtpTransportFactory
@@ -135,9 +142,9 @@ final class TimeBoundedSmtpTransportFactoryTest extends TestCase
 
     private function socketOf(object $transport): SocketStream
     {
-        self::assertInstanceOf(SmtpTransport::class, $transport);
+        $this->assertInstanceOf(SmtpTransport::class, $transport);
         $stream = $transport->getStream();
-        self::assertInstanceOf(SocketStream::class, $stream);
+        $this->assertInstanceOf(SocketStream::class, $stream);
 
         return $stream;
     }
@@ -148,6 +155,7 @@ final class TimeBoundedSmtpTransportFactoryTest extends TestCase
             ->from('security@erpify.com')
             ->to('someone@example.com')
             ->subject('probe')
-            ->text('probe');
+            ->text('probe')
+        ;
     }
 }
