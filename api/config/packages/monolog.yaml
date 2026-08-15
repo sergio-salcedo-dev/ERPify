@@ -96,7 +96,7 @@ when@prod:
             #     action_level: error
             #     handler: sentry_buffer
             #     buffer_size: 100
-            #     channels: ["!event", "!security"]
+            #     channels: ["!event", "!security", "!observability"]
             # sentry_buffer:
             #     type: buffer
             #     handler: sentry_handler

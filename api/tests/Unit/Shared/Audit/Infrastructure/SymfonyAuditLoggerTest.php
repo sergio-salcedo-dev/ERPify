@@ -86,11 +86,14 @@ final class SymfonyAuditLoggerTest extends TestCase
 
         $this->assertCount(1, $recordingLogger->records, 'the gap is recorded, never silent');
         $record = $recordingLogger->records[0];
-        $this->assertSame('warning', $record['level']);
+        // A lost audit row is an integrity defect rather than a metric, so the report is an error. What
+        // decides whether it SURVIVES is the channel, not this level — see the class docblock; the arrival
+        // test is what pins that half, against the files Monolog actually wrote.
+        $this->assertSame('error', $record['level']);
         $this->assertSame(
             ['action' => 'BANK_ACCOUNTS_VIEWED', 'level' => 'activity', 'exception' => $failure],
             $record['context'],
-            'the warning carries only safe keys — never metadata, actor id, or resource id',
+            'the line carries only safe keys — never metadata, actor id, or resource id',
         );
     }
 
@@ -110,7 +113,7 @@ final class SymfonyAuditLoggerTest extends TestCase
         $this->assertSame(
             [],
             $recordingLogger->records,
-            'a security failure propagates; it is not downgraded to a warning',
+            'a security failure propagates; it is never downgraded to a log line',
         );
     }
 
