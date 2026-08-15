@@ -41,13 +41,37 @@
 #
 # worktree.remove / worktree.remove-all:
 # NAME=<dir|path|branch>  selects the worktree (basename under .claude/worktrees/,
-#                  or an absolute path). When no worktree matches but NAME is a
-#                  local branch, the recipe falls back to deleting just that
-#                  branch — covers the half-cleaned state where a previous run
-#                  already removed the worktree but kept the squash-merged
-#                  branch. FORCE=true discards a dirty worktree and deletes a
-#                  not-fully-merged branch (squash-merged branches look unmerged
-#                  to git, so the common merged-PR case needs FORCE=true).
+#                  or an absolute path). FORCE=true discards a dirty worktree and
+#                  deletes a not-fully-merged branch (squash-merged branches look
+#                  unmerged to git, so the common merged-PR case needs FORCE=true).
+#
+# Recovery when no worktree matches NAME. A removal must clear three independent
+# residues — a registered worktree, a directory, a branch — and `git worktree
+# remove` can fail having already dropped the registration, so the recipe must be
+# able to finish a job it started. It therefore sweeps BOTH leftovers in one run
+# and only errors when neither exists:
+#   · a leftover directory at .claude/worktrees/<basename NAME> that git no
+#     longer tracks — tear its stack down by project name, then rm -rf it;
+#   · a leftover local branch named exactly NAME.
+#   Both fire when both match, which is what makes NAME=<branch> whole: the
+#   branch's basename IS the dir slug, so one command clears the pair.
+# Sweeping the directory is the half that must not be skipped, because its
+# absence failed SILENTLY: with only the branch arm, NAME=<branch> printed
+# "✓ deleted branch" and exited 0 over a 48 MB checkout still on disk, while
+# NAME=<dir> exited 1 claiming "no worktree or local branch matches" with the
+# directory and the branch both sitting right there. A green over a residue is
+# worse than the residue.
+# NAME is reduced to its basename before it becomes a path, so nothing outside
+# .claude/worktrees/ is reachable by an `rm -rf` — '.', '..' and '/' are refused.
+#
+# BRANCH/BASE/NAME are read as SHELL variables ("$$NAME"), never spliced into the
+# recipe as make variables ('$(NAME)'). Make puts command-line variables into each
+# recipe's environment verbatim, so the shell arm is both exact and inert; the
+# make arm is textual substitution, and a value carrying a single quote closes the
+# literal and the rest executes. Measured: NAME="x'; echo INJECTED; echo '" ran
+# that echo inside the `awk -v t=…` on the first line and fed its output onward as
+# the resolved worktree path. That is upstream of every guard below, which is why
+# the rule is the interpolation form and not a validation regex.
 #
 # Stale dirs: when a worktree's directory was deleted out-of-band (e.g. an agent
 # `rm -rf`), its stack can't be torn down via `$(MAKE) -C <dir>`. The recipe then
@@ -66,14 +90,14 @@
 ## —— Worktrees ————————————————————————————————————————————————————————————
 
 worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main; NAME=<dir-base>); a random suffix keeps branch/dir/stack unique; START=true brings its stack up
-	@if [ -z "$(BRANCH)" ]; then echo "✗ BRANCH=<branch> required (e.g. BRANCH=feat/backoffice-foo)"; exit 1; fi
+	@if [ -z "$$BRANCH" ]; then echo "✗ BRANCH=<branch> required (e.g. BRANCH=feat/backoffice-foo)"; exit 1; fi
 	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{print $$2; exit}')"; \
 	sfx="$$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 4)"; \
-	branch="$(BRANCH)-$$sfx"; \
-	base="$$(printf '%s' "$(if $(NAME),$(NAME),$$(basename '$(BRANCH)'))" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/^-+|-+$$//g')"; \
+	branch="$$BRANCH-$$sfx"; \
+	base="$$(printf '%s' "$${NAME:-$$(basename "$$BRANCH")}" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/^-+|-+$$//g')"; \
 	dir="$$base-$$sfx"; \
 	path="$$main/.claude/worktrees/$$dir"; \
-	baseref='$(if $(BASE),$(BASE),main)'; \
+	baseref="$${BASE:-main}"; \
 	echo "→ creating worktree $$path on new branch $$branch (from $$baseref)"; \
 	git -C "$$main" worktree add -b "$$branch" "$$path" "$$baseref" || { echo "✗ git worktree add failed"; exit 1; }; \
 	if ls -d "$$path"/.agent/skills/bmad-*/ >/dev/null 2>&1; then \
@@ -97,19 +121,37 @@ worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main
 worktree.list: ## List worktrees (NAME = dir name or path for worktree.remove)
 	@git -C "$(PROJECT_ROOT)" worktree list
 
-worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes + branch; FORCE=true drops dirty/unmerged (destructive)
-	@if [ -z "$(NAME)" ]; then echo "✗ NAME=<worktree-dir-path-or-branch> required (see 'make worktree.list')"; exit 1; fi
+worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes + branch; also sweeps a leftover dir/branch a half-finished run left behind; FORCE=true drops dirty/unmerged (destructive)
+	@if [ -z "$$NAME" ]; then echo "✗ NAME=<worktree-dir-path-or-branch> required (see 'make worktree.list')"; exit 1; fi
 	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{print $$2; exit}')"; \
-	wt="$$(git -C "$$main" worktree list --porcelain | awk -v t='$(NAME)' '$$1=="worktree"{p=$$2; b=p; sub(/.*\//,"",b); if (p==t || b==t){print p; exit}}')"; \
+	wt="$$(git -C "$$main" worktree list --porcelain | awk -v t="$$NAME" '$$1=="worktree"{p=$$2; b=p; sub(/.*\//,"",b); if (p==t || b==t){print p; exit}}')"; \
 	if [ -z "$$wt" ]; then \
-		if [ "$(NAME)" = "main" ]; then echo "✗ refusing to delete branch 'main'"; exit 1; fi; \
-		if git -C "$$main" show-ref --verify --quiet 'refs/heads/$(NAME)'; then \
-			echo "→ no worktree matches NAME=$(NAME); deleting the leftover branch"; \
-			git -C "$$main" branch $(if $(FORCE),-D,-d) '$(NAME)' && echo "✓ deleted branch $(NAME)" \
-				|| { echo "• branch '$(NAME)' kept — squash-merged branches look unmerged to git; re-run with FORCE=true"; exit 1; }; \
-			exit 0; \
+		if [ "$$NAME" = "main" ]; then echo "✗ refusing to delete branch 'main'"; exit 1; fi; \
+		found=; \
+		base="$$(basename "$$NAME")"; \
+		case "$$base" in ''|'.'|'..'|'/') base=;; esac; \
+		orphan=; \
+		if [ -n "$$base" ] && [ -d "$$main/.claude/worktrees/$$base" ]; then orphan="$$main/.claude/worktrees/$$base"; fi; \
+		if [ -n "$$orphan" ]; then \
+			found=1; \
+			slug="$$(printf '%s' "$$base" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/^-+|-+$$//g')"; \
+			echo "→ git no longer tracks $$orphan but the directory survives; tearing down stack erpify-$$slug by project name"; \
+			(cd "$$main" && docker compose -p "erpify-$$slug" -f compose.yaml -f compose.dev.yaml down --remove-orphans --volumes) || true; \
+			rm -rf "$$orphan" || { echo "✗ could not delete $$orphan — root-owned files ('Permission denied' → run 'make worktree.chown' first)"; exit 1; }; \
+			echo "✓ deleted leftover directory $$orphan"; \
+			for b in $$(git -C "$$main" for-each-ref --format='%(refname:short)' refs/heads | awk -v s="$$base" '{n=$$0; sub(/.*\//,"",n); if (n==s) print}'); do \
+				[ "$$b" = "$$NAME" ] && continue; \
+				echo "• branch '$$b' held that worktree and is still here — delete it with 'make worktree.remove NAME=$$b FORCE=true'"; \
+			done; \
 		fi; \
-		echo "✗ no worktree or local branch matches NAME=$(NAME) (see 'make worktree.list')"; exit 1; \
+		if git -C "$$main" show-ref --verify --quiet "refs/heads/$$NAME"; then \
+			found=1; \
+			echo "→ no worktree matches NAME=$$NAME; deleting the leftover branch"; \
+			git -C "$$main" branch $(if $(FORCE),-D,-d) "$$NAME" && echo "✓ deleted branch $$NAME" \
+				|| { echo "• branch '$$NAME' kept — squash-merged branches look unmerged to git; re-run with FORCE=true"; exit 1; }; \
+		fi; \
+		if [ -z "$$found" ]; then echo "✗ no worktree, leftover directory or local branch matches NAME=$$NAME (see 'make worktree.list')"; exit 1; fi; \
+		exit 0; \
 	fi; \
 	if [ "$$wt" = "$$main" ]; then echo "✗ refusing to remove the main worktree ($$main)"; exit 1; fi; \
 	branch="$$(git -C "$$main" worktree list --porcelain | awk -v p="$$wt" '$$1=="worktree"{w=$$2} $$1=="branch" && w==p {sub("refs/heads/","",$$2); print $$2}')"; \
