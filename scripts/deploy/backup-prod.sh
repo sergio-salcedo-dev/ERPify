@@ -84,12 +84,22 @@ verify_dump "$db_file" || exit 1
 # —— 2) Local retention ———————————————————————————————————————————————————
 # Retention intentionally runs before offsite sync.
 # Local backups are the source of truth; offsite storage is a secondary copy.
+#
+# It expires the one artifact kind this script writes, and nothing else. A
+# $BACKUP_DIR holding an objects-<stamp>.tar.gz beside a dump is holding an
+# archive no run here produces or expires: sweeping those is a one-off operator
+# task, documented in docs/vps-deployment.md § Backups.
 while IFS= read -r expired_artifact; do
   [[ -n "$expired_artifact" ]] || continue
   rm -f -- "$expired_artifact"
-done < <(find "$BACKUP_DIR" -maxdepth 1 \( -name 'db-*.dump' -o -name 'objects-*.tar.gz' \) -mtime +"$RETENTION_DAYS")
+done < <(find "$BACKUP_DIR" -maxdepth 1 -name 'db-*.dump' -mtime +"$RETENTION_DAYS")
 
-log_success "Backup $STAMP complete:"
+# The byte count is the cheap smoke signal a cron log can be grepped or
+# thresholded on: verify_dump proves the archive is readable, never that it holds
+# what you expect, and an empty schema dumps clean. `ls -lh` rounds, so state
+# both — the exact number is what a comparison against yesterday's run needs.
+db_bytes=$(wc -c < "$db_file")
+log_success "Backup $STAMP complete: $db_file ($db_bytes bytes)"
 ls -lh "$db_file"
 
 # —— 3) Optional offsite sync ————————————————————————————————————————————

@@ -267,14 +267,123 @@ Los dos siguientes los encontró T7, y el tercero es de la misma familia que los
    *«60.06186 is less than 60.0»*, un margen del 0,1 % que depende de que el timeout del socket se pase de
    largo y no se quede corto. Retirada; el techo se aprieta a `BOUND * 2`, porque `BOUND * 5` no cazaba una
    cota 4× lenta.
-- [ ] **T2 — DEC-1 · #255/#256: reconciliar el backup con la superficie que existe**
-  - [ ] **Retirar `-o -name 'objects-*.tar.gz'` de la retención (`:90`) y conservar el aviso de
+- [x] **T2 — DEC-1 · #255/#256: reconciliar el backup con la superficie que existe**
+  - [x] **Retirar `-o -name 'objects-*.tar.gz'` de la retención (`:90`) y conservar el aviso de
         `restore-prod.sh:92-95`**, reformulando sólo su segunda línea y sin tacharlo de obsoleto
-        (sub-decisión de DEC-1). El barrido de huérfanos locales es tarea de operación, no de código.
+        (sub-decisión de DEC-1). El barrido de huérfanos locales es tarea de operación, no de código,
+        y va documentado en `docs/vps-deployment.md` § Backups.
   - [ ] Corregir en ambos issues la **deriva de nombre** `object_storage_data` → `storage_data` — **la
         dependencia a #252 es correcta y se mantiene** (M5).
   - [ ] Corregir el checklist de #256 a sus pasos ejecutables; el paso 5 nombra además un `pg_restore -l` que
         el `verify_dump` de hoy no usa (M6).
+### T2 — resultado medido
+
+**No hay ningún gate que lea este cambio, y eso es lo primero que hay que decir.** `.github/workflows/ci.yml`
+no tiene paso de shell; `make/ci.mk` es `php.quality`/`pwa.quality` + los tests, ninguno toca `scripts/`;
+`make/super-lint.mk` es local, manual y con `GITHUB_TOKEN`, y su único bloque que pondría `VALIDATE_BASH` está
+comentado. No hay `.pre-commit-config.yaml`. **«Los tests pasan» no prueba nada sobre este diff.** Por eso la
+evidencia se fabricó a mano.
+
+**El `find`, instrumentado en vez de razonado** (`tmp/`, cinco ficheros sembrados con `touch -d`):
+
+| Expresión | Borra |
+|---|---|
+| la de `main` | `db-old.dump` **y** `objects-old.tar.gz` |
+| esta rama | `db-old.dump` |
+
+El delta es **exactamente un fichero**, y es el que se quería.
+
+**Y la cifra que el runbook publica se midió en vez de citarse, que es lo que la salvó de salir mal.** El
+enunciado de partida —«`-mtime +N` es estrictamente mayor que N días enteros»— es **impreciso**: `find` tira la
+parte fraccionaria de la edad, así que `+N` exige **al menos N+1 días enteros**. Un fichero de **14 días y
+medio** no casa con `+14` (medido: sin línea) y sí con `+13` (medido: casa). El de 14 justos sobrevive con
+cualquiera de las dos lecturas, que es por lo que el error habría pasado desapercibido.
+
+**Precedencia, comprobada y no supuesta:** el original ya venía con paréntesis explícitos —
+`\( -name A -o -name B \) -mtime +N`— así que **no** era el bug clásico de precedencia. Para un `db-*.dump`,
+`(A -o B)` vale lo que vale `A`, de modo que retirar la rama `B` no cambia nada de lo que expira. Los
+paréntesis se van con ella por quedar envolviendo un solo test.
+
+**Shellcheck, traído a mano en contenedor porque no existe ni en CI ni en la máquina:** cinco hallazgos sobre
+los dos scripts, **todos preexistentes y ninguno en las líneas tocadas** — `SC2016` ×2 (falsos positivos por
+diseño: las variables las expande el `sh` de dentro del contenedor), `SC1091` ×2 (no sigue el `source`),
+`SC2034` sobre `ENV_FILE` (lo consume `lib/common.sh`, que no sigue). Sobre `lib/common.sh` aparte sale un
+`SC2148` (sin shebang), el único de nivel `error` del directorio. Ese inventario es lo que el trabajo derivado
+de meter shellcheck en CI se encontrará el primer día. `bash -n` limpio en los dos.
+
+**El one-liner del runbook está ejecutado, no sólo escrito.** Contra el mismo directorio de sondeo:
+`RETENTION_DAYS=30` no borra nada (el fichero de 30 días no llega a los 31), y con el default 14 borra el
+huérfano de 30 días y respeta el de 2. Es la comprobación que convierte la cifra del texto en un hecho.
+
+---
+
+## Pase adversarial (código) — T2
+
+Ejecutado **antes de `gh pr create`**, sobre el árbol final, por tres lectores independientes en sólo lectura
+con lentes distintas —pérdida de datos y daño al operador, prosa contra árbol, y honestidad del cierre de
+issues—, cada uno instruido a refutar. **Ocho hallazgos: dos GRAVE, cuatro MEDIA, dos LEVE. Todos aplicados.**
+Cada cita se re-verificó contra el árbol antes de tocar nada.
+
+**GRAVE · Cerrar #255 con este cambio habría tirado una petición viva.** El argumento del cierre es «la
+superficie emparejada ya no existe», y eso vale para **tres de sus cuatro** secciones (ratio de completitud del
+par, P3, P9). No vale para la mitad que sobrevive: **loguear el tamaño del `db-<stamp>.dump`**, que es el
+artefacto que este script sigue produciendo. Y el `ls -lh` que parecía cumplirlo **ya estaba ahí cuando se
+abrió el issue** — verificado: `b0dce6ef:117` es la línea, y `b0dce6ef` es #253, exactamente la PR que #255
+estaba revisando. Citarlo como cumplimiento habría sido citar como evidencia lo que el autor del issue ya tenía
+delante cuando pidió más. Se implementa aquí (`log_success` con el conteo de bytes exacto, que es lo que un log
+de cron puede comparar contra el de ayer) en vez de cerrar por encima.
+
+**GRAVE · La corrección de nombre en #256 dejaba en pie una frase falsa, disfrazada de corregida.** El issue
+dice que el volumen «must exist, or `make backup.prod` **aborts on its volume-exists guard**». **Esa guarda no
+existe**: `require_running_stack()` (`lib/common.sh:25-36`) comprueba `compose.yaml`, el fichero de entorno,
+`docker` y que el servicio `database` esté corriendo — y `git grep 'STORAGE\|volume' -- scripts/deploy/` no
+devuelve nada. Cambiar sólo el sustantivo habría dejado una afirmación falsa sobre el comportamiento de hoy con
+aspecto de haber sido revisada. Se reescribe la sustancia, no el nombre.
+
+**MEDIA ×3, todos sobre el one-liner que yo publicaba para que un operador lo pegue.** (1) Ruta fija
+`/var/backups/erpify` ignorando el knob `BACKUP_DIR`: en un host con el directorio movido **y** la ruta por
+defecto todavía existente, el barrido no casa nada, no falla, y el operador se va creyendo que lo hizo. (2)
+`+14` fijo ignorando `RETENTION_DAYS`: con retención a 30 expira el archivo **antes** que el dump con el que
+estaba emparejado. (3) El offsite no sigue al borrado local: un backend espejo (`rclone sync`) lo propaga en el
+**siguiente** `make backup.prod`, no al barrer, y uno de instantáneas (`restic`/`borg`) no lo propaga en
+absoluto sin un `forget`/`prune` explícito — y son justo los que el propio texto cita como los que devuelven
+huérfanos. Los tres corregidos en el bloque.
+
+**MEDIA · El marcador del sprint confundía decisión resuelta con código enviado.** Decía «#526 está resuelta» y
+«Enviadas T1 (#725) y T4 (#727)» con #727 **abierta y sin mergear** y #526, por tanto, todavía `OPEN`. Es
+exactamente el patrón por el que este repo ya se ha quemado. Separadas las dos claúsulas.
+
+**LEVE ×2.** (1) Pronombre ambiguo en el aviso reformulado: «retention leaves **it** in place» ata por
+proximidad a *the recovery point*, no al archivo — y además la retención es ortogonal al motivo de abortar, así
+que la cláusula se retira y la línea dice lo que el operador tiene que sopesar. (2) El comentario de lectura
+completa estaba sobre el bloque equivocado (describía `verify_dump`, seis líneas más abajo, con un `if` ajeno
+en medio); bajado a su sitio, regla del boy scout, declarado aquí.
+
+**Y una imprecisión mía que el pase cazó y que la medición confirmó**: ver *T2 — resultado medido*.
+
+---
+
+## Revisión de seguridad — T2
+
+Recorrida la checklist del `CLAUDE.md` raíz. **No aplican por construcción:** todo el bloque de `api/` (no hay
+PHP en el diff) y todo el de `pwa/`. Lo que sí aplica es la clase que este diff sí toca: **borrado de datos y
+secretos en logs.**
+
+- **Borrado.** El cambio *reduce* lo que la retención borra: de dos patrones a uno. Medido, el delta es un
+  fichero. Ningún camino nuevo borra nada. El comando que sí borra está en el runbook, lo ejecuta una persona,
+  y lleva su comando de inspección **delante** — con el mismo predicado que el borrado, más ancho por el lado
+  seguro (`ls` sin `-mtime` enseña más de lo que `find -delete` se lleva, nunca menos).
+- **PII.** Los dumps llevan datos de negocio y el runbook ya lo dice. El barrido de huérfanos **no** propaga al
+  offsite, y eso ahora está escrito: un archivo huérfano sigue en las instantáneas hasta un `forget`/`prune`.
+  Es la mitad que se habría quedado sin decir.
+- **Secretos.** `BACKUP_SYNC_CMD` puede llevar credenciales; el script lo sabe (`:96`, *«log a static line,
+  never the value»*) y el diff no lo toca. El nuevo `log_success` emite una ruta y un entero, nada más.
+- **Superficie destructiva.** `restore-prod.sh` sigue con sus dos puertas (`ALLOW_PROD_RESTORE` y la frase
+  tecleada); el diff no roza ninguna.
+
+`PRODUCTION_SECURITY_CHECKLIST.md` no se toca: no se introduce patrón de seguridad nuevo y un `find` con un
+patrón menos no está en sus disparadores.
+
 - [ ] **T3 — DEC-4 · #525: retención de `failed`** (sólo tras la decisión)
   - [ ] **Reutilizar, no reinventar — y elegir bien el patrón**: los dos pruners existentes **no son
         intercambiables**. `Shared/Event/Infrastructure/Messenger/DbalHandledDomainEventPruner.php` es un
@@ -507,16 +616,15 @@ Todas las sondas son desechables, viven en el `tmp/` gitignoreado y **no entran 
 - **T1 (#612) entregado.** Decorador de transporte, no arreglo por llamante. Verificado en tres planos, que no
   son sustituibles entre sí: el unitario (valor de `getTimeout()`), el socket real (un servidor que acepta y
   calla, 60.06 s → dentro de la cota) y el contenedor vivo (`debug:container` + sonda).
-- **La falsificación encontró dos tests que no podían fallar**, ambos corregidos y ambos ahora con rojo propio
-  (guarda `is_numeric` sin caso que la cubriera; `BOUND = 1.0` coincidiendo con el valor de fallo del cast de
-  array). El artefacto los documenta arriba porque el segundo es la familia de la siembra vacua.
+- **La falsificación encontró CUATRO tests que no podían fallar** a lo largo de las dos vueltas, todos
+  corregidos y todos ahora con rojo propio. La primera vuelta dio dos (guarda `is_numeric` sin caso que la
+  cubriera; `BOUND = 1.0` coincidiendo con el valor de fallo del cast de array) y T7 los otros dos. La
+  tercera (`assertNotInstanceOf` sobre un hecho ajeno) sólo apareció con una mutación que **nadie había
+  pedido**: vaciar `create()` entero. La lección para el lote está en *Falsificación*.
 - **Punto ciego declarado, no tapado:** la cota vale para `smtp`/`smtps`. Un bridge de API o `sendmail://` no
   la recibe; está escrito en el docblock de la clase.
 - **T7 ejecutado y aplicado** — ver *Pase adversarial (código)*. Dieciséis hallazgos, uno GRAVE, ninguno
   diferido. Corrigió la garantía central del cambio y bajó el default de 10 a 3.
-- **La falsificación encontró CUATRO tests que no podían fallar** a lo largo de las dos vueltas, no dos. La
-  tercera (`assertNotInstanceOf` sobre un hecho ajeno) sólo apareció con una mutación que **nadie había
-  pedido**: vaciar `create()` entero. La lección para el lote está en *Falsificación*.
 - **Lo que este PR NO promete:** un techo sobre el tiempo total de un envío. Está dicho en el docblock, en
   `api/.env`, en `docs-info/production-deployment.md` y en el cuerpo de la PR, y es la pregunta 4.
 - **No entra en este PR:** T2 (#255), T3 (#525) y T4 (#526) tienen decisión pero salen en PRs propias; #256 y

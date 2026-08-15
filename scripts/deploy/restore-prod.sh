@@ -87,13 +87,13 @@ db_file="$BACKUP_DIR/db-$STAMP.dump"
 [[ -f "$db_file" ]] || { log_error "missing dump: $db_file"; exit 1; }
 
 # —— Verify the artifact BEFORE touching live data ————————————————————————
-# Full read-back (not just the TOC), so a dump truncated in its data section is
-# rejected here rather than failing halfway through the destructive restore.
 if [[ -f "$BACKUP_DIR/objects-$STAMP.tar.gz" ]]; then
   log_warn "$STAMP carries objects-$STAMP.tar.gz, an object archive this restore does not unpack."
-  log_warn "The recovery point will be database-only. Abort now if that archive still matters."
+  log_warn "The recovery point is database-only. Abort now if the object data in that archive matters."
 fi
 
+# Full read-back (not just the TOC), so a dump truncated in its data section is
+# rejected here rather than failing halfway through the destructive restore.
 log_info "Verifying backup $STAMP …"
 verify_dump "$db_file" || exit 1
 log_success "Dump verified (size below)."

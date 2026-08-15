@@ -181,6 +181,12 @@ against the Let's Encrypt duplicate-certificate rate limit, so snapshot
   proven restorable by a full `pg_restore` read-back before the run reports
   success.
 
+The success line carries the dump's exact byte count. That is the signal worth
+watching over time: the read-back proves the archive is *readable*, never that it
+holds what you expect — an empty schema dumps perfectly cleanly — so a run whose
+size falls off a cliff against yesterday's is the cheapest thing you can alert
+on.
+
 Knobs (env vars): `BACKUP_DIR`, `RETENTION_DAYS` (default 14, local pruning),
 `BACKUP_MIN_FREE_MB` (default 500, abort if the target FS is below it),
 `COMPOSE_PROJECT_NAME` (default `erpify` — `make docker.info` prints the
@@ -214,6 +220,38 @@ independent location via `BACKUP_SYNC_CMD` — e.g. `rclone sync` to S3/B2/Drive
 The backup strategy assumes local storage is the primary retention layer.
 Offsite sync failures do not block local retention management — retention prunes
 before the sync hook runs, by design.
+
+### Orphan object archives (one-off sweep)
+
+Retention expires `db-*.dump` and nothing else. A `BACKUP_DIR` that also holds
+`objects-<stamp>.tar.gz` — left by a host that ran the paired backup, or handed
+back by a snapshot-based offsite (`restic`/`borg`) restoring the whole directory
+— holds archives no run expires. Sweep them deliberately, after looking:
+
+```bash
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/erpify}"      # the same knob cron uses
+ls -lh "$BACKUP_DIR"/objects-*.tar.gz                # look before deleting
+find "$BACKUP_DIR" -maxdepth 1 -name 'objects-*.tar.gz' \
+  -mtime +"${RETENTION_DAYS:-14}" -delete
+```
+
+Take both knobs from your cron line rather than the defaults: sweeping at a
+hard-coded 14 days under a `RETENTION_DAYS` of 30 expires an archive before the
+dump it was paired with, and a hard-coded path silently sweeps **nothing** on a
+host whose `BACKUP_DIR` was moved. `find` throws away the fractional part of an
+age, so **`-mtime +N` needs at least N+1 whole days**: `+14` spares a
+fourteen-day-old archive, and spares a fourteen-and-a-half-day-old one too.
+
+**The offsite copy does not follow.** A mirroring backend (`rclone sync`)
+propagates the deletion on the *next* `make backup.prod`, not when you sweep; a
+snapshot backend (`restic`/`borg`) does not propagate it at all until an explicit
+`restic forget --prune` / `borg prune`. Until then the archive — and the PII in
+its paired dump's era — is still offsite.
+
+`restore-prod.sh` warns when the stamp you are restoring carries one. That
+warning is not obsolete: a snapshot offsite returns **both** files to
+`BACKUP_DIR`, and a database-only recovery point is exactly the condition it
+exists to announce.
 
 ### Restore — `make restore.prod`
 
