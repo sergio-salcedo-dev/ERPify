@@ -227,6 +227,10 @@ services:
       # Required for the same reason as on php: this is the worker that sends the lockout notice.
       MAILER_DSN: ${MAILER_DSN:?MAILER_DSN is required in prod (null://null discards mail silently)}
       MAILER_SECURITY_FROM: ${MAILER_SECURITY_FROM:?MAILER_SECURITY_FROM is required in prod (a monitored, replyable mailbox)}
+      # Set explicitly for the same reason as the DSN above: no base service to inherit it from. This is
+      # the tick that mails a person every five minutes on one replica, so a slow socket here costs the
+      # clock rather than a request. Per socket operation, not per send — see api/.env for the arithmetic.
+      MAILER_SMTP_TIMEOUT: ${MAILER_SMTP_TIMEOUT:-3}
       # Sentry captures prune failures too (same required gating as php/messenger_worker).
       SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}

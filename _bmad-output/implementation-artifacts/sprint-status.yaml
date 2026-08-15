@@ -372,7 +372,15 @@ development_status:
   # validador por nombre) y se revirtió; su par sigue en el baseline, ahora con gate propio.
   br-6-gates-arquitectura-ci: done
   br-7-listas-backoffice: done
-  br-8-operabilidad: backlog
+  # Último lote de la épica. Medido contra a4af085f y corregido por un pase adversarial de tres lectores que
+  # refutó tres de las quince mediciones. #255/#256 no son falsos: describen el backup emparejado que #253
+  # construyó y #557 desmontó, y su dependencia a #252 es CORRECTA (el volumen era `storage_data`; sólo derivó
+  # el nombre). #612 sí ascendió de latente a vivo — su premisa la tumbó 0fc48fff el 2026-08-11, de esta misma
+  # épica — y su radio son seis casos de uso y dos superficies de worker, no los dos call sites que enumera.
+  # #526 quedó medio resuelto: ningún registro de Monolog llega a Sentry, por decisión escrita en
+  # sentry.yaml:14-17, así que su opción 1 es imposible sin revertirla. Las decisiones vivas están planteadas
+  # como DEC-1..DEC-5 en la historia, sin resolver.
+  br-8-operabilidad: ready-for-dev
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.

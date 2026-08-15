@@ -39,6 +39,21 @@ prod.env.check: ## Validate .env.prod.local holds every required prod secret (fa
 		echo "  Regenerate URL-safe, e.g.: openssl rand -hex 24"; \
 		exit 1; \
 	fi; \
+	tmo=$$(grep -E "^MAILER_SMTP_TIMEOUT=" "$$file" | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'); \
+	if [ -n "$$tmo" ]; then \
+		if ! printf '%s' "$$tmo" | grep -qE '^[0-9]+(\.[0-9]+)?$$'; then \
+			echo "✗ MAILER_SMTP_TIMEOUT must be a plain number of seconds — got '$$tmo'."; \
+			echo "  A duration spelling like '10s' passes compose, the image build and the container lint,"; \
+			echo "  then throws on the first email and returns false from every lockout tick, silently."; \
+			exit 1; \
+		fi; \
+		if [ "$$(awk -v v="$$tmo" 'BEGIN { print (v >= 1 && v <= 300) ? 1 : 0 }')" != "1" ]; then \
+			echo "✗ MAILER_SMTP_TIMEOUT must be between 1 and 300 seconds — got '$$tmo'."; \
+			echo "  Below 1 no relay completes a round trip, so mail is discarded while looking configured;"; \
+			echo "  above 300 the bound no longer protects the five-minute lockout tick it exists for."; \
+			exit 1; \
+		fi; \
+	fi; \
 	echo "✓ $(PROD_ENV_FILE) is complete — all required keys set."
 
 deploy.local: ## Stand up the prod profile on this host at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance)
