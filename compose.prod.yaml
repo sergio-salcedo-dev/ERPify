@@ -172,10 +172,13 @@ services:
     command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
 
   # Single-replica scheduler. Symfony Scheduler derives every maintenance tick
-  # (PruneHandledDomainEventsMessage, the audit retention PruneAuditLogMessage, ReconcileSubjectErasuresMessage,
-  # the person-reference ReconcilePersonReferencesMessage, the stored-identity InspectStoredIdentityMessage and
-  # the five-minute NotifyLockedIdentitiesMessage) from an in-process clock, so running it on the scaled
-  # `messenger_worker` pool would emit one tick per replica.
+  # (PruneHandledDomainEventsMessage, the failure-transport PruneFailedMessagesMessage, the hourly
+  # ReportDeadLetterBacklogMessage, the audit retention PruneAuditLogMessage, ReconcileSubjectErasuresMessage,
+  # the person-reference ReconcilePersonReferencesMessage, the stored-identity InspectStoredIdentityMessage,
+  # the session PruneRetiredSessionsMessage and the five-minute NotifyLockedIdentitiesMessage) from an
+  # in-process clock, so running it on the scaled `messenger_worker` pool would emit one tick per replica.
+  # This list is prose and nothing recomputes it: the schedule gate reasons by transport NAME, so a tick
+  # missing here is invisible to every check. It has drifted twice; add yours when you add the message.
   #
   # THE STAKES OF THE PIN CHANGED with the lockout notice, and it is no longer only about waste. Every other
   # tick is an idempotent sweep, so N replicas cost N redundant runs a day. This one SENDS MAIL TO A

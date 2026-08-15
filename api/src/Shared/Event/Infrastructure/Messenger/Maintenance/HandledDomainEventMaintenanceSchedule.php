@@ -14,8 +14,13 @@ use Symfony\Contracts\Cache\CacheInterface;
 /**
  * Maintenance schedule. The messenger_worker consumes the generated ticks via the
  * `scheduler_maintenance` transport (added to its `messenger:consume` command in the compose files):
- * a daily prune of stale dedup claims, and an hourly dead-letter backlog check that alarms over
- * threshold.
+ * two daily prunes — stale dedup claims, and the failure transport past its retention window — and an
+ * hourly dead-letter backlog check that alarms over threshold.
+ *
+ * The prune and the alarm read the same table on purpose and must not be tuned independently: the alarm
+ * reports the age of the oldest surviving failed message, so a retention window narrow enough to reach rows
+ * it has not yet raised would cap that age and quiet the queue by deleting its own evidence. The margin
+ * between the two windows is asserted in this schedule's test.
  *
  * **`stateful()` is what makes these periods mean anything.** Without a persisted checkpoint the next run
  * date is computed from the moment the process booted, and `messenger:consume` runs under
@@ -36,6 +41,7 @@ final readonly class HandledDomainEventMaintenanceSchedule implements SchedulePr
         return (new Schedule())
             ->stateful($this->checkpointState)
             ->add(RecurringMessage::every('1 day', new PruneHandledDomainEventsMessage()))
+            ->add(RecurringMessage::every('1 day', new PruneFailedMessagesMessage()))
             ->add(RecurringMessage::every('1 hour', new ReportDeadLetterBacklogMessage()))
         ;
     }

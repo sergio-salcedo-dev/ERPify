@@ -151,8 +151,8 @@ php.lint.audit-evidence: ## Audit erasure-evidence action classification gate
 # Fails CI when a domain event whose AGGREGATE is a natural person is reachable from a
 # framework.messenger.routing key — or an #[AsMessage] attribute — on any transport but `sync`, and
 # when an aggregate type declared in src has no line in api/.persistent-transport-policy. `async` and
-# `failed` are Doctrine tables with no TTL and no prune that no erasure path touches, so a queued
-# person aggregate id outlives the erasure the application confirmed to the subject.
+# `failed` are Doctrine tables no erasure path touches — `async` unbounded, `failed` swept at 30 days —
+# so a queued person aggregate id outlives the erasure the application confirmed to the subject.
 #
 # The gate is two classes and each is selected BY NAME, in its own run. A common prefix keeps both under
 # this target but goes green on a strict subset: rename or delete one class and the other still matches, the

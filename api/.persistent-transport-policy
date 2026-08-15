@@ -3,9 +3,10 @@
 #
 # The rule this file exists to enforce: an "aggregate id alone" payload is safe to put on a persisted
 # transport if and only if that id is not a person's. When it is, the aggregate id IS the personal datum,
-# so an empty payload proves nothing — and `messenger_messages` and `failed` are Doctrine tables with no
-# TTL and no prune that no erasure path touches, so the id outlives the deletion the application confirmed
-# to the subject.
+# so an empty payload proves nothing — and no erasure path reaches `messenger_messages` or `failed`. The
+# `async` queue has no TTL and no prune at all; `failed` is swept by a 30-day retention window, which
+# bounds how long a queued id survives without closing the gap: the deletion the application confirmed to
+# the subject still happens first.
 #
 # Format, one per line:
 #   <AggregateType> => non-person

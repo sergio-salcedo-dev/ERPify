@@ -85,7 +85,16 @@ una `Connection` ni materializa el dataset; sólo `ExecutionStep::execute()` toc
 |------|-------------|-----------------|-------------------|-----------|---------|
 | Poda retención `audit_log` | `AuditRetentionPolicy::thresholdsAt(now)` | un `AuditRetentionThreshold` (drena un nivel) | sí (`PostgresAdvisoryLock`) | sí (`DELETE` older-than) | sí — batching (lotes por `id`) |
 | Poda dedup `handled_domain_event` | umbral único `claimedBefore` | 1 step (`pruneClaimedBefore`) | **no — retrofit pendiente** | sí | sí — volumen ínfimo demostrado |
+| Poda retención transporte `failed` | umbral único `pruneFailedBefore` | 1 step (drena una cola) | sí (`PostgresAdvisoryLock`) | sí (`DELETE` older-than) | sí — batching por `id` **y** presupuesto de reloj |
 | Backlog dead-letter | — (solo lectura) | report | exento (I1) | N/A | N/A |
+
+La poda del transporte `failed` es el **tercer caso mutante**, y el segundo conforme: copia la forma del de
+`audit_log` (mismo lock, mismo `ORDER BY id … FOR UPDATE`, mismo `DELETE` older-than idempotente) y añade
+una cota que aquél no necesita — un presupuesto de reloj —, porque es el único que llega a una tabla que
+**nunca** se podó, así que su primera ejecución se enfrenta al historial entero mientras sostiene el lock.
+Que sea una copia es justo lo que el *timing* de abajo esperaba para juzgar la estabilidad estructural; que
+conviva en el MISMO fichero de schedule con el caso no conforme hace la divergencia de I1 más visible, no
+menos urgente.
 
 La poda de `audit_log` es el **primer caso conforme de facto**. La de `handled_domain_event` diverge **sólo en
 I1** (aún sin el lock estándar): su acotación ya es conforme por la excepción de I3 (volumen ínfimo demostrado,

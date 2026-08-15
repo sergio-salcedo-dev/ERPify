@@ -51,7 +51,7 @@ dos primeros envejecieron.
 |---|---|
 | **M10** | **#261 enumera UN tick; hoy hay OCHO, en tres clases `#[AsSchedule]`** — `maintenance` (PruneHandledDomainEvents 1d, **ReportDeadLetterBacklog 1h**), `audit_maintenance` (PruneAuditLog 1d, ReconcileSubjectErasures 1d) e `identity_maintenance` (ReconcilePersonReferences 1d, NotifyLockedIdentities 5min, InspectStoredIdentity 1d, **PruneRetiredSessions 1d**). **El comentario de `compose.prod.yaml:174-178` lista sólo seis y es prosa drifted**: nunca listó el `ReportDeadLetterBacklogMessage` (de #363, siete semanas anterior), y `PruneRetiredSessionsMessage` lo añadió **`a4af085f` — el commit base de esta historia — sin tocar compose**. Lo que sí es exacto es su argumento (`:180-186`): las tres schedules son `->stateful()` y **ninguna** `->lock()` (cero `->lock(` en `api/src`), así que *«this replica pin is the only thing standing between one notice and N»* está sostenido por el código. |
 | **M11** | **`symfony/lock` no está instalado**, verificado en tres direcciones: ausente de `require` y `require-dev` de `api/composer.json`, sin `api/vendor/symfony/lock` (comprobado contra el checkout con vendor instalado), y sin entrada `"name": "symfony/lock"` en `composer.lock`. `rate_limiter.yaml:17-24` declara el trade-off, con `lock_factory: null` en los **cinco** budgets (`:45,57,88,99,132`). Dato para DEC-3: una de las menciones de `composer.lock` no es una dependencia opcional sino un **`conflict`** — `symfony/messenger` exige `symfony/lock` `<7.4`, o sea **≥7.4 es el suelo** de un futuro `composer require`. |
-| **M12** | **No existe ningún pruner de `failed`.** Atacado por seis vías: los únicos `DELETE FROM` de `api/src` son sobre `bank_count`, `audit_log` y `handled_domain_event` (×2); `messenger_messages` sólo aparece en migraciones como `CREATE`/`DROP`; no hay `messenger:failed:remove` fuera de prosa; ningún target de `make/`, script o compose poda el transporte; los únicos cron del repo son los workflows de CI y el dump de Postgres. `PRODUCTION_SECURITY_CHECKLIST.md:687` lo dice también. **Tres cosas lo leen, todas de sólo lectura**: `MessengerDeadLetterReader` (el único ligado a `@messenger.transport.failed`, `services.yaml:46`, tipado al `ReceiverInterface` de lectura por diseño), y sus dos consumidores — `FailedMessagesStatusCommand` (a demanda) y `ReportDeadLetterBacklogHandler` (**horario**). |
+| **M12** | **RESUELTA por T3: ya existe un pruner de `failed`.** Cuando se midió no existía ninguno. Atacado por seis vías: los únicos `DELETE FROM` de `api/src` son sobre `bank_count`, `audit_log` y `handled_domain_event` (×2); `messenger_messages` sólo aparece en migraciones como `CREATE`/`DROP`; no hay `messenger:failed:remove` fuera de prosa; ningún target de `make/`, script o compose poda el transporte; los únicos cron del repo son los workflows de CI y el dump de Postgres. `PRODUCTION_SECURITY_CHECKLIST.md:687` lo dice también. **Tres cosas lo leen, todas de sólo lectura**: `MessengerDeadLetterReader` (el único ligado a `@messenger.transport.failed`, `services.yaml:46`, tipado al `ReceiverInterface` de lectura por diseño), y sus dos consumidores — `FailedMessagesStatusCommand` (a demanda) y `ReportDeadLetterBacklogHandler` (**horario**). |
 | **M13** | **El warning existe tal cual** — `SymfonyAuditLogger.php:83-91`, `catch (Throwable)` → `warning('Failed to record an activity audit entry.', ['action','level','exception'])` — y está **pinchado por un test**: `SymfonyAuditLoggerTest.php:90-93` hace `assertSame` sobre el array entero, así que una clave añadida lo pone rojo. **Residuo acotado que T4 debe respetar**: «sin PII» vale para las *claves*, no para el mensaje del `Throwable`, que esta clase no controla. El lanzador realista es `DbalAuditLogWriter::write()`, cuyo insert liga `actor_id`, `resource_id`, `metadata`, `ip` y `user_agent`; DBAL 4 ya no imprime los parámetros ligados (`DriverException.php:27`, sin la cláusula `with params [...]` de DBAL 3), así que las formas comunes son limpias — pero la garantía descansa en un formato de vendor, no en una aserción nuestra. |
 | **M14** | **La opción 1 de #526 («regla de alerta en Sentry, cero código») no es cara: es IMPOSIBLE tal cual, y está decidido por escrito.** `sentry/sentry-symfony ^5.11.0` está instalado y `SentryBundle` registrado en dev+prod (`bundles.php:16`), pero **ningún registro de Monolog llega a Sentry, de ningún nivel**: el bundle no registra handler de Monolog (cero `Handler` en sus `Resources/config/`), el repo no cablea `LogsHandler` ni `enable_logs`, y las únicas vías vivas del bundle son `register_error_listener` (kernel.exception) y `messenger.enabled` — **un `Throwable` tragado en `SymfonyAuditLogger.php:85` no es ninguna de las dos**. Es una decisión registrada dos veces: `sentry.yaml:14-17` (*«We deliberately do NOT wire the Monolog Sentry handler … avoids double-reporting»*) y `ReportDeadLetterBacklogHandler.php:16-18` (*«A log line (not a Sentry capture) is the signal on purpose»*). El comentario de `monolog.yaml:90` está rancio **sólo en su motivo** («uncomment when sentry/sentry-symfony is installed»); que el bloque esté comentado es deliberado. |
 
@@ -90,7 +90,7 @@ criterio de cierre de la épica (barrer el backlog otra vez contra `main`) no se
 | **DEC-1** · #255/#256 | **Resuelta** — se retira el patrón de la retención, **el aviso de restore se conserva**, #256 sigue abierto. Detalle y corrección de M3: *Sub-decisión de DEC-1*, bajo esta tabla. | La superficie se retiró deliberadamente (#557) y `restore-prod.sh:89-92` ya lleva el aviso. **Sub-decisión obligatoria**: `backup-prod.sh:90` es el único expirador de los `objects-*.tar.gz` de despliegues reales entre #253 y #557 (M3); borrarlo sin más los inmortaliza. |
 | **DEC-2** · #612 | Decorador de transporte (opción 1 del issue) vs `default_socket_timeout` global (opción 2). | El decorador está verificado alcanzable y suficiente **para `smtp`/`smtps`** (M15), y **sólo** para eso (M15b) — la opción 2 no tiene ese punto ciego, a cambio de un radio global. El radio real son seis casos de uso, cuatro seams y **dos** superficies de worker (M9, M9b). |
 | **DEC-3** · #261 | ¿`wontfix` (seguir en Option A) o instalar `symfony/lock`? | `compose.prod.yaml:180-186` ya escribió el argumento a favor de A **después** de abrirse el issue, y el código lo sostiene (ninguna schedule `->lock()`). Son ocho ticks, no uno (M10). Suelo técnico: `symfony/lock >= 7.4` por el `conflict` de messenger (M11). |
-| **DEC-4** · #525 | Ventana de retención de `failed`, borrado automático vs herramienta de operador, y SLA de triage. | `failed` es durable **a propósito**; podarlo cambia el contrato. Es la única tabla hermana sin retención (M12), y el pruner tendría que convivir con una alarma **horaria**. |
+| **DEC-4** · #525 | **Resuelta: 30 días con poda automática, y la ventana ES el SLA de triage** — la tercera pregunta del issue, que ninguna otra cosa del repo respondía. Detalle: *T3 — resultado medido*. | `failed` es durable **a propósito**; podarlo cambia el contrato. Es la única tabla hermana sin retención (M12), y el pruner tendría que convivir con una alarma **horaria**. |
 | **DEC-5** · #526 | ~~Regla en Sentry vs chequeo in-app.~~ ~~Queda el **umbral** y de dónde sale el contador.~~ **Resuelta: umbral 1, sin contador** — y la pregunta estaba mal planteada, porque en prod la línea a la que apunta no existe. Detalle: *Mecanismo de DEC-5*, bajo esta tabla. | `ReportDeadLetterBacklogHandler` es el precedente enviado de esta forma exacta, elegido por este mismo motivo. |
 
 ### Sub-decisión de DEC-1 · los `objects-*.tar.gz` de legado
@@ -287,8 +287,11 @@ Los dos siguientes los encontró T7, y el tercero es de la misma familia que los
         dependencia a #252 es correcta y se mantiene** (M5). **Corregido más allá del nombre**, porque el pase
         adversarial midió que la frase que lo rodea es falsa: #256 dice que sin el volumen `make backup.prod`
         «aborts on its volume-exists guard», y esa guarda **no existe** (`lib/common.sh:25-36` no mira ningún
-        volumen). Cambiar sólo el sustantivo habría dejado la falsedad con aspecto de revisada. La dependencia
-        se conserva como **hecho histórico**, no como precondición viva.
+        volumen). Cambiar sólo el sustantivo habría dejado una frase que ya no describe el código con aspecto de
+        revisada. **Matiz que costó una segunda corrección al issue**: esa guarda SÍ existió
+        (`b0dce6ef:lib/common.sh:36-40`), así que la frase era cierta cuando se escribió y la retiró #557 —
+        decirle a su autor que era falsa fue el error. La dependencia se conserva como **hecho histórico**,
+        no como precondición viva.
   - [x] **Loguear el tamaño del artefacto** — la mitad de #255 que sobrevive a la retirada de la superficie de
         objetos, y que el `ls -lh` preexistente NO cumplía (es de `b0dce6ef`, la PR que #255 revisaba). Se
         emite como línea plana `backup_bytes=<n>`, **antes** de la retención, para que un artefacto sospechoso
@@ -304,14 +307,14 @@ Los dos siguientes los encontró T7, y el tercero es de la misma familia que los
         no ahora; el comentario de disposición ya está en el issue: tabla de disposición ask-por-ask en un comentario, con los
         commits que construyeron (#253, `b0dce6ef`) y desmontaron (#557, `08f8199b`) la superficie, y con lo
         que el cierre **no** afirma — que un host vivo no tenga huérfanos no se lee desde el repositorio.
-- [ ] **T3 — DEC-4 · #525: retención de `failed`** (sólo tras la decisión)
-  - [ ] **Reutilizar, no reinventar — y elegir bien el patrón**: los dos pruners existentes **no son
+- [x] **T3 — DEC-4 · #525: retención de `failed`** (sólo tras la decisión)
+  - [x] **Reutilizar, no reinventar — y elegir bien el patrón**: los dos pruners existentes **no son
         intercambiables**. `Shared/Event/Infrastructure/Messenger/DbalHandledDomainEventPruner.php` es un
         `DELETE` desnudo; el que la sección de *Falsificación* obliga a imitar es
         `Shared/Audit/Infrastructure/Persistence/DbalAuditLogPruner.php:142`, con `ORDER BY id … FOR UPDATE`.
-  - [ ] Colgarlo de `Maintenance/HandledDomainEventMaintenanceSchedule.php`; convive con
+  - [x] Colgarlo de `Maintenance/HandledDomainEventMaintenanceSchedule.php`; convive con
         `Maintenance/ReportDeadLetterBacklogHandler.php` (horario) y lee por `MessengerDeadLetterReader`.
-  - [ ] Un `#[AsSchedule]` nuevo obliga a añadir su transporte al `messenger:consume` de **`compose.yaml`
+  - [x] Un `#[AsSchedule]` nuevo obliga a añadir su transporte al `messenger:consume` de **`compose.yaml`
         (dev) y `compose.prod.yaml`**. Y a **actualizar el comentario de `:174-178`**, que ya va dos ticks
         por detrás (M10).
 - [x] **T4 — DEC-5 · #526: hacer que la señal exista** (resuelta: umbral 1, sin contador)
@@ -380,6 +383,59 @@ y `ReconcileSubjectErasuresHandler:16` ya razonan lo mismo palabra por palabra �
 dispararse en producción no es una alarma»*— y `ReconcileSubjectErasuresHandlerTest` la pina en un test
 llamado `itAlarmsAtErrorLevelSoProductionDoesNotDiscardIt`. Lo que ninguno de los dos tiene es el rojo de
 llegada: los tres pinan **lo que la fuente llama**, nunca si Monolog lo conserva.
+
+---
+
+## T3 — resultado medido
+
+**La advertencia más ruidosa del traspaso no aplicaba, y comprobarlo la desactivó entera.** Decía que un
+`#[AsSchedule]` nuevo obliga a cablear su transporte en los dos compose «o sale muerto». No hace falta ninguno:
+el tick cuelga de la schedule `maintenance` que ya existe, cuyo `scheduler_maintenance` ya está consumido —y
+en el servicio correcto de cada fichero, `messenger_worker` en dev y `scheduler_worker` en prod—. El gate de
+consumo sigue verde por construcción, no por vigilancia. Lo que sí estaba rancio es el comentario de
+`compose.prod.yaml:174-178`: no listaba `ReportDeadLetterBacklogMessage`, que lleva ahí desde antes.
+
+**El detalle que ningún test sobre `failed` puede ver.** `async` y `failed` son **una sola tabla**
+(`messenger_messages`) distinguidas por `queue_name` — los dos DSN son `doctrine://default?queue_name=…` y sólo
+una migración crea tabla de Messenger. Un `DELETE` sin ese predicado no poda una carta muerta antes de tiempo:
+**borra trabajo en vuelo**, y nada aguas abajo denuncia la ausencia. De ahí que el predicado tenga dos
+guardianes — una fila `async` de la misma edad que debe sobrevivir, y un gate que compara la constante contra
+`messenger.yaml`, porque renombrar la cola en el DSN dejaría el pruner casando cero filas para siempre, en
+silencio y en la dirección segura.
+
+**Falsificación: nueve mutaciones, nueve rojos** (tabla abajo). La primera vuelta tuvo **una con cero rojos**
+—ensanchar la ventana a `<=`— porque ninguna fila sembrada caía *exactamente* en el corte; añadida la fila en
+la frontera, roja. Misma familia que las cuatro de T1.
+
+| Mutación | Rojos |
+|---|---|
+| Quitar el predicado `queue_name` | el `async` en vuelo + el gate de alcance |
+| Ensanchar la ventana a `<=` | la fila exactamente en el corte |
+| Quitar `FOR UPDATE` | gate de código + test de plan |
+| Quitar `ORDER BY id` | gate de código + test de plan |
+| Quitar la guarda de tamaño de lote | el unitario |
+| Desprogramar el tick | el test de la schedule |
+| Quitar `->stateful()` | el test del checkpoint |
+| Bajar la retención a 1 día | el test del margen contra la alarma |
+| Quitar el presupuesto de reloj del drenaje | el test del drenaje acotado |
+
+**El plan, medido en vez de supuesto** (100.000 filas, 25 % en `failed`, `ANALYZE` previo, dentro de una
+transacción revertida):
+
+| Correlación `id`/`created_at` | Plan | Filas descartadas por filtro | Tiempo |
+|---|---|---|---|
+| Invertida (pesimista) | `LockRows` sobre `Index Scan` de la PK | 58.196 | 18,2 ms |
+| Real (el más viejo, id más bajo) | `LockRows` sobre `Index Scan` de la PK | 15.000 | 35,2 ms |
+
+`LockRows` queda **encima del recorrido ordenado** en los dos casos, que es la propiedad que el `FOR UPDATE`
+compra. **No hace falta índice ni migración**: el recorrido es por clave primaria y la correlación real lo
+acorta 4×. La premisa es la misma que el pruner de `audit_log` documenta —el `id` sigue al instante de
+llegada— y un backfill la rompería igual.
+
+**Un test que era flaky por construcción, y lo era por mi culpa.** El de plan afirmaba `LockRows` **o** un
+recorrido de la PK sobre los datos que hubiera en la base. Medido: la misma mutación salió **verde** con una
+población y **roja** con otra. Ahora siembra su propia población y hace `ANALYZE` dentro de la transacción que
+revierte — y por eso «quitar `ORDER BY id`» rojea los dos instrumentos de forma estable en vez de uno.
 
 ---
 
@@ -551,6 +607,20 @@ compose de raíz por el bind mount de sólo lectura y **falla en vez de saltar**
 | `make php.quality` | **0** | incluye deptrac, `php.lint.prod-container` y `composer.check.missing-deps` |
 | `make php.test` | **0** | PHPUnit 2869 tests / 11373 aserciones; Behat 439 escenarios / 4132 pasos |
 | `make prod.env.check` | **0/2** | falsificada con seis valores: `(unset)`→0, `3`→0; `10s`, `abc`, `0.5`, `500`→2 |
+
+**T3 — corridas frescas sobre el árbol final, con su exit code impreso:**
+
+| Puerta | Exit | Nota |
+|---|---|---|
+| `make php.stan` | **0** | |
+| `make php.quality` | **0** | |
+| `make php.test` | **0** | PHPUnit 2881 tests / 11431 aserciones; Behat 439 escenarios / 4132 pasos |
+
+El delta contra `main` (2869 / 11373) son los **12 tests nuevos** de T3. `PHPUnit Notices` sigue en **2**, los
+dos preexistentes: los dos que mis dobles añadieron al principio se fueron al pasar de `createMock` a
+`createStub`, que es lo que ya hacía el test hermano del pruner de auditoría — un `createMock` sin
+expectativas emite *notice* en PHPUnit 13 y ninguna puerta lo convierte en rojo. `pwa.*` no se corre: cero
+ficheros de `pwa/`.
 
 El delta de PHPUnit contra el arranque de la sesión (2855) son exactamente los **14 tests nuevos**: 11 en el
 unitario y 3 en el funcional de cableado.
@@ -750,6 +820,91 @@ RFC 9457, y aquí la respuesta sigue siendo 2xx — la excepción nunca llega a 
 
 ---
 
+## Pase adversarial (código) — T3
+
+Ejecutado **antes de `gh pr create`**, por tres lectores independientes en sólo lectura con lentes distintas
+—la sentencia y lo que puede destruir, prosa contra árbol, y si la decisión misma se sostiene—, cada uno
+instruido a refutar. **Once hallazgos: tres GRAVE, cinco MEDIA, tres LEVE. Todos aplicados o declarados.**
+
+**GRAVE · El argumento de seguridad descansaba en una alarma que no lee nadie.** «La alarma habrá sonado 29
+días antes» sólo vale lo que valga su alcance, y por D3 ese alcance es **una línea en el stderr del
+contenedor**: el puente Monolog→Sentry sigue desconectado, ningún compose declara driver de logging, y nada
+raspa `messenger:failed:status`. El margen protege contra que el pruner **enmascare** un backlog; no lo
+entrega a nadie. Escrito así en el ADR en vez de dejar que el test del margen lo insinúe.
+
+**GRAVE · El SLA de triage que el issue pedía no lo respondía nada.** #525 tiene tres preguntas y la tercera
+—cadencia de triage— no estaba contestada ni aquí ni en el runbook. Resuelta sin inventar un número segundo
+que mantener sincronizado: **la ventana ES el plazo**. Un fallo que nadie miró en 30 días se borra.
+
+**GRAVE · Lo que la poda destruye no lo cubre `event_store`.** El evento de dominio sobrevive —se anexa antes
+del dispatch, atómico con la escritura del agregado—. El **contexto del fallo** no: clase y mensaje de la
+excepción, número de reintentos y el sello de redelivery viven **sólo** en `messenger_messages.headers` y se
+van con la fila. La poda conserva el *qué* y tira el *porqué*. Declarado en el docblock y en el ADR.
+
+**MEDIA · El drenaje no tenía cota de reloj, y esta clase es justo la que la necesita.** El pruner de
+`audit_log` no la lleva porque esa tabla **siempre** se podó: su barrido se encuentra un día de llegadas. Éste
+llega a una cola que nada acotó nunca, así que su **primera** ejecución se enfrenta al historial entero
+sosteniendo el advisory lock — y `messenger:consume --time-limit` no interrumpe un handler ya en vuelo, así
+que bloquearía al scheduler de una réplica con todos los demás ticks detrás. Añadido un presupuesto de reloj
+(300 s por defecto), monótono a propósito, con su rojo.
+
+**MEDIA · El test de plan era flaky por construcción** — ver *T3 — resultado medido*. Corregido sembrando su
+propia población.
+
+**MEDIA · Las líneas `info` del pruner no las lee producción**, exactamente por lo que T4 acaba de medir. No
+se suben de nivel: un salto por lock no es un error. Se declara que son diagnóstico de desarrollo, y que lo
+que reporta un pruner parado no es una línea sino **el propio backlog**, que la alarma de al lado denuncia a
+`error` cada hora.
+
+**MEDIA ×2 · Huecos de documentación con precedente explícito.** La sección de dead-letter de
+`architecture-api.md` documenta la retención de sus hermanas (`handled_domain_event`, `iam_session`) y no
+sabía de ésta; el catálogo de gates de `claude-code-quickref.md` describe el par gate-de-código +
+test-de-plan del pruner de auditoría por su nombre y no el gemelo que esta PR añade; y el `CLAUDE.md` raíz
+tiene una bala **«Deleting from `audit_log`»** sin hermana. Los cuatro rellenados. Añadida además la fila que
+faltaba en la tabla de conformidad de `maintenance-job-execution-contract.md`, que es *evidencia* y estaba
+incompleta.
+
+**LEVE ×3, declarados y no arreglados.** (1) Ningún `messenger:consume` consume `failed` hoy, así que la
+contención con el consumidor del transporte —`FOR UPDATE SKIP LOCKED` contra el nuestro— **no es alcanzable**;
+verificado además que **no hay deadlock posible**, porque cada sentencia de bloqueo de ambos lados es
+autocommit y no se forma espera cíclica. (2) Un mensaje que falla, se reintenta y vuelve a fallar Symfony lo
+**borra** en vez de reencolarlo (guarda de auto-bucle en `SendFailedMessageToFailureTransportListener` +
+`reject()`), así que `created_at` mide siempre la entrada a `failed` y la ventana significa lo que dice; es
+comportamiento preexistente del framework, digno de un issue propio. (3) La colisión de nombres de advisory
+lock con dos nombres es 1/2³² ≈ 2,3·10⁻¹⁰ — el gatillo del retrofit a `hashtextextended` queda *tirado de
+verdad*, no hipotético.
+
+**Lo que el pase argumentó y NO se aceptó:** subir la ventana a 90 días para igualar el tramo `activity` de
+`audit_log`. Ese tramo sirve a un rastro que alguien puede querer reconstruir; una carta muerta es un elemento
+de trabajo, y uno que nadie reclamó en un mes no se reclama en tres. DEC-4 decidió 30 y el argumento del
+revisor no lo mueve — pero queda escrito, con su alternativa descartada, en el ADR.
+
+---
+
+## Revisión de seguridad — T3
+
+Recorrida la checklist del `CLAUDE.md` raíz. **No aplican por construcción:** authn/authz (no hay controller
+ni ruta), validación de entrada (el único parámetro es un `DateTimeImmutable` que el handler deriva de una
+constante), mass assignment, codificación de salida, CORS/CSRF/Mercure, y todo el bloque de `pwa/` (cero
+ficheros).
+
+- **Inyección.** La sentencia es una sola cadena constante con tres parámetros ligados (`:queue`,
+  `:threshold`, `:batch`), tipados. Cero interpolación. El gate de código refuerza que no haya una segunda.
+- **Migraciones.** Ninguna: la medición del plan dice que el recorrido por clave primaria basta, así que no se
+  añade índice ni se toca el esquema.
+- **Borrado de datos.** Es la clase entera del cambio y está tratada arriba: el predicado de cola tiene dos
+  guardianes, la ventana tiene su rojo en la frontera, el drenaje tiene cota, y lo que se pierde
+  —contexto del fallo— está declarado en vez de descubierto.
+- **GDPR.** La poda **no** es un camino de borrado y el cambio no debilita la prohibición: once frases del
+  repo afirmaban «`failed` no tiene TTL ni poda» como justificación de esa prohibición y la mitad pasaba a ser
+  falsa; corregidas con una redacción que cierra explícitamente la lectura «total, sólo sobrevive 30 días» —
+  el registro y su gate conservan los dientes, y el propio `FAILURE_PREAMBLE` del gate ahora lo dice.
+- **Secretos.** Nada nuevo se loguea; las dos líneas emiten un conteo.
+
+`PRODUCTION_SECURITY_CHECKLIST.md` **sí** se toca, y no por patrón nuevo: contenía una de las once frases.
+
+---
+
 ## Pase adversarial (medición)
 
 Ejecutado **antes** de abrir la PR, por tres lectores independientes en sólo lectura, uno por grupo, cada uno
@@ -930,3 +1085,232 @@ contaminó la primera medición y las dos dieron el mismo mensaje; una a una dan
 El segundo es el que prueba que el nuevo instrumento lee el nivel de los **bytes** que Monolog escribió, no de
 un doble. La mutación del canal dispara además la aserción de no-activación del buffer; el orden hace que
 reporte primero la de llegada.
+
+---
+
+---
+
+## Review Findings — bmad-code-review (2026-08-15) · T2 / PR #728
+
+Tres capas en paralelo, sólo lectura, sobre el árbol final. Lo que sobrevive al pase adversarial propio de T2.
+
+- [x] [Review][Patch] **Un `BACKUP_DIR` que sea enlace simbólico deja la retención muda para siempre** — `find`
+      por defecto es `-P` y NO desciende un enlace pasado como punto de partida; `cd … && pwd` es lógico y no lo
+      normaliza. **Medido: 1 coincidencia por la ruta real, 0 por el enlace; `pwd -P` lo arregla.** Mover los
+      backups a otro disco es la maniobra de operación más normal que hay, y el fallo aparece días después como
+      «los backups han dejado de correr». Alcanza también a `list_stamps()`.
+      [scripts/deploy/backup-prod.sh:53]
+- [x] [Review][Patch] **El bloque publicado borra antes de que el operador pueda leer lo que se le dice que
+      lea** — `ls` y `find … -delete` son dos comandos sin encadenar dentro de un mismo bloque: pegarlo entero
+      ejecuta el borrado en la misma pulsación, y un `ls` que falle no lo detiene. [docs/vps-deployment.md:231]
+- [x] [Review][Patch] **Se retira la única expiración automática de archivos que llevan la MISMA PII que el
+      dump** (`b0dce6ef` lo dice en su propio comentario), y la revisión de seguridad de T2 tomó «borra menos»
+      como seguro. Para un control de retención sobre datos personales, borrar menos es la dirección de fallo.
+      [scripts/deploy/backup-prod.sh:95]
+- [x] [Review][Patch] **El barrido «one-off» no puede barrer los archivos que más probablemente están ahí** —
+      filtra por `-mtime +N`, y los que existen al desplegar son justo los de los últimos días. El operador lo
+      corre, no borra nada, y no vuelve. [docs/vps-deployment.md:234]
+- [x] [Review][Patch] **Los `:-` del bloque hacen lo contrario de lo que su propio párrafo ordena** — «toma los
+      dos knobs de tu línea de cron» no lo puede imponer la prosa; sin variables puestas, los defaults se
+      aplican en silencio. [docs/vps-deployment.md:232]
+- [x] [Review][Patch] **`find … -delete` no imprime nada**, así que «no barrió nada» y «barrió doce» se ven
+      igual — es el multiplicador que vuelve infalsificables los demás no-ops. [docs/vps-deployment.md:234]
+- [x] [Review][Patch] **La sustitución de procesos descarta el exit status de `find`**, y un salto de línea en
+      un nombre parte la ruta y hace que `rm` dispare relativo a `$REPO_ROOT`. [scripts/deploy/backup-prod.sh:92]
+- [x] [Review][Patch] **El conteo de bytes: producido DESPUÉS del borrado que podría haber gateado, emitido por
+      `log_success` con color ANSI incondicional (menos greppable que el `ls -lh` al que venía a superar), y
+      `$(wc -c)` bajo `set -e` puede abortar la ejecución tras un dump bueno y ANTES del sync offsite.
+      **Medido: exit 1.** [scripts/deploy/backup-prod.sh:101]
+- [x] [Review][Patch] **`RETENTION_DAYS=0` en el bloque publicado** — valor que el propio script acepta, y
+      `-mtime +0` se lleva el archivo emparejado con el dump de ayer. [docs/vps-deployment.md:235]
+- [x] [Review][Patch] **Le dije al autor de #256 que una frase suya era falsa, y era cierta cuando la
+      escribió** — la guarda de volumen-existe SÍ existía (`b0dce6ef:lib/common.sh:36-40`, `docker volume
+      inspect`) y la borró #557. M5 del propio artefacto lo dice; mis líneas nuevas lo contradicen. **Verificado
+      con `git show`.** Hay que corregir el issue otra vez y reconciliar el artefacto.
+- [x] [Review][Patch] **Nada avisa de que hay huérfanos** — el diseño pasa a depender de que alguien lea el
+      runbook. `backup-prod.sh` ya recorre el directorio; falta la mitad detectiva que el repo aplica en otros
+      ejes. [scripts/deploy/backup-prod.sh:92]
+- [x] [Review][Patch] **La retención sigue borrando en silencio**, en el mismo bloque que este cambio edita
+      para observabilidad. [scripts/deploy/backup-prod.sh:94]
+- [x] [Review][Patch] **`[x] #255 cerrado con evidencia` se afirma en pasado** cuando `Closes #255` sólo dispara
+      al mergear — el mismo patrón «decisión resuelta ≠ código enviado» que este commit corrige para T4 y no
+      aplica a T2. Y el comentario del sprint fija estado transitorio de PRs que nada actualizará.
+- [x] [Review][Patch] **Dos encabezados `##` quedaron dentro de la lista de *Alcance***, así que T3–T8 cuelgan
+      de «Revisión de seguridad — T2»; y el `###` de T2 va pegado a la última viñeta sin línea en blanco.
+- [x] [Review][Patch] **El conteo de bytes no tiene viñeta en el checklist de T2**, y la sección *Gates* nunca
+      dice «no se corrieron, y por qué» — lo importante está bien (no reclama verde falso), falta la frase.
+- [x] [Review][Patch] **Prosa de T1 en pie y citas desplazadas por mi propio diff** — «No entra en este PR: T2…»
+      sigue ahí, la *File List* no lista ningún fichero de T2, y las tres citas `restore-prod.sh:89-92` pasaron
+      a `:90-93` al bajar el comentario de lectura completa.
+- [x] [Review][Patch] **El banner de sección quedó un bloque por encima de lo que nombra** — efecto colateral
+      de mi propio movimiento boy-scout. [scripts/deploy/restore-prod.sh:89]
+- [x] [Review][Patch] **Cuatro precisiones del runbook**: `ls` falla en un host limpio y no hay nota de permisos
+      (el directorio es 700); el barrido esquiva el `flock` que ambos scripts consideran obligatorio; el párrafo
+      del offsite confunde el archivo con el dump que el barrido no toca; y el glob es más ancho que la forma
+      del stamp. [docs/vps-deployment.md:224-254]
+- [x] [Review][Patch] **Tras el barrido, el aviso de restore que la sección defiende deja de dispararse**, y
+      «Abort now» no tiene punto de aborto en el camino `RESTORE_YES=1`. [scripts/deploy/restore-prod.sh:90-93]
+- [x] [Review][Defer] **Un solo marcador de sprint no puede representar cuatro tareas que salen por separado**
+      — `bmad.status.audit` queda rojo con una prescripción equivocada. El fichero ya tiene el precedente
+      (`br-4b`, `br-4c` con clave propia); partir `br-8` es cambio de la historia, no de esta PR.
+
+**Resultado.** Los diecinueve `patch` aplicados; el `defer` intacto. Dos cambian lo que el PR *significa*, no
+sólo cómo está escrito:
+
+1. **`pwd -P`.** `find` es `-P` por defecto y **no desciende** un enlace simbólico pasado como punto de
+   partida; `cd … && pwd` es lógico y no lo resuelve. Medido: 1 coincidencia por la ruta real, **0** por el
+   enlace. Mover `BACKUP_DIR` a otro disco —la maniobra de operación más común que hay— dejaba la retención
+   muda para siempre, reportando éxito, hasta que el preflight de espacio empezara a abortar backups días
+   después. Es un defecto **preexistente** que mi runbook heredaba; se arregla en los dos scripts.
+2. **La revisión de seguridad estaba invertida.** Decía que «borra menos» es la dirección segura. Para un
+   control de retención sobre datos personales no lo es: el archivo de objetos lleva la misma PII que el dump,
+   así que retirar su única expiración automática no es tranquilidad, es una **obligación de retención que
+   pasa a manos de una persona**. De ahí el aviso en cada ejecución, la sección del runbook que ya no se llama
+   *one-off*, y la entrada **sin marcar** en `PRODUCTION_SECURITY_CHECKLIST.md`, que se cierra cuando el
+   despliegue haya aterrizado y el barrido se haya corrido dos veces.
+
+**Y una corrección que salió del repositorio.** Le dije al autor de #256 que su frase sobre la guarda de
+volumen era falsa. Era **cierta cuando la escribió** (`b0dce6ef:lib/common.sh:36-40`, `docker volume inspect`
+con su propio `exit 1`) y la borró #557. M5 de este mismo documento lo tenía medido veinte líneas más arriba
+del sitio donde escribí lo contrario. El issue lleva ya la corrección de la corrección, con el commit citado.
+
+---
+
+## Review Findings — bmad-code-review (2026-08-15) · T3 / PR #729
+
+Tres capas en paralelo, sólo lectura, sobre el árbol final. Lo que sobrevive al pase adversarial propio de T3.
+
+- [x] [Review][Patch] **`PruneFailedMessagesHandler` y `PruneFailedMessagesMessage` no tienen NI UN test, y
+      `retentionDays` no se valida** — los cuatro hermanos sí los tienen (`PruneHandledDomainEventsHandlerTest`,
+      `…MessageTest`, y sus dos de dead-letter), y el del mensaje afirma literalmente `assertSame(30, …)`. Con
+      `retentionDays = 0` el umbral es *ahora* y la primera ejecución **vacía la cola `failed` entera**; con un
+      negativo, `'-' . -30` da `'--30 days'` y el tick muere cada día para siempre. **Las nueve mutaciones que
+      declaré siguen todas verdes ante cualquiera de las dos.** Es la familia de la siembra vacua, cometida
+      dentro de la historia que existe para denunciarla.
+      [api/src/Shared/Event/Infrastructure/Messenger/Maintenance/PruneFailedMessagesHandler.php:24]
+- [x] [Review][Patch] **El test de plan admite exactamente la mutación que existe para cazar** — la alternativa
+      `messenger_messages_pkey` de la regex casa con el `Index Scan` del **DELETE exterior**, que aparece aunque
+      la subconsulta pierda su `ORDER BY id`; y sembrar 2000 filas no acota lo que la tabla compartida ya tiene.
+      Hay que hacer `EXPLAIN` de la SELECT interna por separado, o afirmar sobre el hijo directo de `LockRows`.
+      [api/tests/Functional/Shared/Event/FailedMessagePrunePlanFunctionalTest.php:50]
+- [x] [Review][Patch] **El comentario de `compose.prod.yaml` SIGUE drifted: falta `PruneRetiredSessionsMessage`**
+      — M10 nombraba DOS ticks ausentes; arreglé uno y añadí el mío. **Verificado: existe en
+      `IdentityMaintenanceSchedule.php:91` y aparece 0 veces en ambos compose.** Es el defecto que la propia
+      historia levantó como acta, cometido otra vez en el commit que venía a corregirlo. [compose.prod.yaml:175]
+- [x] [Review][Patch] **El 30 sólo está acotado por abajo** — el funcional usa su propia constante privada
+      desacoplada de la de producción, y el test del margen sólo exige `> 10 días`. Subir la ventana a 300 deja
+      toda la suite verde. [api/tests/Functional/Shared/Event/FailedMessagePrunerFunctionalTest.php:34]
+- [x] [Review][Patch] **Las dos líneas del pruner son `info` y producción no las lee** — y el control
+      compensatorio que el docblock nombra no sirve: `ReportDeadLetterBacklogHandler` tiene `maxBacklog = 0`, o
+      sea que alarma ante cualquier fila esté la poda viva o muerta, y calla cuando la tabla está vacía. No
+      distingue «poda rota» de «hay fallos». Mismo canal `observability` que #727.
+      [api/src/Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php:111]
+- [x] [Review][Patch] **La premisa de seguridad del docblock es fácticamente falsa** — «both DSNs are
+      `doctrine://default?queue_name=…`»: el de `async` es `%env(MESSENGER_TRANSPORT_DSN)%` y su `queue_name`
+      vive en `options:`. El gate de este mismo diff dice lo contrario en su propio docblock.
+      [api/src/Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php:21]
+- [x] [Review][Patch] **El gate fija el nombre de la cola pero no la tabla ni el driver, y resuelve la clave
+      `failed` a mano en vez de leer `failure_transport`** — añadir `&table_name=`, mover el DSN a AMQP/Redis, o
+      repuntar `failure_transport` dejando el bloque viejo, y el pruner casa cero filas para siempre con todos
+      los gates verdes. Literalmente el no-op que el gate se escribió para refutar.
+      [api/tests/Unit/Shared/Architecture/FailedMessagePruneStatementGateTest.php:44]
+- [x] [Review][Patch] **«la alarma no puede ser silenciada por la poda» está sobrevendido** — con
+      `maxBacklog = 0` lo que apaga la alarma es que la poda vacíe la tabla, y a los 30 días la vacía. El margen
+      retrasa el silenciamiento, no lo impide; y la aserción degenera a nada si `maxAgeHours` llega a 0.
+      [docs/architecture-api.md:272]
+- [x] [Review][Patch] **Los funcionales toman el nombre de lock de PRODUCCIÓN sobre la BD compartida de dev**,
+      donde el `messenger_worker` vivo corre ese mismo tick: si lo sostiene, `pruneFailedBefore` devuelve 0 y la
+      aserción falla con un mensaje que no menciona el lock.
+      [api/tests/Functional/Shared/Event/FailedMessagePrunerFunctionalTest.php:214]
+- [x] [Review][Patch] **Los tests emiten `DELETE FROM messenger_messages` SIN predicado de cola** — la forma
+      exacta que el gate declara peligrosa, y el gate no mira `tests/`.
+      [api/tests/Functional/Shared/Event/FailedMessagePrunerFunctionalTest.php:50]
+- [x] [Review][Patch] **La colisión de `hashtext` pasa de hipotética a alcanzable y no se refuta con nada** —
+      dos nombres vivos, mismo worker, lock reentrante en una conexión: una colisión no haría esperar a uno,
+      haría que **ambos creyeran tener exclusividad**. Una aserción de una línea cierra el «despreciable».
+      [api/src/Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php:29]
+- [x] [Review][Patch] **`FOR UPDATE` no excluye a un consumidor que ya reclamó el mensaje** — el transporte
+      commitea de inmediato y libera el lock de fila; el docblock afirma una garantía que el lock no compra.
+      [api/src/Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php:40]
+- [x] [Review][Patch] **El umbral se acuña en el timezone por defecto de PHP contra una columna
+      `TIMESTAMP WITHOUT TIME ZONE` escrita en UTC** — hoy coincide sólo porque un `.ini` fija `date.timezone`,
+      y nada en este código lo enuncia. El pruner de `audit_log` esquiva la clase entera usando `timestamptz`.
+      [api/src/Shared/Event/Infrastructure/Messenger/Maintenance/PruneFailedMessagesHandler.php:24]
+- [x] [Review][Patch] **El drenaje termina antes de tiempo si un borrador concurrente acorta un lote** — la
+      condición de salida es igualdad con el tamaño de lote, y `FOR UPDATE` garantiza que esa clase de
+      contendiente existe. `$deleted > 0` es estrictamente más seguro y termina por la misma razón.
+      [api/src/Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php:145]
+- [x] [Review][Patch] **Un drenaje truncado por presupuesto es indistinguible de uno completo** — misma línea
+      `info` en los dos casos, y ninguna llega a producción.
+      [api/src/Shared/Event/Infrastructure/Messenger/DbalFailedMessagePruner.php:116]
+- [x] [Review][Patch] **El gate de un-solo-borrador sólo casa el literal** — `TRUNCATE`, `$qb->delete(…)` o
+      `'DELETE FROM ' . self::TABLE` pasan de largo, y su docblock afirma la propiedad sin matizar.
+      [api/tests/Unit/Shared/Architecture/FailedMessagePruneStatementGateTest.php:101]
+- [x] [Review][Patch] **Las dos guías que un operador lee para saber qué hace el `scheduler_worker` no mencionan
+      el nuevo trabajo** — el comentario del compose sí se actualizó, así que la omisión es asimétrica.
+      [docs/deployment-guide.md:32]
+- [x] [Review][Defer] **No hay índice para `(queue_name, created_at)`** — medido: a 100k filas el plan es
+      `LockRows` sobre recorrido de la PK, 18/35 ms por lote en las dos correlaciones, así que no hace falta
+      hoy. Queda anotado como el disparador a vigilar si la cola crece un orden de magnitud.
+
+**Resultado.** Los diecisiete `patch` aplicados; el `defer` (el índice) intacto, con su medición al lado. Tres
+merecen constar porque cambian lo que el PR garantiza:
+
+1. **El handler no tenía testigo, y el peor valor era el más plausible.** `retentionDays = 0` pone el umbral en
+   *ahora* y la primera ejecución vacía la cola entera; un negativo construye `'--30 days'` y mata el tick cada
+   día. Las nueve mutaciones declaradas seguían verdes ante las dos. Ahora hay guarda en el mensaje (suelo de 2
+   días, atado al umbral de la alarma), un test del mensaje que pina el 30 como hace su hermano, y un test del
+   handler sobre el único paso que nada cubría: convertir días en instante. Con UTC explícito, porque la
+   coincidencia de zona horaria descansaba en un `php.ini` que este código no nombra.
+2. **El test de plan admitía la mutación que existe para cazar.** La alternativa `messenger_messages_pkey`
+   casaba con el `Index Scan` del **DELETE exterior**, presente aunque la subconsulta perdiera su `ORDER BY`.
+   Ahora se hace `EXPLAIN` de la SELECT interna **por separado**, extraída del propio statement emitido.
+3. **El drenaje terminaba antes de tiempo por diseño.** Salir con `=== batchSize` lee un lote acortado por un
+   borrador concurrente como «no queda nada» — y `FOR UPDATE` es justo la cláusula que garantiza que ese
+   contendiente existe. Sale con un lote vacío, y un drenaje truncado por presupuesto ya no se confunde con uno
+   completo: dice `warning` con lo que lleva y avisa de que queda trabajo.
+
+**Y el defecto que la historia levantó como acta, cometido por segunda vez dentro de ella:** el comentario de
+`compose.prod.yaml` seguía sin `PruneRetiredSessionsMessage`. M10 nombraba **dos** ticks ausentes; arreglé uno
+y añadí el mío. Ahora están los nueve, y el comentario dice en su última línea que nada recomputa esa lista y
+que ha derivado dos veces — porque el gate razona por nombre de schedule y un tick ausente le es invisible.
+
+**Las líneas del pruner pasan al canal `observability`**, por la misma medición que movió las de T4: en el canal
+por defecto un `info` se descarta y un `error` activa el buffer. Y se corrige la afirmación de que «la alarma no
+puede ser silenciada por la poda»: con `maxBacklog = 0` lo que la calla es que la tabla se vacíe, y a los 30
+días se vacía. El margen **retrasa** el silencio, no lo impide.
+
+**El barrido de mutaciones, re-medido sobre el árbol enviado: trece mutaciones, trece rojos.** Cuatro son
+nuevas y existen porque la revisión las pidió (suelo de retención, umbral al futuro, zona horaria, y salir con
+lote corto). La de «salir con lote corto» salió **con cero rojos** en la primera vuelta — había arreglado el
+defecto sin ponerle testigo, que es la misma familia que este lote persigue — y ahora lo tiene: un `Connection`
+de doble que devuelve `[2, 1, 3, 0]` con lote 2, donde la condición vieja para en 3 y la nueva llega a 6.
+
+**Puertas finales:** `php.stan` **0**, `php.quality` **0**, `php.test` **0** (PHPUnit 2891 / 11468; Behat
+439 / 4132). Contra `main` (2869 / 11373) son 22 tests nuevos.
+
+---
+
+## Incidente de merge — el squash de #728 se comió su propia sección de hallazgos
+
+Medido al rebasar #729 sobre `main` tras mergear #727 y #728.
+
+**Los cuatro ficheros de código de #728 llegaron byte a byte** (`scripts/deploy/backup-prod.sh`,
+`restore-prod.sh`, `docs/vps-deployment.md`, `PRODUCTION_SECURITY_CHECKLIST.md` — comparados con `cmp` contra
+`eb93b13b`). Lo que no llegó es su `## Review Findings … T2 / PR #728`: **20 bullets, cero en `main`**. El
+artefacto de `main` tenía 14, que son exactamente los de #727.
+
+**Por qué.** Las tres PRs parten del mismo commit y **las tres añaden una sección al FINAL del mismo fichero**.
+#727 mergeó primero; el squash de #728 aplicó su diff contra una cola de fichero que ya había cambiado y
+resolvió quedándose con un lado. GitHub no reportó conflicto, la PR aparece `MERGED`, y nada avisó — que es
+justo la forma del fallo que este lote lleva toda la sesión persiguiendo: *un PR mergeado tiene el mismo
+aspecto haya llegado tu trabajo o no*.
+
+**Cómo se detectó.** No por una alarma: por contar. `grep -c '\[Review\]'` sobre `main` daba 14 donde la suma
+esperada era 34. La sección se restaura aquí, desde `eb93b13b`, porque #729 es la única PR abierta que ya toca
+ese fichero.
+
+**La lección para el resto del lote.** Cuando varias PRs de un lote escriben en el mismo artefacto, el mergeo
+no es una operación sin pérdida y el instrumento para comprobarlo es **contar en `main`**, no mirar el estado
+de la PR. Con T5/T6/T8 y la PR de los hermanos aún por venir sobre este mismo fichero, se cuenta después de
+cada merge.

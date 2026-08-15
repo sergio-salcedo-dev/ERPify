@@ -694,8 +694,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       it closes when the deploy has landed and the sweep has been run twice, `RETENTION_DAYS + 1` days
       apart.**
 - [x] **GDPR erasure is not defeated by the Messenger transport tables** — closed for the one event that
-      reached them. `messenger_messages` and the `failed` queue have neither TTL nor prune and no erasure
-      path touches them, so a queued message naming a person outlives that person's erasure. The rule is
+      reached them. No erasure path touches `messenger_messages`: the `async` queue has neither TTL nor
+      prune, and the `failed` queue is swept only by a 30-day retention window, so a queued message naming
+      a person still outlives that person's erasure. The rule is
       now declarative: an "aggregate id alone" payload may ride a persisted transport only if the aggregate
       is not a natural person. Classification lives in `api/.persistent-transport-policy`, enforced by
       `make php.lint.persistent-transport`, which resolves each routing key to the events Messenger would
