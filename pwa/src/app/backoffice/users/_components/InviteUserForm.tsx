@@ -8,6 +8,7 @@ import { InviteUser } from "@/context/backoffice/user/application/InviteUser";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { SharedProblemType } from "@/context/shared/error/domain/SharedProblemType";
 import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
   InviteUserSchema,
@@ -28,6 +29,14 @@ import { userRoutes } from "../_lib/userRoutes";
 
 const INVITE_FIELD_NAMES = ["email", "roles"] as const;
 type InviteFieldName = (typeof INVITE_FIELD_NAMES)[number];
+
+/**
+ * A lost uniqueness race carries no `violations` — the API cannot ask which value collided once the
+ * failed commit closed its unit of work — so the field-level wording is the client's to write. It says
+ * "again" rather than "already in use" because the two outcomes differ: the address was free when this
+ * request was checked, and a resubmit is what tells the user which of the two it really is.
+ */
+const EMAIL_TAKEN_IN_FLIGHT = "That email was just taken by another request. Try sending it again.";
 
 function isInviteFieldName(value: string): value is InviteFieldName {
   return (INVITE_FIELD_NAMES as readonly string[]).includes(value);
@@ -75,6 +84,17 @@ export function InviteUserForm() {
   });
 
   const handleHttpError = (err: HttpError) => {
+    // The conflict is the one failure whose remedy is a plain resubmit, so it earns both surfaces:
+    // the field, because the address is what collided, and the persistent surface, which is where
+    // the retry action lives.
+    if (
+      err.problem.status === HttpStatus.CONFLICT &&
+      err.problem.type === SharedProblemType.CONCURRENT_UNIQUE_WRITE
+    ) {
+      setError("email", { type: "server", message: EMAIL_TAKEN_IN_FLIGHT });
+      setProblem(err.problem);
+      return;
+    }
     if (err.problem.status !== HttpStatus.UNPROCESSABLE_ENTITY || !err.problem.violations) {
       setProblem(err.problem);
       return;
@@ -113,6 +133,28 @@ export function InviteUserForm() {
     }
   });
 
+  // Typed recovery in the persistent error surface, keyed off the problem type. Only the lost race
+  // has an action the user can take from here; every other type carries none, so the surface stays
+  // an explanation rather than offering a button that cannot help.
+  const recoveryAction =
+    problem?.type === SharedProblemType.CONCURRENT_UNIQUE_WRITE ? (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={isSubmitting}
+        onClick={() => {
+          // Fire-and-forget: the submit handler resolves every outcome internally.
+          onSubmit();
+        }}
+        aria-label="Try again"
+        title="Send the invitation again"
+        data-testid="invite-user-form__conflict-retry"
+      >
+        Try again
+      </Button>
+    ) : undefined;
+
   return (
     <form
       onSubmit={onSubmit}
@@ -125,6 +167,7 @@ export function InviteUserForm() {
         <MutationError
           problem={problem}
           onDismiss={() => setProblem(null)}
+          action={recoveryAction}
           testId="invite-user-form__mutation-error"
         />
       ) : null}
