@@ -86,10 +86,9 @@ final class SymfonyAuditLoggerTest extends TestCase
 
         $this->assertCount(1, $recordingLogger->records, 'the gap is recorded, never silent');
         $record = $recordingLogger->records[0];
-        // Prod routes Monolog through `fingers_crossed` with `action_level: error`
-        // (config/packages/monolog.yaml), which buffers anything lower and discards it when no error follows —
-        // and nothing on an audited path does, since `activity` is captured on successful reads. Below `error`
-        // the line is unreachable in the only environment where it would matter.
+        // A lost audit row is an integrity defect rather than a metric, so the report is an error. What
+        // decides whether it SURVIVES is the channel, not this level — see the class docblock; the arrival
+        // test is what pins that half, against the files Monolog actually wrote.
         $this->assertSame('error', $record['level']);
         $this->assertSame(
             ['action' => 'BANK_ACCOUNTS_VIEWED', 'level' => 'activity', 'exception' => $failure],
@@ -114,7 +113,7 @@ final class SymfonyAuditLoggerTest extends TestCase
         $this->assertSame(
             [],
             $recordingLogger->records,
-            'a security failure propagates; it is not downgraded to a warning',
+            'a security failure propagates; it is never downgraded to a log line',
         );
     }
 

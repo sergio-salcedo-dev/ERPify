@@ -152,7 +152,8 @@ un oráculo de re-identificación, estrictamente más débil que el HMAC→UUID 
 
 **La justificación de D3 no se sostiene.** D3 justificaba la cola con «libera el request path de IO de auditoría» y
 «latencia p95». Pero el transporte es `doctrine://default` —la cola `audit` es una tabla Postgres en la **misma base y
-conexión** que `audit_log`—, y la captura de `activity` corre en `kernel.terminate`, **después** de enviar la respuesta.
+conexión** que `audit_log`—, y la captura genérica de `activity` corre en `kernel.terminate`, **después** de enviar la respuesta (un
+módulo que nombra su propia acción escribe en plena petición).
 Medido (microbenchmark de una conexión + pgbench bajo carga concurrente, tablas scratch de DDL idéntico): el `INSERT`
 directo no añade latencia visible al cliente (post-terminate), y bajo carga los dos caminos son **indistinguibles** en
 throughput/latencia (el coste de commit/fsync domina y es idéntico). La vía async hacía **~3,2x el trabajo total de BD**

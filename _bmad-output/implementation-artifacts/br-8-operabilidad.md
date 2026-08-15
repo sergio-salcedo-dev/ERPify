@@ -157,11 +157,22 @@ umbrales en el mensaje: allí el backlog tolerable es un juicio operativo, aquí
 bajo `fingers_crossed` un umbral de N no de-ruida las N−1 primeras: **las silencia**, porque hoy ninguna es
 visible.
 
-**Coste aceptado y declarado:** subir el nivel abre el buffer, así que la línea arrastra hasta 50 registros
-`debug` —consultas Doctrine incluidas— por ocurrencia, lo que **aumenta** la exposición del residuo M13 en vez
-de reducirla. Se acepta a cambio de que la señal exista. Si esa forma resulta operativamente inaceptable, la
-palanca es la arquitectura de logging y ya está en el repo —el canal `observability` es un stream always-on
-excluido del `fingers_crossed` por este mismo motivo—, **no** una tabla contadora.
+**El coste que se aceptó aquí resultó impagable, y la revisión de código lo midió.** Subir el nivel abre el
+buffer, y abrir el buffer no emite sólo lo nuestro: `handleBatch` vuelca **todos** los registros que la
+petición había acumulado, incluido el `debug` de `ContextListener` con `['username' => getUserIdentifier()]`,
+que en esta aplicación **es la dirección de correo de la persona**. Reportar una fila de auditoría perdida
+volcando un email a un sumidero sin rotación, sin TTL y sin dueño declarado de su borrado cambia un defecto de
+integridad por otro peor; `RedactionDenylist` no puede intervenir, porque filtra por clave y la clave es de un
+registro de vendor. Verificado en los cuatro eslabones (`ContextListener:241,248`, `SecurityUser:33`, firewall
+`main` sin `stateless`).
+
+**La palanca que esta misma sección nombraba como plan B es la solución.** El canal `observability` es el
+stream always-on que el repo construyó para exactamente esta forma —una línea que debe llegar en una respuesta
+con éxito— y `monolog.yaml` lo excluye del `fingers_crossed` por su nombre. La línea llega a producción **sin
+abrir buffer**: una línea, sin flush, sin amplificación durante la caída que reporta. `error` se mantiene
+porque una fila perdida es un defecto de integridad, pero en este canal el nivel ya no decide si la línea
+sobrevive — y esa es la propiedad que interesa, porque el nivel es un token que cualquiera mueve y el canal
+está en configuración que un gate puede leer.
 
 ---
 
@@ -297,9 +308,11 @@ Los dos siguientes los encontró T7, y el tercero es de la misma familia que los
         para que diga *por qué* el nivel es `error`. Los que sí lo nombraban y no estaban en la lista son
         tres del ADR (`audit-activity-log.md`, D3.1) — el cuarto, `:101`, **no se toca**: cae dentro del
         bloque de D3 marcado como registro histórico en `:87`.
-  - [x] **No reenviar el mensaje del `Throwable` sin acotarlo** (M13), y declarar que subir el nivel
-        **aumenta** su exposición: la línea ahora sí se escribe, y arrastra hasta 50 registros del buffer.
-        Declarado en el docblock; el `Throwable` sigue viajando entero porque el guardián de `:92` lo pina.
+  - [x] **No reenviar el mensaje del `Throwable` sin acotarlo** (M13). El `Throwable` sigue viajando entero
+        porque el guardián del array de contexto lo pina. Lo que **no** ocurre ya es el arrastre del buffer:
+        la revisión de código midió que ese arrastre volcaba el email del usuario, y la línea se movió al
+        canal `observability`, que no abre buffer. La exposición del residuo M13 queda en el mensaje del
+        `Throwable` y en nada más.
   - [x] Deja de ser espejo de `ReportDeadLetterBacklogHandler`: aquel cuenta filas que **existen**, aquí el
         fallo es que la fila **no se escribió**. Ese es el motivo de que no haya contador.
 - [ ] **T5 — DEC-3 · #261**: implementar Option B, o cerrar `wontfix` con el argumento de `compose.prod.yaml:180-186`.
@@ -564,8 +577,10 @@ HTTP; sólo `Bank` y `BankAccount` son `AuditedEntity`, así que los `flush()` d
 writer; y una escritura `security` en el doble **propagaría** antes de tomar el offset). El rojo medido con
 `--filter` reproduce en la suite completa.
 
-**Un agujero declarado, no tapado:** subir el nivel a `critical` dejaría el test de llegada **verde**. Lo caza
-el unitario (`assertSame('error', …)`). Ninguno de los dos basta solo, y el docblock del test lo dice.
+**Ese agujero ya no existe:** el test de llegada lee el nivel de los **bytes** que Monolog escribió
+(`"level_name":"ERROR"` en el JSON del handler de test), no de un doble, así que una degradación a `warning` o
+una promoción a `critical` rojean ahí mismo. Medido: con `warning` el registro **llega** —es un handler
+always-on— y falla la aserción de nivel; con el canal por defecto no llega y falla la de llegada.
 
 ---
 
@@ -705,3 +720,72 @@ Todas las sondas son desechables, viven en el `tmp/` gitignoreado y **no entran 
   `assertSame` del array de contexto queda intacto
 - `api/tests/Unit/Shared/Audit/Infrastructure/Double/RecordingLogger.php` — docblock, boy scout
 - `docs/architecture-api.md`, `docs/adr/audit-activity-log.md` (D3.1, tres frases) — el nivel y su porqué
+
+---
+
+## Review Findings — bmad-code-review (2026-08-15) · T4 / PR #727
+
+Tres capas (*Blind Hunter*, *Edge Case Hunter*, *Acceptance Auditor*) en paralelo, sólo lectura. El pase
+adversarial propio de T4 ya había corrido; esto es lo que **sobrevive** a ese pase.
+
+- [x] [Review][Patch] **La activación del buffer vuelca el email del sujeto a stderr** — subir a `error` activa
+      `fingers_crossed`, y `handleBatch` emite los ≤50 registros de OTROS componentes: `ContextListener:248`
+      loguea a `debug` `['username' => getUserIdentifier()]`, y `SecurityUser:33` devuelve `$user->email()`.
+      Firewall `main` sin `stateless`, así que ocurre en cada petición autenticada. `RedactionDenylist` filtra
+      por clave y la clave es `username`, en un registro de vendor. **Medido en los cuatro eslabones.**
+      Decisión de Sergio: enrutar la línea al canal `observability` (always-on, excluido del `fingers_crossed`),
+      que llega sin abrir el buffer. [api/src/Shared/Audit/Infrastructure/SymfonyAuditLogger.php:114]
+- [x] [Review][Patch] **La premisa refutada sobrevive en la línea que este mismo diff edita** — «`activity`
+      capture runs on `kernel.terminate`» sigue ahí; sólo cambié el paréntesis del nivel. También en
+      `AuditLogWriter.php:11` y en `audit-activity-log.md:155` (D3.1, texto vivo). [docs/architecture-api.md:265]
+- [x] [Review][Patch] **El mismo párrafo sigue vendiendo el `warning` tragado como control vivo** del precio de
+      `RecordRecoveryThrottleAuditBestEffort` — cierto sobre ESE sitio, pero afirma como operativa una señal que
+      este PR acaba de probar inalcanzable. [docs/architecture-api.md:265]
+- [x] [Review][Patch] **El reporte puede lanzar desde dentro del `catch`** — un `StreamHandler` hace `fwrite` y
+      lanza; en el camino in-request eso convierte una operación con éxito en 500, que es lo que la frontera
+      existe para impedir. [api/src/Shared/Audit/Infrastructure/SymfonyAuditLogger.php:114]
+- [x] [Review][Patch] **El test no lee el nivel de los bytes que Monolog escribió** — afirmar el nivel sobre un
+      doble no prueba nada, pero afirmarlo en la salida sí, y gratis. Cierra el agujero de `critical`.
+      [api/tests/Functional/Shared/Audit/ActivityAuditWriteFailureArrivalTest.php:87]
+- [x] [Review][Patch] **`filesize()` está cacheado y el offset previo puede ser rancio** — `clearstatcache` se
+      llama antes del segundo `filesize`, no del primero; un offset corto ensancha la ventana leída y hace la
+      aserción de crecimiento MÁS fácil, no más difícil.
+      [api/tests/Functional/Shared/Audit/ActivityAuditWriteFailureArrivalTest.php:63]
+- [x] [Review][Patch] **El doble lanza para TODOS los niveles**, incluidos los dos que propagan por diseño
+      (`security`, y el `change` del listener `onFlush`). Hoy es benigno por dos hechos que el test no afirma.
+      [api/tests/Functional/Shared/Audit/Fixtures/ThrowingAuditLogWriter.php:26]
+- [x] [Review][Patch] **El boceto de Sentry comentado no excluye el canal** que esta línea usa — quien lo
+      descomente pagina ante una pérdida que el ADR declara aceptable. [api/config/packages/monolog.yaml:94-99]
+- [x] [Review][Patch] **La paridad `when@test`/`when@prod` sigue sin gate**, y el propio test lo dice. Con el
+      canal `observability` la dependencia se estrecha, pero no desaparece.
+- [x] [Review][Patch] **`RecordingLogger` describe el nivel delegando en configuración que no puede ver** —
+      «at the level production delivers» es mentira el día que prod se mueva.
+      [api/tests/Unit/Shared/Audit/Infrastructure/Double/RecordingLogger.php:13]
+- [x] [Review][Patch] **`#[CoversClass]` atribuye un test de pila entera a la clase que aquí no puede regresar**
+      — infla cobertura donde ya la había y no atribuye nada a lo que el test protege de verdad.
+      [api/tests/Functional/Shared/Audit/ActivityAuditWriteFailureArrivalTest.php:35]
+- [x] [Review][Patch] **Tres afirmaciones del propio artefacto contradicen el código que envía**: *Mecanismo de
+      DEC-5* y *Alcance* T4 siguen diciendo «50 registros `debug` — consultas Doctrine incluidas», que el pase
+      T4 refutó; y el pase afirma que el docblock del test nombra el caso `critical`, y no lo nombra.
+- [x] [Review][Defer] **Los dos hermanos `warning` de `Iam/Identity`** — decidido por Sergio: PR propia después
+      de T2/T3. [api/src/Iam/Identity/Application/RecordLockoutAuditBestEffort.php:60]
+- [x] [Review][Defer] **La configuración de Monolog restateada en cinco sitios de prosa** — real, pero el ADR
+      es quien debe poseer el *porqué*; se paga junto con el gate de paridad.
+
+**Resultado.** Los doce `patch` aplicados; los dos `defer` intactos. El cambio de mecanismo —de subir el nivel
+a mover el canal— lo decidió Sergio sobre la medición, no sobre una preferencia: la revisión probó que activar
+el buffer vuelca el email del usuario, y el canal `observability` hace llegar la línea sin abrirlo. Puertas
+frescas sobre el árbol final: `php.stan` **0**, `php.quality` **0**, `php.test` **0** (PHPUnit 2874 / 11419;
+Behat 439 / 4132), `PHPUnit Notices` sigue en los 2 preexistentes.
+
+**Los dos rojos del test, medidos por separado y en corridas aisladas** (encadenar mutaciones en un script
+contaminó la primera medición y las dos dieron el mismo mensaje; una a una dan el suyo):
+
+| Mutación | Rojo |
+|---|---|
+| Volver al canal por defecto | «the request appended nothing to search» — no llega al log always-on |
+| Degradar a `warning` | «the arriving record is the error it claims to be» — **llega** y falla el nivel |
+
+El segundo es el que prueba que el nuevo instrumento lee el nivel de los **bytes** que Monolog escribió, no de
+un doble. La mutación del canal dispara además la aserción de no-activación del buffer; el orden hace que
+reporte primero la de llegada.

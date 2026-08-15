@@ -5,34 +5,33 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Shared\Audit;
 
 use Erpify\Shared\Audit\Application\AuditLogWriter;
-use Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use Erpify\Tests\Functional\Shared\Audit\Fixtures\ThrowingAuditLogWriter;
-use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Test;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * The observable this change exists for: a failed `activity` write ARRIVES in the log, rather than being
- * recorded in a line no environment ever writes.
+ * The two halves of the observable this change exists for: a failed `activity` write ARRIVES in a log, and it
+ * arrives WITHOUT activating the buffered handler.
  *
- * A level assertion is deliberately NOT the gate here. `SymfonyAuditLoggerTest` already asserts the level
- * against an injected double, and that assertion was green for as long as the failure was unreportable in
- * production — it can only ever pin what the source calls, never whether Monolog keeps it. What decides that
- * is `config/packages/monolog.yaml`: `main` is `fingers_crossed` with `action_level: error`, which buffers
- * everything below and discards it when no error follows — and nothing on an audited path does, since
- * `activity` is captured on successful reads. This test therefore drives a real authenticated request through
- * the real handler stack and reads the file Monolog wrote.
+ * A level assertion against an injected double is not the gate — `SymfonyAuditLoggerTest` already makes it,
+ * and it was green for as long as the failure was unreportable in production, because it can only pin what
+ * the source calls and never whether Monolog keeps it. What decides that is
+ * `config/packages/monolog.yaml`, so this test drives a real authenticated request through the real handler
+ * stack and reads the files Monolog wrote.
  *
- * Its conclusion transfers to production because `when@test` and `when@prod` agree on the handler `type`, on
- * `action_level: error`, on the nested handler's `debug` level, and on leaving the default `app` channel — the
- * one `SymfonyAuditLogger` resolves — out of their exclusion lists. **That agreement is not gated today**, and
- * the two blocks already diverge on `channels` (`!event` here, `!deprecation` there): touch only `when@prod`
- * and this test stays green while production goes mute again.
+ * The second half is the one with teeth. Making the line arrive by raising it past `action_level` would also
+ * make it flush the whole `fingers_crossed` buffer — every record the request had accumulated, including
+ * `ContextListener`'s `debug` line carrying the authenticated user's email. Asserting that the buffered log
+ * did NOT grow is what pins the difference between "reported" and "reported at the price of a person's
+ * address", and it goes red the moment the line is routed back to a buffered channel at a level that
+ * activates it.
  *
  * @internal
  */
-#[CoversClass(SymfonyAuditLogger::class)]
+#[CoversNothing]
 final class ActivityAuditWriteFailureArrivalTest extends WebTestCase
 {
     use AuthenticatesFunctionalRequests;
@@ -45,7 +44,8 @@ final class ActivityAuditWriteFailureArrivalTest extends WebTestCase
      */
     private const string AUDITED_ROUTE = '/api/v1/me';
 
-    public function testAFailedActivityWriteReachesTheLogInsteadOfBeingBufferedAway(): void
+    #[Test]
+    public function aFailedActivityWriteArrivesWithoutFlushingTheBufferedHandler(): void
     {
         $client = self::createClient();
 
@@ -57,10 +57,16 @@ final class ActivityAuditWriteFailureArrivalTest extends WebTestCase
 
         $this->authenticateClient($client);
 
-        // The suite shares one never-truncated `test.log`, and other tests provoke 5xx that flush the same
-        // handler. Only the tail appended by THIS request can be evidence.
-        $logFile = $this->logFile();
-        $offsetBefore = \is_file($logFile) ? (int) \filesize($logFile) : 0;
+        // The suite shares logs nothing truncates, and other tests provoke 5xx that flush the same handler.
+        // Only the tail each file gained during THIS request can be evidence, and the stat cache has to be
+        // dropped before the offsets are taken as well as after — a stale-short offset widens the window that
+        // is read and makes the growth assertion easier, not harder.
+        $environment = self::getContainer()->getParameter('kernel.environment');
+        $this->assertIsString($environment);
+        $observability = $this->logFile('observability');
+        $buffered = $this->logFile($environment);
+        $observabilityBefore = $this->sizeOf($observability);
+        $bufferedBefore = $this->sizeOf($buffered);
 
         $client->request(Request::METHOD_GET, self::AUDITED_ROUTE);
 
@@ -74,33 +80,52 @@ final class ActivityAuditWriteFailureArrivalTest extends WebTestCase
             'the double actually threw — an arrival claim over a write that never happened proves nothing',
         );
 
-        \clearstatcache(true, $logFile);
-        $this->assertFileExists($logFile, 'the buffer was flushed, so the nested stream handler created its file');
-        $this->assertGreaterThan(
-            $offsetBefore,
-            (int) \filesize($logFile),
-            'the request appended to the log; without growth there is nothing to search',
-        );
-
-        $appended = \file_get_contents($logFile, offset: $offsetBefore);
-        $this->assertIsString($appended);
+        $appended = $this->tailOf($observability, $observabilityBefore);
         $this->assertStringContainsString(
             self::FAILURE_MESSAGE,
             $appended,
-            'the swallowed audit-write failure reached the log this request wrote',
+            'the swallowed audit-write failure reached the always-on log this request wrote',
+        );
+        // Read the level out of the bytes Monolog emitted, not off a double: the test-env observability
+        // handler is JSON-formatted, so the record carries its own level and a demotion cannot hide here.
+        $this->assertStringContainsString(
+            '"level_name":"ERROR"',
+            $appended,
+            'the arriving record is the error it claims to be',
+        );
+
+        $this->assertSame(
+            $bufferedBefore,
+            $this->sizeOf($buffered),
+            'the buffered handler never activated: reporting the loss must not flush a request buffer that '
+            . "holds other components' records, one of which carries the authenticated user's email",
         );
     }
 
-    private function logFile(): string
+    private function logFile(string $name): string
     {
-        $container = self::getContainer();
-
-        $logsDir = $container->getParameter('kernel.logs_dir');
+        $logsDir = self::getContainer()->getParameter('kernel.logs_dir');
         $this->assertIsString($logsDir);
 
-        $environment = $container->getParameter('kernel.environment');
-        $this->assertIsString($environment);
+        return $logsDir . '/' . $name . '.log';
+    }
 
-        return $logsDir . '/' . $environment . '.log';
+    private function sizeOf(string $file): int
+    {
+        \clearstatcache(true, $file);
+
+        return \is_file($file) ? (int) \filesize($file) : 0;
+    }
+
+    private function tailOf(string $file, int $offset): string
+    {
+        \clearstatcache(true, $file);
+        $this->assertFileExists($file, 'nothing wrote the log this assertion reads');
+        $this->assertGreaterThan($offset, (int) \filesize($file), 'the request appended nothing to search');
+
+        $appended = \file_get_contents($file, offset: $offset);
+        $this->assertIsString($appended);
+
+        return $appended;
     }
 }
