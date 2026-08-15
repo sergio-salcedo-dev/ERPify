@@ -42,6 +42,14 @@ Defined in `compose.prod.yaml` on top of the base stack:
 Plus SMTP credentials and the `SERVER_NAME` / `NEXT_PUBLIC_API_BASE_URL`
 origin for the deployment host.
 
+`MAILER_SMTP_TIMEOUT` is optional (compose defaults it to `3` on `php`,
+`messenger_worker` and `scheduler_worker`) but it is validated: `make
+prod.env.check` refuses anything outside `1`–`300` seconds, and anything that
+is not a plain number — `10s` is the spelling that otherwise passes every gate
+and then fails every send. It bounds a single socket operation, not a whole
+send; the arithmetic and the measurement are in
+[docs-info/production-deployment.md](../docs-info/production-deployment.md).
+
 The PWA prod image additionally **requires** `NEXT_PUBLIC_SENTRY_DSN` (the
 `erpify-pwa-prod` project's DSN — Sentry → Settings → Client Keys (DSN)); the
 `pwa` build aborts without it (`compose.prod.yaml` declares it `${VAR:?…}`). It

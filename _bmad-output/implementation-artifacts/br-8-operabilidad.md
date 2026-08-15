@@ -75,21 +75,93 @@ de naturaleza distinta, y **sólo uno es trabajo de escribir código ahora**:
 ## Decisiones que Sergio debe tomar
 
 **Resueltas** (2026-08-15): **DEC-2** → opción 1, el decorador de transporte (T1, hecho). **DEC-4** → 30 días
-con poda automática. **DEC-5** → umbral in-app, que es a donde M14 ya la había colapsado; queda el valor del
-umbral y de dónde sale el contador. **DEC-1** → #255 se cierra con evidencia y se retira lo que quedó a
-medias; **#256 se queda abierto** como tarea de ejecución, no de código. **DEC-3** → **sigue abierta**: #261
-no entra en el lote.
+con poda automática. **DEC-5** → umbral **1** y **sin contador**: `warning` → `error`, nada más. **DEC-1** →
+#255 se cierra con evidencia, se retira de la retención el patrón `objects-*.tar.gz` y **el aviso de
+`restore-prod.sh:92-95` se conserva**; **#256 se queda abierto** como tarea de ejecución, no de código.
+**DEC-3** → **sigue abierta**: #261 no entra en el lote. Las dos últimas en resolverse —la sub-decisión de
+DEC-1 y el mecanismo de DEC-5— se detallan bajo la tabla, porque en ambas la resolución **corrige una
+medición** de este mismo documento.
 
 **Consecuencia para el cierre de la épica:** con #256 y #261 abiertos, este PR **no cierra BR-8**, y el
 criterio de cierre de la épica (barrer el backlog otra vez contra `main`) no se dispara todavía.
 
 | # | Decisión | Lo que la medición aporta |
 |---|---|---|
-| **DEC-1** · #255/#256 | ¿Vuelve el archivado de objetos, o se cierran ambos con evidencia y se retira lo que quedó a medias? | La superficie se retiró deliberadamente (#557) y `restore-prod.sh:92-95` ya lleva el aviso. **Sub-decisión obligatoria**: `backup-prod.sh:90` es el único expirador de los `objects-*.tar.gz` de despliegues reales entre #253 y #557 (M3); borrarlo sin más los inmortaliza. |
+| **DEC-1** · #255/#256 | **Resuelta** — se retira el patrón de la retención, **el aviso de restore se conserva**, #256 sigue abierto. Detalle y corrección de M3: *Sub-decisión de DEC-1*, bajo esta tabla. | La superficie se retiró deliberadamente (#557) y `restore-prod.sh:92-95` ya lleva el aviso. **Sub-decisión obligatoria**: `backup-prod.sh:90` es el único expirador de los `objects-*.tar.gz` de despliegues reales entre #253 y #557 (M3); borrarlo sin más los inmortaliza. |
 | **DEC-2** · #612 | Decorador de transporte (opción 1 del issue) vs `default_socket_timeout` global (opción 2). | El decorador está verificado alcanzable y suficiente **para `smtp`/`smtps`** (M15), y **sólo** para eso (M15b) — la opción 2 no tiene ese punto ciego, a cambio de un radio global. El radio real son seis casos de uso, cuatro seams y **dos** superficies de worker (M9, M9b). |
 | **DEC-3** · #261 | ¿`wontfix` (seguir en Option A) o instalar `symfony/lock`? | `compose.prod.yaml:180-186` ya escribió el argumento a favor de A **después** de abrirse el issue, y el código lo sostiene (ninguna schedule `->lock()`). Son ocho ticks, no uno (M10). Suelo técnico: `symfony/lock >= 7.4` por el `conflict` de messenger (M11). |
 | **DEC-4** · #525 | Ventana de retención de `failed`, borrado automático vs herramienta de operador, y SLA de triage. | `failed` es durable **a propósito**; podarlo cambia el contrato. Es la única tabla hermana sin retención (M12), y el pruner tendría que convivir con una alarma **horaria**. |
-| **DEC-5** · #526 | ~~Regla en Sentry vs chequeo in-app.~~ **La medición la colapsa**: la opción 1 exige revertir una decisión registrada dos veces (M14). Lo que queda por decidir es el **umbral** y de dónde sale el contador. | `ReportDeadLetterBacklogHandler` es el precedente enviado de esta forma exacta, elegido por este mismo motivo. |
+| **DEC-5** · #526 | ~~Regla en Sentry vs chequeo in-app.~~ ~~Queda el **umbral** y de dónde sale el contador.~~ **Resuelta: umbral 1, sin contador** — y la pregunta estaba mal planteada, porque en prod la línea a la que apunta no existe. Detalle: *Mecanismo de DEC-5*, bajo esta tabla. | `ReportDeadLetterBacklogHandler` es el precedente enviado de esta forma exacta, elegido por este mismo motivo. |
+
+### Sub-decisión de DEC-1 · los `objects-*.tar.gz` de legado
+
+**Se retira `-o -name 'objects-*.tar.gz'` de `backup-prod.sh:90`. El aviso de `restore-prod.sh:92-95` se
+conserva**, reformulando sólo su segunda línea y **sin** describir el archivo como obsoleto o retirado: un
+snapshot antiguo puede contenerlo legítimamente, y ésa es exactamente la condición que detecta.
+
+**M3 queda corregida en su premisa.** «`:90` es lo único que los expira, borrarlo los inmortaliza» databa los
+archivos por la fecha de *merge* de #557, no por la de **despliegue**. El productor no es el commit en `main`:
+es el script que corre en el VPS, así que mientras prod ejecute un checkout anterior, `objects-*.tar.gz`
+**se sigue produciendo**. La vida útil restante del patrón es *(fecha de despliegue de #557) + `RETENTION_DAYS`
++ una ejecución de backup* — una fecha que este repositorio no conoce.
+
+**Y la lectura opuesta también estaba incompleta.** Que el aviso sea inalcanzable porque `list_stamps()`
+(`restore-prod.sh:44-47`) enumera sólo `db-*.dump` es cierto **para el ciclo local**, donde dump y archivo
+comparten un `find`, una alternancia y un mtime, y mueren juntos. No es cierto globalmente: `[[ -f ]]` mira el
+directorio, no el historial. Un restore desde un offsite basado en snapshots —`restic`/`borg`, que el runbook
+prescribe como alternativa a un remoto `rclone crypt`— devuelve **ambos** ficheros a `$BACKUP_DIR`, el stamp
+reaparece por su dump, y el aviso puede y debe dispararse.
+
+El principio que separa las dos mitades: **retención y validación de restore tienen ciclos de vida distintos.**
+La primera es autoridad destructiva sobre una forma de nombre que ninguna versión viva del código produce, y su
+fallo es irreversible; el segundo es una lectura defensiva que cuesta cero cuando no aplica e impide un punto
+de recuperación silenciosamente incompleto cuando aplica. Compartir un patrón de nombre no las hace una sola
+cosa.
+
+**Queda una tarea de operación, no de diseño**, y no bloquea el código: si `ls $BACKUP_DIR/objects-*.tar.gz`
+devuelve algo en el host, un barrido único documentado en el cierre de #255. Los tres datos que sólo la máquina
+tiene son ése, el `RETENTION_DAYS` real, y si el offsite es un `sync` (propaga borrados) o snapshots (no los
+propaga hasta un `forget`/`prune` explícito).
+
+### Mecanismo de DEC-5 · umbral 1, y ningún contador
+
+**`warning(` → `error(` en `SymfonyAuditLogger.php:86`. Nada más: ni contador, ni tabla, ni `#[AsSchedule]`,
+ni transporte.**
+
+**El hallazgo que la decide no estaba en ninguna de las dos opciones del issue: en producción esa línea
+`warning` no existe.** `monolog.yaml` `when@prod` declara `main` como `fingers_crossed` con
+`action_level: error` y `buffer_size: 50` sobre un `nested` a nivel `debug`; la escritura de `activity` corre
+en `kernel.terminate` de una respuesta **con éxito**, así que nada eleva el buffer y la línea se descarta. Lo
+dice el comentario del propio fichero (`:8-9`): *«those buffer until a 5xx and discard everything otherwise»*.
+Hoy el fallo es silencioso al 100 % en todos los modos que **no** son caída de BD — que son precisamente
+aquellos para los que se quería la alarma. Subir el nivel no es la alternativa barata al contador: es lo mínimo
+para que exista señal alguna.
+
+**Descartado el contador en pool de caché: no puede funcionar aquí.** El pool `app` es el adaptador de
+filesystem (los demás backends están comentados; cero Redis en los tres compose) y **ningún servicio monta
+volumen sobre `var/cache`** — en dev, `compose.dev.yaml:180` da al worker un `messenger_cache` privado que lo
+sombrea a propósito. El `catch` corre en `php` y cualquier tick correría en `scheduler_worker`: el contador
+leería **cero para siempre, con todos los gates en verde**. Es la clase de fallo que este lote existe para
+denunciar.
+
+**Descartado el contador en Postgres**, que sí sobrevive a lo anterior, por dos razones. Comparte dominio de
+fallo con lo que cuenta. Y, sobre todo: **con umbral 1 no hay nada que agregar**. Una tabla, un puerto, un
+adaptador, un mensaje, un handler y un tick compran agregación para un requisito que la declara innecesaria, y
+su salida sigue siendo una línea a stderr sin alerting — igual que la de una sola palabra. La maquinaria cara
+no compra alarma, compra agregación.
+
+**El umbral es 1 y no es configurable.** Una fila de auditoría perdida es un defecto de integridad del rastro,
+no una métrica con tolerancia; el recuento, si alguna vez hace falta, viaja como *payload* de la línea y no
+como *puerta*. Esto rompe deliberadamente con el precedente `ReportDeadLetterBacklogHandler`, que sí lleva sus
+umbrales en el mensaje: allí el backlog tolerable es un juicio operativo, aquí el número tolerable es cero. Y
+bajo `fingers_crossed` un umbral de N no de-ruida las N−1 primeras: **las silencia**, porque hoy ninguna es
+visible.
+
+**Coste aceptado y declarado:** subir el nivel abre el buffer, así que la línea arrastra hasta 50 registros
+`debug` —consultas Doctrine incluidas— por ocurrencia, lo que **aumenta** la exposición del residuo M13 en vez
+de reducirla. Se acepta a cambio de que la señal exista. Si esa forma resulta operativamente inaceptable, la
+palanca es la arquitectura de logging y ya está en el repo —el canal `observability` es un stream always-on
+excluido del `fingers_crossed` por este mismo motivo—, **no** una tabla contadora.
 
 ---
 
@@ -101,11 +173,24 @@ criterio de cierre de la épica (barrer el backlog otra vez contra `main`) no se
         vía `#[AsDecorator]` y llama a `SocketStream::setTimeout()`. Cableado verificado contra el contenedor
         vivo, no deducido: `debug:container` reporta `container.decorator (id: mailer.transport_factory.smtp,
         inner: …\TimeBoundedSmtpTransportFactory.inner)` y el id original quedó como alias privado del decorador.
-  - [x] **Un solo valor cubre las dos formas de colgarse**, y esto es lo que hace suficiente un único knob:
-        `SocketStream::initialize()` pasa el mismo `$timeout` a `stream_socket_client()` (no acepta) **y** a
-        `stream_set_timeout()` (acepta y calla), que `AbstractStream::readLine():84` convierte en
-        `TransportException`. La segunda es la forma que toma una caída real y la que un timeout de conexión
+  - [x] **Un solo valor cubre las dos formas de colgarse *una operación*:** `SocketStream::initialize()` pasa
+        el mismo `$timeout` a `stream_socket_client()` (no acepta) **y** a `stream_set_timeout()` (acepta y
+        calla), que `AbstractStream::readLine():84` convierte en `TransportException`; también acota el
+        handshake de STARTTLS. La segunda es la forma que toma una caída real y la que un timeout de conexión
         solo no vería.
+  - [x] **No cubre el envío, y esa distinción es el hallazgo GRAVE de T7** — ver *Pase adversarial (código)*.
+        SMTP es una conversación: el coste es *idas y vueltas × la cota*. Por eso el default es **3 s** y no
+        10, y por eso la garantía está reformulada en los cuatro sitios donde se afirmaba de más.
+  - [x] **Rango aceptado 1–300 s, refutado en los dos extremos.** Todo lo que queda fuera **es un número** —
+        ninguna comprobación de tipo lo caza — y cada uno falla peor que no hacer nada. El default se rechaza
+        en el constructor; la opción del DSN cae al default.
+  - [x] **`make prod.env.check` valida la clave antes de arrancar.** La negativa de la app es ruidosa pero
+        **tardía**: los placeholders de env se resuelven en runtime y compilar el contenedor no instancia
+        servicios, así que `lint:container` y `make php.lint.prod-container` salen **0** sobre un valor
+        rechazado. Esta es la mitad que ocurre en el despliegue.
+  - [x] **Test funcional que arranca el kernel.** `MAILER_SMTP_TIMEOUT` aparece en `api/src` **una sola vez**,
+        dentro del string del `#[Autowire]`; el unitario inyecta un float y nunca construye contenedor. Con el
+        nombre mal escrito, PHPUnit/PHPStan/deptrac/`php.lint.prod-container` seguían **verdes**.
   - [x] **Declarar el punto ciego en vez de esconderlo** (M15b): declarado en el docblock de la clase — la cota
         vale para `smtp://`/`smtps://`; un bridge de API o `sendmail://` construye otra factory sin socket
         nuestro que acotar.
@@ -113,30 +198,56 @@ criterio de cierre de la épica (barrer el backlog otra vez contra `main`) no se
         no-op silencioso; leerla cierra la trampa en vez de dejarla al lado del knob nuevo.
   - [x] Radio cubierto sin enumerar llamantes: la petición, el `scheduler_worker` de una réplica y el
         `messenger_worker` del `async` resuelven todos por esa factory.
-  - [x] **`MAILER_SMTP_TIMEOUT` reenviado por compose** (`compose.yaml` php + messenger_worker,
-        `compose.prod.yaml` scheduler_worker, que no hereda de ninguna base). Sin ese reenvío, ponerlo en
-        `.env.prod` habría sido **otro no-op silencioso** — el mismo defecto que este issue ataca. Probado
-        moviendo el valor: `MAILER_SMTP_TIMEOUT=7 make docker.up` → el transporte real sale a 7 s.
-  - [ ] Actualizar #612 con M8/M9/M9b/M15 (pendiente de T8; la premisa de latencia ya no describe el repo).
+  - [x] **`MAILER_SMTP_TIMEOUT` reenviado por compose a los TRES servicios PHP que envían correo**
+        (`compose.yaml` php + messenger_worker, `compose.prod.yaml` scheduler_worker, que no hereda de ninguna
+        base). Sin ese reenvío, ponerlo en `.env.prod` habría sido **otro no-op silencioso** — el mismo
+        defecto que este issue ataca. Probado moviendo el valor: `MAILER_SMTP_TIMEOUT=7 make docker.up` → el
+        transporte real sale a 7 s. El overlay de prod **fusiona** el `environment:` base, verificado con
+        `docker compose config` (`MAILER_FROM`, declarado sólo en la base, llega al `php` de prod).
+  - [x] Actualizar #612 con M8/M9/M9b/M15 y con la garantía reformulada.
 
 ### T1 — resultado medido
 
-`api/.env` = 10 s por defecto (`api/.env.example` y `.env.prod.example` documentados). Contra el transporte
-que construye la app de verdad: **10 s** con el default, **3 s** honrando `?timeout=3`, con
-`default_socket_timeout = 60`.
+`api/.env` = **3 s** por defecto (`api/.env.example`, `.env.prod.example`, `compose.yaml` ×2 y
+`compose.prod.yaml` alineados). Contra el transporte que construye la app de verdad: **3 s** con el default,
+**3 s** honrando `?timeout=3`, con `default_socket_timeout = 60`.
 
-**Falsificación, una mitad cada vez** (10 tests / 28 aserciones en verde; el grupo `slow` aparte):
+**El número que decidió el default.** Un relé **conforme** —responde correctamente a cada comando, sólo que a
+los 9 s— retuvo un envío:
+
+| Escenario | Cota | Total |
+|---|---|---|
+| 6 idas y vueltas, sin STARTTLS ni AUTH | 10 s | **54,00 s** |
+| + STARTTLS + AUTH (≈4 idas más) | 10 s | ≈90 s |
+| Peer que gotea un byte cada 2 s sin cerrar línea | 2,5 s | >100 s, matado |
+
+`max_execution_time = 0` en los dos contenedores PHP: nada por encima lo tapa. Con la cota en 10, **el peor
+caso era peor que los 60 s que sustituye**. Medido dos veces con instrumentos independientes (54,01 s el
+lector de T7, 54,00 s el mío).
+
+**Falsificación, una mitad cada vez** (24 tests / 57 aserciones en verde, el grupo `slow` incluido —
+no está excluido en `phpunit.dist.xml`, `make/php-test.mk` ni `ci.yml`, así que corre en la puerta que CI
+usa):
 
 | Mutación | Rojos |
 |---|---|
-| Quitar `setTimeout()` | 6 tests, **y el del socket colgado a 60.06 s** contra la cota — el defecto, medido |
+| Quitar `setTimeout()` | 8 tests, **y el del socket colgado a 60.06 s** contra la cota — el defecto, medido |
 | Ignorar la opción del DSN | `testTheDsnOptionOverridesTheConfiguredDefault` |
-| Quitar la guarda `> 0.0` | casos `zero`, `negative` |
-| Quitar la guarda `is_numeric` | caso `?timeout[]=` |
-| Quitar el early-return `instanceof SmtpTransport` | `testLeavesATransportWithoutASocketStreamUntouched` |
+| Quitar el suelo del rango | casos `zero`, `negative`, `0.001` (opción) y `0.0`, `-1.0`, `0.5` (default) |
+| Quitar el techo del rango | casos `301`, `1e308`, `1e400` (opción) y `300.5`, `1e308` (default) |
+| Quitar la guarda `is_numeric` | caso `?timeout[]=` — `(float)['99']` es `1.0`, **dentro** del rango |
+| Quitar el early-return `instanceof SmtpTransport` | `testReturnsATransportWithoutASocketOfOursUntouched` |
 | `supports()` deja de delegar | `testDelegatesSupportsToTheDecoratedFactory` |
+| Escribir mal el nombre de env en `#[Autowire]` | los 2 del test funcional, con `EnvNotFoundException` |
+| Vaciar `create()` entero | 8 tests — y **ninguno** de los unitarios de identidad antes de arreglarlos |
 
-**Dos defectos en los tests, encontrados por la propia falsificación y corregidos:**
+**Una mutación con cero rojos, declarada en vez de tapada:** quitar el `instanceof SocketStream` no rojea
+**nada** de la suite, porque la factory decorada es `final` y siempre construye un `SocketStream`. No es
+código muerto: `make php.stan` sale **2** con `method.notFound` sobre `AbstractStream::setTimeout()`. Su
+guardián es PHPStan, y está escrito en el propio código para que nadie lo «simplifique» con la suite en verde.
+
+**Cuatro defectos en los tests, encontrados por falsificación y corregidos.** Los dos primeros, en la primera
+vuelta:
 
 1. `is_numeric` empezó midiendo **cero rojos** y parecía código muerto. No lo era: `Dsn::fromString` parsea la
    query con `parse_str`, así que `?timeout[]=99` llega como **array**, y `(float)['99']` es `1.0` — pasaría
@@ -145,8 +256,21 @@ que construye la app de verdad: **10 s** con el default, **3 s** honrando `?time
 2. Añadido el caso, **seguía sin rojo**: la constante `BOUND` valía `1.0`, exactamente el valor al que castea
    un array no vacío, así que la aserción afirmaba su propio valor de fallo. `BOUND = 2.5` y el rojo aparece.
    Es la misma familia que la siembra vacua de G-1b/G-5: una aserción que no puede fallar.
+
+Los dos siguientes los encontró T7, y el tercero es de la misma familia que los dos de arriba:
+
+3. `testLeavesATransportWithoutASocketStreamUntouched` afirmaba `assertNotInstanceOf(SmtpTransport::class,…)`,
+   que es un hecho sobre la factory decorada, no sobre la nuestra. **Medido: vaciando `create()` entero
+   rojean 8 tests y ése se queda verde.** Ahora afirma identidad contra un doble.
+4. `assertLessThan($unbounded, $elapsed)` no aportaba detección —`BOUND * 5 = 12,5 < 60`, así que toda medida
+   que la incumple incumple también la siguiente— **y era la frágil que saltaba primero**: al mutar midió
+   *«60.06186 is less than 60.0»*, un margen del 0,1 % que depende de que el timeout del socket se pase de
+   largo y no se quede corto. Retirada; el techo se aprieta a `BOUND * 2`, porque `BOUND * 5` no cazaba una
+   cota 4× lenta.
 - [ ] **T2 — DEC-1 · #255/#256: reconciliar el backup con la superficie que existe**
-  - [ ] **No borrar el `-name 'objects-*.tar.gz'` de `:90` sin resolver antes los archivos de legado** (M3).
+  - [ ] **Retirar `-o -name 'objects-*.tar.gz'` de la retención (`:90`) y conservar el aviso de
+        `restore-prod.sh:92-95`**, reformulando sólo su segunda línea y sin tacharlo de obsoleto
+        (sub-decisión de DEC-1). El barrido de huérfanos locales es tarea de operación, no de código.
   - [ ] Corregir en ambos issues la **deriva de nombre** `object_storage_data` → `storage_data` — **la
         dependencia a #252 es correcta y se mantiene** (M5).
   - [ ] Corregir el checklist de #256 a sus pasos ejecutables; el paso 5 nombra además un `pg_restore -l` que
@@ -161,10 +285,18 @@ que construye la app de verdad: **10 s** con el default, **3 s** honrando `?time
   - [ ] Un `#[AsSchedule]` nuevo obliga a añadir su transporte al `messenger:consume` de **`compose.yaml`
         (dev) y `compose.prod.yaml`**. Y a **actualizar el comentario de `:174-178`**, que ya va dos ticks
         por detrás (M10).
-- [ ] **T4 — DEC-5 · #526: alerta sobre el pico de warnings** (umbral por decidir)
-  - [ ] Espejo de `ReportDeadLetterBacklogHandler`: silencioso salvo breach, `error(...)` estructurado.
-  - [ ] **No reenviar el mensaje del `Throwable` sin acotarlo** (M13): las claves están limpias, el mensaje no
-        lo garantiza este repo.
+- [ ] **T4 — DEC-5 · #526: hacer que la señal exista** (resuelta: umbral 1, sin contador)
+  - [ ] `warning(` → `error(` en `SymfonyAuditLogger.php:86`. **Nada más**: ni contador, ni tabla, ni
+        `#[AsSchedule]`, ni transporte — y esa ausencia es la propiedad, no la falta de trabajo: **un cambio
+        que no declara transporte no puede enviarse muerto.**
+  - [ ] **El `assertSame` del array de contexto (`SymfonyAuditLoggerTest.php:92`) se queda intacto** — es el
+        guardián del residuo M13. Se mueve sólo el nivel (`:89`).
+  - [ ] Actualizar el docblock de la clase y `docs/architecture-api.md`: ambos dicen «swallowed and logged at
+        warning», que deja de describir el código.
+  - [ ] **No reenviar el mensaje del `Throwable` sin acotarlo** (M13), y declarar que subir el nivel
+        **aumenta** su exposición: la línea ahora sí se escribe, y arrastra hasta 50 registros del buffer.
+  - [ ] Deja de ser espejo de `ReportDeadLetterBacklogHandler`: aquel cuenta filas que **existen**, aquí el
+        fallo es que la fila **no se escribió**. Ese es el motivo de que no haya contador.
 - [ ] **T5 — DEC-3 · #261**: implementar Option B, o cerrar `wontfix` con el argumento de `compose.prod.yaml:180-186`.
 - [ ] **T6 — verificación completa** (ver *Gates*)
 - [ ] **T7 — segundo pase adversarial** sobre el código que se escriba, antes de la PR que lo lleve.
@@ -176,14 +308,26 @@ que construye la app de verdad: **10 s** con el default, **3 s** honrando `?time
 
 **Regla del lote, heredada de BR-7: una aserción que pasa no prueba nada hasta que la has visto fallar.**
 
-- **#612** — el observable no es «el mailer tiene timeout», es **«un SMTP que no responde deja de bloquear más
-  de N segundos»**. Falsable con un socket que acepta y calla. **Dos rojos obligatorios que M15b nombra**: que
-  el `instanceof SocketStream` del decorador no esté no-opeando en silencio, y que un DSN que no sea
-  `smtp`/`smtps` quede fuera de la cota **de forma declarada**, no accidental.
+- **#612 — cumplido, y con una corrección que la propia regla obligó a escribir.** El observable no es «el
+  mailer tiene timeout», es **«un SMTP que no responde deja de bloquear más de N segundos»**, falsable con un
+  socket que acepta y calla — y ese rojo existe. Pero el enunciado seguía siendo demasiado ancho: lo que la
+  cota garantiza es **por operación**, no por envío, y la medida del relé conforme (54 s con la cota en 10) es
+  la que lo corrige. De los **dos rojos obligatorios que M15b nombra**, uno se cumplió y el otro **no se
+  puede** cumplir y está declarado: el `instanceof SocketStream` **no tiene rojo en la suite** —su guardián es
+  `make php.stan`— y el límite de esquema no tiene testigo en runtime, sólo el docblock.
 - **#525** — si se poda: rojo de la ventana (una fila justo dentro y otra justo fuera) y rojo del orden de
   borrado, con la disciplina de `DbalAuditLogPruner`, no la del pruner desnudo.
-- **#526** — el rojo es **el umbral**: por debajo no emite, por encima sí.
+- **#526** — el rojo **no es el umbral**, es la **llegada**: un test funcional que sustituye el writer por un
+  doble que lanza, golpea una ruta auditada y lee `api/var/log/test.log`. Antes del cambio la línea **no
+  está** (buffer, descartada); después **sí**. `when@test` comparte con `when@prod` el `action_level: error`,
+  que es lo que se pina — y esa coincidencia es hoy una casualidad de la que el test depende: declararlo.
+  Contra vacuidad: afirmar que el doble **lanzó** (`assertSame(1, $writer->attempts)`) y que el fichero
+  **creció** respecto del offset previo, **antes** de buscar el mensaje.
 - **Siembra no vacua** — cualquier aserción de ausencia afirma primero que la siembra insertó N filas.
+- **Una aserción cuyo valor esperado coincide con su valor de fallo no es una aserción.** El lote lleva ya
+  **tres** de esa familia (`BOUND = 1.0`; `assertNotInstanceOf` sobre un hecho ajeno; y la siembra vacua de
+  G-1b/G-5). Al fijar una constante de test, enumerar qué valores produce el código roto y comprobar que
+  ninguno coincide.
 
 ---
 
@@ -194,6 +338,31 @@ transportes, además `make php.lint.schedule-consumption` (`make/php-quality.mk:
 bajo `api/tests/Unit/Shared/Architecture/`, cableado en `php.quality` y en `php.quality.dry-run`). Lee los
 compose de raíz por el bind mount de sólo lectura y **falla en vez de saltar** cuando no está —
 `ScheduleConsumptionGateTest.php:165-180` llama a `$this->fail(...)`, y no hay ningún `markTestSkipped`.
+
+**T1 — corridas frescas sobre el árbol final, con su exit code impreso:**
+
+| Puerta | Exit | Nota |
+|---|---|---|
+| `make php.stan` | **0** | |
+| `make php.quality` | **0** | incluye deptrac, `php.lint.prod-container` y `composer.check.missing-deps` |
+| `make php.test` | **0** | PHPUnit 2869 tests / 11373 aserciones; Behat 439 escenarios / 4132 pasos |
+| `make prod.env.check` | **0/2** | falsificada con seis valores: `(unset)`→0, `3`→0; `10s`, `abc`, `0.5`, `500`→2 |
+
+El delta de PHPUnit contra el arranque de la sesión (2855) son exactamente los **14 tests nuevos**: 11 en el
+unitario y 3 en el funcional de cableado.
+
+**Dos decisiones de herramienta, nombradas para que sean revisables:**
+
+1. **`filter_var` retirado a favor de `is_numeric`.** `composer-require-checker` pidió declarar `ext-filter`
+   en `require` (regla de `api/CLAUDE.md`). Medido antes de añadir la extensión: **con el rango puesto, los
+   dos predicados dan el mismo resultado en los nueve casos**, `1e400` incluido (`is_numeric` lo acepta,
+   `(float)` lo vuelve `INF`, y el techo lo rechaza). Una extensión declarada que no compra comportamiento no
+   se declara.
+2. **Dos `@SuppressWarnings` de PHPMD, con su motivo escrito.** `TooManyPublicMethods` (3 de 11 son
+   `#[DataProvider]`, públicos por contrato de PHPUnit) y **`Superglobals` sobre `$_ENV`, que es un choque de
+   reglas**: `docs/project-context.md:128` *manda* `$_ENV` y prohíbe `getenv()`, y PHPMD lo prohíbe. Se anota
+   el conflicto en vez de elegir en silencio; el patrón `@SuppressWarnings("PHPMD.…")` ya se usa en
+   `api/tests/Behat/Context/`.
 
 ---
 
@@ -207,7 +376,76 @@ compose de raíz por el bind mount de sólo lectura y **falla en vez de saltar**
 
 ---
 
-## Pase adversarial
+## Pase adversarial (código) — T7
+
+Ejecutado sobre el **código de T1**, antes de reescribir el cuerpo de la PR, por tres lectores independientes
+en sólo lectura con lentes distintas —comportamiento en runtime de la cota, cadena de cableado y despliegue, y
+si cada aserción puede fallar—, cada uno instruido a refutar y a resolver la duda en contra. **Dieciséis
+hallazgos: uno GRAVE, seis MEDIA, nueve LEVE. Todos aplicados.**
+
+**GRAVE · La garantía anunciada no era la entregada.** La cota es **por operación de socket**, no por envío.
+Medida y consecuencias en *T1 — resultado medido*. Lo que la hace grave no es el número sino la dirección:
+**con el default que se iba a enviar, el peor caso era peor que el statu quo que el issue existe para
+arreglar**, y las cuatro afirmaciones del repositorio decían lo contrario.
+
+**MEDIA:**
+
+1. `0.001` pasaba el guarda y tumba todo envío contra un relé sano (0,01 s, medido) → tragado a `warning` por
+   `Send*BestEffort`, con el endpoint devolviendo su 202 uniforme. → rango con suelo.
+2. «Fail loud» era **fail tarde**: `lint:container` sale 0 con `MAILER_SMTP_TIMEOUT=0`; la excepción salta al
+   construir `mailer.transports`. → `prod.env.check`, y el docblock dice «primer envío», no «arranque».
+3. `MAILER_SMTP_TIMEOUT=10s` —la grafía de duración que este repo usa en compose y Caddy— atravesaba
+   `prod.env.check`, `docker compose config`, la build y el arranque; después, 500 en cada reset y el tick de
+   bloqueo devolviendo `false` en silencio. → validado.
+4. **La salida de emergencia documentada no existía.** `api/.env:56`, `api/.env.example:56` y
+   `docs-info/production-deployment.md:66` decían los tres que sin la variable el socket cae a 60 s. No cae:
+   compose sirve el default igual, y sin ella en ningún sitio lanza `EnvNotFoundException`. → corregidos.
+5. **El cableado era lo único infalsificable del PR.** → test funcional que arranca el kernel.
+6. `testLeavesATransportWithoutASocketStreamUntouched` no podía fallar. → afirma identidad.
+
+**LEVE (nueve, todos aplicados o declarados):** rango sin techo (`1e308` → `(int)` es 0) · `is_numeric` más
+ancho que el predicado del env (`1e400` → `INF` → `ValueError`, que **no** es `TransportExceptionInterface`) ·
+el límite de esquema sin testigo en runtime · la rama falsa de `instanceof SocketStream` sin rojo posible ·
+`assertLessThan(60, …)` redundante y frágil · techo `BOUND * 5` demasiado flojo · `docs-info/…:69` decía «both
+`php` y `messenger_worker`» tres líneas bajo la fila cableada a mano en `scheduler_worker` ·
+`docs/deployment-guide.md` y `api/docs/production-ready/secrets.md` sin actualizar · `#[Group('slow')]` no
+hace nada.
+
+**Refutado — la hipótesis que se le plantó al lector para que la confirmase.** Se sospechaba que el grupo
+`slow` estuviera excluido en alguna puerta, lo que habría dejado muerto el único test que prueba el
+observable real. **No lo está** en `phpunit.dist.xml`, `make/php-test.mk` ni `ci.yml`; la corrida de cobertura
+de CI reporta el test. Confirmado por medición propia además de la del lector.
+
+**Lo que este pase NO cubre:** la resolución de DNS (`stream_socket_client()` resuelve antes de conectar y su
+`$timeout` no gobierna `getaddrinfo()` — tercera vía de cuelgue, acotada sólo por `/etc/resolv.conf`), el
+comportamiento bajo el SAPI de worker de FrankenPHP (todas las sondas corrieron bajo CLI), y la imagen de
+prod, que ningún workflow construye.
+
+---
+
+## Revisión de seguridad — T1
+
+Recorrida la checklist del `CLAUDE.md` raíz por fichero del diff. **No aplican por construcción:** inyección
+(cero SQL/DQL), authn/authz (no hay controller ni handler), mass assignment, codificación de salida,
+CORS/CSRF/Mercure, migraciones, dependencias nuevas. Sin ficheros `pwa/`, así que la lista de frontend está
+vacía. **Limpio y digno de constar:** el decorador **nunca loguea el `Dsn`**, que puede llevar
+`smtp://user:pass@host`.
+
+**Un hallazgo, clase disponibilidad, medido y arreglado aquí (SR-1).** La guarda de positividad cubría la
+opción del DSN y dejaba **sin validar** el default inyectado: `EnvVarProcessor.php:273-279` sólo rechaza lo no
+numérico, y compose reenvía verbatim porque `${…:-N}` sólo cubre *unset* o vacío. Medido contra el transporte
+real: `MAILER_SMTP_TIMEOUT=0` → todo envío falla en **0,00 s** más un `Warning` de vendor en
+`AbstractStream.php:91`; `-1` → **no volvió**, matado a los 150 s, 2,5× el default que venía a acotar. El knob
+que existe para quitar una espera ilimitada podía reintroducirla, y peor. → rango 1–300, refutado en el
+constructor, con rojo por extremo.
+
+`PRODUCTION_SECURITY_CHECKLIST.md` no se toca: un timeout de socket no está en sus disparadores enumerados y
+no se introduce patrón de seguridad nuevo. `pwa/docs/production-deployment.md` tampoco: no tiene superficie de
+mailer — se dice en la PR en vez de saltárselo en silencio.
+
+---
+
+## Pase adversarial (medición)
 
 Ejecutado **antes** de abrir la PR, por tres lectores independientes en sólo lectura, uno por grupo, cada uno
 instruido a refutar y a resolver la duda en contra. **De quince filas, tres refutadas y ocho corregidas.** Los
@@ -236,11 +474,15 @@ residuo del mensaje del `Throwable`), M15 (la lista de seams estaba mal compuest
 
 ## Preguntas
 
-1. **DEC-1 desbloquea más trabajo que ninguna**, y ahora tiene una sub-pregunta con consecuencia operativa:
-   ¿qué pasa con los `objects-*.tar.gz` de despliegues reales que `backup-prod.sh:90` es lo único en expirar?
-2. #612 subió de latente a vivo por un commit propio de esta épica, y su radio son dos superficies de worker.
-   ¿Se queda en BR-8 o sale a PR propia por ser el único con consecuencia de disponibilidad?
-3. ¿Se toman DEC-2/3/4/5 ahora, o BR-8 entrega T1+T2 y el resto se registra para un lote posterior?
+1. ~~**DEC-1** y su sub-pregunta sobre los `objects-*.tar.gz`.~~ **Resuelta** (2026-08-15) — ver *Sub-decisión
+   de DEC-1*. Lo que queda no es una pregunta de diseño sino tres datos del host: si quedan huérfanos, el
+   `RETENTION_DAYS` real, y si el offsite propaga borrados o guarda snapshots.
+2. ~~¿#612 se queda en BR-8 o sale a PR propia?~~ **Resuelta** (2026-08-15): la PR #725 se corta a **T1
+   solo**. T2/T3/T4 salen en PRs propias; #256 y #261 siguen abiertos.
+3. ~~¿Se toman DEC-2/3/4/5 ahora?~~ **Resueltas las cuatro.** Queda **DEC-3 (#261)** abierta, fuera del lote.
+4. **Abierta, nacida del GRAVE de T7:** un techo real sobre el tiempo **total** de un envío no cabe en una
+   opción de socket. Las tres formas donde sí cabe son un `--time-limit` de worker, un deadline en los
+   envoltorios `Send*BestEffort`, o tapar el `max_execution_time = 0` que hoy no acota nada. ¿Issue propio?
 
 ## Dev Agent Record
 
@@ -250,9 +492,15 @@ claude-opus-5[1m]
 
 ### Debug Log References
 
-Sonda desechable (borrada) contra el contenedor vivo: construyó el transporte que la app usa de verdad y
-volcó `getTimeout()` — 10 s por defecto, 3 s con `?timeout=3`, `default_socket_timeout = 60`. Repetida con
-`MAILER_SMTP_TIMEOUT=7 make docker.up` para probar que el reenvío por compose no es un no-op.
+Todas las sondas son desechables, viven en el `tmp/` gitignoreado y **no entran en el commit**.
+
+- Contra el contenedor vivo: construyó el transporte que la app usa de verdad y volcó `getTimeout()`.
+  Repetida con `MAILER_SMTP_TIMEOUT=7 make docker.up` para probar que el reenvío por compose no es un no-op.
+- **Relé conforme pero lento** (`probe-slow-relay-{server,client}.php`): habla SMTP correctamente con un
+  retardo por comando. Es el instrumento que midió los 54,00 s y, con él, el GRAVE de T7.
+- **Valores fuera de rango** (`probe-zero-timeout.php`): `0` → fallo en 0,00 s; `-1` → matado a los 150 s.
+- **Predicados** (`probe-filtervar.php`): los trece casos de `filter_var` frente a `is_numeric`, que es lo que
+  decidió no declarar `ext-filter`.
 
 ### Completion Notes List
 
@@ -264,15 +512,24 @@ volcó `getTimeout()` — 10 s por defecto, 3 s con `?timeout=3`, `default_socke
   array). El artefacto los documenta arriba porque el segundo es la familia de la siembra vacua.
 - **Punto ciego declarado, no tapado:** la cota vale para `smtp`/`smtps`. Un bridge de API o `sendmail://` no
   la recibe; está escrito en el docblock de la clase.
-- **Pendiente en T1:** actualizar el cuerpo de #612 con M8/M9/M9b/M15 (va en T8).
-- **No entra en este PR:** T3 (#525) y T4 (#526) tienen decisión pero no código todavía; T2 (#255) es cierre
-  con evidencia más retirada de código muerto; #256 y #261 se quedan abiertos por decisión de Sergio.
-- **Sin pase adversarial todavía (T7).** El lote toca superficie de auditoría en T4, así que el pase debe
-  correr y quedar registrado aquí **antes** de `gh pr create`, no después.
+- **T7 ejecutado y aplicado** — ver *Pase adversarial (código)*. Dieciséis hallazgos, uno GRAVE, ninguno
+  diferido. Corrigió la garantía central del cambio y bajó el default de 10 a 3.
+- **La falsificación encontró CUATRO tests que no podían fallar** a lo largo de las dos vueltas, no dos. La
+  tercera (`assertNotInstanceOf` sobre un hecho ajeno) sólo apareció con una mutación que **nadie había
+  pedido**: vaciar `create()` entero. La lección para el lote está en *Falsificación*.
+- **Lo que este PR NO promete:** un techo sobre el tiempo total de un envío. Está dicho en el docblock, en
+  `api/.env`, en `docs-info/production-deployment.md` y en el cuerpo de la PR, y es la pregunta 4.
+- **No entra en este PR:** T2 (#255), T3 (#525) y T4 (#526) tienen decisión pero salen en PRs propias; #256 y
+  #261 se quedan abiertos por decisión de Sergio. **BR-8 no se cierra con este PR.**
 
 ### File List
 
 - `api/src/Shared/Mailer/Infrastructure/TimeBoundedSmtpTransportFactory.php` — nuevo
 - `api/tests/Unit/Shared/Mailer/Infrastructure/TimeBoundedSmtpTransportFactoryTest.php` — nuevo
-- `api/.env`, `api/.env.example`, `.env.prod.example` — `MAILER_SMTP_TIMEOUT` y su porqué
+- `api/tests/Functional/Shared/Mailer/TimeBoundedSmtpTransportWiringTest.php` — nuevo; el cableado que
+  ninguna otra puerta podía falsificar
+- `api/.env`, `api/.env.example`, `.env.prod.example` — `MAILER_SMTP_TIMEOUT` (3 s) y su porqué
 - `compose.yaml` (php, messenger_worker), `compose.prod.yaml` (scheduler_worker) — reenvío de la variable
+- `make/deploy.mk` — validación de rango en `prod.env.check`
+- `docs-info/production-deployment.md`, `docs/deployment-guide.md`,
+  `api/docs/production-ready/secrets.md` — la variable, y la corrección de los tres servicios
