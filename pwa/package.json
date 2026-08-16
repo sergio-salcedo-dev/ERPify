@@ -24,7 +24,7 @@
     "clean": "rm -rf .next .next-e2e"
   },
   "dependencies": {
-    "@base-ui/react": "^1.6.0",
+    "@base-ui/react": "^1.7.0",
     "@google/genai": "^2.15.0",
     "@hookform/resolvers": "^5.7.1",
     "@playwright/test": "^1.62.0",
