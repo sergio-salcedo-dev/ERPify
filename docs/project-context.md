@@ -1,7 +1,7 @@
 ---
 project_name: 'ERPify'
 user_name: 'Sergio'
-date: '2026-04-21'
+date: '2026-08-17'
 sections_completed: ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns']
 status: 'complete'
 optimized_for_llm: true
@@ -52,7 +52,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 | DI                   | **Inversify 8** + reflect-metadata                                               | Constructor injection of **domain interfaces** (defined in `src/context/<bc>/domain`). `reflect-metadata` must be imported **once** at the app entry point. Use `@injectable()` + `@inject()`.                    |
 | Forms                | react-hook-form + `@hookform/resolvers`                                          | —                                                                                                                                                                                                                 |
 | Unit tests           | **Vitest 4**                                                                     | Config: `pwa/vitest.config.ts` (v4 config API differs from v1/v2). Command: `make pwa.test.unit c='src/context/foo/bar.test.ts'`.                                                                                 |
-| E2E tests            | **Playwright 1.62**                                                              | Config: `pwa/playwright.config.ts`. `baseURL` is resolved, not fixed: `PLAYWRIGHT_BASE_URL` ?? (`CI` ? `https://localhost` : `http://127.0.0.1:3000`). Docker/CI hit the live stack over HTTPS; only a host-run `dev:e2e` uses `:3000`. |
+| E2E tests            | **Playwright 1.62**                                                              | Config: `pwa/playwright.config.ts`. Runs on the **host**, never in a container. `baseURL` = `PLAYWRIGHT_BASE_URL` ?? (`CI` ? `https://localhost` : `http://127.0.0.1:3000`), so `make pwa.test.e2e` defaults to `:3000` and Playwright **spawns** `dev:e2e` itself. Hitting the live HTTPS stack means setting `PLAYWRIGHT_BASE_URL` yourself — CI sets it alongside `CI: true`. |
 | Testing libs         | @testing-library/react 16, jest-dom 6, jsdom                                     | —                                                                                                                                                                                                                 |
 | Lint / format        | ESLint 10.8 + `eslint-config-next` 16.2 + `eslint-config-prettier`, Prettier 3.9 | Run via `make pwa.quality`.                                                                                                                                                                                       |
 | Integrations in deps | `@google/genai`, `firebase-tools`                                                | Present — do not assume usage; check code before wiring.                                                                                                                                                          |
@@ -199,7 +199,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 #### JS — Playwright 1.62 (pwa/)
 
 - Config: `pwa/playwright.config.ts`. Run via `make pwa.test.e2e`. Reports: `make pwa.test.e2e.reports`.
-- `baseURL` comes from `PLAYWRIGHT_BASE_URL` ?? (`CI` ? `https://localhost` : `http://127.0.0.1:3000`) — never hard-code it in a spec. Under Docker/CI the target is the live stack on HTTPS; a host-run `dev:e2e` is the only `:3000` case. From a worktree, point `PLAYWRIGHT_BASE_URL` at that stack's ephemeral HTTPS port.
+- `baseURL` comes from `PLAYWRIGHT_BASE_URL` ?? (`CI` ? `https://localhost` : `http://127.0.0.1:3000`) — never hard-code it in a spec. Nothing in the Make layer sets either variable, so the **default** of `make pwa.test.e2e` is `:3000` with `useWebServer` true: Playwright starts its own `dev:e2e`, and the Compose stack you have running is not what the specs hit. To test against the live stack, export `PLAYWRIGHT_BASE_URL=https://localhost` (what `ci.yml` does, together with `CI: true`); from a worktree, point it at that stack's ephemeral HTTPS port, because Playwright is on the host and cannot reach the internal Docker network.
 - Each spec independent: create its own data, clean up after. No ordering between specs.
 - Locators: role/text based (`getByRole`, `getByLabel`). CSS/XPath selectors last resort.
 - Never sleep. Use `expect(locator).toBeVisible()` / `toHaveText()` auto-waiting.
@@ -333,7 +333,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 #### Runtime gotchas
 
-- Playwright's `baseURL` is environment-resolved (`https://localhost` under CI/Docker, `http://127.0.0.1:3000` for a host-run `dev:e2e`). Assuming either one unconditionally is how a suite ends up pointing at nothing.
+- Playwright's `baseURL` is environment-resolved, and its **default is not the stack you started**: with no `PLAYWRIGHT_BASE_URL` and no `CI`, `make pwa.test.e2e` targets `http://127.0.0.1:3000` and spawns its own `dev:e2e`, so specs can pass against a server that is not the Compose stack. Set `PLAYWRIGHT_BASE_URL` when you mean the live stack.
 - Doctrine ORM 3 / DBAL 4: no `flush($entity)`, no `fetchAll()`, no `Connection::query()`, no `iterate()`. Use `toIterable()`, `fetchAllAssociative()`, `executeQuery()`.
 - Turbopack is the dev bundler. Webpack-only `next.config.*` blocks silently no-op.
 - `messenger_worker` is a **separate Compose service** in prod/ci. Handlers must be idempotent; delivery is at-least-once.
@@ -387,12 +387,10 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Update when the stack changes (new major versions, new bounded contexts, new tooling).
 - Review quarterly and delete rules that have become obvious or no longer apply.
 
-**Verify before trusting a line — nothing here is gated.** No check reads this file, so it drifts silently while every gate stays green, and it drifts *toward* confident wrongness: a version number merely ages, but a stale behavioural claim teaches the opposite of what the code does. Every path and version below is falsifiable in seconds, and cheaper to re-measure than to trust:
+**Verify before trusting a line — nothing here is gated.** No check reads this file, so it drifts silently while every gate stays green, and it drifts *toward* confident wrongness: a version number merely ages, but a stale behavioural claim teaches the opposite of what the code does. Re-measuring is cheaper than trusting:
 
 ```bash
-# every path this file asserts still exists (25 today, all resolving)
-# excludes, deliberately: vendor/ (gitignored, absent in a fresh worktree),
-# trailing-slash directories (prose), and `...` (branch-name patterns like docs/...)
+# paths this file asserts, for the prefixes below
 grep -oE '`(api|pwa|docs|tools)/[a-zA-Z0-9._/-]+`' docs/project-context.md \
   | tr -d '`' | grep -vE '(^|/)vendor/|/$|\.\.\.' | sort -u \
   | while read -r p; do [ -e "$p" ] || echo "MISSING $p"; done
@@ -402,6 +400,11 @@ python3 -c "import json;d=json.load(open('pwa/package.json'));print({**d['depend
 grep -E '^FROM .*@sha256:' api/Dockerfile pwa/Dockerfile
 ```
 
-A clean run proves every asserted **path** exists. It says nothing about whether a **claim** is still true — the Playwright `baseURL` line was a fully-resolving path next to a behavioural assertion that had inverted. Those only fall to reading the code.
+**What a clean run does not cover**, so nobody reads it as an all-clear:
+
+- Only paths under `api|pwa|docs|tools`. Everything else this file names is invisible to it — `Makefile`, `make/*.mk`, `compose*.yaml`, `next.config.*`, `nelmio_cors.php`, `.editorconfig`, `PRODUCTION_SECURITY_CHECKLIST.md`.
+- Only paths whose characters fit `[a-zA-Z0-9._/-]`, so a glob like `` `docs/rules/*.md` `` never matches — and the Markdown rule in `CLAUDE.md` requires writing globs that way.
+- Deliberate skips: `vendor/` (gitignored, absent in a fresh worktree), trailing-slash directories (prose), and `...` (branch-name patterns).
+- **Nothing about whether a claim is true.** A path can resolve while the sentence around it describes behaviour the code no longer has; only reading the code catches that, and behavioural claims are where the damage is.
 
 Last Updated: 2026-08-17
