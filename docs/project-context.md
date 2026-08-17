@@ -32,29 +32,29 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 | Mail                      | symfony/mailer 8                                                                              | Async via Messenger — see `docs/architecture-api.md` (Async & messaging).                                                                                                                                                                                                                                                                                                                             |
 | CORS                      | nelmio/cors-bundle 2.6                                                                        | No wildcard `*` origins (see `docs/rules/security.md`).                                                                                                                                                                                                                                                                                                                  |
 | Autoload                  | PSR-4                                                                                         | `Erpify\\ → api/src/`, `Erpify\Tests\\ → api/tests/`. Polyfills `symfony/polyfill-ctype\|iconv\|php72..84` are `replace`d — **do not** add them transitively.                                                                                                                                                                                                            |
-| Unit tests                | **PHPUnit 13**                                                                                | Config: `api/phpunit.xml.dist`.                                                                                                                                                                                                                                                                                                                                          |
+| Unit tests                | **PHPUnit 13**                                                                                | Config: `api/tools/phpunit/phpunit.dist.xml`.                                                                                                                                                                                                                                                                                                                                          |
 | E2E tests                 | **Behat 4** in the app Composer tree                                                          | Declared in `api/composer.json` under `require-dev`; configured by `api/behat.dist.php`. Runs from `api/vendor/bin/behat`, like PHPUnit.                                                                                                                                                                                                                                 |
-| Static analysis           | PHPStan 2 (`level: max`, sole gate), Rector 2                                                 | Configs: `api/tools/phpstan/phpstan.neon`, `api/rector.php`. Psalm was removed entirely — no taint / security-dataflow analyser remains. **Never** add `vimeo/psalm` or a `psalm/*` plugin back.                                                                                                                                                                                 |
-| Style                     | PHP-CS-Fixer 3.95, PHPCS 4, PHPMD                                                             | Config: `api/.php-cs-fixer.php`. PSR-12 + `declare(strict_types=1);`.                                                                                                                                                                                                                                                                                                    |
+| Static analysis           | PHPStan 2 (`level: max`, sole gate), Rector 2                                                 | Configs: `api/tools/phpstan/phpstan.neon`, `api/tools/rector/rector.php`. Psalm was removed entirely — no taint / security-dataflow analyser remains. **Never** add `vimeo/psalm` or a `psalm/*` plugin back.                                                                                                                                                                                 |
+| Style                     | PHP-CS-Fixer 3.95, PHPCS 4, PHPMD                                                             | Config: `api/tools/ecs/.php-cs-fixer.dist.php`. PSR-12 + `declare(strict_types=1);`.                                                                                                                                                                                                                                                                                                    |
 | Hygiene                   | composer-unused, composer-require-checker, `roave/security-advisories: dev-latest`            | Run via `make composer.check.all`.                                                                                                                                                                                                                                                                                                                                       |
 
 ### PWA (`pwa/`) — Next.js / React
 
 | Concern              | Technology (version)                                                             | Key Constraint for Code Generation                                                                                                                                                                                |
 |----------------------|----------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Runtime (container)  | **Node 24** (Alpine, digest-pinned)                                              | Base image `node:24-alpine`. Pin any `engines.node` updates here.                                                                                                                                                 |
+| Runtime (container)  | **Node 26** (Debian trixie, digest-pinned)                                       | `pwa/Dockerfile` pins `node@sha256:…` (currently `node:26.7.0-trixie`) — not a tag, and not Alpine. `engines.node` is `^24.15.0 \|\| >=26.0.0`; keep it in step with the pin.                                       |
 | Package manager      | **npm**                                                                          | Lockfile: `pwa/package-lock.json`. Do not switch to pnpm/yarn or generate their lockfiles.                                                                                                                        |
-| Framework            | **Next.js 16.2.4** (App Router, Turbopack)                                       | Beyond most training data — prefer reading existing `src/app/` patterns over memory. Turbopack is the dev bundler; Webpack-specific `next.config.*` entries silently no-op. Server Actions API differs from 14.x. |
+| Framework            | **Next.js 16.3** (App Router, Turbopack)                                         | Beyond most training data — prefer reading existing `src/app/` patterns over memory. Turbopack is the dev bundler; Webpack-specific `next.config.*` entries silently no-op. Server Actions API differs from 14.x. |
 | UI runtime           | **React 19.2**                                                                   | Use `use()` for promise unwrapping; `React.FC` is out of favor — use plain function components with typed props.                                                                                                  |
 | Language             | **TypeScript 6** (`strict: true`)                                                | Strict mode is ON in `pwa/tsconfig.json`. Decorators need `experimentalDecorators` + `emitDecoratorMetadata` (required by Inversify). `target: ES2017`.                                                           |
-| Styling              | **Tailwind 4.2** (via `@tailwindcss/postcss`) + Shadcn 4.3                       | **No `tailwind.config.js`** — Tailwind 4 is CSS-first. Configuration lives in `pwa/src/app/globals.css` via `@theme {}` / `@config`. Do **not** generate v3-style JS config.                                      |
+| Styling              | **Tailwind 4.3** (via `@tailwindcss/postcss`) + Shadcn 4.16                      | **No `tailwind.config.js`** — Tailwind 4 is CSS-first. Configuration lives in `pwa/src/app/globals.css` via `@theme {}` / `@config`. Do **not** generate v3-style JS config.                                      |
 | UI kit               | Shadcn, Base UI React, tw-animate-css, tailwind-merge, cva, lucide-react         | BEM class naming (`block__element--modifier`), mobile-first.                                                                                                                                                      |
 | DI                   | **Inversify 8** + reflect-metadata                                               | Constructor injection of **domain interfaces** (defined in `src/context/<bc>/domain`). `reflect-metadata` must be imported **once** at the app entry point. Use `@injectable()` + `@inject()`.                    |
 | Forms                | react-hook-form + `@hookform/resolvers`                                          | —                                                                                                                                                                                                                 |
 | Unit tests           | **Vitest 4**                                                                     | Config: `pwa/vitest.config.ts` (v4 config API differs from v1/v2). Command: `make pwa.test.unit c='src/context/foo/bar.test.ts'`.                                                                                 |
-| E2E tests            | **Playwright 1.59**                                                              | Config: `pwa/playwright.config.ts`. `baseURL: http://localhost:3000` (**not `:80`**) — `dev:e2e` runs Next on `:3000`.                                                                                            |
+| E2E tests            | **Playwright 1.62**                                                              | Config: `pwa/playwright.config.ts`. `baseURL` is resolved, not fixed: `PLAYWRIGHT_BASE_URL` ?? (`CI` ? `https://localhost` : `http://127.0.0.1:3000`). Docker/CI hit the live stack over HTTPS; only a host-run `dev:e2e` uses `:3000`. |
 | Testing libs         | @testing-library/react 16, jest-dom 6, jsdom                                     | —                                                                                                                                                                                                                 |
-| Lint / format        | ESLint 10.2 + `eslint-config-next` 16.2 + `eslint-config-prettier`, Prettier 3.8 | Run via `make pwa.quality`.                                                                                                                                                                                       |
+| Lint / format        | ESLint 10.8 + `eslint-config-next` 16.2 + `eslint-config-prettier`, Prettier 3.9 | Run via `make pwa.quality`.                                                                                                                                                                                       |
 | Integrations in deps | `@google/genai`, `firebase-tools`                                                | Present — do not assume usage; check code before wiring.                                                                                                                                                          |
 
 ### Infrastructure / Dev
@@ -64,7 +64,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 | Compose entrypoint             | `compose.yaml` + `compose.dev.yaml` / `compose.prod.yaml`         | Run from **repo root only**. Switch overlays with `ENV=dev\|ci\|staging\|prod`.                                                               |
 | Canonical commands             | Root `Makefile` + `make/*.mk`                                     | Prefer `make <target>` over raw `docker compose` / `composer` / `npm`. The Make layer handles container routing via `ENV` and `IN_CONTAINER`. |
 | Passthrough args               | `c=`                                                              | Examples: `make composer c='req vendor/pkg'`, `make php.unit c='--filter SomeTest'`, `make pwa.test.unit c='path/to/file.test.ts'`.           |
-| Base images (pinned by digest) | `dunglas/frankenphp:1-php8.5`, `debian:13-slim`, `node:24-alpine` | Dependabot tracks `/api` and `/pwa` — do not unpin.                                                                                           |
+| Base images (pinned by digest) | `dunglas/frankenphp:1-php8.5`, `debian:trixie`, `node:26-trixie` | Dependabot tracks `/api` and `/pwa` — do not unpin.                                                                                           |
 | Prod required env              | `APP_SECRET`, `CADDY_MERCURE_JWT_SECRET`, `POSTGRES_PASSWORD`     | Missing any → prod start fails.                                                                                                               |
 
 ### Ports
@@ -81,7 +81,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 #### PHP (api/)
 
 - `declare(strict_types=1);` at the top of every PHP file. No exceptions.
-- PSR-12 extended coding style; enforced by PHP-CS-Fixer (`api/.php-cs-fixer.php`) and PHPCS.
+- PSR-12 extended coding style; enforced by PHP-CS-Fixer (`api/tools/ecs/.php-cs-fixer.dist.php`) and PHPCS.
 - Type declarations on **every** parameter, return type, and property. Use union/intersection/DNF types where PHP 8.x allows.
 - Prefer modern constructs: `readonly` properties/classes, promoted constructor params, `match`, nullsafe `?->`, named args for clarity, first-class callable syntax.
 - Enums (backed or pure) over string/int constants for closed sets.
@@ -155,7 +155,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - **Next config**: `next.config.*` is Turbopack-aware. Webpack-only config blocks are silently ignored — don't assume they run in dev.
 - **Env**:
     - `NEXT_PUBLIC_*` is public. Anything else is server-only — never read it from a client component.
-    - API base URL: `NEXT_PUBLIC_API_BASE_URL`. Internal SSR fetches: `SYMFONY_INTERNAL_URL`. See `docs/local-fullstack-traffic.md`.
+    - API base URL: `NEXT_PUBLIC_API_BASE_URL`. Internal SSR fetches: `SYMFONY_INTERNAL_URL`. See `docs/integration-architecture.md`.
 - **Images**: use `next/image` with explicit `width`/`height` or `fill`.
 - **Mercure (client)**: subscribe via EventSource to same-origin `/.well-known/mercure` — don't hardcode a cross-origin URL.
 
@@ -172,7 +172,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 #### PHP — PHPUnit 13 (api/)
 
-- Config: `api/phpunit.xml.dist`. Run via `make php.unit` (optional `c='--filter ClassName'`).
+- Config: `api/tools/phpunit/phpunit.dist.xml`. Run via `make php.unit` (optional `c='--filter ClassName'`).
 - Test namespace root: `Erpify\Tests\` → `api/tests/`. Mirror `src/` structure.
 - Use attributes, not doc-comments: `#[Test]`, `#[DataProvider(...)]`, `#[Group('slow')]`.
 - `declare(strict_types=1);` in every test file. Typed fixtures.
@@ -196,10 +196,10 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Mock at module boundary with `vi.mock(...)`; prefer injecting fakes via the Inversify container over global mocks.
 - Async: use `findBy*` / `waitFor` — never `setTimeout` sleeps.
 
-#### JS — Playwright 1.59 (pwa/)
+#### JS — Playwright 1.62 (pwa/)
 
 - Config: `pwa/playwright.config.ts`. Run via `make pwa.test.e2e`. Reports: `make pwa.test.e2e.reports`.
-- `baseURL: http://localhost:3000` — Playwright targets `dev:e2e` on `:3000`, **not** `:80`.
+- `baseURL` comes from `PLAYWRIGHT_BASE_URL` ?? (`CI` ? `https://localhost` : `http://127.0.0.1:3000`) — never hard-code it in a spec. Under Docker/CI the target is the live stack on HTTPS; a host-run `dev:e2e` is the only `:3000` case. From a worktree, point `PLAYWRIGHT_BASE_URL` at that stack's ephemeral HTTPS port.
 - Each spec independent: create its own data, clean up after. No ordering between specs.
 - Locators: role/text based (`getByRole`, `getByLabel`). CSS/XPath selectors last resort.
 - Never sleep. Use `expect(locator).toBeVisible()` / `toHaveText()` auto-waiting.
@@ -243,8 +243,8 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 #### Code Quality - Linting / Formatting — tools are authoritative
 
-- **PHP**: PHP-CS-Fixer (`api/.php-cs-fixer.php`), PHPCS, PHPStan 2 (`api/tools/phpstan/phpstan.neon`, `level: max` — sole type gate), Rector 2, PHPMD. Run all via `make php.quality`. Don't hand-format against these tools.
-- **JS/TS**: ESLint 10 + `eslint-config-next` + `eslint-config-prettier`, Prettier 3.8. Run via `make pwa.quality`; fix via `make pwa.lint` / `make pwa.format`. Don't hand-format.
+- **PHP**: PHP-CS-Fixer (`api/tools/ecs/.php-cs-fixer.dist.php`), PHPCS, PHPStan 2 (`api/tools/phpstan/phpstan.neon`, `level: max` — sole type gate), Rector 2, PHPMD. Run all via `make php.quality`. Don't hand-format against these tools.
+- **JS/TS**: ESLint 10 + `eslint-config-next` + `eslint-config-prettier`, Prettier 3.9. Run via `make pwa.quality`; fix via `make pwa.lint` / `make pwa.format`. Don't hand-format.
 - **All files**: `.editorconfig` wins. LF line endings (enforced by pre-commit). Max file size 1MB (pre-commit). No mixed line endings.
 - Aggregates: `make app.quality` (both sides), `make ci` (`ci.quality` + `ci.test`).
 
@@ -309,13 +309,13 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Dev: `make docker.up` from repo root.
 - CI/Staging/Prod: `make docker.up ENV=ci|staging|prod` — overlays `compose.dev.yaml` or `compose.prod.yaml` accordingly.
 - **Prod requirements** (missing any → start fails): `APP_SECRET`, `CADDY_MERCURE_JWT_SECRET`, `POSTGRES_PASSWORD`.
-- Prod Compose runs a separate `messenger_worker` service and a mailer pipeline — see `docs/production-deployment.md` before deploying behavior changes that touch async flows.
-- Base images are pinned by sha256 digest (`dunglas/frankenphp:1-php8.5`, `debian:13-slim`, `node:24-alpine`); Dependabot at `/api` and `/pwa` handles digest bumps. Do not unpin.
-- DNS, CORS origins, and Mercure cookie/CORS config per `docs/mercure-production-deployment.md` and `docs/production-deployment.md`. After deploy, run the documented smoke tests.
+- Prod Compose runs a separate `messenger_worker` service and a mailer pipeline — see `docs/deployment-guide.md` before deploying behavior changes that touch async flows.
+- Base images are pinned by sha256 digest (`dunglas/frankenphp:1-php8.5`, `debian:trixie`, `node:26-trixie`); Dependabot at `/api` and `/pwa` handles digest bumps. Do not unpin.
+- DNS, CORS origins, and Mercure cookie/CORS config per `docs/deployment-guide.md` and `pwa/docs/production-deployment.md`. After deploy, run the documented smoke tests.
 
 #### Local traffic model
 
-- **Docker dev (default)**: browser → `http(s)://localhost` → FrankenPHP. HTML `/` is proxied to Next (`:3000` in-container). `/api/*` and `/.well-known/mercure` stay on PHP. See `docs/local-fullstack-traffic.md`.
+- **Docker dev (default)**: browser → `http(s)://localhost` → FrankenPHP. HTML `/` is proxied to Next (`:3000` in-container). `/api/*` and `/.well-known/mercure` stay on PHP. See `docs/integration-architecture.md`.
 
 ### Critical Don't-Miss Rules
 
@@ -333,7 +333,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 #### Runtime gotchas
 
-- Playwright e2e targets **port 3000** (`dev:e2e`), **not 80**. `baseURL: http://localhost` silently fails every spec.
+- Playwright's `baseURL` is environment-resolved (`https://localhost` under CI/Docker, `http://127.0.0.1:3000` for a host-run `dev:e2e`). Assuming either one unconditionally is how a suite ends up pointing at nothing.
 - Doctrine ORM 3 / DBAL 4: no `flush($entity)`, no `fetchAll()`, no `Connection::query()`, no `iterate()`. Use `toIterable()`, `fetchAllAssociative()`, `executeQuery()`.
 - Turbopack is the dev bundler. Webpack-only `next.config.*` blocks silently no-op.
 - `messenger_worker` is a **separate Compose service** in prod/ci. Handlers must be idempotent; delivery is at-least-once.
@@ -387,4 +387,21 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Update when the stack changes (new major versions, new bounded contexts, new tooling).
 - Review quarterly and delete rules that have become obvious or no longer apply.
 
-Last Updated: 2026-04-21
+**Verify before trusting a line — nothing here is gated.** No check reads this file, so it drifts silently while every gate stays green, and it drifts *toward* confident wrongness: a version number merely ages, but a stale behavioural claim teaches the opposite of what the code does. Every path and version below is falsifiable in seconds, and cheaper to re-measure than to trust:
+
+```bash
+# every path this file asserts still exists (25 today, all resolving)
+# excludes, deliberately: vendor/ (gitignored, absent in a fresh worktree),
+# trailing-slash directories (prose), and `...` (branch-name patterns like docs/...)
+grep -oE '`(api|pwa|docs|tools)/[a-zA-Z0-9._/-]+`' docs/project-context.md \
+  | tr -d '`' | grep -vE '(^|/)vendor/|/$|\.\.\.' | sort -u \
+  | while read -r p; do [ -e "$p" ] || echo "MISSING $p"; done
+# versions come from the manifests, never from memory
+python3 -c "import json;d=json.load(open('pwa/package.json'));print({**d['dependencies'],**d['devDependencies']})"
+# base images are digests, not tags — resolve them upstream, don't read the tag off this file
+grep -E '^FROM .*@sha256:' api/Dockerfile pwa/Dockerfile
+```
+
+A clean run proves every asserted **path** exists. It says nothing about whether a **claim** is still true — the Playwright `baseURL` line was a fully-resolving path next to a behavioural assertion that had inverted. Those only fall to reading the code.
+
+Last Updated: 2026-08-17
