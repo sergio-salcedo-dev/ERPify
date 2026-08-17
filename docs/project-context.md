@@ -25,7 +25,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 | Framework                 | **Symfony 8.1.x**                                                                             | Require **individual components** — `symfony/symfony` metapackage is in `conflict` and must never be added. `extra.symfony.require: 8.1.*`. Flex `allow-contrib: true`; `auto-scripts` run `cache:clear` + `assets:install` on install/update.                                                                                                                           |
 | Routing / DI / Validation | Symfony 8 attributes                                                                          | Use `#[Route]`, autowiring, `#[AsCommand]`, attribute constraints. No YAML route files in `src/`. Explicit `services.yaml` entries are the exception, not the default.                                                                                                                                                                                                   |
 | HTTP server               | **FrankenPHP** (Caddy embedded, Docker tag `dunglas/frankenphp:1-php8.5` pinned by digest)    | Caddy terminates TLS and reverse-proxies HTML `/` to Next `:3000`; `/api/*` and `/.well-known/mercure` stay on PHP. No separate web server.                                                                                                                                                                                                                              |
-| ORM                       | **Doctrine ORM 3.6**, DBAL 4.4, Migrations 3.9 (bundle 4.0), Persistence 4.2                  | Breaking vs 2.x/legacy: `EntityManager::flush($entity)` removed (flush takes no args); `Query::iterate()` → `toIterable()`; DBAL 4 removed `fetchAll()` → `fetchAllAssociative()`; `Connection::query()` → `executeQuery()`; `ResultStatement` gone. `AbstractController::json()` preferred over manual `new JsonResponse(json_encode(...))` so Serializer groups apply. |
+| ORM                       | **Doctrine ORM 3.6**, DBAL 4.4, Migrations 3.9 (bundle 4.0), Persistence 4.2                  | Breaking vs 2.x/legacy: `EntityManager::flush($entity)` removed (flush takes no args); `Query::iterate()` → `toIterable()`; DBAL 4 removed `fetchAll()` → `fetchAllAssociative()`; `Connection::query()` → `executeQuery()`; `ResultStatement` gone. Responses go through the project's own `ResourceResponder` / `JsonResponder`, not `AbstractController::json()` — neither the base controller nor the Serializer is used in `api/src`. |
 | Database                  | **PostgreSQL** (Compose service)                                                              | Use Doctrine migrations (`make db.migrate` / `db.diff`). Fixtures via Hautelook Alice. Never modify prod DB directly.                                                                                                                                                                                                                                                    |
 | Async / Events            | Symfony Messenger 8 + Doctrine transport                                                      | `messenger_worker` is a **separate Compose service in prod/ci** — not run in the web container. See `docs/architecture-api.md` for transport, serializer, and audit-table semantics before generating handlers.                                                                                                                                               |
 | Realtime                  | Symfony Mercure 0.8 (+ bundle 0.5)                                                            | Served at `/.well-known/mercure` on the FrankenPHP origin. Prod requires `CADDY_MERCURE_JWT_SECRET`.                                                                                                                                                                                                                                                                     |
@@ -46,13 +46,13 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 | Package manager      | **npm**                                                                          | Lockfile: `pwa/package-lock.json`. Do not switch to pnpm/yarn or generate their lockfiles.                                                                                                                        |
 | Framework            | **Next.js 16.3** (App Router, Turbopack)                                         | Beyond most training data — prefer reading existing `src/app/` patterns over memory. Turbopack is the dev bundler; Webpack-specific `next.config.*` entries silently no-op. Server Actions API differs from 14.x. |
 | UI runtime           | **React 19.2**                                                                   | Use `use()` for promise unwrapping; `React.FC` is out of favor — use plain function components with typed props.                                                                                                  |
-| Language             | **TypeScript 6** (`strict: true`)                                                | Strict mode is ON in `pwa/tsconfig.json`. Decorators need `experimentalDecorators` + `emitDecoratorMetadata` (required by Inversify). `target: ES2017`.                                                           |
+| Language             | **TypeScript 6** (`strict: true`)                                                | Strict mode is ON in `pwa/tsconfig.json`. Decorators need `experimentalDecorators` + `emitDecoratorMetadata` (required by Inversify). `target: ES2025`.                                                           |
 | Styling              | **Tailwind 4.3** (via `@tailwindcss/postcss`) + Shadcn 4.16                      | **No `tailwind.config.js`** — Tailwind 4 is CSS-first. Configuration lives in `pwa/src/app/globals.css` via `@theme {}` / `@config`. Do **not** generate v3-style JS config.                                      |
 | UI kit               | Shadcn, Base UI React, tw-animate-css, tailwind-merge, cva, lucide-react         | BEM class naming (`block__element--modifier`), mobile-first.                                                                                                                                                      |
 | DI                   | **Inversify 8** + reflect-metadata                                               | Constructor injection of **domain interfaces** (defined in `src/context/<bc>/domain`). `reflect-metadata` must be imported **once** at the app entry point. Use `@injectable()` + `@inject()`.                    |
 | Forms                | react-hook-form + `@hookform/resolvers`                                          | —                                                                                                                                                                                                                 |
 | Unit tests           | **Vitest 4**                                                                     | Config: `pwa/vitest.config.ts` (v4 config API differs from v1/v2). Command: `make pwa.test.unit c='src/context/foo/bar.test.ts'`.                                                                                 |
-| E2E tests            | **Playwright 1.62**                                                              | Config: `pwa/playwright.config.ts`. Runs on the **host**, never in a container. `baseURL` = `PLAYWRIGHT_BASE_URL` ?? (`CI` ? `https://localhost` : `http://127.0.0.1:3000`), so `make pwa.test.e2e` defaults to `:3000` and Playwright **spawns** `dev:e2e` itself. Hitting the live HTTPS stack means setting `PLAYWRIGHT_BASE_URL` yourself — CI sets it alongside `CI: true`. |
+| E2E tests            | **Playwright 1.62**                                                              | Config: `pwa/playwright.config.ts`. Runs on the **host**, never in a container. `baseURL` = `PLAYWRIGHT_BASE_URL` ?? (`CI` ? `https://localhost` : `http://127.0.0.1:3000`). The Compose stack is a prerequisite either way (the target seeds through it and the API fixtures default to `https://localhost`); what changes is the **front-end**: by default Playwright serves it from a host-spawned `dev:e2e` on `:3000`, not the containerised Next behind FrankenPHP. |
 | Testing libs         | @testing-library/react 16, jest-dom 7, jsdom 30                                   | —                                                                                                                                                                                                                 |
 | Lint / format        | ESLint 10.8 + `eslint-config-next` 16.2 + `eslint-config-prettier`, Prettier 3.9 | Run via `make pwa.quality`.                                                                                                                                                                                       |
 | Integrations in deps | `@google/genai`                                                                  | Present — do not assume usage; check code before wiring.                                                                                                                                                          |
@@ -90,14 +90,14 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - No global state: `global`, static mutable state, and service-locator patterns are forbidden; use constructor DI.
 - Early returns; max nesting 3–4 levels; functions small and single-purpose.
 - Never import framework/ORM/HTTP classes inside `Domain/` — domain stays pure (see `docs/rules/architecture.md`).
-- Namespace root is `Erpify\` → `api/src/`. Tests: `Erpify\Tests\` → `api/tests/`. Top-level boundaries today are `Backoffice`, `Frontoffice`, `Iam`, `Organization`, `Shared` — a new feature joins one of them or earns a new one deliberately; it never lands loose at the root.
+- Namespace root is `Erpify\` → `api/src/`. Tests: `Erpify\Tests\` → `api/tests/`. Top-level boundaries today are `Backoffice`, `Frontoffice`, `Iam`, `Organization`, `Shared` (plus `Kernel.php`) — a new feature joins one of them or earns a new one deliberately; no other file belongs at the root.
 - Doctrine entities live in `Domain/Entity` and may carry **passive persistence/validation metadata** (`#[ORM\…]`, `#[Assert\…]`) — documented exception in `docs/rules/architecture.md` (example: `api/src/Backoffice/Bank/Domain/Entity/Bank.php`). Serializer `#[Groups]` are **not** carried on entities: the HTTP wire contract is owned by per-view Resource DTOs (`Application/Resource/`) mapped from the entity in `Infrastructure/Http/` — the entity is never serialized (see `docs/adr/api-resource-dtos.md`). Behavioral framework code (`EntityManagerInterface`, `Request`/`Response`, Messenger envelopes) stays out of `Domain/`.
 
 #### TypeScript (pwa/)
 
 - `strict: true` in `pwa/tsconfig.json` — respect it; no `// @ts-ignore` or `any` without a written reason.
 - Decorators require `experimentalDecorators` + `emitDecoratorMetadata` (already set) — Inversify depends on this; do not flip off.
-- `target: ES2017`. Use modern ES features (async/await, optional chaining, nullish coalescing, top-level `await` only where Next allows it).
+- `target: ES2025`. Use modern ES features (async/await, optional chaining, nullish coalescing, top-level `await` only where Next allows it).
 - Prefer `const`; never `var`. Arrow functions for callbacks; named `function` for top-level exports where a clearer stack trace helps.
 - **No default exports** for modules under `src/context/**` — named exports only. App Router `page.tsx` / `layout.tsx` default exports are the exception Next.js requires.
 - Interfaces (not `type` aliases) for DI contracts in `domain/`; `type` for unions/utility types.
@@ -114,11 +114,11 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 - **Kernel**: `Erpify\Kernel` in `api/src/Kernel.php` — do not move or rename.
 - **Routing**: attribute-only (`#[Route]`) on controllers. No YAML route files in `src/`. Group controllers per bounded context under `Backoffice/` or `Frontoffice/`.
-- **Controllers**: thin. Extend `AbstractController`; delegate to an Application-layer use case. Return via `$this->json(...)` so Serializer groups apply — do **not** hand-roll `new JsonResponse(json_encode(...))`.
+- **Controllers**: thin, and they extend **nothing** — invokable `final readonly class` delegating to an Application-layer use case. No `AbstractController`, no `$this->json(...)`: the response goes through `ResourceResponder` / `JsonResponder` (zero `extends AbstractController` in `api/src`).
 - **DI**: autowiring + autoconfiguration default. Register explicit services in `services.yaml` only when autowiring can't resolve (tagged iterators, multiple implementations, factories). Bind domain interfaces to infra implementations via `_defaults` + `bind:` or `instanceof`.
 - **No behavioral framework types in `Domain/`**: no `Request`, `Response`, `EntityManagerInterface`, `SerializerInterface`, `HttpException`. Those belong in `Application/` (orchestration) or `Infrastructure/` (adapters). Documented exception: entities may carry passive **persistence/validation** metadata (`#[ORM]`, `#[Assert]`) — **not** `#[Groups]`, which belongs on the per-view Resource DTOs (zero `#[Groups]` exist in `api/src`). See [`rules/architecture.md`](./rules/architecture.md).
 - **Validation**: Symfony Validator attributes on request DTOs in `Application/Http` (enforced by `#[MapRequestPayload]` / `#[MapQueryString]` at mapping time) **and** on domain entities as invariants, enforced by the shared `Validator::ensure(...)` before save.
-- **Serialization**: use Serializer groups (`#[Groups]`) on DTOs; never expose domain entities directly over HTTP.
+- **Serialization**: never expose domain entities over HTTP. The wire contract is a per-view Resource DTO built by a `*ResourceMapper` and emitted through `ResourceResponder` / `JsonResponder`. There is no Serializer in `api/src` — zero `#[Groups]`, zero `SerializerInterface`.
 - **Messenger**:
     - Commands/queries/events implement marker interfaces from `Shared/` — do **not** couple handlers to `Symfony\Messenger\*` envelopes in domain code.
     - The **`messenger_worker`** is a separate Compose service in prod/ci — handlers must be idempotent and tolerate re-delivery.
@@ -199,7 +199,8 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 #### JS — Playwright 1.62 (pwa/)
 
 - Config: `pwa/playwright.config.ts`. Run via `make pwa.test.e2e`. Reports: `make pwa.test.e2e.reports`.
-- `baseURL` comes from `PLAYWRIGHT_BASE_URL` ?? (`CI` ? `https://localhost` : `http://127.0.0.1:3000`) — never hard-code it in a spec. Nothing in the Make layer sets either variable, so the **default** of `make pwa.test.e2e` is `:3000` with `useWebServer` true: Playwright starts its own `dev:e2e`, and the Compose stack you have running is not what the specs hit. To test against the live stack, export `PLAYWRIGHT_BASE_URL=https://localhost` (what `ci.yml` does, together with `CI: true`); from a worktree, point it at that stack's ephemeral HTTPS port, because Playwright is on the host and cannot reach the internal Docker network.
+- `baseURL` comes from `PLAYWRIGHT_BASE_URL` ?? (`CI` ? `https://localhost` : `http://127.0.0.1:3000`) — never hard-code it in a spec. Nothing in the Make layer sets either variable, so the **default** run resolves `:3000` and `useWebServer` is true: Playwright serves the front-end from its own `dev:e2e` (skipping the spawn if something already answers on `:3000`). The API side is the Compose stack regardless — `pwa.test.e2e` seeds through `docker compose exec`, the spawned Next gets `NEXT_PUBLIC_API_BASE_URL=https://localhost`, and `apiBaseURL()` in `pwa/tests/e2e/fixtures/api.ts` falls back to the same.
+- **Anything needing same-origin HTTPS must be told so explicitly**: a cookie scoped to `https://localhost` is not sent to a browser sitting on `http://127.0.0.1:3000`. `PLAYWRIGHT_BASE_URL=https://localhost make pwa.test.e2e` is the documented form (see the header of `pwa/tests/e2e/backoffice/banks-realtime.spec.ts` for the Mercure `SameSite=Strict` case); from a worktree use that stack's mapped 443 port, since Playwright is on the host and cannot reach the internal Docker network.
 - Each spec independent: create its own data, clean up after. No ordering between specs.
 - Locators: role/text based (`getByRole`, `getByLabel`). CSS/XPath selectors last resort.
 - Never sleep. Use `expect(locator).toBeVisible()` / `toHaveText()` auto-waiting.
@@ -245,7 +246,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 - **PHP**: PHP-CS-Fixer (`api/tools/ecs/.php-cs-fixer.dist.php`), PHPCS, PHPStan 2 (`api/tools/phpstan/phpstan.neon`, `level: max` — sole type gate), Rector 2, PHPMD. Run all via `make php.quality`. Don't hand-format against these tools.
 - **JS/TS**: ESLint 10 + `eslint-config-next` + `eslint-config-prettier`, Prettier 3.9. Run via `make pwa.quality`; fix via `make pwa.lint` / `make pwa.format`. Don't hand-format.
-- **All files**: `.editorconfig` wins. LF line endings (enforced by pre-commit). Max file size 1MB (pre-commit). No mixed line endings.
+- **All files**: `.editorconfig` wins. LF line endings, no mixed line endings, keep files small — conventions only; no hook enforces them locally.
 - Aggregates: `make app.quality` (both sides), `make ci` (`ci.quality` + `ci.test`).
 
 #### UI / CSS (pwa/)
@@ -286,7 +287,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Format: `<type>(<scope>): <subject>` — subject **lower-case**, imperative, no trailing period.
 - Types: `feat | fix | docs | style | refactor | perf | test | build | ci | chore | revert`.
 - Optional body explains **why**; reference issues in the footer (`Closes #123`).
-- **Nothing enforces this locally.** No `.pre-commit-config.yaml` exists anywhere in the repo and no git hook is installed, so a malformed subject, a trailing-whitespace diff, or a committed secret is caught by review and CI — never by your commit. `docs/contribution-guide.md` still prints a `pre-commit install` recipe; without a config file that command cannot succeed, so treat the hooks as absent until someone lands one. Write as if they existed; never assume they caught anything.
+- **Nothing enforces this locally.** No `.pre-commit-config.yaml` exists anywhere in the repo and no git hook is installed, so a malformed subject, a trailing-whitespace diff, or a committed secret is caught by review and CI — never by your commit. `docs/contribution-guide.md` still prints a `pre-commit install` recipe: running it does **not** fail, it installs a hook that then aborts every subsequent commit with `No .pre-commit-config.yaml file was found`. Treat the hooks as absent until someone lands a config; write as if they existed, and never assume they caught anything.
 - Create new commits rather than amending; prefer small, focused commits.
 - Before committing, run security checks per `docs/rules/security.md` and update `PRODUCTION_SECURITY_CHECKLIST.md` when security-relevant files change.
 
@@ -327,7 +328,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 #### Runtime gotchas
 
-- Playwright's `baseURL` is environment-resolved, and its **default is not the stack you started**: with no `PLAYWRIGHT_BASE_URL` and no `CI`, `make pwa.test.e2e` targets `http://127.0.0.1:3000` and spawns its own `dev:e2e`, so specs can pass against a server that is not the Compose stack. Set `PLAYWRIGHT_BASE_URL` when you mean the live stack.
+- Playwright's `baseURL` is environment-resolved, and the default front-end is **not** the containerised Next: with no `PLAYWRIGHT_BASE_URL` and no `CI` the browser sits on a host-spawned `dev:e2e` at `http://127.0.0.1:3000` while the API stays on `https://localhost`. Cross-origin from the cookie's point of view — set `PLAYWRIGHT_BASE_URL=https://localhost` for anything that needs same-origin.
 - Doctrine ORM 3 / DBAL 4: no `flush($entity)`, no `fetchAll()`, no `Connection::query()`, no `iterate()`. Use `toIterable()`, `fetchAllAssociative()`, `executeQuery()`.
 - Turbopack is the dev bundler. Webpack-only `next.config.*` blocks silently no-op.
 - `messenger_worker` is a **separate Compose service** in prod/ci. Handlers must be idempotent; delivery is at-least-once.
@@ -336,7 +337,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 #### Security (authoritative: `docs/rules/security.md`)
 
-- Never commit secrets: `.env`, credentials, API keys, tokens. Pre-commit scans block most — still review diffs.
+- Never commit secrets: `.env`, credentials, API keys, tokens. **Nothing scans your commit** (no pre-commit config, no installed hook) — reviewing the diff yourself is the only control.
 - No debug artifacts (`var_dump`, `print_r`, `dd()`, `console.log`) in committed code.
 - SQL only via Doctrine DBAL parameterized APIs or ORM. No string-concatenated SQL. No `eval`.
 - CORS: no wildcard `*` for credentialed requests.
@@ -359,7 +360,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 #### Process gotchas
 
 - Never `--no-verify` without explicit authorization.
-- Never amend after a hook failure — create a new commit.
+- Create a new commit rather than amending a pushed one.
 - Never force-push `main` or shared branches without coordination.
 - Never destructive-delete (`rm -rf`, `db.reset`, `docker.down.clean-volumes`, `git reset --hard`) without explicit confirmation.
 - Never introduce a new package manager, build tool, or framework without an approved story.
@@ -396,8 +397,9 @@ grep -E '^FROM .*@sha256:' api/Dockerfile pwa/Dockerfile
 
 **What a clean run does not cover**, so nobody reads it as an all-clear:
 
-- Only paths under `api|pwa|docs|tools`. Everything else this file names is invisible to it — `Makefile`, `make/*.mk`, `compose*.yaml`, `next.config.*`, `nelmio_cors.php`, `.editorconfig`, `PRODUCTION_SECURITY_CHECKLIST.md`.
+- Only paths **written with** an `api|pwa|docs|tools` prefix. Everything else this file names is invisible to it — `Makefile`, `make/*.mk`, `compose*.yaml`, `next.config.*`, `.editorconfig`, `PRODUCTION_SECURITY_CHECKLIST.md` — and so is a doc-relative path such as `` `rules/architecture.md` ``, which resolves only from `docs/`.
 - Only paths whose characters fit `[a-zA-Z0-9._/-]`, so a glob like `` `docs/rules/*.md` `` never matches — and the Markdown rule in `CLAUDE.md` requires writing globs that way.
+- Only paths in **inline code**. A Markdown link target is never backticked, so no `](…)` in this file is ever checked.
 - Deliberate skips: `vendor/` (gitignored, absent in a fresh worktree), trailing-slash directories (prose), and `...` (branch-name patterns).
 - **Nothing about whether a claim is true.** A path can resolve while the sentence around it describes behaviour the code no longer has; only reading the code catches that, and behavioural claims are where the damage is.
 
