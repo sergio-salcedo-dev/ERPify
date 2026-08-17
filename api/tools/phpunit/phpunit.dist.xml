@@ -8,8 +8,11 @@
          failOnNotice="true"
          failOnWarning="true"
          failOnEmptyTestSuite="true"
+         failOnPhpunitNotice="true"
+         failOnRisky="true"
          displayDetailsOnTestsThatTriggerDeprecations="true"
          displayDetailsOnPhpunitDeprecations="true"
+         displayDetailsOnPhpunitNotices="true"
          bootstrap="bootstrap.php"
          cacheDirectory="../../var/cache/phpunit"
 >
