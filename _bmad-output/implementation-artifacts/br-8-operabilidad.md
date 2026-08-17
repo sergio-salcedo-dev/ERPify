@@ -4,12 +4,12 @@ baseline_commit: a4af085fe685720663e3264b4369305b0dcf8d9f
 
 # Story BR-8: Operabilidad — lo que se nota en producción y no en los tests
 
-Status: ready-for-dev
+Status: done
 
 > Épica: [`epics-backlog-resolution.md`](../planning-artifacts/epics-backlog-resolution.md) · Lote BR-8 · Issues #255 #256 #261 #525 #526 #612
-> Rama: `chore/operability-hardening-3ebd` · Worktree: `.claude/worktrees/operability-hardening-3ebd` · Base: `main` @ `a4af085f`
+> Ramas: `chore/operability-hardening-3ebd` (T1-T4, medición) y `chore/br-8-closure-ntpp` (T5-T8, cierre) · Base: `main` @ `a4af085f`
 > **Último lote de la épica.** Al cerrarlo toca el criterio de cierre: barrer el backlog otra vez contra `main`.
-> **Cuatro de los seis issues contienen una decisión que su propio texto declara no-automatizable.** Este documento las plantea; NO las resuelve.
+> **Cuatro de los seis issues contienen una decisión que su propio texto declara no-automatizable.** Este documento las plantea y, al cerrarse el lote, las cinco (DEC-1…DEC-5) están resueltas y registradas aquí.
 > Las mediciones de abajo pasaron un **pase adversarial** que refutó tres y corrigió ocho — ver *Pase adversarial*.
 
 ---
@@ -49,7 +49,7 @@ dos primeros envejecieron.
 
 | # | Medición contra `a4af085f` |
 |---|---|
-| **M10** | **#261 enumera UN tick; hoy hay OCHO, en tres clases `#[AsSchedule]`** — `maintenance` (PruneHandledDomainEvents 1d, **ReportDeadLetterBacklog 1h**), `audit_maintenance` (PruneAuditLog 1d, ReconcileSubjectErasures 1d) e `identity_maintenance` (ReconcilePersonReferences 1d, NotifyLockedIdentities 5min, InspectStoredIdentity 1d, **PruneRetiredSessions 1d**). **El comentario de `compose.prod.yaml:174-178` lista sólo seis y es prosa drifted**: nunca listó el `ReportDeadLetterBacklogMessage` (de #363, siete semanas anterior), y `PruneRetiredSessionsMessage` lo añadió **`a4af085f` — el commit base de esta historia — sin tocar compose**. Lo que sí es exacto es su argumento (`:180-186`): las tres schedules son `->stateful()` y **ninguna** `->lock()` (cero `->lock(` en `api/src`), así que *«this replica pin is the only thing standing between one notice and N»* está sostenido por el código. |
+| **M10** | **#261 enumera UN tick; hoy hay OCHO, en tres clases `#[AsSchedule]`** — `maintenance` (PruneHandledDomainEvents 1d, **ReportDeadLetterBacklog 1h**), `audit_maintenance` (PruneAuditLog 1d, ReconcileSubjectErasures 1d) e `identity_maintenance` (ReconcilePersonReferences 1d, NotifyLockedIdentities 5min, InspectStoredIdentity 1d, **PruneRetiredSessions 1d**). **El comentario de `compose.prod.yaml:174-178` lista sólo seis y es prosa drifted**: nunca listó el `ReportDeadLetterBacklogMessage` (de #363, siete semanas anterior), y `PruneRetiredSessionsMessage` lo añadió **`a4af085f` — el commit base de esta historia — sin tocar compose**. Lo que sí es exacto es su argumento (`:180-186`): las tres schedules son `->stateful()` y **ninguna** `->lock()` (cero `->lock(` en `api/src`), así que *«this replica pin is the only thing standing between one notice and N»* parecía sostenido por el código. **T5 refuta esa última cláusula**: el pin es una declaración que Compose trata como default, no como techo, y lo que la sostenía era el comentario. La cita `:180-186` además ya no localiza el bloque, que se movió al ampliarlo. |
 | **M11** | **`symfony/lock` no está instalado**, verificado en tres direcciones: ausente de `require` y `require-dev` de `api/composer.json`, sin `api/vendor/symfony/lock` (comprobado contra el checkout con vendor instalado), y sin entrada `"name": "symfony/lock"` en `composer.lock`. `rate_limiter.yaml:17-24` declara el trade-off, con `lock_factory: null` en los **cinco** budgets (`:45,57,88,99,132`). Dato para DEC-3: una de las menciones de `composer.lock` no es una dependencia opcional sino un **`conflict`** — `symfony/messenger` exige `symfony/lock` `<7.4`, o sea **≥7.4 es el suelo** de un futuro `composer require`. |
 | **M12** | **RESUELTA por T3: ya existe un pruner de `failed`.** Cuando se midió no existía ninguno. Atacado por seis vías: los únicos `DELETE FROM` de `api/src` son sobre `bank_count`, `audit_log` y `handled_domain_event` (×2); `messenger_messages` sólo aparece en migraciones como `CREATE`/`DROP`; no hay `messenger:failed:remove` fuera de prosa; ningún target de `make/`, script o compose poda el transporte; los únicos cron del repo son los workflows de CI y el dump de Postgres. `PRODUCTION_SECURITY_CHECKLIST.md:687` lo dice también. **Tres cosas lo leen, todas de sólo lectura**: `MessengerDeadLetterReader` (el único ligado a `@messenger.transport.failed`, `services.yaml:46`, tipado al `ReceiverInterface` de lectura por diseño), y sus dos consumidores — `FailedMessagesStatusCommand` (a demanda) y `ReportDeadLetterBacklogHandler` (**horario**). |
 | **M13** | **El warning existe tal cual** — `SymfonyAuditLogger.php:83-91`, `catch (Throwable)` → `warning('Failed to record an activity audit entry.', ['action','level','exception'])` — y está **pinchado por un test**: `SymfonyAuditLoggerTest.php:90-93` hace `assertSame` sobre el array entero, así que una clave añadida lo pone rojo. **Residuo acotado que T4 debe respetar**: «sin PII» vale para las *claves*, no para el mensaje del `Throwable`, que esta clase no controla. El lanzador realista es `DbalAuditLogWriter::write()`, cuyo insert liga `actor_id`, `resource_id`, `metadata`, `ip` y `user_agent`; DBAL 4 ya no imprime los parámetros ligados (`DriverException.php:27`, sin la cláusula `with params [...]` de DBAL 3), así que las formas comunes son limpias — pero la garantía descansa en un formato de vendor, no en una aserción nuestra. |
@@ -78,18 +78,22 @@ de naturaleza distinta, y **sólo uno es trabajo de escribir código ahora**:
 con poda automática. **DEC-5** → umbral **1** y **sin contador**: `warning` → `error`, nada más. **DEC-1** →
 #255 se cierra con evidencia, se retira de la retención el patrón `objects-*.tar.gz` y **el aviso de
 `restore-prod.sh:89-92` se conserva**; **#256 se queda abierto** como tarea de ejecución, no de código.
-**DEC-3** → **sigue abierta**: #261 no entra en el lote. Las dos últimas en resolverse —la sub-decisión de
-DEC-1 y el mecanismo de DEC-5— se detallan bajo la tabla, porque en ambas la resolución **corrige una
-medición** de este mismo documento.
+**DEC-3** → resuelta (2026-08-17) **a favor de Option A, con un testigo**: #261 se cierra `wontfix` y el pin
+de réplica deja de descansar sólo en un comentario. Detalle: *T5 — resultado medido*. Las tres últimas en
+resolverse —la sub-decisión de DEC-1, el mecanismo de DEC-5 y DEC-3— se detallan bajo la tabla, porque en las
+tres la resolución **corrige una medición** de este mismo documento.
 
-**Consecuencia para el cierre de la épica:** con #256 y #261 abiertos, este PR **no cierra BR-8**, y el
-criterio de cierre de la épica (barrer el backlog otra vez contra `main`) no se dispara todavía.
+**Consecuencia para el cierre de la épica:** con DEC-3 resuelta, **BR-8 cierra**. #256 se queda abierto por
+decisión de Sergio (2026-08-17): es tarea de ejecución sobre el host de rehearsal, no de código, y su
+checklist quedó ejecutable en T2 — un lote de código no espera a un drill que sólo el host puede correr. El
+criterio de cierre de la épica (barrer el backlog otra vez contra `main`) se dispara y está ejecutado en
+*Barrido del backlog*.
 
 | # | Decisión | Lo que la medición aporta |
 |---|---|---|
 | **DEC-1** · #255/#256 | **Resuelta** — se retira el patrón de la retención, **el aviso de restore se conserva**, #256 sigue abierto. Detalle y corrección de M3: *Sub-decisión de DEC-1*, bajo esta tabla. | La superficie se retiró deliberadamente (#557) y `restore-prod.sh:89-92` ya lleva el aviso. **Sub-decisión obligatoria**: `backup-prod.sh:90` es el único expirador de los `objects-*.tar.gz` de despliegues reales entre #253 y #557 (M3); borrarlo sin más los inmortaliza. |
 | **DEC-2** · #612 | Decorador de transporte (opción 1 del issue) vs `default_socket_timeout` global (opción 2). | El decorador está verificado alcanzable y suficiente **para `smtp`/`smtps`** (M15), y **sólo** para eso (M15b) — la opción 2 no tiene ese punto ciego, a cambio de un radio global. El radio real son seis casos de uso, cuatro seams y **dos** superficies de worker (M9, M9b). |
-| **DEC-3** · #261 | ¿`wontfix` (seguir en Option A) o instalar `symfony/lock`? | `compose.prod.yaml:180-186` ya escribió el argumento a favor de A **después** de abrirse el issue, y el código lo sostiene (ninguna schedule `->lock()`). Son ocho ticks, no uno (M10). Suelo técnico: `symfony/lock >= 7.4` por el `conflict` de messenger (M11). |
+| **DEC-3** · #261 | **Resuelta: Option A y un testigo.** `wontfix` con evidencia, más el gate que refuta el vector que sí deja diff. Detalle y la medición que la decide: *T5 — resultado medido*. | `compose.prod.yaml` ya escribió el argumento a favor de A **después** de abrirse el issue, y el código lo sostiene (ninguna schedule `->lock()`). Son ocho ticks, no uno (M10) — **nueve tras `PruneFailedMessagesMessage` de T3**. Suelo técnico: `symfony/lock >= 7.4` por el `conflict` de messenger (M11). Lo que la decisión aporta encima del issue: **`replicas: 1` no impide `--scale`**, medido contra Compose, así que ninguna de las dos opciones del issue describía bien lo que el pin garantizaba. |
 | **DEC-4** · #525 | **Resuelta: 30 días con poda automática, y la ventana ES el SLA de triage** — la tercera pregunta del issue, que ninguna otra cosa del repo respondía. Detalle: *T3 — resultado medido*. | `failed` es durable **a propósito**; podarlo cambia el contrato. Es la única tabla hermana sin retención (M12), y el pruner tendría que convivir con una alarma **horaria**. |
 | **DEC-5** · #526 | ~~Regla en Sentry vs chequeo in-app.~~ ~~Queda el **umbral** y de dónde sale el contador.~~ **Resuelta: umbral 1, sin contador** — y la pregunta estaba mal planteada, porque en prod la línea a la que apunta no existe. Detalle: *Mecanismo de DEC-5*, bajo esta tabla. | `ReportDeadLetterBacklogHandler` es el precedente enviado de esta forma exacta, elegido por este mismo motivo. |
 
@@ -336,10 +340,24 @@ Los dos siguientes los encontró T7, y el tercero es de la misma familia que los
         `Throwable` y en nada más.
   - [x] Deja de ser espejo de `ReportDeadLetterBacklogHandler`: aquel cuenta filas que **existen**, aquí el
         fallo es que la fila **no se escribió**. Ese es el motivo de que no haya contador.
-- [ ] **T5 — DEC-3 · #261**: implementar Option B, o cerrar `wontfix` con el argumento de `compose.prod.yaml:180-186`.
-- [ ] **T6 — verificación completa** (ver *Gates*)
-- [ ] **T7 — segundo pase adversarial** sobre el código que se escriba, antes de la PR que lo lleve.
-- [ ] **T8 — cierres con evidencia** para cada issue que cierre sin código
+- [x] **T5 — DEC-3 · #261**: cerrado `wontfix` sobre Option A, **y pagado el testigo que faltaba**.
+  - [x] **La consulta se llevó a Winston y Amelia antes de decidir**, y no se promedió: los dos descartan
+        Option B por YAGNI y **difieren en lo que el gate compra**. Winston lo leía como retirar el invariante
+        de la prosa; Amelia midió que sólo retira la mitad. La medición le da la razón a Amelia en el hecho y a
+        Winston en la dirección, y el cierre lo dice en vez de escoger la frase más cómoda.
+  - [x] **El gate de réplica, en la clase que ya sabía cuál es el servicio consumidor** —
+        `ScheduleConsumptionGateTest` refuta un consumidor con más de una réplica en cualquiera de los dos
+        compose, y `compose.prod.yaml` sin declararla. La regla vive en `tests/Support/ScheduleConsumption.php`
+        y su falsificación en `ScheduleReplicaRulesGateTest`, clase nueva: el eje es distinto del de consumo
+        y meterlo en `ScheduleConsumptionRulesGateTest` la dejaba en 12 métodos públicos, que PHPMD refuta.
+  - [x] **Declarado el vector que NO cubre**, en los cuatro sitios que lo afirmaban de más (el docblock del
+        gate, `compose.prod.yaml`, el `CLAUDE.md` raíz y `api/CLAUDE.md`): el pin ata el fichero, nunca el
+        despliegue.
+  - [x] Sin `symfony/lock`: la dependencia compra escalar un worker que nada satura, y su store natural
+        (`PostgreSqlStore`) mete un segundo productor de advisory locks junto al de `DbalFailedMessagePruner`.
+- [x] **T6 — verificación completa** (ver *Gates*)
+- [x] **T7 — segundo pase adversarial** sobre el código que se escriba, antes de la PR que lo lleve.
+- [x] **T8 — cierres con evidencia** para cada issue que cierre sin código
 
 ### T4 — resultado medido
 
@@ -403,7 +421,7 @@ guardianes — una fila `async` de la misma edad que debe sobrevivir, y un gate 
 `messenger.yaml`, porque renombrar la cola en el DSN dejaría el pruner casando cero filas para siempre, en
 silencio y en la dirección segura.
 
-**Falsificación: nueve mutaciones, nueve rojos** (tabla abajo). La primera vuelta tuvo **una con cero rojos**
+**Falsificación: diez mutaciones, diez rojos** (tabla abajo). La primera vuelta tuvo **una con cero rojos**
 —ensanchar la ventana a `<=`— porque ninguna fila sembrada caía *exactamente* en el corte; añadida la fila en
 la frontera, roja. Misma familia que las cuatro de T1.
 
@@ -588,16 +606,270 @@ patrón menos no está en sus disparadores.
 
 ---
 
+## T5 — resultado medido
+
+**El hecho que decide DEC-3 no estaba en ninguna de las dos opciones del issue: `replicas: 1` no impide
+escalar.** Medido con dos servicios idénticos salvo el pin:
+
+| Servicio | `docker compose up -d --scale svc=2` | Exit | Contenedores CORRIENDO |
+|---|---|---|---|
+| con `deploy.replicas: 1` | — | **0** | **2** (`-1`, `-2`) |
+| sin bloque `deploy` | — | **0** | **2** (`-1`, `-2`) |
+
+**La primera versión de esta tabla midió `--dry-run` y escribió «crea dos contenedores» en seis sitios.** Un
+`--dry-run` imprime un plan; no arranca nada. Era el precondicionante vendido como consecuencia — el error
+que este lote lleva toda la épica denunciando, cometido en la medición que sostiene su última decisión. La
+re-medición con `up -d` y `docker compose ps` confirma la conclusión, pero la evidencia anterior no la
+soportaba. Se retira además la frase «salida byte a byte idéntica»: la salida de Compose no es determinista
+entre corridas, así que no era una propiedad de nada.
+
+Así que la frase de `compose.prod.yaml` —*«MUST stay at replicas: 1»*— describía
+una restricción que el fichero **no imponía**, y las dos opciones del issue discutían sobre escalar cuando el
+invariante real es *«exactamente un reloj»* y su único guardián era un comentario. Uno que, por M10, **ya
+había derivado dos veces**.
+
+**Lo que sostiene el invariante, medido y no citado.** `Checkpoint::acquire()`
+(`vendor/symfony/scheduler/Generator/Checkpoint.php:34-59`) devuelve `true` **incondicionalmente** cuando la
+schedule no lleva `->lock()`, y ninguna de las tres lo lleva (el único `->lock(` de `api/src` es de
+`OrderedAuditSubjectTrailErasure`, ajeno). El pool durable que introdujo **#730** comparte *estado*, nunca
+*exclusión*.
+
+**Y aquí la primera versión de esta sección afirmaba de más, en la dirección cómoda.** Decía que dos réplicas
+«generan el mismo tick» y que #730 «no reforzó ni debilitó el argumento del pin». Las dos son falsas:
+`MessageGenerator` **relee el pool compartido en cada poll** y suprime un tick que la otra réplica ya guardó,
+así que la duplicación no es incondicional sino una **ventana** — la que va del `acquire()` del ganador a su
+`save()`, que corre *después* del handler. Antes de #730 el pool era el de filesystem por contenedor: dos
+checkpoints independientes y duplicación en **todos** los ticks, siempre. #730 por tanto **estrechó
+materialmente** lo que el pin previene, y decir lo contrario abarataba el argumento a favor de Option A
+usando un hecho que juega en su contra.
+
+Lo que sobrevive a la corrección es justo el tick que decide: los ocho barridos idempotentes colapsarían casi
+siempre en esa carrera, y `NotifyLockedIdentitiesMessage` mantiene la ventana abierta durante un intercambio
+SMTP. El pin sigue justificado **por ese uno**, no por los nueve.
+
+**La decisión, por tanto, se parte en dos y sólo una es de dependencias.** No instalar `symfony/lock`
+(compra escalar un worker que nada satura, con `PostgreSqlStore` metiendo un **tercer** productor de advisory
+locks junto a los de `DbalAuditLogPruner` y `DbalFailedMessagePruner`, y con el TTL de
+`Checkpoint::release():94-105` —que retiene el lock mientras el worker viva— como razonamiento nuevo en el
+camino que manda correo). Y **sí** pagar el
+testigo del vector que deja diff.
+
+**Falsificación: nueve mutaciones, nueve rojos**, todas re-medidas sobre el árbol enviado (las seis primeras
+se habían medido sobre uno intermedio, que es la misma clase de defecto que la tabla registra abajo):
+
+| Mutación | Rojos |
+|---|---|
+| `compose.prod.yaml` a `replicas: 2` | la aserción de réplica, con el conteo en el mensaje |
+| borrar la línea `replicas` de prod | esa misma y la de declaración explícita |
+| `replicas: "${SCHEDULER_REPLICAS:-1}"` | las dos, por `RuntimeException` — no por un pin fingido |
+| **`replicas: 2` en `compose.dev.yaml`** | la aserción de réplica sobre el overlay de dev |
+| **`SCHEDULER_CONSUMER_REPLICAS = 2` + compose a 2** | `theOnlyPermittedReplicaCountIsOne` |
+| quitar la guarda `is_int` | `itRefusesAReplicaCountItCannotEvaluate` |
+| quitar la guarda de servicio ausente | `itRefusesToReadAConsumerTheFileDoesNotDeclare` |
+| **quitar la guarda de documento sin `services`** | `itRefusesADocumentThatDeclaresNoServices` |
+| **sacar `compose.prod.yaml` de `REPLICA_SCOPE`** | `theDeployedComposeFilePinsTheSchedulerConsumerInWriting` |
+| `declaredReplicasOf()` devolviendo siempre `null` | 6 tests |
+
+**Y dos veces seguidas la mutación mordió el sitio equivocado, con la misma causa.** Al medir «quitar la
+guarda de servicio ausente» el reemplazo cogió la primera `is_array($definition)` del fichero, que es la de
+`consumedTransportsByServiceIn`; al medir «sacar el fichero desplegado del mapa» cogió `SCHEDULER_CONSUMER`,
+que acaba con la misma línea que `REPLICA_SCOPE`. Las dos salieron verdes, o rojas por el motivo equivocado,
+hasta anclar el reemplazo. La regla que queda: **una mutación acusa al instrumento antes que a la premisa**, y
+un reemplazo por texto necesita un ancla que sólo case en un sitio.
+
+**Las cuatro mutaciones en negrita existen porque el pase adversarial las pidió**, y las tres eran agujeros
+reales: el overlay `compose.dev.yaml` quedaba fuera del barrido (un `replicas: 2` ahí corría dos relojes en
+dev con todo verde), la constante no estaba pineada (dos ediciones coordinadas dejaban el eje entero vacuo,
+y además convertían el fixture de falsificación en un servicio conforme), y la guarda del documento sin
+`services` no tenía rojo propio porque caía en la excepción de al lado — indistinguible hasta anclar los
+mensajes.
+
+**Una mutación midió cero rojos y el defecto era del instrumento, no del gate.** «Quitar la guarda de
+servicio ausente» salió verde porque el reemplazo mordió la **primera** `is_array($definition)` del fichero,
+que es la de `consumedTransportsByServiceIn`, no la mía. Anclada por el mensaje de su excepción, roja. Vale
+registrarlo por lo que enseña: una mutación verde acusa al instrumento antes que a la premisa, que es lo
+mismo que este lote midió en T1 y en T3.
+
+**Residuo que la mutación destapó y no se paga aquí:** la guarda de `consumedTransportsByServiceIn` **no
+tiene rojo** — anularla deja los 38 tests verdes. Es preexistente y de otra cláusula; queda dicho, no tapado.
+
+**Lo que el gate NO prueba, escrito en el gate y no sólo aquí:** que el despliegue corra un solo reloj. Cubre
+la réplica **escrita en el repositorio**; un `--scale` en una línea de comandos no deja rastro que ningún gate
+pueda leer, y tampoco lo deja un servicio que herede el `command` vía `extends` (nadie usa `extends` hoy; se
+nombra en vez de guardarse, porque una regla para una forma que nadie escribe es especulativa). El camino de
+despliegue real (`make deploy.local`, o `ENV=prod make docker.up.wait` — `docs/vps-deployment.md`) no pasa
+`--scale`, así que hoy no hay violador vivo — pero eso es una propiedad del procedimiento, no del código, y
+por eso se declara en vez de venderse. La entrada abierta de `PRODUCTION_SECURITY_CHECKLIST.md` sobre la
+entrega única del aviso de bloqueo **sigue abierta** por esa mitad exacta, con su alcance actualizado.
+
+### Reconciliación con `main` — lo que el artefacto no sabía
+
+- **#730 (`fix(shared): stop every deploy re-anchoring the daily maintenance ticks`)** mergeó después de T3 y
+  no figuraba aquí. Movió los checkpoints a un pool Postgres durable y añadió
+  `SchedulerCheckpointDurabilityGateTest`. Toca la superficie de DEC-3 y por eso entra en la medición de T5.
+- **El *defer* del gate de paridad `when@test`/`when@prod` NO está resuelto, y afirmarlo fue un error de
+  este cierre.** `ObservabilityChannelGateTest` existe, pero cubre otra cosa: que el canal `observability`
+  tenga handler always-on y quede excluido del `fingers_crossed`. Lo que el *defer* nombraba —`action_level`,
+  el `level` del `nested`, y que ninguno excluya el canal `app`— **sigue sin gate**, y el docblock del propio
+  test lo dice: *«this gate deliberately does not equate them»*. Subir el `level` de `observability` en prod
+  silenciaría la línea que T4 envió con todos los gates verdes. Los tres sitios que lo listan como pendiente
+  son correctos y se quedan. Tampoco es deriva de `main`: ese test lo trajo **#727, el propio T4**.
+- **Los dos hermanos `warning` de `Iam/Identity` siguen vivos**: `RecordLockoutAuditBestEffort:60` y
+  `RecordRecoveryThrottleAuditBestEffort:81` siguen en `warning(`. El *defer* de la revisión de T4 no se ha
+  pagado; se verifica contra el árbol, no contra la nota.
+- **Los ticks son nueve, no ocho.** M10 contó ocho contra `a4af085f`; `PruneFailedMessagesMessage` (T3) es el
+  noveno, y el comentario de `compose.prod.yaml` ya los lista todos desde la revisión de #729.
+
+---
+
+## Pase adversarial (código) — T5
+
+Ejecutado **antes de `gh pr create`**, sobre el árbol final, por tres lectores independientes en sólo lectura
+con lentes distintas —¿puede fallar cada aserción nueva?, ¿es cierta cada afirmación sobre Compose, el
+scheduler y el barrido?, ¿qué frases del repositorio vuelve falsas este cambio?—, cada uno instruido a
+refutar. **Veintiocho hallazgos: cuatro GRAVE, trece MEDIA, once LEVE. Todos aplicados o declarados.**
+
+**GRAVE · Medí un plan y publiqué una consecuencia, en seis sitios.** La sonda que decide DEC-3 corrió con
+`--dry-run`, que imprime lo que Compose *haría*; los seis sitios decían «crea dos contenedores». Re-medido
+con `up -d` + `docker compose ps`: **dos contenedores corriendo** para el servicio pineado, exit 0, igual que
+para el no pineado. La conclusión aguanta y la evidencia no la soportaba — que es exactamente la distinción
+que este lote existe para defender. Retirada además la coletilla «salida byte a byte idéntica»: la salida de
+Compose no es determinista entre corridas, así que no describía ninguna propiedad.
+
+**GRAVE · El bloque de `compose.prod.yaml` se contradecía dentro de sí mismo.** Dejé en pie *«this replica pin
+is the only thing standing between one notice and N»* y *«keeps exactly one clock running»* diez líneas por
+encima de la medición que las refuta, y escribí *«the line above used to read as though it did»* — un
+comentario relativo al cambio, prohibido por el `CLAUDE.md` raíz, y falso además en presente porque la línea
+seguía ahí sin tocar. Reescrito el bloque entero.
+
+**GRAVE · El artefacto declaraba #261 cerrado y el issue estaba OPEN, sin un solo comentario.** T8 quedaba
+marcado sobre un conjunto vacío, y `compose.prod.yaml` remitía a un registro externo que no existía — la clase
+exacta de afirmación infalsificable que el lote persigue. Corregido en el orden correcto: primero el
+comentario de evidencia y el cierre `not planned`, después la afirmación. La aritmética lo delataba sola —
+«21 issues abiertos» *y* «#261 cerrado aquí» no podían ser ciertas a la vez, porque los 21 lo incluían.
+
+**GRAVE · La entrega del gate no estaba en el diff que se revisó.** La clase nueva y sus fixtures eran
+ficheros sin trackear, mientras `make/php-quality.mk` ya invocaba su filtro y otra clase la referenciaba por
+`{@see}`. Un commit de rutas explícitas los incluye; el aviso queda porque el fallo es silencioso.
+
+**MEDIA (trece), las cinco que cambian lo que el PR garantiza:**
+
+1. **`compose.dev.yaml` estaba fuera del barrido.** Dev se compone como `compose.yaml + compose.dev.yaml`, así
+   que un `replicas: 2` en el overlay corría dos relojes con los 25 tests verdes. El eje pasa a cubrir los
+   **tres** ficheros de raíz, con su rojo.
+2. **La constante no estaba pineada.** Subir `SCHEDULER_CONSUMER_REPLICAS` a 2 junto con el compose dejaba
+   todo verde — y peor: convertía el fixture de falsificación, que codifica un 2, en un servicio *conforme*.
+   Ahora una aserción propia la fija.
+3. **Los dos `expectException` no anclaban el mensaje**, y el método lanza el mismo `RuntimeException` desde
+   tres sitios (más `Yaml\ParseException`, que hereda de él). Un fixture roto los habría dejado verdes
+   probando otra guarda. Anclados los tres, como ya hacen sus vecinos del directorio.
+4. **Una segunda guarda sin rojo, y era código nuevo de este PR.** El documento sin `services` caía en la
+   excepción de al lado; con los mensajes anclados es distinguible y tiene su caso.
+5. **`#730` sí estrechó la duplicación**, y yo escribí que la había dejado igual. `MessageGenerator` relee el
+   pool compartido y suprime el tick que la otra réplica guardó, así que la duplicación pasó de incondicional
+   a una ventana. Usaba a favor de Option A un hecho que juega en su contra; corregido en los cinco sitios que
+   decían «genera el mismo tick».
+
+Las otras ocho: el barrido del backlog era un **re-descubrimiento** (los tres issues llevan la medición desde
+el 2026-08-06 y #267 ya fue reescrito) y su verdicto sobre #268 contradecía el comentario del propio issue;
+la aritmética del censo (16, no 18); el *defer* del gate de paridad **no** está resuelto y afirmarlo era falso
+—`ObservabilityChannelGateTest` cubre otro eje, y lo trajo el propio T4—; `docs-info/production-deployment.md`
+listaba **ocho** de los nueve ticks, tercera aparición del mismo drift dentro de esta historia;
+`PRODUCTION_SECURITY_CHECKLIST.md` era un quinto sitio que decía «nada lo enforcea»; `docs/deployment-guide.md`
+y `docs/architecture-api.md` presentaban #261 como alternativa viva; el *Alcance* nombraba la clase de
+falsificación equivocada; y tres citas `fichero:línea` de la sección *Gates* habían quedado rancias.
+
+**LEVE (once), aplicados o declarados:** `extends` evade el barrido y se declara en vez de guardarse (nadie lo
+usa) · el mensaje de la aserción no contemplaba `replicas: 0`, que también rojea · la prosa del fixture
+afirmaba cosas que nada asertaba · el nombre `itSeparates…` prometía una distinción que el código no hace ·
+la cita del camino de despliegue apuntaba a `docker.up` donde el runbook prescribe `deploy.local` /
+`docker.up.wait` · «segundo productor de advisory locks» era el **tercero** · el «22 tests» del residuo se
+midió sobre un árbol intermedio · «nueve ticks» queda escrito a mano en cuatro sitios más que nada recomputa,
+declarado como lo que es · la rama del encabezado era la de T1-T4 · M10 de este mismo documento quedó falsa en
+su última cláusula y se marca como refutada por T5.
+
+**Lo que el pase confirmó como cierto**, y vale tanto como lo que refutó: los 52 bullets `[Review]` siguen
+completos contra `main` (14/20/18) — sin pérdida por squash esta vez; cada filtro del target selecciona
+exactamente su clase, y un filtro sin selección sale **1** por `failOnEmptyTestSuite`; el gate está en
+`php.quality` **y** en `php.quality.dry-run`, así que CI lo corre; `Checkpoint::acquire()`, el envío antes del
+sellado, los nueve ticks, el suelo `>= 7.4` de `symfony/lock` y la ausencia de `--scale` en el camino de
+despliegue son todos exactos; y `scale: 2` junto a `deploy.replicas: 1` lo rechaza Compose por sí solo.
+
+---
+
+## Revisión de seguridad — T5
+
+Recorrida la checklist del `CLAUDE.md` raíz. **No aplican por construcción:** inyección (cero SQL/DQL),
+authn/authz (ni controller ni handler), validación de entrada, mass assignment, codificación de salida,
+CORS/CSRF/Mercure, migraciones, dependencias (el cambio consiste precisamente en **no** añadir una), y todo el
+bloque de `pwa/` (cero ficheros).
+
+El eje que sí aplica es el que el cambio toca: **la entrega única de un aviso de seguridad a una persona.**
+
+- **Lo que el cambio mejora** es acotado y está dicho: un reloj duplicado *escrito en el repositorio* pasa de
+  invisible a rojo, en los tres ficheros compose.
+- **Lo que NO cierra** es la mitad que importa para un atacante con acceso al host: `--scale` en línea de
+  comandos. Medido, no supuesto. Por eso la entrada de `PRODUCTION_SECURITY_CHECKLIST.md` **sigue sin marcar**
+  y su texto ahora distingue las dos mitades en vez de decir que nada lo enforcea.
+- **Secretos:** el gate lee `deploy.replicas` y nada más; no toca ni loguea variables de entorno.
+- **Superficie destructiva:** ninguna. El diff no añade código de producción — sólo tests, un target y prosa.
+
+`docs/rules/security.md` no se toca: no se introduce patrón de seguridad nuevo.
+
+---
+
+## Barrido del backlog — criterio de cierre de la épica
+
+Ejecutado contra `main` el 2026-08-17, que es lo que el criterio pide («si la lección es cierta, esta misma
+épica habrá dejado issues obsoletos»). **21 issues abiertos al empezar el barrido, 20 al terminarlo**: el que
+se movió es #261. Los seis de BR-8: cuatro cerrados con el código (#612, #255, #525, #526), **#261 cerrado
+`not planned`** con su comentario de evidencia, y **#256 abierto a propósito** — tarea de ejecución sobre el
+host, con su checklist ya corregido a los pasos que corren.
+
+**Este barrido se equivocó dos veces seguidas, y la segunda es la que enseña algo.** La primera versión decía
+que ningún issue había quedado obsoleto, escrita sin abrir el árbol. Corregida contra `api/src`, pasó a
+declarar «encuentra dos obsoletos» — y eso también era falso, porque **no abrió los issues**: #266, #267 y
+#268 llevan desde el **2026-08-06** un comentario que ya dice exactamente esto, y el cuerpo de #267 ya fue
+reescrito con la medición. No es un hallazgo: es un **re-descubrimiento**, y el verdicto asimétrico
+(«#268 vivo») contradice el propio comentario de #268 y su checklist, que nombra a #266 y #267 como
+sub-tareas suyas.
+
+Es la regla que este repositorio ya tiene escrita —*el cuerpo de un issue lo superan sus comentarios*—
+incumplida dentro del barrido que existe para no incumplirla. Y había un **tercer** sitio que tampoco abrí:
+el propio fichero de la épica ya clasifica #266, #267 y #268 como «épicas disfrazadas» que **no cuentan para
+el cierre**. Tres registros decían lo mismo antes que yo. Se anota en vez de corregirse en silencio, porque
+el valor del barrido está en su método y el método falló.
+
+| # | Medición contra `main` |
+|---|---|
+| **#266** · `StoragePort::writeStream()` | **Obsoleto.** No hay `api/src/Shared/Storage`, y `StoragePort` aparece **cero** veces en `api/src`. El issue pide un método sobre un puerto que el repositorio ya no tiene. |
+| **#267** · adaptadores de almacenamiento por puerto (`ImageStorage`) | **Obsoleto por la misma causa.** `ImageStorage` y `StoredObject`: cero apariciones en `api/src`. |
+| **#268** · contexto `Documents` | **También alcanzado**, contra lo que dije primero: su propio comentario del 2026-08-06 lo declara desactualizado y su checklist nombra a #266/#267 como sub-features. |
+
+**La causa no es BR-8: es #557**, la misma retirada de superficie que envejeció #255 y #256 (M1, M6) — y
+alguien ya lo había medido y anotado once días antes. **No se cierran aquí**: son features del backlog de
+Sergio, y cerrar por obsolescencia una petición de producto es decisión suya. Lo que este barrido aporta de
+nuevo no es la obsolescencia sino que **siguen abiertos once días después de quedar documentados como
+obsoletos**, que es una decisión pendiente, no un descubrimiento.
+
+**De los 16 restantes** —21 abiertos, menos los tres de almacenamiento, menos #256 y #261 que son del propio
+lote— **ninguno quedó obsoleto por BR-8.** Los que podía haber envejecido son los de scheduler, backup,
+transporte `failed` y auditoría; los dos que más se acercan —#718 (retención de `ip`/`user_agent` en
+evidencia exenta de poda) y #567 (una decisión de `audit:gdpr:erase`)— siguen enteros: BR-8 no tocó ni la
+exención de evidencia ni el comando de borrado.
+
+---
+
 ## Gates
 
 `make php.quality`, `make php.stan` sobre cada fichero PHP tocado, `make app.test`. **T2 no corre ninguno de
 los tres, y la razón se dice en vez de callarse:** su diff no toca ni un fichero PHP ni de `pwa/`, así que las
 tres puertas no leerían nada suyo. Lo que sustituye a un verde ahí está en *T2 — resultado medido*: `bash -n`,
 shellcheck traído a mano, el `find` instrumentado y el one-liner del runbook ejecutado. Si T3/T5 tocan schedules o
-transportes, además `make php.lint.schedule-consumption` (`make/php-quality.mk:217-220`; tres clases de gate
+transportes, además `make php.lint.schedule-consumption` (cuatro clases de gate
 bajo `api/tests/Unit/Shared/Architecture/`, cableado en `php.quality` y en `php.quality.dry-run`). Lee los
 compose de raíz por el bind mount de sólo lectura y **falla en vez de saltar** cuando no está —
-`ScheduleConsumptionGateTest.php:165-180` llama a `$this->fail(...)`, y no hay ningún `markTestSkipped`.
+`ScheduleConsumptionGateTest` llama a `$this->fail(...)` en `composeDirectory()`, y no hay ningún `markTestSkipped`.
 
 **T1 — corridas frescas sobre el árbol final, con su exit code impreso:**
 
@@ -638,6 +910,26 @@ mueve. **`make pwa.quality` / `make pwa.test` no se corren**: el diff no toca ni
 
 **El verde del test de llegada se midió también en la suite completa**, no sólo con `--filter`: la suite
 comparte un `test.log` que nadie trunca, así que un verde aislado no es evidencia de un verde acompañado.
+
+**T5 — corridas frescas sobre el árbol final, con su exit code impreso:**
+
+| Puerta | Exit | Nota |
+|---|---|---|
+| `make php.stan` | **0** | `No errors` |
+| `make php.quality` | **0** | incluye deptrac, PHPMD y `php.lint.schedule-consumption` |
+| `make php.test` | **0** | PHPUnit 2910 tests / 11544 aserciones; Behat 439 escenarios / 4132 pasos |
+| `make php.lint.schedule-consumption` | **0** | 12 + 8 + 7 + 3 = 30 tests en cuatro corridas separadas |
+
+El delta del eje de réplica son **+12 tests** sobre las cuatro clases del gate (18 en `main`, 30 aquí),
+verificado corrida a corrida y no por resta. Las cifras son las del árbol **enviado**: las de la primera
+vuelta —2905 y 25 tests— describían el árbol anterior al pase adversarial, y dejarlas habría sido la misma
+clase de deriva que este lote persigue. `pwa.*` no se corre: cero ficheros de `pwa/` en el diff.
+
+**PHPMD obligó a partir una clase, y la partición era el mejor diseño.** Meter los cuatro casos de réplica en
+`ScheduleConsumptionRulesGateTest` la dejaba en 12 métodos públicos contra un límite de 10. La alternativa era
+`@SuppressWarnings`, con precedente en T1; se descartó porque el eje de réplica **es** otro eje —el fichero ya
+separa consumo y declaración en clases distintas— así que la clase nueva sigue el patrón en vez de esquivar la
+regla. Coste: una línea más en el target, que es donde el propio target avisa de que hay que ponerla.
 
 **Dos decisiones de herramienta, nombradas para que sean revisables:**
 
@@ -939,10 +1231,18 @@ residuo del mensaje del `Throwable`), M15 (la lista de seams estaba mal compuest
    `RETENTION_DAYS` real, y si el offsite propaga borrados o guarda snapshots.
 2. ~~¿#612 se queda en BR-8 o sale a PR propia?~~ **Resuelta** (2026-08-15): la PR #725 se corta a **T1
    solo**. T2/T3/T4 salen en PRs propias; #256 y #261 siguen abiertos.
-3. ~~¿Se toman DEC-2/3/4/5 ahora?~~ **Resueltas las cuatro.** Queda **DEC-3 (#261)** abierta, fuera del lote.
+3. ~~¿Se toman DEC-2/3/4/5 ahora?~~ ~~**Resueltas las cuatro.** Queda **DEC-3 (#261)** abierta, fuera del lote.~~
+   **Las cinco resueltas.** DEC-3 se resolvió el 2026-08-17 en T5 y #261 está cerrado `not planned`.
 4. **Abierta, nacida del GRAVE de T7:** un techo real sobre el tiempo **total** de un envío no cabe en una
    opción de socket. Las tres formas donde sí cabe son un `--time-limit` de worker, un deadline en los
    envoltorios `Send*BestEffort`, o tapar el `max_execution_time = 0` que hoy no acota nada. ¿Issue propio?
+   **Sigue abierta al cierre de BR-8** y se declara así en vez de darse por resuelta: no hay issue creado —
+   verificado, ningún issue abierto la nombra.
+5. **Nacida del barrido:** #266 y #267 describen una superficie retirada por #557. ¿Se cierran por obsoletos,
+   o se reescriben contra el `Documents` de #268? Es decisión de producto, no del lote.
+6. **Nacida de la reconciliación con `main`:** el *defer* de los dos hermanos `warning` de `Iam/Identity`
+   (`RecordLockoutAuditBestEffort:60`, `RecordRecoveryThrottleAuditBestEffort:81`) sigue sin pagarse. La
+   revisión de T4 lo dejó como PR propia «después de T2/T3»; T2 y T3 ya están en `main`.
 
 ## Dev Agent Record
 
@@ -979,7 +1279,8 @@ Todas las sondas son desechables, viven en el `tmp/` gitignoreado y **no entran 
 - **Lo que este PR NO promete:** un techo sobre el tiempo total de un envío. Está dicho en el docblock, en
   `api/.env`, en `docs-info/production-deployment.md` y en el cuerpo de la PR, y es la pregunta 4.
 - **No entra en este PR:** T2 (#255), T3 (#525) y T4 (#526) tienen decisión pero salen en PRs propias; #256 y
-  #261 se quedan abiertos por decisión de Sergio. **BR-8 no se cierra con este PR.**
+  #261 se quedan abiertos por decisión de Sergio. **BR-8 no se cierra con ESE PR** — lo cierra el de T5-T8,
+  con #261 resuelto y sólo #256 abierto a propósito.
 - **T4 (#526) entregado en PR propia.** Una línea de producción, y un test que la hace falsable donde el
   unitario no podía: el unitario pina **lo que la fuente llama**, nunca si Monolog lo conserva. Rojo medido —
   con `warning` el log no crece ni un byte.
@@ -1016,6 +1317,25 @@ Todas las sondas son desechables, viven en el `tmp/` gitignoreado y **no entran 
   `assertSame` del array de contexto queda intacto
 - `api/tests/Unit/Shared/Audit/Infrastructure/Double/RecordingLogger.php` — docblock, boy scout
 - `docs/architecture-api.md`, `docs/adr/audit-activity-log.md` (D3.1, tres frases) — el nivel y su porqué
+
+---
+
+**T5 (#261) + cierre del lote** — rama `chore/br-8-closure-ntpp`:
+
+- `api/tests/Support/ScheduleConsumption.php` — `REPLICA_SCOPE`, `SCHEDULER_CONSUMER_REPLICAS`,
+  `DEPLOYED_COMPOSE_FILE`, `declaredReplicasOf()`
+- `api/tests/Unit/Shared/Architecture/ScheduleConsumptionGateTest.php` — tres aserciones nuevas y el docblock
+- `api/tests/Unit/Shared/Architecture/ScheduleReplicaRulesGateTest.php` — nuevo; la falsificación del eje
+- `api/tests/Unit/Shared/Architecture/ScheduleConsumptionRulesGateTest.php` — sólo el docblock
+- `api/tests/Unit/Shared/Architecture/Fixture/ScheduleConsumption/compose.{scaled-consumer,unpinned-consumer,interpolated-replicas,no-deploy-block,no-services}.yaml`
+  — nuevos
+- `make/php-quality.mk` — la cuarta corrida del gate
+- `compose.prod.yaml` — el bloque de comentario reescrito contra la medición
+- `CLAUDE.md`, `api/CLAUDE.md`, `docs/claude-code-quickref.md`, `docs/architecture-api.md`,
+  `docs/deployment-guide.md`, `docs-info/production-deployment.md` — el eje nuevo y su punto ciego;
+  `docs-info` llevaba además ocho de los nueve ticks
+- `PRODUCTION_SECURITY_CHECKLIST.md` — la entrada de entrega única, con la mitad que ahora sí se gatea
+- `_bmad-output/implementation-artifacts/{br-8-operabilidad.md,sprint-status.yaml}`
 
 ---
 

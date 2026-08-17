@@ -18,8 +18,8 @@ use PHPUnit\Framework\TestCase;
  * a comment or an env var, a whole command parked in a comment, a command written as a plain string, a
  * receiver written after an option, and consumption by the wrong service.
  *
- * The declaration half — which schedules the tree declares at all — is falsified in
- * {@see ScheduleDeclarationRulesGateTest}.
+ * The replica axis of the same gate is falsified in {@see ScheduleReplicaRulesGateTest}, and the declaration
+ * half — which schedules the tree declares at all — in {@see ScheduleDeclarationRulesGateTest}.
  *
  * @internal
  */
