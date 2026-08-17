@@ -83,7 +83,7 @@ final class ResourceNormalizerTest extends TestCase
         $resourceNormalizer = new ResourceNormalizer($innerNormalizer);
 
         $this->expectException(UnexpectedValueException::class);
-        $this->expectExceptionMessage('Expected normalize() to return array, got string.');
+        $this->expectExceptionMessageIsOrContains('Expected normalize() to return array, got string.');
 
         $resourceNormalizer->toArray(new stdClass());
     }

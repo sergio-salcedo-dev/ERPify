@@ -132,15 +132,7 @@ final class ErrorContractGateTest extends TestCase
     {
         $hits = $this->scanForCatchJsonResponseDrift();
 
-        if ([] === $hits) {
-            // Empty allowlist filter result is the green path. Pin the assertion count
-            // so PHPUnit doesn't flag this as a "risky test" with no assertions.
-            $this->addToAssertionCount(1);
-
-            return;
-        }
-
-        $message = self::FAILURE_PREAMBLE . "\n" . \implode("\n", \array_map(
+        $this->assertSame([], $hits, self::FAILURE_PREAMBLE . "\n" . \implode("\n", \array_map(
             static fn (array $hit): string => \sprintf(
                 '%s:%d: %s',
                 $hit['file'],
@@ -148,9 +140,7 @@ final class ErrorContractGateTest extends TestCase
                 $hit['code'],
             ),
             $hits,
-        ));
-
-        $this->fail($message);
+        )));
     }
 
     public function testGateScansAtLeastOneSourceFile(): void

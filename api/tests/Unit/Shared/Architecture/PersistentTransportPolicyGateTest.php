@@ -106,13 +106,7 @@ final class PersistentTransportPolicyGateTest extends TestCase
         $policy = $this->policy();
         $violations = $policy->violations($policy->config()->configuredRoutes(), $policy->eventsInSource());
 
-        if ([] === $violations) {
-            $this->addToAssertionCount(1);
-
-            return;
-        }
-
-        $this->fail(self::FAILURE_PREAMBLE . "\n" . \implode("\n", $violations));
+        $this->assertSame([], $violations, self::FAILURE_PREAMBLE . "\n" . \implode("\n", $violations));
     }
 
     #[Test]

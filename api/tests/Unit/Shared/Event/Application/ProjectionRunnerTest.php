@@ -142,7 +142,7 @@ final class ProjectionRunnerTest extends TestCase
     public function catchUpThrowsForAnUnknownProjector(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('No projector is registered under "missing".');
+        $this->expectExceptionMessageIsOrContains('No projector is registered under "missing".');
 
         $this->runner(
             $this->eventStoreStub(),

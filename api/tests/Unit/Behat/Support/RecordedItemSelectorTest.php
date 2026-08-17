@@ -39,7 +39,7 @@ final class RecordedItemSelectorTest extends TestCase
     public function itFailsLoudlyWhenSeveralItemsExistAndNoneIsSelected(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Ambiguous selection: 2 widgets were recorded');
+        $this->expectExceptionMessageIsOrContains('Ambiguous selection: 2 widgets were recorded');
 
         (new RecordedItemSelector())->select(['first', 'second'], null, 'widget');
     }
@@ -48,7 +48,7 @@ final class RecordedItemSelectorTest extends TestCase
     public function itFailsWhenNothingHasBeenRecorded(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('No widget has been recorded');
+        $this->expectExceptionMessageIsOrContains('No widget has been recorded');
 
         (new RecordedItemSelector())->select([], null, 'widget');
     }
@@ -57,7 +57,7 @@ final class RecordedItemSelectorTest extends TestCase
     public function itFailsWithAOneBasedNumberWhenTheSelectionIsOutOfRange(): void
     {
         $this->expectException(OutOfRangeException::class);
-        $this->expectExceptionMessage('No widget number 3');
+        $this->expectExceptionMessageIsOrContains('No widget number 3');
 
         (new RecordedItemSelector())->select(['first'], 2, 'widget');
     }

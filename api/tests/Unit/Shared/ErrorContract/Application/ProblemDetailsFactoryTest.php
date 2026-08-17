@@ -1241,7 +1241,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             $json,
             'violations must serialize as a JSON array, not an object.',
         );
-        $this->assertSame(1, \preg_match('/"violations":\[\{/', $json));
+        $this->assertMatchesRegularExpression('/"violations":\[\{/', $json);
         $this->assertDoesNotMatchRegularExpression('/"violations":\{/', $json);
     }
 
@@ -2475,7 +2475,9 @@ final class ProblemDetailsFactoryTest extends TestCase
         };
 
         $this->expectException(ProblemBodyTooLargeException::class);
-        $this->expectExceptionMessage('Problem Details body exceeds 16384-byte cap on the required core fields alone.');
+        $this->expectExceptionMessageIsOrContains(
+            'Problem Details body exceeds 16384-byte cap on the required core fields alone.',
+        );
 
         $this->factoryFor()->fromThrowable($exception, self::CID, self::INSTANCE);
     }

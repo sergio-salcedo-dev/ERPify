@@ -32,10 +32,10 @@ final readonly class SecurityLinkMailer
     public function __construct(
         private MailerInterface $mailer,
         private SecuritySenderAddress $securityFrom,
-        #[Autowire('%env(DEFAULT_URI)%')]
+        #[Autowire(env: 'DEFAULT_URI')]
         private string $appBaseUrl,
         private BulletproofEmailChrome $chrome,
-        #[Autowire('%kernel.environment%')]
+        #[Autowire(param: 'kernel.environment')]
         private string $environment,
         private DeliverableSecurityTransport $transport,
     ) {

@@ -23,7 +23,7 @@ final readonly class SendEmailOnBankChanged
         private DomainEventHandlerDeduplicator $domainEventHandlerDeduplicator,
         private NotificationMailer $notificationMailer,
         private LoggerInterface $logger,
-        #[Autowire('%env(DEFAULT_NOTIFICATION_EMAIL)%')]
+        #[Autowire(env: 'DEFAULT_NOTIFICATION_EMAIL')]
         private string $notifyTo,
     ) {
     }

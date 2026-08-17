@@ -9,6 +9,8 @@ use Rector\Naming\Rector\ClassMethod\RenameParamToMatchTypeRector;
 use Rector\Naming\Rector\ClassMethod\RenameVariableToMatchNewTypeRector;
 use Rector\Php83\Rector\Class_\ReadOnlyAnonymousClassRector;
 use Rector\Php84\Rector\MethodCall\NewMethodCallWithoutParenthesesRector;
+use Rector\PHPUnit\PHPUnit120\Rector\Class_\AllowMockObjectsForDataProviderRector;
+use Rector\Symfony\Symfony73\Rector\Class_\CommandHelpToAttributeRector;
 
 return RectorConfig::configure()
     ->withPaths([
@@ -55,6 +57,17 @@ return RectorConfig::configure()
         '*/var/*',
         '*/vendor/*',
         '**/config/reference.php',
+        // Its detector matches any call named `method()` inside a test carrying
+        // #[DataProvider], without checking the receiver is a MockObject — so it fires on
+        // createStub(), which is not one. PHPUnit runs here with failOnDeprecation,
+        // failOnNotice and failOnWarning all on, and the affected classes are green, so the
+        // attribute would suppress a deprecation this tree does not emit.
+        AllowMockObjectsForDataProviderRector::class,
+        // Moving setHelp() into #[AsCommand] splits one command's description across two
+        // places: configure() survives regardless, holding addArgument/addOption/addUsage.
+        // The heredoc also loses its indentation as an attribute argument and collapses the
+        // attribute past the 120-character line limit.
+        CommandHelpToAttributeRector::class,
         // Do not simplify (new Class())->method()
         NewMethodCallWithoutParenthesesRector::class,
         RenameParamToMatchTypeRector::class,

@@ -53,7 +53,7 @@ final class OutboxTableMatchTest extends TestCase
         $context->anOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['bankId', 'ACME']]));
 
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('No outbox event found containing the expected properties');
+        $this->expectExceptionMessageIsOrContains('No outbox event found containing the expected properties');
 
         $context->anOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['absentProperty', 'ACME']]));
     }
@@ -63,7 +63,7 @@ final class OutboxTableMatchTest extends TestCase
         $context = $this->contextHolding((object) ['bankId' => 'ACME']);
 
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('No outbox event found containing the expected properties');
+        $this->expectExceptionMessageIsOrContains('No outbox event found containing the expected properties');
 
         $context->anOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['bankId', 'OTHER']]));
     }
@@ -78,7 +78,9 @@ final class OutboxTableMatchTest extends TestCase
         );
 
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('An outbox event was found containing the properties that should be absent');
+        $this->expectExceptionMessageIsOrContains(
+            'An outbox event was found containing the properties that should be absent',
+        );
 
         $context->noOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['bankId', 'ACME']]));
     }
@@ -134,7 +136,7 @@ final class OutboxTableMatchTest extends TestCase
         $context = $this->contextHolding((object) ['bankId' => 'ACME']);
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('more than two columns');
+        $this->expectExceptionMessageIsOrContains('more than two columns');
 
         $context->noOutboxEventCreatedOnQueueContaining(
             self::ASYNC,
@@ -151,7 +153,7 @@ final class OutboxTableMatchTest extends TestCase
         $context = $this->contextHolding((object) ['bankId' => 'ACME']);
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('repeats a property');
+        $this->expectExceptionMessageIsOrContains('repeats a property');
 
         $context->noOutboxEventCreatedOnQueueContaining(
             self::ASYNC,

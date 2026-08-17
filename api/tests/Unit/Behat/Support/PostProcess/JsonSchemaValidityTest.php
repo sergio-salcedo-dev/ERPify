@@ -45,7 +45,7 @@ final class JsonSchemaValidityTest extends TestCase
     public function testItFailsWhenTheSchemaAcceptsTheDocument(): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('Given JSON validates the schema');
+        $this->expectExceptionMessageIsOrContains('Given JSON validates the schema');
 
         JsonAssertions::withScalarModifiers()->jsonShouldNotBeValid(
             new Json(self::PAYLOAD),

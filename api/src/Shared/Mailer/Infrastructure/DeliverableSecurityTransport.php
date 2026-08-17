@@ -40,9 +40,9 @@ final readonly class DeliverableSecurityTransport
     private const string DISCARD_SCHEME = 'null://';
 
     public function __construct(
-        #[Autowire('%env(MAILER_DSN)%')]
+        #[Autowire(env: 'MAILER_DSN')]
         private string $dsn,
-        #[Autowire('%kernel.environment%')]
+        #[Autowire(param: 'kernel.environment')]
         private string $environment,
     ) {
     }

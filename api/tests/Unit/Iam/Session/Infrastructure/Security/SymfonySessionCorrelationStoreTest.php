@@ -76,9 +76,6 @@ final class SymfonySessionCorrelationStoreTest extends TestCase
         $request = Request::create('/api/v1/me');
         $request->setSession($session);
 
-        $requestStack = new RequestStack();
-        $requestStack->push($request);
-
-        return $requestStack;
+        return new RequestStack([$request]);
     }
 }

@@ -74,20 +74,10 @@ final class StrictRequestPayloadGateTest extends TestCase
     {
         $hits = $this->scanApiSource();
 
-        if ([] === $hits) {
-            // Empty result is the green path. Pin the assertion count so PHPUnit does not flag a
-            // risky no-assertion test.
-            $this->addToAssertionCount(1);
-
-            return;
-        }
-
-        $message = self::FAILURE_PREAMBLE . "\n" . \implode("\n", \array_map(
+        $this->assertSame([], $hits, self::FAILURE_PREAMBLE . "\n" . \implode("\n", \array_map(
             static fn (array $hit): string => \sprintf('%s:%d', $hit['file'], $hit['line']),
             $hits,
-        ));
-
-        $this->fail($message);
+        )));
     }
 
     public function testGateScansAtLeastOneSourceFile(): void
