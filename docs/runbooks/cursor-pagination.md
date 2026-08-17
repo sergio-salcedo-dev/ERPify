@@ -151,7 +151,8 @@ Prefer a roll-forward fix. A full rollback to page-based pagination means revert
 and the cursor-flip commits **together** (the keyset kernel + off-wire engine underneath them stay
 intact); never force-push `main`. No migration rollback is involved — the composite indexes +
 `COLLATE "C"` are independent of the wire contract and stay. The observability channel and listener
-are additive and revert cleanly.
+are additive, but no longer revert cleanly: the channel now carries every report that must survive a
+non-5xx path, so removing it would silence them all and red `BestEffortReportChannelGateTest`.
 
 When undoing the wire flip, the API and the PWA consumer must move together: a page-based PWA against a
 cursor-only API (or vice versa) is broken.

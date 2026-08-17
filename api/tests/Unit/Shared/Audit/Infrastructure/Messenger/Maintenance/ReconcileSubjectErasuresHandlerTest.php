@@ -23,7 +23,7 @@ final class ReconcileSubjectErasuresHandlerTest extends TestCase
     private const string OTHER_SCOPE_ID = 'BankAccount:0197f2b4-0000-7000-8000-000000000001';
 
     #[Test]
-    public function itAlarmsAtErrorLevelSoProductionDoesNotDiscardIt(): void
+    public function itAlarmsAtErrorLevelBecauseADivergenceIsNotAnObservation(): void
     {
         // Prod routes Monolog through `fingers_crossed` with `action_level: error`
         // (config/packages/monolog.yaml), which buffers anything lower and discards it when no error follows.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Throwable;
 
 /**
@@ -29,11 +30,18 @@ use Throwable;
  * The identity is deliberately absent from the log context. The id is the subject's own and a log line is a
  * sink no erasure path reaches; the request's correlation id already ties the entry to the caller for as long
  * as the request trail exists.
+ *
+ * On the always-on `observability` channel the level no longer buys arrival, and that trade is deliberate:
+ * `critical` on the buffered channel DID flush up to fifty of the password-change request's records, real
+ * context this line no longer gets. It is given up on purpose — by this repository's own measurement that
+ * flush emits `ContextListener`'s `debug` line carrying the person's address, which is precisely what the
+ * paragraph above keeps out of this context. `critical` is kept for what it says about the failure.
  */
 final readonly class ReauthenticateDeviceBestEffort
 {
     public function __construct(
         private ReauthenticateDevice $reauthenticateDevice,
+        #[Autowire(service: 'monolog.logger.observability')]
         private LoggerInterface $logger,
     ) {
     }

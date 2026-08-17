@@ -14,6 +14,7 @@ use InvalidArgumentException;
 use Override;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * {@link AuditLogPruner} backed by the `audit_log` table — the sole `DELETE` against the otherwise
@@ -55,6 +56,7 @@ final readonly class DbalAuditLogPruner implements AuditLogPruner
     public function __construct(
         private Connection $connection,
         private PostgresAdvisoryLock $advisoryLock,
+        #[Autowire(service: 'monolog.logger.observability')]
         private LoggerInterface $logger,
         private int $batchSize = self::DEFAULT_BATCH_SIZE,
     ) {

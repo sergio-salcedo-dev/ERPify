@@ -47,12 +47,41 @@ services:
     # Bound here rather than with `#[Autowire]` at the parameter, which is how their `Infrastructure` sibling
     # `SymfonyAuditLogger` does it: these are `Application` classes, and deptrac refuses that layer a
     # dependency on the DI container's attributes. Wiring is configuration, so it lives in configuration.
-    # `AuditReportChannelGateTest` holds both spellings to the same rule.
+    # `BestEffortReportChannelGateTest` holds both spellings to the same rule.
     Erpify\Iam\Identity\Application\RecordLockoutAuditBestEffort:
         arguments:
             $logger: '@monolog.logger.observability'
 
     Erpify\Iam\Identity\Application\RecordRecoveryThrottleAuditBestEffort:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    # Same rule, same reason, for the rest of the `Application` best-effort reporters: each swallows a failure
+    # its caller must survive — a revoked session, a mail that did not go out — and the report is the only
+    # trace it leaves. On the default channel prod discards it, because `fingers_crossed` activates on the
+    # RECORD'S LEVEL and these paths answer 2xx by design.
+    #
+    # The channel decides arrival, not the level: `observability` admits from `info`, so each class keeps the
+    # level that says what its line means. On the default channel the level would decide instead, and both of
+    # its answers are wrong — below `error` the line is discarded, at `error` it arrives by flushing the
+    # request's other records.
+    Erpify\Iam\Identity\Application\RevokeSessionsBestEffort:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    Erpify\Iam\Identity\Application\SendAccountLockedEmailBestEffort:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    Erpify\Iam\Identity\Application\SendPasswordChangedEmailBestEffort:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    Erpify\Iam\Identity\Application\SendPasswordResetEmailBestEffort:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort:
         arguments:
             $logger: '@monolog.logger.observability'
 

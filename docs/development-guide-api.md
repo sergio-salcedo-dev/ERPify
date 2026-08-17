@@ -109,11 +109,22 @@ toolbar DOM under sfjs's global AJAX handlers) — see «Symfony debug toolbar (
 | `test`                    | `api/var/log/test.log` (fingers_crossed on `error`)      | line   |
 | `prod` / `staging` / `ci` | container stderr only (JSON), fingers_crossed on `error` | JSON   |
 
+**The `observability` channel is a separate file in every environment, and it is excluded from the ones above.** Swallowed-failure reports and scheduled-sweep findings go there — lines that must survive a response that never becomes a 5xx, which is exactly what `fingers_crossed` discards. They are therefore **not** in `dev.log` nor in `docker compose logs`:
+
+| Env    | Destination                        |
+|--------|------------------------------------|
+| `dev`  | `api/var/log/observability.log`    |
+| `test` | `api/var/log/observability.log`    |
+| `prod` | container stderr (JSON, always on) |
+
+Which classes write there is held by `BestEffortReportChannelGateTest`; that the channel stays always-on is held by `ObservabilityChannelGateTest`.
+
 Dev file logs are visible on the host because `compose.dev.yaml` bind-mounts `./api/var:/app/api/var`. Files are root-owned — use `sudo rm -rf api/var/log/*` to clean.
 
 ```bash
 # Dev — pick whichever is convenient:
 tail -f api/var/log/dev.log           # host, IDE-friendly
+tail -f api/var/log/observability.log  # swallowed failures + sweep findings (NOT in dev.log)
 make docker.logs                       # follow every service (stderr)
 docker compose logs -f php             # follow API only (stderr)
 

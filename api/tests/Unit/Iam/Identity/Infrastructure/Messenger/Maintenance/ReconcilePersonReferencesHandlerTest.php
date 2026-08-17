@@ -56,7 +56,7 @@ final class ReconcilePersonReferencesHandlerTest extends TestCase
     }
 
     #[Test]
-    public function itAlarmsAtErrorLevelSoProductionDoesNotDiscardIt(): void
+    public function itAlarmsAtErrorLevelBecauseADivergenceIsNotAnObservation(): void
     {
         // Prod routes Monolog through `fingers_crossed` with `action_level: error`, so a `warning` would be
         // buffered and dropped: the alarm would never fire in the only environment that matters.
