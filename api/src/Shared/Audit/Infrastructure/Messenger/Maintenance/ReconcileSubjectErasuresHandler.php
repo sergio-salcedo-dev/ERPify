@@ -6,6 +6,7 @@ namespace Erpify\Shared\Audit\Infrastructure\Messenger\Maintenance;
 
 use Erpify\Shared\Audit\Application\SubjectErasureReconciler;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
@@ -13,9 +14,12 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  * `GDPR_SUBJECT_ERASED` evidence, so the integrity divergence surfaces in monitoring instead of staying
  * silent. It only reports — remediation (recording the missing entry) stays a human decision.
  *
- * `error` and not a lower level: prod routes Monolog through `fingers_crossed` with `action_level: error`
- * (config/packages/monolog.yaml), which buffers everything below that and discards it when no error follows.
- * An alarm that cannot fire in production is not an alarm.
+ * `error` and not `warning`, and the reason is no longer the buffered handler: this alarm goes to the
+ * always-on `observability` channel, which `monolog.yaml` excludes from `fingers_crossed` by name, so it
+ * arrives at any level. The level says what the finding IS — a divergence the operator must act on — and
+ * routing it here is what stops it paying for arrival by flushing the worker's whole buffer. An alarm that
+ * cannot fire in production is not an alarm; one that fires by dragging fifty unrelated records with it is a
+ * different defect.
  *
  * A COUNT, never the scope ids. An `EncryptionScopeId` names the aggregate whose key was destroyed, so the
  * list identifies the subjects behind an erasure; emitting it here would copy that into log storage, which
@@ -28,6 +32,7 @@ final readonly class ReconcileSubjectErasuresHandler
 {
     public function __construct(
         private SubjectErasureReconciler $reconciler,
+        #[Autowire(service: 'monolog.logger.observability')]
         private LoggerInterface $logger,
     ) {
     }

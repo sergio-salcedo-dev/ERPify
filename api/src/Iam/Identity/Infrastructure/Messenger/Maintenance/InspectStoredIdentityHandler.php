@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance;
 
 use Erpify\Iam\Identity\Application\InspectStoredIdentity;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
@@ -17,9 +18,12 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  * unknown role and refuses the unreadable credential without a word, so a drifting table produces no
  * exception, no log line and no red gate.
  *
- * `error` and not `warning`, which is not a taste call: prod routes Monolog through `fingers_crossed` with
- * `action_level: error` (config/packages/monolog.yaml), so a lower level is buffered and discarded — an alarm
- * that cannot fire in production is not an alarm.
+ * `error` and not `warning`, and the reason is no longer the buffered handler: this alarm goes to the
+ * always-on `observability` channel, which `monolog.yaml` excludes from `fingers_crossed` by name, so it
+ * arrives at any level. The level says what the finding IS — a divergence the operator must act on — and
+ * routing it here is what stops it paying for arrival by flushing the worker's whole buffer. An alarm that
+ * cannot fire in production is not an alarm; one that fires by dragging fifty unrelated records with it is a
+ * different defect.
  *
  * **Counts, never identities**, matching its sibling. The verdict knows nothing about who drifted (the probes
  * return counts by design), but the orphan role VALUES it does know are left out too: they are arbitrary text
@@ -41,6 +45,7 @@ final readonly class InspectStoredIdentityHandler
 {
     public function __construct(
         private InspectStoredIdentity $inspectStoredIdentity,
+        #[Autowire(service: 'monolog.logger.observability')]
         private LoggerInterface $logger,
     ) {
     }

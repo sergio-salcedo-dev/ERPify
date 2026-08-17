@@ -15,10 +15,12 @@ use Symfony\Component\Yaml\Yaml;
  * production: the `observability` channel is an always-on stream in BOTH environments, and neither routes it
  * through the buffered handler.
  *
- * Two classes of line depend on it — the cursor-pagination metrics that gave the channel its name, and the
- * report of a swallowed `activity` audit write. Both must arrive on a SUCCESSFUL response, which is exactly
- * what `fingers_crossed` is built to discard. The arrival test proves the audit one reaches
- * `observability.log`; nothing proved that the environment it proves it in resembles the one that matters.
+ * Every line that must arrive on a path which never produces a 5xx depends on it — the cursor-pagination
+ * metrics that gave the channel its name, the reports of swallowed failures, and the findings of the
+ * scheduled sweeps. All of them land on a successful response or a clean worker run, which is exactly what
+ * `fingers_crossed` is built to discard. `BestEffortReportChannelGateTest` holds the population; the arrival
+ * tests prove two of them reach `observability.log`. What neither proves is that the environment they prove
+ * it in resembles the one that matters — which is what this gate is for.
  *
  * Left ungated, the failure is silent in both directions: attach the channel to `fingers_crossed` and the line
  * is discarded again with every test green, or drop the exclusion on `main` and the same record ALSO lands in

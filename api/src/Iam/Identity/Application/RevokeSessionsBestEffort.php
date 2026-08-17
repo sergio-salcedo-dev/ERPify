@@ -15,6 +15,12 @@ use Throwable;
  * ops) is what keeps a session-store outage from stranding an operation whose credential change already
  * committed. Owning the policy here keeps {@see CompletePasswordReset} free of it, and lets the future
  * "change password from my account" flow reuse the same teardown.
+ *
+ * The subject id is deliberately absent from the log context. This report goes to the always-on
+ * `observability` channel, so it is emitted on every occurrence rather than discarded — and a log line is a
+ * sink no erasure path reaches, with no rotation and no declared owner of its deletion. The request's
+ * correlation id already ties the entry to the caller for as long as the request trail exists, which is the
+ * same trade {@see \Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort} states.
  */
 final readonly class RevokeSessionsBestEffort
 {
@@ -31,7 +37,7 @@ final readonly class RevokeSessionsBestEffort
         } catch (Throwable $throwable) {
             $this->logger->warning(
                 'Credential change committed; eager session revoke skipped (revoke failed).',
-                ['userId' => $userId, 'exception' => $throwable],
+                ['exception' => $throwable],
             );
         }
     }

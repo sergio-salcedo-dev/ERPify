@@ -22,6 +22,7 @@ final readonly class SendEmailOnBankChanged
     public function __construct(
         private DomainEventHandlerDeduplicator $domainEventHandlerDeduplicator,
         private NotificationMailer $notificationMailer,
+        #[Autowire(service: 'monolog.logger.observability')]
         private LoggerInterface $logger,
         #[Autowire('%env(DEFAULT_NOTIFICATION_EMAIL)%')]
         private string $notifyTo,

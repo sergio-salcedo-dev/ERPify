@@ -38,7 +38,9 @@ use Throwable;
  * `observability` is the always-on stream this repository built for exactly this shape — a line that must
  * arrive on a successful response — and `monolog.yaml` excludes it from `fingers_crossed` by name. The report
  * therefore reaches stderr in prod without opening any buffer: one line, no flush, no amplification during the
- * outage it reports. `SearchObservabilityListener` binds the same channel the same way.
+ * outage it reports. It is not alone on that
+ * channel: every class whose report must survive a non-5xx path binds it the same way, and
+ * `BestEffortReportChannelGateTest` holds that population.
  *
  * `error` remains the level because a lost audit row is an integrity defect rather than a metric, but on this
  * channel the level no longer decides whether the line survives — which is the property worth having, since
