@@ -31,6 +31,27 @@ use Throwable;
  * The resource type is reached through {@see FulfilIdentityErasure}'s constant rather than spelled here: the
  * type denotes a natural person, so the file holding its literal is the one the audit-resource registry names
  * as obliged to erase it, and a second spelling would nominate this class as an erasure owner it is not.
+ *
+ * **The report goes to the `observability` channel — bound in `services.yaml`, since deptrac refuses this
+ * layer a dependency on the container's attributes.** On the default channel it would not be read: prod
+ * routes that channel through `fingers_crossed`, whose activation is decided by the RECORD'S LEVEL and not
+ * by the response — an `error` there fires the handler and flushes the whole buffer, and anything below it
+ * is discarded with the rest when the request ends without one. `observability` is the always-on stream this
+ * repository built for exactly this shape, and `monolog.yaml` excludes it from the buffered handler by name.
+ *
+ * The level is `error` for what it asserts rather than for whether it survives, which on this channel the
+ * level does not decide: a `security` projection owed and not made is an integrity defect in the trail, not
+ * a degraded nicety — the reading {@see \Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger} applies
+ * to a lost `activity` row. The pairing matters more than either half: raising the level WITHOUT the channel
+ * is strictly worse than leaving it alone, because it turns a discarded line into a buffer flush of every
+ * record the request accumulated. Whose records those are is a question about the path, and this one is
+ * anonymous — no session token exists at a failed login, so the address `ContextListener` volunteers on an
+ * authenticated request is not among them. That is a reason the exposure here is smaller than on its
+ * sibling's paths, never a reason the flush is acceptable.
+ *
+ * {@see \Erpify\Tests\Functional\Iam\Identity\LockoutAuditWriteFailureArrivalTest} is what holds both
+ * halves: the binding is a position in a YAML file that a reorder can silently revert, and no static check
+ * can see that.
  */
 final readonly class RecordLockoutAuditBestEffort
 {
@@ -57,7 +78,7 @@ final readonly class RecordLockoutAuditBestEffort
                 AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
             );
         } catch (Throwable $throwable) {
-            $this->logger->warning(
+            $this->logger->error(
                 'Lockout committed; security audit projection skipped (write failed).',
                 ['exception' => $throwable],
             );

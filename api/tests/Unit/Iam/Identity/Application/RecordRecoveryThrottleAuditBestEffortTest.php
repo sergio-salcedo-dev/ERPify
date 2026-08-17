@@ -120,10 +120,10 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
 
         $this->assertSame([], $auditLogger->records);
         $this->assertCount(1, $logger->records);
-        $this->assertSame(LogLevel::WARNING, $logger->records[0]['level']);
+        $this->assertSame(LogLevel::ERROR, $logger->records[0]['level']);
     }
 
-    public function testAFailedWriteIsSwallowedAndLoggedAtWarning(): void
+    public function testAFailedWriteIsSwallowedAndLoggedAtError(): void
     {
         $failure = new RuntimeException('audit_log is unavailable');
         $logger = new RecordingLogger();
@@ -140,7 +140,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
             $logger->records,
             'A swallowed projection failure that logs nothing is an observation that silently did not happen.',
         );
-        $this->assertSame(LogLevel::WARNING, $logger->records[0]['level']);
+        $this->assertSame(LogLevel::ERROR, $logger->records[0]['level']);
         $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
     }
 

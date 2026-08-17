@@ -14,8 +14,8 @@ use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
- * Projects an exhausted recovery budget onto the operator's `security` surface — the half of #602 that is
- * otherwise invisible, because a throttled `POST /forgot-password` answers the same uniform 202 as a served
+ * Projects an exhausted recovery budget onto the operator's `security` surface — the half that is
+ * otherwise invisible: a throttled `POST /forgot-password` answers the same uniform 202 as a served
  * one and {@see \Erpify\Shared\Audit\Domain\AuditPolicy} audits `GET` only, so neither generic hook can see
  * a refusal that raises no exception and changes no response.
  *
@@ -53,6 +53,20 @@ use Throwable;
  * a sweep against addresses that name nobody. The trail therefore lets an authorised reader tell a resolvable
  * target from an unresolvable one — stated rather than hidden, because withholding the row would carry the
  * same bit in its absence while losing the sweep.
+ *
+ * **The report goes to the `observability` channel — bound in `services.yaml`, since deptrac refuses this
+ * layer a dependency on the container's attributes — and on this path the channel is the whole difference.**
+ * On the default channel the report of the one thing this class exists to observe would be the thing nobody
+ * could observe: prod routes that channel through `fingers_crossed`, which decides on the RECORD'S LEVEL and
+ * not on the response, so anything below `error` is discarded when the request ends without one — and a
+ * throttled `POST /forgot-password` ends in its uniform 202 by design. `observability` is always on, and
+ * `monolog.yaml` excludes it from the buffered handler by name.
+ *
+ * The level is `error` for what it asserts rather than for whether it survives, which on this channel the
+ * level does not decide: a `security` projection owed and not made is an integrity defect in the trail. The
+ * pairing is what matters — raising the level without moving the channel would ACTIVATE the buffer and flush
+ * whatever the request had accumulated, which is the opposite of what a class this careful about the address
+ * should cause.
  */
 final readonly class RecordRecoveryThrottleAuditBestEffort
 {
@@ -77,8 +91,9 @@ final readonly class RecordRecoveryThrottleAuditBestEffort
         } catch (Throwable $throwable) {
             // The only signal that an observation was owed and not made: the claim is already spent, so this
             // address stays silent for the rest of the window. No id and no address in the line — this runs
-            // once per address per window on an anonymous path the erasure chain does not reach.
-            $this->logger->warning(
+            // once per address per window on an anonymous path the erasure chain does not reach. The channel
+            // is what makes the signal reachable at all; see the class docblock.
+            $this->logger->error(
                 'Recovery throttle exhausted; security audit projection skipped (write failed).',
                 ['exception' => $throwable],
             );

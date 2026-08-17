@@ -37,6 +37,8 @@ final class ObservabilityChannelGateTest extends TestCase
 {
     private const string CHANNEL = 'observability';
 
+    private const string PINNED_LEVEL = 'info';
+
     #[Test]
     #[DataProvider('provideGatedEnvironmentsCases')]
     public function theChannelHasAnAlwaysOnHandlerThatNeverBuffers(string $environment): void
@@ -61,6 +63,32 @@ final class ObservabilityChannelGateTest extends TestCase
             'The `%s` handler under `%s` no longer serves exactly its own channel.',
             self::CHANNEL,
             $environment,
+        ));
+    }
+
+    #[Test]
+    #[DataProvider('provideGatedEnvironmentsCases')]
+    public function theChannelHandlerKeepsItsPinnedLevel(string $environment): void
+    {
+        // Always-on is not enough on its own: the handler's own `level` still filters, and the lines this
+        // channel carries are not all errors. The failed-transport pruner reports its drains at `info`, and
+        // an `error` floor here would drop them while every other assertion in this class stayed green — the
+        // same silent discard the channel exists to escape, moved one level down.
+        //
+        // `info` rather than `debug` deliberately: `debug` is where framework noise lives, and this stream
+        // has no rotation and no declared owner of its erasure.
+        $handler = $this->handlers($environment)[self::CHANNEL] ?? null;
+        $this->assertIsArray($handler);
+
+        $this->assertSame(self::PINNED_LEVEL, $handler['level'] ?? null, \sprintf(
+            'The `%s` handler under `%s` is no longer pinned to `%s`. Equality, not a floor, and '
+            . 'deliberately: RAISING it discards writers — the failed-transport prune reports at `info`, so '
+            . 'an `error` floor drops the report of a sweep nobody else observes, with this gate otherwise '
+            . 'green — and LOWERING it to `debug` opens an unrotated stream with no declared owner of its '
+            . 'erasure to every framework record. Both directions are regressions, so both go red.',
+            self::CHANNEL,
+            $environment,
+            self::PINNED_LEVEL,
         ));
     }
 
