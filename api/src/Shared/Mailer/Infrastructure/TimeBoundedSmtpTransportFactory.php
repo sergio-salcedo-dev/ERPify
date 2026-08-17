@@ -97,7 +97,7 @@ final readonly class TimeBoundedSmtpTransportFactory implements TransportFactory
     public function __construct(
         #[AutowireDecorated]
         private TransportFactoryInterface $decorated,
-        #[Autowire('%env(float:MAILER_SMTP_TIMEOUT)%')]
+        #[Autowire(env: 'float:MAILER_SMTP_TIMEOUT')]
         private float $defaultTimeout,
     ) {
         if (!$this->isAcceptable($defaultTimeout)) {

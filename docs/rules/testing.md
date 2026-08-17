@@ -32,6 +32,12 @@ Name **ports by capability** and **implementations by technology/strategy** — 
 - An in-memory double that also records the calls it received still uses `InMemory<Port>` — the implementation nature dominates the incidental spying.
 - Reserve `Spy*` / `Stub*` / `Dummy*` for doubles that embody a test-double pattern instead of an alternative implementation of a domain port (a stubbed framework exception, a spy mailer, a stub clock).
 
+## A double with no expectations is `createStub()`
+
+`createMock()` declares that the interaction itself is under test; `createStub()` declares that the double only has to answer. Reach for the mock **only** when the test configures `expects()` — configuring nothing and calling `createMock()` claims a verification that never happens, and PHPUnit 13 says so: *"No expectations were configured for the mock object … Consider refactoring your test code to use a test stub instead."* That arrives as a PHPUnit notice, so it does not fail the suite the way `failOnNotice` fails a PHP one — it prints and the build stays green, which is how one reached `main` unnoticed.
+
+Do **not** silence it with `#[AllowMockObjectsWithoutExpectations]`. The attribute exists for a double that genuinely needs mock semantics without expectations; over an expectation-less `createMock()` it preserves the wrong claim instead of correcting it, and it is class-wide, so it also covers every double added to that class later.
+
 ## Assert the seed before asserting the absence
 
 A test that asserts *"no row survives"* passes perfectly when the setup inserted nothing. The assertion is true, the test is green, and it proves nothing — so **every test whose subject is an absence must first assert that its own seed happened**: that the `INSERT` affected N rows, that the fixture exists, that the query it is about to negate would have found something a moment ago.
