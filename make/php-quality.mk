@@ -202,21 +202,26 @@ php.lint.person-reference: ## Person-reference erasure-owner + detective-coverag
 # gate uses for docs/). With the mount gone the gate FAILS rather than skipping; a check that quietly does
 # nothing reports the same green as a real pass.
 #
-# Three classes, each selected BY NAME in its own run, for the reason spelled out at the sibling targets: a
+# Four classes, each selected BY NAME in its own run, for the reason spelled out at the sibling targets: a
 # common prefix goes green on a strict subset, so a deleted class would leave the others matching and the
 # target reporting success with part of the boundary gone. Each filter's selection is verified with
 # `--list-tests`, never assumed — and adding a class to the boundary means adding its run HERE, or its
 # falsification silently leaves the gate while every local run still reports green.
 #
-# The three cover the two halves plus the tree: what the sweep sees declared in PHP
+# The four cover the three rule halves plus the tree: what the sweep sees declared in PHP
 # (ScheduleDeclarationRulesGateTest), what it reads as consumed in the compose files
-# (ScheduleConsumptionRulesGateTest), and the real tree pairing both (ScheduleConsumptionGateTest).
+# (ScheduleConsumptionRulesGateTest), how many replicas those files give the consuming service
+# (ScheduleReplicaRulesGateTest), and the real tree pairing all of it (ScheduleConsumptionGateTest).
 #
-# A green proves a transport NAME appears in a consume command. It does not prove the worker runs, that the
-# service is deployed, that --time-limit is sane, or that any tick ever reached a log.
+# A green proves a transport NAME appears in a consume command and that no root compose file gives its
+# consumer more than one replica. It does not prove the worker runs, that the service is deployed, that
+# --time-limit is sane, or that any tick ever reached a log — nor that the DEPLOY runs one clock:
+# `docker compose up -d --scale svc=2` was measured to leave TWO CONTAINERS RUNNING for a service declaring
+# `deploy.replicas: 1`, so the pin binds the repository, not the host.
 php.lint.schedule-consumption: ## Schedule transport-consumption gate
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleConsumptionGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleConsumptionRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=ScheduleReplicaRulesGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleDeclarationRulesGateTest
 
 ## —— Prod-container compile gate ———————————————————————————————————————————

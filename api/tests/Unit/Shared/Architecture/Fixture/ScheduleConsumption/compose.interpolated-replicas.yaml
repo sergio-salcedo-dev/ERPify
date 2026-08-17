@@ -1,0 +1,8 @@
+# Reads as pinned and is not: the real count lives in an env file no gate opens, so `SCHEDULER_REPLICAS=2`
+# scales the clock with the repository unchanged. This is the one shape that would let the check report a
+# pin it never verified, which is why it fails loudly instead of treating the value as absent.
+services:
+  scheduler_worker:
+    command: ["php", "bin/console", "messenger:consume", "scheduler_alpha", "--time-limit=3600"]
+    deploy:
+      replicas: "${SCHEDULER_REPLICAS:-1}"

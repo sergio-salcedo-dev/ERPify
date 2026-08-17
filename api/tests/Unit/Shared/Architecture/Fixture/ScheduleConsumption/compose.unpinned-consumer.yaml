@@ -1,0 +1,11 @@
+# A `deploy` block that carries resource limits and no replica count — the shape a service acquires when
+# someone adds limits and never thinks about the clock. Compose defaults to one replica, so nothing breaks
+# today and nothing records that one is the requirement either.
+services:
+  scheduler_worker:
+    command: ["php", "bin/console", "messenger:consume", "scheduler_alpha", "--time-limit=3600"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "256m"

@@ -1,0 +1,14 @@
+# The one state the replica rule exists to report: the consuming service declared to run twice. The count
+# is deliberately greater than ScheduleConsumption::SCHEDULER_CONSUMER_REPLICAS rather than a literal chosen
+# to look wrong — raising that constant is what would turn this fixture into a compliant service, which is
+# why the constant is pinned by its own assertion in ScheduleConsumptionGateTest.
+services:
+  messenger_worker:
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600"]
+  scheduler_worker:
+    command: ["php", "bin/console", "messenger:consume", "scheduler_alpha", "--time-limit=3600"]
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.25"
