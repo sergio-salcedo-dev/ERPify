@@ -180,12 +180,14 @@ este write —`INSERT` autocommit de una fila con `id` v7 acuñado por el client
 UNIQUE)— las clases reintentables (deadlock/serialization) no contienden, y la que sí ocurre (conexión perdida) no se
 recupera sobre la misma `Connection` (DBAL 4 no reconecta) sin arrastrar gestión de ciclo de vida de conexión al camino
 best-effort. La pérdida se cubre por **observabilidad**, no por durabilidad: best-effort significa pérdida
-**visible**, no pérdida evitada — y visible exige un nivel que producción entregue. El reporte es `error` por eso:
-`main` es `fingers_crossed` con `action_level: error`, y nada en un camino auditado eleva ese buffer, porque
-`activity` se captura sobre lecturas con éxito. Medido en `when@test` —que comparte `type` y `action_level` con
-`when@prod`, acuerdo hoy **no gateado**—: con `warning` el fichero de log no crece **ni un byte** tras un
-`write()` que sí lanzó. Visible **no** es alertable: el puente Monolog→Sentry sigue desconectado a propósito y
-la línea llega a stderr y a nada más. El vector dominante de pérdida sigue siendo que `kernel.terminate` no
+**visible**, no pérdida evitada — y visible exige un **canal** que producción entregue, no un nivel. El reporte
+sale por `observability`, un stream always-on que `monolog.yaml` excluye por nombre del `main`
+`fingers_crossed`; el nivel es `error` por lo que la línea afirma, no por si sobrevive. Esa distinción es la
+corrección que costó una medición: subir el nivel en el canal por defecto sí habría hecho llegar la línea, pero
+**activando** el buffer, que vuelca todo lo que la petición acumuló —incluida la dirección del usuario que
+`ContextListener` registra a `debug`—. Medido: con el canal por defecto el fichero no crece **ni un byte** tras
+un `write()` que sí lanzó; con `observability`, llega sin abrir buffer. Visible **no** es alertable: el puente
+Monolog→Sentry sigue desconectado a propósito y la línea llega a stderr y a nada más. El vector dominante de pérdida sigue siendo que `kernel.terminate` no
 dispare (SIGTERM/reciclado del worker), que ningún reintento de BD toca.
 
 **Alcance de esa decisión: el `INSERT` de `activity`, no toda contención de la aplicación.** El argumento mide un

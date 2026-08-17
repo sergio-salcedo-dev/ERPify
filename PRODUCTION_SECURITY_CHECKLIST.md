@@ -460,8 +460,9 @@ you change anything here.
       refusal is a synchronous write per attempt handed to the attacker. The row names the subject when
       the address resolves and nothing when it does not; **the address itself is never written**, in
       any column or encoding. **Three residues, none of them closed:** the claim is spent before the
-      write, so an `audit_log` outage costs one window of silence per address (the swallowed `warning`
-      is the only signal, and the Monolog→Sentry bridge is deliberately unwired); the budget lives in
+      write, so an `audit_log` outage costs one window of silence per address (the swallow is the only
+      signal; it now logs at `error` on the always-on `observability` channel, so it survives to the
+      container's stderr, but the Monolog→Sentry bridge is deliberately unwired and nothing pages); the budget lives in
       the rate-limiter cache pool, so a redeploy, a `cache:clear` or a second FrankenPHP worker
       produces extra rows for one siege; and the row says *that* exhaustion happened and *when*, never
       *how much* — a six-request accident and a hundred-thousand-request siege look identical, volume
