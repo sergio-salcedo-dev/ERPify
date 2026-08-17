@@ -4,10 +4,10 @@ argument-hint: "[--dry-run]   (default: inventory, then STOP for branch authoriz
 ---
 
 Batch the open dependabot PRs into a single branch. Dependabot opens **one PR per
-dependency**, which is wrong whenever one bump spans several pin sites — those PRs
-cannot go green individually, no matter how long you wait or how many times you
-rerun them. `.github/dependabot.yaml` fires **weekly** across four ecosystems, so
-this runs often.
+dependency**, which is wrong whenever one bump spans several pin sites, or whenever
+two packages are coupled through an API neither declares — those PRs cannot go green
+individually, no matter how long you wait or how many times you rerun them.
+`.github/dependabot.yaml` fires **weekly** across four ecosystems, so this runs often.
 
 Arguments: `$ARGUMENTS` may contain `--dry-run` to report only (change nothing,
 create nothing).
@@ -39,7 +39,14 @@ is a *github_actions* bump whose action is published by `docker/`; matching on
 Composer bumps may already arrive grouped (`… in the composer group across 1
 directory`). Do not re-split a group — treat it as one unit.
 
-## 3. Detect the multi-pin trap (the reason this command exists)
+## 3. Detect the coupling traps (the reason this command exists)
+
+Two classes, and they differ in when you can know: **3A is knowable before you run
+anything** (a static read of our own tree); **3B is knowable only from the red**, because
+the coupling lives in vendor code and our tree never states it. Neither red is a
+regression to investigate — each is the split itself.
+
+### 3A — Multi-pin: several sub-paths of one action repository
 
 The trap is **multiple sub-paths of one action repository**, not multiple pin
 sites. Dependabot keys a dependency on the full `<owner>/<repo>/<path>`, so it
@@ -72,10 +79,66 @@ PR. It is also the only such repository in this tree today: if the one-liner
 above prints anything else, that action needs a group of its own rather than a
 hand-batch every release.
 
+### 3B — Coupled packages: one reaches into another's internals
+
+Two packages of the same ecosystem where one calls the other's **non-public** API.
+Dependabot keys each as its own dependency and opens one PR each, so the reached-into
+package moving alone fatals the reacher. **No static check finds this** — the coupling
+is in `vendor/`, not in our tree, and neither package declares it in its constraints.
+The detector is the failure signature:
+
+> a red naming the **other** package of a same-week pair, in a reflection /
+> private-property / missing-internal-class error.
+
+Worked example, measured. #738 (`phpstan/phpstan` 2.2.5→2.2.8, `rector/rector` held at
+2.5.7) died in `php.rector.dry-run`:
+
+```
+PHP Fatal error: Uncaught Rector\Exception\Reflection\MissingPrivatePropertyException:
+Property "$container" was not found in "PHPStan\Parser\RichParser" class
+```
+
+Rector reaches PHPStan's container through `PrivatesAccessor` in
+`PHPStanContainerMemento::removeRichVisitors()`; PHPStan 2.2.8 removed that private
+property. Confirm the reach upstream rather than trusting the stack trace — resolve the
+reaching file at both tags, since **a 404 at the new tag is the fix itself**:
+
+```bash
+gh api "repos/rectorphp/rector/contents/src/DependencyInjection/PHPStan/PHPStanContainerMemento.php?ref=2.5.7" --jq .name
+gh api "repos/rectorphp/rector/contents/src/PhpParser/Parser/RectorParser.php?ref=2.5.7" \
+  -H "Accept: application/vnd.github.raw" | grep -c removeRichVisitors
+```
+
+Measured: the file exists at `2.5.7` and `RectorParser.php` calls it **once**; at `2.6.1`
+the file is **404** and the call count is **0**. So the pair goes green only moving in
+one commit, and `phpstan/phpstan` can never be batched without `rector/rector`.
+
+**A group in `.github/dependabot.yaml` is the durable fix**, exactly as for
+`codeql-action`. Unlike 3A it does not by itself make the PR green — see below.
+
+### Not every red is a split — a fixer bump that ships new rules
+
+#739 (`rector/rector` 2.5.7→2.6.1, phpstan held) was neither the coupling nor a
+regression: `php.rector.dry-run` exited 2 with `39 files would have been changed`, the
+2.6.x *composer-based* sets activating `RenameMethodRector` (18×),
+`ParamAndEnvAttributeRector` (8×), `CommandConfigureToAttributeRector` (6×) and four
+more. **That red survives any batching** — it is real work, and it turns a
+dependency-only batch into a source-touching PR, so step 9's checklist exemption falls
+away and the change needs its own review. Size it from the dry-run log before
+proposing a branch, and say so at step 5:
+
+```bash
+grep -A1 '^Applied rules:' <log> | grep '^ \* ' | sort | uniq -c | sort -rn
+```
+
+Whether to take those rewrites wholesale, take them selectively (a skip list in
+`api/tools/rector/rector.php`), or split them off is the **user's** call, not yours.
+
 ## 4. Report
 
-Print a table: PR / ecosystem / files / CI conclusion / **batch-blocking?** (yes
-when the multi-pin trap applies). Name every red and whether the split explains it.
+Print a table: PR / ecosystem / files / CI conclusion / **batch-blocking?** (yes when
+3A or 3B applies). Name every red and which of the three it is: the multi-pin split
+(3A), the private-API coupling (3B), or real work the bump demands.
 
 `--dry-run` STOPS here.
 
