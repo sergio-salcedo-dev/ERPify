@@ -41,8 +41,9 @@ context: []
 - [x] `pwa/src/context/shared/http-client/infrastructure/FetchHttpClient.ts` — `assign` → `replace`; directiva del selector nuevo con la razón corregida (función libre de módulo, no adaptador DI; sin contexto React).
 - [x] `pwa/src/app/backoffice/BackOfficeLayoutClient.tsx` — directiva del selector nuevo. Se **borra** la explicación de por qué no había directiva: ya no aplica y era registro de la deliberación, no del código.
 - [x] `pwa/tests/.../FetchHttpClient.test.ts` — el stub y las aserciones pasan a `replace`.
-- [ ] GitHub #420 — cerrado con la evidencia medida y el disparador nuevo.
-- [ ] Cuerpo de la PR — revisión de seguridad por clase; hallazgos de la pasada adversarial; #420 cierra sin código.
+- [x] GitHub #420 — cerrado con la evidencia medida y el disparador nuevo (`not planned`).
+- [x] Los 7 hallazgos preexistentes que sí son parches — cerrados con test propio, cada uno falsificado contra su arreglo. Ampliación de alcance autorizada explícitamente por el humano.
+- [x] Cuerpo de la PR — revisión de seguridad por clase; hallazgos de la pasada adversarial; #420 cierra sin código; los 2 rediseños declinados con su argumento.
 
 **Acceptance Criteria:**
 - Dado el árbol, cuando corro `grep -Rn "no-location-assign-relative-destination" pwa/src`, entonces hay **0** coincidencias: la regla de Next ya no dispara en ningún sitio y ninguna directiva suya sobrevive sin uso.
@@ -51,6 +52,7 @@ context: []
 - Dado el cambio a `replace()`, cuando devuelvo el código a `assign()`, entonces el test se pone **rojo**. Un verde tras un renombrado puede ser vacuo.
 - Dado el diff guardado antes de `make pwa.quality`, cuando el gate termina, entonces es **byte a byte el mismo**.
 - Dado `api/src`, entonces `git diff --stat -- api/` está vacío.
+- Dado cada uno de los 7 arreglos preexistentes, cuando revierto **ese** arreglo, entonces **su** test se pone rojo. Medido uno a uno: la primera versión del test del doble logout pasaba sin la guarda —el menú se cierra al primer clic y el segundo no alcanzaba ningún manejador— y hubo que reescribirla para que reabriese el menú.
 
 ## Spec Change Log
 
