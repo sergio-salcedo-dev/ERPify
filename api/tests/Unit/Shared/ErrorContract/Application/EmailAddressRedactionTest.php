@@ -7,6 +7,8 @@ namespace Erpify\Tests\Unit\Shared\ErrorContract\Application;
 use Erpify\Shared\ErrorContract\Application\EmailAddressRedaction;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -142,23 +144,34 @@ final class EmailAddressRedactionTest extends TestCase
      * ran: had it failed outright, the fallback would have collapsed this single `@`-bearing token to the
      * sentinel just as quickly and satisfied a bound on its own.
      */
+    /**
+     * **In its own process, and that attribute is load-bearing.** PCRE bakes the JIT decision into the
+     * compiled-pattern cache entry, so `ini_set('pcre.jit', '0')` reaches a pattern this process has not
+     * compiled yet and nothing else. Measured on this subject: 4.973 ms when the ini is lowered before the
+     * first compile, 5.409 ms with `-d pcre.jit=0`, and **0.546 ms when the pattern is compiled first and the
+     * ini lowered after** — indistinguishable from the 0.661 ms JIT path. Sharing a process with any earlier
+     * test in this class, or with `RedactingTransportTest`, therefore measured the configuration this case
+     * exists to exclude, and the bound could not fail.
+     *
+     * The lower bound is the non-vacuity control: with the JIT on this subject finishes in well under a
+     * millisecond, so a run that fast means the interpreter never took over and the upper bound proved
+     * nothing.
+     */
     #[Test]
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
     public function itScansALongRunInLinearTimeWithNoJitToHideBehind(): void
     {
-        $jit = \ini_get('pcre.jit');
         \ini_set('pcre.jit', '0');
 
-        try {
-            $hostile = \str_repeat('a.', 100_000) . '@';
+        $hostile = \str_repeat('a.', 100_000) . '@';
 
-            $startedAt = \hrtime(true);
-            $redacted = EmailAddressRedaction::apply($hostile);
-            $elapsedMs = (\hrtime(true) - $startedAt) / 1e6;
+        $startedAt = \hrtime(true);
+        $redacted = EmailAddressRedaction::apply($hostile);
+        $elapsedMs = (\hrtime(true) - $startedAt) / 1e6;
 
-            $this->assertLessThan(1_000, $elapsedMs, 'the pattern backtracks over the run instead of scanning it');
-            $this->assertSame($hostile, $redacted, 'the engine failed and the fallback answered for it');
-        } finally {
-            \ini_set('pcre.jit', false === $jit ? '1' : $jit);
-        }
+        $this->assertGreaterThan(2, $elapsedMs, 'the JIT was still compiled in, so the bound below proves nothing');
+        $this->assertLessThan(1_000, $elapsedMs, 'the pattern backtracks over the run instead of scanning it');
+        $this->assertSame($hostile, $redacted, 'the engine failed and the fallback answered for it');
     }
 }

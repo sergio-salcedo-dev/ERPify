@@ -61,15 +61,21 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
      * spells every line but the last as `550-5.1.1 …`, which is what Google emits, and without it such a reply
      * reports no status at all.
      *
-     * Bounded at both ends rather than by `\b`, which matches inside a longer dotted run: an IPv4 address in
-     * `Connection to 5.1.1.1 timed out` and a dotted local part in `<a.5.1.1.b@example.test>` both yield a
-     * three-part token that is not a status code. Neither can leak — the capture is digits and dots either way
-     * — but presenting a fabricated diagnosis in the shape of a real one costs an operator the time this field
-     * exists to save.
+     * **Anchored on the reply code, because shape alone does not identify a status.** Bounding the run at both
+     * ends stops `Connection to 5.1.1.1 timed out` and `<a.5.1.1.b@example.test>`, and it was still not enough:
+     * measured, `a-5.1.1@example.test rejected` reported `5.1.1` — synthesised out of a local part, the hyphen
+     * opening it — and `Upgrade to version 4.2.3 first` reported `4.2.3`, a version number. RFC 3463 statuses
+     * arrive in an SMTP reply, and a reply always spells its three-digit code first (`550 5.1.1 …`, or
+     * `550-5.1.1 …` on every line but the last of a multi-line reply, which is what Google emits). Requiring
+     * that code is what tells a diagnosis from a coincidence. A message carrying a status with no reply code in
+     * front of it now reports none, which is the safe direction: no diagnosis beats a fabricated one.
      */
-    private const string ENHANCED_STATUS = '/(?:^|["\s-])([45]\.\d{1,3}\.\d{1,3})(?![.\d])/';
+    private const string ENHANCED_STATUS = '/[45]\d{2}[ \-]([45]\.\d{1,3}\.\d{1,3})(?![.\d])/';
 
     private const string NO_STATUS = 'none';
+
+    /** Distinct from `none`: the engine refused the scan, so nothing was measured either way. */
+    private const string UNREADABLE_STATUS = 'unreadable';
 
     public static function from(Throwable $throwable): self
     {
@@ -110,10 +116,22 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
         unset($debug);
     }
 
+    /**
+     * Every status the reply carries, not the first: a bounce that names one status per recipient reported only
+     * the leading one, which is the wrong half of the answer as often as the right one. An engine failure
+     * answers differently from a reply that carried nothing, because `none` on a run PCRE refused to scan reads
+     * as a measurement and is not one.
+     */
     private static function enhancedStatusOf(string $message): string
     {
-        $matched = \preg_match(self::ENHANCED_STATUS, $message, $matches);
+        $matched = \preg_match_all(self::ENHANCED_STATUS, $message, $matches);
 
-        return 1 === $matched ? $matches[1] : self::NO_STATUS;
+        if (false === $matched) {
+            return self::UNREADABLE_STATUS;
+        }
+
+        $statuses = \array_values(\array_unique($matches[1]));
+
+        return [] === $statuses ? self::NO_STATUS : \implode('/', $statuses);
     }
 }

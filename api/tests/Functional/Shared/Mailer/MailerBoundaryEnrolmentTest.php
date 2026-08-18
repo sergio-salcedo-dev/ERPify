@@ -16,6 +16,7 @@ use Symfony\Component\DependencyInjection\Attribute\WhenNot;
 use Symfony\Component\Mailer\Command\MailerTestCommand;
 use Symfony\Component\Mailer\Mailer;
 use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Mailer\Messenger\MessageHandler;
 use Symfony\Component\Mailer\Transport\TransportInterface;
 
 /**
@@ -76,8 +77,16 @@ final class MailerBoundaryEnrolmentTest extends KernelTestCase
         );
     }
 
+    /**
+     * The mailer HOLDS the boundary; on this configuration it does not send through it. `FrameworkExtension`
+     * injects `messenger.default_bus` into `mailer.mailer` whenever `framework.mailer.message_bus` is unset —
+     * and `config/packages/mailer.yaml` sets only `dsn` — so `Mailer::send()` dispatches to the bus and reads
+     * `$this->transport` for the queued `MessageEvent`'s `(string)` alone. The send itself happens in
+     * `MessageHandler`, which the case below pins. Both are asserted because both hold the collection, and a
+     * name claiming the send path here would be the wrong thing for a reader to trust.
+     */
     #[Test]
-    public function theMailerItselfSendsThroughTheBoundary(): void
+    public function theMailerHoldsTheTranslationBoundary(): void
     {
         self::bootKernel();
 
@@ -89,6 +98,25 @@ final class MailerBoundaryEnrolmentTest extends KernelTestCase
         $transport = new ReflectionProperty($mailer, 'transport');
 
         $this->assertInstanceOf(RedactingTransport::class, $transport->getValue($mailer));
+    }
+
+    /**
+     * The path that reaches a DURABLE sink, and the one nothing here asserted. `SendEmailMessage` is handled
+     * in-process today, but a handler that throws hands the throwable to Messenger, which stamps
+     * `ErrorDetailsStamp` into `messenger_messages` — a table no erasure path touches. It is also the consumer
+     * a routed transport would put in a worker whose stderr is PID 1's.
+     */
+    #[Test]
+    public function theMessengerHandlerSendsThroughTheBoundary(): void
+    {
+        self::bootKernel();
+
+        $handler = self::getContainer()->get('mailer.messenger.message_handler');
+        $this->assertInstanceOf(MessageHandler::class, $handler);
+
+        $transport = new ReflectionProperty($handler, 'transport');
+
+        $this->assertInstanceOf(RedactingTransport::class, $transport->getValue($handler));
     }
 
     #[Test]

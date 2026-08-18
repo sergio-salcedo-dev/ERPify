@@ -67,6 +67,31 @@
   mailbox validated fail-loud outside dev/test (`SecuritySenderAddress`); the operational `MAILER_FROM` may
   stay no-reply.
 
+## A vendor exception message is composed, never copied, at the boundary that raises it
+
+An exception message is a general carrier of caller data, and the sinks that hold it — `php://stderr` under a
+driver with no rotation, `messenger_messages` via `ErrorDetailsStamp`, a third-party error tracker with its own
+retention — are reached by no erasure path. `SmtpTransport::assertResponseCode()` interpolates the server's
+reply verbatim, and the command whose reply fails on a rejected recipient is `RCPT TO:<address>`, so the
+message names a person.
+
+**Translate at the boundary that raises it, and compose the replacement.** `RedactingTransport` decorates the
+`mailer.transports` collection — the id, not its consumers, so anything wired to the collection inherits the
+translation by construction — and answers with a `MailDeliveryFailed` whose message is built from a class name,
+an SMTP reply code, an RFC 3463 enhanced status and the origin `file:line`. It chains no `previous` and its
+`getDebug()` is empty, because a normalising formatter walks both. Nothing downstream is trusted to redact,
+because nothing downstream receives anything to redact.
+
+**A diagnosis is identified by its anchor, not by its shape.** The enhanced status is read only where an SMTP
+reply code introduces it: matching the shape alone was measured reporting `5.1.1` out of the local part of
+`a-5.1.1@example.test` and `4.2.3` out of `Upgrade to version 4.2.3 first`. A fabricated diagnosis costs an
+operator the time the field exists to save, so the pattern refuses one and reports `none`.
+
+**Redaction vocabularies live together.** `EmailAddressRedaction` sits beside `RequestUriRedaction` and
+`RedactionDenylist` in `Shared/ErrorContract/Application`, because an axis redacted in one sink must be
+redacted in all of them and the denylist alone cannot: it is a rule about KEY names, and an identifier in a
+VALUE — Sentry's `Full command` extra, a `Referer`, a raw `query_string` — needs a vocabulary instead.
+
 ## Password policy
 - **One constraint object, no options.** Every surface that *creates* a credential — the authenticated change,
   the reset completion, the invitation accept, the bootstrap CLI — carries
