@@ -23,7 +23,7 @@ final readonly class SendPasswordResetEmailBestEffort
     ) {
     }
 
-    public function send(string $recipientEmail, #[SensitiveParameter] string $resetToken): void
+    public function send(#[SensitiveParameter] string $recipientEmail, #[SensitiveParameter] string $resetToken): void
     {
         try {
             $this->sender->send($recipientEmail, $resetToken);

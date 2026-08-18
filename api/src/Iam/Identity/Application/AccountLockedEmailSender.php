@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application;
 
+use SensitiveParameter;
+
 /**
  * Tells the owner of an identity that it has been temporarily locked after repeated failed sign-ins.
  *
@@ -16,5 +18,5 @@ namespace Erpify\Iam\Identity\Application;
  */
 interface AccountLockedEmailSender
 {
-    public function send(string $recipientEmail): void;
+    public function send(#[SensitiveParameter] string $recipientEmail): void;
 }
