@@ -23,7 +23,6 @@
 - Avoid global variables
 - Handle errors properly
 - Use async/await instead of callbacks when possible
-- **Named exports only under `src/context/**`.** A default export has no name at the import site, so the same module gets three spellings across three importers and neither grep nor a rename refactor follows it. App Router files (`page.tsx`, `layout.tsx`, `error.tsx`, …) are the exception Next.js requires.
 
 ### Consuming enum-like constants: `Record`, compare, or `switch`
 
