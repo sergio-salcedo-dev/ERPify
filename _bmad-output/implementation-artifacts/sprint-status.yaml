@@ -353,7 +353,7 @@ development_status:
   # Cerrada el 2026-08-17 con BR-8: las diez claves de historia están en `done` y el criterio de cierre
   # (barrer el backlog otra vez contra `main`) está ejecutado y registrado en br-8-operabilidad.md. Sin clave
   # de retrospectiva: si se corre una, se añade aquí.
-  epic-backlog-resolution: in-progress
+  epic-backlog-resolution: done
   br-1-behat-vocabulario-falsabilidad: done
   br-2-residuos-eje-referencias-persona: done
   br-3-auditoria-crypto-cierres-eje-3: done
@@ -395,8 +395,9 @@ development_status:
   # regla del fichero tampoco es evidencia de que la rama haya mergeado.
   br-8-operabilidad: done
   # Cierre de #295 (contrato de código de estado de los endpoints de salud) y #222 (exención de auth +
-  # política de deep-check). Reabre la épica: su alcance es resolver el backlog de issues, y quedan.
-  br-9-contrato-endpoints-salud: review
+  # política de deep-check). `done` marca que el code review de la tarea completa ocurrió, no que la
+  # rama haya entrado: el marcador va por delante del merge por diseño — para eso está git.
+  br-9-contrato-endpoints-salud: done
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.
