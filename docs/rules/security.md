@@ -92,6 +92,30 @@ operator the time the field exists to save, so the pattern refuses one and repor
 redacted in all of them and the denylist alone cannot: it is a rule about KEY names, and an identifier in a
 VALUE — Sentry's `Full command` extra, a `Referer`, a raw `query_string` — needs a vocabulary instead.
 
+## A person's identifier is declared sensitive at the parameter
+
+`#[SensitiveParameter]` renders an argument as `Object(SensitiveParameterValue)` in a stack trace instead of
+in clear. Two controls carry that property and they are not interchangeable:
+
+- **`zend.exception_ignore_args = On`** (`api/frankenphp/conf.d/10-app.ini`) strips *every* argument of *every*
+  frame, vendor frames included — `SmtpTransport::doRcptToCommand(string $address)` among them, which no
+  attribute of ours can reach. It is the control that holds the line today, and it is a property of the
+  deployed ini rather than of the code.
+- **The attribute** is narrower and survives a change to that ini. It is what makes the code state, rather than
+  assume, that a value is not for a trace.
+
+**Declare both, and never only the attribute.** Marking the parameter while leaving the ini unpinned gates the
+redundant half of the control; pinning the ini while leaving a signature bare asserts, in the signature, that
+the value is ordinary. A signature that marks a token and leaves the address beside it bare is the shape to
+look for — it states that one is sensitive and the other is not.
+
+PHP does **not** enforce attribute agreement between an interface and its implementation, so a bare
+implementation behind a marked interface compiles and passes every gate. `SensitiveRecipientAddressGateTest`
+pins the mail surface against exactly that, as a set rather than a count, and pins the ini beside it. Its blind
+spots are stated at the class: it keys on the parameter NAME, so an address carried as `$to` or `$email` is
+outside it — that axis is issue #769 — and it says nothing about `getMessage()`, which is where an address
+actually reaches a sink.
+
 ## Password policy
 - **One constraint object, no options.** Every surface that *creates* a credential — the authenticated change,
   the reset completion, the invitation accept, the bootstrap CLI — carries
