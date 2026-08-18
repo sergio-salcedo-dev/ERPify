@@ -21,10 +21,10 @@ The `pwa/` deployable is a Next.js 16.2 (App Router) + React 19.2 + TypeScript 6
 | DI              | Inversify (+ reflect-metadata)                    | 8.1     |
 | Class utilities | class-variance-authority, clsx, tailwind-merge    | —       |
 | Unit tests      | Vitest (jsdom)                                    | 4.1     |
-| Testing library | @testing-library/react, @testing-library/jest-dom | 16/6    |
-| E2E             | Playwright                                        | 1.59    |
+| Testing library | @testing-library/react, @testing-library/jest-dom | 16/7    |
+| E2E             | Playwright                                        | 1.62    |
 | Linting         | ESLint + `@next/eslint-plugin-next`               | 10 / 16 |
-| Formatting      | Prettier                                          | 3.8     |
+| Formatting      | Prettier                                          | 3.9     |
 
 ## Architecture pattern
 
@@ -183,7 +183,7 @@ The PWA consumes the API's [RFC 9457 Problem Details](./api-error-contract.md) c
 | Layer         | Tool                 | Entry                                                                                            |
 | ------------- | -------------------- | ------------------------------------------------------------------------------------------------ |
 | Unit          | **Vitest 4** (jsdom) | `pwa/vitest.config.ts`, run via `make pwa.test.unit`                                             |
-| E2E           | **Playwright 1.59**  | `pwa/playwright.config.ts`, run via `make pwa.test.e2e`                                          |
+| E2E           | **Playwright 1.62**  | `pwa/playwright.config.ts`, run via `make pwa.test.e2e`                                          |
 | Watch         | Vitest               | `make pwa.test.unit.watch`                                                                       |
 | Reports       | Playwright HTML      | `make pwa.test.e2e.reports`                                                                      |
 | Lint / format | ESLint + dependency-cruiser + Prettier + `tsc` | `make pwa.quality` (all four), `make pwa.lint.graph` (graph boundaries only), `make pwa.lint` (ESLint --fix), `make pwa.format` (Prettier --write) |
