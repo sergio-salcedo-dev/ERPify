@@ -43,7 +43,7 @@ Browser opens at `http://localhost` (and `https://localhost`). Accept the dev ce
 | Install deps         | `make pwa.install`          | `npm ci`                                                 |
 | Unit tests           | `make pwa.test.unit`        | Vitest; optional `c='path/to/file.test.ts'`              |
 | Unit — watch         | `make pwa.test.unit.watch`  |                                                          |
-| E2E tests            | `make pwa.test.e2e`         | Playwright — targets **`:3000`**                         |
+| E2E tests            | `make pwa.test.e2e`         | Playwright — resolved `baseURL`, see below               |
 | Playwright reports   | `make pwa.test.e2e.reports` |                                                          |
 | Unit + E2E           | `make pwa.test`             |                                                          |
 
@@ -79,7 +79,7 @@ pwa/src/
 ## Dependency injection
 
 - **Inversify 8** with constructor injection of **domain interfaces**.
-- `reflect-metadata` imported **once** at the app entry.
+- `reflect-metadata` imported once per independent entry (`src/app/layout.tsx`, `Container.ts`, `tests/setup.ts`); never inside a component.
 - `tsconfig.json` already has `experimentalDecorators` + `emitDecoratorMetadata`.
 - Bindings live per bounded context (e.g. `src/context/<bc>/infrastructure/container.ts`), composed into the root container under `src/context/shared/infrastructure/`.
 
@@ -114,12 +114,13 @@ pwa/src/
 
 ## Critical rules to load before coding
 
-Load [`project-context.md`](./project-context.md) before generating code. Key callouts for the PWA:
+Load [`project-context.md`](./project-context.md) before generating code; [`pwa/CLAUDE.md`](../pwa/CLAUDE.md) and `docs/rules/*.md` own the same rules in more depth. Key callouts for the PWA:
 
 - Next 16 / React 19 / Tailwind 4 / Inversify 8 / TS 6 are beyond most training data — **read existing code before inventing patterns**.
-- **Playwright targets `:3000`**, not `:80`. `baseURL: http://localhost:3000`.
+- **Playwright's `baseURL` is resolved, not fixed** (`pwa/playwright.config.ts`): `PLAYWRIGHT_BASE_URL ?? (CI ? "https://localhost" : "http://127.0.0.1:3000")`. So the default local run does **not** target the Compose stack's front-end — Playwright spawns its own `dev:e2e` on `:3000` (`useWebServer` is on when there is no `CI`, the URL is `http://`, and `PLAYWRIGHT_SKIP_WEBSERVER` is not `1`; `reuseExistingServer` skips the spawn if something already answers). The API side is the Compose stack either way.
+- **The host matters, not just the port.** The default is `127.0.0.1`, and a cookie scoped to `https://localhost` is not sent to a browser sitting on `http://127.0.0.1:3000`. Anything needing same-origin HTTPS must say so: `PLAYWRIGHT_BASE_URL=https://localhost make pwa.test.e2e` (from a worktree, that stack's mapped 443 port — Playwright runs on the host and cannot reach the internal Docker network). `applyPlaywrightDotenvFiles()` loads `pwa/.env` without clobbering the shell and then `pwa/.env.local`, which **does** clobber it — a value pinned there beats the one on your command line.
 - No `React.FC`, no `enzyme`, no shallow rendering; use Testing Library with role/label/text queries.
 - Turbopack is the dev bundler; Webpack-specific `next.config.*` entries silently no-op.
-- `reflect-metadata` imported once; don't re-import per module.
+- `reflect-metadata` imported at each independent entry — the app layout, the container module, the Vitest setup — and nowhere else; don't re-import per module.
 - Mercure client must subscribe via same-origin `/.well-known/mercure`.
 - API errors are RFC 9457 Problem Details ([`api-error-contract.md`](./api-error-contract.md)) — switch UI logic on the body's `type` (opaque, stable), not on status code or message text. Capture `correlation-id` (body or `X-Correlation-Id` header) for support tickets.

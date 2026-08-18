@@ -1,0 +1,107 @@
+# Every version docs/project-context.md claims, bound to the manifest entry that owns it.
+#
+# That page exists to tell an agent what its training data gets wrong about THIS stack, and it is read
+# far more widely than its history suggests: 60 of the 90 installed skills declare it in
+# `persistent_facts`, so it is loaded as foundational context at the start of an agent session rather
+# than consulted on demand. A stale line there is not documentation rot — it is a false premise handed
+# to the agent before it reads any code, asserted with exactly the confidence of a true one.
+#
+# It is also not hypothetical. Measured over the page's history, FOURTEEN second-column version numbers
+# have been corrected, TWELVE of them in one commit (#746 — Mercure 0.7, Node 24, Next.js 16.2.4,
+# Tailwind 4.2, Shadcn 4.3, Playwright 1.59, ESLint 10.2, Prettier 3.8 and four more, all wrong at once)
+# landing immediately before this registry existed. Prose drifted alongside them and is still ungated,
+# so a green here covers the direction with the worst measured record and says nothing about the other.
+#
+# Format:  <manifest> :: <dotted path> => <token exactly as written on the page>
+#          unbound    :: <why nothing can own it> => <token exactly as written on the page>
+#
+# The token carries its product name on purpose. Binding the bare number would make the staleness
+# direction a tautology — "4" appears in any page of prose — so the check would pass over a page that no
+# longer mentions Behat at all. The version is the token's last whitespace-separated word.
+#
+# The gate (make php.lint.project-context) checks four things:
+#   - the manifest still starts with the token's version, so a bump that skips the page fails;
+#   - the token still appears verbatim on the page, so rewording a cell without touching this file
+#     fails rather than leaving a line guarding a claim nobody makes any more;
+#   - every version the page's tables claim is covered by a line here, so a claim added to the page
+#     with no entry fails instead of passing in silence;
+#   - every line here still covers a claim the extraction FINDS. That last one is what keeps the third
+#     honest: the not-empty guard fires only at zero claims, so reformatting one table's columns drops
+#     that table out of the universe and every other check stays green — measured, a leading column on
+#     the PWA table alone takes 33 claims to 18 while the fifteen orphaned lines keep passing, because
+#     their tokens are still page TEXT and that is all the staleness leg reads.
+#
+# "Starts with" is a floor, and only a constraint that HAS a floor is read: `^`, `~`, `>=`, `=`, a bare
+# version, and a PARTIAL wildcard (`8.1.*` — a bare `*`, which twelve `ext-*` entries carry, is refused).
+# `<`, `>`, `!=` and any union are refused rather than guessed at — the earlier spelling stripped those
+# characters as a charlist, which inverted them, and `<2.0` satisfied the claim "2.0" while
+# `^24.15.0 || >=26.0.0` satisfied "24" on a container running 26.
+#
+# The universe is the PAGE's claims, not the manifests' keys: the second column of each table row, on a
+# word followed by whitespace and a number. 33 claims over the page at 406 lines, no false positives. A
+# claim whose version-bearing word is a bare noun ("bundle 4.0") is unreadable to a reviewer as well as
+# to the extractor — rename it on the page rather than teaching the gate to guess.
+#
+# What a green does NOT prove:
+#   - Nothing about the third column of those tables. It is prose, it is where drift keeps landing
+#     alongside the numbers, and no cheap check can falsify it — reading the code is the only control.
+#     Nor about any prose outside the tables, which is most of the page. Sampled adversarially, that
+#     half still held two provable falsehoods after this registry was written.
+#   - Nothing about a version glued to its subject by anything but whitespace. `node:26-trixie` and
+#     `dunglas/frankenphp:1-php8.5` are stated in second columns and are NOT in the universe — and
+#     `node:24-alpine -> node:26-trixie` is one of the values #746 had to correct, so the gap covers a
+#     value with a drift record. Same for a version in column 1, an HTML table, a `v`-prefixed version,
+#     and a cell containing an escaped pipe (`\|`), which the split reads as a cell boundary.
+#   - Nothing about a version stated in the page's PROSE rather than in a table cell — the extraction
+#     reads table rows only, and a claim moved into a paragraph leaves the universe silently. A markdown
+#     table pasted into a fenced code block goes the other way and mints phantom claims, which fails
+#     loudly and is the safe direction.
+#   - Nothing about an `unbound` line beyond the fact that somebody wrote a reason. The reason is not
+#     checked against anything; it is a statement made where a reviewer will see it, not a proof.
+#   - Nothing about anything pinned by digest rather than by manifest — Node and the base images. Nor
+#     about the fourth pinned image, `postgres:...` in the root `compose.yaml`, which sits outside the
+#     `/api` and `/pwa` directories `.github/dependabot.yaml` tracks.
+#   - A dotted path cannot address a manifest key that itself contains a dot. None does today. And
+#     composer.lock, where a transitive version lives, exposes no STABLE path — its packages are a
+#     positional list, so `packages.N.version` resolves and means nothing.
+
+api/composer.json :: require.php => PHP 8.5
+api/composer.json :: extra.symfony.require => Symfony 8.1
+api/composer.json :: require.doctrine/orm => Doctrine ORM 3.6
+api/composer.json :: require.doctrine/dbal => DBAL 4.4
+api/composer.json :: require.doctrine/doctrine-migrations-bundle => migrations-bundle 4.0
+api/composer.json :: require.doctrine/persistence => Persistence 4.2
+api/composer.json :: require.symfony/messenger => Messenger 8
+api/composer.json :: require.symfony/mercure => Mercure 0.8
+api/composer.json :: require.symfony/mercure-bundle => mercure-bundle 0.5
+api/composer.json :: require.symfony/mailer => symfony/mailer 8
+api/composer.json :: require.nelmio/cors-bundle => nelmio/cors-bundle 2.6
+api/composer.json :: require-dev.phpunit/phpunit => PHPUnit 13
+api/composer.json :: require-dev.behat/behat => Behat 4
+api/composer.json :: require-dev.phpstan/phpstan => PHPStan 2
+api/composer.json :: require-dev.rector/rector => Rector 2
+api/composer.json :: require-dev.friendsofphp/php-cs-fixer => PHP-CS-Fixer 3.95
+api/composer.json :: require-dev.squizlabs/php_codesniffer => PHPCS 4
+pwa/package.json :: dependencies.next => Next.js 16.3
+pwa/package.json :: dependencies.react => React 19.2
+pwa/package.json :: devDependencies.typescript => TypeScript 6
+pwa/package.json :: devDependencies.tailwindcss => Tailwind 4.3
+pwa/package.json :: dependencies.shadcn => Shadcn 4.16
+pwa/package.json :: dependencies.inversify => Inversify 8
+pwa/package.json :: dependencies.vitest => Vitest 4
+pwa/package.json :: dependencies.@playwright/test => Playwright 1.62
+pwa/package.json :: dependencies.@testing-library/react => @testing-library/react 16
+pwa/package.json :: dependencies.@testing-library/jest-dom => jest-dom 7
+pwa/package.json :: devDependencies.jsdom => jsdom 30
+pwa/package.json :: devDependencies.eslint => ESLint 10.8
+pwa/package.json :: devDependencies.@next/eslint-plugin-next => @next/eslint-plugin-next 16.3
+pwa/package.json :: devDependencies.prettier => Prettier 3.9
+
+# The Dockerfile pins node by digest and the page names the tag it resolves to, so there is no
+# constraint to compare. engines.node is `^24.15.0 || >=26.0.0` and would not serve either: a union has
+# no floor, and reading its first alternative would bless the claim "Node 24" on a container running 26.
+unbound :: pinned by digest in pwa/Dockerfile, and engines.node is a union with no floor => Node 26
+
+# doctrine/migrations arrives through doctrine/doctrine-migrations-bundle. The root manifest declares no
+# key for it, and composer.lock is a list rather than a dotted map, so no path addresses it.
+unbound :: transitive through doctrine/doctrine-migrations-bundle, no root manifest key => Migrations 3.9
