@@ -67,13 +67,8 @@ export default function BackOfficeLayoutClient({
       // mid-transition and redirects to /login before the push to HOME commits. A
       // hard navigation discards all in-memory client state and lands on the public
       // landing unconditionally — and it fires even if the server revoke failed.
-      // @next/next/no-location-assign-relative-destination does not flag this call:
-      // it resolves the argument statically and sees a bare constant rather than a
-      // template literal, so a green lint is no evidence the pattern is absent. No
-      // disable directive belongs here either — ESLint reports an unused one as its
-      // own warning, and eslint --fix (which `make pwa.quality` runs) deletes it. The
-      // reasoning above is what must survive if the rule ever resolves constants.
       void logout().finally(() => {
+        // eslint-disable-next-line no-restricted-syntax
         globalThis.location.assign(Routes.HOME);
       });
       return;

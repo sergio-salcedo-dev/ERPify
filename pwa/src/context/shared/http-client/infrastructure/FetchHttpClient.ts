@@ -60,13 +60,14 @@ function redirectToLoginOnSessionExpiry(input: string): void {
   sessionExpiredRedirectStarted = true;
   const current = `${globalThis.location.pathname}${globalThis.location.search}`;
   const next = encodeURIComponent(safeInternalPath(current, Routes.BACKOFFICE));
-  // The rule below prescribes redirect() or useRouter().push(); neither is reachable
-  // from here. This is a DI-managed infrastructure adapter, not a component: there is
-  // no render phase for redirect() and no React context for a hook. A full-document
-  // navigation is also what this path wants — the session is gone, so discarding every
-  // piece of in-memory client state is the point here, not an accident of the call.
-  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-  globalThis.location.assign(`${Routes.LOGIN}?next=${next}&reason=session-expired`);
+  // A router is unreachable from here: this is a module-level function inside an
+  // infrastructure adapter, so there is no render phase for redirect() and no React
+  // context for useRouter(). A full-document navigation is also what this path wants —
+  // the session is gone, so discarding every piece of in-memory client state is the
+  // point, not a side effect. replace() rather than assign() so the dead, now
+  // unauthenticated page does not sit in history one Back press away.
+  // eslint-disable-next-line no-restricted-syntax
+  globalThis.location.replace(`${Routes.LOGIN}?next=${next}&reason=session-expired`);
 }
 
 function browserApiBase(): string {

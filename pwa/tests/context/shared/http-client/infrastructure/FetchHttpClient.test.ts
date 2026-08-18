@@ -499,7 +499,7 @@ describe("FetchHttpClient", () => {
     };
     const ORIGINAL_INTERNAL = process.env.SYMFONY_INTERNAL_URL;
 
-    let assign: MockInstance;
+    let replace: MockInstance;
 
     // The single-flight redirect guard is module-level, so each test gets a fresh
     // module (guard reset) via a dynamic re-import after resetModules.
@@ -518,8 +518,8 @@ describe("FetchHttpClient", () => {
 
     beforeEach(() => {
       vi.resetModules();
-      assign = vi.fn();
-      vi.stubGlobal("location", { pathname: "/backoffice/banks", search: "?page=2", assign });
+      replace = vi.fn();
+      vi.stubGlobal("location", { pathname: "/backoffice/banks", search: "?page=2", replace });
     });
 
     afterEach(() => {
@@ -538,8 +538,8 @@ describe("FetchHttpClient", () => {
         problem: { status: HttpStatus.UNAUTHORIZED },
       });
 
-      expect(assign).toHaveBeenCalledTimes(1);
-      expect(assign).toHaveBeenCalledWith(
+      expect(replace).toHaveBeenCalledTimes(1);
+      expect(replace).toHaveBeenCalledWith(
         `/login?next=${encodeURIComponent("/backoffice/banks?page=2")}&reason=session-expired`,
       );
     });
@@ -554,7 +554,7 @@ describe("FetchHttpClient", () => {
         client.get("/api/v1/backoffice/audit/timeline"),
       ]);
 
-      expect(assign).toHaveBeenCalledTimes(1);
+      expect(replace).toHaveBeenCalledTimes(1);
     });
 
     it("does not redirect on a 200", async () => {
@@ -563,7 +563,7 @@ describe("FetchHttpClient", () => {
 
       await client.get("/api/v1/backoffice/banks");
 
-      expect(assign).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
     });
 
     it("does not redirect for the /me cold-load probe (AuthProvider owns that 401)", async () => {
@@ -574,7 +574,7 @@ describe("FetchHttpClient", () => {
         problem: { status: HttpStatus.UNAUTHORIZED },
       });
 
-      expect(assign).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
     });
 
     it("does not redirect for the login endpoint's own 401 (bad credentials)", async () => {
@@ -585,7 +585,7 @@ describe("FetchHttpClient", () => {
         client.post("/api/v1/backoffice/login", { email: "a@b.com", password: "x" }),
       ).rejects.toMatchObject({ problem: { status: HttpStatus.UNAUTHORIZED } });
 
-      expect(assign).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
     });
 
     it("does not redirect during SSR (no window)", async () => {
@@ -598,7 +598,7 @@ describe("FetchHttpClient", () => {
         problem: { status: HttpStatus.UNAUTHORIZED },
       });
 
-      expect(assign).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
     });
   });
 });
