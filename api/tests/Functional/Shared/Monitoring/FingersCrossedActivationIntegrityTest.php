@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Shared\Monitoring;
 
 use DateTimeImmutable;
-use Monolog\Handler\FingersCrossed\ErrorLevelActivationStrategy;
+use Monolog\Handler\FingersCrossed\ActivationStrategyInterface;
 use Monolog\Handler\FingersCrossedHandler;
 use Monolog\Handler\TestHandler;
 use Monolog\Level;
@@ -13,7 +13,7 @@ use Monolog\Logger;
 use Monolog\LogRecord;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
-use Symfony\Bridge\Monolog\Handler\FingersCrossed\HttpCodeActivationStrategy;
+use ReflectionProperty;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -26,13 +26,16 @@ use Throwable;
  * `HttpCodeActivationStrategy` asks whether `context['exception']` is an `HttpExceptionInterface`. Logger
  * processors run before any handler sees the record, so a processor that replaces that Throwable with an
  * array — a normalised map, a string, anything — leaves the strategy unable to recognise a 404. The handler
- * then activates on a request the configuration excludes by name, and flushes its whole buffer of preceding
- * records to `php://stderr`: the sink with no rotation, no TTL and no owner of erasure that the redaction
- * rules in this module exist to keep identifiers out of.
+ * then activates on a request the configuration excludes by name and flushes its whole buffer of preceding
+ * records to `php://stderr`: the sink with no rotation, no TTL and no owner of erasure.
  *
- * The processors are read from the booted container rather than listed here, so this holds for whichever ones
- * the application enrols — including one added after this file was written, which is the only version of the
- * assertion worth having.
+ * **Both halves are read from the container**, because a test that names its own processors proves nothing
+ * about the application's, and a test that builds its own activation strategy from a literal stays green while
+ * the configured exclusion is deleted. What is asserted here is the deployed configuration, not a copy of it.
+ *
+ * The remaining blind spot, stated rather than implied: this reads processors enrolled on CHANNEL LOGGERS. A
+ * processor tagged `handler: main` lands on the gate handler itself, which `FingersCrossedHandler::handle()`
+ * runs before consulting the strategy, and no assertion here would see it.
  *
  * @internal
  */
@@ -46,56 +49,94 @@ final class FingersCrossedActivationIntegrityTest extends KernelTestCase
     {
         self::bootKernel();
 
-        $record = $this->aNotFoundRecord();
+        $channels = $this->channelLoggers();
+        $this->assertNotEmpty($channels, 'no channel logger was read, so this asserts nothing');
 
-        foreach ($this->enrolledProcessors() as $processor) {
-            $record = $processor($record);
+        foreach ($channels as $id => $logger) {
+            $record = $this->aNotFoundRecord();
+
+            foreach ($logger->getProcessors() as $processor) {
+                $record = $processor($record);
+            }
+
+            $this->assertInstanceOf(
+                Throwable::class,
+                $record->context['exception'] ?? null,
+                \sprintf('a processor on "%s" replaced the throwable the activation strategy reads', $id),
+            );
         }
-
-        $this->assertInstanceOf(
-            Throwable::class,
-            $record->context['exception'] ?? null,
-            'a logger processor replaced the throwable the activation strategy reads',
-        );
     }
 
     #[Test]
-    public function anExcludedHttpCodeDoesNotFlushTheBuffer(): void
+    public function theConfiguredExclusionKeepsAnExcludedCodeOutOfTheSink(): void
     {
         self::bootKernel();
 
-        $requestStack = new RequestStack();
+        $strategy = $this->configuredActivationStrategy();
+
+        // The stack the strategy itself holds, not the one the container hands out under another id: an
+        // exclusion is only evaluated when `getMainRequest()` answers, so pushing onto a different instance
+        // would make this pass for the wrong reason — by never reaching the exclusion at all.
+        $requestStack = (new ReflectionProperty($strategy, 'requestStack'))->getValue($strategy);
+        $this->assertInstanceOf(RequestStack::class, $requestStack);
         $requestStack->push(Request::create('/api/v1/banks/does-not-exist'));
 
         $sink = new TestHandler();
-        $handler = new FingersCrossedHandler(
-            $sink,
-            new HttpCodeActivationStrategy(
-                $requestStack,
-                [['code' => 404, 'urls' => []]],
-                new ErrorLevelActivationStrategy(Level::Error),
-            ),
-            self::BUFFER_SIZE,
-        );
+        $handler = new FingersCrossedHandler($sink, $strategy, self::BUFFER_SIZE);
 
-        $logger = new Logger('app', [$handler], $this->enrolledProcessors());
+        $logger = new Logger('app', [$handler], $this->processorsOfTheAppChannel());
         $logger->error('Uncaught PHP Exception', ['exception' => new NotFoundHttpException()]);
 
         $this->assertSame([], $sink->getRecords(), 'a 404 flushed the buffer into the unrotated sink');
     }
 
     /**
+     * The strategy the deployed `main` handler actually holds, so deleting `excluded_http_codes` from
+     * `monolog.yaml` turns this red instead of leaving it asserting a literal of its own.
+     */
+    private function configuredActivationStrategy(): ActivationStrategyInterface
+    {
+        $handler = self::getContainer()->get('monolog.handler.main');
+        $this->assertInstanceOf(FingersCrossedHandler::class, $handler);
+
+        $strategy = (new ReflectionProperty($handler, 'activationStrategy'))->getValue($handler);
+        $this->assertInstanceOf(ActivationStrategyInterface::class, $strategy);
+
+        return $strategy;
+    }
+
+    /**
+     * @return array<string, Logger>
+     */
+    private function channelLoggers(): array
+    {
+        $container = self::getContainer();
+        $loggers = [];
+
+        foreach ($container->getServiceIds() as $id) {
+            if (!\str_starts_with($id, 'monolog.logger')) {
+                continue;
+            }
+
+            $service = $container->get($id);
+
+            if ($service instanceof Logger) {
+                $loggers[$id] = $service;
+            }
+        }
+
+        return $loggers;
+    }
+
+    /**
      * @return list<callable(LogRecord): LogRecord>
      */
-    private function enrolledProcessors(): array
+    private function processorsOfTheAppChannel(): array
     {
         $logger = self::getContainer()->get('monolog.logger');
         $this->assertInstanceOf(Logger::class, $logger);
 
-        $processors = \array_values($logger->getProcessors());
-        $this->assertNotEmpty($processors, 'nothing is enrolled, so this test asserts nothing');
-
-        return $processors;
+        return \array_values($logger->getProcessors());
     }
 
     private function aNotFoundRecord(): LogRecord

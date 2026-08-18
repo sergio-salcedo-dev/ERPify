@@ -106,12 +106,13 @@ final class MailAddressRedactionTest extends TestCase
     }
 
     /**
-     * The cost of drawing the boundary at the RFC's `specials` rather than at a URI grammar: a connection
-     * string loses its credentials to the sentinel and keeps the host and port an operator needs to tell one
-     * database from another.
+     * The cost of drawing the boundary at the RFC's `specials` rather than at a URI grammar, asserted so the
+     * cost is a decision rather than a surprise: `@` separates credentials from host in a connection string
+     * too, so the host is swallowed along with the password and only the port survives. Over-redacting a log
+     * costs a diagnostic; under-redacting it costs an identifier that outlives its own erasure.
      */
     #[Test]
-    public function itKeepsTheHostOfAConnectionStringItRedacts(): void
+    public function itSwallowsTheHostOfAConnectionStringAlongWithTheCredentials(): void
     {
         $this->assertSame(
             'postgresql://app:REDACTED:5432/erpify?sslmode=require',

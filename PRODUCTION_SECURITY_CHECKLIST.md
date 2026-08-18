@@ -936,22 +936,46 @@ mitigated state. Accepting one means recording who accepted it and against which
       running production image, so treat prod as unconfirmed rather than clean. Closing it means a `logging:`
       driver with a retention the erasure path can act on, or keeping the ids out of the document URL — which
       the deep-link design deliberately does not do.
-- [ ] **A recipient's address cannot reach a log through a mail failure, and the guarantee has two stated
-      limits.** `SmtpTransport::assertResponseCode()` quotes the server's reply verbatim, and the command whose
-      reply fails on a rejected recipient is `RCPT TO:<address>` — so a refusal names the person. Every
-      component that swallows that throwable and logs it, plus `ErrorDetailsStamp` in `messenger_messages` and
-      the error reporter that reads throwables outside the logging stack, would hold an address the erasure
-      path cannot reach. `RedactingMailer` decorates `mailer.mailer` and translates every failure into
-      `MailDeliveryFailed`, whose message is COMPOSED from a class name, an SMTP code and an RFC 3463 enhanced
-      status — digits and dots, so it can carry no address — and which chains no `previous`, because a
-      normalising formatter walks that chain and `TransportException::getDebug()` holds the whole SMTP
-      conversation. Nothing downstream is trusted to redact, because nothing downstream receives anything to
-      redact. **Limit one:** the boundary is `MailerInterface`, so a component reaching past it to a
-      `TransportInterface` would see the untranslated failure. Nothing does today; no gate refuses it, and
-      review is the control. **Limit two:** this closes the mail surface only. A vendor exception message is a
-      general carrier of caller data — a database driver quoting a violated unique value is the same shape —
-      and no rule in this repository covers that class. Both are recorded here rather than closed because the
-      first is one seam a reader can check and the second is a survey with no bounded scope.
+- [ ] **A recipient's address does not reach a log through a mail SEND failure, and four residuals around
+      that boundary are accepted.** `SmtpTransport::assertResponseCode()` quotes the server's reply verbatim,
+      and the command whose reply fails on a rejected recipient is `RCPT TO:<address>` — so a refusal names the
+      person, and every component that swallows that throwable and logs it, plus `ErrorDetailsStamp` in
+      `messenger_messages` and the error reporter that reads throwables outside the logging stack, would hold
+      an address no erasure path can reach. `RedactingTransport` decorates **`mailer.transports`** and
+      translates every failure into `MailDeliveryFailed`, whose message is COMPOSED from a class name, an SMTP
+      code and an RFC 3463 enhanced status, which chains no `previous`, and whose `getDebug()` is empty by
+      construction because the transport's own exception accumulates the whole SMTP conversation there.
+      **The boundary is the transport and not `MailerInterface`, and that is measured rather than stylistic:**
+      the compiled production container has three consumers of the transport collection, and only one is the
+      mailer — `MailerTestCommand` calls `send()` on it with no `try`, and Messenger's `MessageHandler` would
+      do the same from the worker if `SendEmailMessage` were ever routed. A `mailer:test` against a relay that
+      rejects the recipient reaches `console.error_listener`, which logs at `critical` — above the
+      `fingers_crossed` action level — with the address in `exception`, `command` and `message`.
+      `MailerBoundaryEnrolmentTest` pins all three consumers.
+      **Residual one — address construction happens before the boundary.** The senders build their `Email`
+      first, and `Mime\Address` raises `RfcComplianceException` quoting the address it rejects; the
+      `*BestEffort` wrapper catches that and logs it raw. Measured bound: every form
+      `#[Assert\Email(mode: STRICT)]` admits (`NoRFCWarningsValidation`) is also admitted by the
+      `MessageIDValidation` that `Address` uses, so no stored address reaches it today — but that is an
+      undocumented agreement between two different validators, not a guarantee, and an address arriving from a
+      fixture, a seeded row or a future caller that skips the constraint would be logged in clear.
+      **Residual two — `RoundRobinTransport` logs the raw throwable** at `error` on the `mailer` channel from
+      *inside* the collection, so a decorator above it cannot un-log what is already written. Latent only:
+      `MAILER_DSN` is a single DSN, so no round-robin is constructed; a `failover://a||b` value would arm it and
+      nothing detects that.
+      **Residual three — `CreateInvitationCommand` prints the recipient to stdout** on both the success and the
+      send-failure branch. The address was typed by the operator and, under `docker exec`, that output does not
+      reach the json-file driver — but the guarantee above is written in absolute terms and this is the shape it
+      forbids, so it is named rather than left to the reader.
+      **Cost accepted, measured.** A failure carrying no server reply — refused connection, TLS handshake, read
+      timeout, unknown `--transport` name — has neither a code nor an enhanced status, so four distinct
+      operational faults all read `code 0, status none` and differ only by exception class. The host, the port
+      and the reason are in the vendor message, which is the same string that carries the recipient, so keeping
+      them means keeping it. This is the diagnostic price of composing instead of filtering, and it falls
+      hardest on `mailer:test` — the command whose exposure motivated moving the boundary in the first place.
+      **Residual four — a vendor exception message is a general carrier of caller data.** A database driver
+      quoting a violated unique value is the same shape. No rule in this repository covers that class; closing
+      it is a survey with no bounded scope, and only the mail surface is closed here.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.
