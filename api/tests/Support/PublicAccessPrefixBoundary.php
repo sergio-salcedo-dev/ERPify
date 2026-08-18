@@ -44,10 +44,20 @@ final class PublicAccessPrefixBoundary
     }
 
     /**
-     * PHP routing files are imported exactly like the YAML ones and cannot be parsed as data, so the prefix
-     * is matched against their SOURCE. That is coarse on purpose: a mention is reported whether or not the
-     * route is guarded, because the alternative — ignoring a file format Symfony loads — is how a route live
-     * in the production router sat under an anonymous prefix with this gate green.
+     * A TEXTUAL CONFINEMENT HEURISTIC over PHP routing files, and deliberately nothing more.
+     *
+     * Symfony imports them exactly like the YAML ones, but they are code: there is no parser here, no
+     * routing loader, and no evaluation of whatever guards the file applies. All this does is look for the
+     * exempt prefix in the source and refuse to vouch for the exemption when it finds one.
+     *
+     * So read a red as "this gate cannot establish confinement", never as "this route is reachable" — a
+     * mention in a comment reds too. And read a green the same way round: it means no PHP routing file
+     * names the prefix, NOT that none registers a route under it. A path built at runtime, assembled from
+     * constants, or spelled differently is invisible to this, and closing that needs a real loader rather
+     * than a wider regex.
+     *
+     * Coarse on purpose, because the alternative was ignoring a format Symfony loads — which is how a route
+     * live in the production router sat under an anonymous prefix with this gate green.
      *
      * @param array<string, string> $phpSources file path => file contents
      *
@@ -61,9 +71,11 @@ final class PublicAccessPrefixBoundary
         foreach ($phpSources as $file => $source) {
             if (\str_contains($source, $prefix)) {
                 $violations[] = \sprintf(
-                    'PHP routing file %s mentions `%s`. This gate cannot read PHP routing as data, so it '
-                    . 'cannot establish that such a route is bounded — declare the route in the YAML file '
-                    . 'the registry names, or the `%s` exemption is unverifiable.',
+                    'PHP routing file %s mentions `%s`. This is a TEXTUAL heuristic, not a parser: it does '
+                    . 'not read PHP routing, does not know whether that mention is a live route, and a match '
+                    . 'in a comment reds just the same. What it reports is that confinement of the `%s` '
+                    . 'exemption can no longer be ESTABLISHED here — declare the route in the YAML file the '
+                    . 'registry names, or move the exemption to a form that does not need bounding.',
                     $file,
                     $prefix,
                     $pattern,

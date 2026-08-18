@@ -325,7 +325,9 @@ php.lint.project-context: ## docs/project-context.md version-claim gate
 #
 # The routing sweep covers what Symfony imports — `{routes}/*` and `{routes}/{env}/*`, YAML and PHP alike.
 # A narrower one was measured leaving a `/api/test/` route live in the prod router with this gate green.
-# PHP routing cannot be parsed as data, so it is matched as text and any mention is reported.
+# PHP routing is code, so it gets a TEXTUAL confinement heuristic rather than a parser: a red says the
+# exemption's confinement cannot be ESTABLISHED, never that a route is reachable, and its green says no such
+# file names the prefix — not that none registers a route under it.
 #
 # Two classes — the assertions over the real tree, and falsifiability of the rules against synthetic input —
 # each selected by exact name in its own run, so a vanished one is an empty suite rather than a green
