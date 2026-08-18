@@ -27,7 +27,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "backoffice", "health"]
             },
-            "description": "Health check for the backoffice context."
+            "description": "Liveness check for the backoffice context. Requires an authenticated session: it is not exempt from the firewall, and answers 401 Problem Details without one. Use the Frontoffice health request for an unauthenticated probe."
           },
           "response": []
         },
@@ -41,7 +41,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "backoffice", "health", "database"]
             },
-            "description": "Database reachability probe (SELECT 1). Returns data.status 'ok' when the database responds, 'error' otherwise; HTTP 200 either way."
+            "description": "Database reachability probe (SELECT 1). Requires an authenticated session. Returns data.status 'ok' when the database responds, 'error' otherwise; HTTP 200 either way — the status code reports whether the request could be decided, data.status reports what the probe found."
           },
           "response": []
         },
@@ -179,7 +179,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "health"]
             },
-            "description": "Health check for the frontoffice context."
+            "description": "Liveness check for the frontoffice context, and the only health route outside the firewall — reachable with no session, which is what the deploy smoke test and the public /status page rely on."
           },
           "response": []
         },

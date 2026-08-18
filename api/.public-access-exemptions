@@ -1,0 +1,80 @@
+# Every `access_control` rule that lets an unauthenticated caller reach a route, classified by WHO needs it
+# anonymous and by WHETHER it matches one target or a subtree.
+#
+# Why this file exists: the firewall is default-deny, so one line in `access_control` is the entire
+# authorization story for a caller with no session — and until this registry nothing read that list.
+# `PermissionCatalogCoversEveryGatedRouteTest` covers permissions ⊂ catalog, which is the other direction
+# entirely: it says nothing about routes gated by nothing. Adding an exemption was a one-line diff no build
+# inspected.
+#
+# THREE SHAPES ADMIT AN ANONYMOUS CALLER AND ONLY ONE SAYS SO. `roles: PUBLIC_ACCESS` is the explicit one.
+# `route: <name>` instead of `path:` is the same thing keyed differently — Symfony accepts both. And a rule
+# whose `roles` are ABSENT or EMPTY is stronger still: `AccessListener::authenticate` returns before
+# deciding anything, so the route is open and the token never appears. All three are collected; a sweep
+# keyed on the token would have seen only the first, which was measured, live, on this branch.
+#
+# The `$` is not the invariant, and reading it as one is what makes a gate red on a correct line. What the
+# anchor buys is that an exemption matches ONE target instead of a subtree — but the anchor alone does not
+# establish that either: `^/api/v1/(health|backoffice/health/database)$` and `^/api/v1/health.*$` are both
+# anchored and both span a set, and the second reopens exactly the subtree whose loss of anchoring made the
+# database probe anonymous. So `exact` means a LITERAL path between the anchors, and `prefix` is the form
+# that must justify itself.
+#
+# Format, one per line. `::` is the field separator, so no field may contain it:
+#   <pattern> => exact :: <the anonymous caller that requires it>
+#   <pattern> => prefix :: <the anonymous caller that requires it> :: <path of the file that bounds it>
+#
+# `<pattern>` is the literal `path:` string from `security.yaml`, character for character — or `route:<name>`
+# for a rule keyed on the route name. A registered pattern that is merely equivalent is a violation: the
+# gate compares text, because "equivalent" is a judgement and a regex that differs is a regex somebody
+# rewrote.
+#
+# A `prefix` line names the FILE that keeps its subtree out of production — not a reason. A reason is a
+# sentence; a file is something the gate can open and check. `^/api/test/` is inert in prod only because
+# every route under it lives inside the `when@test:` block of one file, and that is an assertion with the
+# exact shape of a `#[When(env: 'dev')]` guard: correct until an unrelated edit moves it, with every other
+# gate green, and first read by the deploy.
+#
+# The gate is two classes — PublicAccessExemptionGateTest over the real tree, and
+# PublicAccessExemptionRulesGateTest for the falsifiability of the rules against synthetic input — run by
+# `make php.lint.public-access`, each selected by exact name in its own run so a vanished class is an empty
+# suite rather than a green subset.
+#
+# ---------------------------------------------------------------------------------------------------------
+# What it deliberately does NOT do. Read this list as the specification of the gate's blind spots — a green
+# build proves what is below the line, and nothing above it. Every entry here was MEASURED, most of them by
+# an adversarial pass that broke the first version of this gate three ways.
+#
+#   - It never judges a classification. Naming a consumer that does not exist passes; so does calling a
+#     genuinely dangerous route `exact`. The completeness check forces the decision into a diff, and review
+#     is what judges it. That is the same trade every registry here makes.
+#   - It reads `security.yaml` and nothing else, so an exemption introduced OUTSIDE `access_control` is
+#     invisible: a second firewall with `security: false`, or a route excluded by the firewall's own
+#     `pattern`. Neither exists today; each would need its own arm.
+#   - A rule declaring `allow_if` or `request_matcher` is REFUSED rather than classified — whether it admits
+#     an anonymous caller cannot be decided from the config alone, so the gate stops instead of guessing.
+#   - The prefix check understands ONE way of bounding a subtree: the `when@test:` wrapper in a routing
+#     YAML. A route guarded just as correctly by `#[When(env: 'test')]` on its controller reads as unbounded
+#     here. Nothing in the tree does that today; the fix if one appears is another arm, never a suppression.
+#   - PHP routing files are matched as TEXT by a CONFINEMENT HEURISTIC, not parsed. There is no routing
+#     loader here and no evaluation of whatever guards the file applies, so a red means "confinement cannot
+#     be established" and never "this route is reachable" — a mention inside a comment reds too. The green
+#     is weaker still: it says no PHP routing file NAMES the prefix, not that none registers a route under
+#     it, and a path built at runtime or assembled from constants is invisible. Coarse on purpose, because
+#     the alternative was ignoring a format Symfony imports, and that is how a route live in production sat
+#     under this exemption with the gate green. Closing the residue needs a real loader, not a wider regex.
+#   - It proves an attribute-routing resource declares a `prefix` that cannot overlap an exempt prefix, at
+#     any nesting depth. It does NOT read the `#[Route]` attributes themselves, so it cannot see a route
+#     whose own path escapes its resource prefix.
+#   - It says nothing about whether an exempt route is SAFE to be public — no payload inspection, no cost
+#     analysis, no rate-limit check. It only forces the exemption to be listed, formed, bounded and consumed.
+#
+# ---------------------------------------------------------------------------------------------------------
+
+^/api/v1/backoffice/login$ => exact :: the login handshake — a caller proving credentials holds no session yet
+^/api/v1/backoffice/invitations/accept$ => exact :: invitation accept, a pre-identity write; it stays inside the main firewall so the login helper can resolve it and mint the first session
+^/api/v1/backoffice/forgot-password$ => exact :: password recovery request — a locked-out or forgotten-password user has no session by definition
+^/api/v1/backoffice/reset-password$ => exact :: password recovery completion, same pre-identity caller
+^/api/v1/health$ => exact :: the deploy smoke test (scripts/deploy/deploy.sh), the CI smoke steps (.github/workflows/ci.yml) and the public /status page, which mounts outside RequireAuth
+^/api/v1/dev/frankenphp-hot-reload$ => exact :: the PWA layout's dev hot-reload poll, fired before any session exists
+^/api/test/ => prefix :: the error-contract functional suite, which drives throwaway controllers through a real kernel :: config/routes/test.yaml

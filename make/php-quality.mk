@@ -296,6 +296,47 @@ php.lint.project-context: ## docs/project-context.md version-claim gate
 	@$(PHP_TEST) bin/phpunit --filter=ProjectContextPageRulesGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ProjectContextRegistryRulesGateTest
 
+## —— Public-access exemption gate ——————————————————————————————————————————
+
+# Fails CI when an `access_control` rule that admits an unauthenticated caller carries no line in
+# api/.public-access-exemptions, when a classified rule no longer admits one, when a classification
+# disagrees with what it matches, when a prefix exemption is not bounded by the file it names, or when the
+# terminal default-deny rule is gone or no longer last.
+#
+# The firewall is the entire authorization story for a caller with no session, and until this gate nothing
+# read its allowlist: PermissionCatalogCoversEveryGatedRouteTest covers permissions in the catalog, which
+# says nothing about routes gated by nothing at all. Adding an exemption was a one-line diff no build read.
+#
+# Three shapes admit an anonymous caller and only one says so, which is why the universe is derived from a
+# rule's EFFECT rather than from the PUBLIC_ACCESS token: `route:` is an alternative matcher Symfony accepts
+# alongside `path:`, and a rule whose `roles` are absent or empty is stronger still — AccessListener returns
+# before deciding anything, so the route is open and the token never appears. Both were measured passing a
+# token-keyed sweep, one of them with an anonymous 200 out of the database probe. A rule whose admission the
+# gate cannot evaluate (`allow_if`, `request_matcher`) is refused rather than assumed safe.
+#
+# The invariant is one-target-vs-subtree, not the anchor character. Demanding `$` everywhere would go red on
+# `^/api/test/`, a deliberate prefix — and a gate that reds on a correct line ends its life as a suppression.
+# But the anchor alone proves nothing either: `^/api/v1/(a|b)$` and `^/api/v1/health.*$` are both anchored
+# and both span a set, the second reopening the exact subtree whose loss of anchoring made the database
+# probe anonymous. So `exact` means a literal path between the anchors, and a `prefix` must name the FILE
+# that keeps its subtree out of production — which this gate then opens, because "inert in prod" otherwise
+# has the shape of a #[When(env: 'dev')] guard: correct until an unrelated edit moves it, every other gate
+# green, first read by the deploy.
+#
+# The routing sweep covers what Symfony imports — `{routes}/*` and `{routes}/{env}/*`, YAML and PHP alike.
+# A narrower one was measured leaving a `/api/test/` route live in the prod router with this gate green.
+# PHP routing is code, so it gets a TEXTUAL confinement heuristic rather than a parser: a red says the
+# exemption's confinement cannot be ESTABLISHED, never that a route is reachable, and its green says no such
+# file names the prefix — not that none registers a route under it.
+#
+# Two classes — the assertions over the real tree, and falsifiability of the rules against synthetic input —
+# each selected by exact name in its own run, so a vanished one is an empty suite rather than a green
+# subset. A green proves every exemption is listed, formed, bounded and consumed; it never judges whether
+# the exemption should exist, and the registry header enumerates the rest of the blind spots.
+php.lint.public-access: ## Firewall public-exemption classification gate
+	@$(PHP_TEST) bin/phpunit --filter=PublicAccessExemptionGateTest
+	@$(PHP_TEST) bin/phpunit --filter=PublicAccessExemptionRulesGateTest
+
 ## —— Deptrac (architectural boundaries) ————————————————————————————————————
 
 # Static, AST-aware gate over api/src enforcing three concerns in one ruleset
@@ -331,7 +372,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -349,7 +390,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -359,6 +400,6 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence \
         php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary \
-        php.lint.composer-stability php.lint.prod-container php.lint.project-context \
+        php.lint.composer-stability php.lint.prod-container php.lint.project-context php.lint.public-access \
         php.deptrac php.deptrac.baseline \
         php.quality php.quality.dry-run

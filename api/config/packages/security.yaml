@@ -32,8 +32,12 @@ security:
                 max_attempts: 5
 
     # Default-deny: every /api route needs an authenticated session unless it is on this allowlist, which is
-    # the complete set of routes with a legitimate unauthenticated caller — the login handshake, the liveness
-    # probes hit by CI/monitoring, and the dev hot-reload poll the PWA layout fires before any session exists.
+    # the complete set of routes with a legitimate unauthenticated caller — the login handshake, the one
+    # liveness probe the deploy and CI smoke steps and the public status page reach, and the dev hot-reload
+    # poll the PWA layout fires before any session exists. Every entry is classified in
+    # api/.public-access-exemptions, and `make php.lint.public-access` fails on an addition, a removal or a
+    # widening that file does not carry — including the two spellings that admit an anonymous caller without
+    # naming PUBLIC_ACCESS at all: a rule keyed on `route:`, and one whose `roles` are absent or empty.
     # First match wins, so the catch-all is last; it is scoped to `^/api` (not `^/`) so /_dev, /_wdt,
     # /.well-known/mercure and the reverse-proxied PWA stay outside the firewall's remit. An unauthenticated
     # hit raises AccessDeniedException, which UnauthenticatedAccessListener turns into a 401 through the
@@ -47,13 +51,18 @@ security:
         # session. Both endpoints are same-origin-guarded (PasswordResetOriginListener) and answer uniformly.
         - { path: '^/api/v1/backoffice/forgot-password$', roles: PUBLIC_ACCESS }
         - { path: '^/api/v1/backoffice/reset-password$', roles: PUBLIC_ACCESS }
-        # Liveness only — a static payload that probes nothing. The anchored `$` is load-bearing: the
-        # database probe lives one segment deeper and must NOT inherit this exemption. It costs a Postgres
-        # round-trip per anonymous request (a DoS amplifier) and discloses dependency state to whoever asks,
-        # so it falls through to the catch-all and requires a session like the rest of `/api`. That is a
-        # session, not a permission — neither health controller carries #[IsGranted], unlike every other
-        # backoffice controller. Widening this pattern reopens the anonymous half.
-        - { path: '^/api/v1/backoffice/health$', roles: PUBLIC_ACCESS }
+        # The one liveness route with anonymous consumers: the deploy smoke test (scripts/deploy/deploy.sh),
+        # the CI smoke steps (.github/workflows/ci.yml) and the public /status page, which mounts outside
+        # RequireAuth. A static payload that probes nothing.
+        # The anchored `$` is load-bearing: everything one segment deeper — the database probe included — must
+        # NOT inherit this exemption. A deep probe costs a Postgres round-trip per anonymous request (a DoS
+        # amplifier) and discloses dependency state to whoever asks, so it falls through to the catch-all and
+        # requires a session like the rest of `/api`. That is a session, not a permission — no health
+        # controller carries #[IsGranted], unlike every other backoffice controller.
+        #
+        # The backoffice liveness route is deliberately NOT here. It is served by the same PHP process off the
+        # same static payload, so this route answering already proves that process alive; its own page mounts
+        # behind RequireAuth and had no anonymous consumer left once the runbooks were pointed here.
         - { path: '^/api/v1/health$', roles: PUBLIC_ACCESS }
         # Anchored to the one route it exempts, not to the `/dev/` prefix: the controllers under it are
         # #[When]-guarded out of prod, but a prefix pattern would exempt any future `/dev/` route before its

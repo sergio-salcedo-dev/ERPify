@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-08-14
+last_updated: 2026-08-18
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -394,6 +394,10 @@ development_status:
   # ser ejecución sobre el host de rehearsal y no código. Este `done` es la historia, no el issue — y por la
   # regla del fichero tampoco es evidencia de que la rama haya mergeado.
   br-8-operabilidad: done
+  # Cierre de #295 (contrato de código de estado de los endpoints de salud) y #222 (exención de auth +
+  # política de deep-check). `done` marca que el code review de la tarea completa ocurrió, no que la
+  # rama haya entrado: el marcador va por delante del merge por diseño — para eso está git.
+  br-9-contrato-endpoints-salud: done
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.

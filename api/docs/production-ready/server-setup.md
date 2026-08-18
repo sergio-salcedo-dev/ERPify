@@ -85,8 +85,10 @@ The `--wait` flag blocks until all containers report healthy. Once the
 ```console
 docker compose -f compose.yaml -f compose.prod.yaml ps
 
-# Should return {"status":"ok", ...}
-curl -sf https://api.your-domain.com/api/v1/backoffice/health | jq .
+# Should return {"data":{"status":"ok","service":"Front office", ...}}
+# This is the only health route outside the firewall — the back-office one and the database
+# probe require a session, so an operator holding a shell cannot use them here.
+curl -sf https://api.your-domain.com/api/v1/health | jq .
 ```
 
 ---

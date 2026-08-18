@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Shared\Http\Infrastructure;
 
+use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonSchema\Validator as JsonSchemaValidator;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use stdClass;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -38,11 +40,19 @@ use Symfony\Component\HttpFoundation\Response;
  * tests here would fail (contract drift) and the `php.lint.error-contract`
  * gate would block the diff.
  *
+ * The two paths differ in who may reach them, and that asymmetry is deliberate rather than
+ * incidental: only the frontoffice route is exempt from the firewall, so the backoffice one is
+ * driven with a seated session. Dropping that session would not weaken this suite quietly — it
+ * would turn every backoffice assertion here into a 401 — which is what makes {@see clientFor}
+ * the single place the exemption boundary is stated.
+ *
  * @internal
  */
 #[CoversNothing]
 final class HealthEndpointsContractTest extends WebTestCase
 {
+    use AuthenticatesFunctionalRequests;
+
     private const string UUID_V7_REGEX = '/\A[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/';
 
     private const string SCHEMA_FIXTURE = '/../../../../Fixtures/Problem/rfc-9457.schema.json';
@@ -81,9 +91,24 @@ final class HealthEndpointsContractTest extends WebTestCase
         );
     }
 
-    private function assertHealthFailurePathIsConformingProblemDetails(string $path): void
+    /**
+     * The frontoffice liveness route is the one `/api` path outside the firewall; the backoffice one
+     * requires a session like the rest, so it is driven with one seated.
+     */
+    private function clientFor(string $path): KernelBrowser
     {
         $kernelBrowser = self::createClient();
+
+        if (self::BACKOFFICE_HEALTH_PATH === $path) {
+            $this->authenticateClient($kernelBrowser);
+        }
+
+        return $kernelBrowser;
+    }
+
+    private function assertHealthFailurePathIsConformingProblemDetails(string $path): void
+    {
+        $kernelBrowser = $this->clientFor($path);
         $kernelBrowser->catchExceptions(true);
         $kernelBrowser->request(Request::METHOD_GET, $path . '?_force_failure=1');
 
@@ -147,7 +172,7 @@ final class HealthEndpointsContractTest extends WebTestCase
 
     private function assertHealthHappyPathIsUnchanged(string $path, string $expectedService): void
     {
-        $kernelBrowser = self::createClient();
+        $kernelBrowser = $this->clientFor($path);
         $kernelBrowser->catchExceptions(true);
         $kernelBrowser->request(Request::METHOD_GET, $path);
 

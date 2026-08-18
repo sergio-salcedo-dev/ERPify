@@ -123,29 +123,49 @@ you change anything here.
       alarm (`ReportDeadLetterBacklogHandler`) logs **counts/ages only**, never
       payloads; `event:dedup:clear` deletes a claim via parameterised DBAL
       (`release()`), no string-interpolated SQL. No new auth surface.
-- [ ] The health endpoints (`/api/v1/health`, `/api/v1/backoffice/health`) are
-      **consciously public and liveness-only**: static payload (status, service
-      name, server time) with no DB / Mercure / Messenger probing, no PII, no
-      versions. Each carries its own `$`-anchored `PUBLIC_ACCESS` entry in
-      `api/config/packages/security.yaml`, and **the anchoring is the control**: a
-      pattern spanning the prefix exempts every route nested under it, which is how
-      the database probe came to be anonymous. The two exemptions rest on different
-      consumers and must be reasoned about separately: `/api/v1/health` is reached
-      anonymously by the §8 smoke test **and by the public `/status` page**, which
-      mounts outside `RequireAuth` — retiring that exemption bounces an anonymous
+- [ ] **Exactly one health route is public: `/api/v1/health`.** It is liveness-only —
+      a static payload (status, service name, server time) with no DB / Mercure /
+      Messenger probing, no PII, no versions — and it holds the sole `$`-anchored
+      `PUBLIC_ACCESS` health entry in `api/config/packages/security.yaml`. It has two
+      three anonymous consumers that cannot present a session: the §8 deploy smoke
+      test (`scripts/deploy/deploy.sh` requires exactly `200`), the CI smoke steps
+      (`.github/workflows/ci.yml`), and the public `/status` page, which mounts
+      outside `RequireAuth`. Retiring it bounces an anonymous
       visitor to `/login`, since the PWA's HTTP client treats a 401 outside the auth
-      handshake as an expired session. `/api/v1/backoffice/health` has no anonymous
-      consumer in the PWA — its page mounts behind `RequireAuth` — but it does have
-      one **outside** it: the deploy runbooks curl it unauthenticated
-      (`api/docs/production-ready/hardening.md`, `server-setup.md`), and an operator
-      holding a shell holds no session cookie. Closing it is therefore a change to a
-      documented operational procedure, not a config edit. Two
-      invariants: **any deep health check is authenticated** — the dependency probe
-      `/api/v1/backoffice/health/database` falls through to
-      `IS_AUTHENTICATED_FULLY`, pinned by an `@anonymous` 401 scenario in
-      `api/features/backoffice/health/database.feature` — and no liveness route
-      ever grows dependency status. Tracked in
-      [#222](https://github.com/sergio-salcedo-dev/ERPify/issues/222).
+      handshake as an expired session. Its anonymity is pinned by an `@anonymous`
+      scenario in `api/features/frontoffice/health/get.feature` — otherwise nothing
+      would go red when someone closed it.
+- [ ] **`/api/v1/backoffice/health` requires a session, like the rest of `/api`.** It
+      is served by the same PHP process off the same static payload, so the public
+      route answering already proves that process alive; its own page mounts behind
+      `RequireAuth`, and the deploy runbooks now curl the public route instead.
+      Pinned by an `@anonymous` 401 scenario in
+      `api/features/backoffice/health/get.feature` that also asserts the body carries
+      no `data` node — the status alone cannot tell a firewall rejection apart from a
+      controller that answered.
+- [ ] **Two invariants over the health surface.** *Any deep health check is
+      authenticated* — the dependency probe `/api/v1/backoffice/health/database`
+      falls through to `IS_AUTHENTICATED_FULLY`, pinned by an `@anonymous` 401
+      scenario in `api/features/backoffice/health/database.feature`. And *no liveness
+      route ever grows dependency status* — both liveness features assert `0 requests
+      got executed across all doctrine connections`.
+- [ ] **Every public exemption is classified, and the classification is gated.** The
+      firewall is default-deny, so an `access_control` line is the entire
+      authorization story for an unauthenticated caller — and nothing used to read
+      that list. Each entry is classified in `api/.public-access-exemptions` by its
+      anonymous consumer and by whether it matches one route or a subtree;
+      `make php.lint.public-access` fails on an unclassified exemption, an orphaned
+      line, a pattern that differs textually, a form that disagrees with what it
+      matches, a prefix exemption whose subtree is no longer bounded by the file it
+      names, and the loss of the terminal default-deny rule that makes the rest
+      exemptions at all. **Two spellings admit an anonymous caller without naming
+      `PUBLIC_ACCESS`** and both are collected: a rule keyed on `route:` instead of
+      `path:`, and one whose `roles` are absent or empty — the latter makes
+      `AccessListener` return before deciding anything. **And the anchor is not the
+      invariant**: `^/api/v1/health.*$` is anchored and still reopens the subtree
+      whose loss of anchoring made the database probe anonymous, so `exact` means a
+      literal path and a prefix must name what bounds it. The registry header
+      enumerates what a green does not prove.
 - [ ] `GET /api/v1/backoffice/banks/{id}/accounts` returns the **full canonical
       IBAN** (PII) and is **consciously public** like the rest of `/backoffice`
       (the API has no auth layer yet). The masking is presentational on the PWA
