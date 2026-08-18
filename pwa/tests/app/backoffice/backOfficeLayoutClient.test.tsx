@@ -105,6 +105,10 @@ async function openAccountMenu(): Promise<HTMLElement> {
   return screen.findByTestId("bo-layout__account-menu");
 }
 
+// Mirrors REVOKE_BUDGET_MS in BackOfficeLayoutClient: the wait is a contract with the user
+// (leave within this budget), so the test states it rather than reaching for the module's copy.
+const REVOKE_BUDGET_MS = 3_000;
+
 function renderLayout() {
   return render(
     <BackOfficeLayoutClient>
@@ -147,6 +151,44 @@ describe("BackOfficeLayoutClient", () => {
     // A push would keep this guarded subtree mounted, and RequireAuth would send the just-revoked
     // session to /login instead of the public landing.
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("drops a second sign-out while the first is still in flight", async () => {
+    // The click closes the menu, so a second one needs it reopened — reachable for as long as
+    // the revoke is outstanding, which is exactly the window REVOKE_BUDGET_MS bounds.
+    logout.mockImplementationOnce(() => new Promise<void>(() => {}));
+    renderLayout();
+    await openAccountMenu();
+    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+
+    await openAccountMenu();
+    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+
+    // The second revoke would POST against an already-revoked session; that 401 reaches the
+    // transport, which starts its own competing bounce to /login.
+    expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves anyway when the server revoke never settles", async () => {
+    // `shouldAdvanceTime` keeps findBy*/waitFor working on real time while the sign-out
+    // budget stays under the test's control.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      logout.mockImplementationOnce(() => new Promise<void>(() => {}));
+      renderLayout();
+      await openAccountMenu();
+
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+      expect(assign).not.toHaveBeenCalled();
+
+      // The revoke carries no AbortSignal, so without the budget the user would sit on a page
+      // that looks signed in and answers nothing.
+      await vi.advanceTimersByTimeAsync(REVOKE_BUDGET_MS);
+
+      await waitFor(() => expect(assign).toHaveBeenCalledWith(Routes.HOME));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("routes the remaining account entries through the client-side router", async () => {

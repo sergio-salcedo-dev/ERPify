@@ -27,7 +27,8 @@ function trimBase(url: string): string {
 
 // Single-flight guard for the session-expired bounce: a burst of concurrent
 // 401s (e.g. a dashboard firing several gated requests at once) must navigate to
-// /login exactly once, not race N redirects. Never reset — the page is leaving.
+// /login exactly once, not race N redirects. Cleared again only if the navigation is
+// refused, because then the page is NOT leaving and every later 401 would be swallowed.
 let sessionExpiredRedirectStarted = false;
 
 // Endpoints whose 401/403 is a handshake outcome, not a mid-session expiry:
@@ -39,6 +40,10 @@ let sessionExpiredRedirectStarted = false;
 //    an as-yet-unauthenticated user; an origin/CSRF rejection is a handshake
 //    failure the token-action screen owns, so it must not be bounced to
 //    `/login?reason=session-expired`.
+//  - `/sessions/revoke-current` IS the sign-out call. On an already-expired
+//    session it 401s, and bouncing that would race the sign-out's own
+//    navigation and strand the user on "session expired" instead of the public
+//    landing they asked for.
 // Every other gated 401 means "was authenticated, now isn't".
 function isAuthHandshakeEndpoint(input: string): boolean {
   const path = input.split("?")[0];
@@ -46,7 +51,8 @@ function isAuthHandshakeEndpoint(input: string): boolean {
     path.endsWith(API_ENDPOINTS.IDENTITY.ME) ||
     path.endsWith(API_ENDPOINTS.BACKOFFICE.LOGIN) ||
     path.endsWith(API_ENDPOINTS.BACKOFFICE.INVITATIONS.ACCEPT) ||
-    path.endsWith(API_ENDPOINTS.BACKOFFICE.RESET_PASSWORD)
+    path.endsWith(API_ENDPOINTS.BACKOFFICE.RESET_PASSWORD) ||
+    path.endsWith(API_ENDPOINTS.IDENTITY.SESSIONS_REVOKE_CURRENT)
   );
 }
 
@@ -57,6 +63,10 @@ function redirectToLoginOnSessionExpiry(input: string): void {
   if (typeof window === "undefined") return;
   if (sessionExpiredRedirectStarted) return;
   if (isAuthHandshakeEndpoint(input)) return;
+  // Already on /login: the bounce would replace the document with itself, and the latch
+  // is module state that a fresh document resets — so a 401 raised from this screen could
+  // reload it for as long as the call keeps failing.
+  if (globalThis.location.pathname === Routes.LOGIN) return;
   sessionExpiredRedirectStarted = true;
   const current = `${globalThis.location.pathname}${globalThis.location.search}`;
   const next = encodeURIComponent(safeInternalPath(current, Routes.BACKOFFICE));
@@ -66,8 +76,16 @@ function redirectToLoginOnSessionExpiry(input: string): void {
   // the session is gone, so discarding every piece of in-memory client state is the
   // point, not a side effect. replace() rather than assign() so the dead, now
   // unauthenticated page does not sit in history one Back press away.
-  // eslint-disable-next-line no-restricted-syntax
-  globalThis.location.replace(`${Routes.LOGIN}?next=${next}&reason=session-expired`);
+  try {
+    // eslint-disable-next-line no-restricted-syntax
+    globalThis.location.replace(`${Routes.LOGIN}?next=${next}&reason=session-expired`);
+  } catch {
+    // A navigation-restricted context (a sandboxed frame) rejects this with a
+    // SecurityError. Swallow it rather than letting a raw DOMException escape the
+    // adapter's HttpError contract, and drop the latch: the page stayed, so the 401
+    // must surface normally and a later one must still be able to bounce.
+    sessionExpiredRedirectStarted = false;
+  }
 }
 
 function browserApiBase(): string {

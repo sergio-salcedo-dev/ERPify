@@ -8,6 +8,7 @@ import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import type { Telemetry } from "@/context/shared/observability/domain/Telemetry";
 import { isProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 
 // v7-shaped: ProblemDetails.instance / correlation-id are UUID v7, minted via @/context/shared/uuid/infrastructure/uuidV7.
 const { STUB_UUID } = vi.hoisted(() => ({
@@ -575,6 +576,53 @@ describe("FetchHttpClient", () => {
       });
 
       expect(replace).not.toHaveBeenCalled();
+    });
+
+    it("does not redirect for the sign-out call's own 401 (already-expired session)", async () => {
+      respond401();
+      const client = await freshClient();
+
+      await expect(client.post("/api/v1/sessions/revoke-current", {})).rejects.toMatchObject({
+        problem: { status: HttpStatus.UNAUTHORIZED },
+      });
+
+      // Bouncing here would race the sign-out's own navigation to the public landing and
+      // strand the user on "session expired" instead.
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it("does not redirect when the document is already on /login", async () => {
+      vi.stubGlobal("location", { pathname: Routes.LOGIN, search: "", replace });
+      respond401();
+      const client = await freshClient();
+
+      await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+        problem: { status: HttpStatus.UNAUTHORIZED },
+      });
+
+      // The latch is module state a fresh document resets, so replacing /login with itself
+      // could reload the screen for as long as the call keeps failing.
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it("clears the single-flight latch when the navigation is refused", async () => {
+      // A sandboxed frame rejects a top-level navigation with a SecurityError.
+      replace.mockImplementationOnce(() => {
+        throw new Error("SecurityError");
+      });
+      respond401();
+      const client = await freshClient();
+
+      // The DOMException must not escape the adapter's HttpError contract.
+      await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+        problem: { status: HttpStatus.UNAUTHORIZED },
+      });
+      await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+        problem: { status: HttpStatus.UNAUTHORIZED },
+      });
+
+      // The page never left, so the second 401 must still be able to bounce.
+      expect(replace).toHaveBeenCalledTimes(2);
     });
 
     it("does not redirect for the login endpoint's own 401 (bad credentials)", async () => {

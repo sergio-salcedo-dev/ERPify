@@ -25,6 +25,15 @@ import { Routes } from "@/context/shared/routing/domain/Routes";
 
 const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 
+// How long sign-out waits for the server revoke before leaving anyway. The revoke carries
+// no AbortSignal, so without a budget a request that never settles leaves the user on a
+// page that looks signed in and answers nothing — the one outcome worse than a stale cookie.
+const REVOKE_BUDGET_MS = 3_000;
+
+function afterMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function BackOfficeLayoutClient({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -57,24 +66,32 @@ export default function BackOfficeLayoutClient({
 
   const menuGroups = backofficeMenuGroups;
 
+  // Sign-out is in flight. State rather than a ref because the click closes the menu, so a
+  // second attempt needs it reopened — an asynchronous gap a re-render always wins.
+  const [isLeaving, setIsLeaving] = useState(false);
+
   const handleNavigation = (path: string) => {
+    setIsSidebarOpen(false);
     if (path === Routes.HOME) {
+      // A second click would POST a revoke against an already-revoked session; that 401
+      // reaches the transport, which starts its own competing bounce to /login.
+      if (isLeaving) return;
+      setIsLeaving(true);
       // The account menu's logout entry targets HOME (the public landing). logout()
       // revokes the server session (dropping its cookie) then clears client state;
-      // wait for it to settle so the cookie is gone before leaving, then use a
-      // full-document navigation rather than router.push: an SPA push keeps this
+      // wait up to REVOKE_BUDGET_MS for it so the cookie is normally gone before
+      // leaving, then use a full-document navigation rather than router.push: an SPA push keeps this
       // guarded subtree mounted, so RequireAuth observes the just-cleared session
       // mid-transition and redirects to /login before the push to HOME commits. A
       // hard navigation discards all in-memory client state and lands on the public
       // landing unconditionally — and it fires even if the server revoke failed.
-      void logout().finally(() => {
+      void Promise.race([logout(), afterMs(REVOKE_BUDGET_MS)]).finally(() => {
         // eslint-disable-next-line no-restricted-syntax
         globalThis.location.assign(Routes.HOME);
       });
       return;
     }
     router.push(path);
-    setIsSidebarOpen(false);
   };
 
   const navigateTo = (path: string) => () => handleNavigation(path);
