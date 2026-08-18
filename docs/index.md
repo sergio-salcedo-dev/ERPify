@@ -1,6 +1,6 @@
 # ERPify — Documentation Index
 
-> Updated 2026-07-29. Primary entry point for repo-wide docs. AI agents: load [`project-context.md`](./project-context.md) before generating code. RFC 9457 error contract: [`api-error-contract.md`](./api-error-contract.md). Deep-dives: 2.
+> Updated 2026-07-29. Primary entry point for repo-wide docs. AI agents: [`project-context.md`](./project-context.md) carries versions and the traps they set for a model trained before them; the normative rules live in `CLAUDE.md` and `docs/rules/*.md`. RFC 9457 error contract: [`api-error-contract.md`](./api-error-contract.md). Deep-dives: 2.
 
 ## Project at a glance
 
@@ -43,7 +43,7 @@ Folders are typed by *kind of document*; file names are kebab-case by topic, nev
 
 ### AI agent context (load first)
 
-- **[project-context.md](./project-context.md)** — Authoritative constraints for AI code generation
+- **[project-context.md](./project-context.md)** — Stack versions and what a model trained before them gets wrong; gated by `make php.lint.project-context`
 - **[claude-code-quickref.md](./claude-code-quickref.md)** — Full command catalog, repo layout tables, "adding new code" recipes, gotchas (companion to root `CLAUDE.md`)
 
 ### Project overview
