@@ -936,6 +936,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       running production image, so treat prod as unconfirmed rather than clean. Closing it means a `logging:`
       driver with a retention the erasure path can act on, or keeping the ids out of the document URL — which
       the deep-link design deliberately does not do.
+- [ ] **A recipient's address cannot reach a log through a mail failure, and the guarantee has two stated
+      limits.** `SmtpTransport::assertResponseCode()` quotes the server's reply verbatim, and the command whose
+      reply fails on a rejected recipient is `RCPT TO:<address>` — so a refusal names the person. Every
+      component that swallows that throwable and logs it, plus `ErrorDetailsStamp` in `messenger_messages` and
+      the error reporter that reads throwables outside the logging stack, would hold an address the erasure
+      path cannot reach. `RedactingMailer` decorates `mailer.mailer` and translates every failure into
+      `MailDeliveryFailed`, whose message is COMPOSED from a class name, an SMTP code and an RFC 3463 enhanced
+      status — digits and dots, so it can carry no address — and which chains no `previous`, because a
+      normalising formatter walks that chain and `TransportException::getDebug()` holds the whole SMTP
+      conversation. Nothing downstream is trusted to redact, because nothing downstream receives anything to
+      redact. **Limit one:** the boundary is `MailerInterface`, so a component reaching past it to a
+      `TransportInterface` would see the untranslated failure. Nothing does today; no gate refuses it, and
+      review is the control. **Limit two:** this closes the mail surface only. A vendor exception message is a
+      general carrier of caller data — a database driver quoting a violated unique value is the same shape —
+      and no rule in this repository covers that class. Both are recorded here rather than closed because the
+      first is one seam a reader can check and the second is a survey with no bounded scope.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.
