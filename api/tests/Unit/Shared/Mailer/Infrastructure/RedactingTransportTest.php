@@ -104,6 +104,16 @@ final class RedactingTransportTest extends TestCase
         $this->assertSame(
             $this->sendAndCatch($raise('Connection refused'))->getMessage(),
             $this->sendAndCatch($raise('php_network_getaddresses: getaddrinfo failed'))->getMessage(),
+            'two faults raised from one site collapse into one message, which is the cost this field bounds',
+        );
+
+        // The control, and without it the equality above is satisfied by a composer that ignores the origin
+        // entirely: both throwables above are built by one closure, so they share a file and a line whatever
+        // the composition does with them. Raising the same fault from a DIFFERENT site must read differently.
+        $this->assertNotSame(
+            $this->sendAndCatch($raise('Connection refused'))->getMessage(),
+            $this->sendAndCatch(new RuntimeException('Connection refused'))->getMessage(),
+            'the origin does not vary with the site it was raised from, so it identifies nothing',
         );
     }
 
@@ -113,7 +123,7 @@ final class RedactingTransportTest extends TestCase
         $thrown = $this->sendAndCatch(new RuntimeException('Connection could not be established.'));
 
         $this->assertStringContainsString(
-            'SMTP delivery failed (' . RuntimeException::class . ', code 0, status none) at ',
+            'SMTP delivery failed (' . RuntimeException::class . ', code none, status none) at ',
             $thrown->getMessage(),
         );
     }

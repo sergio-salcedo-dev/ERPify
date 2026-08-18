@@ -77,6 +77,8 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
     /** Distinct from `none`: the engine refused the scan, so nothing was measured either way. */
     private const string UNREADABLE_STATUS = 'unreadable';
 
+    private const string NO_REPLY_CODE = 'none';
+
     public static function from(Throwable $throwable): self
     {
         // The redaction pass is defence in depth over a string this class built out of a class name and two
@@ -85,9 +87,9 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
         // The code travels as the exception's own, not only inside the text: a normalising formatter emits it
         // as a top-level field, and an integer cannot carry an address, so propagating it is free.
         return new self(EmailAddressRedaction::apply(\sprintf(
-            'SMTP delivery failed (%s, code %d, status %s) at %s:%d.',
+            'SMTP delivery failed (%s, code %s, status %s) at %s:%d.',
             $throwable::class,
-            (int) $throwable->getCode(),
+            self::replyCodeOf($throwable),
             self::enhancedStatusOf($throwable->getMessage()),
             \basename($throwable->getFile()),
             $throwable->getLine(),
@@ -114,6 +116,20 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
     public function appendDebug(string $debug): void
     {
         unset($debug);
+    }
+
+    /**
+     * A reply code is three digits from 2xx to 5xx, and only a code of that shape is one. Everything else is
+     * the throwable's OWN code, and printing it after the word SMTP asserts a provenance it does not have — a
+     * driver's `23505` would read as a reply the server never sent, and `0` reads as a reply of zero rather
+     * than as the absence of one. The code still travels as the exception's own code; what is refused here is
+     * the claim the text makes about where it came from.
+     */
+    private static function replyCodeOf(Throwable $throwable): string
+    {
+        $code = (int) $throwable->getCode();
+
+        return $code >= 200 && $code <= 599 ? (string) $code : self::NO_REPLY_CODE;
     }
 
     /**
