@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
+use Erpify\Tests\Support\ProjectContextFixtureFiles;
 use Erpify\Tests\Support\ProjectContextVersions;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
@@ -21,13 +22,20 @@ use RuntimeException;
  *
  * A malformed line throws rather than being skipped. Skipping is the failure mode that matters here —
  * a registry that silently drops what it cannot parse shrinks to nothing one typo at a time, reporting
- * green the whole way down. The comparison half is {@see ProjectContextVersionRulesGateTest}.
+ * green the whole way down.
+ *
+ * An `unbound` line is exempt from the manifest half and from nothing else. It exists so a claim nothing
+ * can own is *declared* rather than omitted, and an omission and an exemption must not look alike — which
+ * is why the staleness direction still applies to it, in {@see ProjectContextPageRulesGateTest}. What a
+ * constraint satisfies is {@see ProjectContextManifestRulesGateTest}.
  *
  * @internal
  */
 #[CoversNothing]
 final class ProjectContextRegistryRulesGateTest extends TestCase
 {
+    use ProjectContextFixtureFiles;
+
     #[Test]
     public function anEntryThatHoldsInBothDirectionsReportsNoDefect(): void
     {
@@ -55,24 +63,6 @@ final class ProjectContextRegistryRulesGateTest extends TestCase
         $this->assertStringContainsString('^8.4', $defect);
     }
 
-    /**
-     * The direction a page edit breaks: the manifest still agrees, but nobody makes the claim any more.
-     */
-    #[Test]
-    public function aTokenThatLeftThePageIsReportedEvenWhenTheManifestStillAgrees(): void
-    {
-        $root = $this->fixtureRoot(['require' => ['php' => '^8.5']]);
-
-        $defect = ProjectContextVersions::defectIn(
-            $root,
-            $this->entry('manifest.json', 'require.php', 'PHP 8.5'),
-            'a page that no longer mentions the runtime at all',
-        );
-
-        $this->assertIsString($defect);
-        $this->assertStringContainsString('no longer appears', $defect);
-    }
-
     #[Test]
     public function aPathAddressingNothingIsReportedApartFromDrift(): void
     {
@@ -86,6 +76,22 @@ final class ProjectContextRegistryRulesGateTest extends TestCase
 
         $this->assertIsString($defect);
         $this->assertStringContainsString('addresses nothing', $defect);
+    }
+
+    /**
+     * The reason is not a dotted path and is never resolved. Reading it as one would report "addresses
+     * nothing" over every exemption, which is the opposite of what the line is for.
+     */
+    #[Test]
+    public function anUnboundClaimIsNotCheckedAgainstAnyManifest(): void
+    {
+        $root = $this->fixtureRoot(['require' => ['php' => '^8.5']]);
+
+        $this->assertNull(ProjectContextVersions::defectIn(
+            $root,
+            $this->entry(ProjectContextVersions::UNBOUND, 'pinned by digest in pwa/Dockerfile', 'Node 26'),
+            'the page says Node 26 somewhere',
+        ));
     }
 
     #[Test]
@@ -133,50 +139,5 @@ final class ProjectContextRegistryRulesGateTest extends TestCase
         $this->expectExceptionMessageIsOrContains('unreadable');
 
         ProjectContextVersions::entriesIn('/nonexistent/.project-context-versions');
-    }
-
-    /**
-     * @return array{manifest: string, path: string, token: string, version: string}
-     */
-    private function entry(string $manifest, string $path, string $token): array
-    {
-        $words = \explode(' ', $token);
-
-        return [
-            'manifest' => $manifest,
-            'path' => $path,
-            'token' => $token,
-            'version' => $words[\count($words) - 1],
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $manifest
-     */
-    private function fixtureRoot(array $manifest): string
-    {
-        $root = $this->temporaryDirectory();
-        \file_put_contents(
-            $root . '/manifest.json',
-            \json_encode($manifest, JSON_THROW_ON_ERROR),
-        );
-
-        return $root;
-    }
-
-    private function registryHolding(string $contents): string
-    {
-        $path = $this->temporaryDirectory() . '/.project-context-versions';
-        \file_put_contents($path, $contents);
-
-        return $path;
-    }
-
-    private function temporaryDirectory(): string
-    {
-        $root = \sys_get_temp_dir() . '/project-context-versions-' . \bin2hex(\random_bytes(8));
-        $this->assertTrue(\mkdir($root, 0o777, true));
-
-        return $root;
     }
 }

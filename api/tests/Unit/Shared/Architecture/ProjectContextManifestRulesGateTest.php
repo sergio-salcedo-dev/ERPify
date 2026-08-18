@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Architecture;
 
+use Erpify\Tests\Support\ProjectContextFixtureFiles;
 use Erpify\Tests\Support\ProjectContextVersions;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -11,19 +12,22 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Falsifiability of the rules behind {@see ProjectContextVersionGateTest}.
+ * Falsifiability of what {@see ProjectContextVersionGateTest} asks of a MANIFEST: whether a declared
+ * constraint satisfies a claimed version, and what a dotted path resolves to.
  *
- * This half pins the comparison: a declaration satisfies a claim only at a version boundary, and an
- * unresolvable path is reported rather than guessed. Without the boundary the check accepts any prefix,
- * so every single-digit claim on the page — Behat 4, PHPStan 2, Rector 2, Inversify 8, TypeScript 6 —
- * becomes unfalsifiable while the suite stays green. The registry half is
+ * Both rules are here because dropping either leaves the suite green over a page that lies. Without the
+ * version boundary every single-digit claim (Behat 4, PHPStan 2, Rector 2, Inversify 8, TypeScript 6)
+ * becomes unfalsifiable; without the operator allowlist a constraint written to *exclude* the claimed
+ * version satisfies it. The page's side is {@see ProjectContextPageRulesGateTest} and the registry's is
  * {@see ProjectContextRegistryRulesGateTest}.
  *
  * @internal
  */
 #[CoversNothing]
-final class ProjectContextVersionRulesGateTest extends TestCase
+final class ProjectContextManifestRulesGateTest extends TestCase
 {
+    use ProjectContextFixtureFiles;
+
     #[Test]
     #[DataProvider('provideADeclarationSatisfiesTheVersionItStartsWithCases')]
     public function aDeclarationSatisfiesTheVersionItStartsWith(string $declared, string $version): void
@@ -41,6 +45,8 @@ final class ProjectContextVersionRulesGateTest extends TestCase
         yield 'stability flag, as behat/behat carries it' => ['^4.0@alpha', '4'];
         yield 'major claimed against a full patch constraint' => ['^13.3.0', '13'];
         yield 'exact' => ['3.9.6', '3.9'];
+        yield 'tilde' => ['~0.2.2', '0.2'];
+        yield 'inclusive lower bound, which is still a floor' => ['>=26.0.0', '26'];
     }
 
     #[Test]
@@ -61,6 +67,18 @@ final class ProjectContextVersionRulesGateTest extends TestCase
         yield 'a different major' => ['^2.2.8', '3'];
         yield 'a different minor' => ['^4.3.2', '4.1'];
         yield 'claim longer than the declaration' => ['^8.5', '8.5.1'];
+        // The permissive direction. Stripping the punctuation as a charlist inverted these: the page
+        // could claim the one version its manifest is written to exclude, and the gate agreed.
+        yield 'upper bound, which excludes the version it names' => ['<2.0', '2.0'];
+        yield 'inclusive upper bound' => ['<=2.0', '2.0'];
+        yield 'exclusive lower bound, which excludes the version it names' => ['>2', '2'];
+        yield 'negation' => ['!=3.0', '3.0'];
+        // A union has no single floor. Reading the first alternative is what blessed "Node 24" against
+        // the manifest of a container running 26.
+        yield 'union, first alternative' => ['^1.0.0 || ^2.0.0', '1.0'];
+        yield 'union, as engines.node writes it' => ['^24.15.0 || >=26.0.0', '24'];
+        yield 'comma-separated range' => ['>=1.0,<2.0', '1.0'];
+        yield 'hyphenated range' => ['1.0 - 2.0', '1.0'];
     }
 
     #[Test]
@@ -109,27 +127,5 @@ final class ProjectContextVersionRulesGateTest extends TestCase
         \file_put_contents($root . '/manifest.json', '{not json');
 
         $this->assertNull(ProjectContextVersions::declaredConstraint($root . '/manifest.json', 'require.php'));
-    }
-
-    /**
-     * @param array<string, mixed> $manifest
-     */
-    private function fixtureRoot(array $manifest): string
-    {
-        $root = $this->temporaryDirectory();
-        \file_put_contents(
-            $root . '/manifest.json',
-            \json_encode($manifest, JSON_THROW_ON_ERROR),
-        );
-
-        return $root;
-    }
-
-    private function temporaryDirectory(): string
-    {
-        $root = \sys_get_temp_dir() . '/project-context-versions-' . \bin2hex(\random_bytes(8));
-        $this->assertTrue(\mkdir($root, 0o777, true));
-
-        return $root;
     }
 }

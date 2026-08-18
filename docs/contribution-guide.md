@@ -82,7 +82,7 @@ See [`project-context.md`](./project-context.md) for the full set. Highlights:
 - **TypeScript**: `strict: true`, named exports under `src/context/**`, no `React.FC`, respect server/client boundary.
 - **Doctrine 3 / DBAL 4**: no `flush($entity)`, no `fetchAll()`, no `Connection::query()`.
 - **Tailwind 4**: no `tailwind.config.js` — CSS-first via `@theme`/`@config`.
-- **Playwright**: `baseURL: http://localhost:3000`, not `:80`.
+- **Playwright**: `baseURL` is resolved in `pwa/playwright.config.ts` — `PLAYWRIGHT_BASE_URL ?? (CI ? https://localhost : http://127.0.0.1:3000)` — never hard-coded in a spec. The default host is `127.0.0.1`, so `https://localhost` cookies do not reach it.
 - **Messenger**: handlers idempotent; `messenger_worker` is a separate Compose service in prod/ci.
 - **Make-first**: run commands from repo root via `make` targets, not raw `docker compose` / `composer` / `npm`.
 

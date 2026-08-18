@@ -11,21 +11,29 @@ use RuntimeException;
  * Derivation rules for `api/.project-context-versions`: the registry binding every version
  * `docs/project-context.md` claims to the manifest entry that owns it.
  *
- * The page's whole remaining purpose is telling an agent what its training data gets wrong about this
- * stack, so a version on it is load-bearing and a stale one is worse than none — it is asserted with the
- * same confidence as a true one, and the reader has no way to tell them apart. Measured over that page's
- * history: ten drifted claims against zero wrong version numbers, which is why the numbers earned a gate
- * and the normative prose was moved to the docs that own it instead.
+ * A version on that page is load-bearing and a stale one is worse than none — it is asserted with the
+ * same confidence as a true one, and the reader has no way to tell them apart. The page also states
+ * normative rules, which no cheap check can falsify; the versions are the part that can be, so they are
+ * the part gated here. Measured over the page's history: ten drifted claims, all of them prose, against
+ * zero wrong version numbers — a green here therefore says nothing about the direction that has drifted.
  *
  * A registry entry binds a **token**, not a bare number. Binding "4" would make the staleness direction a
  * tautology, since that substring appears in any page of prose — the check would pass over a page that no
  * longer mentions Behat at all. The version is the token's last whitespace-separated word.
  *
- * These rules are pinned against fixtures by `ProjectContextVersionRulesGateTest` (the comparison) and
- * `ProjectContextRegistryRulesGateTest` (parsing and defect reporting); the assertions over the real tree
- * are `ProjectContextVersionGateTest`. All three live in `tests/Unit/Shared/Architecture/`.
+ * The universe of claims is derived rather than trusted: {@see claimsIn()} reads the second column of the
+ * page's own tables, so a version added to the page with no registry line fails instead of passing in
+ * silence. A claim nothing can own — pinned by digest, or reached only transitively — is declared against
+ * the {@see UNBOUND} manifest with the reason, which is a statement rather than an omission.
+ *
+ * These rules are pinned against fixtures one subject at a time — `ProjectContextManifestRulesGateTest`
+ * (what a declared constraint satisfies), `ProjectContextPageRulesGateTest` (which words are claims and
+ * which token covers one) and `ProjectContextRegistryRulesGateTest` (how a line parses and how a defect is
+ * reported); the assertions over the real tree are `ProjectContextVersionGateTest`. All four live in
+ * `tests/Unit/Shared/Architecture/`.
  *
  * @phpstan-type RegistryEntry array{manifest: string, path: string, token: string, version: string}
+ * @phpstan-type PageClaim array{claim: string, line: int}
  *
  * @internal test support
  */
@@ -34,6 +42,12 @@ final class ProjectContextVersions
     public const string REGISTRY = '.project-context-versions';
 
     public const string PAGE = 'docs/project-context.md';
+
+    /**
+     * The manifest name a claim carries when no manifest can own it. The middle column then holds the
+     * reason instead of a dotted path, so the exemption is readable at the line that grants it.
+     */
+    public const string UNBOUND = 'unbound';
 
     /**
      * @return list<RegistryEntry>
@@ -71,6 +85,10 @@ final class ProjectContextVersions
      */
     public static function defectIn(string $repoRoot, array $entry, string $page): ?string
     {
+        if (self::UNBOUND === $entry['manifest']) {
+            return self::absentFromPage($page, $entry['token']);
+        }
+
         $declared = self::declaredConstraint($repoRoot . '/' . $entry['manifest'], $entry['path']);
 
         if (null === $declared) {
@@ -92,30 +110,147 @@ final class ProjectContextVersions
             );
         }
 
-        if (!\str_contains($page, $entry['token'])) {
-            return \sprintf(
-                '"%s" no longer appears on %s. Either the page reworded the claim and this line was left '
-                . 'behind, or the claim is gone and so should the line — a registry entry nobody makes is '
-                . 'not a guard, it is a decoration that reports green.',
-                $entry['token'],
-                self::PAGE,
-            );
-        }
-
-        return null;
+        return self::absentFromPage($page, $entry['token']);
     }
 
     /**
-     * A declaration satisfies a claim when it *starts* with it at a version boundary.
+     * The staleness direction, shared by bound and unbound entries: a line guarding a claim nobody makes
+     * is not a guard, it is a decoration that reports green.
+     */
+    private static function absentFromPage(string $page, string $token): ?string
+    {
+        if (\str_contains(self::withoutEmphasis($page), self::withoutEmphasis($token))) {
+            return null;
+        }
+
+        return \sprintf(
+            '"%s" no longer appears on %s. Either the page reworded the claim and this line was left '
+            . 'behind, or the claim is gone and so should the line — a registry entry nobody makes is '
+            . 'not a guard, it is a decoration that reports green.',
+            $token,
+            self::PAGE,
+        );
+    }
+
+    /**
+     * A declaration satisfies a claim when the version it *begins at* starts with the claim, at a version
+     * boundary.
      *
-     * The boundary is what keeps the comparison honest: a bare prefix match lets the claim "1" pass
-     * against "16.3.0", so every one-digit claim on the page would be unfalsifiable.
+     * Two things keep the comparison honest, and each was measured failing without the other. The boundary
+     * refuses a bare prefix: without it the claim "1" passes against "16.3.0" and every one-digit claim on
+     * the page — Behat 4, PHPStan 2, Rector 2, Inversify 8, TypeScript 6 — is unfalsifiable. The operator
+     * allowlist refuses a constraint that does not begin at a version at all: stripping the leading
+     * punctuation as a charlist inverts `<` and `>`, so `<2.0` and `>2` both satisfied "2" — the page could
+     * claim a version its manifest *excludes* and the gate would agree. A union has no single beginning,
+     * so it is refused outright rather than read as its first alternative: `^24.15.0 || >=26.0.0` was
+     * measured satisfying the claim "24" while the container runs 26.
      */
     public static function satisfies(string $declared, string $version): bool
     {
-        $normalised = \ltrim($declared, '^~>=< ');
+        $lowerBound = self::lowerBoundOf($declared);
 
-        return 1 === \preg_match('/^' . \preg_quote($version, '/') . '(\D|$)/', $normalised);
+        if (null === $lowerBound) {
+            return false;
+        }
+
+        return 1 === \preg_match('/^' . \preg_quote($version, '/') . '(\D|$)/', $lowerBound);
+    }
+
+    /**
+     * The version a constraint begins at, or `null` when it does not begin at one.
+     *
+     * `^`, `~`, `>=` and `=` all pin a floor and are read; a bare version and a wildcard are their own
+     * floor. Everything else — `<`, `<=`, `>`, `!=`, and any union or range — is refused, because a claim
+     * the gate cannot place is a claim it must not bless.
+     */
+    private static function lowerBoundOf(string $declared): ?string
+    {
+        $declared = \trim($declared);
+
+        foreach (['||', '|', ',', ' - '] as $alternation) {
+            if (\str_contains($declared, $alternation)) {
+                return null;
+            }
+        }
+
+        if (1 !== \preg_match('/^(?:\^|~|>=|=)?(\d.*)$/', $declared, $matches)) {
+            return null;
+        }
+
+        return $matches[1];
+    }
+
+    /**
+     * Every version claim the page's tables make: the second column of each table row, which is where the
+     * page states what it runs. The third column is prose and the first is a label, so neither is read.
+     *
+     * A claim is identified by the word carrying the number, not by the whole product name, because a cell
+     * writes "Doctrine ORM 3.6" while another writes "jsdom 30" — matching the tail is what lets a registry
+     * token spell the product out without the extraction having to guess where the name begins.
+     *
+     * Measured over the page at 406 lines: 34 claims, no false positives.
+     *
+     * @return list<PageClaim>
+     */
+    public static function claimsIn(string $page): array
+    {
+        $claims = [];
+
+        foreach (\explode("\n", $page) as $offset => $line) {
+            $line = \trim($line);
+
+            if (!\str_starts_with($line, '|')) {
+                continue;
+            }
+
+            $cells = \explode('|', \trim($line, '|'));
+
+            if (\count($cells) < 2) {
+                continue;
+            }
+
+            $subject = \trim($cells[1]);
+
+            if (1 === \preg_match('/^[-: ]+$/', $subject)) {
+                continue;
+            }
+
+            $subject = self::withoutEmphasis($subject);
+
+            \preg_match_all('/(@?[A-Za-z][A-Za-z0-9.\-\/+]*)\s+(\d+(?:\.\d+)*)/', $subject, $hits, PREG_SET_ORDER);
+
+            foreach ($hits as $hit) {
+                $claims[] = ['claim' => $hit[1] . ' ' . $hit[2], 'line' => $offset + 1];
+            }
+        }
+
+        return $claims;
+    }
+
+    /**
+     * Whether a registry token makes the page's claim.
+     *
+     * Tail match, not equality: the registry token may carry a longer product name than the cell's
+     * version-bearing word ("Doctrine ORM 3.6" covers "ORM 3.6"), but it may never carry a *different*
+     * version, and the boundary stops "ORM 3.6" from being covered by a token ending "STORM 3.6".
+     */
+    public static function coversClaim(string $token, string $claim): bool
+    {
+        $token = (string) \preg_replace('/\s+/', ' ', \trim($token));
+
+        return $token === $claim || \str_ends_with($token, ' ' . $claim);
+    }
+
+    /**
+     * The page with its inline emphasis removed, so both halves of the gate read the same text.
+     *
+     * They must, and a raw comparison was measured proving they did not: the page writes
+     * `` `eslint-config-next` 16.2 ``, whose backticks sit INSIDE the claim, so the extraction saw a
+     * claim the staleness check could not find and the registry could not hold a line satisfying both.
+     */
+    private static function withoutEmphasis(string $text): string
+    {
+        return \str_replace(['**', '`'], '', $text);
     }
 
     /**

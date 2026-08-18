@@ -268,13 +268,32 @@ php.lint.prod-container: ## Prod service-container compile gate
 # in different words, and its placeholder token is wider than Behat's — the one direction where it
 # fails open, and where --strict rather than this gate catches the undispatchable step. The registry
 # header enumerates the rest of the blind spots.
-php.lint.project-context: ## docs/project-context.md version-claim gate
-	@$(PHP_TEST) bin/phpunit --filter=ProjectContextVersionGateTest
-	@$(PHP_TEST) bin/phpunit --filter=ProjectContextVersionRulesGateTest
-	@$(PHP_TEST) bin/phpunit --filter=ProjectContextRegistryRulesGateTest
-
 php.lint.step-vocabulary: ## Behat step-vocabulary classification gate
 	@$(PHP_TEST) bin/phpunit --filter=BehatStepVocabularyGateTest
+
+## —— project-context.md version gate ———————————————————————————————————————
+
+# Fails CI when docs/project-context.md and the manifests it describes disagree, in either direction, or
+# when the page claims a version api/.project-context-versions does not bind at all.
+#
+# That page is not the lightly-read note its history suggests: 60 of the 90 installed skills declare it in
+# `persistent_facts`, so it is loaded as foundational context at the start of an agent session rather than
+# consulted on demand. A stale line is a false premise handed to the agent before it reads any code,
+# asserted with exactly the confidence of a true one.
+#
+# The versions are gated because they are the part a cheap check can falsify. The page's normative prose
+# is not, and that is where every measured drift in its history landed — ten claims, against zero wrong
+# version numbers. So a green here is silent about the direction that has actually drifted; the registry
+# header enumerates the rest of the blind spots.
+#
+# Four classes — the assertions over the real tree, plus falsifiability of the rules for each subject the
+# gate reads (the manifest, the page, the registry) — each selected by exact name in its own run, so a
+# vanished one is an empty suite rather than a green subset.
+php.lint.project-context: ## docs/project-context.md version-claim gate
+	@$(PHP_TEST) bin/phpunit --filter=ProjectContextVersionGateTest
+	@$(PHP_TEST) bin/phpunit --filter=ProjectContextManifestRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=ProjectContextPageRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=ProjectContextRegistryRulesGateTest
 
 ## —— Deptrac (architectural boundaries) ————————————————————————————————————
 
