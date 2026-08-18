@@ -958,7 +958,14 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Which path actually reaches a durable sink, stated because the two differ.** `MessageHandler` runs in
       the worker, which is PID 1, so its stderr is the json-file driver with no rotation, no TTL and no owner —
       and `ErrorDetailsStamp` would persist the message in `messenger_messages`. That is the path worth the
-      control, and it is latent today because `SendEmailMessage` is unrouted. `mailer:test`, by contrast, is
+      control, and it is **live rather than latent**: an earlier reading called it latent because
+      `SendEmailMessage` is unrouted, which is true of that message and not of the sink. Two paths reach it
+      without it. `SendEmailOnBankChanged` handles `BankCreated`/`BankUpdated`, both routed `async`, and
+      **re-throws** a mail failure so Messenger retries and finally stamps `ErrorDetailsStamp`. And the
+      scheduled lockout notice reports through `SendAccountLockedEmailBestEffort`, bound in `services.yaml` to
+      `monolog.logger.observability` — a channel the prod `main` handler excludes **by name**, so its stream is
+      always on and no 5xx is needed to flush it. Before this translation, every rejected recipient on either
+      path was written verbatim to the worker's stderr. `mailer:test`, by contrast, is
       run by an operator through `docker exec`, whose stderr is **measured not to reach the driver** (marker
       written to a container's stderr via `docker exec`: zero occurrences in `docker logs`); it lands in the
       operator's terminal. It is closed here regardless, because the boundary costs nothing extra to place
@@ -969,7 +976,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       `mailer:test 'alice@example.test'`. The translation cleans `exception` and `message` and **cannot touch
       `command`** — that field is the operator's invocation, not the failure. The `console` channel is inside
       the prod `main` handler and `critical` is above its action level, so the line flushes; the sink is the
-      ephemeral one described above. Closing it means not naming a person on a command line.
+      ephemeral one described above. **That argument once covered a second sink and did not hold there**:
+      `sentry/sentry-symfony`'s `ConsoleListener` sets `extra['Full command']` to the whole argv line and
+      captures it on `ConsoleErrorEvent`, so the address reached a third-party tracker with retention of its
+      own and no erasure path. `RedactionDenylist` could not help — it is a rule about KEY names and the key is
+      `Full command`. That half is **closed, not accepted**: `SentryEventScrubber` now redacts addresses in
+      `extra` VALUES, at any depth, the way it already did for `query_string`, `url` and `Referer`. What
+      remains is the Monolog line, and closing that means not naming a person on a command line.
       **Residual two — address construction happens before the boundary.** The senders build their `Email`
       first, and `Mime\Address` raises `RfcComplianceException` quoting the address it rejects; the
       `*BestEffort` wrapper catches that and logs it raw. Measured bound: every form
@@ -979,7 +992,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       reach this by position; only wrapping build and send inside the four adapters would, which is **pending
       rather than declined**.
       **Residual three — `CreateInvitationCommand` prints the recipient to stdout** on both the success and the
-      send-failure branch. Same operator-invoked, ephemeral sink as residual one, and named for the same reason.
+      send-failure branch. Its Sentry half is closed with residual one's — the address rode the same
+      `Full command` extra — and what remains is stdout, whose sink is the operator's terminal.
       **Residual four — a vendor exception message is a general carrier of caller data.** A database driver
       quoting a violated unique value is the same shape. No rule in this repository covers that class; closing
       it is a survey with no bounded scope, and only the mail surface is closed here.
@@ -987,15 +1001,16 @@ mitigated state. Accepting one means recording who accepted it and against which
       a logger. Measured: `Transport.php:154,157` build it as `new $class($args[, $period])` and never pass one,
       so Symfony's own wiring leaves it on the `NullLogger` default — a `failover://a||b` DSN does **not** arm
       that line. Reachable only by constructing the transport by hand.
-      **Accepted 2026-08-18 (Sergio):** there is no production deployment and no customer. Residuals one,
-      three and five stand on the arguments measured above — an operator-invoked sink for the first two,
-      Symfony's own wiring never arming the third. Residual four is deferred knowingly rather than dismissed:
-      the carrier is real and a database driver quoting a violated unique value has the same shape; what is
-      declined is the survey that would bound the class, not the risk. **Residual two is accepted against
-      #764 and nothing else.** Its measured bound is an agreement between two vendor validators that no test
-      watches — pinning it was considered and declined, because a test would freeze an accidental
-      implementation detail as though it were the contract — so it is not a guarantee and cannot report its
-      own expiry; the acceptance ends when #764 closes.
+      **Accepted 2026-08-18 (Sergio):** there is no production deployment and no customer. Residuals one, three
+      and five stand on the arguments measured above — an operator-invoked **terminal** for the first two, once
+      the tracker half of that sink was measured and **closed rather than accepted**, and Symfony's own wiring
+      never arming the third. Residual four is deferred knowingly rather than dismissed: the carrier is real and a
+      database driver quoting a violated unique value has the same shape; what is declined is the survey that
+      would bound the class, not the risk. **Residual two is accepted against #764 and nothing else.** Its
+      measured bound is an agreement between two vendor validators that no test watches — pinning it was
+      considered and declined, because a test would freeze an accidental implementation detail as though it were
+      the contract — so it is not a guarantee and cannot report its own expiry; the acceptance ends when #764
+      closes.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.
