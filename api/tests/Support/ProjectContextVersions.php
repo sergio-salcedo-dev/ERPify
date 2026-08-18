@@ -12,10 +12,10 @@ use RuntimeException;
  * `docs/project-context.md` claims to the manifest entry that owns it.
  *
  * A version on that page is load-bearing and a stale one is worse than none — it is asserted with the
- * same confidence as a true one, and the reader has no way to tell them apart. The page also states
- * normative rules, which no cheap check can falsify; the versions are the part that can be, so they are
- * the part gated here. Measured over the page's history: ten drifted claims, all of them prose, against
- * zero wrong version numbers — a green here therefore says nothing about the direction that has drifted.
+ * same confidence as a true one, and the reader has no way to tell them apart. That is not hypothetical:
+ * the commit before this gate existed (#746) corrected TWELVE second-column version numbers at once, and
+ * fourteen have been corrected over the page's history. The page states normative rules too, and those no
+ * cheap check can falsify; the versions are the part that can be, so they are the part gated here.
  *
  * A registry entry binds a **token**, not a bare number. Binding "4" would make the staleness direction a
  * tautology, since that substring appears in any page of prose — the check would pass over a page that no
@@ -188,7 +188,9 @@ final class ProjectContextVersions
      * writes "Doctrine ORM 3.6" while another writes "jsdom 30" — matching the tail is what lets a registry
      * token spell the product out without the extraction having to guess where the name begins.
      *
-     * Measured over the page at 406 lines: 34 claims, no false positives.
+     * Measured over the page at 406 lines: 33 claims, no false positives. It reads a version glued to its
+     * subject by whitespace only, so `node:26-trixie` and `dunglas/frankenphp:1-php8.5` are outside the
+     * universe however plainly they are stated; the registry header names that gap rather than hiding it.
      *
      * @return list<PageClaim>
      */
@@ -232,11 +234,16 @@ final class ProjectContextVersions
      *
      * Tail match, not equality: the registry token may carry a longer product name than the cell's
      * version-bearing word ("Doctrine ORM 3.6" covers "ORM 3.6"), but it may never carry a *different*
-     * version, and the boundary stops "ORM 3.6" from being covered by a token ending "STORM 3.6".
+     * version, and the boundary breaks on a word — without it "happy-jsdom 30" would cover "jsdom 30",
+     * a different package entirely.
+     *
+     * It strips emphasis for the same reason {@see absentFromPage()} does: a token written to mirror the
+     * page (`` `eslint-config-next` 16.2 ``) must not pass one leg of the gate and fail the other.
      */
     public static function coversClaim(string $token, string $claim): bool
     {
-        $token = (string) \preg_replace('/\s+/', ' ', \trim($token));
+        $token = (string) \preg_replace('/\s+/', ' ', \trim(self::withoutEmphasis($token)));
+        $claim = self::withoutEmphasis($claim);
 
         return $token === $claim || \str_ends_with($token, ' ' . $claim);
     }

@@ -13,6 +13,12 @@ namespace Erpify\Tests\Support;
  * creates one directory per fixture, so leaving them behind fills the container's temp with dozens of
  * directories nobody can attribute to anything.
  *
+ * The sweep READS the directory rather than globbing it, because one of the fixtures is a dotfile
+ * (`.project-context-versions`) and `glob('*')` does not match one — measured, that spelling left three
+ * directories behind on every run while reporting nothing. `rmdir()` is asserted for the same reason: on a
+ * non-empty directory it only warns, and `tools/phpunit/phpunit.dist.xml` restricts warning failures to
+ * `src`, so the next unreachable name would be exactly as quiet as this one was.
+ *
  * @phpstan-require-extends \PHPUnit\Framework\TestCase
  *
  * @internal test support
@@ -27,13 +33,15 @@ trait ProjectContextFixtureFiles
     protected function tearDown(): void
     {
         foreach ($this->temporaryDirectories as $temporaryDirectory) {
-            foreach ((array) \glob($temporaryDirectory . '/*') as $file) {
-                if (\is_string($file) && \is_file($file)) {
-                    \unlink($file);
-                }
+            foreach (\array_diff((array) \scandir($temporaryDirectory), ['.', '..']) as $entry) {
+                \unlink($temporaryDirectory . '/' . $entry);
             }
 
-            \rmdir($temporaryDirectory);
+            $this->assertTrue(\rmdir($temporaryDirectory), \sprintf(
+                'The fixture directory %s survived its test. Something wrote a name this cleanup does not '
+                . 'reach, and the next leak would be as quiet as this one.',
+                $temporaryDirectory,
+            ));
         }
 
         $this->temporaryDirectories = [];

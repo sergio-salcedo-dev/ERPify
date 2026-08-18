@@ -281,10 +281,11 @@ php.lint.step-vocabulary: ## Behat step-vocabulary classification gate
 # consulted on demand. A stale line is a false premise handed to the agent before it reads any code,
 # asserted with exactly the confidence of a true one.
 #
-# The versions are gated because they are the part a cheap check can falsify. The page's normative prose
-# is not, and that is where every measured drift in its history landed — ten claims, against zero wrong
-# version numbers. So a green here is silent about the direction that has actually drifted; the registry
-# header enumerates the rest of the blind spots.
+# The versions are gated because they are the part a cheap check can falsify. Measured over that page's
+# history, fourteen second-column version numbers have been corrected — twelve of them in one commit
+# (#746), immediately before this gate existed. Its normative prose drifted alongside them and remains
+# ungated, so a green here is silent about that half; the registry header enumerates the rest of the
+# blind spots, including versions glued to their subject by `:` rather than whitespace.
 #
 # Four classes — the assertions over the real tree, plus falsifiability of the rules for each subject the
 # gate reads (the manifest, the page, the registry) — each selected by exact name in its own run, so a

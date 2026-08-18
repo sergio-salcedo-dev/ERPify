@@ -79,6 +79,13 @@ final class ProjectContextPageRulesGateTest extends TestCase
         yield 'different package whose name ends with the claim' => ['happy-jsdom 30', 'jsdom 30', false];
         yield 'same product, different version' => ['Behat 4', 'Behat 5', false];
         yield 'claim is longer than the token' => ['ORM 3.6', 'Doctrine ORM 3.6', false];
+        // A token written to mirror the page must not pass one leg of the gate and fail the other: the
+        // staleness check strips emphasis, so this one has to as well.
+        yield 'token mirrors the page inline emphasis' => [
+            '`eslint-config-next` 16.2',
+            'eslint-config-next 16.2',
+            true,
+        ];
     }
 
     /**
