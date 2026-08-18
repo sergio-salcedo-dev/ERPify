@@ -12,8 +12,13 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 
 /**
  * Integration test for {@see RateLimitListener}. Boots the real Symfony kernel and drives
- * `/api/v1/backoffice/health` (a stable 200 endpoint) through the full request → routing →
- * limiter → response pipeline.
+ * `/api/v1/health` through the full request → routing → limiter → response pipeline.
+ *
+ * It uses that route because three of these tests assert a 200, and it is the one `/api` path a
+ * caller with no session still reaches. Not because a 401 would escape the limiter — measured, it
+ * does not: this listener runs at `kernel.request` priority 512 against the firewall's 8, so a
+ * rejected request consumes its token and carries both header families exactly like an accepted
+ * one. The budget assertions would hold behind the firewall; the status assertions would not.
  *
  * Isolation: `api/config/packages/test/cache.yaml` swaps the cache app pool to
  * `cache.adapter.array` (in-memory) so cross-test pollution is impossible. The flipside is
@@ -35,7 +40,7 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 #[CoversNothing]
 final class RateLimitListenerFunctionalTest extends WebTestCase
 {
-    private const string ENDPOINT = '/api/v1/backoffice/health';
+    private const string ENDPOINT = '/api/v1/health';
 
     private const int BUDGET = 5;
 

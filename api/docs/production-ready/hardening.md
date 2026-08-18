@@ -100,12 +100,16 @@ relevant section of the production documentation for context.
 After bringing the production stack up, verify end-to-end:
 
 ```console
-# Health endpoint
-curl -sf https://api.your-domain.com/api/v1/backoffice/health | jq .
-# Expected: {"status":"ok","service":"Back office", ...}
+# Health endpoint — the one route outside the firewall, so a shell with no session reaches it.
+# The back-office liveness route and the database probe both require a session; curling them
+# from here answers 401 by design.
+curl -sf https://api.your-domain.com/api/v1/health | jq .
+# Expected: {"data":{"status":"ok","service":"Front office","datetime":"…"}}
 
-# Bank list (should return HTTP 200 and JSON array)
-curl -sf https://api.your-domain.com/api/v1/backoffice/banks | jq .
+# Business routes are authenticated: this answers 401 Problem Details without a session cookie,
+# which is itself a useful smoke signal that the firewall is up.
+curl -s -o /dev/null -w '%{http_code}\n' https://api.your-domain.com/api/v1/backoffice/banks
+# Expected: 401
 
 # TLS grade (external tool)
 # https://www.ssllabs.com/ssltest/analyze.html?d=api.your-domain.com

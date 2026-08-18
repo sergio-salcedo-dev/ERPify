@@ -17,7 +17,7 @@ Feature: Default-deny access control on the API
 
   @anonymous
   Scenario: A public route stays reachable without authentication
-    When I send a "GET" request to "/backoffice/health"
+    When I send a "GET" request to "/health"
     Then the response status code should be 200
 
   Scenario: An authenticated session reaches a protected route
