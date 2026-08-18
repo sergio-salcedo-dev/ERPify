@@ -110,6 +110,9 @@ final class MailAddressRedactionTest extends TestCase
      * cost is a decision rather than a surprise: `@` separates credentials from host in a connection string
      * too, so the host is swallowed along with the password and only the port survives. Over-redacting a log
      * costs a diagnostic; under-redacting it costs an identifier that outlives its own erasure.
+     *
+     * What it does NOT remove is the user, which sits before the `:` and outside the matched run — stated here
+     * because a reader could otherwise take this case as proof that a connection string is scrubbed.
      */
     #[Test]
     public function itSwallowsTheHostOfAConnectionStringAlongWithTheCredentials(): void
@@ -121,19 +124,41 @@ final class MailAddressRedactionTest extends TestCase
     }
 
     /**
-     * A long run of address bytes ending in an `@` is the shape that makes a naive pattern quadratic. The
-     * assertion is a wall-clock bound rather than an exact figure: it fails on a pattern that re-splits the
-     * run, and passes on any machine for one that does not.
+     * A long run of address bytes ending in an `@` is the shape that makes a naive pattern quadratic.
+     *
+     * **PCRE's JIT is disabled for the duration, and that is what gives this assertion teeth.** With the JIT on
+     * — which is what this deployment and this test suite otherwise run — the engine collapses the quadratic
+     * scan by itself, so the pattern measures the same with the lookbehind and without it and the bound cannot
+     * fail. Measured at 200 KB: 0.507 ms against 0.135 ms with the JIT, 5 ms against 9.6 s without it. The
+     * lookbehind is insurance for a deployment whose JIT is absent, so this is the configuration that can
+     * observe whether the insurance is still there.
+     *
+     * **The shape that exposes the quadratic scan is the one where no match completes**, which is why the run
+     * ends at the `@` with no domain behind it: the engine has to fail and restart at every position. Give it a
+     * domain and the match succeeds at the first attempt, both variants finish in 0.1 ms, and the bound stops
+     * discriminating.
+     *
+     * The result is asserted as well as the time, and asserting it UNCHANGED is what proves the pattern itself
+     * ran: had it failed outright, the fallback would have collapsed this single `@`-bearing token to the
+     * sentinel just as quickly and satisfied a bound on its own.
      */
     #[Test]
-    public function itScansALongRunInLinearTime(): void
+    public function itScansALongRunInLinearTimeWithNoJitToHideBehind(): void
     {
-        $hostile = \str_repeat('a.', 100_000) . '@';
+        $jit = \ini_get('pcre.jit');
+        \ini_set('pcre.jit', '0');
 
-        $startedAt = \hrtime(true);
-        MailAddressRedaction::apply($hostile);
-        $elapsedMs = (\hrtime(true) - $startedAt) / 1e6;
+        try {
+            $hostile = \str_repeat('a.', 100_000) . '@';
 
-        $this->assertLessThan(1_000, $elapsedMs, 'the pattern backtracks over the run instead of scanning it');
+            $startedAt = \hrtime(true);
+            $redacted = MailAddressRedaction::apply($hostile);
+            $elapsedMs = (\hrtime(true) - $startedAt) / 1e6;
+
+            $this->assertLessThan(1_000, $elapsedMs, 'the pattern backtracks over the run instead of scanning it');
+            $this->assertSame($hostile, $redacted, 'the engine failed and the fallback answered for it');
+        } finally {
+            \ini_set('pcre.jit', false === $jit ? '1' : $jit);
+        }
     }
 }

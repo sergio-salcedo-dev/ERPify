@@ -26,7 +26,12 @@ use Throwable;
  * calls `send()` on it with no `try`, and Messenger's `MessageHandler` would do the same from the worker if
  * `SendEmailMessage` were ever routed. A boundary drawn at `MailerInterface` covers neither, and covers them
  * silently — the command's failure reaches the console error listener, which logs it at `critical` with the
- * recipient in three separate fields.
+ * recipient in a field no translation can reach.
+ *
+ * The count is a description of today, not a property: the framework wires a fourth consumer, the notifier's
+ * email channel, which is absent here only because no notifier is configured. Decorating the id rather than
+ * its consumers is what makes that harmless — anything wired to the collection inherits this by construction,
+ * so a new consumer needs no edit here and no line in a list that would otherwise have to be maintained.
  *
  * `Mailer::send()` unwraps a `HandlerFailedException` looking for a `TransportExceptionInterface` and rethrows
  * it bare, which is why {@see MailDeliveryFailed} implements that interface: without it the mailer would
@@ -56,9 +61,14 @@ final readonly class RedactingTransport implements TransportInterface
      *
      * The cost of that width, stated because the docblock above argues only its benefit: a serialisation bug is
      * a permanent programming error and a refused connection is a transient fault, and past this line both
-     * present as `TransportExceptionInterface`. Nothing in this application catches that interface today, so a
-     * future `catch` inviting a retry is the shape to watch for. The composed message carries the origin file
-     * and line, which is what keeps the two tellable apart in a log.
+     * present as `TransportExceptionInterface`. The composed message carries the origin file and line, which is
+     * what keeps the two tellable apart in a log.
+     *
+     * The same width erases a decision Messenger reads off the TYPE. Its retry listener asks whether the
+     * throwable implements the recoverable or the unrecoverable marker, and a translation answers neither — so
+     * a failure raised as unrecoverable inside a send would be retried to the dead letter instead of stopping.
+     * Latent, and measured so: neither this application nor the mail library raises those markers today. The
+     * shape to watch for is a transport or a listener that starts to.
      *
      * **What this cannot reach is anything raised before the send.** The senders build their `Email` first, and
      * `Mime\Address` quotes the argument it rejects, so a malformed recipient throws in the sender rather than

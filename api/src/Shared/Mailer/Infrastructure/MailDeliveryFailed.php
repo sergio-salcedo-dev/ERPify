@@ -30,12 +30,18 @@ use Throwable;
  * costs the diagnosis and leaks nothing; a named class, which is every throwable this application raises,
  * passes through untouched.
  *
- * **The origin is the fourth field, and it is what keeps this diagnosable.** A failure carrying no reply — a
- * refused connection, a TLS handshake, a read timeout, an unknown transport name — has neither a code nor a
- * status, so those three fields alone collapse four distinct operational faults into one string. The file and
- * line the throwable was raised from separate them, because the library raises each from its own `throw`, and
- * their alphabet is a vendor source name and an integer: no caller can put an address there. The basename
- * rather than the path, which identifies the site without describing the deployment's layout.
+ * **The origin is the fourth field, and it separates most of what the other three cannot.** A failure carrying
+ * no reply has neither a code nor a status, so those three fields alone would read identically for every fault
+ * that never reached a server. The file and line the throwable was raised from tell a read timeout from an
+ * unknown transport name from a rejected recipient, and their alphabet is a vendor source name and an integer,
+ * so no caller can put an address there. The basename rather than the path, which identifies the site without
+ * describing the deployment's layout.
+ *
+ * **Its measured limit.** The socket layer raises every connection failure from a SINGLE `throw` inside a
+ * `set_error_handler` closure that receives only the message, discarding the `errno` — so a refused connection,
+ * a DNS failure and a TLS handshake against a plaintext port produce the same file, the same line and code 0,
+ * and are indistinguishable here. Telling them apart needs the text of the reply, which is the same text that
+ * carries the recipient. That trade is the whole design, and this is where it is paid.
  *
  * **Nothing is chained as `previous`.** A normalising formatter walks that chain and would print the original
  * message again, which would undo the whole exercise; and `TransportException::getDebug()` accumulates the
@@ -51,13 +57,17 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
      * full" from "user unknown" from "relay denied" — the diagnosis an operator needs — and its alphabet is
      * digits and dots, so it can carry no address.
      *
+     * The `-` in the leading class is the RFC 5321 continuation marker, not decoration: a multi-line reply
+     * spells every line but the last as `550-5.1.1 …`, which is what Google emits, and without it such a reply
+     * reports no status at all.
+     *
      * Bounded at both ends rather than by `\b`, which matches inside a longer dotted run: an IPv4 address in
      * `Connection to 5.1.1.1 timed out` and a dotted local part in `<a.5.1.1.b@example.test>` both yield a
      * three-part token that is not a status code. Neither can leak — the capture is digits and dots either way
      * — but presenting a fabricated diagnosis in the shape of a real one costs an operator the time this field
      * exists to save.
      */
-    private const string ENHANCED_STATUS = '/(?:^|["\s])([45]\.\d{1,3}\.\d{1,3})(?![.\d])/';
+    private const string ENHANCED_STATUS = '/(?:^|["\s-])([45]\.\d{1,3}\.\d{1,3})(?![.\d])/';
 
     private const string NO_STATUS = 'none';
 
@@ -66,6 +76,8 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
         // The redaction pass is defence in depth over a string this class built out of a class name and two
         // numbers. It is expected to find nothing; it is here so that a future field added to this message
         // cannot turn a composed message back into a copied one without something catching it.
+        // The code travels as the exception's own, not only inside the text: a normalising formatter emits it
+        // as a top-level field, and an integer cannot carry an address, so propagating it is free.
         return new self(MailAddressRedaction::apply(\sprintf(
             'SMTP delivery failed (%s, code %d, status %s) at %s:%d.',
             $throwable::class,
@@ -73,7 +85,7 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
             self::enhancedStatusOf($throwable->getMessage()),
             \basename($throwable->getFile()),
             $throwable->getLine(),
-        )));
+        )), (int) $throwable->getCode());
     }
 
     /**

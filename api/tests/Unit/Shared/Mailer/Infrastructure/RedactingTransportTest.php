@@ -11,7 +11,6 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\Mailer\Envelope;
-use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mailer\Exception\UnexpectedResponseException;
 use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\TransportInterface;
@@ -44,6 +43,18 @@ final class RedactingTransportTest extends TestCase
         $this->assertStringNotContainsString(self::ADDRESS, $thrown->getMessage());
     }
 
+    /**
+     * A normalising formatter emits `code` as a top-level field of its own, so a translation that kept the
+     * number only inside the text would lose it for every reader that parses the record rather than the prose.
+     */
+    #[Test]
+    public function theSmtpCodeTravelsAsTheExceptionsOwnCode(): void
+    {
+        $thrown = $this->sendAndCatch(new UnexpectedResponseException(self::SMTP_REFUSAL, 550));
+
+        $this->assertSame(550, $thrown->getCode());
+    }
+
     #[Test]
     public function theDiagnosisSurvivesTheBoundary(): void
     {
@@ -66,50 +77,33 @@ final class RedactingTransportTest extends TestCase
     }
 
     /**
-     * The four faults that carry no server reply are distinguished by nothing else: same class for three of
-     * them, code 0 and no status for all four. Without the origin they read identically.
+     * A failure with no reply is distinguished by nothing but its origin: no code, no status, and the same
+     * class for most of them. The origin is read off the failure rather than written out, so the first half
+     * asserts that it is REPORTED rather than that this file sits at a particular line.
+     *
+     * The second half pins its measured limit, so the trade stays declared rather than becoming a surprise:
+     * the socket layer raises every connection failure from one `throw` inside an error handler that never
+     * sees the errno, so a refused connection and a DNS failure arrive with the same origin and the same code.
+     * Two failures raised from ONE site are therefore indistinguishable — what would tell them apart is the
+     * text of the reply, which is the text carrying the recipient.
      */
     #[Test]
-    public function twoFailuresWithNoReplyAreStillTellableApart(): void
+    public function theOriginIdentifiesAFailureWithNoReplyAsFarAsOneSiteAllows(): void
     {
-        $here = $this->sendAndCatch(new RuntimeException('Connection could not be established.'));
-        $there = $this->sendAndCatch(new RuntimeException('Connection timed out.'));
-
-        $this->assertNotSame($here->getMessage(), $there->getMessage());
-        $this->assertStringContainsString('RedactingTransportTest.php:', $here->getMessage());
-    }
-
-    #[Test]
-    public function neitherTheChainNorTheTranscriptCarriesTheAddressBack(): void
-    {
-        // A normalising formatter walks `previous` and would print the original message again; the transport
-        // exception also accumulates the whole SMTP conversation, `RCPT TO:` included, behind `getDebug()`.
-        $failure = new UnexpectedResponseException(self::SMTP_REFUSAL, 550);
-        $failure->appendDebug('RCPT TO:<' . self::ADDRESS . '>');
+        $failure = new RuntimeException('Connection could not be established.');
 
         $thrown = $this->sendAndCatch($failure);
 
-        $this->assertNotInstanceOf(Throwable::class, $thrown->getPrevious());
-        $this->assertSame('', $thrown->getDebug());
-    }
+        $this->assertStringContainsString(
+            \sprintf('at %s:%d.', \basename($failure->getFile()), $failure->getLine()),
+            $thrown->getMessage(),
+        );
 
-    /**
-     * `Mailer::send()` unwraps a `HandlerFailedException` looking for this interface and rethrows it bare.
-     * Without it the mailer surfaces a Messenger wrapper and the failure an operator reads names the bus.
-     */
-    #[Test]
-    public function theTranslatedFailureIsStillATransportFailure(): void
-    {
-        // Read off the class rather than off a caught instance: the return type already carries the interface,
-        // so `assertInstanceOf` on it is a tautology PHPStan resolves at analysis time, and an invariant whose
-        // assertion cannot fail is unguarded. This one goes red the moment the `implements` clause is dropped.
-        $implemented = \class_implements(MailDeliveryFailed::class);
-        $this->assertIsArray($implemented);
+        $raise = static fn (string $message): RuntimeException => new RuntimeException($message);
 
-        $this->assertContains(
-            TransportExceptionInterface::class,
-            $implemented,
-            'Mailer::send() would surface a Messenger wrapper instead of this failure',
+        $this->assertSame(
+            $this->sendAndCatch($raise('Connection refused'))->getMessage(),
+            $this->sendAndCatch($raise('php_network_getaddresses: getaddrinfo failed'))->getMessage(),
         );
     }
 

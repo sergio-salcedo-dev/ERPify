@@ -949,9 +949,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       **The boundary is the transport and not `MailerInterface`, and that is measured rather than stylistic:**
       the compiled production container has three consumers of the transport collection and only one is the
       mailer — `MailerTestCommand` calls `send()` on it with no `try`, and Messenger's `MessageHandler` would
-      do the same from the worker if `SendEmailMessage` were ever routed. `MailerBoundaryEnrolmentTest` pins the
-      collection, both named consumers, and the absence of an environment condition that would remove the
-      decorator from production while leaving every gate green.
+      do the same from the worker if `SendEmailMessage` were ever routed. That count describes today, not a
+      property: the framework wires a fourth, the notifier's email channel, absent here only because no
+      notifier is configured. Decorating the id rather than its consumers is what makes the count harmless —
+      anything wired to the collection inherits the translation by construction. `MailerBoundaryEnrolmentTest`
+      pins the collection itself for that reason, and both named consumers on top, plus the absence of a `When`
+      or `WhenNot` condition that would remove the decorator from production while leaving every gate green.
       **Which path actually reaches a durable sink, stated because the two differ.** `MessageHandler` runs in
       the worker, which is PID 1, so its stderr is the json-file driver with no rotation, no TTL and no owner —
       and `ErrorDetailsStamp` would persist the message in `messenger_messages`. That is the path worth the

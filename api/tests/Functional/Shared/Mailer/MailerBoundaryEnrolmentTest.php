@@ -7,11 +7,14 @@ namespace Erpify\Tests\Functional\Shared\Mailer;
 use Erpify\Shared\Mailer\Infrastructure\RedactingTransport;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionProperty;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\DependencyInjection\Attribute\When;
+use Symfony\Component\DependencyInjection\Attribute\WhenNot;
 use Symfony\Component\Mailer\Command\MailerTestCommand;
+use Symfony\Component\Mailer\Mailer;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mailer\Transport\TransportInterface;
 
@@ -43,10 +46,21 @@ final class MailerBoundaryEnrolmentTest extends KernelTestCase
     {
         // Read off the class, not the container: the test container cannot answer for the production one, and
         // an attribute that removed the decorator there would leave every assertion in this file green.
+        //
+        // Both attributes, because `WhenNot` does not extend `When` — it is an independent class the loader
+        // reads to DE-register a service in the environment it names, so a check for one of them is blind to
+        // the other, and `#[WhenNot(env: 'prod')]` is the cheaper way to reopen exactly this hole.
+        $reflection = new ReflectionClass(RedactingTransport::class);
+
         $this->assertSame(
             [],
-            (new ReflectionClass(RedactingTransport::class))->getAttributes(When::class),
-            'the boundary is conditioned out of an environment, so production may not have it',
+            $reflection->getAttributes(When::class, ReflectionAttribute::IS_INSTANCEOF),
+            'the boundary is conditioned into named environments, so production may not have it',
+        );
+        $this->assertSame(
+            [],
+            $reflection->getAttributes(WhenNot::class, ReflectionAttribute::IS_INSTANCEOF),
+            'the boundary is conditioned out of a named environment, so production may not have it',
         );
     }
 
@@ -68,6 +82,10 @@ final class MailerBoundaryEnrolmentTest extends KernelTestCase
         self::bootKernel();
 
         $mailer = self::getContainer()->get(MailerInterface::class);
+        // Guarded like its sibling below: without this the test dies with a ReflectionException naming a
+        // missing property rather than an assertion naming the boundary, if the mailer is ever decorated.
+        $this->assertInstanceOf(Mailer::class, $mailer);
+
         $transport = new ReflectionProperty($mailer, 'transport');
 
         $this->assertInstanceOf(RedactingTransport::class, $transport->getValue($mailer));
