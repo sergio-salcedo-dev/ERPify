@@ -5,20 +5,17 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Shared\Monitoring;
 
 use DateTimeImmutable;
-use Monolog\Handler\FingersCrossed\ActivationStrategyInterface;
-use Monolog\Handler\FingersCrossedHandler;
-use Monolog\Handler\TestHandler;
+use Erpify\Tests\Support\DeployedFingersCrossedGate;
 use Monolog\Level;
 use Monolog\Logger;
 use Monolog\LogRecord;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
-use ReflectionProperty;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Contracts\Service\ServiceProviderInterface;
+use Throwable;
 
 /**
  * `excluded_http_codes` decides what stays out of an unrotated sink, and it decides it by reading an OBJECT.
@@ -31,36 +28,67 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  *
  * **Both halves are read from the container**, because a test that names its own processors proves nothing
  * about the application's, and a test that builds its own activation strategy from a literal stays green while
- * the configured exclusion is deleted. What is asserted here is the deployed configuration, not a copy of it.
+ * the configured exclusion is deleted.
  *
- * The remaining blind spot, stated rather than implied: this reads processors enrolled on CHANNEL LOGGERS. A
- * processor tagged `handler: main` lands on the gate handler itself, which `FingersCrossedHandler::handle()`
- * runs before consulting the strategy, and no assertion here would see it.
+ * **The channel sweep reads public AND private ids.** `TestContainer::getServiceIds()` answers with the public
+ * container alone, and MonologBundle makes public only the channels named under `monolog.channels` — five of
+ * the seventeen here, excluding both `app` (every `Erpify\` class) and `request` (where Symfony's
+ * `ErrorListener` writes the very record this file fabricates). Enumerating through that API alone swept 29%
+ * of the channels while reading as exhaustive, so the ids come from the public container UNION the test
+ * private-services locator, and the presence of those two channels is asserted rather than assumed.
+ *
+ * What a green proves: no processor enrolled on any channel logger destroys the throwable or its status; every
+ * configured excluded code stays out of the sink; and a code that is NOT excluded still reaches it, so that
+ * emptiness is a working exclusion rather than an apparatus that never fires.
+ *
+ * What it does not prove: anything the DECLARATION half asserts — that every environment declares the same
+ * non-empty exclusion, and that no processor is enrolled on the gate handler where no sweep here could see it
+ * — which is `MonologExclusionDeclarationGateTest`, kernel-free because only the `test` declaration is
+ * reachable from a booted one. Nor anything about a processor pushed onto a logger at runtime rather than
+ * wired, nor about the path taken when no request is in the stack: off-request the strategy returns its inner
+ * result and the exclusion is never consulted, which is a property of the deployed dependency.
  *
  * @internal
  */
 #[CoversNothing]
 final class FingersCrossedActivationIntegrityTest extends KernelTestCase
 {
-    /** The code the deployed exclusion names, spelled as the configuration spells it. */
-    private const int EXCLUDED_STATUS = 404;
+    /** Channels whose absence from the sweep is the failure this file exists to make impossible. */
+    private const array MANDATORY_CHANNEL_IDS = ['monolog.logger', 'monolog.logger.request'];
 
-    /** @var list<RequestStack> */
-    private array $popped = [];
+    /** A status no environment excludes, used as the positive control. */
+    private const int UNEXCLUDED_STATUS = 500;
+
+    private ?DeployedFingersCrossedGate $gate = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Booted once: `bootKernel()` shuts the previous kernel down, and the gate holds its container.
+        self::bootKernel();
+    }
 
     #[Test]
     public function noEnrolledProcessorHidesAnHttpExceptionFromTheActivationStrategy(): void
     {
-        self::bootKernel();
-
         $channels = $this->channelLoggers();
-        $this->assertNotEmpty($channels, 'no channel logger was read, so this asserts nothing');
+
+        foreach (self::MANDATORY_CHANNEL_IDS as $mandatory) {
+            $this->assertArrayHasKey(
+                $mandatory,
+                $channels,
+                \sprintf('"%s" was not swept, so nothing here asserts anything about it', $mandatory),
+            );
+        }
+
+        $excluded = $this->gate()->unconditionallyExcludedCodes();
+        $this->assertNotEmpty($excluded);
 
         foreach ($channels as $id => $logger) {
             // The record carries the channel of the logger about to process it: a processor that branches on
             // `$record->channel` would otherwise run here under a name it never sees in production, take the
             // wrong branch, and leave this assertion green over the very processor that blinds the strategy.
-            $record = $this->aNotFoundRecord($logger->getName());
+            $record = $this->aRecordCarrying($excluded[0], $logger->getName());
 
             foreach ($logger->getProcessors() as $processor) {
                 $record = $processor($record);
@@ -77,7 +105,7 @@ final class FingersCrossedActivationIntegrityTest extends KernelTestCase
                 \sprintf('a processor on "%s" replaced the throwable the activation strategy reads', $id),
             );
             $this->assertSame(
-                self::EXCLUDED_STATUS,
+                $excluded[0],
                 $exception->getStatusCode(),
                 \sprintf('a processor on "%s" changed the status the exclusion matches on', $id),
             );
@@ -85,111 +113,98 @@ final class FingersCrossedActivationIntegrityTest extends KernelTestCase
     }
 
     #[Test]
-    public function theConfiguredExclusionKeepsAnExcludedCodeOutOfTheSink(): void
+    public function theConfiguredExclusionKeepsEveryExcludedCodeOutOfTheSink(): void
     {
-        self::bootKernel();
+        $codes = $this->gate()->unconditionallyExcludedCodes();
+        $this->assertNotEmpty($codes, 'the deployed strategy excludes nothing, so every 404 flushes the buffer');
 
-        $strategy = $this->configuredActivationStrategy();
+        foreach ($codes as $code) {
+            $sink = $this->gate()->flushRecordsFor($this->aRecordCarrying($code), $this->processorsOfTheAppChannel());
 
-        // The stack the strategy itself holds, not the one the container hands out under another id: an
-        // exclusion is only evaluated when `getMainRequest()` answers, so pushing onto a different instance
-        // would make this pass for the wrong reason — by never reaching the exclusion at all.
-        $requestStack = (new ReflectionProperty($strategy, 'requestStack'))->getValue($strategy);
-        $this->assertInstanceOf(RequestStack::class, $requestStack);
-        $requestStack->push(Request::create('/api/v1/banks/does-not-exist'));
-        // The stack is the container's, shared with whatever runs next in this kernel.
-        $this->popped[] = $requestStack;
-
-        $sink = new TestHandler();
-        $handler = new FingersCrossedHandler($sink, $strategy, $this->deployedBufferSize());
-
-        $logger = new Logger('app', [$handler], $this->processorsOfTheAppChannel());
-        $logger->error('Uncaught PHP Exception', ['exception' => new NotFoundHttpException()]);
-
-        $this->assertSame([], $sink->getRecords(), 'a 404 flushed the buffer into the unrotated sink');
+            $this->assertSame(
+                [],
+                $sink->getRecords(),
+                \sprintf('a %d flushed the buffer into the unrotated sink', $code),
+            );
+        }
     }
 
     /**
-     * The strategy the deployed `main` handler actually holds, so deleting `excluded_http_codes` from
-     * `monolog.yaml` turns this red instead of leaving it asserting a literal of its own.
-     */
-    /**
-     * The exclusion is declared once per environment, and only the `test` one is reachable from a booted test
-     * kernel — so the assertion above holds while the `prod` block is deleted or narrowed, and production
-     * flushes its buffer on every 404 with this file green. Comparing the declarations closes that: it is the
-     * one property of the deployed configuration a test in this environment can actually observe.
+     * Without this, the emptiness above is satisfied by an apparatus that never fires at all — raising
+     * `action_level` to `critical` leaves every assertion in the previous test green for a reason that has
+     * nothing to do with `excluded_http_codes`.
      */
     #[Test]
-    public function everyEnvironmentDeclaresTheSameExclusion(): void
+    public function aStatusOutsideTheExclusionStillReachesTheSink(): void
     {
-        $configured = \file_get_contents($this->monologConfigPath());
-        $this->assertIsString($configured);
-
-        $matched = \preg_match_all('/^\s*excluded_http_codes:\s*(.+)$/m', $configured, $matches);
-
-        $this->assertGreaterThan(1, $matched, 'fewer declarations than environments, so one lost its exclusion');
-        $this->assertSame(
-            [\reset($matches[1])],
-            \array_values(\array_unique($matches[1])),
-            'the environments disagree on which codes stay out of the unrotated sink',
+        $this->assertNotContains(
+            self::UNEXCLUDED_STATUS,
+            $this->gate()->unconditionallyExcludedCodes(),
+            'the control status is itself excluded, so it cannot tell a working exclusion from an inert handler',
         );
-    }
 
-    private function monologConfigPath(): string
-    {
-        return \dirname(__DIR__, 4) . '/config/packages/monolog.yaml';
+        $sink = $this->gate()->flushRecordsFor(
+            $this->aRecordCarrying(self::UNEXCLUDED_STATUS),
+            $this->processorsOfTheAppChannel(),
+        );
+
+        $this->assertNotSame(
+            [],
+            $sink->getRecords(),
+            'the handler never activates at all, so the emptiness asserted elsewhere proves nothing',
+        );
     }
 
     protected function tearDown(): void
     {
-        foreach ($this->popped as $requestStack) {
-            $requestStack->pop();
-        }
-
-        $this->popped = [];
+        // The stack is the container's, shared with whatever runs next in this kernel.
+        $this->gate?->releaseRequests();
+        $this->gate = null;
         parent::tearDown();
     }
 
-    private function configuredActivationStrategy(): ActivationStrategyInterface
+    private function gate(): DeployedFingersCrossedGate
     {
-        $handler = self::getContainer()->get('monolog.handler.main');
-        $this->assertInstanceOf(FingersCrossedHandler::class, $handler);
+        if (!$this->gate instanceof DeployedFingersCrossedGate) {
+            self::bootKernel();
+            $this->gate = new DeployedFingersCrossedGate(self::getContainer());
+        }
 
-        $strategy = (new ReflectionProperty($handler, 'activationStrategy'))->getValue($handler);
-        $this->assertInstanceOf(ActivationStrategyInterface::class, $strategy);
-
-        return $strategy;
+        return $this->gate;
     }
 
     /**
-     * Read off the deployed handler rather than copied, so a change to `buffer_size` cannot leave this test
-     * exercising a size the application does not use.
-     */
-    private function deployedBufferSize(): int
-    {
-        $handler = self::getContainer()->get('monolog.handler.main');
-        $this->assertInstanceOf(FingersCrossedHandler::class, $handler);
-
-        $bufferSize = (new ReflectionProperty($handler, 'bufferSize'))->getValue($handler);
-        $this->assertIsInt($bufferSize);
-
-        return $bufferSize;
-    }
-
-    /**
+     * Public ids come from the public container, private ones from the test locator — the union is what the
+     * application actually enrols processors on.
+     *
      * @return array<string, Logger>
      */
     private function channelLoggers(): array
     {
         $container = self::getContainer();
+
+        $privateLocator = $container->get('test.private_services_locator');
+        $this->assertInstanceOf(
+            ServiceProviderInterface::class,
+            $privateLocator,
+            'private services are unreachable, so this would sweep the public channels alone',
+        );
+
+        $ids = \array_unique([...$container->getServiceIds(), ...\array_keys($privateLocator->getProvidedServices())]);
+        \sort($ids);
+
         $loggers = [];
 
-        foreach ($container->getServiceIds() as $id) {
+        foreach ($ids as $id) {
             if (!\str_starts_with($id, 'monolog.logger')) {
                 continue;
             }
 
-            $service = $container->get($id);
+            try {
+                $service = $container->get($id);
+            } catch (Throwable $throwable) {
+                $this->fail(\sprintf('channel logger "%s" could not be read: %s', $id, $throwable->getMessage()));
+            }
 
             if ($service instanceof Logger) {
                 $loggers[$id] = $service;
@@ -210,14 +225,14 @@ final class FingersCrossedActivationIntegrityTest extends KernelTestCase
         return \array_values($logger->getProcessors());
     }
 
-    private function aNotFoundRecord(string $channel = 'app'): LogRecord
+    private function aRecordCarrying(int $status, string $channel = 'app'): LogRecord
     {
         return new LogRecord(
             new DateTimeImmutable(),
             $channel,
             Level::Error,
             'Uncaught PHP Exception',
-            ['exception' => new NotFoundHttpException()],
+            ['exception' => new HttpException($status)],
         );
     }
 }
