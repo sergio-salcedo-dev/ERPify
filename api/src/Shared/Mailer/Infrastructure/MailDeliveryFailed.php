@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Mailer\Infrastructure;
 
-use Erpify\Shared\Mailer\Application\MailAddressRedaction;
+use Erpify\Shared\ErrorContract\Application\EmailAddressRedaction;
 use Override;
 use RuntimeException;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
@@ -25,7 +25,7 @@ use Throwable;
  * server anywhere might emit, and would fail silently and toward the leak whenever it was not.
  *
  * The class name is the one part with no bounded alphabet — an anonymous class stringifies to a name holding
- * `@` and the defining file's path — which is why {@see MailAddressRedaction} still runs over the composed
+ * `@` and the defining file's path — which is why {@see EmailAddressRedaction} still runs over the composed
  * result rather than being dropped as redundant. For such a class the second pass swallows the name, which
  * costs the diagnosis and leaks nothing; a named class, which is every throwable this application raises,
  * passes through untouched.
@@ -78,7 +78,7 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
         // cannot turn a composed message back into a copied one without something catching it.
         // The code travels as the exception's own, not only inside the text: a normalising formatter emits it
         // as a top-level field, and an integer cannot carry an address, so propagating it is free.
-        return new self(MailAddressRedaction::apply(\sprintf(
+        return new self(EmailAddressRedaction::apply(\sprintf(
             'SMTP delivery failed (%s, code %d, status %s) at %s:%d.',
             $throwable::class,
             (int) $throwable->getCode(),

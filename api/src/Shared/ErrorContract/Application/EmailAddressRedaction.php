@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Mailer\Application;
+namespace Erpify\Shared\ErrorContract\Application;
 
 /**
  * Replaces every email address in a string with {@see SENTINEL}.
@@ -20,7 +20,7 @@ namespace Erpify\Shared\Mailer\Application;
  * address, because nothing that reaches it was carrying one. Named in prose rather than linked, because the
  * composer lives in `Infrastructure` and this layer does not point outward, even in a docblock.
  */
-enum MailAddressRedaction
+enum EmailAddressRedaction
 {
     /**
      * Spelled here rather than imported from the URI vocabulary. Each sink that redacts states its own token —

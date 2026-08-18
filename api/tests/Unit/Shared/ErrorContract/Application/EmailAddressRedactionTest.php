@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Mailer\Application;
+namespace Erpify\Tests\Unit\Shared\ErrorContract\Application;
 
-use Erpify\Shared\Mailer\Application\MailAddressRedaction;
+use Erpify\Shared\ErrorContract\Application\EmailAddressRedaction;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -13,8 +13,8 @@ use PHPUnit\Framework\TestCase;
 /**
  * @internal
  */
-#[CoversClass(MailAddressRedaction::class)]
-final class MailAddressRedactionTest extends TestCase
+#[CoversClass(EmailAddressRedaction::class)]
+final class EmailAddressRedactionTest extends TestCase
 {
     /**
      * The forms are the ones `#[Assert\Email(mode: STRICT)]` admits, spelled as `Email::from()` canonicalises
@@ -27,10 +27,10 @@ final class MailAddressRedactionTest extends TestCase
     {
         $line = \sprintf('550 5.1.1 <%s>: Recipient address rejected: User unknown', $address);
 
-        $redacted = MailAddressRedaction::apply($line);
+        $redacted = EmailAddressRedaction::apply($line);
 
         $this->assertStringNotContainsString($address, $redacted);
-        $this->assertStringContainsString(MailAddressRedaction::SENTINEL, $redacted);
+        $this->assertStringContainsString(EmailAddressRedaction::SENTINEL, $redacted);
         // The diagnosis outlives the redaction, which is why this replaces rather than strips.
         $this->assertStringContainsString('550 5.1.1', $redacted);
         $this->assertStringContainsString('Recipient address rejected', $redacted);
@@ -54,7 +54,7 @@ final class MailAddressRedactionTest extends TestCase
     {
         // An operator reads the shape of a reply, so the punctuation that separates one address from the next
         // has to survive: a rule that swallowed the brackets would also fuse two recipients into one token.
-        $this->assertSame($expected, MailAddressRedaction::apply($line));
+        $this->assertSame($expected, EmailAddressRedaction::apply($line));
     }
 
     /**
@@ -75,7 +75,7 @@ final class MailAddressRedactionTest extends TestCase
     public function itRewritesNothingWithoutAnAddress(string $message): void
     {
         // A redactor that rewrites ordinary prose costs the operator the diagnosis and buys no privacy.
-        $this->assertSame($message, MailAddressRedaction::apply($message));
+        $this->assertSame($message, EmailAddressRedaction::apply($message));
     }
 
     /**
@@ -97,11 +97,11 @@ final class MailAddressRedactionTest extends TestCase
     {
         $this->assertSame(
             'RCPT TO:<alice@[192.168.1.10]> refused',
-            MailAddressRedaction::apply('RCPT TO:<alice@[192.168.1.10]> refused'),
+            EmailAddressRedaction::apply('RCPT TO:<alice@[192.168.1.10]> refused'),
         );
         $this->assertSame(
             '<"REDACTED"@example.test>',
-            MailAddressRedaction::apply('<"a@b"@example.test>'),
+            EmailAddressRedaction::apply('<"a@b"@example.test>'),
         );
     }
 
@@ -119,7 +119,7 @@ final class MailAddressRedactionTest extends TestCase
     {
         $this->assertSame(
             'postgresql://app:REDACTED:5432/erpify?sslmode=require',
-            MailAddressRedaction::apply('postgresql://app:pw@db.internal:5432/erpify?sslmode=require'),
+            EmailAddressRedaction::apply('postgresql://app:pw@db.internal:5432/erpify?sslmode=require'),
         );
     }
 
@@ -152,7 +152,7 @@ final class MailAddressRedactionTest extends TestCase
             $hostile = \str_repeat('a.', 100_000) . '@';
 
             $startedAt = \hrtime(true);
-            $redacted = MailAddressRedaction::apply($hostile);
+            $redacted = EmailAddressRedaction::apply($hostile);
             $elapsedMs = (\hrtime(true) - $startedAt) / 1e6;
 
             $this->assertLessThan(1_000, $elapsedMs, 'the pattern backtracks over the run instead of scanning it');
