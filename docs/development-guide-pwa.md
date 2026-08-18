@@ -16,10 +16,10 @@ npm is pinned to **12.0.1** on all three surfaces — the host (`.nvmrc` + `engi
 
 ```
 @google/genai (preinstall: no-op) · @sentry/cli (postinstall: downloads the sentry-cli binary)
-protobufjs (postinstall) · unrs-resolver (postinstall: selects a native binding)
+protobufjs (postinstall)
 ```
 
-None of the four is load-bearing: the `@google/genai` preinstall is a literal no-op, `protobufjs` only prints a version-scheme warning, and the `@sentry/cli` / `unrs-resolver` postinstalls are **fallback binary downloaders** — both packages ship the real artifact as a platform `optionalDependency` (`@sentry/cli-linux-x64`, `@unrs/resolver-binding-linux-x64-gnu`), which npm installs normally. `sentry-cli` therefore stays functional on the host and in the image, so Sentry source-map upload remains available when `SENTRY_AUTH_TOKEN` is eventually wired.
+None of the three is load-bearing: the `@google/genai` preinstall is a literal no-op, `protobufjs` only prints a version-scheme warning, and the `@sentry/cli` postinstall is a **fallback binary downloader** — the package ships the real artifact as a platform `optionalDependency` (`@sentry/cli-linux-x64`), which npm installs normally. `sentry-cli` therefore stays functional on the host and in the image, so Sentry source-map upload remains available when `SENTRY_AUTH_TOKEN` is eventually wired.
 
 Review the list with `npm install-scripts ls`; `npm install-scripts approve|deny <pkg>` writes a pinned entry to `allowScripts`. Approve only after reading the script — the default-deny is a supply-chain control, not friction to route around. A platform without a prebuilt optional binary (e.g. a non-glibc or non-x64 image) would need an explicit approval to fall back to the download.
 
@@ -56,7 +56,7 @@ make pwa.lint.graph                 # dependency-cruiser boundary gate over pwa/
 make pwa.format                     # Prettier --write
 ```
 
-ESLint 10 + `eslint-config-next` + Prettier are **authoritative** — do not hand-format against them.
+ESLint 10 + `@next/eslint-plugin-next` + Prettier are **authoritative** — do not hand-format against them.
 
 ## Directory discipline
 
