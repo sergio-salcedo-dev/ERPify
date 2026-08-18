@@ -94,7 +94,7 @@ pwa/package.json :: dependencies.@testing-library/react => @testing-library/reac
 pwa/package.json :: dependencies.@testing-library/jest-dom => jest-dom 7
 pwa/package.json :: devDependencies.jsdom => jsdom 30
 pwa/package.json :: devDependencies.eslint => ESLint 10.8
-pwa/package.json :: devDependencies.eslint-config-next => eslint-config-next 16.2
+pwa/package.json :: devDependencies.@next/eslint-plugin-next => @next/eslint-plugin-next 16.3
 pwa/package.json :: devDependencies.prettier => Prettier 3.9
 
 # The Dockerfile pins node by digest and the page names the tag it resolves to, so there is no
