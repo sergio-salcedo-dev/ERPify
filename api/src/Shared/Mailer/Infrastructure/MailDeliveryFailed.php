@@ -30,10 +30,12 @@ use Throwable;
  * costs the diagnosis and leaks nothing; a named class, which is every throwable this application raises,
  * passes through untouched.
  *
- * **Declared cost.** A failure that carries no reply — a refused connection, a TLS handshake, a read timeout —
- * has no code and no status, so four distinct operational faults all read `code 0, status none` and differ
- * only by class. That is the price of composing rather than copying: the text that would tell them apart is
- * the same text that carries the recipient. Recorded in `PRODUCTION_SECURITY_CHECKLIST.md`.
+ * **The origin is the fourth field, and it is what keeps this diagnosable.** A failure carrying no reply — a
+ * refused connection, a TLS handshake, a read timeout, an unknown transport name — has neither a code nor a
+ * status, so those three fields alone collapse four distinct operational faults into one string. The file and
+ * line the throwable was raised from separate them, because the library raises each from its own `throw`, and
+ * their alphabet is a vendor source name and an integer: no caller can put an address there. The basename
+ * rather than the path, which identifies the site without describing the deployment's layout.
  *
  * **Nothing is chained as `previous`.** A normalising formatter walks that chain and would print the original
  * message again, which would undo the whole exercise; and `TransportException::getDebug()` accumulates the
@@ -65,10 +67,12 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
         // numbers. It is expected to find nothing; it is here so that a future field added to this message
         // cannot turn a composed message back into a copied one without something catching it.
         return new self(MailAddressRedaction::apply(\sprintf(
-            'SMTP delivery failed (%s, code %d, status %s).',
+            'SMTP delivery failed (%s, code %d, status %s) at %s:%d.',
             $throwable::class,
             (int) $throwable->getCode(),
             self::enhancedStatusOf($throwable->getMessage()),
+            \basename($throwable->getFile()),
+            $throwable->getLine(),
         )));
     }
 
@@ -84,8 +88,9 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
     }
 
     /**
-     * Accepted and discarded. Nothing in this application appends to a translated failure, and a transcript
-     * is the one string this class exists not to hold, so there is no accumulation to perform.
+     * A refusal, not an absence of work to do. Should this class ever sit inside something that accumulates —
+     * a round-robin transport appends the failed transport's transcript to the exception it is collecting —
+     * this is the seam where the SMTP conversation would land, so the argument is dropped deliberately.
      */
     #[Override]
     public function appendDebug(string $debug): void

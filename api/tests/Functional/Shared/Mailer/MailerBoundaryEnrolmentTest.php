@@ -7,8 +7,10 @@ namespace Erpify\Tests\Functional\Shared\Mailer;
 use Erpify\Shared\Mailer\Infrastructure\RedactingTransport;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
+use ReflectionClass;
 use ReflectionProperty;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\DependencyInjection\Attribute\When;
 use Symfony\Component\Mailer\Command\MailerTestCommand;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mailer\Transport\TransportInterface;
@@ -20,16 +22,34 @@ use Symfony\Component\Mailer\Transport\TransportInterface;
  * container ever puts it in front of anything — and a decorator nobody wires is a silent no-op that every unit
  * assertion still passes.
  *
- * The command is asserted separately from the collection on purpose. It is the reason the boundary sits at the
- * transport rather than at the mailer: it takes the collection directly, calls `send()` on it with no `try`,
- * and its failure reaches the console error listener, which logs at `critical` with the recipient in three
- * fields. An enrolment assertion that only read the mailer would stay green while that path reopened.
+ * **The collection is the primary assertion**, because decorating that id substitutes the decorator for every
+ * consumer of it — including Messenger's `MessageHandler`, which is named nowhere here, and anything a future
+ * bundle wires the same way. The mailer and the console command are asserted on top as defence: they are the
+ * two consumers whose exposure is understood today, and naming them keeps a reader from having to rediscover
+ * why the boundary is not at `MailerInterface`.
+ *
+ * All three read the TEST container, which is the same container shape that missed the defect this boundary
+ * was moved to fix. `#[When]` closes that gap from the other side: an environment condition on the decorator
+ * would keep every gate green while removing it from production, which is the failure mode `CLAUDE.md` records
+ * under declaring a class out of production.
  *
  * @internal
  */
 #[CoversNothing]
 final class MailerBoundaryEnrolmentTest extends KernelTestCase
 {
+    #[Test]
+    public function theBoundaryIsNotConditionedOutOfAnyEnvironment(): void
+    {
+        // Read off the class, not the container: the test container cannot answer for the production one, and
+        // an attribute that removed the decorator there would leave every assertion in this file green.
+        $this->assertSame(
+            [],
+            (new ReflectionClass(RedactingTransport::class))->getAttributes(When::class),
+            'the boundary is conditioned out of an environment, so production may not have it',
+        );
+    }
+
     #[Test]
     public function everySendGoesThroughTheTranslationBoundary(): void
     {

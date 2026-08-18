@@ -936,46 +936,54 @@ mitigated state. Accepting one means recording who accepted it and against which
       running production image, so treat prod as unconfirmed rather than clean. Closing it means a `logging:`
       driver with a retention the erasure path can act on, or keeping the ids out of the document URL — which
       the deep-link design deliberately does not do.
-- [ ] **A recipient's address does not reach a log through a mail SEND failure, and four residuals around
+- [ ] **A recipient's address does not reach a log through a mail SEND failure, and five residuals around
       that boundary are accepted.** `SmtpTransport::assertResponseCode()` quotes the server's reply verbatim,
       and the command whose reply fails on a rejected recipient is `RCPT TO:<address>` — so a refusal names the
       person, and every component that swallows that throwable and logs it, plus `ErrorDetailsStamp` in
       `messenger_messages` and the error reporter that reads throwables outside the logging stack, would hold
       an address no erasure path can reach. `RedactingTransport` decorates **`mailer.transports`** and
       translates every failure into `MailDeliveryFailed`, whose message is COMPOSED from a class name, an SMTP
-      code and an RFC 3463 enhanced status, which chains no `previous`, and whose `getDebug()` is empty by
-      construction because the transport's own exception accumulates the whole SMTP conversation there.
+      code, an RFC 3463 enhanced status and the origin file and line, which chains no `previous`, and whose
+      `getDebug()` is empty by construction because the transport's own exception accumulates the whole SMTP
+      conversation there.
       **The boundary is the transport and not `MailerInterface`, and that is measured rather than stylistic:**
-      the compiled production container has three consumers of the transport collection, and only one is the
+      the compiled production container has three consumers of the transport collection and only one is the
       mailer — `MailerTestCommand` calls `send()` on it with no `try`, and Messenger's `MessageHandler` would
-      do the same from the worker if `SendEmailMessage` were ever routed. A `mailer:test` against a relay that
-      rejects the recipient reaches `console.error_listener`, which logs at `critical` — above the
-      `fingers_crossed` action level — with the address in `exception`, `command` and `message`.
-      `MailerBoundaryEnrolmentTest` pins all three consumers.
-      **Residual one — address construction happens before the boundary.** The senders build their `Email`
+      do the same from the worker if `SendEmailMessage` were ever routed. `MailerBoundaryEnrolmentTest` pins the
+      collection, both named consumers, and the absence of an environment condition that would remove the
+      decorator from production while leaving every gate green.
+      **Which path actually reaches a durable sink, stated because the two differ.** `MessageHandler` runs in
+      the worker, which is PID 1, so its stderr is the json-file driver with no rotation, no TTL and no owner —
+      and `ErrorDetailsStamp` would persist the message in `messenger_messages`. That is the path worth the
+      control, and it is latent today because `SendEmailMessage` is unrouted. `mailer:test`, by contrast, is
+      run by an operator through `docker exec`, whose stderr is **measured not to reach the driver** (marker
+      written to a container's stderr via `docker exec`: zero occurrences in `docker logs`); it lands in the
+      operator's terminal. It is closed here regardless, because the boundary costs nothing extra to place
+      correctly and the sink is a property of how the command happens to be invoked.
+      **Residual one — the recipient survives in the console error listener's `command` field.**
+      `ErrorListener.php:46` logs `['exception' => …, 'command' => $inputString, 'message' => …]` at `critical`,
+      and `$inputString` is the command line: measured, `bin/console mailer:test alice@example.test` yields
+      `mailer:test 'alice@example.test'`. The translation cleans `exception` and `message` and **cannot touch
+      `command`** — that field is the operator's invocation, not the failure. The `console` channel is inside
+      the prod `main` handler and `critical` is above its action level, so the line flushes; the sink is the
+      ephemeral one described above. Closing it means not naming a person on a command line.
+      **Residual two — address construction happens before the boundary.** The senders build their `Email`
       first, and `Mime\Address` raises `RfcComplianceException` quoting the address it rejects; the
       `*BestEffort` wrapper catches that and logs it raw. Measured bound: every form
       `#[Assert\Email(mode: STRICT)]` admits (`NoRFCWarningsValidation`) is also admitted by the
       `MessageIDValidation` that `Address` uses, so no stored address reaches it today — but that is an
-      undocumented agreement between two different validators, not a guarantee, and an address arriving from a
-      fixture, a seeded row or a future caller that skips the constraint would be logged in clear.
-      **Residual two — `RoundRobinTransport` logs the raw throwable** at `error` on the `mailer` channel from
-      *inside* the collection, so a decorator above it cannot un-log what is already written. Latent only:
-      `MAILER_DSN` is a single DSN, so no round-robin is constructed; a `failover://a||b` value would arm it and
-      nothing detects that.
+      undocumented agreement between two different validators, not a guarantee. A transport decorator cannot
+      reach this by position; only wrapping build and send inside the four adapters would, which is **pending
+      rather than declined**.
       **Residual three — `CreateInvitationCommand` prints the recipient to stdout** on both the success and the
-      send-failure branch. The address was typed by the operator and, under `docker exec`, that output does not
-      reach the json-file driver — but the guarantee above is written in absolute terms and this is the shape it
-      forbids, so it is named rather than left to the reader.
-      **Cost accepted, measured.** A failure carrying no server reply — refused connection, TLS handshake, read
-      timeout, unknown `--transport` name — has neither a code nor an enhanced status, so four distinct
-      operational faults all read `code 0, status none` and differ only by exception class. The host, the port
-      and the reason are in the vendor message, which is the same string that carries the recipient, so keeping
-      them means keeping it. This is the diagnostic price of composing instead of filtering, and it falls
-      hardest on `mailer:test` — the command whose exposure motivated moving the boundary in the first place.
+      send-failure branch. Same operator-invoked, ephemeral sink as residual one, and named for the same reason.
       **Residual four — a vendor exception message is a general carrier of caller data.** A database driver
       quoting a violated unique value is the same shape. No rule in this repository covers that class; closing
       it is a survey with no bounded scope, and only the mail surface is closed here.
+      **Residual five — `RoundRobinTransport` logs a raw throwable**, but only if something constructs it with
+      a logger. Measured: `Transport.php:154,157` build it as `new $class($args[, $period])` and never pass one,
+      so Symfony's own wiring leaves it on the `NullLogger` default — a `failover://a||b` DSN does **not** arm
+      that line. Reachable only by constructing the transport by hand.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

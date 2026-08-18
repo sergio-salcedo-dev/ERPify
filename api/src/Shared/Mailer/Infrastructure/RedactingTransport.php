@@ -54,6 +54,12 @@ final readonly class RedactingTransport implements TransportInterface
      * it refused, and that implements no transport interface at all. A boundary admitting only the failures it
      * could name would let the other classes through untouched.
      *
+     * The cost of that width, stated because the docblock above argues only its benefit: a serialisation bug is
+     * a permanent programming error and a refused connection is a transient fault, and past this line both
+     * present as `TransportExceptionInterface`. Nothing in this application catches that interface today, so a
+     * future `catch` inviting a retry is the shape to watch for. The composed message carries the origin file
+     * and line, which is what keeps the two tellable apart in a log.
+     *
      * **What this cannot reach is anything raised before the send.** The senders build their `Email` first, and
      * `Mime\Address` quotes the argument it rejects, so a malformed recipient throws in the sender rather than
      * here — where the `*BestEffort` wrapper logs it raw. That residual is recorded, with its measured bound,

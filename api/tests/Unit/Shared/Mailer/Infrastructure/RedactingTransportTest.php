@@ -47,13 +47,36 @@ final class RedactingTransportTest extends TestCase
     #[Test]
     public function theDiagnosisSurvivesTheBoundary(): void
     {
-        // What an operator acts on: which failure it was, and what the server said in numbers.
-        $thrown = $this->sendAndCatch(new UnexpectedResponseException(self::SMTP_REFUSAL, 550));
+        // What an operator acts on: which failure it was, what the server said in numbers, and where it was
+        // raised. The origin is built from the failure rather than written out, because the assertion is that
+        // it is REPORTED, not that this test file sits at a particular line.
+        $failure = new UnexpectedResponseException(self::SMTP_REFUSAL, 550);
+
+        $thrown = $this->sendAndCatch($failure);
 
         $this->assertSame(
-            'SMTP delivery failed (' . UnexpectedResponseException::class . ', code 550, status 5.1.1).',
+            \sprintf(
+                'SMTP delivery failed (%s, code 550, status 5.1.1) at %s:%d.',
+                UnexpectedResponseException::class,
+                \basename($failure->getFile()),
+                $failure->getLine(),
+            ),
             $thrown->getMessage(),
         );
+    }
+
+    /**
+     * The four faults that carry no server reply are distinguished by nothing else: same class for three of
+     * them, code 0 and no status for all four. Without the origin they read identically.
+     */
+    #[Test]
+    public function twoFailuresWithNoReplyAreStillTellableApart(): void
+    {
+        $here = $this->sendAndCatch(new RuntimeException('Connection could not be established.'));
+        $there = $this->sendAndCatch(new RuntimeException('Connection timed out.'));
+
+        $this->assertNotSame($here->getMessage(), $there->getMessage());
+        $this->assertStringContainsString('RedactingTransportTest.php:', $here->getMessage());
     }
 
     #[Test]
@@ -95,8 +118,8 @@ final class RedactingTransportTest extends TestCase
     {
         $thrown = $this->sendAndCatch(new RuntimeException('Connection could not be established.'));
 
-        $this->assertSame(
-            'SMTP delivery failed (' . RuntimeException::class . ', code 0, status none).',
+        $this->assertStringContainsString(
+            'SMTP delivery failed (' . RuntimeException::class . ', code 0, status none) at ',
             $thrown->getMessage(),
         );
     }
