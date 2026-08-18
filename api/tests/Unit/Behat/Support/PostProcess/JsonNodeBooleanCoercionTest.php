@@ -47,7 +47,7 @@ final class JsonNodeBooleanCoercionTest extends TestCase
     public function testABooleanNodeDoesNotEqualTextThatIsNotItsOwnSpelling(string $payload, string $text): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('but');
+        $this->expectExceptionMessageIsOrContains('but');
 
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeEqualTo(new Json($payload), self::NODE, $text);
     }
@@ -95,7 +95,7 @@ final class JsonNodeBooleanCoercionTest extends TestCase
     public function testABooleanNodeIsNotOneOfAListItDoesNotName(): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('which is not one of');
+        $this->expectExceptionMessageIsOrContains('which is not one of');
 
         JsonAssertions::withScalarModifiers()
             ->jsonPropertyShouldBeOneOf(new Json(self::TRUE_PAYLOAD), self::NODE, 'open, closed')
@@ -134,7 +134,7 @@ final class JsonNodeBooleanCoercionTest extends TestCase
     public function testTheTextStepsRefuseABooleanRatherThanStringifyingIt(string $payload): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('which has no string form to compare');
+        $this->expectExceptionMessageIsOrContains('which has no string form to compare');
 
         JsonAssertions::withScalarModifiers()
             ->jsonPropertyShouldNotContains(new Json($payload), self::NODE, 'anything')

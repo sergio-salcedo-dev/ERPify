@@ -234,7 +234,7 @@ final readonly class ProblemDetailsFactory
     private const string VIOLATION_UNINFORMATIVE_TEMPLATE = 'This value was of an unexpected type.';
 
     public function __construct(
-        #[Autowire('%kernel.environment%')]
+        #[Autowire(param: 'kernel.environment')]
         private string $environment,
         private LoggerInterface $logger,
     ) {

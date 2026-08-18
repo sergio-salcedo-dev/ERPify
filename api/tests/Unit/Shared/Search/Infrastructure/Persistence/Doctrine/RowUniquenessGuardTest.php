@@ -36,7 +36,7 @@ final class RowUniquenessGuardTest extends TestCase
         $guard = new RowUniquenessGuard();
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('Row Uniqueness Contract violated');
+        $this->expectExceptionMessageIsOrContains('Row Uniqueness Contract violated');
 
         $guard->assert($this->queryBuilderJoining(collectionValued: true, select: ['o', 'i']));
     }
@@ -49,7 +49,7 @@ final class RowUniquenessGuardTest extends TestCase
         $guard = new RowUniquenessGuard();
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('Row Uniqueness Contract violated');
+        $this->expectExceptionMessageIsOrContains('Row Uniqueness Contract violated');
 
         $guard->assert($this->queryBuilderJoining(collectionValued: true, select: ['o']));
     }
@@ -71,7 +71,7 @@ final class RowUniquenessGuardTest extends TestCase
         $queryBuilder->method('getRootAliases')->willReturn(['o', 'p']);
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('Row Uniqueness Contract violated');
+        $this->expectExceptionMessageIsOrContains('Row Uniqueness Contract violated');
 
         (new RowUniquenessGuard())->assert($queryBuilder);
     }

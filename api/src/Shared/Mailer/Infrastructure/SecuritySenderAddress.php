@@ -33,9 +33,9 @@ final readonly class SecuritySenderAddress
     private const array UNDELIVERABLE_DOMAINS = ['test', 'example', 'invalid', 'localhost', 'local'];
 
     public function __construct(
-        #[Autowire('%env(MAILER_SECURITY_FROM)%')]
+        #[Autowire(env: 'MAILER_SECURITY_FROM')]
         private string $address,
-        #[Autowire('%kernel.environment%')]
+        #[Autowire(param: 'kernel.environment')]
         private string $environment,
     ) {
     }

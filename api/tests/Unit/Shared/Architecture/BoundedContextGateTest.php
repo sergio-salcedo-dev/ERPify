@@ -105,15 +105,7 @@ final class BoundedContextGateTest extends TestCase
     {
         $hits = $this->scanForCrossContextImports();
 
-        if ([] === $hits) {
-            // Empty result is the green path. Pin the assertion count so PHPUnit
-            // doesn't flag this as a "risky test" with no assertions.
-            $this->addToAssertionCount(1);
-
-            return;
-        }
-
-        $message = self::FAILURE_PREAMBLE . "\n" . \implode("\n", \array_map(
+        $this->assertSame([], $hits, self::FAILURE_PREAMBLE . "\n" . \implode("\n", \array_map(
             static fn (array $hit): string => \sprintf(
                 '%s:%d: %s imports %s',
                 $hit['file'],
@@ -122,15 +114,17 @@ final class BoundedContextGateTest extends TestCase
                 $hit['target'],
             ),
             $hits,
-        ));
-
-        $this->fail($message);
+        )));
     }
 
     public function testCrossContextForeignKeysAreReportedNotFailed(): void
     {
         // Level 2 is a soft rule: collect and surface cross-context Doctrine
-        // associations, but never fail the build on them.
+        // associations, but never fail the build on them. Declaring the absence of
+        // assertions is the honest spelling — the alternative pins a count for an
+        // assertion this method deliberately never makes.
+        $this->expectNotToPerformAssertions();
+
         $warnings = $this->scanForCrossContextAssociations();
 
         if ([] !== $warnings) {
@@ -147,10 +141,6 @@ final class BoundedContextGateTest extends TestCase
                 ));
             }
         }
-
-        // The gate never blocks on Level 2 — the warnings are diagnostic only.
-        // Pin the assertion count so PHPUnit doesn't flag this as a risky test.
-        $this->addToAssertionCount(1);
     }
 
     public function testGateScansAtLeastOneSourceFile(): void

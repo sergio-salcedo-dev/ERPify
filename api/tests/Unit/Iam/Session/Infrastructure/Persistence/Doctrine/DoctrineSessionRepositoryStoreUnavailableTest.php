@@ -60,7 +60,7 @@ final class DoctrineSessionRepositoryStoreUnavailableTest extends TestCase
 
     private function entityManagerThrowing(Throwable $failure): EntityManagerInterface
     {
-        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager = $this->createStub(EntityManagerInterface::class);
         $entityManager->method('createQueryBuilder')->willThrowException($failure);
 
         return $entityManager;

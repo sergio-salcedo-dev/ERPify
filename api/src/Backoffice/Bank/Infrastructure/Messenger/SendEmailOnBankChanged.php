@@ -24,7 +24,7 @@ final readonly class SendEmailOnBankChanged
         private NotificationMailer $notificationMailer,
         #[Autowire(service: 'monolog.logger.observability')]
         private LoggerInterface $logger,
-        #[Autowire('%env(DEFAULT_NOTIFICATION_EMAIL)%')]
+        #[Autowire(env: 'DEFAULT_NOTIFICATION_EMAIL')]
         private string $notifyTo,
     ) {
     }

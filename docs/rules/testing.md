@@ -32,6 +32,14 @@ Name **ports by capability** and **implementations by technology/strategy** — 
 - An in-memory double that also records the calls it received still uses `InMemory<Port>` — the implementation nature dominates the incidental spying.
 - Reserve `Spy*` / `Stub*` / `Dummy*` for doubles that embody a test-double pattern instead of an alternative implementation of a domain port (a stubbed framework exception, a spy mailer, a stub clock).
 
+## A double with no expectations is `createStub()`
+
+`createMock()` declares that the interaction itself is under test; `createStub()` declares that the double only has to answer. Reach for the mock **only** when the test configures `expects()` — configuring nothing and calling `createMock()` claims a verification that never happens, and PHPUnit says so: *"No expectations were configured for the mock object … Consider refactoring your test code to use a test stub instead."*
+
+That arrives as a **PHPUnit** notice rather than a PHP one, and the two answer to different switches — `failOnNotice` has no authority over it. `api/tools/phpunit/phpunit.dist.xml` therefore also sets `failOnPhpunitNotice` and `displayDetailsOnPhpunitNotices`: without the first the build stays green, and without the second the run prints an aggregate count carrying no class, method or message, which reads as noise.
+
+Do **not** silence it with `#[AllowMockObjectsWithoutExpectations]`. The attribute is for a double that genuinely needs mock semantics without expectations; over an expectation-less `createMock()` it preserves the wrong claim instead of correcting it. It targets a class **or** a method, and the class form — the one `AllowMockObjectsForDataProviderRector` emits, which is why that rule is skipped in `api/tools/rector/rector.php` — also covers every double added to that class later.
+
 ## Assert the seed before asserting the absence
 
 A test that asserts *"no row survives"* passes perfectly when the setup inserted nothing. The assertion is true, the test is green, and it proves nothing — so **every test whose subject is an absence must first assert that its own seed happened**: that the `INSERT` affected N rows, that the fixture exists, that the query it is about to negate would have found something a moment ago.

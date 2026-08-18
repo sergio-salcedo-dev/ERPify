@@ -39,7 +39,7 @@ final class JsonNodeValueComparisonTest extends TestCase
     public function testADateComparisonOverAValueThatIsNotADateFailsAsAnAssertion(string $payload): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('which is not a date');
+        $this->expectExceptionMessageIsOrContains('which is not a date');
 
         JsonAssertions::withScalarModifiers()
             ->jsonPropertyDateShouldBeEqualTo(new Json($payload), self::NODE, '2026-01-01')
@@ -63,7 +63,7 @@ final class JsonNodeValueComparisonTest extends TestCase
     public function testADateComparisonOverABooleanIsRefusedBeforeItReachesTheDateParse(): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('which has no string form to compare');
+        $this->expectExceptionMessageIsOrContains('which has no string form to compare');
 
         JsonAssertions::withScalarModifiers()
             ->jsonPropertyDateShouldBeEqualTo(new Json('{"node": true}'), self::NODE, '2026-01-01')
@@ -89,7 +89,7 @@ final class JsonNodeValueComparisonTest extends TestCase
         $assertions->jsonPropertyShouldBeOneOf(new Json('{"node": "open"}'), self::NODE, 'open, closed');
 
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('which is not one of "1, 2"');
+        $this->expectExceptionMessageIsOrContains('which is not one of "1, 2"');
 
         $assertions->jsonPropertyShouldBeOneOf(new Json('{"node": 3}'), self::NODE, '1, 2');
     }

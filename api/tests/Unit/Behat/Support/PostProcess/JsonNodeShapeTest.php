@@ -39,7 +39,7 @@ final class JsonNodeShapeTest extends TestCase
     public function testZeroElementsDoesNotHoldForAnExplicitNull(): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('holds null, which is not a collection');
+        $this->expectExceptionMessageIsOrContains('holds null, which is not a collection');
 
         JsonAssertions::withScalarModifiers()
             ->jsonPropertyShouldHaveElements(new Json('{"node": null}'), self::NODE, 0)
@@ -49,7 +49,7 @@ final class JsonNodeShapeTest extends TestCase
     public function testOneElementDoesNotHoldForAScalar(): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('holds string, which is not a collection');
+        $this->expectExceptionMessageIsOrContains('holds string, which is not a collection');
 
         JsonAssertions::withScalarModifiers()
             ->jsonPropertyShouldHaveElements(new Json('{"node": "scalar"}'), self::NODE, 1)
@@ -66,7 +66,7 @@ final class JsonNodeShapeTest extends TestCase
         // The cases above are the accepted half; only a wrong count over a real collection shows the
         // comparison is made at all, rather than the guard above being the whole assertion.
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('has 3 children whereas it should have 2');
+        $this->expectExceptionMessageIsOrContains('has 3 children whereas it should have 2');
 
         $assertions->jsonPropertyShouldHaveElements(new Json('{"node": [1, 2, 3]}'), self::NODE, 2);
     }
@@ -75,7 +75,7 @@ final class JsonNodeShapeTest extends TestCase
     public function testFalseDoesNotHoldForANodeThatIsNotABoolean(string $payload): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('which is not a boolean');
+        $this->expectExceptionMessageIsOrContains('which is not a boolean');
 
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeFalse(new Json($payload), self::NODE);
     }
@@ -84,7 +84,7 @@ final class JsonNodeShapeTest extends TestCase
     public function testTrueDoesNotHoldForANodeThatIsNotABoolean(string $payload): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('which is not a boolean');
+        $this->expectExceptionMessageIsOrContains('which is not a boolean');
 
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeTrue(new Json($payload), self::NODE);
     }
@@ -108,7 +108,7 @@ final class JsonNodeShapeTest extends TestCase
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeFalse(new Json('{"node": false}'), self::NODE);
 
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('is true but it should have been false');
+        $this->expectExceptionMessageIsOrContains('is true but it should have been false');
 
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeFalse(new Json('{"node": true}'), self::NODE);
     }
@@ -118,7 +118,7 @@ final class JsonNodeShapeTest extends TestCase
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeTrue(new Json('{"node": true}'), self::NODE);
 
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('is false but it should have been true');
+        $this->expectExceptionMessageIsOrContains('is false but it should have been true');
 
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeTrue(new Json('{"node": false}'), self::NODE);
     }
@@ -131,7 +131,7 @@ final class JsonNodeShapeTest extends TestCase
         $assertions->jsonPropertyShouldBeTyped(new Json('{"node": 7}'), self::NODE, 'integer');
 
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('is typed integer whereas it should have been string');
+        $this->expectExceptionMessageIsOrContains('is typed integer whereas it should have been string');
 
         $assertions->jsonPropertyShouldBeTyped(new Json('{"node": 7}'), self::NODE, 'string');
     }

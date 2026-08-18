@@ -56,8 +56,7 @@ final class SealedAuditEntryFactoryTest extends TestCase
         $request = new Request(server: ['REMOTE_ADDR' => '203.0.113.7']);
         $request->headers->set('User-Agent', 'Mozilla/5.0 (probe)');
 
-        $requestStack = new RequestStack();
-        $requestStack->push($request);
+        $requestStack = new RequestStack([$request]);
 
         $entry = $this->factory($requestStack)->create('ROUTE_BACKOFFICE_BANK_SEARCH', AuditLevel::ACTIVITY);
 
@@ -78,8 +77,7 @@ final class SealedAuditEntryFactoryTest extends TestCase
         $request = new Request();
         $request->headers->set('User-Agent', \str_repeat('a', 600));
 
-        $requestStack = new RequestStack();
-        $requestStack->push($request);
+        $requestStack = new RequestStack([$request]);
 
         $entry = $this->factory($requestStack)->create('ROUTE_BACKOFFICE_BANK_SEARCH', AuditLevel::ACTIVITY);
 
@@ -98,8 +96,7 @@ final class SealedAuditEntryFactoryTest extends TestCase
 
     public function testItMintsACanonicalFallbackWhenTheRequestCarriesNoCorrelationId(): void
     {
-        $requestStack = new RequestStack();
-        $requestStack->push(new Request());
+        $requestStack = new RequestStack([new Request()]);
 
         $entry = $this->factory($requestStack)->create('BANK_ACCOUNTS_VIEWED', AuditLevel::ACTIVITY);
 
@@ -112,8 +109,7 @@ final class SealedAuditEntryFactoryTest extends TestCase
         $request = new Request();
         $request->attributes->set(CorrelationIdListener::ATTRIBUTE_KEY, $correlationId);
 
-        $requestStack = new RequestStack();
-        $requestStack->push($request);
+        $requestStack = new RequestStack([$request]);
 
         return $this->factory($requestStack, $actor);
     }
