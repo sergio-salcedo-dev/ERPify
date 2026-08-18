@@ -60,9 +60,9 @@ final class ConstantTimeAuthBranchingContractTest extends TestCase
         // tolerates it; the negative match guards against future drift.
         $pattern = '/(?:^|[^a-zA-Z0-9_])\\\?' . \preg_quote($primitive, '/') . '\s*\(/';
 
-        $this->assertSame(
-            0,
-            \preg_match($pattern, $source),
+        $this->assertDoesNotMatchRegularExpression(
+            $pattern,
+            $source,
             \sprintf(
                 'ProblemDetailsFactory must not call %s() — the constant-time-branching '
                 . 'invariant requires the listener / factory path to perform no wall-clock, '

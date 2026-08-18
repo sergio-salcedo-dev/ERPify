@@ -90,7 +90,7 @@ final class AuditEvidenceActionRulesGateTest extends TestCase
     public function theRegistryRefusesAnUnrecognisedVerdict(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Unrecognised classification for "GDPR_ACCOUNT_ERASED"');
+        $this->expectExceptionMessageIsOrContains('Unrecognised classification for "GDPR_ACCOUNT_ERASED"');
 
         $this->readingRegistry("GDPR_ACCOUNT_ERASED => Evidence\n")->classification();
     }
@@ -99,7 +99,7 @@ final class AuditEvidenceActionRulesGateTest extends TestCase
     public function theRegistryRefusesADuplicateToken(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Duplicate registry line for "GDPR_SUBJECT_ERASED"');
+        $this->expectExceptionMessageIsOrContains('Duplicate registry line for "GDPR_SUBJECT_ERASED"');
 
         $this->readingRegistry(
             "GDPR_SUBJECT_ERASED => evidence\nGDPR_SUBJECT_ERASED => ordinary\n",

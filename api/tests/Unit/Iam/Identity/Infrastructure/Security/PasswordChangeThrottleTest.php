@@ -68,8 +68,7 @@ final class PasswordChangeThrottleTest extends TestCase
     public function testTheRefusalStampsItsOwnBudgetForTheResponseHeaders(): void
     {
         $request = Request::create('/api/v1/me/password', Request::METHOD_POST);
-        $requestStack = new RequestStack();
-        $requestStack->push($request);
+        $requestStack = new RequestStack([$request]);
 
         $throttle = $this->throttle(limit: 1, requestStack: $requestStack);
         $throttle->ensureWithinBudget(self::IDENTITY_ID);

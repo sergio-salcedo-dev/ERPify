@@ -53,7 +53,7 @@ final class MessengerTransportsTest extends TestCase
         $transports = new MessengerTransports(new Container());
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('service messenger.transport.async is not registered');
+        $this->expectExceptionMessageIsOrContains('service messenger.transport.async is not registered');
 
         $transports->pending(self::ASYNC);
     }
@@ -63,7 +63,7 @@ final class MessengerTransportsTest extends TestCase
         // The real class travels in the message: diagnosing a transport that stopped being in-memory
         // should not require opening the container.
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('service messenger.transport.async is stdClass');
+        $this->expectExceptionMessageIsOrContains('service messenger.transport.async is stdClass');
 
         $this->transportsWith(new stdClass())->pending(self::ASYNC);
     }

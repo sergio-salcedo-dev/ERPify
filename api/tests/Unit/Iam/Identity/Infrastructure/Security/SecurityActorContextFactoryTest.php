@@ -77,9 +77,6 @@ final class SecurityActorContextFactoryTest extends TestCase
 
     private function requestInFlight(): RequestStack
     {
-        $requestStack = new RequestStack();
-        $requestStack->push(Request::create(self::ENDPOINT));
-
-        return $requestStack;
+        return new RequestStack([Request::create(self::ENDPOINT)]);
     }
 }

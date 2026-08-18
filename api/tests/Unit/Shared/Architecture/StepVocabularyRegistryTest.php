@@ -48,7 +48,7 @@ final class StepVocabularyRegistryTest extends TestCase
     public function testItRefusesALineItCannotRead(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Malformed line');
+        $this->expectExceptionMessageIsOrContains('Malformed line');
 
         StepVocabularyRegistry::parse("I do a thing => used\nI am not classified at all\n");
     }
@@ -56,7 +56,7 @@ final class StepVocabularyRegistryTest extends TestCase
     public function testItRefusesAClassificationItDoesNotKnow(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Unknown classification "probably"');
+        $this->expectExceptionMessageIsOrContains('Unknown classification "probably"');
 
         StepVocabularyRegistry::parse('I do a thing => probably');
     }
@@ -64,7 +64,7 @@ final class StepVocabularyRegistryTest extends TestCase
     public function testItRefusesAPatternClassifiedTwice(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Pattern classified twice: I do a thing');
+        $this->expectExceptionMessageIsOrContains('Pattern classified twice: I do a thing');
 
         StepVocabularyRegistry::parse("I do a thing => used\nI do a thing => idle\n");
     }
@@ -72,7 +72,7 @@ final class StepVocabularyRegistryTest extends TestCase
     public function testItRefusesAFileCarryingNoClassification(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('carries no classification at all');
+        $this->expectExceptionMessageIsOrContains('carries no classification at all');
 
         StepVocabularyRegistry::parse("# only comments\n\n# and blank lines\n");
     }

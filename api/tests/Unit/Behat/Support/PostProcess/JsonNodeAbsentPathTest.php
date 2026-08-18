@@ -46,7 +46,7 @@ final class JsonNodeAbsentPathTest extends TestCase
     public function testAnAbsentPathFailsAsAnAssertionInsteadOfAnAccessorError(Closure $assertion): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage(self::ABSENT_MESSAGE);
+        $this->expectExceptionMessageIsOrContains(self::ABSENT_MESSAGE);
 
         $assertion(JsonAssertions::withScalarModifiers(), new Json(self::PRESENT_PAYLOAD));
     }
@@ -140,7 +140,7 @@ final class JsonNodeAbsentPathTest extends TestCase
     public function testAPathUnderAParentThatCarriesNoChildrenIsAbsentAndNotABrokenStep(string $payload): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('Property "node.child" does not exist in the JSON.');
+        $this->expectExceptionMessageIsOrContains('Property "node.child" does not exist in the JSON.');
 
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeNull(new Json($payload), 'node.child');
     }
@@ -158,7 +158,7 @@ final class JsonNodeAbsentPathTest extends TestCase
     public function testShouldExistFailsAsAnAssertionForAPathThePayloadDoesNotCarry(): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('The property "absentProperty" does not exist.');
+        $this->expectExceptionMessageIsOrContains('The property "absentProperty" does not exist.');
 
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldExist(new Json(self::PRESENT_PAYLOAD), self::ABSENT);
     }
@@ -179,7 +179,7 @@ final class JsonNodeAbsentPathTest extends TestCase
         $assertions->jsonPropertyShouldNotExist($json, 'node.child');
 
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('The property "node" exists.');
+        $this->expectExceptionMessageIsOrContains('The property "node" exists.');
 
         $assertions->jsonPropertyShouldNotExist($json, 'node');
     }
@@ -201,7 +201,7 @@ final class JsonNodeAbsentPathTest extends TestCase
         // asserting nothing would satisfy the accepted case on its own. The message is what pins the
         // stripping: an unstripped suffix fails as an absent path, not as a node that is not null.
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('but it should have been null');
+        $this->expectExceptionMessageIsOrContains('but it should have been null');
 
         JsonAssertions::withScalarModifiers()->jsonPropertyShouldBeNull(new Json(self::PRESENT_PAYLOAD), 'node::null');
     }

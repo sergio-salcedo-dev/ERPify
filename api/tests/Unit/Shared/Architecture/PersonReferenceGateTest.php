@@ -69,13 +69,7 @@ final class PersonReferenceGateTest extends TestCase
             \array_keys($references->classification()),
         ));
 
-        if ([] === $unclassified) {
-            $this->addToAssertionCount(1);
-
-            return;
-        }
-
-        $this->fail(self::FAILURE_PREAMBLE . "\n" . \sprintf(
+        $this->assertSame([], $unclassified, self::FAILURE_PREAMBLE . "\n" . \sprintf(
             "These persisted identifier columns are declared by an entity but carry no line in\n"
             . ".person-reference-policy:\n  %s",
             \implode("\n  ", $unclassified),
