@@ -2475,7 +2475,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         };
 
         $this->expectException(ProblemBodyTooLargeException::class);
-        $this->expectExceptionMessageIsOrContains(
+        $this->expectExceptionMessageIs(
             'Problem Details body exceeds 16384-byte cap on the required core fields alone.',
         );
 

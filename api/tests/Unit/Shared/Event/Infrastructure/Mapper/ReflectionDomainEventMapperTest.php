@@ -32,7 +32,7 @@ final class ReflectionDomainEventMapperTest extends TestCase
     public function classForThrowsForAnUnknownKey(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessageIsOrContains(
+        $this->expectExceptionMessageIs(
             'No domain event is registered for "erpify.backoffice.bank.created" (v2).',
         );
 
@@ -43,7 +43,7 @@ final class ReflectionDomainEventMapperTest extends TestCase
     public function aggregateTypeForThrowsForAnUnknownKey(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessageIsOrContains('No domain event is registered for "unknown" (v1).');
+        $this->expectExceptionMessageIs('No domain event is registered for "unknown" (v1).');
 
         $this->mapper()->aggregateTypeFor('unknown', 1);
     }
