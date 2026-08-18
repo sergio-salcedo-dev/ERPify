@@ -54,7 +54,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 | Unit tests           | **Vitest 4**                                                                     | Config: `pwa/vitest.config.ts` (v4 config API differs from v1/v2). Command: `make pwa.test.unit c='src/context/foo/bar.test.ts'`.                                                                                 |
 | E2E tests            | **Playwright 1.62**                                                              | Config: `pwa/playwright.config.ts`. Runs on the **host**, never in a container. `baseURL` = `PLAYWRIGHT_BASE_URL` ?? (`CI` ? `https://localhost` : `http://127.0.0.1:3000`). The Compose stack is a prerequisite either way (the target seeds through it and the API fixtures default to `https://localhost`); what changes is the **front-end**: by default Playwright serves it from a host-spawned `dev:e2e` on `:3000`, not the containerised Next behind FrankenPHP. |
 | Testing libs         | @testing-library/react 16, jest-dom 7, jsdom 30                                   | —                                                                                                                                                                                                                 |
-| Lint / format        | ESLint 10.8 + `eslint-config-next` 16.2 + `eslint-config-prettier`, Prettier 3.9 | Run via `make pwa.quality`.                                                                                                                                                                                       |
+| Lint / format        | ESLint 10.8 + `@next/eslint-plugin-next` 16.3 + `eslint-config-prettier`, Prettier 3.9 | Run via `make pwa.quality`.                                                                                                                                                                                       |
 | Integrations in deps | `@google/genai`                                                                  | Present — do not assume usage; check code before wiring.                                                                                                                                                          |
 
 ### Infrastructure / Dev
@@ -106,7 +106,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Do not import React Server Component code into Client Components or vice-versa — respect Next 16 `'use client'` boundaries. Server Actions live in server-only modules.
 - No `console.log` in committed code; use a logger abstraction if one exists, otherwise structured errors.
 - Error handling: throw typed errors; never swallow with empty `catch`. Async boundaries (route handlers, server actions) must convert thrown domain errors to HTTP responses.
-- ESLint (`eslint-config-next` + Prettier) is authoritative — do not hand-format against it.
+- ESLint (`@next/eslint-plugin-next` + Prettier) is authoritative — do not hand-format against it.
 
 ### Framework-Specific Rules
 
@@ -245,7 +245,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 #### Code Quality - Linting / Formatting — tools are authoritative
 
 - **PHP**: PHP-CS-Fixer (`api/tools/ecs/.php-cs-fixer.dist.php`), PHPCS, PHPStan 2 (`api/tools/phpstan/phpstan.neon`, `level: max` — sole type gate), Rector 2, PHPMD. Run all via `make php.quality`. Don't hand-format against these tools.
-- **JS/TS**: ESLint 10 + `eslint-config-next` + `eslint-config-prettier`, Prettier 3.9. Run via `make pwa.quality`; fix via `make pwa.lint` / `make pwa.format`. Don't hand-format.
+- **JS/TS**: ESLint 10 + `@next/eslint-plugin-next` + `eslint-config-prettier`, Prettier 3.9. Run via `make pwa.quality`; fix via `make pwa.lint` / `make pwa.format`. Don't hand-format.
 - **All files**: `.editorconfig` wins. LF line endings, no mixed line endings, keep files small — conventions only; no hook enforces them locally.
 - Aggregates: `make app.quality` (both sides), `make ci` (`ci.quality` + `ci.test`).
 

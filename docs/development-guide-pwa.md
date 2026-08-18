@@ -56,7 +56,7 @@ make pwa.lint.graph                 # dependency-cruiser boundary gate over pwa/
 make pwa.format                     # Prettier --write
 ```
 
-ESLint 10 + `eslint-config-next` + Prettier are **authoritative** — do not hand-format against them.
+ESLint 10 + `@next/eslint-plugin-next` + Prettier are **authoritative** — do not hand-format against them.
 
 ## Directory discipline
 
