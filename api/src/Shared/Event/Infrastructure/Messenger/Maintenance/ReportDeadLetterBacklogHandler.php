@@ -9,6 +9,7 @@ use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Application\DeadLetterReader;
 use Erpify\Shared\Event\Application\DeadLetterSummary;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
@@ -26,6 +27,7 @@ final readonly class ReportDeadLetterBacklogHandler
     public function __construct(
         private DeadLetterReader $reader,
         private Clock $clock,
+        #[Autowire(service: 'monolog.logger.observability')]
         private LoggerInterface $logger,
     ) {
     }

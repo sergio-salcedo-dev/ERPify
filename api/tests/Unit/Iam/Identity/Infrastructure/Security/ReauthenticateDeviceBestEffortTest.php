@@ -77,7 +77,7 @@ final class ReauthenticateDeviceBestEffortTest extends TestCase
         $users = new InMemoryUserRepository($user);
 
         return new ReauthenticateDeviceBestEffort(
-            new ReauthenticateDevice($users, $security ?? $this->createMock(Security::class)),
+            new ReauthenticateDevice($users, $security ?? $this->createStub(Security::class)),
             $logger,
         );
     }

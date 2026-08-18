@@ -42,9 +42,9 @@ final class RedactionDenylistTest extends TestCase
     {
         foreach (RedactionDenylist::KEYS as $key) {
             $this->assertSame($key, \strtolower($key), \sprintf('Key "%s" must be lowercase.', $key));
-            $this->assertSame(
-                1,
-                \preg_match('/\A[a-z][a-z0-9_-]*\z/', $key),
+            $this->assertMatchesRegularExpression(
+                '/\A[a-z][a-z0-9_-]*\z/',
+                $key,
                 \sprintf('Key "%s" must be ASCII identifier-shaped.', $key),
             );
         }

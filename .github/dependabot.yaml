@@ -26,6 +26,35 @@ updates:
       prefix: "chore"
     cooldown:
       default-days: 7
+    # Every tool here consumes phpstan/phpstan through its NON-public API, and
+    # every one of those constraints is a LOWER BOUND — so the constraint admits
+    # the release that breaks it and Composer never refuses. Only a `conflict`
+    # entry would, and not one of them declares it. Measured: phpstan 2.2.5 ->
+    # 2.2.8 moving ALONE (#738) dies in php.rector.dry-run with
+    # MissingPrivatePropertyException on PHPStan\Parser\RichParser::$container,
+    # which rector 2.5.7 reads via PrivatesAccessor; the co-moved pair (#739)
+    # does not fatal at all. Grouping is what makes the fix land in the same
+    # commit as the break. Full mechanism: /deps-update step 3B.
+    #
+    # Membership is what breaks together: rector/rector on that measurement, the
+    # phpstan-* extensions and extension-installer because they exist only to
+    # plug into phpstan. Deliberately OUT: phpstan/phpdoc-parser (a production
+    # library that constrains phpstan not at all) and deptrac/deptrac — which
+    # carries the loosest bound of the five (^2.0) and so is the most exposed,
+    # but is an independent tool on its own cadence; it is named here rather
+    # than grouped, and is the first candidate if this class bites again.
+    #
+    # Re-derive the exposure before trusting this list:
+    #   jq -r '[.packages,."packages-dev"]|flatten|.[]
+    #     |select(.require."phpstan/phpstan")
+    #     |"\(.name) -> \(.require."phpstan/phpstan")"' api/composer.lock
+    groups:
+      phpstan-rector:
+        patterns:
+          - "phpstan/phpstan"
+          - "phpstan/phpstan-*"
+          - "phpstan/extension-installer"
+          - "rector/rector"
 
   - package-ecosystem: github-actions
     directory: /

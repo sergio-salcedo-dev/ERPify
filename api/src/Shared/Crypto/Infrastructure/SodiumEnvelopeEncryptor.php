@@ -38,7 +38,7 @@ final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
 
     public function __construct(
         private Keystore $keystore,
-        #[Autowire('%env(AUDIT_KEK)%')]
+        #[Autowire(env: 'AUDIT_KEK')]
         private string $kek,
     ) {
         if (SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_KEYBYTES !== \strlen($this->kek)) {

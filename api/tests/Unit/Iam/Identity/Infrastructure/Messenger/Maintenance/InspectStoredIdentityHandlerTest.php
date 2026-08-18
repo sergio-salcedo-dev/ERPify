@@ -51,8 +51,8 @@ final class InspectStoredIdentityHandlerTest extends TestCase
         $this->handler($integrity, $logger)(new InspectStoredIdentityMessage());
 
         $this->assertCount(1, $logger->records);
-        // `error` and not `warning`: prod buffers everything below it through `fingers_crossed` and discards
-        // it, so a lower level is an alarm that cannot fire where it matters.
+        // `error` and not `warning`: the level states what the finding is — a divergence to act on — rather
+        // than buying arrival, which the always-on `observability` channel provides at any level.
         $this->assertSame('error', $logger->records[0]['level']);
         $context = $logger->records[0]['context'];
         $this->assertSame(1, $context['orphanRoleValues'] ?? null, 'the COUNT of values, never the values');

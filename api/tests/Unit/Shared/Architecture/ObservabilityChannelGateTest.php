@@ -15,10 +15,12 @@ use Symfony\Component\Yaml\Yaml;
  * production: the `observability` channel is an always-on stream in BOTH environments, and neither routes it
  * through the buffered handler.
  *
- * Two classes of line depend on it — the cursor-pagination metrics that gave the channel its name, and the
- * report of a swallowed `activity` audit write. Both must arrive on a SUCCESSFUL response, which is exactly
- * what `fingers_crossed` is built to discard. The arrival test proves the audit one reaches
- * `observability.log`; nothing proved that the environment it proves it in resembles the one that matters.
+ * Every line that must arrive on a path which never produces a 5xx depends on it — the cursor-pagination
+ * metrics that gave the channel its name, the reports of swallowed failures, and the findings of the
+ * scheduled sweeps. All of them land on a successful response or a clean worker run, which is exactly what
+ * `fingers_crossed` is built to discard. `BestEffortReportChannelGateTest` holds the population; the arrival
+ * tests prove two of them reach `observability.log`. What neither proves is that the environment they prove
+ * it in resembles the one that matters — which is what this gate is for.
  *
  * Left ungated, the failure is silent in both directions: attach the channel to `fingers_crossed` and the line
  * is discarded again with every test green, or drop the exclusion on `main` and the same record ALSO lands in
@@ -36,6 +38,8 @@ use Symfony\Component\Yaml\Yaml;
 final class ObservabilityChannelGateTest extends TestCase
 {
     private const string CHANNEL = 'observability';
+
+    private const string PINNED_LEVEL = 'info';
 
     #[Test]
     #[DataProvider('provideGatedEnvironmentsCases')]
@@ -61,6 +65,32 @@ final class ObservabilityChannelGateTest extends TestCase
             'The `%s` handler under `%s` no longer serves exactly its own channel.',
             self::CHANNEL,
             $environment,
+        ));
+    }
+
+    #[Test]
+    #[DataProvider('provideGatedEnvironmentsCases')]
+    public function theChannelHandlerKeepsItsPinnedLevel(string $environment): void
+    {
+        // Always-on is not enough on its own: the handler's own `level` still filters, and the lines this
+        // channel carries are not all errors. The failed-transport pruner reports its drains at `info`, and
+        // an `error` floor here would drop them while every other assertion in this class stayed green — the
+        // same silent discard the channel exists to escape, moved one level down.
+        //
+        // `info` rather than `debug` deliberately: `debug` is where framework noise lives, and this stream
+        // has no rotation and no declared owner of its erasure.
+        $handler = $this->handlers($environment)[self::CHANNEL] ?? null;
+        $this->assertIsArray($handler);
+
+        $this->assertSame(self::PINNED_LEVEL, $handler['level'] ?? null, \sprintf(
+            'The `%s` handler under `%s` is no longer pinned to `%s`. Equality, not a floor, and '
+            . 'deliberately: RAISING it discards writers — the failed-transport prune reports at `info`, so '
+            . 'an `error` floor drops the report of a sweep nobody else observes, with this gate otherwise '
+            . 'green — and LOWERING it to `debug` opens an unrotated stream with no declared owner of its '
+            . 'erasure to every framework record. Both directions are regressions, so both go red.',
+            self::CHANNEL,
+            $environment,
+            self::PINNED_LEVEL,
         ));
     }
 

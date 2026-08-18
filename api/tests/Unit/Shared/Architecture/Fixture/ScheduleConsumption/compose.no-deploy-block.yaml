@@ -1,0 +1,6 @@
+# No `deploy` block at all — the second of the two states that must both read as "no count declared". The
+# other (a `deploy` block carrying only resource limits) is compose.unpinned-consumer.yaml; they take
+# different branches of the reader and only one of them was exercised before.
+services:
+  scheduler_worker:
+    command: ["php", "bin/console", "messenger:consume", "scheduler_alpha", "--time-limit=3600"]

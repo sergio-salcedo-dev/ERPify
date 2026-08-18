@@ -1,0 +1,5 @@
+# A YAML document Compose would reject and a reader would skim past: no `services` key at all. It reaches
+# the same exception class as a missing service, so only anchoring the message tells the two guards apart.
+name: erpify
+volumes:
+  database_data: {}

@@ -71,7 +71,9 @@ when@prod:
                 level: debug
                 formatter: monolog.formatter.json
             # Always-on JSON stream (NOT fingers_crossed) so the cursor-pagination metric lines are
-            # never buffered away. One line per search / rejected cursor → parse by `event`.
+            # never buffered away. The cursor-pagination metrics carry an `event` key and parse by it;
+            # the swallow reports and sweep findings that share the stream do not, so a reader filters by
+            # message rather than assuming one shape.
             observability:
                 type: stream
                 channels: [observability]

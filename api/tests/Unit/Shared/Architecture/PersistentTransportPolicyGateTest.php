@@ -106,13 +106,7 @@ final class PersistentTransportPolicyGateTest extends TestCase
         $policy = $this->policy();
         $violations = $policy->violations($policy->config()->configuredRoutes(), $policy->eventsInSource());
 
-        if ([] === $violations) {
-            $this->addToAssertionCount(1);
-
-            return;
-        }
-
-        $this->fail(self::FAILURE_PREAMBLE . "\n" . \implode("\n", $violations));
+        $this->assertSame([], $violations, self::FAILURE_PREAMBLE . "\n" . \implode("\n", $violations));
     }
 
     #[Test]
@@ -124,25 +118,29 @@ final class PersistentTransportPolicyGateTest extends TestCase
             static fn (?string $adr): bool => null !== $adr && PersistentTransportPolicy::PERSON_NO_EXCEPTION !== $adr,
         );
 
-        if ([] === $exceptions) {
-            // No sanctioned exception today. Pin the assertion count so PHPUnit does not flag a risky test.
-            $this->addToAssertionCount(1);
-
-            return;
-        }
+        $defects = [];
 
         foreach ($exceptions as $aggregateType => $adr) {
             // assertFileExists() is file_exists(), which is true for a DIRECTORY — so `person :: docs`
             // would silence the policy check with no ADR written at all.
             $absolute = \dirname($policy->apiRoot()) . '/' . $adr;
 
-            $this->assertTrue(\is_file($absolute) && \str_ends_with($adr, '.md'), \sprintf(
+            if (\is_file($absolute) && \str_ends_with($adr, '.md')) {
+                continue;
+            }
+
+            $defects[] = \sprintf(
                 'The ADR declared for the queued person aggregate "%s" is not an existing Markdown file: %s. '
                 . 'An exception without a recorded decision is just the defect with a comment on it.',
                 $aggregateType,
                 $adr,
-            ));
+            );
         }
+
+        // The sanctioned-exception set is empty in the normal state, so this asserts over nothing
+        // most days. That is the check having no subject, not the check being satisfied: what keeps
+        // the registry itself from emptying out is theGateScansAtLeastOneEventAndOneRoutingEntry.
+        $this->assertSame([], $defects, \implode("\n", $defects));
     }
 
     #[Test]

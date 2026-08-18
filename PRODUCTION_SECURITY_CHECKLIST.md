@@ -460,8 +460,9 @@ you change anything here.
       refusal is a synchronous write per attempt handed to the attacker. The row names the subject when
       the address resolves and nothing when it does not; **the address itself is never written**, in
       any column or encoding. **Three residues, none of them closed:** the claim is spent before the
-      write, so an `audit_log` outage costs one window of silence per address (the swallowed `warning`
-      is the only signal, and the Monolog→Sentry bridge is deliberately unwired); the budget lives in
+      write, so an `audit_log` outage costs one window of silence per address (the swallow is the only
+      signal; it now logs at `error` on the always-on `observability` channel, so it survives to the
+      container's stderr, but the Monolog→Sentry bridge is deliberately unwired and nothing pages); the budget lives in
       the rate-limiter cache pool, so a redeploy, a `cache:clear` or a second FrankenPHP worker
       produces extra rows for one siege; and the row says *that* exhaustion happened and *when*, never
       *how much* — a six-request accident and a hundred-thousand-request siege look identical, volume
@@ -812,8 +813,16 @@ mitigated state. Accepting one means recording who accepted it and against which
       day of silence about a live lock), and `IdentityMaintenanceSchedule` is `->stateful()` but not
       `->lock()`ed. Two scheduler replicas would therefore race send-then-stamp and deliver the notice
       twice — at someone whose account an attacker is already driving. `compose.prod.yaml` pins
-      `scheduler_worker` to `replicas: 1` and says so at the pin; nothing enforces it. Closing this
-      means a scheduler lock, or a deployment check that refuses to scale that service.
+      `scheduler_worker` to `replicas: 1` and says so at the pin.
+      **Half of it is now enforced, and the half that is not is the reason this stays open.**
+      `ScheduleConsumptionGateTest` refuses any of the three root compose files giving that consumer
+      more than one replica, and refuses `compose.prod.yaml` declaring none — so a duplicated clock
+      *committed to the repository* is a red build. It cannot see one asked for at the command line:
+      measured, `docker compose up -d --scale <svc>=2` leaves two containers running for a service
+      declaring `replicas: 1`, exit 0, exactly as for one declaring none. Compose treats the value as a
+      default, never a ceiling. Closing this therefore still means a scheduler lock (`symfony/lock`,
+      declined in #261 with that asymmetry as the recorded cost) or a deployment-side check that
+      refuses to scale the service.
 - [ ] **`api/storage-test/` is outside `.gitignore`.** It is a Flysystem test-storage directory the
       suite writes into, so any `git add -A` commits whatever a test last wrote — into a **public**
       repository. Today the residue is a 91-byte 1×1 PNG; the exposure grows the day a test writes

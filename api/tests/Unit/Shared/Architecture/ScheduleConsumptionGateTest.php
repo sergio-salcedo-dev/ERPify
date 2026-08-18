@@ -9,6 +9,7 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use ReflectionClassConstant;
 
 /**
  * Static gate over the one property that makes "this control is scheduled" falsifiable: every
@@ -21,11 +22,33 @@ use PHPUnit\Framework\TestCase;
  * consumed by nobody. A scheduled compliance control that ships dead is indistinguishable from one that
  * ships working right up until the day it was supposed to catch something.
  *
+ * The replica assertions cover the second half of the same invariant. Naming the right service is worth
+ * nothing if that service runs twice: ticks come from an in-process clock and `Checkpoint::acquire()` returns
+ * true unconditionally without a `->lock()`. The durable checkpoint pool shares state rather than exclusion,
+ * so a second replica *can* duplicate a tick rather than always doing so — `MessageGenerator` re-reads the
+ * shared pool each poll and suppresses one the other replica already saved, leaving a window between the
+ * winner's `acquire()` and its `save()`, which runs after the handler. That window is widest exactly where it
+ * costs most: `NotifyLockedIdentitiesMessage` holds it open for an SMTP exchange and mails a person.
+ *
  * What a green run does NOT prove, and the distinction matters because this gate is the evidence behind a
- * requirement that alarms have to arrive: it proves a transport name appears in a consume command. It does
- * not prove the worker is running, that the service is deployed, that `--time-limit` is sane, that the
- * schedule's period is right, or that anything ever reached a log. Presence of the name is the floor, not
- * the guarantee.
+ * requirement that alarms have to arrive: it proves a transport name appears in a consume command, and that
+ * no root compose file gives that consumer more than one replica. It does not prove the worker is running,
+ * that the service is deployed, that `--time-limit` is sane, that the schedule's period is right, or that
+ * anything ever reached a log. Presence of the name is the floor, not the guarantee.
+ *
+ * **And the pin binds the file, never the deploy.** Measured by running it, not by planning it: with two
+ * otherwise identical services — one declaring `deploy.replicas: 1`, one declaring no count —
+ * `docker compose up -d --scale <service>=2` left **two containers running for each**, exit 0. The
+ * declaration is a default and a statement of intent; Compose does not treat it as a ceiling. So this gate
+ * refuses a duplicated clock written into the repository — the vector that leaves a diff — and says nothing
+ * about one asked for on a command line, which leaves no trace here. Closing that second vector needs
+ * `->lock()`, hence `symfony/lock`; declined in #261, whose closing comment carries this asymmetry as the
+ * recorded cost.
+ *
+ * One committed shape does evade it: a service using `extends` inherits the consume command without
+ * declaring one of its own, and this sweep keys on a literal `command`. Nothing in the tree uses `extends`
+ * today, and it is named here rather than guarded because a rule for a shape nobody writes is speculative —
+ * but a reader must not mistake the green for coverage of it.
  *
  * The derivation rules live in {@see ScheduleConsumption} and their falsifiability in
  * {@see ScheduleConsumptionRulesGateTest}; this class is the assertions over the real tree.
@@ -150,6 +173,87 @@ final class ScheduleConsumptionGateTest extends TestCase
         foreach (ScheduleConsumption::COMPOSE_FILES as $composeFile) {
             yield $composeFile => [$composeFile];
         }
+    }
+
+    #[Test]
+    public function theOnlyPermittedReplicaCountIsOne(): void
+    {
+        // The invariant reduces to this constant, and without pinning it the whole axis is two coordinated
+        // edits away from vacuous: raise it to 2, raise the compose file to 2, and every assertion below
+        // stays green over a duplicated clock — with the falsification fixture, which hard-codes 2, quietly
+        // switching from modelling a violation to modelling a compliant service.
+        //
+        // Read through reflection rather than named directly: PHPStan resolves a class constant to its
+        // literal value and reports the comparison as always-true, which would make the one assertion that
+        // guards the constant the one assertion the type checker forbids.
+        $pinned = (new ReflectionClassConstant(ScheduleConsumption::class, 'SCHEDULER_CONSUMER_REPLICAS'))
+            ->getValue()
+        ;
+
+        $this->assertSame(1, $pinned);
+    }
+
+    #[Test]
+    #[DataProvider('provideTheSchedulerConsumerNeverDeclaresMoreThanOneReplicaCases')]
+    public function theSchedulerConsumerNeverDeclaresMoreThanOneReplica(string $composeFile): void
+    {
+        $consumer = ScheduleConsumption::replicaConsumerOf($composeFile);
+        $declared = ScheduleConsumption::declaredReplicasOf(
+            $this->composeDirectory() . '/' . $composeFile,
+            $consumer,
+        );
+
+        // Only `DEPLOYED_COMPOSE_FILE` is required to state a count; the other two are held to not
+        // contradicting it, and Compose supplies the one when they say nothing.
+        if (null === $declared) {
+            $this->assertNotSame(ScheduleConsumption::DEPLOYED_COMPOSE_FILE, $composeFile);
+
+            return;
+        }
+
+        $this->assertSame(ScheduleConsumption::SCHEDULER_CONSUMER_REPLICAS, $declared, \sprintf(
+            'Service `%s` in %s declares %d replicas, and only %d is permitted. Every tick comes from an '
+            . 'in-process clock and no schedule carries `->lock()`, so a second replica can duplicate a tick '
+            . 'rather than share it — and one of the nine mails a person. A count of 0 fails here too: a '
+            . 'scheduler nobody runs is the same nine controls missing, reported by nothing.',
+            $consumer,
+            $composeFile,
+            $declared,
+            ScheduleConsumption::SCHEDULER_CONSUMER_REPLICAS,
+        ));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideTheSchedulerConsumerNeverDeclaresMoreThanOneReplicaCases(): iterable
+    {
+        foreach (\array_keys(ScheduleConsumption::REPLICA_SCOPE) as $composeFile) {
+            yield $composeFile => [$composeFile];
+        }
+    }
+
+    #[Test]
+    public function theDeployedComposeFilePinsTheSchedulerConsumerInWriting(): void
+    {
+        // Through the lookup rather than the offset: pairing the two literals inline lets PHPStan resolve
+        // it, which turns any guard on the pairing into an always-true it refuses — and leaves the pairing
+        // itself unguarded. Measured: with the deployed file dropped from the map, the inline form kept
+        // `php.stan` at 0 and the suite green.
+        $composeFile = ScheduleConsumption::DEPLOYED_COMPOSE_FILE;
+        $consumer = ScheduleConsumption::replicaConsumerOf($composeFile);
+
+        $this->assertNotNull(
+            ScheduleConsumption::declaredReplicasOf($this->composeDirectory() . '/' . $composeFile, $consumer),
+            \sprintf(
+                'Service `%s` in %s declares no replica count. Compose defaults to one either way, which is '
+                . 'exactly the problem: the invariant then rests on a default nobody chose and no reader can '
+                . 'see, in the file a deploy applies. Write `deploy.replicas: %d`.',
+                $consumer,
+                $composeFile,
+                ScheduleConsumption::SCHEDULER_CONSUMER_REPLICAS,
+            ),
+        );
     }
 
     /**

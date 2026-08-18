@@ -52,7 +52,7 @@ final class EntityClassResolverTest extends TestCase
         $resolver = $this->resolverForMappedEntities(Bank::class);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('No mapped entity matches the short name "Nope".');
+        $this->expectExceptionMessageIsOrContains('No mapped entity matches the short name "Nope".');
 
         $resolver->resolve('Nope', null);
     }

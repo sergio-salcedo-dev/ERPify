@@ -21,7 +21,7 @@ final class BackedEnumNodeModifierTest extends TestCase
     public function itThrowsADescriptiveFailureForANonStringExpectedRatherThanAborting(): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('Expected a "Fqcn::CASE" string, got int');
+        $this->expectExceptionMessageIsOrContains('Expected a "Fqcn::CASE" string, got int');
 
         (new BackedEnumNodeModifier())->getProcessedValue(123);
     }
@@ -49,7 +49,7 @@ final class BackedEnumNodeModifierTest extends TestCase
     public function itRefusesAReferenceCarryingMoreThanOneCaseSeparator(): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('Expected exactly one "::"');
+        $this->expectExceptionMessageIsOrContains('Expected exactly one "::"');
 
         (new BackedEnumNodeModifier())->getProcessedValue(Role::class . '::ADMIN::VIEWER');
     }

@@ -37,7 +37,7 @@ final class LastRunTest extends TestCase
     public function testReadingAnExitCodeBeforeAnythingRanRefusesInsteadOfAnsweringSuccess(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Nothing has been run yet in this scenario');
+        $this->expectExceptionMessageIs('Nothing has been run yet in this scenario');
 
         (new LastRun())->exitCode();
     }
@@ -47,7 +47,7 @@ final class LastRunTest extends TestCase
         // An empty string would quietly satisfy "should not contain", which is the direction that
         // stays green: a scenario asserting an absence would prove it against a run it never made.
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Nothing has been run yet in this scenario');
+        $this->expectExceptionMessageIs('Nothing has been run yet in this scenario');
 
         (new LastRun())->output();
     }
@@ -59,7 +59,7 @@ final class LastRunTest extends TestCase
         $lastRun->reset();
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Nothing has been run yet in this scenario');
+        $this->expectExceptionMessageIs('Nothing has been run yet in this scenario');
 
         $lastRun->exitCode();
     }

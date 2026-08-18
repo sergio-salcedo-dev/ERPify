@@ -350,7 +350,10 @@ development_status:
   # El barrido del 2026-08-06 cerró 11 de 65 midiendo cada issue CONTRA EL CÓDIGO, no contra su título, y
   # corrigió otros 4. Los 11 eran recientes, no viejos: el backlog se pudre por lo que se entrega, no por el
   # tiempo. Un issue solo se cierra con evidencia medida en el comentario de cierre.
-  epic-backlog-resolution: in-progress
+  # Cerrada el 2026-08-17 con BR-8: las diez claves de historia están en `done` y el criterio de cierre
+  # (barrer el backlog otra vez contra `main`) está ejecutado y registrado en br-8-operabilidad.md. Sin clave
+  # de retrospectiva: si se corre una, se añade aquí.
+  epic-backlog-resolution: done
   br-1-behat-vocabulario-falsabilidad: done
   br-2-residuos-eje-referencias-persona: done
   br-3-auditoria-crypto-cierres-eje-3: done
@@ -379,11 +382,18 @@ development_status:
   # épica — y su radio son seis casos de uso y dos superficies de worker, no los dos call sites que enumera.
   # DEC-5 está resuelta y la resolución rechaza LAS DOS opciones de #526: ningún registro de Monolog llega a
   # Sentry (decisión escrita en sentry.yaml:14-17), así que la 1 es imposible sin revertirla; y con umbral 1
-  # no hay nada que agregar, así que la 2 compra maquinaria por nada. De DEC-1..DEC-5 hay cuatro resueltas y
-  # sólo DEC-3 (#261) sigue abierta. Decisión resuelta no es código enviado, y este fichero no es el sitio
-  # donde comprobarlo: T1/T2/T3/T4 salen cada una en su PR (#725, #728, #729, #727) y el estado de cada una
-  # se lee en git, no aquí. Esta clave seguirá en `in-progress` mientras #256 y #261 sigan abiertos.
-  br-8-operabilidad: in-progress
+  # no hay nada que agregar, así que la 2 compra maquinaria por nada. Decisión resuelta no es código enviado,
+  # y este fichero no es el sitio donde comprobarlo: T1/T2/T3/T4 salieron cada una en su PR (#725, #728,
+  # #729, #727) y el estado de cada una se lee en git, no aquí.
+  # DEC-3 resuelta el 2026-08-17 (Option A + testigo), consultada con Winston y Amelia sin promediar su
+  # discrepancia: #261 se cierra `wontfix` y el gate de consumo pasa a refutar también la réplica. Lo decidió
+  # una medición que ninguna de las dos opciones del issue contemplaba — `replicas: 1` NO impide
+  # `docker compose up --scale`, así que el pin ata el fichero y no el despliegue, y eso queda declarado en
+  # los cuatro sitios que lo afirmaban de más.
+  # #261 está CERRADO (`not planned`) con su comentario de evidencia; #256 se queda ABIERTO a propósito, por
+  # ser ejecución sobre el host de rehearsal y no código. Este `done` es la historia, no el issue — y por la
+  # regla del fichero tampoco es evidencia de que la rama haya mergeado.
+  br-8-operabilidad: done
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.

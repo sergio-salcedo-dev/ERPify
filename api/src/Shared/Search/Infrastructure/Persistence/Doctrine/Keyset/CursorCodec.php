@@ -47,7 +47,7 @@ final readonly class CursorCodec
     private const string SEPARATOR = '.';
 
     public function __construct(
-        #[Autowire('%kernel.secret%')]
+        #[Autowire(param: 'kernel.secret')]
         private string $secret,
     ) {
     }

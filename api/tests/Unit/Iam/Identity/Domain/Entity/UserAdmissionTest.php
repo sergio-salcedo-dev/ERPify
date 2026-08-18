@@ -27,11 +27,13 @@ final class UserAdmissionTest extends TestCase
 {
     public function testAnActiveIdentityPassesTheAdmissionWall(): void
     {
+        // Passing the wall is the absence of a throw, so there is nothing to assert on:
+        // an escaping exception is what fails this test.
+        $this->expectNotToPerformAssertions();
+
         $user = UserMother::create();
 
         $user->ensureActive();
-
-        $this->addToAssertionCount(1);
     }
 
     public function testASuspendedIdentityIsWalledWithItsOwnReason(): void

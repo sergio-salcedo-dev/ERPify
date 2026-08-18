@@ -19,7 +19,7 @@ use RuntimeException;
 /**
  * The swallow-and-log contract of the lockout projection, pinned on its own. {@see LoginAttemptRegistrarAuditTest}
  * exercises the class through the use case but only asserts the row and the commit boundary, so deleting the
- * `logger->warning` call and leaving a bare `catch` left the whole suite green — the failure mode of a
+ * `logger->error` call and leaving a bare `catch` left the whole suite green — the failure mode of a
  * best-effort projection is silence, and nothing else in the suite could see it.
  *
  * @internal
@@ -48,7 +48,7 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
         $this->assertSame([], $logger->records, 'A successful projection must not log.');
     }
 
-    public function testSwallowsAFailedAuditWriteAndLogsItAtWarning(): void
+    public function testSwallowsAFailedAuditWriteAndLogsItAtError(): void
     {
         $failure = new RuntimeException('audit_log is unavailable');
         $logger = new RecordingLogger();
@@ -60,7 +60,7 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
             $logger->records,
             'A swallowed projection failure that logs nothing is an effect that silently did not happen.',
         );
-        $this->assertSame(LogLevel::WARNING, $logger->records[0]['level']);
+        $this->assertSame(LogLevel::ERROR, $logger->records[0]['level']);
         $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
     }
 

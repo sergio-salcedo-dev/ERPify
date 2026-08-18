@@ -39,6 +39,49 @@ final class ScheduleConsumption
     ];
 
     /**
+     * The compose file a deploy actually applies on top of the base.
+     *
+     * `compose.yaml` is the shared base every environment layers on; `compose.prod.yaml` is the overlay the
+     * VPS applies (`make deploy.local`, or `ENV=prod make docker.up.wait` — `docs/vps-deployment.md`). That
+     * makes it the one file where an absent replica count is not "the default is fine" but "nobody wrote the
+     * constraint down", so it is the only file required to declare the pin rather than merely refrain from
+     * contradicting it.
+     */
+    public const string DEPLOYED_COMPOSE_FILE = 'compose.prod.yaml';
+
+    /**
+     * Every root compose file that can give the scheduler-consuming service a replica count, and which
+     * service that is in each.
+     *
+     * Wider than {@see COMPOSE_FILES} by one, and the extra entry is the point: `make/config.mk` composes dev
+     * as `compose.yaml + compose.dev.yaml`, so a `deploy.replicas: 2` written into the dev overlay runs two
+     * clocks over the same nine ticks while a sweep limited to the consumption pair stays green. The overlay
+     * declares `messenger_worker` in order to extend it, which is why the same reader works on all three.
+     */
+    public const array REPLICA_SCOPE = [
+        'compose.yaml' => 'messenger_worker',
+        'compose.dev.yaml' => 'messenger_worker',
+        'compose.prod.yaml' => 'scheduler_worker',
+    ];
+
+    /**
+     * The replica count the scheduler consumer may run.
+     *
+     * One, and the reason is not efficiency. Every tick is derived from an in-process clock, and
+     * `Checkpoint::acquire()` (`symfony/scheduler`) returns true unconditionally when the schedule carries no
+     * `->lock()` — which none of them does. The durable checkpoint pool shares STATE between processes, never
+     * exclusion: `MessageGenerator` re-reads it each poll and suppresses a tick the other replica already
+     * saved, so a second replica CAN duplicate a tick rather than always doing so — the window is between the
+     * winner's `acquire()` and its `save()`, which runs after the handler.
+     *
+     * That window is why the count is one rather than why it is nearly harmless. Eight of the nine ticks are
+     * idempotent sweeps and would mostly collapse; `NotifyLockedIdentitiesMessage` mails a person and holds
+     * the window open for an SMTP exchange, and it sends BEFORE stamping the suppression window — so two
+     * clocks deliver the notice twice to someone whose account an attacker is already driving.
+     */
+    public const int SCHEDULER_CONSUMER_REPLICAS = 1;
+
+    /**
      * The name Symfony gives a schedule whose attribute carries no argument.
      */
     private const string DEFAULT_SCHEDULE_NAME = 'default';
@@ -155,6 +198,76 @@ final class ScheduleConsumption
         $consumed = \array_merge(...\array_values(self::consumedTransportsByServiceIn($composeFile)));
 
         return \array_values(\array_unique($consumed));
+    }
+
+    /**
+     * The service {@see REPLICA_SCOPE} holds responsible for a compose file's scheduler clock.
+     *
+     * A lookup rather than a direct offset read, and the difference is a real guard instead of a decorative
+     * one: reading `REPLICA_SCOPE[DEPLOYED_COMPOSE_FILE]` inline pairs two literals, so PHPStan resolves it
+     * and any assertion about the pairing becomes always-true — measured, removing the deployed file from
+     * the map left `make php.stan` at exit 0 and every test green. Behind a `string` parameter the pairing
+     * is checked at runtime and has a red of its own.
+     *
+     * @throws RuntimeException
+     */
+    public static function replicaConsumerOf(string $composeFile): string
+    {
+        return self::REPLICA_SCOPE[$composeFile] ?? throw new RuntimeException(\sprintf(
+            'No service is held responsible for the scheduler clock in "%s". A compose file outside '
+            . 'REPLICA_SCOPE is a file whose replica count nothing reads.',
+            $composeFile,
+        ));
+    }
+
+    /**
+     * The replica count a service declares in a compose file, or null when it declares none.
+     *
+     * A non-integer is a failure rather than a null. `replicas: ${SCHEDULER_REPLICAS:-1}` reads as "pinned"
+     * to anyone skimming the file while putting the real count in an env file no gate can see, which is the
+     * one shape that would let this check report a pin it cannot verify.
+     *
+     * @throws RuntimeException
+     */
+    public static function declaredReplicasOf(string $composeFile, string $service): ?int
+    {
+        $parsed = Yaml::parseFile($composeFile);
+
+        if (!\is_array($parsed) || !\is_array($parsed['services'] ?? null)) {
+            throw new RuntimeException(\sprintf('"%s" declares no services to read.', $composeFile));
+        }
+
+        $definition = $parsed['services'][$service] ?? null;
+
+        if (!\is_array($definition)) {
+            throw new RuntimeException(\sprintf(
+                'Service "%s" is not declared in "%s". A consumer this check cannot find is a consumer it '
+                . 'cannot hold to one replica.',
+                $service,
+                $composeFile,
+            ));
+        }
+
+        $deploy = $definition['deploy'] ?? null;
+
+        if (!\is_array($deploy) || !\array_key_exists('replicas', $deploy)) {
+            return null;
+        }
+
+        $replicas = $deploy['replicas'];
+
+        if (!\is_int($replicas)) {
+            throw new RuntimeException(\sprintf(
+                'Service "%s" in "%s" declares `replicas: %s`, which this check cannot evaluate. Write the '
+                . 'count as a literal integer — an interpolated value moves the real number into an env file '
+                . 'nothing here reads, while still looking pinned.',
+                $service,
+                $composeFile,
+                \is_scalar($replicas) ? (string) $replicas : \get_debug_type($replicas),
+            ));
+        }
+
+        return $replicas;
     }
 
     /**
