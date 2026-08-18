@@ -32,10 +32,16 @@ Pass extra args with **`c='…'`**, e.g. `make pwa.test.unit c='path/to/file.tes
 
 ## E2E (Playwright)
 
-- **CI / Docker stack**: **`CI=true`** and **`PLAYWRIGHT_BASE_URL=https://localhost`** (see root [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
-- **Local** with the full stack on **https://localhost**: set **`PLAYWRIGHT_BASE_URL=https://localhost`** — Playwright does not start **`npm run dev`** (Next dev only serves HTTP). With **`http://localhost`**, if something already listens on that URL, **`reuseExistingServer`** skips spawning the dev server.
-- **Local** with **`npm run dev`** only: omit **`PLAYWRIGHT_BASE_URL`** (default **`http://localhost`**, port 80).
-- Optional **`PLAYWRIGHT_SKIP_WEBSERVER=1`**: never spawn **`npm run dev`** even for **`http://`** base URLs.
+`baseURL` is resolved in `playwright.config.ts`, never hard-coded in a spec:
+
+```
+PLAYWRIGHT_BASE_URL ?? (CI ? "https://localhost" : "http://127.0.0.1:3000")
+```
+
+- **Default local run**: `http://127.0.0.1:3000`. Playwright spawns `npm run dev:e2e` itself — `useWebServer` is on when there is no `CI`, the URL is `http://`, and `PLAYWRIGHT_SKIP_WEBSERVER` is not `1`. `reuseExistingServer` skips the spawn when something already answers there. The API stays on the Compose stack regardless.
+- **Against the full stack on HTTPS**: `PLAYWRIGHT_BASE_URL=https://localhost`. No web server is spawned — Next dev cannot serve HTTPS — so Compose must already be up. Use this for anything that needs same-origin cookies: `https://localhost` cookies never reach a browser on `http://127.0.0.1:3000`.
+- **CI**: sets `CI=true` and `PLAYWRIGHT_BASE_URL=https://localhost` (root [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
+- `PLAYWRIGHT_SKIP_WEBSERVER=1` never spawns the dev server, even for `http://` base URLs.
 
 ## Docs
 

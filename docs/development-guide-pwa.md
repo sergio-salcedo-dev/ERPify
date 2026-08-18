@@ -114,10 +114,11 @@ pwa/src/
 
 ## Critical rules to load before coding
 
-Load [`project-context.md`](./project-context.md) before generating code. Key callouts for the PWA:
+[`project-context.md`](./project-context.md) carries the versions and the traps they set for a model trained before them; the normative rules are in [`pwa/CLAUDE.md`](../pwa/CLAUDE.md) and `docs/rules/*.md`. Key callouts for the PWA:
 
 - Next 16 / React 19 / Tailwind 4 / Inversify 8 / TS 6 are beyond most training data — **read existing code before inventing patterns**.
-- **Playwright targets `:3000`**, not `:80`. `baseURL: http://localhost:3000`.
+- **Playwright's `baseURL` is resolved, not fixed** (`pwa/playwright.config.ts`): `PLAYWRIGHT_BASE_URL ?? (CI ? "https://localhost" : "http://127.0.0.1:3000")`. So the default local run does **not** target the Compose stack's front-end — Playwright spawns its own `dev:e2e` on `:3000` (`useWebServer` is on when there is no `CI`, the URL is `http://`, and `PLAYWRIGHT_SKIP_WEBSERVER` is not `1`; `reuseExistingServer` skips the spawn if something already answers). The API side is the Compose stack either way.
+- **The host matters, not just the port.** The default is `127.0.0.1`, and a cookie scoped to `https://localhost` is not sent to a browser sitting on `http://127.0.0.1:3000`. Anything needing same-origin HTTPS must say so: `PLAYWRIGHT_BASE_URL=https://localhost make pwa.test.e2e` (from a worktree, that stack's mapped 443 port — Playwright runs on the host and cannot reach the internal Docker network).
 - No `React.FC`, no `enzyme`, no shallow rendering; use Testing Library with role/label/text queries.
 - Turbopack is the dev bundler; Webpack-specific `next.config.*` entries silently no-op.
 - `reflect-metadata` imported once; don't re-import per module.
