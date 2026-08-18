@@ -987,6 +987,15 @@ mitigated state. Accepting one means recording who accepted it and against which
       a logger. Measured: `Transport.php:154,157` build it as `new $class($args[, $period])` and never pass one,
       so Symfony's own wiring leaves it on the `NullLogger` default — a `failover://a||b` DSN does **not** arm
       that line. Reachable only by constructing the transport by hand.
+      **Accepted 2026-08-18 (Sergio):** there is no production deployment and no customer. Residuals one,
+      three and five stand on the arguments measured above — an operator-invoked sink for the first two,
+      Symfony's own wiring never arming the third. Residual four is deferred knowingly rather than dismissed:
+      the carrier is real and a database driver quoting a violated unique value has the same shape; what is
+      declined is the survey that would bound the class, not the risk. **Residual two is accepted against
+      #764 and nothing else.** Its measured bound is an agreement between two vendor validators that no test
+      watches — pinning it was considered and declined, because a test would freeze an accidental
+      implementation detail as though it were the contract — so it is not a guarantee and cannot report its
+      own expiry; the acceptance ends when #764 closes.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.
