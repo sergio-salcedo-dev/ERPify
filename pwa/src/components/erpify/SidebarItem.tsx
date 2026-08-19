@@ -111,10 +111,14 @@ export function SidebarItem({
             return (
               <button
                 type="button"
-                key={subItem.name}
+                // Identity, never the label: a consumer that relabels an entry while it works
+                // would otherwise change the key, and React would destroy the button the user
+                // just activated — dropping focus to <body> and moving the new state onto a
+                // different node, where no assistive technology reads it.
+                key={subItem.testId ?? subItem.path}
                 onClick={() => onClick(subItem.path, subItem.action)}
                 title={subItem.name}
-                aria-disabled={subItem.isBusy}
+                aria-disabled={subItem.isBusy || undefined}
                 data-testid={subItem.testId}
                 className={`sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-medium transition-all ${
                   isSubActive

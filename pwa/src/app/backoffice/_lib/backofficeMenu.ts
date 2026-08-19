@@ -253,8 +253,9 @@ export const backofficeMenuGroups: NavGroup[] = [
 
 /**
  * Account entry pinned to the sidebar footer, rendered apart from the scrolling
- * groups. Logout carries `action: "sign-out"`; its `path` is only where the sign-out lands,
- * so an ordinary entry may point at `Routes.HOME` without revoking anything.
+ * groups. Logout carries `action: "sign-out"`, which is the only thing that triggers it — so an
+ * ordinary entry may point at `Routes.HOME` without revoking anything. Its own `path` is inert on
+ * that branch: the handler hard-codes the destination, and a test pins the two to agree.
  *
  * "My profile" repeats the parent's own path on purpose: an expanded desktop sidebar
  * only toggles the sub-item list when the parent is clicked, so the account landing

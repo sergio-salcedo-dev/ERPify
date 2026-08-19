@@ -119,7 +119,13 @@ async function openAccountMenu(): Promise<HTMLElement> {
  */
 function openSidebarAccountGroup(): HTMLElement {
   const sidebar = screen.getByRole("complementary");
-  fireEvent.click(within(sidebar).getByTitle(accountMenuItem.name));
+  // Idempotent, because the parent button TOGGLES. Unlike the two menus this group does not
+  // close when a leaf is activated, so a caller reopening every surface after a click would
+  // close this one instead.
+  const leaf = ACCOUNT_LOGOUT.testId;
+  if (leaf === undefined || within(sidebar).queryByTestId(leaf) === null) {
+    fireEvent.click(within(sidebar).getByTitle(accountMenuItem.name));
+  }
   return sidebar;
 }
 
@@ -223,15 +229,19 @@ describe("BackOfficeLayoutClient", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("says it is leaving, on the surface that stays on screen while it does", async () => {
+  it.each(SIGN_OUT_SURFACES)("says it is leaving, on %s", async (_label, open, addressOf) => {
+    // Once per surface, because the derivation is shared but the rendering is hand-copied into
+    // three JSX sites: deleting the attribute from any one of them left the whole suite green.
+    // The menus close on activation, so the surface is reopened before asserting.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       logout.mockImplementationOnce(() => new Promise<void>(() => {}));
       renderLayout();
-      openSidebarAccountGroup();
+      await open();
 
-      const address = required(ACCOUNT_LOGOUT.testId, "a test id for the sign-out entry");
+      const address = addressOf(ACCOUNT_LOGOUT);
       fireEvent.click(screen.getByTestId(address));
+      await open();
 
       // aria-disabled, never `disabled`: the click has to keep reaching the handler so the
       // in-flight guard stays the single point that drops it, and stays falsifiable.
@@ -239,6 +249,49 @@ describe("BackOfficeLayoutClient", () => {
         expect(screen.getByTestId(address)).toHaveAttribute("aria-disabled", "true"),
       );
       expect(screen.getByTestId(address)).toHaveTextContent(LEAVING_LABEL);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("announces that it is leaving on the paths where the menu closes over the entry", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      logout.mockImplementationOnce(() => new Promise<void>(() => {}));
+      renderLayout();
+      await openAccountMenu();
+
+      const status = screen.getByTestId("bo-layout__leaving-status");
+      expect(status).toHaveTextContent("");
+
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+
+      // The dropdown closes on activation, so the entry that carries the relabel is gone. Without
+      // this region the window is silent on the most ordinary desktop path, while every other
+      // navigation is being dropped.
+      await waitFor(() => expect(status).toHaveTextContent(LEAVING_LABEL));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the very button it relabels, rather than replacing it", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      logout.mockImplementationOnce(() => new Promise<void>(() => {}));
+      renderLayout();
+      openSidebarAccountGroup();
+
+      const address = required(ACCOUNT_LOGOUT.testId, "a test id for the sign-out entry");
+      const before = screen.getByTestId(address);
+      fireEvent.click(before);
+      await waitFor(() => expect(screen.getByTestId(address)).toHaveTextContent(LEAVING_LABEL));
+
+      // Same DOM node, not merely the same test id. A React key derived from the label would
+      // change with it, so the button the user just activated would be destroyed and rebuilt —
+      // focus falls to <body>, and the new state lands on a node no assistive technology is
+      // watching. A testid-addressed assertion cannot see that; identity can.
+      expect(screen.getByTestId(address)).toBe(before);
     } finally {
       vi.useRealTimers();
     }

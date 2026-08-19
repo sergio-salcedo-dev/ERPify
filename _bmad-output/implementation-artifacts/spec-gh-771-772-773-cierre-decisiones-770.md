@@ -3,7 +3,7 @@ title: 'Cierre de las decisiones que dejó abiertas la PR #770 — #771, #773, d
 type: 'chore'
 created: '2026-08-19'
 baseline_commit: 'f438fe15a24371c9f251d424c89284366288112d'
-status: 'in-progress'
+status: 'in-review'
 review_loop_iteration: 1
 context: []
 ---
@@ -66,7 +66,7 @@ context: []
 - [x] `pwa/src/app/backoffice/BackOfficeLayoutClient.tsx` — los tres sitios de la igualdad ramifican por `action`; las cinco llamadas reenvían la intención; la afordancia llega a las tres superficies.
 - [x] `pwa/tests/app/backoffice/backOfficeLayoutClient.test.tsx` — migrar `:70` y `:72` a `action`; guardián sobre **todo** el modelo (`backofficeMenuGroups` + `accountMenuItem`); `it.each` de sign-out sobre los tres testids afirmando `logout` una vez y `replace` con `Routes.HOME`; reapuntar el test del doble sign-out a una superficie que la afordancia no deshabilita; y dar aserciones reales a la rama `isSignOut` del test móvil.
 - [x] GitHub #772 — enriquecerlo con las siete mediciones nuevas (binding condicional que apagaría G4 en producción, ciclo `Container`↔`FetchHttpClient`, punto de publicación frente al `try`, replay, alcance real de `RequireAuth`, `MockHttpClient` bajo Vitest, y que el evento debe ir **sin payload**). Queda abierto.
-- [ ] **Correr la pasada adversarial sobre el código** y escribir sus hallazgos en la sección *Adversarial pass* de este artefacto, **antes** de `gh pr create`.
+- [x] **Correr la pasada adversarial sobre el código** y escribir sus hallazgos en la sección *Adversarial pass* de este artefacto, **antes** de `gh pr create`.
 - [ ] Cuerpo de la PR — revisión de seguridad por clase; `Closes #771`, `#773` y `#785`; y dónde quedó registrada la pasada. #784, #786 y #787 quedan **abiertos**: los dos primeros son trabajo propio y el tercero es un límite registrado que no se cierra.
 
 **Acceptance Criteria:**
@@ -86,7 +86,20 @@ context: []
 
 Issues abiertos por esta PR: **#783** (mecanismo del gate), **#784** (cota de transporte), **#785** (afordancia, que esta PR cierra), **#786** (latch residual), **#787** (punto ciego del alias). #772 enriquecido con siete mediciones y **abierto**.
 
-Pendiente sobre el código. La pasada sobre **este spec** (tres capas de contexto fresco y sólo-lectura: Blind Hunter, Edge Case Hunter, Acceptance Auditor) está registrada en el *Spec Change Log*, iteración 1.
+Corrida sobre el código antes de `gh pr create`, dos capas en paralelo con contexto fresco y sólo-lectura (`bmad-review-adversarial-general` y `bmad-review-edge-case-hunter`), sobre `git diff f438fe15..HEAD`. Ninguna falló; ~23 hallazgos distintos. **No confirmó el cambio: lo cambió.**
+
+**Las dos que derriban una afirmación mía, ambas verificadas a mano después:**
+
+1. **El selector de asignación se volvió un producto cruzado.** Al factorizarlo en dos `:matches()` independientes, `href` pasó a emparejarse con *cualquier* receptor de la enumeración: `parent.href = u`, `top.href`, `self.href` y `document.href` reportaban **1** donde `main` reportaba **0**. Son asignaciones de dominio ordinarias, y su `eslint-disable` es rule-wide — apagaría también `maxLength` y el contrato de test-id en esa línea, que es literalmente el coste que el comentario nuevo cita para apagar la regla de Next. Mi corpus no lo vio porque sólo probé `anchor.href`. Reescrito como ocho alternativas explícitas con `href` acoplado a un objeto `location`; reintroducir el producto cruzado enrojece los tres negativos nuevos.
+2. **El test de contención era circular.** `seenByUpstream = POSITIVES.filter(...)` toma su universo de la lista que dos tests antes se afirma que los selectores marcan, así que una forma que la regla de Next reporte y los selectores no **jamás podía entrar en él**. La afirmación principal de G2 descansaba en un test estructuralmente incapaz de encontrar un hueco. Reescrito sobre una rejilla generada (7 receptores × 5 deletreos + asignaciones de `location`), independiente de `POSITIVES`: al retirar la rama computada, ahora **nombra los 8 huecos** en vez de pasar.
+
+**Parches aplicados (10):** los dos de arriba; el `key` de React derivado del rótulo, que destruía el botón recién pulsado y tiraba el foco a `<body>` (fijado con una aserción de identidad de nodo); `aria-disabled="false"` emitido en los hermanos; `accountLinks` filtrando por `action === undefined` en vez de `!== "sign-out"`, que ocultaría cualquier acción futura; dos comentarios que afirmaban que `path` decide dónde aterriza el sign-out cuando el código lo tiene hard-codeado; la afordancia sin aserción en dos de las tres superficies (borrarla de cualquiera dejaba la suite verde — ahora `it.each` por superficie, cada una falsificada); una región `role="status"` porque en las dos superficies cuyo menú se cierra la entrada se desmonta antes de poder decir nada, mientras la guarda descarta en silencio toda otra navegación; el comentario de `globals`, que llamaba «entorno» a seis nombres; y dos puntos ciegos medidos que la documentación no nombraba (clave computada por template literal, y cadenas de receptor de más de un nivel — `window.top.location.assign(u)` escapa mientras `top.location.assign(u)` sí dispara).
+
+**Coste conocido, ahora explícito:** `parent.location.replace(…)` es un falso positivo **preexistente** (1 en `main` y en HEAD) porque `parent`/`top`/`self`/`document` son receptores cross-frame reales *y* nombres de variable ordinarios; la rama computada lo extiende a `parent["location"]`. Fijado como test que **pasa**, para que estrechar la enumeración más adelante sea una decisión y no un descuido — estrecharla silenciaría `top.location.assign(u)`, que es navegación real.
+
+**Rechazados (2), midiendo:** «la cota de 3 s mata el revoke» — es exactamente la afirmación que #770 refutó con un sondeo en cuatro configuraciones donde el POST llegó y el servidor completó en las cuatro; la capa la razonó desde el precondicionante («no hay `keepalive`»), sin evidencia de revokes que no lleguen, que es el disparador declarado para reabrirla. Y «`logout()` puede rechazar y producir una unhandled rejection» — `AuthProvider` captura y tiene `finally`; #770 ya lo descartó y añadir un `.catch` vacío sería código defensivo para un caso imposible.
+
+**Diferidos (3), preexistentes:** la barra lateral compacta no renderiza sub-ítems, así que no tiene hoja de sign-out (sin cambio en este diff); el `catch` de recuperación sólo significa algo en el camino de presupuesto agotado (comentario estrechado, comportamiento intacto); y el cajón móvil se cierra antes de la guarda, así que durante la ventana traga el clic — mitigado por la región de estado. La pasada sobre **este spec** (tres capas de contexto fresco y sólo-lectura: Blind Hunter, Edge Case Hunter, Acceptance Auditor) está registrada en el *Spec Change Log*, iteración 1.
 
 ## Spec Change Log
 

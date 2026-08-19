@@ -79,6 +79,17 @@ const DOMAIN_NEGATIVES: ReadonlyArray<readonly [string, string]> = [
     "a domain field reached by computed access",
     'const s = { location: { assign: (_: string) => {} } }; s["location"].assign("/x");',
   ],
+  // A receiver merely *named* like a browser global is ordinary code — `parent` and `top` are
+  // tree-node vocabulary in an ERP and `href` is an ordinary nav-entry field. Keeping `href`
+  // coupled to a `location` object is what separates them; factoring the property check away
+  // from the object check pairs every `href` with every global name.
+  ["an href field on a receiver named parent", 'const parent = { href: "" }; parent.href = "/x";'],
+  ["an href field on a receiver named top", 'const top = { href: "" }; top.href = "/x";'],
+  [
+    "an href field on a receiver named document",
+    'const document = { href: "" }; document.href = "/x";',
+  ],
+  ["a plain anchor href", 'const anchor = { href: "" }; anchor.href = "/x";'],
 ];
 
 describe("the hard-navigation gate", () => {
@@ -90,24 +101,76 @@ describe("the hard-navigation gate", () => {
     expect(navigationErrorsIn(code)).toBe(0);
   });
 
+  it("accepts a known cost: a local named like a global is swept in", () => {
+    // `parent`, `top`, `self` and `document` are enumerated because they are real cross-frame
+    // navigation receivers — and they are also ordinary local-variable names. So a domain object
+    // called one of them is a false positive, and this is the price of the enumeration rather
+    // than an oversight. Recorded as a passing test so narrowing the set later is a decision:
+    // dropping them would silence `top.location.assign(u)`, which is a genuine navigation.
+    expect(
+      navigationErrorsIn('const parent = { location: "a b" }; parent.location.replace(/ /g, "-");'),
+    ).toBe(1);
+    expect(
+      navigationErrorsIn(
+        'const self = { location: { assign: (_: string) => {} } }; self["location"].assign("x");',
+      ),
+    ).toBe(1);
+    // A receiver outside the set is what the enumeration actually buys.
+    expect(
+      navigationErrorsIn(
+        'const site = { location: { assign: (_: string) => {} } }; site["location"].assign("x");',
+      ),
+    ).toBe(0);
+  });
+
   it("does not claim the blind spots it cannot see", () => {
     // Recorded as tests so the limits are as legible as the coverage, and so a future widening
     // shows up here as a decision rather than as a silent behaviour change.
     expect(navigationErrorsIn('const l = globalThis.location; l.assign("/x");')).toBe(0);
     expect(navigationErrorsIn("globalThis.location.reload();")).toBe(0);
     expect(navigationErrorsIn('window.open("/x", "_self");')).toBe(0);
+    // A template-literal key is one backtick away from the computed shape the selectors do match:
+    // `property.value` exists on a Literal, not on a TemplateLiteral.
+    expect(navigationErrorsIn('globalThis[`location`].assign("/x");')).toBe(0);
+    // And the receiver arms reach one level, so the canonical cross-frame spelling escapes while
+    // its bare form (`top.location.assign(u)`) is flagged — an asymmetry worth stating.
+    expect(navigationErrorsIn('window.top.location.assign("/x");')).toBe(0);
+    expect(navigationErrorsIn('iframe.contentWindow.location.replace("/x");')).toBe(0);
   });
 
   it("reports everything the upstream rule would, so switching it off costs no coverage", () => {
-    const seenByUpstream = POSITIVES.filter(([, code]) => upstreamErrorsIn(code) > 0);
+    // The corpus is generated, deliberately NOT drawn from POSITIVES. Filtering POSITIVES by
+    // "the upstream rule sees it" would make the loop circular: every entry there is asserted
+    // `toBe(1)` against the selectors two tests above, so a shape the upstream rule reports and
+    // the selectors miss could never enter the universe being checked. A gap has to be able to
+    // appear before an assertion about gaps means anything.
+    const receivers = ["window", "globalThis", "self", "document", "top", "parent", ""];
+    const corpus: string[] = [];
+    for (const receiver of receivers) {
+      for (const loc of receiver === ""
+        ? ["location"]
+        : [`${receiver}.location`, `${receiver}["location"]`]) {
+        corpus.push(
+          `${loc}.assign("/x");`,
+          `${loc}["assign"]("/x");`,
+          `${loc}.replace("/x");`,
+          `${loc}.href = "/x";`,
+          `${loc}["href"] = "/x";`,
+        );
+      }
+      if (receiver !== "") {
+        corpus.push(`${receiver}.location = "/x";`, `${receiver}["location"] = "/x";`);
+      }
+    }
 
-    // Without this the containment is vacuous: a rule that catches nothing is trivially
-    // contained, which is exactly the state the shipped config's `off` puts it in.
+    const seenByUpstream = corpus.filter((code) => upstreamErrorsIn(code) > 0);
+
+    // Guards the other way: a rule reporting nothing is trivially contained, which is exactly
+    // what the shipped config's `off` makes it.
     expect(seenByUpstream.length).toBeGreaterThan(0);
 
-    for (const [label, code] of seenByUpstream) {
-      expect(navigationErrorsIn(code), label).toBeGreaterThan(0);
-    }
+    const gaps = seenByUpstream.filter((code) => navigationErrorsIn(code) === 0);
+    expect(gaps).toEqual([]);
   });
 
   it("reports shapes the upstream rule structurally cannot", () => {

@@ -34,8 +34,11 @@ const eslintConfig = [
       // package.json nor package-lock.json — `npm ci`, what make/pwa.mk and CI run, leaves
       // `import globals from "globals"` at ERR_MODULE_NOT_FOUND. Nothing in this config reads
       // them today: `no-undef` is not enabled, and the one rule that resolved identifiers
-      // against the global scope is turned off below. They are here so the config states the
-      // environment its files actually run in, for whatever rule next needs that resolution.
+      // against the global scope is turned off below. The set is exactly the six receivers the
+      // hard-navigation selectors enumerate, so what this config calls a global agrees with what
+      // those selectors treat as one. It is NOT a full browser environment
+      // (`fetch`, `localStorage`, `setTimeout` and the rest are absent) — enabling `no-undef` or
+      // adding a rule that resolves identifiers globally needs this list widened first.
       globals: {
         window: "readonly",
         document: "readonly",
@@ -98,7 +101,7 @@ const eslintConfig = [
         },
         {
           selector:
-            "AssignmentExpression:matches([left.property.name='href'], [left.computed=true][left.property.value='href'], [left.property.name='location'], [left.computed=true][left.property.value='location']):matches([left.object.name='location'], [left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.property.name='location'], [left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.computed=true][left.object.property.value='location'], [left.object.name=/^(window|globalThis|self|document|top|parent)$/])",
+            "AssignmentExpression:matches([left.property.name='href'][left.object.name='location'], [left.property.name='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.property.name='location'], [left.property.name='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.computed=true][left.object.property.value='location'], [left.computed=true][left.property.value='href'][left.object.name='location'], [left.computed=true][left.property.value='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.property.name='location'], [left.computed=true][left.property.value='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.computed=true][left.object.property.value='location'], [left.property.name='location'][left.object.name=/^(window|globalThis|self|document|top|parent)$/], [left.computed=true][left.property.value='location'][left.object.name=/^(window|globalThis|self|document|top|parent)$/])",
           message:
             "Assigning location.href — or the whole location object — is a full-document navigation wearing a property assignment. Same rule as location.assign/replace: use router.push()/replace(), or disable this rule on the line with the reason.",
         },

@@ -89,9 +89,11 @@ export default function BackOfficeLayoutClient({
       // reopened, which is exactly the window REVOKE_BUDGET_MS bounds.
       if (isLeaving) return;
       setIsLeaving(true);
-      // Where sign-out lands is `path`; that it signs out is `action`. logout()
-      // revokes the server session (dropping its cookie) then clears client state; wait up
-      // to REVOKE_BUDGET_MS for it so the cookie is normally gone before leaving. Then leave
+      // `action` is what makes this sign out. The destination below is hard-coded to HOME and
+      // this entry's own `path` is never read on this branch — a model test is what keeps the
+      // two from drifting apart. logout() revokes the server session (dropping its cookie) then
+      // clears client state; wait up to REVOKE_BUDGET_MS for it so the cookie is normally gone
+      // before leaving. Then leave
       // the authenticated area with a full-document navigation rather than router.push: an
       // SPA push keeps this guarded subtree mounted, so RequireAuth observes the just-cleared
       // session mid-transition and redirects to /login before the push to HOME commits. A
@@ -106,7 +108,10 @@ export default function BackOfficeLayoutClient({
           // eslint-disable-next-line no-restricted-syntax
           globalThis.location.replace(Routes.HOME);
         } catch {
-          // The document stayed, so sign-out must be attemptable again rather than wedged.
+          // The document stayed, so sign-out must be attemptable again rather than wedged. This
+          // only means anything on the budget-expired path: if logout() won the race the session
+          // is already null, RequireAuth has unmounted this subtree, and there is no menu left to
+          // attempt it from.
           setIsLeaving(false);
         }
       });
@@ -124,11 +129,14 @@ export default function BackOfficeLayoutClient({
   // entries, so the two can never drift. Logout is split out: it is the only entry whose
   // target leaves the back office, and it reads as destructive.
   const accountEntries = accountMenuItem.subItems ?? [];
-  const accountLinks = accountEntries.filter((entry) => entry.action === undefined);
+  const accountLinks = accountEntries.filter((entry) => entry.action !== "sign-out");
   const accountLogout = accountEntries.find((entry) => entry.action === "sign-out");
 
-  // One derivation for all three surfaces that render this entry — sidebar, mobile drawer and
-  // top bar — so the leaving state cannot appear on one and be missing from the others.
+  // One derivation, so the entry cannot read as busy on one surface and idle on another. It is
+  // only *visible* on the expanded sidebar, though: clicking closes the dropdown and the mobile
+  // drawer, so on those paths the entry is unmounted before it could show anything. That is what
+  // the status region below is for — it survives the menu closing, and it is the announcement
+  // `aria-disabled` cannot make once its element is gone.
   const isEntryLeaving = (entry: NavSubItem) => isLeaving && entry.action === "sign-out";
   const entryLabel = (entry: NavSubItem) => (isEntryLeaving(entry) ? "Signing out…" : entry.name);
   const accountItemWithState = {
@@ -152,6 +160,19 @@ export default function BackOfficeLayoutClient({
   return (
     <RequireAuth>
       <TooltipProvider>
+        {/* The only signal that survives the click. Both menus close on activation, so on every
+            path but the expanded sidebar the relabelled entry is unmounted before it can say
+            anything — and meanwhile the in-flight guard silently drops every other navigation for
+            up to REVOKE_BUDGET_MS. A live region is what turns that dead-looking window into a
+            stated one, for a screen reader as much as for a sighted user. */}
+        <output
+          role="status"
+          aria-live="polite"
+          data-testid="bo-layout__leaving-status"
+          className="sr-only"
+        >
+          {isLeaving ? "Signing out…" : ""}
+        </output>
         <div className="bo-layout min-h-screen bg-background flex font-sans">
           <a
             href="#main-content"
