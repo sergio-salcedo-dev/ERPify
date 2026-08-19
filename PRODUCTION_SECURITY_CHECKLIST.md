@@ -956,7 +956,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       running production image, so treat prod as unconfirmed rather than clean. Closing it means a `logging:`
       driver with a retention the erasure path can act on, or keeping the ids out of the document URL — which
       the deep-link design deliberately does not do.
-- [ ] **A recipient's address does not reach a log through a mail SEND failure, and five residuals around
+- [ ] **A recipient's address does not reach a log through a mail failure, and four residuals around
       that boundary are accepted.** `SmtpTransport::assertResponseCode()` quotes the server's reply verbatim,
       and the command whose reply fails on a rejected recipient is `RCPT TO:<address>` — so a refusal names the
       person, and every component that swallows that throwable and logs it, plus `ErrorDetailsStamp` in
@@ -990,6 +990,21 @@ mitigated state. Accepting one means recording who accepted it and against which
       written to a container's stderr via `docker exec`: zero occurrences in `docker logs`); it lands in the
       operator's terminal. It is closed here regardless, because the boundary costs nothing extra to place
       correctly and the sink is a property of how the command happens to be invoked.
+      **Assembly is inside the boundary as well, and that half is closed rather than accepted.** `Mime\Address`
+      refuses a non-compliant value with a message quoting it, and that throw happens while the message is being
+      BUILT — upstream of any transport decorator, where the `*BestEffort` wrapper logs it raw. `RedactingMailer`
+      is the single place a MIME message exists: senders hand it strings and it assembles and sends in one call,
+      so the assembly throw becomes the same composed `MailDeliveryFailed` — class and origin only, with no reply
+      code and no enhanced status, because nothing has spoken to a server (measured: `550-5.1.1` is a value
+      `Address` refuses, and the status pattern reads `5.1.1` straight back out of the refusal, so a scan there
+      would fabricate a diagnosis out of the rejected value). It is structural rather than a habit:
+      `MailAssemblyBoundaryGateTest` pins the set of `api/src` files allowed to name `Symfony\Component\Mime`
+      and `Symfony\Component\Mailer\MailerInterface`, so a second construction site — or a class holding the
+      mailer directly — is an explicit edit rather than a silent reopening. What this replaces was a bound
+      nothing watched: every form `#[Assert\Email(mode: STRICT)]` admits is also admitted by the
+      `MessageIDValidation` that `Address` uses, an undocumented agreement between two vendor validators that no
+      test pinned (pinning it was considered and declined — it would freeze an accidental implementation detail
+      as though it were the contract) and that could not report its own expiry.
       **Residual one — the recipient survives in the console error listener's `command` field.**
       `ErrorListener.php:46` logs `['exception' => …, 'command' => $inputString, 'message' => …]` at `critical`,
       and `$inputString` is the command line: measured, `bin/console mailer:test alice@example.test` yields
@@ -1003,34 +1018,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       `Full command`. That half is **closed, not accepted**: `SentryEventScrubber` now redacts addresses in
       `extra` VALUES, at any depth, the way it already did for `query_string`, `url` and `Referer`. What
       remains is the Monolog line, and closing that means not naming a person on a command line.
-      **Residual two — address construction happens before the boundary.** The senders build their `Email`
-      first, and `Mime\Address` raises `RfcComplianceException` quoting the address it rejects; the
-      `*BestEffort` wrapper catches that and logs it raw. Measured bound: every form
-      `#[Assert\Email(mode: STRICT)]` admits (`NoRFCWarningsValidation`) is also admitted by the
-      `MessageIDValidation` that `Address` uses, so no stored address reaches it today — but that is an
-      undocumented agreement between two different validators, not a guarantee. A transport decorator cannot
-      reach this by position; only wrapping build and send inside the four adapters would, which is **pending
-      rather than declined**.
-      **Residual three — `CreateInvitationCommand` prints the recipient to stdout** on both the success and the
+      **Residual two — `CreateInvitationCommand` prints the recipient to stdout** on both the success and the
       send-failure branch. Its Sentry half is closed with residual one's — the address rode the same
       `Full command` extra — and what remains is stdout, whose sink is the operator's terminal.
-      **Residual four — a vendor exception message is a general carrier of caller data.** A database driver
+      **Residual three — a vendor exception message is a general carrier of caller data.** A database driver
       quoting a violated unique value is the same shape. No rule in this repository covers that class; closing
       it is a survey with no bounded scope, and only the mail surface is closed here.
-      **Residual five — `RoundRobinTransport` logs a raw throwable**, but only if something constructs it with
+      **Residual four — `RoundRobinTransport` logs a raw throwable**, but only if something constructs it with
       a logger. Measured: `Transport.php:154,157` build it as `new $class($args[, $period])` and never pass one,
       so Symfony's own wiring leaves it on the `NullLogger` default — a `failover://a||b` DSN does **not** arm
       that line. Reachable only by constructing the transport by hand.
-      **Accepted 2026-08-18 (Sergio):** there is no production deployment and no customer. Residuals one, three
-      and five stand on the arguments measured above — an operator-invoked **terminal** for the first two, once
+      **Accepted 2026-08-18 (Sergio):** there is no production deployment and no customer. Residuals one, two
+      and four stand on the arguments measured above — an operator-invoked **terminal** for the first two, once
       the tracker half of that sink was measured and **closed rather than accepted**, and Symfony's own wiring
-      never arming the third. Residual four is deferred knowingly rather than dismissed: the carrier is real and a
+      never arming the last. Residual three is deferred knowingly rather than dismissed: the carrier is real and a
       database driver quoting a violated unique value has the same shape; what is declined is the survey that
-      would bound the class, not the risk. **Residual two is accepted against #764 and nothing else.** Its
-      measured bound is an agreement between two vendor validators that no test watches — pinning it was
-      considered and declined, because a test would freeze an accidental implementation detail as though it were
-      the contract — so it is not a guarantee and cannot report its own expiry; the acceptance ends when #764
-      closes.
+      would bound the class, not the risk.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

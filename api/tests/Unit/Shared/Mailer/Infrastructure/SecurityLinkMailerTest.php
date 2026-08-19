@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Shared\Mailer\Infrastructure;
 
 use Erpify\Shared\Mailer\Infrastructure\BulletproofEmailChrome;
 use Erpify\Shared\Mailer\Infrastructure\DeliverableSecurityTransport;
+use Erpify\Shared\Mailer\Infrastructure\RedactingMailer;
 use Erpify\Shared\Mailer\Infrastructure\SecurityLinkEmailContent;
 use Erpify\Shared\Mailer\Infrastructure\SecurityLinkMailer;
 use Erpify\Shared\Mailer\Infrastructure\SecurityMailerMisconfigured;
@@ -120,7 +121,7 @@ final class SecurityLinkMailerTest extends TestCase
         string $environment = 'dev',
     ): SecurityLinkMailer {
         return new SecurityLinkMailer(
-            $mailer,
+            new RedactingMailer($mailer),
             new SecuritySenderAddress($from, $environment),
             $baseUrl,
             new BulletproofEmailChrome(),

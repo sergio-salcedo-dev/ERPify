@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Mailer\Infrastructure;
 
 use Erpify\Shared\Mailer\Infrastructure\PlainTextNotificationMailer;
+use Erpify\Shared\Mailer\Infrastructure\RedactingMailer;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -17,7 +18,7 @@ final class PlainTextNotificationMailerTest extends TestCase
     public function testRendersScalarBooleanAndNullFieldsWithoutDroppingThem(): void
     {
         $mailer = new CapturingMailer();
-        (new PlainTextNotificationMailer($mailer, 'noreply@erpify.test'))->send(
+        (new PlainTextNotificationMailer(new RedactingMailer($mailer), 'noreply@erpify.test'))->send(
             'ops@erpify.test',
             'Subject',
             ['name' => 'Acme', 'count' => 0, 'active' => false, 'archived' => true, 'parent' => null],
@@ -37,7 +38,7 @@ final class PlainTextNotificationMailerTest extends TestCase
     {
         $mailer = new CapturingMailer();
         // Invalid UTF-8 inside a non-scalar value makes json_encode() return false.
-        (new PlainTextNotificationMailer($mailer, 'noreply@erpify.test'))->send(
+        (new PlainTextNotificationMailer(new RedactingMailer($mailer), 'noreply@erpify.test'))->send(
             'ops@erpify.test',
             'Subject',
             ['payload' => ['bad' => "\xB1\x31"]],
@@ -49,7 +50,7 @@ final class PlainTextNotificationMailerTest extends TestCase
     public function testEncodesArrayFieldsAsJson(): void
     {
         $mailer = new CapturingMailer();
-        (new PlainTextNotificationMailer($mailer, 'noreply@erpify.test'))->send(
+        (new PlainTextNotificationMailer(new RedactingMailer($mailer), 'noreply@erpify.test'))->send(
             'ops@erpify.test',
             'Subject',
             ['meta' => ['k' => 'v']],

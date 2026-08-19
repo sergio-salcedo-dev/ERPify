@@ -11,7 +11,11 @@ use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Throwable;
 
 /**
- * The application's own account of a failed send, raised in place of the transport's.
+ * The application's own account of a mail that did not go out, raised in place of the vendor's.
+ *
+ * One type for both ways that happens — the transport refused it, or it could not be assembled — because the
+ * only decision any caller makes on it is whether the mail was sent, and both answer no. The two are told
+ * apart by the composed text and by the origin it carries, not by a class a `catch` would have to enumerate.
  *
  * **Why the original never travels.** `SmtpTransport::assertResponseCode()` embeds the server's reply verbatim,
  * and the command whose reply fails on a rejected recipient is `RCPT TO:<address>` — so a refusal such as
@@ -94,6 +98,31 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
             \basename($throwable->getFile()),
             $throwable->getLine(),
         )), (int) $throwable->getCode());
+    }
+
+    /**
+     * The other way a mail fails before it is on the wire, raised by {@see RedactingMailer} while the message
+     * is being assembled. `Mime\Address` refuses a non-compliant value with a message embedding it verbatim,
+     * so the vendor text is dropped for exactly the reason the transport's is.
+     *
+     * **Neither a reply code nor an enhanced status is reported, because neither exists** — nothing has spoken
+     * to a server yet. Scanning this message for one would be worse than useless: the only variable part of it
+     * is the rejected value, which is arbitrary text. Measured, `550-5.1.1` is a value `Address` refuses and
+     * {@see self::ENHANCED_STATUS} reads `5.1.1` straight back out of the refusal. A field that can only be
+     * right by accident is not a diagnosis.
+     *
+     * What identifies the failure is the class and the origin, and here the origin is load-bearing rather than
+     * a tie-breaker: the whole assembly is one expression setting an envelope and two bodies, so `Address.php`
+     * rather than some other vendor file is what says an address was refused at all.
+     */
+    public static function whileAssembling(Throwable $throwable): self
+    {
+        return new self(EmailAddressRedaction::apply(\sprintf(
+            'Mail assembly failed (%s) at %s:%d.',
+            $throwable::class,
+            \basename($throwable->getFile()),
+            $throwable->getLine(),
+        )));
     }
 
     /**

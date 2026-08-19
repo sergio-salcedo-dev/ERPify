@@ -7,12 +7,11 @@ namespace Erpify\Iam\Identity\Infrastructure\Mail;
 use Erpify\Iam\Identity\Application\PasswordChangedEmailSender;
 use Erpify\Shared\Mailer\Infrastructure\BulletproofEmailChrome;
 use Erpify\Shared\Mailer\Infrastructure\DeliverableSecurityTransport;
+use Erpify\Shared\Mailer\Infrastructure\RedactingMailer;
 use Erpify\Shared\Mailer\Infrastructure\SecuritySenderAddress;
 use Override;
 use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
-use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\Mime\Email;
 
 /**
  * {@see PasswordChangedEmailSender} rendered through the shared {@see BulletproofEmailChrome}. Deliberately
@@ -36,7 +35,7 @@ final readonly class SymfonyPasswordChangedEmailSender implements PasswordChange
     private const string SUBJECT = 'Your ERPify password has changed';
 
     public function __construct(
-        private MailerInterface $mailer,
+        private RedactingMailer $mailer,
         private SecuritySenderAddress $securityFrom,
         private BulletproofEmailChrome $chrome,
         private DeliverableSecurityTransport $transport,
@@ -50,15 +49,13 @@ final readonly class SymfonyPasswordChangedEmailSender implements PasswordChange
 
         $from = $this->securityFrom->toString();
 
-        $email = (new Email())
-            ->from($from)
-            ->to($recipientEmail)
-            ->subject(self::SUBJECT)
-            ->text($this->textBody($from))
-            ->html($this->htmlBody($from))
-        ;
-
-        $this->mailer->send($email);
+        $this->mailer->send(
+            from: $from,
+            recipientEmail: $recipientEmail,
+            subject: self::SUBJECT,
+            text: $this->textBody($from),
+            html: $this->htmlBody($from),
+        );
     }
 
     private function textBody(string $from): string

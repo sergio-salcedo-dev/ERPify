@@ -6,8 +6,6 @@ namespace Erpify\Shared\Mailer\Infrastructure;
 
 use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\Mime\Email;
 
 /**
  * Renders and sends a "single bulletproof link" security email — a plain-text fallback plus a dark-mode-aware
@@ -30,7 +28,7 @@ final readonly class SecurityLinkMailer
     private const array LOCAL_ENVIRONMENTS = ['dev', 'test'];
 
     public function __construct(
-        private MailerInterface $mailer,
+        private RedactingMailer $mailer,
         private SecuritySenderAddress $securityFrom,
         #[Autowire(env: 'DEFAULT_URI')]
         private string $appBaseUrl,
@@ -61,15 +59,13 @@ final readonly class SecurityLinkMailer
 
         $link = \rtrim($this->appBaseUrl, '/') . $content->path . '?token=' . \rawurlencode($token);
 
-        $email = (new Email())
-            ->from($this->securityFrom->toString())
-            ->to($recipientEmail)
-            ->subject($content->subject)
-            ->text($this->textBody($content, $link))
-            ->html($this->htmlBody($content, $link))
-        ;
-
-        $this->mailer->send($email);
+        $this->mailer->send(
+            from: $this->securityFrom->toString(),
+            recipientEmail: $recipientEmail,
+            subject: $content->subject,
+            text: $this->textBody($content, $link),
+            html: $this->htmlBody($content, $link),
+        );
     }
 
     private function textBody(SecurityLinkEmailContent $content, string $link): string
