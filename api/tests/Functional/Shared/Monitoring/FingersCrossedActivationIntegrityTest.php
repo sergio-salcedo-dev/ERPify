@@ -26,9 +26,9 @@ use Throwable;
  * then activates on a request the configuration excludes by name and flushes its whole buffer of preceding
  * records to `php://stderr`: the sink with no rotation, no TTL and no owner of erasure.
  *
- * **Both halves are read from the container**, because a test that names its own processors proves nothing
- * about the application's, and a test that builds its own activation strategy from a literal stays green while
- * the configured exclusion is deleted.
+ * **The processors AND the activation strategy are read from the container**, because a test that names its
+ * own processors proves nothing about the application's, and one that builds its own activation strategy from
+ * a literal stays green while the configured exclusion is deleted.
  *
  * **The channel sweep reads public AND private ids.** `TestContainer::getServiceIds()` answers with the public
  * container alone, and MonologBundle makes public only the channels named under `monolog.channels` — five of
@@ -38,15 +38,39 @@ use Throwable;
  * private-services locator, and the presence of those two channels is asserted rather than assumed.
  *
  * What a green proves: no processor enrolled on any channel logger destroys the throwable or its status; every
- * configured excluded code stays out of the sink; and a code that is NOT excluded still reaches it, so that
- * emptiness is a working exclusion rather than an apparatus that never fires.
+ * configured excluded code stays out of the sink; a code that is NOT excluded still reaches it, so that
+ * emptiness is a working exclusion rather than an apparatus that never fires; and, with no request in the
+ * stack, an excluded code reaches the sink too — the exclusion is consulted only while `getMainRequest()`
+ * answers. **That last one pins a hole, not a protection**, and it is pinned rather than described because it
+ * is what makes the request path named by the two measurements above load-bearing instead of incidental.
+ *
+ * The hole has no producer here: nothing in `api/src` raises a 404 or 405 `HttpExceptionInterface` at all — a
+ * "404" in this codebase is the `NotFound` marker interface, and the status is applied by
+ * `ProblemDetailsFactory` — and what the worker logs is whatever the bus threw, a `HandlerFailedException` on
+ * the ordinary path, never an `HttpExceptionInterface`.
+ *
+ * The on-request population is likewise narrower than the surface a reader assumes, and it is not `/api/*`:
+ * `ExceptionResponder` is subscribed to `kernel.exception` at priority 16 and calls `setResponse()`, which
+ * `ExceptionEvent` inherits from `RequestEvent` and which stops propagation, so HttpKernel's
+ * `ErrorListener::logKernelException` — subscribed to the same event at priority 0 — never runs there. The
+ * exception surface then writes only the responder's own line, which carries `exception_class` /
+ * `exception_message` but no `exception` key at all, so nothing there can match an exclusion whatever its
+ * level (`warning` for a status-mapped 4xx anyway, below `action_level: error`).
+ *
+ * **That is not the same as saying nothing else logs a throwable during an `/api/*` request** — a dozen sites
+ * in `api/src` pass `['exception' => …]`, and the `*BestEffort` collaborators do it on the `app` channel at
+ * `error`, which activates the deployed handler. What makes the exclusion inert here is narrower and exact:
+ * `logKernelException` is the only producer of an `HttpExceptionInterface` under that key, and it does not
+ * run on this surface. What `excluded_http_codes` actually holds is therefore the routing 404/405 raised
+ * OUTSIDE `/api/` — scanner traffic Caddy hands to PHP, where `RouterListener` throws a real
+ * `NotFoundHttpException` and `ErrorListener` does log — and that path carries a main request by
+ * construction.
  *
  * What it does not prove: anything the DECLARATION half asserts — that every environment declares the same
  * non-empty exclusion, and that no processor is enrolled on the gate handler where no sweep here could see it
  * — which is `MonologExclusionDeclarationGateTest`, kernel-free because only the `test` declaration is
  * reachable from a booted one. Nor anything about a processor pushed onto a logger at runtime rather than
- * wired, nor about the path taken when no request is in the stack: off-request the strategy returns its inner
- * result and the exclusion is never consulted, which is a property of the deployed dependency.
+ * wired.
  *
  * @internal
  */
@@ -64,7 +88,9 @@ final class FingersCrossedActivationIntegrityTest extends KernelTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Booted once: `bootKernel()` shuts the previous kernel down, and the gate holds its container.
+        // Booted here and nowhere else. `bootKernel()` shuts the previous kernel down, so a second boot inside
+        // `gate()` would hand this test a container while the loggers it had already swept belonged to a dead
+        // one.
         self::bootKernel();
     }
 
@@ -119,7 +145,7 @@ final class FingersCrossedActivationIntegrityTest extends KernelTestCase
         $this->assertNotEmpty($codes, 'the deployed strategy excludes nothing, so every 404 flushes the buffer');
 
         foreach ($codes as $code) {
-            $sink = $this->gate()->flushRecordsFor($this->aRecordCarrying($code), $this->processorsOfTheAppChannel());
+            $sink = $this->gate()->flushOnRequest($this->aRecordCarrying($code), $this->processorsOfTheAppChannel());
 
             $this->assertSame(
                 [],
@@ -143,7 +169,10 @@ final class FingersCrossedActivationIntegrityTest extends KernelTestCase
             'the control status is itself excluded, so it cannot tell a working exclusion from an inert handler',
         );
 
-        $sink = $this->gate()->flushRecordsFor(
+        // On-request, and named here rather than arranged elsewhere: off-request every status reaches the
+        // sink, so a control measured there would be green for a reason that has nothing to do with the
+        // exclusion it is controlling for.
+        $sink = $this->gate()->flushOnRequest(
             $this->aRecordCarrying(self::UNEXCLUDED_STATUS),
             $this->processorsOfTheAppChannel(),
         );
@@ -155,10 +184,39 @@ final class FingersCrossedActivationIntegrityTest extends KernelTestCase
         );
     }
 
+    /**
+     * The scope note above says the exclusion is never consulted off-request. Pinned rather than left as prose:
+     * this is the other half of the measurement two tests up — same excluded code, same handler, opposite
+     * request path, opposite outcome — which is what makes naming that path a measurement rather than a
+     * ceremony. It records a hole in the deployed dependency, one with no producer here, and it is what would
+     * notice a release closing that hole, which would make this file's scope statement, and the paragraph
+     * `api/CLAUDE.md` repeats from it, quietly false.
+     */
+    #[Test]
+    public function offRequestTheExclusionIsNotConsultedAndAnExcludedCodeReachesTheSink(): void
+    {
+        $codes = $this->gate()->unconditionallyExcludedCodes();
+        $this->assertNotEmpty($codes, 'the deployed strategy excludes nothing, so this measures no exclusion');
+
+        $sink = $this->gate()->flushOffRequest(
+            $this->aRecordCarrying($codes[0]),
+            $this->processorsOfTheAppChannel(),
+        );
+
+        $this->assertNotSame(
+            [],
+            $sink->getRecords(),
+            \sprintf(
+                'a %d stayed out of the sink with no request in the stack, so the deployed strategy no longer '
+                . 'needs one and this file\'s scope statement is now wrong — most likely a dependency upgrade '
+                . 'closing the hole, which is an improvement to record rather than a regression to revert',
+                $codes[0],
+            ),
+        );
+    }
+
     protected function tearDown(): void
     {
-        // The stack is the container's, shared with whatever runs next in this kernel.
-        $this->gate?->releaseRequests();
         $this->gate = null;
         parent::tearDown();
     }
@@ -166,7 +224,6 @@ final class FingersCrossedActivationIntegrityTest extends KernelTestCase
     private function gate(): DeployedFingersCrossedGate
     {
         if (!$this->gate instanceof DeployedFingersCrossedGate) {
-            self::bootKernel();
             $this->gate = new DeployedFingersCrossedGate(self::getContainer());
         }
 
