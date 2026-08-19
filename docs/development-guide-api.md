@@ -38,7 +38,7 @@ A fresh install has no login until an organization and its first admin exist. Ru
 
 ```bash
 make sf c='organization:provision <name>'                        # the installation's single organization (rejects a second run)
-make sf c='organization:administrator:create <email> [password]' # identity + ADMIN membership (hidden prompt if password omitted)
+make sf c='organization:administrator:create <email> [password]' # ADMIN identity + organization membership (hidden prompt if password omitted)
 ```
 
 Prefer omitting the password so it is read from a hidden prompt — passing it as an argument leaves it visible in the process list.

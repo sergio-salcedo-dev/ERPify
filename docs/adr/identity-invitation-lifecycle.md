@@ -22,11 +22,15 @@ The domain is born knowing tenancy: every aggregate carries an `organizationId` 
 
 *Discarded:* strictly single-tenant with no organization concept — the later single→multi migration is the exact pain this avoids. *Discarded:* full multi-tenant operation now — out of scope; self-signup is a deferred extension point, and modelling readiness ≠ operating tenancy.
 
+> **Superseded in part** — 2026-08-19, [#549](https://github.com/sergio-salcedo-dev/ERPify/issues/549): `Membership(userId, organizationId)` carries no roles; `identity_user.roles` is the single role authority, so nothing can disagree with it across the context boundary no constraint spans. The org-scoping seam is untouched — every aggregate still carries an `organizationId` and a user still has exactly one membership. Genuinely org-scoped authority (D2 of [`authorization-model-boundaries.md`](./authorization-model-boundaries.md)) reopens the question deliberately, and needs a column `membership` does not have.
+
 ### D3 — Two parallel state machines force `User` to be born `INVITED`
 
 The identity machine (`INVITED → ACTIVE ↔ SUSPENDED ↔ DEACTIVATED`, plus the terminal `INVITED → REVOKED`; no `PENDING`) and the invitation machine (`CREATED → SENT → …`) are **live simultaneously** (the accept surface projects `Invitation=SENT ∧ Identity=INVITED`). For both to hold state at once — and for roles to be assigned before acceptance (a user is never active without already belonging to the org) — the `User` and its `Membership` must exist in `INVITED` before the token is accepted. Consequences: `User.status` is an enum with those cases — `REVOKED` was added later, when invitation revocation gained a console surface: withdrawing the delivery record has to withdraw the identity it provisioned, or the register keeps a person at `INVITED`, carrying the roles that were being granted, for as long as the installation lives. It is deliberately distinct from `DEACTIVATED` (a withdrawn invitation is not a retired member) and deliberately a state rather than a deletion (the invitation already put that person's id in the reproducible log and in the membership that admitted them, so removing the row would strand references whose erasure has a declared owner); `HashedPassword` is **nullable until `ACTIVE`** (`INVITED` = identity + membership provisioned, credential not yet set); assigned roles live on `Membership`, leaving `Invitation` a pure token/delivery aggregate.
 
 *Discarded:* creating the `User` only on acceptance (always-complete User) — cannot hold the pre-assigned membership/roles the model requires, nor the two machines in parallel.
+
+> **Superseded in part** — 2026-08-19, [#549](https://github.com/sergio-salcedo-dev/ERPify/issues/549): the roles pre-assigned to an `INVITED` identity live on that identity, not on its `Membership`. The rest of D3 stands — both machines still require `User` and `Membership` to exist before acceptance.
 
 ### D4 — Admission is a `UserChecker` that makes the three-moments rule mechanical
 
@@ -39,6 +43,8 @@ The rule `credentials → identity → admission → session` (never `credential
 `Iam/Invitation` owns `Invitation` (`organizationId`, `invitedUserId`, `tokenHash`, `expiresAt`, `status: CREATED→SENT→ACCEPTED|REVOKED|EXPIRED`). The raw token never persists — only its hash (D6). Acceptance is a **net-new POST outside the login firewall** that validates the token, flips `User INVITED→ACTIVE`, sets the password, marks `Invitation ACCEPTED`, **regenerates the session id** (anti-fixation on the privilege jump), and mints the first `Session`. As an unauthenticated state-changing POST that mints a session, it carries a same-origin `Origin` check (the `LoginOriginListener` pattern) **and** a CSRF token — it is the first consumer that wires the stateless double-submit token the sibling ADR left `wire-on-consumer`. Resend invalidates the prior token and issues a new one (in place, on the same row); revoke → `REVOKED`, in one transaction with the identity's own `INVITED → REVOKED`, so a pulled invitation cannot leave a live-looking member behind; TTL lapse → `EXPIRED`.
 
 *Discarded:* carrying roles on the `Invitation` — roles belong to `Membership` (D3); the invitation is delivery only.
+
+> **Superseded in part** — 2026-08-19, [#549](https://github.com/sergio-salcedo-dev/ERPify/issues/549): the alternative stands, its reason does not. Roles are not on `Membership` either; the invitation is delivery only because the identity it provisions carries them.
 
 ### D6 — A shared `SingleUseToken` building block in `Shared/Token`
 

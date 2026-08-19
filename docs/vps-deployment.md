@@ -40,7 +40,13 @@ On a VPS with a real domain:
 4. **Deploy:** `make deploy.local` (or
    `ENV=prod make docker.up.wait && ENV=prod make db.migrate`). No compose edits
    — the overlay is identical. ACME needs ports 80/443 reachable from the
-   internet to issue the cert on first boot.
+   internet to issue the cert on first boot. **The new image is up before the
+   migration runs**, so between the two commands the new code meets the old
+   schema and a migration that stops writing a still-`NOT NULL` column fails
+   every `INSERT` until the migration lands — and rolling the image back later
+   needs `down()` run by hand first, which no `make` target does. Both windows
+   and the commands that close them:
+   [`deployment-guide.md`](deployment-guide.md) § Deploy process / § Rollback.
 5. **Verify:** `https://your.domain/api/v1/health` returns `200` with a valid
    public cert; `docker compose … ps` shows every service healthy.
 

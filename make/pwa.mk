@@ -108,8 +108,9 @@ pwa.test.unit.watch: pwa.install.if-missing ## Run unit tests (Vitest) watch mod
 
 # E2E fixture user — seeded into the running stack before the Playwright run so the `setup` project can log in
 # against the default-deny /api (there is no login UI yet). The org is provisioned first, then the user is
-# created as the installation administrator (identity + ADMIN membership) via the CLI bootstrap path — there is
-# no generic user-create command. Idempotent: a second provision / duplicate email just fails the CLI, swallowed.
+# created as the installation administrator (ADMIN identity + organization membership) via the CLI bootstrap
+# path — there is no generic user-create command. Idempotent: a second provision / duplicate email just fails
+# the CLI, swallowed.
 # Keep the values in sync with E2E_USER_* in pwa/tests/e2e/constants.ts.
 E2E_USER_EMAIL ?= e2e@erpify.test
 E2E_USER_PASSWORD ?= e2ePassword123
