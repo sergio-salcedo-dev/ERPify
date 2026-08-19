@@ -25,6 +25,19 @@ import { Routes } from "@/context/shared/routing/domain/Routes";
 
 const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 
+// How long sign-out waits for the server revoke before leaving anyway. The revoke carries
+// no AbortSignal, so without a budget a request that never settles leaves the user on a
+// page that looks signed in and answers nothing — the one outcome worse than a stale cookie.
+const REVOKE_BUDGET_MS = 3_000;
+
+function afterMs(ms: number): { elapsed: Promise<void>; cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout>;
+  const elapsed = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  return { elapsed, cancel: () => clearTimeout(timer) };
+}
+
 export default function BackOfficeLayoutClient({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -57,23 +70,46 @@ export default function BackOfficeLayoutClient({
 
   const menuGroups = backofficeMenuGroups;
 
+  // Sign-out is in flight. State rather than a ref because the click closes the menu, so a
+  // second attempt needs it reopened — an asynchronous gap a re-render always wins.
+  const [isLeaving, setIsLeaving] = useState(false);
+
   const handleNavigation = (path: string) => {
+    setIsSidebarOpen(false);
     if (path === Routes.HOME) {
+      // A second click POSTs a second revoke against a session the first one already
+      // revoked, and schedules a second navigation behind it. Reachable for as long as the
+      // first revoke is outstanding: the click closes the menu, so it needs the menu
+      // reopened, which is exactly the window REVOKE_BUDGET_MS bounds.
+      if (isLeaving) return;
+      setIsLeaving(true);
       // The account menu's logout entry targets HOME (the public landing). logout()
-      // revokes the server session (dropping its cookie) then clears client state;
-      // wait for it to settle so the cookie is gone before leaving, then use a
-      // full-document navigation rather than router.push: an SPA push keeps this
-      // guarded subtree mounted, so RequireAuth observes the just-cleared session
-      // mid-transition and redirects to /login before the push to HOME commits. A
-      // hard navigation discards all in-memory client state and lands on the public
-      // landing unconditionally — and it fires even if the server revoke failed.
-      void logout().finally(() => {
-        globalThis.location.assign(Routes.HOME);
+      // revokes the server session (dropping its cookie) then clears client state; wait up
+      // to REVOKE_BUDGET_MS for it so the cookie is normally gone before leaving. Then leave
+      // the authenticated area with a full-document navigation rather than router.push: an
+      // SPA push keeps this guarded subtree mounted, so RequireAuth observes the just-cleared
+      // session mid-transition and redirects to /login before the push to HOME commits. A
+      // hard navigation discards all in-memory client state and lands on the public landing
+      // unconditionally — and it fires even if the server revoke failed. replace() rather
+      // than assign() so the authenticated page it leaves is not one Back press away, where
+      // a bfcache restore would put the previous user's data back on a shared machine.
+      const budget = afterMs(REVOKE_BUDGET_MS);
+      void Promise.race([logout(), budget.elapsed]).finally(() => {
+        budget.cancel();
+        try {
+          // eslint-disable-next-line no-restricted-syntax
+          globalThis.location.replace(Routes.HOME);
+        } catch {
+          // The document stayed, so sign-out must be attemptable again rather than wedged.
+          setIsLeaving(false);
+        }
       });
       return;
     }
+    // Gated too: a sidebar click during the sign-out window would route somewhere the
+    // pending navigation is about to tear down, losing whatever the user typed there.
+    if (isLeaving) return;
     router.push(path);
-    setIsSidebarOpen(false);
   };
 
   const navigateTo = (path: string) => () => handleNavigation(path);

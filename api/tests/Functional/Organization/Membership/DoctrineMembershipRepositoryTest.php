@@ -10,7 +10,6 @@ use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\DoctrineMembershipRepository;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Organization\Organization\Infrastructure\Persistence\Doctrine\DoctrineOrganizationRepository;
-use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -56,14 +55,13 @@ final class DoctrineMembershipRepositoryTest extends KernelTestCase
             $organizationId = $this->provisionOrganization();
             $userId = Uuid::generate();
 
-            $this->repository->save(Membership::grant(Uuid::generate(), $userId, $organizationId, Role::ADMIN));
+            $this->repository->save(Membership::grant(Uuid::generate(), $userId, $organizationId));
             $this->entityManager->clear();
 
             $found = $this->repository->findByUserId($userId);
             $this->assertInstanceOf(Membership::class, $found);
             $this->assertSame($userId, $found->userId());
             $this->assertSame($organizationId, $found->organizationId());
-            $this->assertSame([Role::ADMIN], $found->roles());
         });
     }
 
@@ -71,8 +69,8 @@ final class DoctrineMembershipRepositoryTest extends KernelTestCase
     {
         $this->inRolledBackTransaction(function (): void {
             $organizationId = $this->provisionOrganization();
-            $this->saveMembershipWith($organizationId, Role::ADMIN);
-            $this->saveMembershipWith($organizationId, Role::VIEWER);
+            $this->saveMembershipWith($organizationId);
+            $this->saveMembershipWith($organizationId);
 
             $this->entityManager->clear();
 
@@ -85,7 +83,7 @@ final class DoctrineMembershipRepositoryTest extends KernelTestCase
         $this->inRolledBackTransaction(function (): void {
             $organizationId = $this->provisionOrganization();
             $userId = Uuid::generate();
-            $membership = Membership::grant(Uuid::generate(), $userId, $organizationId, Role::ADMIN);
+            $membership = Membership::grant(Uuid::generate(), $userId, $organizationId);
 
             $this->repository->save($membership);
             $this->repository->remove($membership);
@@ -102,8 +100,8 @@ final class DoctrineMembershipRepositoryTest extends KernelTestCase
             $organizationId = $this->provisionOrganization();
             $userId = Uuid::generate();
             $other = Uuid::generate();
-            $this->repository->save(Membership::grant(Uuid::generate(), $userId, $organizationId, Role::ADMIN));
-            $this->repository->save(Membership::grant(Uuid::generate(), $other, $organizationId, Role::VIEWER));
+            $this->repository->save(Membership::grant(Uuid::generate(), $userId, $organizationId));
+            $this->repository->save(Membership::grant(Uuid::generate(), $other, $organizationId));
 
             $deleted = $this->repository->deleteAllForUser($userId);
 
@@ -125,9 +123,9 @@ final class DoctrineMembershipRepositoryTest extends KernelTestCase
         });
     }
 
-    private function saveMembershipWith(string $organizationId, Role $role): void
+    private function saveMembershipWith(string $organizationId): void
     {
-        $this->repository->save(Membership::grant(Uuid::generate(), Uuid::generate(), $organizationId, $role));
+        $this->repository->save(Membership::grant(Uuid::generate(), Uuid::generate(), $organizationId));
     }
 
     private function provisionOrganization(): string

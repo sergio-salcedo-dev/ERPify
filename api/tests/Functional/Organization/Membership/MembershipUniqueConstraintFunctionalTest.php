@@ -12,7 +12,6 @@ use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
 use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\DoctrineMembershipRepository;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Organization\Organization\Domain\Repository\OrganizationRepository;
-use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -60,11 +59,11 @@ final class MembershipUniqueConstraintFunctionalTest extends KernelTestCase
         $userId = Uuid::generate();
         $memberships = $this->service(MembershipRepository::class);
 
-        $memberships->save(Membership::grant(Uuid::generate(), $userId, $this->organizationId, Role::VIEWER));
+        $memberships->save(Membership::grant(Uuid::generate(), $userId, $this->organizationId));
 
         $this->expectException(UserAlreadyMember::class);
 
-        $memberships->save(Membership::grant(Uuid::generate(), $userId, $this->organizationId, Role::EDITOR));
+        $memberships->save(Membership::grant(Uuid::generate(), $userId, $this->organizationId));
     }
 
     /**

@@ -12,7 +12,6 @@ use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
-use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
 use Erpify\Shared\Token\Domain\SingleUseToken;
@@ -158,7 +157,7 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
 
     private function membershipFor(string $userId): Membership
     {
-        $membership = Membership::grant(Uuid::generate(), $userId, self::ORGANIZATION_ID, Role::VIEWER);
+        $membership = Membership::grant(Uuid::generate(), $userId, self::ORGANIZATION_ID);
         $membership->pullDomainEvents();
 
         return $membership;

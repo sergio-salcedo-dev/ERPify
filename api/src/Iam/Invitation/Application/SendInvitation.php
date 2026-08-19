@@ -67,7 +67,7 @@ final readonly class SendInvitation
             function () use ($invitationId, $email, $generated, $roles): string {
                 $user = $this->inviteUser->invite($email, ...$roles);
                 $userId = $user->getId() ?? throw InvitedIdentityUnavailable::withoutId();
-                $membership = $this->grantMembership->grant($userId, ...$roles);
+                $membership = $this->grantMembership->grant($userId);
 
                 $invitation = Invitation::create(
                     $invitationId,

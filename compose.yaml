@@ -55,7 +55,12 @@ services:
       start_period: 120s
 
   database:
-    image: postgres:${POSTGRES_VERSION:-18}-alpine@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+    # Literal tag, not ${POSTGRES_VERSION}: dependabot's compose parser reads the tag
+    # position with a regex that stops dead at `$`, yielding no tag and no digest, so an
+    # interpolated reference is skipped in silence — indistinguishable from "up to date".
+    # The digest is what docker actually resolves anyway, so the variable never selected a
+    # version here; POSTGRES_VERSION still drives serverVersion= in DATABASE_URL below.
+    image: postgres:18-alpine@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-erpify_db}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-erpify_password}

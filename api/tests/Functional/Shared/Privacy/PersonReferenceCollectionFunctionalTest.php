@@ -9,7 +9,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Application\ReconcileErasedSubjectReferences;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
-use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Support\PersonReferenceKeys;
 use Erpify\Tests\Support\PersonReferences;
@@ -94,7 +93,7 @@ final class PersonReferenceCollectionFunctionalTest extends KernelTestCase
 
         $orphanId = Uuid::generate();
         $this->entityManager->persist(
-            Membership::grant(Uuid::generate(), $orphanId, $organizationId, Role::VIEWER),
+            Membership::grant(Uuid::generate(), $orphanId, $organizationId),
         );
         $this->entityManager->flush();
 

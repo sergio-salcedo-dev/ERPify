@@ -29,7 +29,8 @@ use SensitiveParameter;
  *
  * Cross-module references are by id with no physical FK — `organizationId` points at an Organization,
  * `invitedUserId` at an `Iam\Identity\User` — `Uuid::ensure()`d at the edge. Roles are NOT modelled here
- * (delivery only; roles live on the `Membership`).
+ * (delivery only): `SendInvitation` writes them onto the identity it provisions, which is where authorization
+ * reads them from.
  *
  * State-oriented persistence (ADR D5): the business needs the current snapshot of the invitation's lifecycle,
  * not its history as a ledger — auditability is event emission, not event sourcing. Single-use is
