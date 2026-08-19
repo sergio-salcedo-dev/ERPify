@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
-const { push, logout, override, nav, auth, assign } = vi.hoisted(() => ({
+const { push, logout, override, nav, auth, assign, replace } = vi.hoisted(() => ({
   push: vi.fn(),
   logout: vi.fn(() => Promise.resolve()),
   override: vi.fn(),
   assign: vi.fn(),
+  replace: vi.fn(),
   nav: { pathname: "/backoffice" },
   // `status` is the literal the guard compares against rather than `AuthStatus.AUTHENTICATED`:
   // a mock factory is hoisted above the imports, so it cannot read a value imported here.
@@ -129,6 +130,7 @@ describe("BackOfficeLayoutClient", () => {
       pathname: Routes.BACKOFFICE,
       search: "",
       assign,
+      replace,
     });
     nav.pathname = Routes.BACKOFFICE;
     auth.session = SESSION;
@@ -145,8 +147,11 @@ describe("BackOfficeLayoutClient", () => {
 
     fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
 
-    // The revoke is awaited before leaving, so the assignment lands a microtask later.
-    await waitFor(() => expect(assign).toHaveBeenCalledWith(Routes.HOME));
+    // The revoke is awaited before leaving, so the navigation lands a microtask later.
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+    // replace, not assign: the authenticated page must not stay one Back press away, where
+    // a bfcache restore would put the previous user's data back on a shared machine.
+    expect(assign).not.toHaveBeenCalled();
     expect(logout).toHaveBeenCalledTimes(1);
     // A push would keep this guarded subtree mounted, and RequireAuth would send the just-revoked
     // session to /login instead of the public landing.
@@ -154,19 +159,27 @@ describe("BackOfficeLayoutClient", () => {
   });
 
   it("drops a second sign-out while the first is still in flight", async () => {
-    // The click closes the menu, so a second one needs it reopened — reachable for as long as
-    // the revoke is outstanding, which is exactly the window REVOKE_BUDGET_MS bounds.
-    logout.mockImplementationOnce(() => new Promise<void>(() => {}));
-    renderLayout();
-    await openAccountMenu();
-    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+    // Fake timers so the budget this test deliberately never resolves cannot outlive the
+    // test and fire its navigation into a later one.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      // The click closes the menu, so a second one needs it reopened — reachable for as long
+      // as the revoke is outstanding, which is exactly the window REVOKE_BUDGET_MS bounds.
+      logout.mockImplementationOnce(() => new Promise<void>(() => {}));
+      renderLayout();
+      await openAccountMenu();
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
 
-    await openAccountMenu();
-    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+      await openAccountMenu();
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
 
-    // The second revoke would POST against an already-revoked session; that 401 reaches the
-    // transport, which starts its own competing bounce to /login.
-    expect(logout).toHaveBeenCalledTimes(1);
+      // A second revoke would POST against a session the first one already revoked, and
+      // schedule a second navigation behind it.
+      expect(logout).toHaveBeenCalledTimes(1);
+      expect(replace).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("leaves anyway when the server revoke never settles", async () => {
@@ -179,13 +192,37 @@ describe("BackOfficeLayoutClient", () => {
       await openAccountMenu();
 
       fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
-      expect(assign).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
 
       // The revoke carries no AbortSignal, so without the budget the user would sit on a page
       // that looks signed in and answers nothing.
       await vi.advanceTimersByTimeAsync(REVOKE_BUDGET_MS);
 
-      await waitFor(() => expect(assign).toHaveBeenCalledWith(Routes.HOME));
+      await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The invariant, not the cosmetic: EVERY branch of handleNavigation closes the mobile
+  // drawer. The plain-navigation case held before this change; the sign-out branch returned
+  // early and left the authenticated drawer open — for as long as REVOKE_BUDGET_MS, now that
+  // sign-out waits. Asserted through the Sheet, the only consumer of `isSidebarOpen`;
+  // `data-sidebar-open` is bound to `isCompact`, a different state entirely.
+  it.each([
+    ["a plain navigation entry", `${ACCOUNT_LINKS[0].testId}--mobile`, false],
+    ["the sign-out entry", `${ACCOUNT_LOGOUT.testId}--mobile`, true],
+  ])("closes the mobile drawer on %s", async (_label, testId, isSignOut) => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      if (isSignOut) logout.mockImplementationOnce(() => new Promise<void>(() => {}));
+      renderLayout();
+      fireEvent.click(screen.getByLabelText("Open navigation menu"));
+
+      const entry = await screen.findByTestId(testId);
+      fireEvent.click(entry);
+
+      await waitFor(() => expect(screen.queryByTestId(testId)).toBeNull());
     } finally {
       vi.useRealTimers();
     }
@@ -199,7 +236,7 @@ describe("BackOfficeLayoutClient", () => {
     fireEvent.click(screen.getByTestId(menuTestId(entry)));
 
     expect(push).toHaveBeenCalledWith(entry.path);
-    expect(assign).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
     expect(logout).not.toHaveBeenCalled();
   });
 

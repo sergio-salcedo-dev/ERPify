@@ -80,10 +80,13 @@ function redirectToLoginOnSessionExpiry(input: string): void {
     // eslint-disable-next-line no-restricted-syntax
     globalThis.location.replace(`${Routes.LOGIN}?next=${next}&reason=session-expired`);
   } catch {
-    // A navigation-restricted context (a sandboxed frame) rejects this with a
-    // SecurityError. Swallow it rather than letting a raw DOMException escape the
-    // adapter's HttpError contract, and drop the latch: the page stayed, so the 401
-    // must surface normally and a later one must still be able to bounce.
+    // No known browser path reaches here: unlike assign(), replace() is cross-origin
+    // callable and performs no security check, and a sandboxed navigable *ignores* a
+    // navigation rather than raising. It stands so that an environment which cannot
+    // navigate at all cannot escape this adapter's HttpError contract with a raw
+    // exception, and it drops the latch because the document stayed. It does NOT cover
+    // the ignored-navigation case: nothing is raised there, so the latch survives and
+    // later 401s in that document are swallowed.
     sessionExpiredRedirectStarted = false;
   }
 }

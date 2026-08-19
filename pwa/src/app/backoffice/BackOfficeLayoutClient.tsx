@@ -30,8 +30,12 @@ const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 // page that looks signed in and answers nothing — the one outcome worse than a stale cookie.
 const REVOKE_BUDGET_MS = 3_000;
 
-function afterMs(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function afterMs(ms: number): { elapsed: Promise<void>; cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout>;
+  const elapsed = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  return { elapsed, cancel: () => clearTimeout(timer) };
 }
 
 export default function BackOfficeLayoutClient({
@@ -73,24 +77,38 @@ export default function BackOfficeLayoutClient({
   const handleNavigation = (path: string) => {
     setIsSidebarOpen(false);
     if (path === Routes.HOME) {
-      // A second click would POST a revoke against an already-revoked session; that 401
-      // reaches the transport, which starts its own competing bounce to /login.
+      // A second click POSTs a second revoke against a session the first one already
+      // revoked, and schedules a second navigation behind it. Reachable for as long as the
+      // first revoke is outstanding: the click closes the menu, so it needs the menu
+      // reopened, which is exactly the window REVOKE_BUDGET_MS bounds.
       if (isLeaving) return;
       setIsLeaving(true);
       // The account menu's logout entry targets HOME (the public landing). logout()
-      // revokes the server session (dropping its cookie) then clears client state;
-      // wait up to REVOKE_BUDGET_MS for it so the cookie is normally gone before
-      // leaving, then use a full-document navigation rather than router.push: an SPA push keeps this
-      // guarded subtree mounted, so RequireAuth observes the just-cleared session
-      // mid-transition and redirects to /login before the push to HOME commits. A
-      // hard navigation discards all in-memory client state and lands on the public
-      // landing unconditionally — and it fires even if the server revoke failed.
-      void Promise.race([logout(), afterMs(REVOKE_BUDGET_MS)]).finally(() => {
-        // eslint-disable-next-line no-restricted-syntax
-        globalThis.location.assign(Routes.HOME);
+      // revokes the server session (dropping its cookie) then clears client state; wait up
+      // to REVOKE_BUDGET_MS for it so the cookie is normally gone before leaving. Then leave
+      // the authenticated area with a full-document navigation rather than router.push: an
+      // SPA push keeps this guarded subtree mounted, so RequireAuth observes the just-cleared
+      // session mid-transition and redirects to /login before the push to HOME commits. A
+      // hard navigation discards all in-memory client state and lands on the public landing
+      // unconditionally — and it fires even if the server revoke failed. replace() rather
+      // than assign() so the authenticated page it leaves is not one Back press away, where
+      // a bfcache restore would put the previous user's data back on a shared machine.
+      const budget = afterMs(REVOKE_BUDGET_MS);
+      void Promise.race([logout(), budget.elapsed]).finally(() => {
+        budget.cancel();
+        try {
+          // eslint-disable-next-line no-restricted-syntax
+          globalThis.location.replace(Routes.HOME);
+        } catch {
+          // The document stayed, so sign-out must be attemptable again rather than wedged.
+          setIsLeaving(false);
+        }
       });
       return;
     }
+    // Gated too: a sidebar click during the sign-out window would route somewhere the
+    // pending navigation is about to tear down, losing whatever the user typed there.
+    if (isLeaving) return;
     router.push(path);
   };
 

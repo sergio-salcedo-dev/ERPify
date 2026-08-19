@@ -501,6 +501,7 @@ describe("FetchHttpClient", () => {
     const ORIGINAL_INTERNAL = process.env.SYMFONY_INTERNAL_URL;
 
     let replace: MockInstance;
+    let assign: MockInstance;
 
     // The single-flight redirect guard is module-level, so each test gets a fresh
     // module (guard reset) via a dynamic re-import after resetModules.
@@ -520,7 +521,16 @@ describe("FetchHttpClient", () => {
     beforeEach(() => {
       vi.resetModules();
       replace = vi.fn();
-      vi.stubGlobal("location", { pathname: "/backoffice/banks", search: "?page=2", replace });
+      // `assign` is stubbed too, and asserted unused: without it, reverting the source to
+      // assign() would go red because the stub lacks the method, not because the assertion
+      // says replace. The test must fail for the reason it states.
+      assign = vi.fn();
+      vi.stubGlobal("location", {
+        pathname: "/backoffice/banks",
+        search: "?page=2",
+        replace,
+        assign,
+      });
     });
 
     afterEach(() => {
@@ -543,6 +553,8 @@ describe("FetchHttpClient", () => {
       expect(replace).toHaveBeenCalledWith(
         `/login?next=${encodeURIComponent("/backoffice/banks?page=2")}&reason=session-expired`,
       );
+      // replace, not assign: the expired page must not stay one Back press away.
+      expect(assign).not.toHaveBeenCalled();
     });
 
     it("redirects only once for concurrent 401s (single-flight)", async () => {
@@ -605,10 +617,13 @@ describe("FetchHttpClient", () => {
       expect(replace).not.toHaveBeenCalled();
     });
 
-    it("clears the single-flight latch when the navigation is refused", async () => {
-      // A sandboxed frame rejects a top-level navigation with a SecurityError.
+    it("clears the single-flight latch when the navigation throws", async () => {
+      // No known browser raises here — replace() performs no security check and a sandboxed
+      // navigable ignores the navigation silently. This pins the contract for an environment
+      // that cannot navigate at all: the exception must not escape as a raw throw, and the
+      // latch must not wedge the bounce for the rest of the document's life.
       replace.mockImplementationOnce(() => {
-        throw new Error("SecurityError");
+        throw new Error("cannot navigate");
       });
       respond401();
       const client = await freshClient();

@@ -54,23 +54,28 @@ const eslintConfig = [
       "no-restricted-syntax": [
         "error",
         {
-          // The Next rule for this (@next/next/no-location-assign-relative-destination) resolves a
-          // static string prefix and gives up on anything it cannot fold to a literal, so it misses
-          // `location.assign(Routes.HOME)` — an imported binding — while flagging the same constant
-          // written as a template literal. Coverage that depends on how the destination is spelled
-          // cannot state this invariant, and it does not see `replace()` at all. This selector keys
-          // on the call, not on its argument, so every full-document navigation in the tree is
-          // visible and each one has to argue for itself on the line above.
+          // Keyed on the receiver, not on the destination. The Next rule for this
+          // (@next/next/no-location-assign-relative-destination) folds the argument to a static
+          // string prefix and gives up on anything it cannot resolve, so how a destination is
+          // spelled decides whether it is seen; it also never looks at `replace()`. Enumerating
+          // the global receivers instead is what keeps a domain object's `location` field out:
+          // an ERP has `warehouse.location`, and a rule that fired on `warehouse.location.replace`
+          // would be silenced on lines that never navigate — and this disable is rule-wide, so
+          // each one also switches off the maxLength and test-id bans on its line.
+          //
+          // What a green run does NOT prove: an aliased receiver (`const l = location`) needs
+          // scope analysis and escapes; so do `location.reload()` and `window.open(u, "_self")`,
+          // which are navigations this rule does not claim. Blind spots are listed in pwa/CLAUDE.md.
           selector:
-            "CallExpression[callee.property.name=/^(assign|replace)$/]:matches([callee.object.property.name='location'], [callee.object.name='location'])",
+            "CallExpression:matches([callee.property.name=/^(assign|replace)$/], [callee.computed=true][callee.property.value=/^(assign|replace)$/]):matches([callee.object.object.name=/^(window|globalThis|self|document|top|parent)$/][callee.object.property.name='location'], [callee.object.name='location'])",
           message:
-            "A full-document navigation (location.assign/replace) discards all in-memory client state and is almost never what you want inside the app — use router.push()/replace() from next/navigation. It is legitimate when leaving an authenticated area or when no React context exists to reach a router from; in that case disable this rule on the line and write down which of the two it is.",
+            "A full-document navigation (location.assign/replace) discards all in-memory client state; inside the app use router.push()/replace() from next/navigation. It is legitimate when leaving an authenticated area, or when no React context exists to reach a router from — disable this rule on the line and say which of the two it is.",
         },
         {
           selector:
-            "AssignmentExpression[left.property.name='href']:matches([left.object.property.name='location'], [left.object.name='location'])",
+            "AssignmentExpression:matches([left.property.name='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.property.name='location'], [left.property.name='href'][left.object.name='location'], [left.property.name='location'][left.object.name=/^(window|globalThis|self|document|top|parent)$/])",
           message:
-            "Assigning location.href is a full-document navigation wearing a property assignment — same rule as location.assign/replace: use router.push()/replace(), or disable this rule on the line with the reason.",
+            "Assigning location.href — or the whole location object — is a full-document navigation wearing a property assignment. Same rule as location.assign/replace: use router.push()/replace(), or disable this rule on the line with the reason.",
         },
         {
           selector: "JSXAttribute[name.name='maxLength']",

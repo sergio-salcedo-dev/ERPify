@@ -4,7 +4,7 @@ type: 'chore'
 created: '2026-08-18'
 status: 'in-review'
 baseline_commit: '85c1687cd3dd836d2692eda2d93e7bc693c8ed8b'
-review_loop_iteration: 2
+review_loop_iteration: 3
 context: []
 ---
 
@@ -49,7 +49,8 @@ context: []
 **Acceptance Criteria:**
 - Dado el árbol, cuando corro `grep -Rn "no-location-assign-relative-destination" pwa/src`, entonces hay **0** coincidencias: la regla de Next ya no dispara en ningún sitio y ninguna directiva suya sobrevive sin uso.
 - Dado el árbol, cuando busco `location.assign|replace` y `location.href =` en `pwa/src`, entonces cada coincidencia lleva directiva del selector nuevo y una razón encima.
-- Dado el selector, cuando provoco cada uno de sus rojos —quitar la directiva de A, quitar la de B, un tercer `location.assign` con constante importada, un `location.href =`, un `window.location.replace`—, entonces **los cinco** dan `exit=2`. Un guardarraíl que no se ha visto rojo no está probado.
+- Dado el selector, cuando corro `tests/eslint/hardNavigationGate.test.ts`, entonces afirma **las dos direcciones** contra la config real importada: 8 positivos y 4 negativos de dominio, más los puntos ciegos declarados. Falsificado en ambas: quitar la rama del receptor tumba 4 positivos; ensancharlo a «cualquier objeto con `.location`» resucita el falso positivo. Sustituye a los cinco rojos provocados a mano, que probaban el gate una vez y en un artefacto que se borra.
+- Dado el hoist de `setIsSidebarOpen(false)`, cuando lo revierto, entonces el caso de sign-out del test parametrizado del cajón se pone rojo y el de navegación normal sigue verde. Los **7** arreglos tienen ya test propio falsificado, menos el que es una corrección de comentario.
 - Dado el cambio a `replace()`, cuando devuelvo el código a `assign()`, entonces el test se pone **rojo**. Un verde tras un renombrado puede ser vacuo.
 - Dado el diff guardado antes de `make pwa.quality`, cuando el gate termina, entonces es **byte a byte el mismo**.
 - Dado `api/src`, entonces `git diff --stat -- api/` está vacío.
@@ -67,6 +68,13 @@ context: []
   5. El comentario de `isLeaving` lo refuta **este mismo diff** (añadir `revoke-current` a la lista de handshake hace imposible el rebote que alega); `isLeaving` no tiene vía de liberación; `router.push` no está protegido durante la ventana; un test fuga un `setTimeout` real de 3 s.
   6. **Violación de proceso, registrada como tal:** los hallazgos de la iteración 1 entraron en este artefacto **nueve minutos después** de `gh pr create` (PR 21:30:44Z; commits 21:39:34 y 21:40:18), en trabajo de superficie de autenticación. El gate de `CLAUDE.md` pide que estén escritos **antes** de abrir.
   Los puntos 1-4 están abiertos como decisiones para el humano, consultados en paralelo con un modelo externo, Winston y Amelia. **KEEP** de la iteración 1 intacto y honrado.
+
+- **Iteración 3 — `bmad-code-review` (3 capas) + consulta a un modelo externo, Winston y Amelia.** Dos decisiones cerradas con medición propia, y **dos premisas refutadas, una de ellas de un revisor**:
+  - **D1 → (c) sola. `keepalive` declinado.** La afirmación «la navegación a los 3 s aborta el POST en vuelo» **no se reproduce**: sondeo con servidor propio de mismo origen y handler que duerme 4 s, navegando en el mismo tick. Cuatro configuraciones —con y sin `keepalive`, red local y con 3 s de latencia + subida estrangulada por CDP— y en **las cuatro** el POST llega y el servidor completa. En una, la navegación aterriza antes de que el POST llegue siquiera. Era un precondicionante («no hay `keepalive`»), no una consecuencia observada. Queda la descomposición: con servidor lento y red normal —el caso que hace saltar la cota— la petición ya llegó y solo se cancela la lectura de la respuesta, así que la revocación se compromete igual. Un negativo no prueba que el aborto nunca ocurra: no se pudo construir el caso de petición genuinamente sin enviar. Reabrible con evidencia de revokes que no llegan.
+  - **D2 → arreglar el *sujeto* del selector, no su anchura** (opción que ninguna de las cuatro del dosier contemplaba). Los falsos positivos no venían de ser ancho sino de casar *cualquier* objeto con `.location`, que en un ERP es medio dominio. Enumerando los receptores globales: FP de dominio a **0** y dos agujeros cerrados (`document.location = u`, acceso computado), medido sobre el árbol entero. Enumerar el sujeto **no es** una allowlist de exenciones.
+  - **Premisa mía, refutada por Winston:** cité «una regla que necesita allowlist está mal escrita» como estándar general del repo. Es sobre dependency-cruiser; `pwa/CLAUDE.md:83,158` documenta a los selectores hermanos como *syntactic heuristic* cuya *completeness rests on review*. El estándar real es declarar los puntos ciegos con la misma precisión que la cobertura — de ahí el párrafo nuevo en `pwa/CLAUDE.md`. Ese error viajó al dosier y ChatGPT lo heredó.
+  - **Medido y descartado:** declarar `languageOptions.globals` no enrojece nada (exit 0) y despierta la regla de Next en los cuatro receptores — pero no crea gate mientras sea `warn` bajo `eslint .` sin `--max-warnings`, y sigue sin ver `replace` ni destinos no literales. **PR aparte.** `no-restricted-properties` no puede sustituir a los selectores: alcanza `location.assign` pelado pero no `globalThis.location.assign`, que es nuestro código.
+  - El `catch` del transporte defendía un `SecurityError` que `replace()` no puede lanzar (es `assign()` quien lo lanza, y un navegable en sandbox *ignora* la navegación sin excepción). Comentario corregido y **residual declarado**: el caso ignorado no lo cubre nadie.
 
 ## Design Notes
 
