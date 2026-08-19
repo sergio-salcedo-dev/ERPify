@@ -3,7 +3,7 @@ title: 'Cierre de las decisiones que dejó abiertas la PR #770 — #771, #773, d
 type: 'chore'
 created: '2026-08-19'
 baseline_commit: 'f438fe15a24371c9f251d424c89284366288112d'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 1
 context: []
 ---
@@ -67,7 +67,7 @@ context: []
 - [x] `pwa/tests/app/backoffice/backOfficeLayoutClient.test.tsx` — migrar `:70` y `:72` a `action`; guardián sobre **todo** el modelo (`backofficeMenuGroups` + `accountMenuItem`); `it.each` de sign-out sobre los tres testids afirmando `logout` una vez y `replace` con `Routes.HOME`; reapuntar el test del doble sign-out a una superficie que la afordancia no deshabilita; y dar aserciones reales a la rama `isSignOut` del test móvil.
 - [x] GitHub #772 — enriquecerlo con las siete mediciones nuevas (binding condicional que apagaría G4 en producción, ciclo `Container`↔`FetchHttpClient`, punto de publicación frente al `try`, replay, alcance real de `RequireAuth`, `MockHttpClient` bajo Vitest, y que el evento debe ir **sin payload**). Queda abierto.
 - [x] **Correr la pasada adversarial sobre el código** y escribir sus hallazgos en la sección *Adversarial pass* de este artefacto, **antes** de `gh pr create`.
-- [ ] Cuerpo de la PR — revisión de seguridad por clase; `Closes #771`, `#773` y `#785`; y dónde quedó registrada la pasada. #784, #786 y #787 quedan **abiertos**: los dos primeros son trabajo propio y el tercero es un límite registrado que no se cierra.
+- [x] Cuerpo de la PR — revisión de seguridad por clase; `Closes #771`, `#773` y `#785`; y dónde quedó registrada la pasada. #784, #786 y #787 quedan **abiertos**: los dos primeros son trabajo propio y el tercero es un límite registrado que no se cierra.
 
 **Acceptance Criteria:**
 - Dado `CLAUDE.md`, cuando leo la bala de proceso, entonces enuncia tres ocurrencias y distingue el modo de fallo de #770 del de #616/#620. Y `git log origin/chore/pwa-close-770-open-decisions-icvf -1 --format=%cI -- CLAUDE.md` es **anterior** al `createdAt` de la PR.
@@ -152,3 +152,55 @@ Para G3, los consumidores reales de `backofficeMenu` son dos, no cuatro: `sectio
 - `git diff --numstat origin/main -- …/deferred-work.md` — `0 7`.
 - `git diff --stat origin/main...HEAD -- api/ pwa/package.json pwa/package-lock.json` — vacío.
 - `gh issue view <n> --json body` por cada issue nuevo — contiene la medición de su bala.
+
+## Suggested Review Order
+
+**El invariante del lint, y por qué el orden es el arreglo**
+
+- El punto de entrada: la regla de Next apagada, con la medición que lo permite.
+  [`eslint.config.mjs:74`](../../pwa/eslint.config.mjs#L74)
+
+- Las ocho alternativas explícitas. Factorizarlas creó un producto cruzado que enrojecía `parent.href`.
+  [`eslint.config.mjs:104`](../../pwa/eslint.config.mjs#L104)
+
+- La contención sobre rejilla generada — no sobre `POSITIVES`, que la volvía circular.
+  [`hardNavigationGate.test.ts:141`](../../pwa/tests/eslint/hardNavigationGate.test.ts#L141)
+
+- El coste que se acepta: un local llamado como un global entra igual. Test que **pasa**.
+  [`hardNavigationGate.test.ts:104`](../../pwa/tests/eslint/hardNavigationGate.test.ts#L104)
+
+- Seis nombres, no un entorno: lo que la declaración es y lo que no.
+  [`eslint.config.mjs:42`](../../pwa/eslint.config.mjs#L42)
+
+**El sign-out por intención**
+
+- El discriminador. Sin él, el destino era el disparador.
+  [`backofficeMenu.ts:64`](../../pwa/src/app/backoffice/_lib/backofficeMenu.ts#L64)
+
+- La rama: `action`, nunca `path`. El destino de abajo está hard-codeado.
+  [`BackOfficeLayoutClient.tsx:85`](../../pwa/src/app/backoffice/BackOfficeLayoutClient.tsx#L85)
+
+- El contrato de la capa de diseño se ensancha; sin ella el sidebar no revocaba.
+  [`SidebarItem.tsx:31`](../../pwa/src/components/erpify/SidebarItem.tsx#L31)
+
+- `key` por identidad: derivarlo del rótulo destruía el botón recién pulsado.
+  [`SidebarItem.tsx:118`](../../pwa/src/components/erpify/SidebarItem.tsx#L118)
+
+- Una derivación para las tres superficies, y lo que eso **no** compra.
+  [`BackOfficeLayoutClient.tsx:142`](../../pwa/src/app/backoffice/BackOfficeLayoutClient.tsx#L142)
+
+- La región que sí habla cuando el menú ya se cerró sobre la entrada.
+  [`BackOfficeLayoutClient.tsx:169`](../../pwa/src/app/backoffice/BackOfficeLayoutClient.tsx#L169)
+
+**Lo que fija la regresión**
+
+- El señuelo: una entrada a `/` sin intención no revoca.
+  [`backOfficeLayoutSignOutIntent.test.tsx:84`](../../pwa/tests/app/backoffice/backOfficeLayoutSignOutIntent.test.tsx#L84)
+
+- El guardián, en fichero propio para que falle por su aserción y no al cargar.
+  [`backofficeMenu.test.ts:23`](../../pwa/tests/app/backoffice/backofficeMenu.test.ts#L23)
+
+**El registro de proceso**
+
+- La tercera ocurrencia, y dónde vive el guardarraíl que esta prosa no es.
+  [`CLAUDE.md:183`](../../CLAUDE.md#L183)
