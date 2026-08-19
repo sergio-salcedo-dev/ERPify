@@ -4,7 +4,7 @@ type: 'chore'
 created: '2026-08-18'
 status: 'in-review'
 baseline_commit: '85c1687cd3dd836d2692eda2d93e7bc693c8ed8b'
-review_loop_iteration: 1
+review_loop_iteration: 2
 context: []
 ---
 
@@ -30,7 +30,8 @@ context: []
 
 - `pwa/eslint.config.mjs:54` — bloque `no-restricted-syntax` (severidad `error`) del config que cubre `**/*.{ts,tsx,js,jsx}`. Los dos selectores nuevos van **aquí**, no en un bloque propio.
 - `pwa/src/context/shared/http-client/infrastructure/FetchHttpClient.ts:63-70` — `redirectToLoginOnSessionExpiry()`: función libre de módulo (no la clase `@injectable()`, que está en :107). Bounce de sesión expirada.
-- `pwa/src/app/backoffice/BackOfficeLayoutClient.tsx:62-72` — `handleNavigation()`: logout hacia HOME. Su comentario de 8 líneas ya justificaba la navegación dura; se conserva intacto.
+- `pwa/src/app/backoffice/BackOfficeLayoutClient.tsx:73-96` — `handleNavigation()`: logout hacia HOME. Su comentario de 8 líneas ya justificaba la navegación dura; **se editó** una frase para alinearla con la cota (`wait up to REVOKE_BUDGET_MS`).
+- `pwa/tests/app/backoffice/backOfficeLayoutClient.test.tsx` — tests del layout; el diff los modifica.
 - `pwa/tests/context/shared/http-client/infrastructure/FetchHttpClient.test.ts:502-601` — mockea `location`; sigue al comportamiento.
 - `api/src/Iam/Identity/Domain/{Email,HashedPassword}.php`, `api/src/Iam/Session/Domain/SessionId.php` — los tres VO. **No se modifican.**
 
@@ -52,11 +53,20 @@ context: []
 - Dado el cambio a `replace()`, cuando devuelvo el código a `assign()`, entonces el test se pone **rojo**. Un verde tras un renombrado puede ser vacuo.
 - Dado el diff guardado antes de `make pwa.quality`, cuando el gate termina, entonces es **byte a byte el mismo**.
 - Dado `api/src`, entonces `git diff --stat -- api/` está vacío.
-- Dado cada uno de los 7 arreglos preexistentes, cuando revierto **ese** arreglo, entonces **su** test se pone rojo. Medido uno a uno: la primera versión del test del doble logout pasaba sin la guarda —el menú se cierra al primer clic y el segundo no alcanzaba ningún manejador— y hubo que reescribirla para que reabriese el menú.
+- De los 7 arreglos preexistentes: **5** tienen test propio y cada uno se puso rojo al revertir **su** arreglo, medido uno a uno; **1** es una corrección de comentario, que ningún test puede falsificar; y **1 —el hoist de `setIsSidebarOpen(false)`— NO tiene test**: revertirlo deja la suite verde. La redacción anterior de este criterio («los 7, cada uno con su test») era falsa y la auditoría de aceptación la refutó. La primera versión del test del doble logout además era vacua: pasaba sin la guarda, porque el menú se cierra al primer clic y el segundo no alcanzaba ningún manejador; se reescribió para reabrir el menú.
 
 ## Spec Change Log
 
 - **Iteración 1 — pasada adversarial (Blind Hunter + Edge Case Hunter).** Hallazgo disparador: el comentario del sitio B y el *Intent* de este spec afirmaban que la regla «resuelve el argumento estáticamente y no ve la constante». **Refutado midiendo**: una constante pelada (`"/"`) **sí** dispara; `Routes.HOME` escapa por ser un **binding importado** que `getStringIfConstant` no resuelve; y `` `${Routes.HOME}` `` dispara hoy. El comentario no solo era falso: enseñaba a silenciar un aviso legítimo metiendo la URL en una constante. Amendado el mecanismo en *Intent*, y el alcance para incluir el guardarraíl propio (autorizado por el humano) que hace innecesaria toda la asimetría directiva/comentario. Estado malo evitado: dejar en `main` un comentario que, siendo lo único que sostiene la decisión, enseña lo contrario de lo que ocurre. **KEEP:** la exigencia de idempotencia del gate y la de provocar los rojos; ambas siguen siendo lo que distingue una afirmación de una medición.
+
+- **Iteración 2 — `bmad-code-review`, tres capas en paralelo (Blind Hunter, Edge Case Hunter, Acceptance Auditor).** Ninguna falló. Lo que refutó, medido:
+  1. **El comentario de `eslint.config.mjs` es una premisa falsa.** La config no declara `languageOptions.globals`, así que el `isGlobalReference()` de la regla de Next solo resuelve `globalThis.`; `location.…`, `window.location.…` y `document.location.…` dan **cero** reportes con cualquier argumento. El discriminante ancho es el **receptor**, no el deletreo del destino. Efecto: `window.location.assign("/")` está sin vigilar en todo el repo.
+  2. **El try/catch del transporte defiende un mecanismo imposible.** `Location.replace()` es cross-origin-callable y no comprueba seguridad; es `assign()` quien lanza `SecurityError`. Al pasar a `replace()` se eliminó la única llamada que podía lanzarlo, y un navegable en sandbox **ignora** la navegación en vez de rechazarla: el latch se queda en `true` y los 401 posteriores se tragan — justo lo que el catch dice impedir.
+  3. **El gate tiene agujeros medidos** (`document.location = url`, alias, acceso computado, `.bind`, `Reflect.apply`, `location.reload()`, `window.open(u,"_self")` → 0 hits) y un **falso positivo sobre código de dominio** (`warehouse.location.replace(…)` → 1 hit), lo que en un ERP fuerza `eslint-disable` en líneas sin relación con navegación.
+  4. **La cota de 3 s cancela su propio revoke** (no hay `keepalive` en el http-client), y al expirar deja la página autenticada a un Atrás de distancia porque `setSession(null)` no ha corrido.
+  5. El comentario de `isLeaving` lo refuta **este mismo diff** (añadir `revoke-current` a la lista de handshake hace imposible el rebote que alega); `isLeaving` no tiene vía de liberación; `router.push` no está protegido durante la ventana; un test fuga un `setTimeout` real de 3 s.
+  6. **Violación de proceso, registrada como tal:** los hallazgos de la iteración 1 entraron en este artefacto **nueve minutos después** de `gh pr create` (PR 21:30:44Z; commits 21:39:34 y 21:40:18), en trabajo de superficie de autenticación. El gate de `CLAUDE.md` pide que estén escritos **antes** de abrir.
+  Los puntos 1-4 están abiertos como decisiones para el humano, consultados en paralelo con un modelo externo, Winston y Amelia. **KEEP** de la iteración 1 intacto y honrado.
 
 ## Design Notes
 
