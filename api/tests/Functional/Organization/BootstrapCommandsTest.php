@@ -37,6 +37,8 @@ final class BootstrapCommandsTest extends KernelTestCase
 {
     private const string TRUNCATE_SQL = 'TRUNCATE membership, organization, identity_user';
 
+    private const string ORGANIZATION_NAME = 'ERPify';
+
     private Connection $connection;
 
     private EntityManagerInterface $entityManager;
@@ -72,7 +74,7 @@ final class BootstrapCommandsTest extends KernelTestCase
 
     public function testBootstrapsTheOrganizationAndFirstAdministrator(): void
     {
-        $this->assertSame(Command::SUCCESS, $this->provision('ERPify')->getStatusCode());
+        $this->assertSame(Command::SUCCESS, $this->provision(self::ORGANIZATION_NAME)->getStatusCode());
         $this->assertSame(Command::SUCCESS, $this->createAdministrator('admin@erpify.test')->getStatusCode());
 
         $this->entityManager->clear();
@@ -83,17 +85,15 @@ final class BootstrapCommandsTest extends KernelTestCase
         $this->assertNotNull($adminId);
         $this->assertSame([Role::ADMIN], $admin->roles());
 
-        // The organization is reachable only through the membership: its existence is guaranteed by the
-        // membership.organization_id FK, so a membership carrying an org id proves the org was provisioned.
         $membership = $this->memberships->findByUserId($adminId);
         $this->assertInstanceOf(Membership::class, $membership);
 
-        $this->assertAdminBelongsToTheOrganization($membership->organizationId(), $adminId);
+        $this->assertMembershipNamesTheProvisionedOrganization($membership->organizationId());
     }
 
     public function testRejectsASecondOrganization(): void
     {
-        $this->assertSame(Command::SUCCESS, $this->provision('ERPify')->getStatusCode());
+        $this->assertSame(Command::SUCCESS, $this->provision(self::ORGANIZATION_NAME)->getStatusCode());
         $this->assertSame(Command::FAILURE, $this->provision('Second Corp')->getStatusCode());
     }
 
@@ -137,19 +137,48 @@ final class BootstrapCommandsTest extends KernelTestCase
     }
 
     /**
-     * The two halves of "the installation has an administrator" live in different aggregates: the ADMIN role
-     * on `identity_user` (asserted above) and the belonging on `membership`. Reading the member list back
-     * from the organization side is what proves the second half was committed under the very organization
-     * the membership names, rather than merely that a row with some org id exists.
+     * The two halves of "the installation has an administrator" live in different aggregates: the `ADMIN` role
+     * on `identity_user` (asserted above) and the belonging on `membership`. The second half is asked of the
+     * `organization` rows themselves rather than by reading the member list back through the membership
+     * repository. That round trip looks like a cross-check and is not one: it asks whether the row already
+     * found by `user_id` is also found by the `organization_id` read off that same row, a predicate no
+     * behaviour of the two commands can falsify — only a mis-mapped repository could, and this test covers
+     * neither the repository nor its mapping.
+     *
+     * What the commands can get wrong is which organization is committed, and under what name. Measured
+     * against a provision that ignores its `name` argument: the member-list round trip stays green, the
+     * second assertion below goes red. The count guards the other direction — the administrator bootstrap
+     * resolves the organization rather than creating one, so a second row here means it created its own
+     * (that a *second* provision is refused is `testRejectsASecondOrganization`, not this).
      */
-    private function assertAdminBelongsToTheOrganization(string $organizationId, string $adminId): void
+    private function assertMembershipNamesTheProvisionedOrganization(string $organizationId): void
     {
-        $members = \array_filter(
-            $this->memberships->findByOrganizationId($organizationId),
-            static fn (Membership $membership): bool => $membership->userId() === $adminId,
+        $this->assertSame(
+            1,
+            $this->organizationCount('SELECT COUNT(*) FROM organization'),
+            'the installation must hold exactly one organization',
         );
 
-        $this->assertNotEmpty($members, 'the administrator must belong to the provisioned organization');
+        // `id` is a `uuid` column, so the cast compares canonically rather than by string casing.
+        $this->assertSame(
+            1,
+            $this->organizationCount(
+                'SELECT COUNT(*) FROM organization WHERE id = CAST(:id AS UUID) AND name = :name',
+                ['id' => $organizationId, 'name' => self::ORGANIZATION_NAME],
+            ),
+            'the membership must name the organization the provision command committed',
+        );
+    }
+
+    /**
+     * @param array<string, string> $parameters
+     */
+    private function organizationCount(string $sql, array $parameters = []): int
+    {
+        $count = $this->connection->fetchOne($sql, $parameters);
+        \assert(\is_numeric($count));
+
+        return (int) $count;
     }
 
     /**

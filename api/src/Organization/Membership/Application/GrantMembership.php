@@ -13,8 +13,8 @@ use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
- * Binds a user to the installation's organization — the published entry point every user-onboarding path
- * (bootstrap today, invitation later) funnels through so a user never exists without exactly one membership.
+ * Binds a user to the installation's organization — the published entry point both user-onboarding paths, the
+ * CLI bootstrap and invitation, funnel through, so a user never exists without exactly one membership.
  * It resolves the single organization itself, so callers in other contexts stay unaware of the organization
  * aggregate and only depend on this one service.
  */

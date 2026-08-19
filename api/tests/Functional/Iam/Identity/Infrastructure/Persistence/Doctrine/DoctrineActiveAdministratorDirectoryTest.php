@@ -169,11 +169,16 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
         $this->inRolledBackTransaction(function (): void {
             $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
             // A membership whose user is not a live identity — what an erasure interrupted between the two
-            // contexts leaves behind. This pins WHICH source answers the invariant: the directory reads
-            // `identity_user.roles` and never joins membership, so belonging alone is not authority and a row
-            // here can never rescue a drained administrator pool. If authorization is ever re-pointed at
-            // membership, this test is the one that has to be revisited deliberately rather than discovered
-            // in production.
+            // contexts leaves behind. It refutes exactly one reading of the invariant, that belonging is
+            // authority: measured, an implementation counting `membership.user_id` alongside the identity rows
+            // turns this method red and no other in the class, and deleting the seed lets the same
+            // implementation pass.
+            //
+            // That is all it refutes, which is narrower than "the directory never joins membership". A
+            // re-pointing that read a role off membership would need a column the table does not have, and one
+            // that INNER JOINed membership to `identity_user` would discount this row for the same reason the
+            // directory does. Such a move needs coverage of its own; this seed only keeps the degenerate
+            // reading from shipping in silence.
             $seeded = $this->connection->executeStatement(
                 <<<'SQL'
                     INSERT INTO membership (id, user_id, organization_id, created_at, updated_at)
