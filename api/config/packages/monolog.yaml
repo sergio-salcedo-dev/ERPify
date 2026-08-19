@@ -62,6 +62,13 @@ when@prod:
                 type: fingers_crossed
                 action_level: error
                 handler: nested
+                # This exclusion governs the routing 404/405s from OUTSIDE `/api/` — the scanner traffic
+                # Caddy hands to PHP, where `RouterListener` throws and HttpKernel's `ErrorListener` logs at
+                # `error`. It is inert on the API surface: `ExceptionResponder` answers there first and
+                # `setResponse()` stops propagation, so `ErrorListener` never runs, and the responder's own
+                # line is `warning` for every 4xx — below `action_level`, so nothing activates. What keeps an
+                # API 404 from flushing this buffer is that level gap, not this list
+                # (`ApiClientErrorBufferCouplingGateTest`).
                 excluded_http_codes: [404, 405]
                 channels: ["!deprecation", "!observability"]
                 buffer_size: 50
