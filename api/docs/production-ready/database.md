@@ -21,7 +21,7 @@ override is provided:
 | `POSTGRES_USER`     | `erpify_user`            |
 | `POSTGRES_PASSWORD` | `erpify_password`        |
 | `POSTGRES_DB`       | `erpify_db`              |
-| `POSTGRES_VERSION`  | `18`                     |
+| `POSTGRES_VERSION`  | `18` (see note below)    |
 | `POSTGRES_PORT`     | `15432` (host-side only) |
 
 These values appear in:
@@ -29,6 +29,15 @@ These values appear in:
 - `api/.env` → `DATABASE_URL` used by Symfony
 - Root `compose.yaml` → `POSTGRES_*` env on the `database` service and the `DATABASE_URL`
   env on the `php` service
+
+> [!IMPORTANT]
+>
+> `POSTGRES_VERSION` feeds **only** `serverVersion=` in `DATABASE_URL`. It does **not** select the
+> image: `compose.yaml` pins the `database` service to a literal tag plus a digest, because
+> dependabot's compose parser reads the tag position with a regex that stops dead at `$` — an
+> interpolated reference yields neither tag nor digest and is skipped in silence, leaving the one
+> image production actually runs untracked. Raising this variable without moving the pin tells
+> Doctrine a version the server is not running; move the two together.
 
 The database is exposed on host port **15432** so you can connect from a local
 client (e.g. DBeaver, TablePlus, `psql`) without touching the container:
@@ -53,6 +62,7 @@ Set the following in `api/.env.prod.local` on the server (see [secrets.md](secre
 POSTGRES_USER=erpify_prod
 POSTGRES_PASSWORD=<strong-random-password>
 POSTGRES_DB=erpify_prod
+# serverVersion= for Doctrine only; the image tag is pinned in compose.yaml — keep the two in step
 POSTGRES_VERSION=18
 ```
 
