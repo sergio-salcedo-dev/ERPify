@@ -1,0 +1,4 @@
+# A line naming a file the sweep does not find.
+tests/Unit/Shared/Architecture/HomeGateProbe.txt :: home
+tests/Unit/Alpha/MirroredGateProbe.txt :: mirrored :: src/Alpha
+tests/Unit/Alpha/VanishedGateProbe.txt :: mirrored :: src/Alpha

@@ -346,6 +346,38 @@ php.lint.public-access: ## Firewall public-exemption classification gate
 	@$(PHP_TEST) bin/phpunit --filter=PublicAccessExemptionGateTest
 	@$(PHP_TEST) bin/phpunit --filter=PublicAccessExemptionRulesGateTest
 
+## —— Artifact-gate placement gate ——————————————————————————————————————————
+
+# Fails CI when an artifact gate — a kernel-free test whose subject is a repository artifact rather than a
+# running behaviour — carries no line in api/.artifact-gate-placement, when a line names a file the sweep no
+# longer finds, when the placement a line declares is not the placement the file's own path has, or when a
+# file is added to api/tests/Unit/Shared/Architecture/Support/, the one directory still holding rule engines
+# outside api/tests/Support/ and a set that may only shrink.
+#
+# It exists because the convention was load-bearing and unwritten. Every GATE target above selects its
+# classes by `--filter` on class name; all but one select out of api/tests/Unit/Shared/Architecture/, whose
+# name is HISTORICAL — it names the folder's founding member and never tracked what landed on it. With no
+# rule stating which case a new gate is in, placement was settled by whichever neighbour got copied, and one
+# subject ended up in the home, mirrored on a module, and in a second one-file
+# tests/Functional/Shared/Architecture/. docs/rules/testing.md states the rule; this gate is what keeps it
+# from being another paragraph.
+#
+# Three classes, each selected BY NAME in its own run, for the reason spelled out at the sibling targets: a
+# common prefix goes green on a strict subset, so a deleted class would leave the others matching and the
+# target reporting success with part of the boundary gone. Each filter's selection is verified with
+# `--list-tests`, never assumed.
+#
+# A green proves every artifact gate the sweep SEES is classified and sits where its line says. Outside the
+# home that sweep is a text heuristic erring in both directions — it skips a gate that also credits
+# production coverage (thirteen such tests today, all already mirrored on their module) and admits any test
+# importing a rule engine — and a gate it never matched has no line to go stale, which is how one sat
+# unclassified through this gate's first green run. It never judges a classification. The registry header
+# enumerates the rest, and says why the list cannot be exhaustive.
+php.lint.gate-placement: ## Artifact-gate placement classification gate
+	@$(PHP_TEST) bin/phpunit --filter=ArtifactGatePlacementGateTest
+	@$(PHP_TEST) bin/phpunit --filter=ArtifactGatePlacementRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=ArtifactGateDetectionRulesGateTest
+
 ## —— Deptrac (architectural boundaries) ————————————————————————————————————
 
 # Static, AST-aware gate over api/src enforcing three concerns in one ruleset
@@ -381,7 +413,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -399,7 +431,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -410,5 +442,6 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence \
         php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary \
         php.lint.composer-stability php.lint.prod-container php.lint.project-context php.lint.public-access \
+        php.lint.gate-placement \
         php.deptrac php.deptrac.baseline \
         php.quality php.quality.dry-run

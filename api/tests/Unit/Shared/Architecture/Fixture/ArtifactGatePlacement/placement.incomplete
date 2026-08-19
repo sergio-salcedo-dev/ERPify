@@ -1,0 +1,2 @@
+# A gate the sweep finds and nothing classifies.
+tests/Unit/Shared/Architecture/HomeGateProbe.txt :: home

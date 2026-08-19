@@ -1,0 +1,164 @@
+# Every artifact gate in `api/tests`, classified by WHERE it is filed and — when that is away from the
+# category home — by what it is mirrored on.
+#
+# An artifact gate is a kernel-free test whose subject is a repository artifact rather than a running
+# behaviour: it reads the tree, a registry, a compose file or a doc as data and asserts a rule over it. The
+# category is defined by that MECHANISM, never by subject. Its home is
+# `api/tests/Unit/Shared/Architecture/`, and that path is HISTORICAL — it names the folder's founding
+# member, a bounded-context isolation gate, and has never tracked what landed on it since.
+#
+# WHY THIS FILE EXISTS. Thirteen `php.lint.*` targets select gate classes by `--filter` on class name;
+# twelve of them select out of the home and one selects a gate filed deliberately elsewhere. No rule
+# anywhere said which case a new gate was in, so the placement was settled by whichever neighbour got
+# copied — and one subject ended up in three places at once: the home, mirrored on a module, and a second
+# one-file `tests/Functional/Shared/Architecture/`. A convention that every build depends on and nothing
+# states is not a convention, it is a habit.
+#
+# HOW TO DECIDE, for the line you are about to add: ask whose rule the gate enforces. A rule that belongs
+# to ONE module — that module's own contract, whatever breadth the sweep needs to enforce it — may be
+# filed `mirrored` on that module. A rule that belongs to no single module (a repo-wide convention, a
+# registry at the api root, a compose file, a doc, the migration directory) goes in the home. Both
+# placements are legitimate; what is not legitimate is choosing by imitation.
+#
+# Format, one per line. `::` is the field separator, so no field may contain it:
+#   <path> :: home
+#   <path> :: mirrored :: <directory under src/ or tests/ that the file mirrors>
+#   <path> :: undecided :: <why the classification is open>
+#
+# `<path>` is api-relative. A `mirrored` subject must EXIST and the file must sit at its mirror
+# (`tests/Unit/<subject minus its src/ or tests/ root>/…`) — `tests/` is the second mirror axis, for a gate
+# whose subject is test infrastructure — and a bare `src`/`tests` is refused, since a whole source root is
+# not a module. `undecided` is for a file already in the home whose membership in the category is an open
+# question; it states a reason, because an exemption with no reason is indistinguishable from an oversight.
+#
+# The gate is three classes — ArtifactGatePlacementGateTest over the real tree, plus
+# ArtifactGateDetectionRulesGateTest and ArtifactGatePlacementRulesGateTest for the falsifiability of the
+# detector and of the placement rules against synthetic input — run by `make php.lint.gate-placement`, each
+# selected by exact name in its own run so a vanished class is an empty suite rather than a green subset.
+#
+# ---------------------------------------------------------------------------------------------------------
+# What it deliberately does NOT do. Read this list as the specification of the gate's blind spots: a green
+# build proves NOTHING that is listed below. Every entry was measured by an adversarial pass that broke the
+# first version of this gate, and the first entry is the one that matters — the list is not exhaustive,
+# because a text matcher over an open-ended set of idioms cannot be shown to be.
+#
+#   - It never judges a classification. `mirrored` on a module whose rule the gate does not enforce passes,
+#     and so does `home` for something that belongs on a module. The completeness check forces the decision
+#     into a diff; review is what judges it. That is the trade every registry here makes.
+#   - The universe has two halves and only one is airtight. Every test file under the home is in it by
+#     LOCATION, whatever the file contains. Elsewhere it is a shape heuristic — kernel-free, crediting no
+#     production coverage, and reaching a file outside its own directory — and it errs in BOTH directions.
+#   - It under-approximates. The reach it recognises is a climb (`dirname(__DIR__…)`, `__DIR__ . '/..`, the
+#     `__FILE__` spellings), a process-derived root (`getcwd()`, `realpath()`), reflection (`getFileName()`)
+#     or an import of a rule engine. A root built from a path CONSTANT, from `$_SERVER`, or by concatenating
+#     `DIRECTORY_SEPARATOR` is invisible — measured, a `Finder` rooted at a class constant passes as a
+#     non-gate. So is a class whose `extends TestCase` arrives through an intermediate abstract base (a text
+#     matcher cannot follow one; nothing in the tree has one today). A gate this half never matched has no
+#     line to go stale, which is how one sat unclassified through the first green build of this gate.
+#   - It over-approximates. An import of anything in `api/tests/Support/` is read as reaching the tree, so a
+#     plain unit test that merely uses a helper from there joins the universe and needs a line. That is
+#     deliberate — the engines' own unit tests are exactly the files whose placement is in question — but it
+#     is not the definition at the top of this file.
+#   - A gate that also `#[CoversClass]`es the production class it reads is skipped outside the home. That is
+#     deliberate: such a test is not wholly a gate, and its placement follows the subject it covers.
+#     Measured, thirteen tests sit in that overlap today, every one already mirrored on an existing `src/`
+#     directory. Coverage credited through a docblock `@covers` is not read at all (the source is
+#     comment-stripped first); the tree carries none.
+#   - A gate that must boot a kernel is out of the category, because the category is kernel-free. One
+#     exists (`tests/Functional/Shared/Architecture/SchedulerCheckpointDurabilityGateTest.php`) and this
+#     file says nothing about where functional tests are filed.
+#   - The sweep does not descend into a SYMLINKED directory under `tests/`, so a gate placed behind one is
+#     invisible in both directions. Following links would open a loop hazard; nothing in the tree uses one.
+#   - It reads text, not an AST. A heredoc holding gate-shaped source reads as the gate itself, and an
+#     import aliased with `as` is resolved only for `TestCase`, not for a `#[CoversClass]` target.
+#   - The engine ratchet reads ONE directory (`tests/Unit/Shared/Architecture/Support/`). An engine filed
+#     under a third name elsewhere passes; a rename of that directory is caught only because emptying it is
+#     allowed solely when both engines are found in `api/tests/Support/`.
+#   - A `mirrored` subject under `tests/Unit/` has no expressible mirror — the derivation prefixes
+#     `tests/Unit/` to what is left of the subject — so such a line reds rather than being satisfiable.
+#   - The reader skips only lines STARTING with `#`, so a trailing comment is swallowed into the last field
+#     and reported as a bad subject rather than as a comment. Every registry in this repo shares that reader.
+#   - Nothing here proves a gate ASSERTS anything. A registered class whose every assertion is vacuous is
+#     classified exactly like one that works.
+#   - Nothing here reads the make targets. A gate wired into no target still needs a line and still gets
+#     one; whether a target runs it is pinned by `failOnEmptyTestSuite`, which turns a `--filter` matching
+#     nothing into exit 1 the next time that target runs, and says nothing about one matching a subset.
+#
+# What the two directions do close: a gate that HAS a line cannot silently lose it. A detector that stops
+# seeing something turns its line stale, and one that starts seeing more leaves the newcomer unclassified.
+# A gate the shape half never matched is invisible to both, which is the hole above and not a guarantee.
+#
+# The two engine tests in the home (BehatVocabularyReaderTest, StepVocabularyRegistryTest) are `home`
+# because their engines are; they move to `tests/Unit/Support/ :: mirrored :: tests/Support` on the day the
+# engines move, which is the placement PhpSourceTest already has.
+# ---------------------------------------------------------------------------------------------------------
+
+tests/Unit/Shared/Architecture/AdministratorSetLockStatementGateTest.php :: home
+tests/Unit/Shared/Architecture/ArtifactGateDetectionRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/ArtifactGatePlacementGateTest.php :: home
+tests/Unit/Shared/Architecture/ArtifactGatePlacementRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/AuditEvidenceActionRegistryGateTest.php :: home
+tests/Unit/Shared/Architecture/AuditEvidenceActionRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/AuditPruneStatementGateTest.php :: home
+tests/Unit/Shared/Architecture/BehatStepVocabularyGateTest.php :: home
+tests/Unit/Shared/Architecture/BehatSuiteCoverageGateTest.php :: home
+tests/Unit/Shared/Architecture/BehatVocabularyReaderTest.php :: home
+tests/Unit/Shared/Architecture/BestEffortReportChannelGateTest.php :: home
+tests/Unit/Shared/Architecture/BoundedContextGateTest.php :: home
+tests/Unit/Shared/Architecture/CaddyfileAccessLogRedactionGateTest.php :: home
+tests/Unit/Shared/Architecture/ComposerStabilityGateTest.php :: home
+tests/Unit/Shared/Architecture/ConstraintMessageValueGateTest.php :: home
+tests/Unit/Shared/Architecture/ConstraintValidatorResolutionGateTest.php :: home
+tests/Unit/Shared/Architecture/DeptracSeamSyncGateTest.php :: home
+tests/Unit/Shared/Architecture/DomainPresentationSeparationGateTest.php :: home
+tests/Unit/Shared/Architecture/EnumWireContractGateTest.php :: home
+tests/Unit/Shared/Architecture/EventDispatchGateTest.php :: home
+tests/Unit/Shared/Architecture/FailedMessagePruneStatementGateTest.php :: home
+tests/Unit/Shared/Architecture/MailAssemblyBoundaryGateTest.php :: home
+tests/Unit/Shared/Architecture/MigrationColumnDefaultGateTest.php :: home
+tests/Unit/Shared/Architecture/MigrationColumnDefaultRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/MonologExclusionDeclarationGateTest.php :: home
+tests/Unit/Shared/Architecture/ObservabilityChannelGateTest.php :: home
+tests/Unit/Shared/Architecture/PersistentTransportPolicyGateTest.php :: home
+tests/Unit/Shared/Architecture/PersistentTransportRoutingShapeGateTest.php :: home
+tests/Unit/Shared/Architecture/PersonContainmentRuleGateTest.php :: home
+tests/Unit/Shared/Architecture/PersonReferenceGateTest.php :: home
+tests/Unit/Shared/Architecture/PersonReferenceRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/PersonReferenceSourceGateTest.php :: home
+tests/Unit/Shared/Architecture/PersonReferenceSourceRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php :: home
+tests/Unit/Shared/Architecture/PersonResourceErasureRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/PersonResourceErasureWitnessGateTest.php :: home
+tests/Unit/Shared/Architecture/ProjectContextManifestRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/ProjectContextPageRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/ProjectContextRegistryRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/ProjectContextVersionGateTest.php :: home
+tests/Unit/Shared/Architecture/PublicAccessExemptionGateTest.php :: home
+tests/Unit/Shared/Architecture/PublicAccessExemptionRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/ReadSideProjectionGateTest.php :: home
+tests/Unit/Shared/Architecture/RedactionVocabularyParityTest.php :: home
+tests/Unit/Shared/Architecture/ScheduleConsumptionGateTest.php :: home
+tests/Unit/Shared/Architecture/ScheduleConsumptionRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/ScheduleDeclarationRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/ScheduleReplicaRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/SensitiveRecipientAddressGateTest.php :: home
+tests/Unit/Shared/Architecture/StepVocabularyRegistryTest.php :: home
+tests/Unit/Shared/Architecture/StrictRequestPayloadGateTest.php :: home
+
+# Reads no repository artifact: it puts candidate separators through `Assert\Iban` at runtime and requires
+# the canonical form to absorb whatever the validator accepts. Whether the category covers a contract test
+# against a dependency is open, and nothing is moved on an open question.
+tests/Unit/Shared/Architecture/IbanSeparatorContractGateTest.php :: undecided :: asks a validator at runtime rather than reading an artifact
+
+# Filed on the module whose contract they enforce.
+tests/Unit/Behat/Context/OutboxUnqualifiedStepsTest.php :: mirrored :: tests/Behat/Context
+tests/Unit/Behat/Context/SupersededRunPhrasingsTest.php :: mirrored :: tests/Behat/Context
+tests/Unit/Iam/Session/SessionSubstitutabilitySeamTest.php :: mirrored :: src/Iam/Session
+tests/Unit/Shared/ErrorContract/Application/BannedDoctrineApisTest.php :: mirrored :: src/Shared/ErrorContract
+tests/Unit/Shared/ErrorContract/Application/ConstantTimeAuthBranchingContractTest.php :: mirrored :: src/Shared/ErrorContract
+tests/Unit/Shared/ErrorContract/Application/ErrorContractGateTest.php :: mirrored :: src/Shared/ErrorContract
+tests/Unit/Shared/ErrorContract/Application/LoggerInterfaceContractTest.php :: mirrored :: src/Shared/ErrorContract
+tests/Unit/Shared/ErrorContract/Application/NativeJsonEncodeContractTest.php :: mirrored :: src/Shared/ErrorContract
+tests/Unit/Shared/ErrorContract/Domain/Exception/TaxonomyArchitectureTest.php :: mirrored :: src/Shared/ErrorContract
+tests/Unit/Shared/Serialization/ResourceDtoContractTest.php :: mirrored :: src/Shared/Serialization
+tests/Unit/Support/PhpSourceTest.php :: mirrored :: tests/Support

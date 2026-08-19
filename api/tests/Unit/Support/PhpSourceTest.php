@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Architecture;
+namespace Erpify\Tests\Unit\Support;
 
 use Erpify\Tests\Support\PhpSource;
 use PHPUnit\Framework\Attributes\CoversClass;

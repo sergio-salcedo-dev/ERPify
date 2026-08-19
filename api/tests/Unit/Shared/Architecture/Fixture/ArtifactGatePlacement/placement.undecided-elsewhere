@@ -1,0 +1,4 @@
+# An `undecided` line on a file that does not sit in the home. Placement is only open for a file already
+# there; anywhere else it was decided by being put there.
+tests/Unit/Shared/Architecture/HomeGateProbe.txt :: home
+tests/Unit/Alpha/MirroredGateProbe.txt :: undecided :: nobody looked

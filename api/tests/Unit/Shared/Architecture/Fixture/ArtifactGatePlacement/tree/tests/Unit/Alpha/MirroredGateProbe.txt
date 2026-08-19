@@ -1,0 +1,21 @@
+<?php
+
+// Not a `.php` file, and deliberately so: this is INPUT to a text-reading detector, and a fixer that
+// rewrote it would change what the sweep is being shown. Every PHP tool in the tree walks `tests/`.
+
+declare(strict_types=1);
+
+use PHPUnit\Framework\TestCase;
+
+/**
+ * A gate standing in for one scoped to a single module and filed mirrored on it. It carries the shape the
+ * detector reads outside the home — kernel-free, no production coverage credited, and a climb out of its
+ * own directory — so the fixture exercises the detector rather than assuming it.
+ */
+final class MirroredGateProbe extends TestCase
+{
+    public function sourceRoot(): string
+    {
+        return \dirname(__DIR__, 3) . '/src/Alpha';
+    }
+}
