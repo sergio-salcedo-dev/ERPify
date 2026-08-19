@@ -23,15 +23,13 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Throwable;
 
 /**
- * Bootstraps the installation's first administrator: creates the identity and, in the same transaction,
- * its ADMIN membership in the already-provisioned organization — so a user never exists without a
+ * Bootstraps the installation's first administrator: creates the identity carrying ADMIN and, in the same
+ * transaction, its membership in the already-provisioned organization — so a user never exists without a
  * membership, and the organization satisfies its "at least one active ADMIN" invariant from the start.
- * There is no public sign-up; subsequent members arrive by invitation. The plaintext password is hashed
- * here in Infrastructure and never printed or logged; prefer the hidden prompt over the visible argument.
- *
- * Roles are written to both the identity and the membership: the membership is the authoritative,
- * org-scoped home for roles, while the identity's role list stays the operative source the session firewall
- * reads today (the auth path is re-pointed at the membership in a later story, not here).
+ * The role is written to the identity alone, which is where authorization is read from; the membership
+ * carries the belonging and nothing else. There is no public sign-up; subsequent members arrive by
+ * invitation. The plaintext password is hashed here in Infrastructure and never printed or logged; prefer
+ * the hidden prompt over the visible argument.
  *
  * The coupling is the shape of a composition root, not a smell to refactor away. This command is the one
  * place that joins two bounded contexts — `CreateUser` in Identity and `GrantMembership` in Organization —
@@ -43,7 +41,7 @@ use Throwable;
  */
 #[AsCommand(
     name: 'organization:administrator:create',
-    description: "Create the installation's first administrator (identity + ADMIN membership)",
+    description: "Create the installation's first administrator (ADMIN identity + organization membership)",
 )]
 final class CreateInitialAdministratorCommand extends Command
 {
@@ -132,7 +130,7 @@ final class CreateInitialAdministratorCommand extends Command
                 $user = $this->createUser->create($email, $hashedPassword, Role::ADMIN);
                 $userId = $user->getId() ?? throw new RuntimeException('The created user has no id.');
 
-                $this->grantMembership->grant($userId, Role::ADMIN);
+                $this->grantMembership->grant($userId);
             });
         } catch (Throwable $throwable) {
             $io->error(\sprintf('Could not create the administrator: %s', $throwable->getMessage()));
@@ -140,7 +138,7 @@ final class CreateInitialAdministratorCommand extends Command
             return Command::FAILURE;
         }
 
-        $io->success(\sprintf('Created administrator %s with an ADMIN membership.', $email));
+        $io->success(\sprintf('Created administrator %s and their organization membership.', $email));
 
         return Command::SUCCESS;
     }

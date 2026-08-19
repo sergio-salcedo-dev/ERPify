@@ -6,22 +6,25 @@ namespace Erpify\Organization\Membership\Domain\Entity;
 
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
- * The authoritative user↔organization link: it binds an identity to the organization it belongs to and
- * carries the org-scoped roles that identity holds. A user is never "global" — exactly one membership per
- * user (the UNIQUE `user_id`), assigned before the user is ever active. Roles live here, not on the user:
- * they are a property of belonging to an organization, so the org-scoping seam and the authorization data
- * share one home.
+ * The authoritative user↔organization link: it binds an identity to the organization it belongs to. A user is
+ * never "global" — exactly one membership per user (the UNIQUE `user_id`), assigned before the user is ever
+ * active.
+ *
+ * It carries no roles. Authorization is answered from the identity aggregate alone (`identity_user.roles`), so
+ * there is exactly one role authority and no second source that can disagree with it about what a person may
+ * do — a divergence nothing in the schema could have detected, since the two live in different bounded
+ * contexts and no constraint spans them. Genuinely organization-scoped authority (ownership, per-tenant roles)
+ * would reopen that choice deliberately rather than by accretion; see `docs/adr/authorization-model-boundaries.md`.
  *
  * Cross-module references are by id, never a mapped association: `userId` points at an `Iam\Identity\User`
  * and `organizationId` at an {@see \Erpify\Organization\Organization\Domain\Entity\Organization}; the
  * physical foreign keys are re-injected schema-aware by a `postGenerateSchema` listener so no object graph
- * crosses a module boundary. {@see Role} is consumed as published authorization vocabulary.
+ * crosses a module boundary.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'membership')]
@@ -35,11 +38,7 @@ final class Membership extends AggregateRoot
     #[ORM\Column(name: 'organization_id', type: Types::GUID)]
     private string $organizationId;
 
-    /** @var list<string> */
-    #[ORM\Column(type: Types::JSON)]
-    private array $roles;
-
-    private function __construct(string $id, string $userId, string $organizationId, Role ...$roles)
+    private function __construct(string $id, string $userId, string $organizationId)
     {
         parent::__construct();
 
@@ -49,12 +48,11 @@ final class Membership extends AggregateRoot
         $this->id = $id;
         $this->userId = $userId;
         $this->organizationId = $organizationId;
-        $this->roles = $this->distinctRoleValues($roles);
     }
 
-    public static function grant(string $id, string $userId, string $organizationId, Role ...$roles): self
+    public static function grant(string $id, string $userId, string $organizationId): self
     {
-        return new self($id, $userId, $organizationId, ...$roles);
+        return new self($id, $userId, $organizationId);
     }
 
     public function userId(): string
@@ -65,34 +63,5 @@ final class Membership extends AggregateRoot
     public function organizationId(): string
     {
         return $this->organizationId;
-    }
-
-    /**
-     * @return list<Role>
-     */
-    public function roles(): array
-    {
-        return \array_map(Role::from(...), $this->roles);
-    }
-
-    public function hasRole(Role $role): bool
-    {
-        return \in_array($role->value, $this->roles, true);
-    }
-
-    /**
-     * @param array<Role> $roles
-     *
-     * @return list<string>
-     */
-    private function distinctRoleValues(array $roles): array
-    {
-        $values = [];
-
-        foreach ($roles as $role) {
-            $values[$role->value] = $role->value;
-        }
-
-        return \array_values($values);
     }
 }

@@ -28,7 +28,7 @@ ERPify/
 │   │   │   └── Session/            # reserved skeleton — identity/invitation epic
 │   │   ├── Organization/           # tenancy — multi-tenant-ready, operation deferred (adr/identity-invitation-lifecycle.md D2)
 │   │   │   ├── Organization/       # tenant aggregate — one org per installation, CLI bootstrap (organization:provision / :administrator:create)
-│   │   │   └── Membership/         # authoritative user↔org link + org-scoped roles; references User/Organization by id
+│   │   │   └── Membership/         # authoritative user↔org link (belonging only — roles are authoritative on User); references User/Organization by id
 │   │   └── Shared/                 # minimal Kernel + capability modules — see docs/adr/shared-module-organization.md
 │   │       ├── Kernel/             # DDD building blocks — [Domain] Aggregate, Entity (Identifiable/Timestamped), Enum (Currency), ValueObject (NormalizedText); [Application] Result
 │   │       ├── ErrorContract/      # RFC 9457 pipeline — [Domain] Exception taxonomy; [Application] ProblemDetailsFactory/ProblemDetails/RedactionDenylist; [Infrastructure] ProblemDetailsResponder + ExceptionResponder/RateLimitListener

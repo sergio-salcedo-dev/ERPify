@@ -23,8 +23,8 @@ interface MembershipRepository
 
     /**
      * Hard-deletes the user's membership and returns how many rows went. A membership is a pure link — the
-     * user it binds, the organization it binds them to, and the roles that belonging carries — so once the
-     * person is gone there is nothing left in the row that means anything, and no state worth keeping.
+     * user it binds and the organization it binds them to — so once the person is gone there is nothing left
+     * in the row that means anything, and no state worth keeping.
      *
      * `user_id` is UNIQUE, so this removes at most one row; it is phrased as a count rather than a boolean
      * because the erasure that consumes it reports counts, and because the uniqueness is a schema fact this
