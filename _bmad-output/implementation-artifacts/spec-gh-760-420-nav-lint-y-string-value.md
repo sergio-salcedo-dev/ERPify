@@ -2,8 +2,8 @@
 title: 'GH #760 + #420 — guardarraíl propio para la navegación dura y declive del trait StringValue'
 type: 'chore'
 created: '2026-08-18'
-status: 'in-review'
-baseline_commit: '85c1687cd3dd836d2692eda2d93e7bc693c8ed8b'
+status: 'done'
+baseline_commit: '89c0b206ed95c03211831f0c8c3ee1193ddfc606'
 review_loop_iteration: 3
 context: []
 ---
@@ -55,6 +55,49 @@ context: []
 - Dado el diff guardado antes de `make pwa.quality`, cuando el gate termina, entonces es **byte a byte el mismo**.
 - Dado `api/src`, entonces `git diff --stat -- api/` está vacío.
 - De los 7 arreglos preexistentes: **5** tienen test propio y cada uno se puso rojo al revertir **su** arreglo, medido uno a uno; **1** es una corrección de comentario, que ningún test puede falsificar; y **1 —el hoist de `setIsSidebarOpen(false)`— NO tiene test**: revertirlo deja la suite verde. La redacción anterior de este criterio («los 7, cada uno con su test») era falsa y la auditoría de aceptación la refutó. La primera versión del test del doble logout además era vacua: pasaba sin la guarda, porque el menú se cierra al primer clic y el segundo no alcanzaba ningún manejador; se reescribió para reabrir el menú.
+
+### Review Findings
+
+`bmad-code-review`, 2026-08-19. Tres capas en paralelo (Blind Hunter, Edge Case Hunter, Acceptance Auditor); ninguna falló. Severidad asignada aquí por consecuencia, descartando la que asignó cada capa.
+
+**Decision (2) — resueltas por el humano, consultadas antes con un modelo externo, Winston y Amelia:**
+
+- [x] [Review][Decision] **La cota de 3 s del sign-out** — resuelta como **(c) sola**: `replace()` en el sitio de sign-out, `keepalive` **declinado sobre medición** (el aborto no se reproduce en 4 configuraciones). Reabrible con evidencia de revokes que no llegan.
+- [x] [Review][Decision] **Si el gate propio merece existir** — resuelta arreglando su **sujeto**, no su anchura: receptores globales enumerados, mensaje honesto, puntos ciegos en `pwa/CLAUDE.md`, y test que lo fija en las dos direcciones.
+
+**Patch (17) — aplicados:**
+
+- [x] [Review][Patch] El selector casaba cualquier objeto con `.location` — falso positivo sobre campo de dominio [`pwa/eslint.config.mjs`]
+- [x] [Review][Patch] Agujero: `document.location = url` invisible [`pwa/eslint.config.mjs`]
+- [x] [Review][Patch] Agujero: acceso computado `location["assign"](u)` invisible [`pwa/eslint.config.mjs`]
+- [x] [Review][Patch] El mensaje afirmaba una cobertura total que la medición refuta [`pwa/eslint.config.mjs`]
+- [x] [Review][Patch] El comentario de la config explicaba un mecanismo imposible (la regla de Next no resuelve receptor sin `globals`) [`pwa/eslint.config.mjs`]
+- [x] [Review][Patch] El `catch` del transporte defendía un `SecurityError` que `replace()` no puede lanzar; residual declarado [`pwa/src/context/shared/http-client/infrastructure/FetchHttpClient.ts:82`]
+- [x] [Review][Patch] El comentario de `isLeaving` alegaba un rebote que este mismo diff hizo imposible [`pwa/src/app/backoffice/BackOfficeLayoutClient.tsx:76`]
+- [x] [Review][Patch] `isLeaving` no tenía vía de liberación — logout muerto en ese documento [`pwa/src/app/backoffice/BackOfficeLayoutClient.tsx:103`]
+- [x] [Review][Patch] `router.push` sin proteger durante la ventana de salida [`pwa/src/app/backoffice/BackOfficeLayoutClient.tsx:108`]
+- [x] [Review][Patch] El sign-out usaba `assign()`, dejando la página autenticada a un Atrás [`pwa/src/app/backoffice/BackOfficeLayoutClient.tsx:101`]
+- [x] [Review][Patch] `afterMs` tiraba el handle del timer — 3 s retenidos incluso en el camino feliz [`pwa/src/app/backoffice/BackOfficeLayoutClient.tsx:33`]
+- [x] [Review][Patch] Un test dejaba un `setTimeout` real de 3 s sin cancelar [`pwa/tests/app/backoffice/backOfficeLayoutClient.test.tsx:156`]
+- [x] [Review][Patch] El A/B del transporte estaba sobredeterminado: fallaba por `TypeError` de forma-de-stub, no por su aserción [`pwa/tests/context/shared/http-client/infrastructure/FetchHttpClient.test.ts:523`]
+- [x] [Review][Patch] Un test decía fijar un `SecurityError` que no fija [`pwa/tests/context/shared/http-client/infrastructure/FetchHttpClient.test.ts:604`]
+- [x] [Review][Patch] El arreglo del sidebar no tenía test; añadido parametrizado sobre las dos ramas [`pwa/tests/app/backoffice/backOfficeLayoutClient.test.tsx`]
+- [x] [Review][Patch] El AC de «los 7 arreglos con test propio» era falso; corregido a 5 + 1 comentario + 1 sin test (ya cubierto)
+- [x] [Review][Patch] Artefacto y PR desalineados: `Code Map`, `baseline_commit` pre-rebase, contradicción del cuerpo de PR sobre el sitio de logout, el sitio B sin nombrar su caso legítimo, línea de 101 caracteres, y `pwa/CLAUDE.md` sin su párrafo de puntos ciegos
+
+**Defer (7) — preexistentes o fuera de alcance:**
+
+- [x] [Review][Defer] El logout está acoplado al **destino** del ítem de menú, no a su intención — issue #771
+- [x] [Review][Defer] La UI de error del 401 se pinta durante la ventana de unload — issue #772
+- [x] [Review][Defer] `eslint.config.mjs` no declara `languageOptions.globals`, dejando una regla de Next inerte en todo el repo — issue #773
+- [x] [Review][Defer] La cota vive en la capa de presentación; el invariante «ninguna petición cuelga» es del transporte [`pwa/src/app/backoffice/BackOfficeLayoutClient.tsx:28`]
+- [x] [Review][Defer] Sin afordancia de «saliendo» durante hasta 3 s: el menú se cierra y no hay señal [`pwa/src/app/backoffice/BackOfficeLayoutClient.tsx`]
+- [x] [Review][Defer] Si la navegación es **ignorada** (sandbox) no se lanza nada, así que el latch sobrevive y los 401 posteriores se tragan — residual declarado en el comentario [`pwa/src/context/shared/http-client/infrastructure/FetchHttpClient.ts:82`]
+- [x] [Review][Defer] Puntos ciegos irreductibles del selector: receptor con alias, `location.reload()`, `window.open(u,"_self")` — documentados, no corregibles con un selector sintáctico
+
+**Dismissed (5)** — ruido o refutados midiendo: «la cota cancela el revoke» (no se reproduce en 4/4 configuraciones); `logout()` puede rechazar y producir una unhandled rejection (`AuthProvider` captura y tiene `finally`, no puede); colisiones de `endsWith` con `revoke-current` (medidas: ninguna); `/login/` con barra final (Next 308-redirige); el asunto del commit sin referencia a issue (el `(#NNN)` del log es el número de PR del squash, y el check B de `bmad.status.audit` va de tags de historia, que aquí no hay).
+
+**Violación de proceso, registrada porque no tiene parche:** los hallazgos de la iteración 1 entraron en este artefacto **nueve minutos después** de `gh pr create`, en trabajo de superficie de autenticación. El gate de `CLAUDE.md` los quiere escritos **antes** de abrir.
 
 ## Spec Change Log
 
