@@ -14,5 +14,5 @@ use SensitiveParameter;
  */
 interface PasswordResetEmailSender
 {
-    public function send(string $recipientEmail, #[SensitiveParameter] string $resetToken): void;
+    public function send(#[SensitiveParameter] string $recipientEmail, #[SensitiveParameter] string $resetToken): void;
 }

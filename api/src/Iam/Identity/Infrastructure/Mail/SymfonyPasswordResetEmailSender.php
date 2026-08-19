@@ -25,7 +25,7 @@ final readonly class SymfonyPasswordResetEmailSender implements PasswordResetEma
     }
 
     #[Override]
-    public function send(string $recipientEmail, #[SensitiveParameter] string $resetToken): void
+    public function send(#[SensitiveParameter] string $recipientEmail, #[SensitiveParameter] string $resetToken): void
     {
         $this->mailer->send($this->content(), $recipientEmail, $resetToken);
     }

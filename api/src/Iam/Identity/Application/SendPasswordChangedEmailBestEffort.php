@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Application;
 
 use Psr\Log\LoggerInterface;
+use SensitiveParameter;
 use Throwable;
 
 /**
@@ -22,7 +23,7 @@ final readonly class SendPasswordChangedEmailBestEffort
     ) {
     }
 
-    public function send(string $recipientEmail): void
+    public function send(#[SensitiveParameter] string $recipientEmail): void
     {
         try {
             $this->sender->send($recipientEmail);

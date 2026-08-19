@@ -43,6 +43,7 @@ final readonly class SecurityLinkMailer
 
     public function send(
         SecurityLinkEmailContent $content,
+        #[SensitiveParameter]
         string $recipientEmail,
         #[SensitiveParameter]
         string $token,

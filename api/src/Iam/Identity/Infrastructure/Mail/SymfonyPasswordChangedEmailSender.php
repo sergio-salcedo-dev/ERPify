@@ -9,6 +9,7 @@ use Erpify\Shared\Mailer\Infrastructure\BulletproofEmailChrome;
 use Erpify\Shared\Mailer\Infrastructure\DeliverableSecurityTransport;
 use Erpify\Shared\Mailer\Infrastructure\SecuritySenderAddress;
 use Override;
+use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
@@ -43,7 +44,7 @@ final readonly class SymfonyPasswordChangedEmailSender implements PasswordChange
     }
 
     #[Override]
-    public function send(string $recipientEmail): void
+    public function send(#[SensitiveParameter] string $recipientEmail): void
     {
         $this->transport->ensureDeliverable();
 
