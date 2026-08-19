@@ -91,10 +91,23 @@ services:
         arguments:
             $failedTransport: '@messenger.transport.failed'
 
-    # Untargeted on purpose: the tag with no `handler` or `channel` attribute applies the processor to
-    # every handler, which is the point — the field it redacts is written by the framework as readily as
-    # by our own code, so naming the channels that carry it today would date on the next library that
-    # adopts the convention. Tagged one by one rather than through `_instanceof` on Monolog's interface:
-    # there is exactly one processor, and a rule that enrols the next one silently is a surprise.
+    # Untargeted on purpose: the tag with no `handler` or `channel` attribute makes `AddProcessorsPass`
+    # push the processor onto every channel logger, which is the point — the fields these redact are
+    # written by the framework as readily as by our own code, so naming the channels that carry them today
+    # would date on the next library that adopts the convention. A logger processor also runs BEFORE any
+    # handler sees the record, which is what keeps the redaction ahead of the `fingers_crossed` buffer and
+    # ahead of the handler-scoped `PsrLogMessageProcessor` that interpolates the message.
+    #
+    # The tag is not redundant, and the reason is worth the four lines. `MonologExtension` calls
+    # `registerForAutoconfiguration(ProcessorInterface::class)`, so autoconfiguration alone already enrols
+    # every class here implementing that interface — but the two mechanisms are INDEPENDENT, and an
+    # explicit tag survives what switches autoconfiguration off. Measured against the compiled prod
+    # container, over a purged cache on every arm: tag + autoconfiguration → 14 `pushProcessor` sites; tag
+    # with `autoconfigure: false` → 14; no definition at all → 14; tag removed AND `autoconfigure: false`
+    # → 0. Enrolment IS the control these two classes exist to provide, so it is written where a reader
+    # looks for it rather than left to a framework default a later `_defaults` edit could switch off.
     Erpify\Shared\Monitoring\Infrastructure\Monolog\RequestUriRedactionProcessor:
+        tags: ['monolog.processor']
+
+    Erpify\Shared\Monitoring\Infrastructure\Monolog\PersonDataRedactionProcessor:
         tags: ['monolog.processor']
