@@ -58,6 +58,11 @@ const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 /** Opens attempted on the account menu before the failure is allowed to surface. */
 const OPEN_ATTEMPTS = 3;
 
+const SIGN_OUT = "sign-out";
+
+/** The label the sign-out entry wears while its revoke is outstanding. */
+const LEAVING_LABEL = "Signing out…";
+
 function required<T>(value: T | undefined, what: string): T {
   if (value === undefined) throw new Error(`The navigation model no longer declares ${what}.`);
   return value;
@@ -67,10 +72,10 @@ function required<T>(value: T | undefined, what: string): T {
 // covered without editing this file — and a model that stopped declaring one fails here rather than
 // leaving the assertions below true of an empty list.
 const ACCOUNT_ENTRIES: readonly NavSubItem[] = accountMenuItem.subItems ?? [];
-const ACCOUNT_LINKS = ACCOUNT_ENTRIES.filter((entry) => entry.path !== Routes.HOME);
+const ACCOUNT_LINKS = ACCOUNT_ENTRIES.filter((entry) => entry.action === undefined);
 const ACCOUNT_LOGOUT = required(
-  ACCOUNT_ENTRIES.find((entry) => entry.path === Routes.HOME),
-  "an account entry targeting HOME (the logout)",
+  ACCOUNT_ENTRIES.find((entry) => entry.action === SIGN_OUT),
+  "an account entry carrying the sign-out intent",
 );
 // "My profile" repeats its parent's path, so an entry below it is what proves the active-state walk
 // looks at the sub-items instead of only comparing the parent.
@@ -105,6 +110,51 @@ async function openAccountMenu(): Promise<HTMLElement> {
 
   return screen.findByTestId("bo-layout__account-menu");
 }
+
+/**
+ * Expands the sidebar's Account group and returns the aside. The desktop sidebar renders its
+ * sub-items through `SidebarItem`, which keeps them collapsed until the parent is clicked — so
+ * this leaf is reachable only through that toggle, and it is the surface that stays on screen for
+ * the whole sign-out window.
+ */
+function openSidebarAccountGroup(): HTMLElement {
+  const sidebar = screen.getByRole("complementary");
+  fireEvent.click(within(sidebar).getByTitle(accountMenuItem.name));
+  return sidebar;
+}
+
+/**
+ * The three surfaces that render the account entries, each with its own QA address. Sign-out has to
+ * work identically through all of them: the discriminator travels from the model through whichever
+ * component renders the leaf, and the desktop sidebar's goes through a design-system component that
+ * used to forward only the path.
+ */
+const SIGN_OUT_SURFACES: ReadonlyArray<
+  readonly [string, () => Promise<void>, (entry: NavSubItem) => string]
+> = [
+  [
+    "the desktop sidebar",
+    async () => {
+      openSidebarAccountGroup();
+    },
+    (entry) => required(entry.testId, "a test id for the sign-out entry"),
+  ],
+  [
+    "the mobile drawer",
+    async () => {
+      fireEvent.click(screen.getByLabelText("Open navigation menu"));
+      await screen.findByRole("dialog");
+    },
+    (entry) => `${required(entry.testId, "a test id for the sign-out entry")}--mobile`,
+  ],
+  [
+    "the top-bar menu",
+    async () => {
+      await openAccountMenu();
+    },
+    menuTestId,
+  ],
+];
 
 // Mirrors REVOKE_BUDGET_MS in BackOfficeLayoutClient: the wait is a contract with the user
 // (leave within this budget), so the test states it rather than reaching for the module's copy.
@@ -156,6 +206,42 @@ describe("BackOfficeLayoutClient", () => {
     // A push would keep this guarded subtree mounted, and RequireAuth would send the just-revoked
     // session to /login instead of the public landing.
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it.each(SIGN_OUT_SURFACES)("signs out from %s", async (_label, open, addressOf) => {
+    // The top-bar menu is the only surface the suite reached before, and it is the only one whose
+    // leaf the layout renders itself. The sidebar's goes through SidebarItem — a design-system
+    // component whose callback used to carry the path alone, so an intent-keyed branch would have
+    // left this leaf navigating to the landing page with the session still alive.
+    renderLayout();
+    await open();
+
+    fireEvent.click(screen.getByTestId(addressOf(ACCOUNT_LOGOUT)));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+    expect(logout).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("says it is leaving, on the surface that stays on screen while it does", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      logout.mockImplementationOnce(() => new Promise<void>(() => {}));
+      renderLayout();
+      openSidebarAccountGroup();
+
+      const address = required(ACCOUNT_LOGOUT.testId, "a test id for the sign-out entry");
+      fireEvent.click(screen.getByTestId(address));
+
+      // aria-disabled, never `disabled`: the click has to keep reaching the handler so the
+      // in-flight guard stays the single point that drops it, and stays falsifiable.
+      await waitFor(() =>
+        expect(screen.getByTestId(address)).toHaveAttribute("aria-disabled", "true"),
+      );
+      expect(screen.getByTestId(address)).toHaveTextContent(LEAVING_LABEL);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("drops a second sign-out while the first is still in flight", async () => {
@@ -223,6 +309,15 @@ describe("BackOfficeLayoutClient", () => {
       fireEvent.click(entry);
 
       await waitFor(() => expect(screen.queryByTestId(testId)).toBeNull());
+      // The drawer closes on both branches — `setIsSidebarOpen(false)` runs before either — so
+      // without these the sign-out case would stay green with the intent never forwarded.
+      if (isSignOut) {
+        expect(logout).toHaveBeenCalledTimes(1);
+        expect(push).not.toHaveBeenCalled();
+      } else {
+        expect(logout).not.toHaveBeenCalled();
+        expect(push).toHaveBeenCalledWith(ACCOUNT_LINKS[0].path);
+      }
     } finally {
       vi.useRealTimers();
     }

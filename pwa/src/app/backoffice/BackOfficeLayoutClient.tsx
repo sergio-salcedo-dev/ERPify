@@ -17,7 +17,13 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { sectionTitleFor } from "./_lib/sectionTitle";
-import { backofficeMenuGroups, accountMenuItem, type NavItem } from "./_lib/backofficeMenu";
+import {
+  backofficeMenuGroups,
+  accountMenuItem,
+  type NavItem,
+  type NavSubItem,
+  type NavAction,
+} from "./_lib/backofficeMenu";
 import { RequireAuth, DevSessionSwitcher } from "@/context/shared/access/infrastructure/ui";
 import { useSession } from "@/context/shared/access/application/useSession";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
@@ -74,16 +80,16 @@ export default function BackOfficeLayoutClient({
   // second attempt needs it reopened — an asynchronous gap a re-render always wins.
   const [isLeaving, setIsLeaving] = useState(false);
 
-  const handleNavigation = (path: string) => {
+  const handleNavigation = (path: string, action?: NavAction) => {
     setIsSidebarOpen(false);
-    if (path === Routes.HOME) {
+    if (action === "sign-out") {
       // A second click POSTs a second revoke against a session the first one already
       // revoked, and schedules a second navigation behind it. Reachable for as long as the
       // first revoke is outstanding: the click closes the menu, so it needs the menu
       // reopened, which is exactly the window REVOKE_BUDGET_MS bounds.
       if (isLeaving) return;
       setIsLeaving(true);
-      // The account menu's logout entry targets HOME (the public landing). logout()
+      // Where sign-out lands is `path`; that it signs out is `action`. logout()
       // revokes the server session (dropping its cookie) then clears client state; wait up
       // to REVOKE_BUDGET_MS for it so the cookie is normally gone before leaving. Then leave
       // the authenticated area with a full-document navigation rather than router.push: an
@@ -112,14 +118,27 @@ export default function BackOfficeLayoutClient({
     router.push(path);
   };
 
-  const navigateTo = (path: string) => () => handleNavigation(path);
+  const navigateTo = (path: string, action?: NavAction) => () => handleNavigation(path, action);
 
   // The top-bar menu mirrors the sidebar's Account group rather than declaring its own
   // entries, so the two can never drift. Logout is split out: it is the only entry whose
   // target leaves the back office, and it reads as destructive.
   const accountEntries = accountMenuItem.subItems ?? [];
-  const accountLinks = accountEntries.filter((entry) => entry.path !== Routes.HOME);
-  const accountLogout = accountEntries.find((entry) => entry.path === Routes.HOME);
+  const accountLinks = accountEntries.filter((entry) => entry.action === undefined);
+  const accountLogout = accountEntries.find((entry) => entry.action === "sign-out");
+
+  // One derivation for all three surfaces that render this entry — sidebar, mobile drawer and
+  // top bar — so the leaving state cannot appear on one and be missing from the others.
+  const isEntryLeaving = (entry: NavSubItem) => isLeaving && entry.action === "sign-out";
+  const entryLabel = (entry: NavSubItem) => (isEntryLeaving(entry) ? "Signing out…" : entry.name);
+  const accountItemWithState = {
+    ...accountMenuItem,
+    subItems: accountEntries.map((entry) => ({
+      ...entry,
+      name: entryLabel(entry),
+      isBusy: isEntryLeaving(entry),
+    })),
+  };
   const accountEmail = session?.user.email ?? "";
 
   const isItemActive = (item: NavItem) => {
@@ -200,7 +219,7 @@ export default function BackOfficeLayoutClient({
                 </p>
               )}
               <SidebarItem
-                {...accountMenuItem}
+                {...accountItemWithState}
                 isActive={isItemActive(accountMenuItem)}
                 onClick={handleNavigation}
                 isCompact={isCompact}
@@ -272,7 +291,7 @@ export default function BackOfficeLayoutClient({
                                   <button
                                     type="button"
                                     key={subItem.name}
-                                    onClick={navigateTo(subItem.path)}
+                                    onClick={navigateTo(subItem.path, subItem.action)}
                                     title={subItem.name}
                                     data-testid={
                                       subItem.testId ? `${subItem.testId}--mobile` : undefined
@@ -317,8 +336,9 @@ export default function BackOfficeLayoutClient({
                             <button
                               type="button"
                               key={subItem.name}
-                              onClick={() => handleNavigation(subItem.path)}
-                              title={subItem.name}
+                              onClick={() => handleNavigation(subItem.path, subItem.action)}
+                              title={entryLabel(subItem)}
+                              aria-disabled={isEntryLeaving(subItem)}
                               data-testid={subItem.testId ? `${subItem.testId}--mobile` : undefined}
                               className={`w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-semibold transition-all ${
                                 pathname === subItem.path
@@ -327,7 +347,7 @@ export default function BackOfficeLayoutClient({
                               }`}
                             >
                               {subItem.icon && <subItem.icon className="w-3.5 h-3.5" />}
-                              {subItem.name}
+                              {entryLabel(subItem)}
                             </button>
                           ))}
                         </div>
@@ -449,8 +469,9 @@ export default function BackOfficeLayoutClient({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           variant="destructive"
-                          onClick={navigateTo(accountLogout.path)}
-                          title={accountLogout.name}
+                          onClick={navigateTo(accountLogout.path, accountLogout.action)}
+                          title={entryLabel(accountLogout)}
+                          aria-disabled={isEntryLeaving(accountLogout)}
                           data-testid={
                             accountLogout.testId ? `${accountLogout.testId}--menu` : undefined
                           }
@@ -458,7 +479,7 @@ export default function BackOfficeLayoutClient({
                           {accountLogout.icon ? (
                             <accountLogout.icon className="size-4" aria-hidden />
                           ) : null}
-                          {accountLogout.name}
+                          {entryLabel(accountLogout)}
                         </DropdownMenuItem>
                       </>
                     ) : null}

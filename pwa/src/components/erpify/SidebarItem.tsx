@@ -10,6 +10,17 @@ interface SubItem {
   icon?: LucideIcon;
   /** Optional `data-testid` for the sub-item button. */
   testId?: string;
+  /**
+   * Forwarded verbatim to `onClick` so the consumer can act on what an entry means rather
+   * than on where it points. This component never interprets it.
+   */
+  action?: "sign-out";
+  /**
+   * Marks the entry as already working. Rendered as `aria-disabled`, not `disabled`: the
+   * click must still reach `onClick`, because the consumer's own in-flight guard is what
+   * drops it — a view that swallowed the event instead would make that guard untestable.
+   */
+  isBusy?: boolean;
 }
 
 interface SidebarItemProps {
@@ -17,7 +28,7 @@ interface SidebarItemProps {
   icon: LucideIcon;
   path: string;
   isActive: boolean;
-  onClick: (path: string) => void;
+  onClick: (path: string, action?: "sign-out") => void;
   subItems?: SubItem[];
   isCompact?: boolean;
   /** Optional `data-testid` for the top-level item button. */
@@ -101,8 +112,9 @@ export function SidebarItem({
               <button
                 type="button"
                 key={subItem.name}
-                onClick={() => onClick(subItem.path)}
+                onClick={() => onClick(subItem.path, subItem.action)}
                 title={subItem.name}
+                aria-disabled={subItem.isBusy}
                 data-testid={subItem.testId}
                 className={`sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-medium transition-all ${
                   isSubActive
