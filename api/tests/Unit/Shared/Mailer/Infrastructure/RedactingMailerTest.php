@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Mailer\Infrastructure;
 
+use Erpify\Shared\Mailer\Infrastructure\MailAssemblyField;
 use Erpify\Shared\Mailer\Infrastructure\MailDeliveryFailed;
 use Erpify\Shared\Mailer\Infrastructure\RedactingMailer;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -13,6 +14,7 @@ use RuntimeException;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
+use Throwable;
 
 /**
  * The half of the mail boundary a transport decorator cannot reach: the message is refused while it is being
@@ -21,6 +23,7 @@ use Symfony\Component\Mime\Email;
  * @internal
  */
 #[CoversClass(RedactingMailer::class)]
+#[CoversClass(MailAssemblyField::class)]
 #[CoversClass(MailDeliveryFailed::class)]
 final class RedactingMailerTest extends TestCase
 {
@@ -80,9 +83,70 @@ final class RedactingMailerTest extends TestCase
         $thrown = $this->assembleAndCatch(from: 'not-an-address');
 
         $this->assertMatchesRegularExpression(
-            '/^Mail assembly failed \(\S+\) at Address\.php:\d+\.$/',
+            '/^Mail assembly failed on from \(\S+\) at Address\.php:\d+\.$/',
             $thrown->getMessage(),
         );
+    }
+
+    /**
+     * The class and the origin cannot separate these four: one parser refuses all of them at one line of one
+     * vendor file. Without the argument name a deploy that can send no mail at all — an unset or malformed
+     * `MAILER_FROM` — reads exactly like one stored address being bad, and the scheduled lockout notice turns
+     * that into an unattributable warning per tick, for ever, because it never stamps a suppression window
+     * behind a send that failed.
+     */
+    #[Test]
+    public function eachRefusedArgumentIsNamed(): void
+    {
+        $messages = [
+            $this->assembleAndCatch(from: 'not-an-address')->getMessage(),
+            $this->assembleAndCatch(from: '')->getMessage(),
+            $this->assembleAndCatch(recipient: self::MALFORMED_RECIPIENT)->getMessage(),
+            $this->assembleAndCatch(recipient: '')->getMessage(),
+        ];
+
+        $this->assertCount(2, \array_unique($messages), 'a refused sender and a refused recipient read alike');
+        $this->assertStringContainsString(' on from ', $messages[0]);
+        $this->assertStringContainsString(' on from ', $messages[1]);
+        $this->assertStringContainsString(' on recipientEmail ', $messages[2]);
+        $this->assertStringContainsString(' on recipientEmail ', $messages[3]);
+    }
+
+    /**
+     * The one field of the refusal that is not composed. A normalising formatter walks the chain and prints
+     * each link's own message, so a chained original would hand back the address the composition dropped —
+     * and `TransportException::getDebug()` would come back with it, `RCPT TO:` included.
+     */
+    #[Test]
+    public function theRefusedValueIsNotReachableThroughAChainedOriginal(): void
+    {
+        $thrown = $this->assembleAndCatch(recipient: self::MALFORMED_RECIPIENT);
+
+        $this->assertNotInstanceOf(Throwable::class, $thrown->getPrevious());
+    }
+
+    /**
+     * `null` is a mail with no part of that type, which is the vendor's own contract and the reason the two
+     * bodies are nullable here: taking assembly away from the callers is not a reason to take that shape away
+     * with it. Distinct from `''`, which is a mail carrying one empty part.
+     */
+    #[Test]
+    public function aBodyGivenAsNullBecomesNoPartRatherThanAnEmptyOne(): void
+    {
+        $mailer = new CapturingMailer();
+
+        (new RedactingMailer($mailer))->send(
+            from: self::FROM,
+            recipientEmail: self::RECIPIENT,
+            subject: 'Subject',
+            text: 'text body',
+            html: null,
+        );
+
+        $email = $mailer->lastEmail;
+        $this->assertInstanceOf(Email::class, $email);
+        $this->assertNull($email->getHtmlBody());
+        $this->assertSame('text body', $email->getTextBody());
     }
 
     /**

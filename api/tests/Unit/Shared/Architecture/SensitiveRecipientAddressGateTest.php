@@ -44,8 +44,9 @@ use Throwable;
  * - Anonymous classes, closures and plain functions are unreachable: the walk derives a type from a file path.
  * - The five test doubles under `api/tests` declare the parameter bare on purpose (none is deployed), so the
  *   tree contains five examples a future adapter may be copied from, and this gate reds only afterwards.
- * - It says nothing about `getMessage()`, which is where an address actually reaches a sink (closed for both
- *   the assembly and the send by the mail boundary), nor about vendor frames holding the same string
+ * - It says nothing about `getMessage()`, which is where an address actually reaches a sink (closed by the
+ *   mail boundary for both the assembly and the send of every mail path `api/src` writes, and NOT for a
+ *   message a vendor command assembles), nor about vendor frames holding the same string
  *   (`SmtpTransport::doRcptToCommand(string $address)`), which cannot be marked at all.
  *
  * @internal

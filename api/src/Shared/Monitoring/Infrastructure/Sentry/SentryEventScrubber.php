@@ -26,9 +26,29 @@ use Sentry\Event;
  *    `request.query_string`, which arrive as raw strings a key-based rule cannot
  *    read, and which carry the identity axes (`actorId`, `resourceId`,
  *    `correlationId`) and the positional `filters[N][value]` search grammar.
+ *  - **Addresses in free text** — {@see EmailAddressRedaction} over every string
+ *    in `extra`, over the event's own message, and over
+ *    `exception.values[].value`, which is the exception MESSAGE and the field the
+ *    tracker titles an issue with. That last one is not hypothetical: the console
+ *    error listener is registered at priority -64 (measured on the compiled prod
+ *    container, ahead of Symfony's own at -128), {@see SentryEventFilter} discards
+ *    only `ClientError` and messenger-worker transport noise — an
+ *    `RfcComplianceException` is neither — and `bin/console mailer:test <address>`
+ *    raises one whose message quotes the argument verbatim, so
+ *    without this pass a person's address lands in third-party retention that no
+ *    erasure path reaches. The application's own mail failure composes its message
+ *    instead of copying one, which is what keeps this pass expected to find
+ *    nothing on that path rather than relied upon there.
+ *
+ * The exception TYPE is deliberately left alone. It is a class name, and the one
+ * form of it holding an `@` is an anonymous class, whose name is a file path and
+ * not a person — redacting it would cost the only identification the frame has.
  *
  * Out of scope (covered elsewhere or by the denylist's own limits): breadcrumbs,
- * exception messages, and secret-bearing keys NOT in the denylist.
+ * `contexts`, stack-trace frames, and secret-bearing keys NOT in the denylist.
+ * The message pass has no live producer today — nothing under `src` calls
+ * `captureMessage()` and the Monolog handler in `config/packages/monolog.yaml`
+ * is commented out — so it guards the shape rather than a measured leak.
  *
  * Reusing the SAME denylist as the RFC 9457 pipeline
  * ({@see \Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory}) keeps scrub
@@ -66,7 +86,56 @@ final class SentryEventScrubber
             $event->setRequest($this->scrubRequest($request));
         }
 
+        $this->redactExceptionValuesOf($event);
+        $this->redactMessageOf($event);
+
         return $event;
+    }
+
+    /**
+     * A vendor exception message is a general carrier of caller data, and this is the sink where that costs
+     * the most: an address here outlives the erasure the application confirmed to its subject, in a retention
+     * this application does not own. The bag is mutated in place and written back, so the write is explicit
+     * rather than a side effect a future reader has to infer from the getter.
+     */
+    private function redactExceptionValuesOf(Event $event): void
+    {
+        $exceptions = $event->getExceptions();
+
+        if ([] === $exceptions) {
+            return;
+        }
+
+        foreach ($exceptions as $exception) {
+            $exception->setValue(EmailAddressRedaction::apply($exception->getValue()));
+        }
+
+        $event->setExceptions($exceptions);
+    }
+
+    /**
+     * The template, its parameters and the pre-formatted rendering are three fields of one message, and the
+     * SDK's setter takes all three at once — so redacting the template alone would leave the same address in
+     * the string a reader actually sees.
+     */
+    private function redactMessageOf(Event $event): void
+    {
+        $message = $event->getMessage();
+
+        if (null === $message) {
+            return;
+        }
+
+        $formatted = $event->getMessageFormatted();
+
+        $event->setMessage(
+            EmailAddressRedaction::apply($message),
+            \array_map(
+                EmailAddressRedaction::apply(...),
+                $event->getMessageParams(),
+            ),
+            null === $formatted ? null : EmailAddressRedaction::apply($formatted),
+        );
     }
 
     /**

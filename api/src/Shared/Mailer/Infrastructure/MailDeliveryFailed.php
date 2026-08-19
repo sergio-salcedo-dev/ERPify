@@ -7,6 +7,7 @@ namespace Erpify\Shared\Mailer\Infrastructure;
 use Erpify\Shared\ErrorContract\Application\EmailAddressRedaction;
 use Override;
 use RuntimeException;
+use SensitiveParameter;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Throwable;
 
@@ -52,6 +53,12 @@ use Throwable;
  * entire SMTP conversation, `RCPT TO:` included, so keeping a reference to the original keeps that transcript
  * reachable too. What survives is what an operator acts on: which failure it was, what the server said in
  * numbers, and where it happened.
+ *
+ * **The throwable each factory reads is declared sensitive.** Dropping it from the composed message stops it
+ * travelling as the cause; it is still an argument of the frame that composed, so a trace collecting arguments
+ * would render the address-quoting original there instead. `zend.exception_ignore_args = On`
+ * (`frankenphp/conf.d/10-app.ini`) strips every argument of every frame and is what holds that today, which
+ * makes these marks the half that survives a change to the ini rather than the control in force.
  */
 final class MailDeliveryFailed extends RuntimeException implements TransportExceptionInterface
 {
@@ -83,8 +90,10 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
 
     private const string NO_REPLY_CODE = 'none';
 
-    public static function from(Throwable $throwable): self
-    {
+    public static function from(
+        #[SensitiveParameter]
+        Throwable $throwable,
+    ): self {
         // The redaction pass is defence in depth over a string this class built out of a class name and two
         // numbers. It is expected to find nothing; it is here so that a future field added to this message
         // cannot turn a composed message back into a copied one without something catching it.
@@ -111,14 +120,27 @@ final class MailDeliveryFailed extends RuntimeException implements TransportExce
      * {@see self::ENHANCED_STATUS} reads `5.1.1` straight back out of the refusal. A field that can only be
      * right by accident is not a diagnosis.
      *
-     * What identifies the failure is the class and the origin, and here the origin is load-bearing rather than
-     * a tie-breaker: the whole assembly is one expression setting an envelope and two bodies, so `Address.php`
-     * rather than some other vendor file is what says an address was refused at all.
+     * What identifies the failure is the class, the origin and the field. The origin says an address was
+     * refused at all — `Address.php` rather than some other vendor file — and the field says WHICH argument
+     * it was refused from, which the origin cannot: every one of `from` and `recipientEmail`, refused or
+     * empty, is the same parser refusing at the same line.
+     *
+     * **The field is what separates a deployment fault from one person's row**, and the two need opposite
+     * responses. `from` is env-derived at every call site and is never a person, so a refusal there means no
+     * mail can leave this deploy at all; `recipientEmail` means one stored address is bad and the rest of the
+     * sweep is fine. Read without it, the scheduled lockout notice reports the first as the second: the send
+     * returns false, no suppression stamp is written, and the tick re-attempts — a stream of identical
+     * warnings an operator cannot attribute. Naming the argument costs nothing, because
+     * {@see MailAssemblyField} is a closed set of parameter names and carries no value.
      */
-    public static function whileAssembling(Throwable $throwable): self
-    {
+    public static function whileAssembling(
+        MailAssemblyField $field,
+        #[SensitiveParameter]
+        Throwable $throwable,
+    ): self {
         return new self(EmailAddressRedaction::apply(\sprintf(
-            'Mail assembly failed (%s) at %s:%d.',
+            'Mail assembly failed on %s (%s) at %s:%d.',
+            $field->value,
             $throwable::class,
             \basename($throwable->getFile()),
             $throwable->getLine(),
