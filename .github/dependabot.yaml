@@ -11,6 +11,35 @@ updates:
     cooldown:
       default-days: 7
 
+  # `docker-compose`, not a `/` entry on the `docker` lane above. The two are separate
+  # ecosystems with separate file fetchers, and the docker one cannot see a compose file:
+  # it globs `*.ya?ml` but then keeps only what `likely_kubernetes_resource?` accepts —
+  # a mapping carrying BOTH `apiVersion` and `kind`. No compose file has either, so the
+  # docker lane pointed at `/` fetches nothing and never opens a PR, the same silent
+  # no-op documented on the composer lane below.
+  #
+  # This lane is what watches the root compose pins. It matters because compose.prod.yaml
+  # declares no `image:` on its `database` service: production inherits the postgres pin
+  # from compose.yaml, so before this entry the image running the production database was
+  # the one image in the tree nothing was tracking.
+  #
+  # Reach: the fetcher's filename regex is /(docker-)?compose(-[\w]+)?(?>\.[\w-]+)?\.ya?ml/i
+  # and the listing is non-recursive, so it takes compose.yaml, compose.dev.yaml and
+  # compose.prod.yaml and nothing else. The locally-built `${IMAGES_PREFIX:-}app-*` services
+  # parse to nothing and are dropped without error, so they generate no noise here.
+  #
+  # An image reference is only tracked if it yields a tag or a digest; a bare
+  # `axllent/mailpit` yields neither and is skipped as silently as an interpolated tag.
+  # Pin every image this lane is meant to watch.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"
+    cooldown:
+      default-days: 7
+
   # `/api`, not `/`: the repo root holds no composer.json — the manifest is
   # api/composer.json. Pointed at `/` this lane produced ZERO routine PRs in
   # four months while npm produced ~40, and the only two composer PRs ever
