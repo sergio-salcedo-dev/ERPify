@@ -5,12 +5,17 @@
 #
 #   Symfony\Component\Messenger\MessageBusInterface
 #       -> Erpify\Shared\Event\Domain\EventBus            (docs/adr/event-driven-architecture.md)
-#   Doctrine\ORM\EntityManagerInterface
+#   Doctrine\ORM\EntityManagerInterface, Doctrine\ORM\EntityManager,
+#   Doctrine\Persistence\ManagerRegistry, Doctrine\Persistence\ObjectManager
 #       -> Erpify\Shared\Persistence\Application\TransactionManager
 #                                                          (docs/adr/external-dependencies-in-domain.md)
 #
 # An entry exempts a FILE, not a single FQCN: allowlisting a file stops the gate reading it for every
 # forbidden type at once. Prefer moving the collaborator behind its port to widening this file.
+#
+# An entry must be a LIVE exemption. The gate rejects one that points at no file, points outside
+# */Application/, or points at a file holding no forbidden import — an exception already paid reads
+# as an exception still owed, which is the state an allowlist rots into once nobody rereads it.
 #
 # Lines starting with `#` and blank lines are ignored. Each remaining line is an api-relative path
 # (POSIX, no leading slash) of an Application file exempted from the rule. Adding an entry is a

@@ -100,9 +100,26 @@ dual-write actual "porque casi nunca falla" (pérdida silenciosa, inaceptable en
 ### D4 — Gate prescriptivo + allowlist como frontera temporal explícita
 
 `EventDispatchGateTest` (estilo `BoundedContextGateTest`, vía `make php.lint.event-bus`, sumado a
-`php.quality`) **falla** si un fichero bajo `*/Application/` referencia `MessageBusInterface`, salvo
-entrada en `api/.event-dispatch-allowlist`. Hace el invariante de D1 *load-bearing*: el acoplamiento no
-puede reaparecer en un PR sin una excepción revisada.
+`php.quality`) **falla** si un fichero bajo `*/Application/` importa un tipo de framework en vez del
+puerto que lo sustituye, salvo entrada en `api/.event-dispatch-allowlist`. Hace el invariante de D1
+*load-bearing*: el acoplamiento no puede reaparecer en un PR sin una excepción revisada.
+
+La superficie prohibida es un **mapa** de FQCN al puerto que lo reemplaza, no un tipo suelto:
+`MessageBusInterface` → `EventBus`, y la familia de managers de Doctrine (`ORM\EntityManagerInterface`,
+`ORM\EntityManager`, `Persistence\ManagerRegistry`, `Persistence\ObjectManager`) →
+`TransactionManager` ([`external-dependencies-in-domain.md`](./external-dependencies-in-domain.md)). El
+fallo nombra fichero, línea, tipo ofensor y remedio. El `ManagerRegistry` entra por ser la vía por la
+que la mayoría del código Symfony alcanza un manager: prohibir solo los hermanos raros deja abierta la
+forma común.
+
+**No es el único lector de esa línea, y su valor está en el hueco del otro.** `php.deptrac` ya rechaza
+`Vendor.Doctrine`/`Vendor.Symfony` desde todo ruleset `*.Application` que declara — medido, un
+argumento de constructor plantado en `BankCreator` da `Violations 1, exit 1` para ambos tipos. Lo que
+deptrac **no** puede afirmar es un contexto sin capa declarada: sus colectores son un directorio por
+módulo *registrado*, y `Frontoffice/Dev` solo declara `Infrastructure`, así que un fichero en
+`src/Frontoffice/Dev/Application/` le sale `Violations 0, Uncovered 0, exit 0` mientras este gate lo
+nombra con su línea. Cobertura de primera línea para el módulo que nadie ha registrado todavía; deptrac
+lee la *dependencia*, este gate lee el *import*, y cada uno es ciego donde el otro ve.
 
 El eje **audit** estrenó esa frontera temporal y la cerró: `BankAccountSearcher` ya **no** importa
 `MessageBusInterface` — registra el acceso por el puerto `AuditLogger`
@@ -212,8 +229,8 @@ roto, peor observabilidad que `failed`). Descartado: `allow_no_handlers: true` g
 
 - Behat de `Bank` (POST/PUT/DELETE) 100% verde, contrato RFC 9457 intacto; el delete con FK TOCTOU
   sigue devolviendo `409 bank-in-use`.
-- `make php.lint.event-bus` falla al reintroducir `MessageBusInterface` en un `Application/` no
-  exento; verde con la única excepción de `BankAccountSearcher`.
+- `make php.lint.event-bus` falla al reintroducir `MessageBusInterface` o cualquier manager de Doctrine
+  en un `Application/` no exento; verde hoy, con la allowlist sin entradas.
 - `make php.quality` limpio (`level: max`).
 
 ## Triggers de revisita
