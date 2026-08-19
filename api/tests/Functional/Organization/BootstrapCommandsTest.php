@@ -23,10 +23,11 @@ use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * Proves the bootstrap sequence end-to-end against REAL Postgres: provisioning the organization then
- * creating the first administrator yields an admin identity, an ADMIN membership, and the "one org per
- * installation", "no user without a membership" and "at least one active ADMIN" invariants. The commit path
- * matters here (the admin command wraps identity + membership in one transaction), so each test truncates
- * the organization graph before and after instead of running inside a rolled-back transaction.
+ * creating the first administrator yields an identity carrying ADMIN, a membership admitting it to that
+ * organization, and the "one org per installation", "no user without a membership" and "at least one active
+ * ADMIN" invariants. The commit path matters here (the admin command wraps identity + membership in one
+ * transaction), so each test truncates the organization graph before and after instead of running inside a
+ * rolled-back transaction.
  *
  * @internal
  */
@@ -86,9 +87,8 @@ final class BootstrapCommandsTest extends KernelTestCase
         // membership.organization_id FK, so a membership carrying an org id proves the org was provisioned.
         $membership = $this->memberships->findByUserId($adminId);
         $this->assertInstanceOf(Membership::class, $membership);
-        $this->assertTrue($membership->hasRole(Role::ADMIN));
 
-        $this->assertActiveAdminExists($membership->organizationId());
+        $this->assertAdminBelongsToTheOrganization($membership->organizationId(), $adminId);
     }
 
     public function testRejectsASecondOrganization(): void
@@ -136,14 +136,20 @@ final class BootstrapCommandsTest extends KernelTestCase
         return $tester;
     }
 
-    private function assertActiveAdminExists(string $organizationId): void
+    /**
+     * The two halves of "the installation has an administrator" live in different aggregates: the ADMIN role
+     * on `identity_user` (asserted above) and the belonging on `membership`. Reading the member list back
+     * from the organization side is what proves the second half was committed under the very organization
+     * the membership names, rather than merely that a row with some org id exists.
+     */
+    private function assertAdminBelongsToTheOrganization(string $organizationId, string $adminId): void
     {
-        $admins = \array_filter(
+        $members = \array_filter(
             $this->memberships->findByOrganizationId($organizationId),
-            static fn (Membership $membership): bool => $membership->hasRole(Role::ADMIN),
+            static fn (Membership $membership): bool => $membership->userId() === $adminId,
         );
 
-        $this->assertNotEmpty($admins, 'the organization must keep at least one ADMIN membership');
+        $this->assertNotEmpty($members, 'the administrator must belong to the provisioned organization');
     }
 
     /**

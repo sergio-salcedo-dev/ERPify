@@ -168,15 +168,16 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
     {
         $this->inRolledBackTransaction(function (): void {
             $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
-            // A membership carrying ADMIN whose user is not a live identity — what a demote-then-erase
-            // leaves behind. This pins WHICH source answers the invariant: roles are read from
-            // identity_user, membership carries no status with which to express liveness, and so a row here
-            // can never rescue a drained administrator pool. If auth is ever re-pointed at membership, this
-            // test is the one that has to be revisited deliberately rather than discovered in production.
+            // A membership whose user is not a live identity — what an erasure interrupted between the two
+            // contexts leaves behind. This pins WHICH source answers the invariant: the directory reads
+            // `identity_user.roles` and never joins membership, so belonging alone is not authority and a row
+            // here can never rescue a drained administrator pool. If authorization is ever re-pointed at
+            // membership, this test is the one that has to be revisited deliberately rather than discovered
+            // in production.
             $seeded = $this->connection->executeStatement(
                 <<<'SQL'
-                    INSERT INTO membership (id, user_id, organization_id, roles, created_at, updated_at)
-                    VALUES (:id, :userId, :organizationId, to_json(ARRAY['ADMIN']::text[]), NOW(), NOW())
+                    INSERT INTO membership (id, user_id, organization_id, created_at, updated_at)
+                    VALUES (:id, :userId, :organizationId, NOW(), NOW())
                     SQL,
                 [
                     'id' => self::ORPHAN_MEMBERSHIP,

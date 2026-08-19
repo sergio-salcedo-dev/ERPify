@@ -54,7 +54,7 @@ api/src/
 │   └── Session/      { Application, Domain, Infrastructure }   # server-side session registry (iam_session) + fail-closed admission gate + retention sweep — adr/identity-invitation-lifecycle.md D8
 ├── Organization/                                               # tenancy — modelled multi-tenant-ready, operation deferred (adr/identity-invitation-lifecycle.md D2)
 │   ├── Organization/ { Application, Domain, Infrastructure }   # tenant aggregate — one org per installation, CLI bootstrap (organization:provision / :administrator:create)
-│   └── Membership/   { Application, Domain, Infrastructure }   # authoritative user↔org link + org-scoped roles; references User/Organization by id
+│   └── Membership/   { Application, Domain, Infrastructure }   # authoritative user↔org link (belonging only — roles are authoritative on User); references User/Organization by id
 └── Shared/                                                       # kernel trio + capability modules — adr/shared-module-organization.md
     ├── Application/    { Problem, UseCase }                      # kernel: RFC 9457 mapping + use-case Result
     ├── Domain/         { Aggregate, Entity, Enum, Exception, Uuid, ValueObject }   # kernel primitives
