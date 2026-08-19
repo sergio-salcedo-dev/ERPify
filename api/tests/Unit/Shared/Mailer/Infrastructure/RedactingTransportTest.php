@@ -44,6 +44,20 @@ final class RedactingTransportTest extends TestCase
     }
 
     /**
+     * Dropping the message is only half of it: Monolog's `NormalizerFormatter` follows `previous`
+     * unconditionally and prints each link's own message, so an original kept as the cause would put the
+     * server's reply — recipient and all — back into the same record. `getDebug()` would come back with it
+     * too, since the transport's own exception accumulates the whole SMTP conversation there.
+     */
+    #[Test]
+    public function theServersReplyIsNotReachableThroughAChainedOriginal(): void
+    {
+        $thrown = $this->sendAndCatch(new UnexpectedResponseException(self::SMTP_REFUSAL, 550));
+
+        $this->assertNotInstanceOf(Throwable::class, $thrown->getPrevious());
+    }
+
+    /**
      * A normalising formatter emits `code` as a top-level field of its own, so a translation that kept the
      * number only inside the text would lose it for every reader that parses the record rather than the prose.
      */

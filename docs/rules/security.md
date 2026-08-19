@@ -82,6 +82,26 @@ an SMTP reply code, an RFC 3463 enhanced status and the origin `file:line`. It c
 `getDebug()` is empty, because a normalising formatter walks both. Nothing downstream is trusted to redact,
 because nothing downstream receives anything to redact.
 
+**A decorator only reaches what its position reaches, so the object is built inside the boundary too.**
+`Mime\Address` refuses a non-compliant value with a message quoting it, and that throw happens while the
+message is being assembled — before any transport is involved, where the best-effort wrapper around every mail
+path logs it raw. `RedactingMailer` is therefore the single place `api/src` holds a MIME message: senders hand
+it the strings and it assembles and sends in one call, so an assembly failure becomes the same composed
+exception (class, origin and the name of the refused argument, with no reply code and no status, because
+nothing has spoken to a server). The argument name is what separates a deployment that can send no mail from
+one stored address being bad — one parser refuses `from` and `recipientEmail` at the same line — and it costs
+no confidentiality, because it is drawn from a closed enum of parameter names.
+`MailAssemblyBoundaryGateTest` pins the set of `api/src` files allowed to name a message namespace or the
+mailer component, which makes the property structural rather than a habit a reviewer has to re-check per
+sender.
+
+**The scope of that claim is `api/src`, and vendor code assembles too.** `MailerTestCommand` builds its own
+message from an operator's argument, upstream of every boundary this repository can place; measured,
+`bin/console mailer:test <address>` writes that value five times, across four fields of one
+`console.CRITICAL` record, on a channel the production handler does not exclude. It is a recorded residual, not a closed path — a boundary
+covers what its position reaches, and saying otherwise is how a residual gets deleted on a claim wider than
+the change that earned it.
+
 **A diagnosis is identified by its anchor, not by its shape.** The enhanced status is read only where an SMTP
 reply code introduces it: matching the shape alone was measured reporting `5.1.1` out of the local part of
 `a-5.1.1@example.test` and `4.2.3` out of `Upgrade to version 4.2.3 first`. A fabricated diagnosis costs an
