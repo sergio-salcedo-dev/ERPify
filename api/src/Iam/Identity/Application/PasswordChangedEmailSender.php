@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application;
 
+use SensitiveParameter;
+
 /**
  * Sends the "your password was changed" notification after a completed reset — a pure heads-up with no action
  * link and no token. It is produced post-commit and best-effort by {@see CompletePasswordReset} (through
@@ -13,5 +15,5 @@ namespace Erpify\Iam\Identity\Application;
  */
 interface PasswordChangedEmailSender
 {
-    public function send(string $recipientEmail): void;
+    public function send(#[SensitiveParameter] string $recipientEmail): void;
 }

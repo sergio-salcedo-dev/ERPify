@@ -24,9 +24,12 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  *
  * A guard at send time rather than at boot, and that is deliberate: it is retried on every attempt, so
  * repairing the configuration repairs the control with no redeploy, and each refusal logs through the
- * best-effort wrapper that already catches it — which in production reaches Sentry, since a schedule that
- * cannot do its job is an operational fault rather than a domain outcome. A one-shot check at startup states
- * the same fact once and then goes quiet while the deployment drifts.
+ * best-effort wrapper that already catches it. Where that lands is the `observability` channel — `php://stderr`
+ * in production, `var/log/observability.log` in dev and test — and nowhere else: the Monolog-to-Sentry handler
+ * in `monolog.yaml` is commented out, and `register_error_listener` sees only unhandled throwables, which a
+ * swallowed one is not. So a schedule that cannot do its job is an operational fault someone has to read a log
+ * to find, not an alert that finds them. A one-shot check at startup states the same fact
+ * once and then goes quiet while the deployment drifts.
  *
  * Separate from {@see SecuritySenderAddress} because they answer different questions about different values:
  * one is whether a channel exists, the other is who the message claims to be from. A deployment can get either

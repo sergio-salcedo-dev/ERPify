@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Monitoring\Infrastructure\Sentry;
 
+use Erpify\Shared\ErrorContract\Application\EmailAddressRedaction;
 use Erpify\Shared\ErrorContract\Application\RedactionDenylist;
 use Erpify\Shared\ErrorContract\Application\RequestUriRedaction;
 use Sentry\Event;
@@ -54,6 +55,9 @@ final class SentryEventScrubber
     {
         /** @var array<string, mixed> $extra Recursive scrub preserves the string keys it keeps. */
         $extra = $this->scrub($event->getExtra());
+        /** @var array<string, mixed> $extra */
+        $extra = $this->redactAddressesIn($extra);
+
         $event->setExtra($extra);
 
         $request = $event->getRequest();
@@ -113,6 +117,40 @@ final class SentryEventScrubber
         }
 
         return $request;
+    }
+
+    /**
+     * A denylist is a rule about KEY names, and `extra` holds one field where the identifier is in the VALUE:
+     * `sentry/sentry-symfony`'s `ConsoleListener` sets `Full command` to the whole argv line on every console
+     * command, and captures it on `ConsoleErrorEvent`. `bin/console mailer:test <address>` and
+     * `iam:invitation:create <address>` therefore carry a person's address into a third-party sink with
+     * retention of its own, which no erasure path reaches — the same reason `Referer` is redacted above rather
+     * than trusted. Dropping the field by key would take the command name with it, and the command name is the
+     * only thing that says which control failed.
+     *
+     * Applied to every string in the sub-tree rather than to that one key, because keying on `Full command`
+     * would repeat the mistake this method exists to correct: the next field carrying an address in its value
+     * is invisible to a rule that names fields. Over-redacting a diagnostic extra fails in the safe direction.
+     *
+     * @param array<array-key, mixed> $values
+     *
+     * @return array<array-key, mixed>
+     */
+    private function redactAddressesIn(array $values): array
+    {
+        foreach ($values as $key => $value) {
+            if (\is_string($value)) {
+                $values[$key] = EmailAddressRedaction::apply($value);
+
+                continue;
+            }
+
+            if (\is_array($value)) {
+                $values[$key] = $this->redactAddressesIn($value);
+            }
+        }
+
+        return $values;
     }
 
     /**

@@ -67,6 +67,55 @@
   mailbox validated fail-loud outside dev/test (`SecuritySenderAddress`); the operational `MAILER_FROM` may
   stay no-reply.
 
+## A vendor exception message is composed, never copied, at the boundary that raises it
+
+An exception message is a general carrier of caller data, and the sinks that hold it — `php://stderr` under a
+driver with no rotation, `messenger_messages` via `ErrorDetailsStamp`, a third-party error tracker with its own
+retention — are reached by no erasure path. `SmtpTransport::assertResponseCode()` interpolates the server's
+reply verbatim, and the command whose reply fails on a rejected recipient is `RCPT TO:<address>`, so the
+message names a person.
+
+**Translate at the boundary that raises it, and compose the replacement.** `RedactingTransport` decorates the
+`mailer.transports` collection — the id, not its consumers, so anything wired to the collection inherits the
+translation by construction — and answers with a `MailDeliveryFailed` whose message is built from a class name,
+an SMTP reply code, an RFC 3463 enhanced status and the origin `file:line`. It chains no `previous` and its
+`getDebug()` is empty, because a normalising formatter walks both. Nothing downstream is trusted to redact,
+because nothing downstream receives anything to redact.
+
+**A diagnosis is identified by its anchor, not by its shape.** The enhanced status is read only where an SMTP
+reply code introduces it: matching the shape alone was measured reporting `5.1.1` out of the local part of
+`a-5.1.1@example.test` and `4.2.3` out of `Upgrade to version 4.2.3 first`. A fabricated diagnosis costs an
+operator the time the field exists to save, so the pattern refuses one and reports `none`.
+
+**Redaction vocabularies live together.** `EmailAddressRedaction` sits beside `RequestUriRedaction` and
+`RedactionDenylist` in `Shared/ErrorContract/Application`, because an axis redacted in one sink must be
+redacted in all of them and the denylist alone cannot: it is a rule about KEY names, and an identifier in a
+VALUE — Sentry's `Full command` extra, a `Referer`, a raw `query_string` — needs a vocabulary instead.
+
+## A person's identifier is declared sensitive at the parameter
+
+`#[SensitiveParameter]` renders an argument as `Object(SensitiveParameterValue)` in a stack trace instead of
+in clear. Two controls carry that property and they are not interchangeable:
+
+- **`zend.exception_ignore_args = On`** (`api/frankenphp/conf.d/10-app.ini`) strips *every* argument of *every*
+  frame, vendor frames included — `SmtpTransport::doRcptToCommand(string $address)` among them, which no
+  attribute of ours can reach. It is the control that holds the line today, and it is a property of the
+  deployed ini rather than of the code.
+- **The attribute** is narrower and survives a change to that ini. It is what makes the code state, rather than
+  assume, that a value is not for a trace.
+
+**Declare both, and never only the attribute.** Marking the parameter while leaving the ini unpinned gates the
+redundant half of the control; pinning the ini while leaving a signature bare asserts, in the signature, that
+the value is ordinary. A signature that marks a token and leaves the address beside it bare is the shape to
+look for — it states that one is sensitive and the other is not.
+
+PHP does **not** enforce attribute agreement between an interface and its implementation, so a bare
+implementation behind a marked interface compiles and passes every gate. `SensitiveRecipientAddressGateTest`
+pins the mail surface against exactly that, as a set rather than a count, and pins the ini beside it. Its blind
+spots are stated at the class: it keys on the parameter NAME, so an address carried as `$to` or `$email` is
+outside it — that axis is issue #769 — and it says nothing about `getMessage()`, which is where an address
+actually reaches a sink.
+
 ## Password policy
 - **One constraint object, no options.** Every surface that *creates* a credential — the authenticated change,
   the reset completion, the invitation accept, the bootstrap CLI — carries

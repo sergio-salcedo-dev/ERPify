@@ -25,7 +25,7 @@ final readonly class SymfonyInvitationEmailSender implements InvitationEmailSend
     }
 
     #[Override]
-    public function send(string $recipientEmail, #[SensitiveParameter] string $acceptToken): void
+    public function send(#[SensitiveParameter] string $recipientEmail, #[SensitiveParameter] string $acceptToken): void
     {
         $this->mailer->send($this->content(), $recipientEmail, $acceptToken);
     }

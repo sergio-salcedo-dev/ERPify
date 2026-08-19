@@ -31,7 +31,7 @@ final readonly class SendInvitationEmailBestEffort
      * @return bool whether the mailer accepted the send without throwing — never a claim of delivery, which no
      *              mailer confirms and an async transport cannot even attempt within this call
      */
-    public function send(string $recipientEmail, #[SensitiveParameter] string $acceptToken): bool
+    public function send(#[SensitiveParameter] string $recipientEmail, #[SensitiveParameter] string $acceptToken): bool
     {
         try {
             $this->sender->send($recipientEmail, $acceptToken);

@@ -14,5 +14,5 @@ use SensitiveParameter;
  */
 interface InvitationEmailSender
 {
-    public function send(string $recipientEmail, #[SensitiveParameter] string $acceptToken): void;
+    public function send(#[SensitiveParameter] string $recipientEmail, #[SensitiveParameter] string $acceptToken): void;
 }
