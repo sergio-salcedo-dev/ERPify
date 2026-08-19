@@ -41,7 +41,7 @@ Prod/staging load secrets from a gitignored root `.env.prod.local` (copy from [`
 make composer c='req vendor/pkg'    # Run composer inside the container.
 make sf c='about'                   # Symfony console (also: make sf.cc, make sf.routes f='…', make sf.about).
 make sf c='organization:provision <name>'              # Bootstrap the installation's single organization (one per install; rejects a 2nd).
-make sf c='organization:administrator:create <email>'  # Bootstrap the first ADMIN (identity + ADMIN membership); hidden password prompt if omitted.
+make sf c='organization:administrator:create <email>'  # Bootstrap the first administrator (ADMIN identity + organization membership); hidden password prompt if omitted.
 make sf c='identity:integrity:inspect'                 # Report identity rows the auth path tolerates silently: role values no Role case backs, credentials HashedPassword refuses. SUCCESS clean / FAILURE finding / INVALID the read failed. Counts, never ids.
 make profiler.open                  # Open the Symfony Profiler UI (/_profiler/latest) in the browser (dev).
 make profiler.dump-server           # Start the var-dumper server: collects dump() out-of-band (dev).

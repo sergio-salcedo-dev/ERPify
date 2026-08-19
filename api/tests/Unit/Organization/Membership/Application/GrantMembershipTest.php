@@ -8,7 +8,6 @@ use Erpify\Organization\Membership\Application\GrantMembership;
 use Erpify\Organization\Membership\Domain\Exception\OrganizationNotProvisioned;
 use Erpify\Organization\Membership\Domain\Exception\UserAlreadyMember;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
-use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Unit\Organization\Organization\Application\InMemoryOrganizationRepository;
@@ -32,12 +31,11 @@ final class GrantMembershipTest extends TestCase
         $memberships = new InMemoryMembershipRepository();
         $userId = Uuid::generate();
 
-        $membership = (new GrantMembership($memberships, $organizations))->grant($userId, Role::ADMIN);
+        $membership = (new GrantMembership($memberships, $organizations))->grant($userId);
 
         $this->assertSame([$membership], $memberships->saved);
         $this->assertSame($userId, $membership->userId());
         $this->assertSame($organization->getId(), $membership->organizationId());
-        $this->assertSame([Role::ADMIN], $membership->roles());
     }
 
     public function testRejectsWhenNoOrganizationIsProvisioned(): void
@@ -46,7 +44,7 @@ final class GrantMembershipTest extends TestCase
 
         $this->expectException(OrganizationNotProvisioned::class);
 
-        $granter->grant(Uuid::generate(), Role::ADMIN);
+        $granter->grant(Uuid::generate());
     }
 
     public function testRejectsAMalformedUserIdBeforeTouchingTheRepositories(): void
@@ -57,7 +55,7 @@ final class GrantMembershipTest extends TestCase
 
         $this->expectException(InvalidUuidException::class);
 
-        $granter->grant('not-a-uuid', Role::ADMIN);
+        $granter->grant('not-a-uuid');
     }
 
     public function testRejectsASecondMembershipForTheSameUser(): void
@@ -65,11 +63,11 @@ final class GrantMembershipTest extends TestCase
         $memberships = new InMemoryMembershipRepository();
         $granter = new GrantMembership($memberships, $this->organizationsWith('ACME Corp'));
         $userId = Uuid::generate();
-        $granter->grant($userId, Role::ADMIN);
+        $granter->grant($userId);
 
         $this->expectException(UserAlreadyMember::class);
 
-        $granter->grant($userId, Role::VIEWER);
+        $granter->grant($userId);
     }
 
     private function organizationsWith(string $name): InMemoryOrganizationRepository

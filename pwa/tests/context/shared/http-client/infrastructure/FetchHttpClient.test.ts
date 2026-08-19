@@ -8,6 +8,7 @@ import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import type { Telemetry } from "@/context/shared/observability/domain/Telemetry";
 import { isProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 
 // v7-shaped: ProblemDetails.instance / correlation-id are UUID v7, minted via @/context/shared/uuid/infrastructure/uuidV7.
 const { STUB_UUID } = vi.hoisted(() => ({
@@ -499,6 +500,7 @@ describe("FetchHttpClient", () => {
     };
     const ORIGINAL_INTERNAL = process.env.SYMFONY_INTERNAL_URL;
 
+    let replace: MockInstance;
     let assign: MockInstance;
 
     // The single-flight redirect guard is module-level, so each test gets a fresh
@@ -518,8 +520,17 @@ describe("FetchHttpClient", () => {
 
     beforeEach(() => {
       vi.resetModules();
+      replace = vi.fn();
+      // `assign` is stubbed too, and asserted unused: without it, reverting the source to
+      // assign() would go red because the stub lacks the method, not because the assertion
+      // says replace. The test must fail for the reason it states.
       assign = vi.fn();
-      vi.stubGlobal("location", { pathname: "/backoffice/banks", search: "?page=2", assign });
+      vi.stubGlobal("location", {
+        pathname: "/backoffice/banks",
+        search: "?page=2",
+        replace,
+        assign,
+      });
     });
 
     afterEach(() => {
@@ -538,10 +549,12 @@ describe("FetchHttpClient", () => {
         problem: { status: HttpStatus.UNAUTHORIZED },
       });
 
-      expect(assign).toHaveBeenCalledTimes(1);
-      expect(assign).toHaveBeenCalledWith(
+      expect(replace).toHaveBeenCalledTimes(1);
+      expect(replace).toHaveBeenCalledWith(
         `/login?next=${encodeURIComponent("/backoffice/banks?page=2")}&reason=session-expired`,
       );
+      // replace, not assign: the expired page must not stay one Back press away.
+      expect(assign).not.toHaveBeenCalled();
     });
 
     it("redirects only once for concurrent 401s (single-flight)", async () => {
@@ -554,7 +567,7 @@ describe("FetchHttpClient", () => {
         client.get("/api/v1/backoffice/audit/timeline"),
       ]);
 
-      expect(assign).toHaveBeenCalledTimes(1);
+      expect(replace).toHaveBeenCalledTimes(1);
     });
 
     it("does not redirect on a 200", async () => {
@@ -563,7 +576,7 @@ describe("FetchHttpClient", () => {
 
       await client.get("/api/v1/backoffice/banks");
 
-      expect(assign).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
     });
 
     it("does not redirect for the /me cold-load probe (AuthProvider owns that 401)", async () => {
@@ -574,7 +587,57 @@ describe("FetchHttpClient", () => {
         problem: { status: HttpStatus.UNAUTHORIZED },
       });
 
-      expect(assign).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it("does not redirect for the sign-out call's own 401 (already-expired session)", async () => {
+      respond401();
+      const client = await freshClient();
+
+      await expect(client.post("/api/v1/sessions/revoke-current", {})).rejects.toMatchObject({
+        problem: { status: HttpStatus.UNAUTHORIZED },
+      });
+
+      // Bouncing here would race the sign-out's own navigation to the public landing and
+      // strand the user on "session expired" instead.
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it("does not redirect when the document is already on /login", async () => {
+      vi.stubGlobal("location", { pathname: Routes.LOGIN, search: "", replace });
+      respond401();
+      const client = await freshClient();
+
+      await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+        problem: { status: HttpStatus.UNAUTHORIZED },
+      });
+
+      // The latch is module state a fresh document resets, so replacing /login with itself
+      // could reload the screen for as long as the call keeps failing.
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it("clears the single-flight latch when the navigation throws", async () => {
+      // No known browser raises here — replace() performs no security check and a sandboxed
+      // navigable ignores the navigation silently. This pins the contract for an environment
+      // that cannot navigate at all: the exception must not escape as a raw throw, and the
+      // latch must not wedge the bounce for the rest of the document's life.
+      replace.mockImplementationOnce(() => {
+        throw new Error("cannot navigate");
+      });
+      respond401();
+      const client = await freshClient();
+
+      // The DOMException must not escape the adapter's HttpError contract.
+      await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+        problem: { status: HttpStatus.UNAUTHORIZED },
+      });
+      await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+        problem: { status: HttpStatus.UNAUTHORIZED },
+      });
+
+      // The page never left, so the second 401 must still be able to bounce.
+      expect(replace).toHaveBeenCalledTimes(2);
     });
 
     it("does not redirect for the login endpoint's own 401 (bad credentials)", async () => {
@@ -585,7 +648,7 @@ describe("FetchHttpClient", () => {
         client.post("/api/v1/backoffice/login", { email: "a@b.com", password: "x" }),
       ).rejects.toMatchObject({ problem: { status: HttpStatus.UNAUTHORIZED } });
 
-      expect(assign).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
     });
 
     it("does not redirect during SSR (no window)", async () => {
@@ -598,7 +661,7 @@ describe("FetchHttpClient", () => {
         problem: { status: HttpStatus.UNAUTHORIZED },
       });
 
-      expect(assign).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
     });
   });
 });

@@ -71,11 +71,11 @@ final class SendInvitationTest extends TestCase
         $this->assertCount(1, $users->saved);
         $invitedUser = $users->saved[0];
         $this->assertSame(IdentityStatus::INVITED, $invitedUser->status());
+        $this->assertSame([Role::EDITOR], $invitedUser->roles());
         $this->assertNotInstanceOf(\Erpify\Iam\Identity\Domain\HashedPassword::class, $invitedUser->passwordHash());
 
         $this->assertCount(1, $memberships->saved);
         $this->assertSame($invitedUser->getId(), $memberships->saved[0]->userId());
-        $this->assertSame([Role::EDITOR], $memberships->saved[0]->roles());
 
         $this->assertCount(1, $invitations->saved);
         $invitation = $invitations->saved[0];

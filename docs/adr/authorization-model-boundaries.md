@@ -56,7 +56,7 @@ Both are worse than the column that avoids them.
 
 Governing an organization (who may administer it, billing, subscription, transfer of ownership) is a property of
 the **relationship between a user and an organization**, not of the user. When the domain requires it, it will be
-modelled on `Membership` — as a membership type or an ownership flag alongside its roles — never as `Role::OWNER`.
+modelled on `Membership` — as a membership type or an ownership flag on the membership itself — never as `Role::OWNER`.
 
 Two reasons, in order of weight. First, ownership is inherently organization-scoped: a user who is an owner of one
 organization is not thereby an owner of another, and a global role cannot express that distinction at all — it

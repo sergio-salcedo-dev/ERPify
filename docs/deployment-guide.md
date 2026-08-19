@@ -188,6 +188,10 @@ Step-by-step (incl. internal-CA trust and `/etc/hosts`) and VPS promotion:
    ENV=prod make db.migrate
    ```
 
+   **Steps 2 and 3 are a window in which the new code runs against the old schema** — `docker.up` starts the new image before `db.migrate` touches the database, and both `scripts/deploy/deploy-local.sh` and [`vps-deployment.md`](./vps-deployment.md) step 4 use that same order. A migration whose new code stops writing a column still declared `NOT NULL` fails every `INSERT` for the length of that window: `Version20260819091752` drops `membership.roles`, so an invitation or an administrator bootstrap that commits before step 3 lands fails with `null value in column "roles" … violates not-null constraint`.
+
+   **Reversing the order does not close it for a drop, it moves the outage** — migrating while the old image is still serving breaks that image's *reads* instead (§ Rollback), which is worse. A bare column drop has no safe order. Either accept the write-failure window, take the deploy as planned downtime, or split the change across two releases: leave the column with a `DEFAULT` in the release that stops writing it and drop it in the next one. That last option removes the hazard in both directions rather than documenting it.
+
 4. **Provision the organization and its administrators** — first install only; see below.
 5. Watch `messenger_worker` logs: `ENV=prod make docker.logs` (filter by service).
 6. Run smoke tests per [`pwa/docs/production-deployment.md`](../pwa/docs/production-deployment.md).
@@ -254,7 +258,16 @@ by the same demotion chain above, which is strictly worse than the gap it would 
 
 - Images are immutable (digest-pinned). Redeploy the previous image tag.
 - Roll back DB changes only if the migration is reversible — otherwise restore from the most recent Postgres backup and replay.
-- **Redeploying the previous image does not undo its migrations — `down()` never runs.** The old writer therefore meets the new schema, and the one shape that breaks under it is a `NOT NULL` column added **without a `DEFAULT`**: every `INSERT` from code that predates the column fails. It needs no rolling deploy and no second replica; one replica rolled back is enough. On `audit_log` the consequence is tiered by how the write is issued — the `change` tier writes inside `onFlush` with no `catch`, so the **business** write fails with the audit write. A `NOT NULL` column therefore keeps a persistent `DEFAULT`; if a `postGenerateSchema` listener is the table's source of truth, declare it there so `make db.diff` stays clean instead of dropping the default to silence the diff. Gate: `MigrationColumnDefaultGateTest` (a closed exemption list of the four migrations that predate it).
+- **Redeploying the previous image does not undo its migrations — `down()` never runs**, so the old code meets the new schema. **Two** shapes break under that, and they break different halves of the application:
+  - **A `NOT NULL` column added without a `DEFAULT` breaks the old *writer*.** Every `INSERT` from code that predates the column fails. It needs no rolling deploy and no second replica; one replica rolled back is enough. On `audit_log` the consequence is tiered by how the write is issued — the `change` tier writes inside `onFlush` with no `catch`, so the **business** write fails with the audit write. A `NOT NULL` column therefore keeps a persistent `DEFAULT`; if a `postGenerateSchema` listener is the table's source of truth, declare it there so `make db.diff` stays clean instead of dropping the default to silence the diff. Gate: `MigrationColumnDefaultGateTest` (a closed exemption list of the four migrations that predate it).
+  - **A dropped column breaks the old *reader*, which is strictly worse — and no gate sees it.** Doctrine enumerates every mapped column in the entity `SELECT`, so the previous image asks for a column the migration removed and Postgres answers `ERROR: column … does not exist`: the failure is on reads, not confined to write paths, and both halves are individually correct so nothing goes red before the deploy. `Version20260819091752` drops `membership.roles`, and the previous image reads `membership` on **every successful login** — `SessionMintingSuccessListener` (`LoginSuccessEvent`) → `FindUserOrganizationId::of()` → `MembershipRepository::findByUserId()` — where the `catch (Throwable)` invalidates the session and rethrows. Rolling that image back onto the migrated schema is an authentication outage: nobody can log in, including the administrator who would fix it.
+- **Rolling back past a column drop means running `down()` first, and no `make` target does it.** `make/db.mk` exposes `db.migrate` and nothing that reverses it. Take the schema back one migration **before** starting the old image:
+
+  ```bash
+  ENV=prod make sf c='doctrine:migrations:migrate prev --no-interaction'
+  ```
+
+  `down()` restores the column's **shape, not its content** — measured, `migrate prev` exits 0 and `Version20260819091752` re-adds `membership.roles` empty and `NOT NULL` with no default. So the order is `down()` **then** the old image, never the reverse, and the schema it leaves is again one only the old image can write to. That is enough here only because the dropped column had no reader in the previous image either (`Membership::hasRole()`/`roles()` had no caller in `api/src`); it was written and never consulted, which is why it was droppable at all. A drop whose column the old image genuinely read back is not recoverable this way — that one is the backup, not the migration.
 - Postgres holds all application state, so a restore is a single artifact: `STAMP=<stamp> make restore.prod` (runbook: [`vps-deployment.md`](./vps-deployment.md) § Backups).
 
 ## Operational notes
