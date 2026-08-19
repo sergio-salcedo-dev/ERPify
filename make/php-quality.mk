@@ -102,12 +102,14 @@ php.lint.bounded-context: ## Bounded-context isolation gate
 php.lint.composer-stability: ## Composer stability gate (nothing shipped tracks a branch)
 	@$(PHP_TEST) bin/phpunit --filter=ComposerStabilityGateTest
 
-## —— Event-dispatch boundary gate ——————————————————————————————————————————
+## —— Application-layer framework-seam gate ————————————————————————————————
 
-# Fails CI when a file under */Application/ imports Symfony\Component\Messenger\MessageBusInterface
-# directly instead of publishing domain events through the Erpify\Shared\Event\Domain\EventBus
-# port (skipping api/.event-dispatch-allowlist). ADR: docs/adr/event-driven-architecture.md.
-php.lint.event-bus: ## Event-dispatch boundary gate
+# Fails CI when a file under */Application/ reaches a framework seam by importing the framework type
+# instead of its port: Symfony\Component\Messenger\MessageBusInterface instead of
+# Erpify\Shared\Event\Domain\EventBus, or Doctrine\ORM\EntityManagerInterface instead of
+# Erpify\Shared\Persistence\Application\TransactionManager (skipping api/.event-dispatch-allowlist).
+# ADRs: docs/adr/event-driven-architecture.md, docs/adr/external-dependencies-in-domain.md.
+php.lint.event-bus: ## Application-layer framework-seam gate
 	@$(PHP_TEST) bin/phpunit --filter=EventDispatchGateTest
 
 ## —— Person-resource erasure gate ——————————————————————————————————————————
