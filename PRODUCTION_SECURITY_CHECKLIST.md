@@ -930,6 +930,65 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Accepted 2026-08-05 (Sergio):** no customer, and the cost of closing it is three seams across two
       contexts for a recoverable UX papercut. Re-assess if a session-scoped revoke becomes cheap for another
       reason, or the first time a user reports it.
+- [x] **The security stack's four person-data carriers do not reach the buffered application log.** Scoped
+      deliberately: the console `command` key is a fifth reach and stays open as
+      [#788](https://github.com/sergio-salcedo-dev/ERPify/issues/788), so "on any channel" would be false —
+      `symfony/console`'s `ErrorListener` logs a failing process's full argv at CRITICAL on the `console`
+      channel, which prod's buffer includes (`channels: ["!deprecation", "!observability"]`) and whose level
+      is above `action_level: error`, so that record does not merely sit in the buffer, it FLUSHES it; and two
+      commands take a person's email as an argument (`iam:invitation:create`,
+      `organization:administrator:create` — the second a password too). The security stack
+      names the person on every authenticated request: `ContextListener` logs `username =>
+      getUserIdentifier()` at DEBUG (and here that identifier IS the email — `SecurityUser::getUserIdentifier()`
+      returns `$this->user->email()`), on login `AuthenticatorManager` logs the token OBJECT, whose
+      `__toString()` spells the address out again, and a session token the firewall cannot use is logged whole
+      under `received` — on one branch the raw SERIALIZED token, address and password hash together. All of
+      them sit behind prod's `fingers_crossed` handler at `level: debug`, and a request is about seven records
+      into a fifty-record buffer, so any 5xx flushes them to `php://stderr` — the Docker json-file driver no
+      compose file gives a rotation, a TTL or an owner of erasure. Closed by
+      `Shared/Monitoring/Infrastructure/Monolog/PersonDataRedactionProcessor`, a **key** rule over four carriers
+      (`username`, `impersonator_username`, `token`, `received`), replacing the value whole with `REDACTED` —
+      whole rather than parsed, because a `TokenInterface` is `Stringable` and Monolog's formatter spells it out
+      downstream of every processor. Logger-scoped, so it runs ahead of the buffer AND ahead of the
+      handler-scoped `PsrLogMessageProcessor` that interpolates the message. Everything an incident needs
+      survives: `provider`, `authenticator`, `firewall_name`, `token_class`, the message, and `exception` —
+      untouched on purpose, since `HttpCodeActivationStrategy` reads it to decide what flushes at all.
+      **Exact match, not the substring rule `RedactionDenylist` uses for response bodies:** measured, a
+      substring on `token` destroys `token_class`, a class name holding no person datum.
+      **What it does not cover**, each measured rather than assumed: the record's MESSAGE (which is NOT quiet —
+      see below); a carrier nested inside another value or riding in `extra`; and the `doctrine` channel, which
+      logs every statement's bound parameters — the login `SELECT … WHERE t0.email = ?` carries the address
+      under a nested `params` key. That last one is bounded by the DBAL logging middleware, read from the
+      compiled containers rather than from the option that configures it: `Doctrine\DBAL\Logging\Middleware`
+      appears in the test container and appears **nowhere** in the prod one, so it is a property of the
+      `kernel.debug` and not of the environment name — `doctrine.dbal.logging` defaults to `%kernel.debug%`
+      and `config/packages/doctrine.yaml` never sets it, so one `APP_DEBUG` on the prod stack turns that
+      carrier on into the same unrotated sink. `compose.prod.yaml` sets no `APP_DEBUG` at all and relies on
+      Dotenv's `'prod' !== $env` default; pinning it there would make the claim structural instead of
+      default-dependent, and is not done here. The console `ErrorListener`'s `command` key is deliberately
+      NOT in the carrier set: it is #788, a distinct disclosure whose worse half is a plaintext password, and
+      a key here would close its appearance while leaving that — retiring the issue without fixing it. The
+      MESSAGE is not reachable by anything processor-shaped either, and the live vector there is not a
+      `{carrier}` placeholder: it is `{command}`, interpolated by the handler-scoped `PsrLogMessageProcessor`
+      downstream of every processor, and identifiers `sprintf`-composed into a message before Monolog sees
+      it (`CurlHttpClient` writes `Request: "%s %s"` on the buffered `http_client` channel).
+      **Enrolment is the whole control, and its two halves are verified in two different containers.** In
+      test, `PersonDataRedactionArrivalTest` drives a real login plus a real
+      authenticated request and asserts no swept record reaches the prod formatter carrying the address, and
+      separately that every one of the container's channel loggers carries the rule — behaviour alone is green
+      for any channel a request happened not to write on. In **prod**, the container compiled by
+      `make php.lint.prod-container` is the evidence, and it is read rather than assumed: 14 channel loggers,
+      14 `pushProcessor` sites for this rule, `monolog.logger.security` and `monolog.logger.request` among
+      them, on the **logger** and not on a handler — so the record is redacted before `FingersCrossedHandler`
+      buffers it. **The count is a reading, not a gate** — nothing recomputes it, so reproduce it with
+      `make php.lint.prod-container` plus a grep, over a PURGED `var/cache/prod` (a warmup on a stale cache
+      answers with the previous build). What IS gated is the property that lets the test container stand in
+      for prod: the class carries no `#[When]`/`#[WhenNot]`, asserted in `PersonDataRedactionArrivalTest`, so
+      it cannot be conditioned out of production while every test stays green. Unenrolment takes BOTH
+      mechanisms, measured on four arms with the cache purged each time: tag + autoconfiguration → 14 sites;
+      tag with `autoconfigure: false` → 14; no definition at all → 14; tag removed AND `autoconfigure: false`
+      → 0 — and only that last arm makes the test formatter emit the address inside the login record's
+      stringified token.
 - [ ] **A person's id still reaches the access log through the URL *path*, and it is accepted.** Caddy's
       access-log filter operates on `request>uri query`, so it is structurally incapable of touching a path
       segment — and the application log's `request_uri` leaves the path alone by the same decision, so the
@@ -943,6 +1002,21 @@ mitigated state. Accepting one means recording who accepted it and against which
       access log for `/api/*` at all. **Accepted for now:** there is no production deployment, and the
       query-side leak that *was* closed is the one with volume — it fired on every keystroke of a filter,
       against one entry per user record opened here.
+      **In the application log the same id is spelled twice in one record, and both spellings are this one
+      residual.** Symfony's router listener writes `route_parameters` beside `request_uri`, and a route
+      parameter IS a path segment: measured on the running stack,
+      `GET /api/v1/backoffice/users/01a01aff-87d3-7902-a5f3-c986d20d7feb` produces
+      `route_parameters.id = 01a01aff-87d3-7902-a5f3-c986d20d7feb` and a `request_uri` whose path ends in the
+      same bytes. `PersonDataRedactionProcessor` therefore leaves `route_parameters` alone: redacting one
+      spelling while the other stands in the same record removes nothing and costs an operator the route
+      parameters. **This spelling is not covered by the acceptance above**, which was written about the path
+      and Caddy's query filter; it needs its own sign-off. The declination is bounded rather than absolute,
+      and the bound is prose: the two coincide for the deployed route table, whose every placeholder is a
+      uuid, and `route_parameters` carries the DECODED value where `request_uri` stays encoded — so a route
+      that comes to carry a person-valued placeholder with a percent-encodable byte makes `route_parameters`
+      the only spelling, and nothing reds. `DeclinedRouteParameterCarrierTest` pins the other direction only:
+      the day `RequestUriRedactionProcessor` starts redacting paths it reds, and `route_parameters` must then
+      be added to `CARRIERS`. When the path closes, both close with it.
 - [ ] **The Next.js container logs the full request URL, person ids included — measured in dev, unverified in
       prod.** The audit screen navigates to `/backoffice/audit?actorId=<uuid>&resourceId=<uuid>`, Caddy
       reverse-proxies the document to the PWA, and the container prints

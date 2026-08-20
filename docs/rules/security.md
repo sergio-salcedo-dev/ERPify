@@ -112,6 +112,38 @@ operator the time the field exists to save, so the pattern refuses one and repor
 redacted in all of them and the denylist alone cannot: it is a rule about KEY names, and an identifier in a
 VALUE — Sentry's `Full command` extra, a `Referer`, a raw `query_string` — needs a vocabulary instead.
 
+**A leak whose emitter lives in `vendor/` is closed by a Monolog processor, by CARRIER and not by pattern.**
+`Shared/Monitoring/Infrastructure/Monolog` holds the two: `RequestUriRedactionProcessor` for the `request_uri`
+any library may write, `PersonDataRedactionProcessor` for the keys the security stack names a person in
+(`username`, `impersonator_username`, `token`, `received`). Four properties are the pattern, not the detail.
+**Enrol on the logger, never on a handler** — a logger processor runs before the `fingers_crossed` buffer and
+before the handler-scoped `PsrLogMessageProcessor` that interpolates the message; a handler-scoped one runs
+after both and is invisible to the sweep in `FingersCrossedActivationIntegrityTest`. **Replace the value
+whole**, because a value with a `__toString()` is spelled out by the formatter downstream of every processor,
+so a rule that inspected strings would cover the plain carriers and let the object through. **Match the key
+exactly**: a substring rule reaching for `token` also destroys `token_class`, and over-redaction that costs an
+operator a diagnostic is not free just because it errs toward safety. **Leave a null value alone**: a carrier
+the emitter had nothing to put in is "none was sent", and stamping the sentinel over it asserts an identifier
+that never existed.
+
+Adding a carrier is three edits, not one, because the set fails in three independent directions: the entry in
+`CARRIERS` on the class; a case in `PersonDataRedactionProcessorTest` whose context is a shape the emitter
+really writes, asserted at the deployed formatter in **both** directions so a case that never carried a person
+datum reds instead of passing; and a row in `PersonDataCarrierEmitterGateTest`'s `EMITTERS` naming the
+installed class that spells the key, which is what reds when a dependency bump renames it and leaves the rule
+guarding a key nobody writes. `PersonDataRedactionArrivalTest` carries the orthogonal half, enrolment — the
+rule and its enrolment fail independently — and asserts it three ways: behaviourally (a real session's
+records), structurally (every channel logger carries the rule, since a channel that logged nothing is green
+for free), and by refusing a `#[When]`/`#[WhenNot]` on the class, which is what lets the test container stand
+in for the prod one.
+
+Two things a processor of this shape never proves and must say so. It cannot reach the record's **message**,
+which the handler-scoped `PsrLogMessageProcessor` interpolates downstream of it. And it asserts presence on a
+logger, never **position**: `Logger::pushProcessor` is an `array_unshift`, so anything enrolled later runs
+earlier and sees the record unredacted — dev's `DebugProcessor` does exactly that, into the profiler. Never
+touch `context['exception']` in a processor: `HttpCodeActivationStrategy` reads it to decide which statuses may
+flush the buffer at all.
+
 ## A person's identifier is declared sensitive at the parameter
 
 `#[SensitiveParameter]` renders an argument as `Object(SensitiveParameterValue)` in a stack trace instead of
