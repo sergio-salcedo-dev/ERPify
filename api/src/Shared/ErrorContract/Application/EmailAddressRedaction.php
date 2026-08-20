@@ -24,8 +24,9 @@ enum EmailAddressRedaction
 {
     /**
      * Spelled here rather than imported from the URI vocabulary. Each sink that redacts states its own token —
-     * `api/frankenphp/Caddyfile`, the request-URI rule and the PWA's filter all do — so that the sinks agree on
-     * what an operator reads without any one of them depending on another's constant.
+     * the request-URI rule and the PWA's filter both do — so they agree on what an operator reads without any
+     * one of them depending on another's constant. The access log is no longer among them: it replaces the
+     * whole query string rather than a value, so it holds no vocabulary to agree with.
      */
     public const string SENTINEL = 'REDACTED';
 

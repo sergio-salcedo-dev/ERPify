@@ -510,15 +510,20 @@ you change anything here.
       token does). **Read that header for what it is:** it is delivered with a DOCUMENT, so it governs a deep
       link or a refresh and not a client-side navigation into the screen from elsewhere in the back-office,
       where the initial document's policy still applies. It is defence in depth; the edge is what closes the
-      log. The client also strips `?token=` from the URL/history on mount, and Caddy's access log **redacts
-      every secret- and identity-bearing query parameter**: `authorization`, `token`, the audit screen's
-      `actorId`/`resourceId`/`correlationId`, and the `filters[0..19][value]` grammar every list surface
-      serializes its filter values into — which also covers the account-holder name and the user email
-      filters. **The range is bound to `SearchQuery::MAX_FILTERS`, not to what this UI emits**, because the
-      entry is written before Symfony validates anything: a 422 or a 404 is logged like any other request, so
-      the enumeration has to cover every index the API will accept from any client. An index at or beyond the
-      cap is rejected by validation but still logged, so a caller who fabricates one — and therefore already
-      knows the identifier — can plant it there; Caddy's grammar has no wildcard and that stays open. **Caddy also drops the `Referer` header**, because a
+      log. The client also strips `?token=` from the URL/history on mount, and **Caddy's access log carries
+      no query string at all**: the filter strips everything from the `?` and keeps the path. It does not
+      enumerate sensitive parameter names, and that is the correction rather than a detail — an enumeration
+      stood here for months and, measured against the running stack by `AccessLogQueryContainmentGateTest`,
+      contained **one of nine** spellings of a value. The `in` operator's own spelling
+      (`filters[N][value][]`, `filters[N][value][0]`), any filter index past the enumerated range, a
+      double-encoded key and a plain parameter name nobody had listed each reached this log in clear.
+      Caddy's `query` filter substitutes the value of an exactly named parameter and has no wildcard, so its
+      reach was whatever a person remembered to write. **The threat model the old acceptance was signed
+      against was the wrong one**: it argued that whoever plants an index past the cap already knows the
+      identifier, which answers confidentiality and answers nothing about **retention** — the harm is that
+      the deployment then holds a person's identifier in a sink with no rotation, no TTL and no owner of
+      erasure, and any client can force that for free. Both cliffs (index and sub-index) are closed by the
+      strip rather than by a longer list. **Caddy also drops the `Referer` header**, because a
       log line records more than its URI: for a same-origin API call the referring document is the screen the
       ids live on, so an unfiltered `Referer` reproduces in clear exactly what the `uri` filter blanked, on the
       same entry. The **application** log answers the same vocabulary through a Monolog processor over every
@@ -990,9 +995,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       → 0 — and only that last arm makes the test formatter emit the address inside the login record's
       stringified token.
 - [ ] **A person's id still reaches the access log through the URL *path*, and it is accepted.** Caddy's
-      access-log filter operates on `request>uri query`, so it is structurally incapable of touching a path
-      segment — and the application log's `request_uri` leaves the path alone by the same decision, so the
-      residual is one residual across both logs rather than a difference between them. The producer is
+      access-log filter strips the query string and keeps the path, so a path segment is untouched by
+      construction — and the application log's `request_uri` leaves the path alone by the same decision, so
+      the residual is one residual across both logs rather than a difference between them. The producer is
       `pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts`, which composes
       `/api/v1/backoffice/users/<uuid>`, where the uuid is the person's id. The sink has no owner of erasure:
       no compose file declares a `logging:` driver, so it is the default json-file driver with neither rotation
@@ -1017,6 +1022,70 @@ mitigated state. Accepting one means recording who accepted it and against which
       the only spelling, and nothing reds. `DeclinedRouteParameterCarrierTest` pins the other direction only:
       the day `RequestUriRedactionProcessor` starts redacting paths it reds, and `route_parameters` must then
       be added to `CARRIERS`. When the path closes, both close with it.
+- [x] **A person's email, an account holder's name and an IBAN reached the access log through the `in`
+      operator's array spelling** — closed, and closed by changing the mechanism rather than lengthening a
+      list. The filter enumerated sensitive parameter names, and Caddy matches a name exactly with no
+      wildcard, so `filters[N][value][]` and `filters[N][value][0]` — the spellings a list value takes —
+      matched nothing. Measured against the running stack, the enumeration contained **one of nine**
+      spellings of a value; a double-encoded key and a plain parameter name nobody had listed also passed.
+      It was reachable through the API, not only by hand: `FieldMapping`'s default operator set granted
+      `In` to every field that did not name its own, which included `email` on the user register and
+      `holderName`/`iban` on bank accounts. Two changes, each falsified by provoking its red: Caddy now
+      drops the query whole (`AccessLogQueryContainmentGateTest` sends nine spellings through the running
+      stack, including one on a 2xx, and asserts none survives), and `In` is opt-in at `FieldMapping`
+      (`SearchOperatorSurfaceGateTest`), so the four person-data fields that never used it no longer admit
+      it while the bank name and short code, which nine scenarios in
+      `api/features/backoffice/bank/search.feature` do reach with a list, declare it — that count is stated
+      with the extraction that produces it at `DoctrineBankRepository::searchFieldMap()`, so a reader re-runs
+      it rather than trusting it.
+- [ ] **The access log's filter is overridable from the environment at three points, and nothing detects
+      it.** `{$CADDY_GLOBAL_OPTIONS}` (`api/frankenphp/Caddyfile:7`), `{$CADDY_EXTRA_CONFIG}` (`:17`) and
+      `{$CADDY_SERVER_LOG_OPTIONS}` (`:25`) are each documented options (`api/docs/options.md`). The last
+      expands inside the `log` block **ahead of** `format filter`, so setting it to another encoder replaces
+      every rule below it; the first two can introduce a global logger or a whole second site block carrying
+      no `format filter` at all. Any of the three does it from a deployment, without touching this
+      repository, with every gate in the tree green — the whole-query strip included. No test here can see
+      it, because none reads a deployment's environment. **This is a bigger hole than any spelling the strip
+      closes**, and it bounds what every other claim on this page about the access log is worth. Dev and
+      test set the third deliberately, to point the log at a file the effect gate can read; that use sets
+      the destination and leaves `format filter` alone.
+- [ ] **Everything a client controls OUTSIDE the query string still reaches the access log in clear.** The
+      strip covers `request>uri` from the first `?` **or `%3f`** — the encoded delimiter is matched
+      case-insensitively because the literal-only pattern was measured letting `/api/v1/health%3Ffoo=<value>`
+      through whole. Measured against the running stack, each of these still lands: the URL **path**
+      (`/api/v1/backoffice/users/<uuid>`, the long-standing residual); a `;`-delimited path parameter
+      (`/api/v1/health;p=<value>`); and **every request header except
+      `Referer`**, which is the only one dropped (`User-Agent`, `X-Anything` and any other are logged
+      verbatim; `Cookie` and `Authorization` are redacted by Caddy's own credential handling). So the
+      statement "any client can force the deployment to retain a person's identifier here" is **still true
+      after the strip** — the strip removed the axis a legitimate UI drives, not the axis a hostile caller
+      drives. Closing it needs a header allowlist plus a path mechanism, or no access log for `/api/*`.
+- [ ] **The embedded Mercure hub logs subscriber topics in clear, on a logger this site's filter does not
+      govern.** Measured: `GET /.well-known/mercure?topic=<value>` produces an access line reading
+      `?REDACTED` **and**, on stderr, `http.handlers.mercure … "topics": ["<value>"]`. They are separate
+      loggers, which is why the site's `format filter` reaches one and not the other.
+      `api/frankenphp/Caddyfile` enables `anonymous` and `subscriptions` unconditionally, so this is
+      unauthenticated. The application's own topics are bank and bank-account UUIDs, so normal operation
+      leaks nothing — this is an injection channel into the same unrotated, un-TTL'd, unerasable sink, and it
+      is pre-existing rather than introduced. Closing it needs a `log` override for the
+      `http.handlers.mercure` logger, or dropping `subscriptions`.
+- [ ] **A person's address is declared unmarked in 27 parameter declarations outside the pinned mail
+      surface, and the axis is accepted.** `#[SensitiveParameter]` covers every declaration named
+      `recipientEmail` (`SensitiveRecipientAddressGateTest` pins that set); the same value is declared
+      unmarked in **27** further places on this reading — 25 of the 26 sites listed in #769
+      (`NotifyLockedIdentities.php:88` is a call, not a declaration) plus the two `$emailIdentifier`
+      parameters of `ReauthenticateDevice` and `ReauthenticateDeviceBestEffort`, which that list omits.
+      **Read it as a bound, not a measurement**: it is a hand count sourced from an issue rather than an
+      extraction anyone can re-run, and a looser token scan of `api/src` returns 29, of which 3 are
+      status-transition `$to` parameters on `Invalid*Transition` — 26 on a comparable definition. Nothing
+      gates the number, which is part of why this axis is accepted rather than closed.
+      **The axis is unobservable on this deployment**: `zend.exception_ignore_args = On`
+      (`api/frankenphp/conf.d/10-app.ini`) strips every argument of every frame, so no sink renders them,
+      and the attribute is the narrower half that would survive a change to that ini. It is **not** closable
+      by marking them: the gate that keeps the mail surface honest keys on the parameter NAME, so an
+      attribute on `$email` or `$to` is one nothing preserves — the exact decay the gate exists to prevent.
+      Closing it needs a definition of "carries a person's address" a gate can evaluate, which is the
+      unspecified semantics that kept #767 from adding a `php.lint.*` rule in the first place.
 - [ ] **The Next.js container logs the full request URL, person ids included — measured in dev, unverified in
       prod.** The audit screen navigates to `/backoffice/audit?actorId=<uuid>&resourceId=<uuid>`, Caddy
       reverse-proxies the document to the PWA, and the container prints

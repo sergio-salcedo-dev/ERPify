@@ -58,9 +58,10 @@
   a per-target budget may answer 429 once the caller has already proved it holds the target, which is why
   `password_change_per_identity` on `POST /me/password` refuses out loud and nothing on this surface does.
 - **Token hygiene:** a single-use token travels ONLY in the emailed link and the request body — never in a
-  log (Caddy's access log and the application log both redact the `token` query parameter, alongside the
-  identity axes and the positional `filters[N][value]` search grammar; Caddy also drops the `Referer` header,
-  which would otherwise carry a token-bearing URL into the same entry), never in a Messenger transport (token-bearing emails are
+  log — Caddy's access log carries no query string at all (it strips everything from the `?`, so a token
+  cannot be there whatever it is named), and the application log redacts the `token` parameter alongside the
+  identity axes and the positional `filters[N][value]` grammar; Caddy also drops the `Referer` header, which
+  would otherwise carry a token-bearing URL into the same entry — never in a Messenger transport (token-bearing emails are
   synchronous best-effort), never left in browser history/`Referer` (token screens send
   `Referrer-Policy: no-referrer` and strip `?token=` on mount).
 - **Security sender:** user-facing security emails come from `MAILER_SECURITY_FROM` — a monitored, replyable
@@ -165,7 +166,9 @@ PHP does **not** enforce attribute agreement between an interface and its implem
 implementation behind a marked interface compiles and passes every gate. `SensitiveRecipientAddressGateTest`
 pins the mail surface against exactly that, as a set rather than a count, and pins the ini beside it. Its blind
 spots are stated at the class: it keys on the parameter NAME, so an address carried as `$to` or `$email` is
-outside it — that axis is issue #769 — and it says nothing about `getMessage()`, which is where an address
+outside it — 27 declarations, accepted and recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §7, where the
+reason it is not closable by marking them is stated: an attribute on a parameter the gate's key does not
+cover is one nothing preserves — and it says nothing about `getMessage()`, which is where an address
 actually reaches a sink.
 
 ## Password policy

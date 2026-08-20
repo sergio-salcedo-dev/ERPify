@@ -559,7 +559,7 @@ Feature: Search banks
     And the JSON node "data" should have 31 elements
     And 3 requests got executed only for doctrine connection "default"
 
-  # name lists default operators (eq/in/contains) only; a range operator is not allow-listed,
+  # name declares eq/in/contains at its field mapping; `In` is opt-in and is not in the default; a range operator is not allow-listed,
   # so the applier rejects it semantically before any SQL runs.
   Scenario: A range operator on a field that does not allow it returns 422 unsupported-search-operator
     When I send a "GET" request to "/backoffice/banks?filters[0][field]=name&filters[0][operator]=gt&filters[0][value]=x"

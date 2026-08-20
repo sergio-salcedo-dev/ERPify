@@ -98,3 +98,13 @@ Feature: Search the identity register
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "invalid-cursor"
+
+  # `In` is opt-in per field (`FieldMapping`'s default is eq/contains), and `email` does not ask for it:
+  # nothing in this product filters addresses as a list, and the operator is the one whose wire spelling
+  # grows a sub-index. The refusal is pinned through the endpoint rather than only at the field map,
+  # because a narrowing nobody can see from the outside is a narrowing nobody notices breaking.
+  Scenario: Filtering the register by a list of emails is refused
+    When I send a "GET" request to "/backoffice/users?filters[0][field]=email&filters[0][operator]=in&filters[0][value][]=admin@erpify.test"
+    Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "unsupported-search-operator"

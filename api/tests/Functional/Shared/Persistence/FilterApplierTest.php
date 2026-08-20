@@ -361,7 +361,15 @@ final class FilterApplierTest extends KernelTestCase
     private function bankFieldMap(): SearchFieldMap
     {
         return new SearchFieldMap([
-            'name' => new FieldMapping('b.nameNormalized', new NormalizedTextFieldNormalizer()),
+            // `In` is named here and not inherited: it is absent from the default operator set, and the
+            // subject of these cases is what `FilterApplier` DOES with a list — normalising each item,
+            // refusing an empty one — not which fields production grants it to. A fixture that mirrored
+            // the repository would leave those two behaviours unexercised.
+            'name' => new FieldMapping(
+                'b.nameNormalized',
+                new NormalizedTextFieldNormalizer(),
+                operators: [FilterOperator::Eq, FilterOperator::In, FilterOperator::Contains],
+            ),
             'shortName' => new FieldMapping('b.shortName'),
             'id' => new FieldMapping(
                 'b.id',
