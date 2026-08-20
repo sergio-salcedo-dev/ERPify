@@ -23,7 +23,7 @@ API-scoped guidance. Root [`../CLAUDE.md`](../CLAUDE.md) is authoritative for mo
     -   `Shared/` — vertical-slice capability modules over a minimal `Kernel/` (DDD building blocks). Capabilities each carry only the layers they need: `ErrorContract/` (RFC 9457 pipeline), `Uuid/`, `Http/`, `Serialization/`, `Persistence/`, `Clock/`, `Event/`, `Mailer/`, `Monitoring/`, `Search/`, `Validation/`, plus `Audit/`, `Access/`, `Token/`, `Crypto/`, `Privacy/`. No global `Domain`/`Application`/`Infrastructure` buckets — see [`../docs/adr/shared-module-organization.md`](../docs/adr/shared-module-organization.md). Put truly reusable code here; don't scatter it across modules.
 -   `config/` — Symfony config (services, routes, packages, Messenger transports).
 -   `migrations/` — Doctrine migrations (never edit applied migrations; generate new ones via `make db.diff`).
--   `tests/` — `Unit/`, `Functional/`, `Behat/`, `DataFixtures/`.
+-   `tests/` — `Unit/`, `Functional/`, `Behat/`, `DataFixtures/`, plus `Support/` (the rule engines the artifact gates assert over — see [`../docs/rules/testing.md`](../docs/rules/testing.md)).
 -   `tools/` — per-tool configuration, plus the one remaining isolated Composer install (PHPUnit). Behat is **not** here: its bridge was retired when `behat/behat` 4 lifted the `symfony/console` cap, and it now lives in `api/composer.json` like every other dev tool (see "Rules that bite" below).
 -   `features/` — Behat `.feature` files.
 -   `frankenphp/` — Caddyfile + worker entry.

@@ -1,0 +1,16 @@
+<?php
+
+// Not a `.php` file, and deliberately so: this is INPUT to a text-reading detector, and a fixer that
+// rewrote it would change what the sweep is being shown. Every PHP tool in the tree walks `tests/`.
+
+declare(strict_types=1);
+
+use PHPUnit\Framework\TestCase;
+
+/**
+ * A gate standing in for one filed in the category home. It carries none of the shape signals, because the
+ * home half of the universe is decided by location alone.
+ */
+final class HomeGateProbe extends TestCase
+{
+}

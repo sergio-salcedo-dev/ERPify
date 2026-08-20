@@ -1,0 +1,3 @@
+# A `mirrored` line naming a directory that does not exist.
+tests/Unit/Shared/Architecture/HomeGateProbe.txt :: home
+tests/Unit/Alpha/MirroredGateProbe.txt :: mirrored :: src/Gamma

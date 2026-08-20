@@ -1,0 +1,4 @@
+# The agreeing state: every probe the sweep finds carries one line, and each line's placement is the one the
+# probe's own path has.
+tests/Unit/Shared/Architecture/HomeGateProbe.txt :: home
+tests/Unit/Alpha/MirroredGateProbe.txt :: mirrored :: src/Alpha

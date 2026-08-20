@@ -332,7 +332,7 @@ Full reference (mapping table, header rules, observability, code map, test surfa
 
 | Layer             | Tool                                           | Entry                                                                       |
 |-------------------|------------------------------------------------|-----------------------------------------------------------------------------|
-| Unit              | **PHPUnit 13**                                 | `api/phpunit.xml.dist`, run via `make php.unit`                             |
+| Unit              | **PHPUnit 13**                                 | `api/tools/phpunit/phpunit.dist.xml`, run via `make php.unit`               |
 | Functional        | PHPUnit (kernel/HTTP)                          | `api/tests/Functional/`, run via `make php.unit`                            |
 | E2E / BDD         | **Behat 4**                                    | `api/behat.dist.php`, features in `api/features/`, run via `make php.behat` |
 | Fixtures          | Hautelook Alice                                | `make db.load.fixtures`                                                     |
