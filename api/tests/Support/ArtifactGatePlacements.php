@@ -30,6 +30,19 @@ final readonly class ArtifactGatePlacements
     /** The file sits in the home and its membership in the category is an open question. The line says why. */
     public const string UNDECIDED = 'undecided';
 
+    /**
+     * The detector's shape heuristic matched it, but its subject is a RUNNING behaviour rather than an
+     * artifact read as data, so it is outside the category by the definition the registry opens with — and
+     * it is filed under `tests/Functional/` for the reason any functional test is. The line says what it
+     * needs to run.
+     *
+     * This exists because the other three all assert a placement and none of them can say "the placement is
+     * not in question, the membership is". `undecided` is the near miss and it is deliberately not widened
+     * to cover this: it means an open question about a file sitting in the home, and answering a different
+     * question with it would make both unreadable.
+     */
+    public const string OUT_OF_CATEGORY = 'functional';
+
     /** Where a mirror's subject may live. `tests/` is the second mirror axis: test infrastructure. */
     private const array SUBJECT_ROOTS = ['src/', 'tests/'];
 
@@ -154,6 +167,11 @@ final readonly class ArtifactGatePlacements
                 . 'file already in the home; anywhere else it has been decided by being put there.',
                 ArtifactGateSweep::HOME,
             ),
+            self::OUT_OF_CATEGORY => $inHome ? \sprintf(
+                'is classified `%s` but sits in the category home. A file declared outside the category '
+                . 'does not belong in the home of that category.',
+                self::OUT_OF_CATEGORY,
+            ) : null,
             default => $this->mirrorDisagreement($path, (string) $placement['subject'], $inHome),
         };
     }
@@ -248,13 +266,19 @@ final readonly class ArtifactGatePlacements
                 'subject' => null,
                 'reason' => self::reason($path, $tail),
             ],
+            self::OUT_OF_CATEGORY => [
+                'placement' => self::OUT_OF_CATEGORY,
+                'subject' => null,
+                'reason' => self::reason($path, $tail),
+            ],
             default => throw new RuntimeException(\sprintf(
-                'Unknown placement "%s" for "%s". Expected one of: %s, %s, %s.',
+                'Unknown placement "%s" for "%s". Expected one of: %s, %s, %s, %s.',
                 $placement,
                 $path,
                 self::IN_HOME,
                 self::MIRRORED,
                 self::UNDECIDED,
+                self::OUT_OF_CATEGORY,
             )),
         };
     }

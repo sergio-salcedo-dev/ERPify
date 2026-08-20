@@ -91,6 +91,14 @@ services:
       FRANKENPHP_WORKER_CONFIG: "${FRANKENPHP_WORKER_CONFIG-watch /app/api/src/**/*.php}"
       FRANKENPHP_SITE_CONFIG: "${FRANKENPHP_SITE_CONFIG-hot_reload /app/api/src/**/*.php /app/api/config/**/*.yaml /app/api/config/**/*.php}"
       MERCURE_EXTRA_DIRECTIVES: demo
+      # Sends the access log to a file the test suite can read, so the gate over it can assert an
+      # EFFECT (send a request, read the line that was written) instead of the shape of a config
+      # block. It sets the DESTINATION only: `{$CADDY_SERVER_LOG_OPTIONS}` expands ahead of
+      # `format filter`, which is the thing under test and which this leaves untouched. Prod leaves
+      # the variable unset and keeps stderr, so what the gate measures differs from the deployed
+      # sink in where the line lands and in nothing else.
+      # The cost is local: `docker logs php` no longer carries access lines in dev; the file does.
+      CADDY_SERVER_LOG_OPTIONS: "output file /app/api/var/log/caddy-access.log"
       XDEBUG_MODE: "${XDEBUG_MODE:-off}"
       PHP_IDE_CONFIG: "serverName=${PHP_IDE_SERVER_NAME:-dev}"
       APP_ENV: "${APP_ENV:-dev}"

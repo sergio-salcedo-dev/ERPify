@@ -45,13 +45,23 @@ final class FieldMappingTest extends TestCase
         $this->assertFalse($mapping->allows(FilterOperator::Contains));
     }
 
-    public function testNonUuidFieldAllowsAllOperatorsByDefault(): void
+    /**
+     * The default is the capability every field gets without anybody deciding, so `In` is not in it: it is
+     * the one operator whose value is a list, and the one whose wire spelling therefore grows a sub-index.
+     * Both directions are asserted together — a field that wants it says so — because the pair IS the rule,
+     * and splitting it would let the negative half stand alone and read as "lists are not supported".
+     */
+    public function testTheListOperatorIsGrantedOnlyWhenAFieldNamesIt(): void
     {
-        $mapping = new FieldMapping('b.name');
+        $inherited = new FieldMapping('b.name');
 
-        $this->assertTrue($mapping->allows(FilterOperator::Eq));
-        $this->assertTrue($mapping->allows(FilterOperator::In));
-        $this->assertTrue($mapping->allows(FilterOperator::Contains));
+        $this->assertTrue($inherited->allows(FilterOperator::Eq));
+        $this->assertTrue($inherited->allows(FilterOperator::Contains));
+        $this->assertFalse($inherited->allows(FilterOperator::In));
+
+        $declared = new FieldMapping('b.status', operators: [FilterOperator::Eq, FilterOperator::In]);
+
+        $this->assertTrue($declared->allows(FilterOperator::In));
     }
 
     public function testDateTimeFieldRejectsContainsAmongExplicitOperators(): void

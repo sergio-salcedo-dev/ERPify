@@ -33,6 +33,18 @@ final readonly class FieldMapping
      * The guards are deliberately four flat, symmetric if-throws — one invariant each, no
      * shared predicate — so every rejected combination reads as its own sentence.
      *
+     * `In` is absent from the default on purpose, so a field admits it only by asking. A default is a
+     * capability grant over every field nobody configured, and `In` is the one operator in this
+     * vocabulary whose value is a LIST — the only one whose wire spelling grows a sub-index. Left in the
+     * default it reached six fields nobody had decided about, four of which nothing in the tree ever
+     * filtered with a list — among them a person's address, an account holder's name and an account
+     * number. The two that a scenario does exercise that way, a bank's name and its short code, now say so
+     * at their own declaration, which is where a reader looks for the decision; so do the status, level,
+     * actor type and resource type that always did.
+     *
+     * `SearchOperatorSurfaceGateTest` holds both directions: the default stays conservative, and every
+     * field admitting `In` declares it explicitly.
+     *
      * @param list<FilterOperator> $operators
      *
      * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
@@ -41,7 +53,7 @@ final readonly class FieldMapping
     public function __construct(
         public string $dqlPath,
         public ?FieldNormalizer $normalizer = null,
-        private array $operators = [FilterOperator::Eq, FilterOperator::In, FilterOperator::Contains],
+        private array $operators = [FilterOperator::Eq, FilterOperator::Contains],
         public bool $requiresUuidValues = false,
         public bool $requiresDateTimeValues = false,
     ) {

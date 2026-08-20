@@ -124,11 +124,22 @@ final readonly class DoctrineBankRepository implements
         $rangeOperators = [FilterOperator::Gt, FilterOperator::Gte, FilterOperator::Lt, FilterOperator::Lte];
 
         return new SearchFieldMap([
-            'name' => new FieldMapping('b.nameNormalized', $this->normalizedText),
+            // `In` is named rather than inherited: it is absent from the default operator set, so the two
+            // fields that want it are the two that say so. A bank's name and its short code are the one
+            // place this API is asked for several values at once — nine acceptance scenarios in
+            // `features/backoffice/bank/search.feature` filter by them that way.
+            'name' => new FieldMapping(
+                'b.nameNormalized',
+                $this->normalizedText,
+                operators: [FilterOperator::Eq, FilterOperator::In, FilterOperator::Contains],
+            ),
             // shortName is stored upper-case ASCII, so its normalizer upper-cases the search
-            // value (the lower-casing name normalizer would never match). Default operators:
-            // eq/in/contains.
-            'shortName' => new FieldMapping('b.shortName', $this->asciiUpperText),
+            // value (the lower-casing name normalizer would never match).
+            'shortName' => new FieldMapping(
+                'b.shortName',
+                $this->asciiUpperText,
+                operators: [FilterOperator::Eq, FilterOperator::In, FilterOperator::Contains],
+            ),
             // No contains on id: a LIKE over a UUID column breaks at the SQL level.
             'id' => new FieldMapping(
                 'b.id',

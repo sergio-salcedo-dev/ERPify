@@ -24,12 +24,20 @@
 #   <path> :: home
 #   <path> :: mirrored :: <directory under src/ or tests/ that the file mirrors>
 #   <path> :: undecided :: <why the classification is open>
+#   <path> :: functional :: <what it needs to run>
 #
 # `<path>` is api-relative. A `mirrored` subject must EXIST and the file must sit at its mirror
 # (`tests/Unit/<subject minus its src/ or tests/ root>/…`) — `tests/` is the second mirror axis, for a gate
 # whose subject is test infrastructure — and a bare `src`/`tests` is refused, since a whole source root is
 # not a module. `undecided` is for a file already in the home whose membership in the category is an open
 # question; it states a reason, because an exemption with no reason is indistinguishable from an oversight.
+#
+# `functional` is the fourth, and it answers a different question from the other three. They each assert a
+# PLACEMENT; this one says the file is outside the CATEGORY — the shape heuristic matched it, but its subject
+# is a running behaviour rather than an artifact read as data, which is the definition at the top of this
+# file. Its placement under `tests/Functional/` is not in question, so it must NOT sit in the home, and the
+# reason field says what it needs to run. `undecided` was the near miss and is deliberately not widened to
+# cover it: answering two different questions with one token would make both unreadable.
 #
 # The gate is three classes — ArtifactGatePlacementGateTest over the real tree, plus
 # ArtifactGateDetectionRulesGateTest and ArtifactGatePlacementRulesGateTest for the falsifiability of the
@@ -150,6 +158,7 @@ tests/Unit/Shared/Architecture/ScheduleConsumptionGateTest.php :: home
 tests/Unit/Shared/Architecture/ScheduleConsumptionRulesGateTest.php :: home
 tests/Unit/Shared/Architecture/ScheduleDeclarationRulesGateTest.php :: home
 tests/Unit/Shared/Architecture/ScheduleReplicaRulesGateTest.php :: home
+tests/Unit/Shared/Architecture/SearchOperatorSurfaceGateTest.php :: home
 tests/Unit/Shared/Architecture/SensitiveRecipientAddressGateTest.php :: home
 tests/Unit/Shared/Architecture/StepVocabularyRegistryTest.php :: home
 tests/Unit/Shared/Architecture/StrictRequestPayloadGateTest.php :: home
@@ -171,3 +180,11 @@ tests/Unit/Shared/ErrorContract/Application/NativeJsonEncodeContractTest.php :: 
 tests/Unit/Shared/ErrorContract/Domain/Exception/TaxonomyArchitectureTest.php :: mirrored :: src/Shared/ErrorContract
 tests/Unit/Shared/Serialization/ResourceDtoContractTest.php :: mirrored :: src/Shared/Serialization
 tests/Unit/Support/PhpSourceTest.php :: mirrored :: tests/Support
+
+# Kernel-free by shape, which is what the detector reads, but its subject is a RUNNING behaviour rather than
+# an artifact read as data: it sends real requests through Caddy and reads the line Caddy wrote. By the
+# definition at the top of this file that puts it outside the category, and the category has no spelling for
+# saying so — `home` and `mirrored` both assert a placement, and this file's placement under
+# `tests/Functional/` is not in question. Recorded rather than moved, because moving it into the home would
+# file a test that needs a running stack beside tests that need nothing.
+tests/Functional/Shared/Monitoring/AccessLogQueryContainmentGateTest.php :: functional :: sends real requests through Caddy and reads the line it wrote, so it needs the running stack

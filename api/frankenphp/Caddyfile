@@ -23,77 +23,43 @@
 		# without touching this repository and without any gate noticing. The filter below is only as
 		# strong as this variable being left alone.
 		{$CADDY_SERVER_LOG_OPTIONS}
-		# Redact secret- and identity-bearing query parameters. The access log has no owner of erasure:
-		# no compose file declares a `logging:` driver, so stderr lands in the default json-file driver
-		# with no rotation and no TTL, and nothing in the GDPR erasure path can reach it. Whatever gets
-		# in outlives the erasure the app confirmed to the subject.
+		# The query string is dropped WHOLE, and that is the mechanism rather than a stronger setting of
+		# the old one. This log has no owner of erasure — no compose file declares a `logging:` driver, so it
+		# is the default json-file driver with neither rotation nor TTL, and nothing in the GDPR erasure path
+		# can reach it — so whatever lands here outlives the erasure the app confirmed to the subject. The
+		# obligation that follows is RETENTION, and it is not answered by observing that whoever planted a
+		# value already knew it: the harm is that we now hold a person's identifier and cannot erase it.
 		#
-		# Secrets: `authorization` can be set by Mercure, and `token` carries the single-use
-		# invitation/reset secret (`<id>.<secret>`).
+		# What stood here was a name allowlist — one `replace` line per sensitive parameter, plus one per
+		# filter index up to `SearchQuery::MAX_FILTERS`. Measured against the running stack by
+		# `AccessLogQueryContainmentGateTest`, that shape contained exactly ONE of nine spellings of a value:
+		# the scalar `filters[N][value]`. The `in` operator's own spelling (`filters[N][value][]` and
+		# `filters[N][value][0]`), any index past the enumeration, a double-encoded key, and a plain
+		# parameter name nobody had listed all reached this log in clear. That is not an incomplete list, it
+		# is the wrong instrument: the `query` filter substitutes the value of an EXACTLY NAMED parameter and
+		# has no wildcard, so its reach is whatever a person remembered to write — and a person is the wrong
+		# thing to depend on for a sink nobody can erase.
 		#
-		# Person ids arrive on two different requests and both have to be covered — closing only the
-		# cheaper one leaves the sink open. The audit screen holds its filter state in the document URL
-		# (`actorId`, `resourceId`), so those names appear on the navigation; the API request that the
-		# same screen fires on every keystroke of the filter carries the identical values under the
-		# generic `filters[N][value]` grammar, a key no name-based rule reaches. `correlationId` is not
-		# a person id — it is redacted because a request-correlation UUID reconstructs a session.
+		# Enumerating harder cannot repair it. The entry is written BEFORE the application validates
+		# anything — a 401, a 404 and a 422 are logged like a 200 — so neither `SearchQuery::MAX_FILTERS` nor
+		# `FilterQuery::MAX_IN_VALUES` bounds what can appear here.
 		#
-		# `filters[N][value]` is blunt on purpose: the grammar has no wildcard and the index carries no
-		# type, so redacting the value axis also blanks level, actor type, action and the date bounds —
-		# of every list surface, not just audit. The access log can no longer answer "which filter was
-		# applied"; that diagnostic is spent knowingly. It buys more than audit: the account-holder name
-		# and the user email filters travel the same way.
+		# What is spent, stated plainly and not talked down: this log can no longer answer which field,
+		# operator, sort or page a request asked for, and for a 2xx nothing else answers it either — prod's
+		# `fingers_crossed` handler discards every non-error record, so a successful request lives here and
+		# nowhere else. `SearchObservabilityListener` keeps the route, the limit, the direction, the
+		# pagination mode and the correlation id on the always-on `observability` channel; it does NOT carry
+		# the filter shape, and it deliberately did not gain it here. `filters[N][field]` is a caller's
+		# string, and moving one into a stream with the same absence of rotation, TTL and erasure owner would
+		# reproduce this defect one channel over to recover a diagnostic nobody had asked for. Doing it
+		# safely means emitting the field the SERVER resolved, from the route's own field map, which is a
+		# change to what the listener is given rather than a line here. Path, method, status and timing stay.
 		#
-		# The range is 0..19 because that is what the API ACCEPTS (`SearchQuery::MAX_FILTERS`), not what
-		# the PWA emits. Binding it to the producer was measured to be the wrong axis: a log records what
-		# the CALLER sent, and this entry is written before Symfony validates anything — a request that
-		# ends in 422 or 404 is logged just the same — so any client of the API, not only this UI, could
-		# put an identifier past the ninth index and have it recorded in clear. The gate derives the
-		# range from that constant and fails if either the constant or the enumeration moves alone.
-		#
-		# What stays open above the cap is declared rather than closed: an index of 20 or beyond is
-		# rejected by validation, but Caddy has already logged it, so a caller who fabricates one — and
-		# who therefore already knows the identifier — can still plant it here. Closing that needs a
-		# different mechanism than an enumeration, and Caddy's grammar has no wildcard.
+		# The PATH is not covered and stays a separate, separately accepted residual:
+		# `/api/v1/backoffice/users/<uuid>` names a person, and a filter over a URI cannot tell a path
+		# segment from an identifier.
 		format filter {
-			request>uri query {
-				replace authorization REDACTED
-				replace token REDACTED
-				replace actorId REDACTED
-				replace resourceId REDACTED
-				replace correlationId REDACTED
-				# `next` carries a URL inside a value: an expired session redirects to
-				# `/login?next=<the whole audit URL, percent-encoded>`, so the ids the audit screen holds
-				# arrive under a name no axis list would ever contain. Measured in this log.
-				#
-				# Blanked whole, and that is a grammar limit rather than a choice: this filter substitutes
-				# the value of a NAMED parameter and cannot read inside one, so redacting only the axes
-				# nested in it is not expressible here. The application log does exactly that — same
-				# vocabulary, richer grammar — so the two sinks agree on what is sensitive and differ only
-				# in how much of the destination survives. What is spent here is "where was the session
-				# going", on the redirect requests alone.
-				replace next REDACTED
-				replace filters[0][value] REDACTED
-				replace filters[1][value] REDACTED
-				replace filters[2][value] REDACTED
-				replace filters[3][value] REDACTED
-				replace filters[4][value] REDACTED
-				replace filters[5][value] REDACTED
-				replace filters[6][value] REDACTED
-				replace filters[7][value] REDACTED
-				replace filters[8][value] REDACTED
-				replace filters[9][value] REDACTED
-				replace filters[10][value] REDACTED
-				replace filters[11][value] REDACTED
-				replace filters[12][value] REDACTED
-				replace filters[13][value] REDACTED
-				replace filters[14][value] REDACTED
-				replace filters[15][value] REDACTED
-				replace filters[16][value] REDACTED
-				replace filters[17][value] REDACTED
-				replace filters[18][value] REDACTED
-				replace filters[19][value] REDACTED
-			}
+			request>uri regexp "[?].*$" "?REDACTED"
 
 			# The same log line also carries the referring document's URL, and for a same-origin API
 			# request that document is the screen the ids live on — so `Referer` reproduces `actorId`
