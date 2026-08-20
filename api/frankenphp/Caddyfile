@@ -35,7 +35,9 @@
 		# `AccessLogQueryContainmentGateTest`, that shape contained exactly ONE of nine spellings of a value:
 		# the scalar `filters[N][value]`. The `in` operator's own spelling (`filters[N][value][]` and
 		# `filters[N][value][0]`), any index past the enumeration, a double-encoded key, and a plain
-		# parameter name nobody had listed all reached this log in clear. That is not an incomplete list, it
+		# parameter name nobody had listed all reached this log in clear. A TENTH spelling — the delimiter
+		# itself percent-encoded — was found afterwards by an adversarial read and falsified separately, against
+		# a first version of this rule that anchored on a literal `?`. That is not an incomplete list, it
 		# is the wrong instrument: the `query` filter substitutes the value of an EXACTLY NAMED parameter and
 		# has no wildcard, so its reach is whatever a person remembered to write — and a person is the wrong
 		# thing to depend on for a sink nobody can erase.
@@ -44,11 +46,13 @@
 		# anything — a 401, a 404 and a 422 are logged like a 200 — so neither `SearchQuery::MAX_FILTERS` nor
 		# `FilterQuery::MAX_IN_VALUES` bounds what can appear here.
 		#
-		# What is spent, stated plainly and not talked down: this log can no longer answer which field,
-		# operator, sort or page a request asked for, and for a 2xx nothing else answers it either — prod's
-		# `fingers_crossed` handler discards every non-error record, so a successful request lives here and
-		# nowhere else. `SearchObservabilityListener` keeps the route, the limit, the direction, the
-		# pagination mode and the correlation id on the always-on `observability` channel; it does NOT carry
+		# What is spent, stated plainly and not talked down: this log can no longer answer which FIELD or
+		# OPERATOR a request filtered by. That is narrower than "a 2xx lives only here", which is false — the
+		# `fingers_crossed` handler discards non-error records only on the channels it buffers (`observability`
+		# and `deprecation` are excluded and always on), `AccessLogAuditListener` writes an `audit_log` row for
+		# the successful `/api/*` requests its policy admits, and `SearchObservabilityListener` emits one
+		# `keyset_search` line per successful search. What those keep is the route, the limit, the direction,
+		# the pagination mode and the correlation id; none of them carries
 		# the filter shape, and it deliberately did not gain it here. `filters[N][field]` is a caller's
 		# string, and moving one into a stream with the same absence of rotation, TTL and erasure owner would
 		# reproduce this defect one channel over to recover a diagnostic nobody had asked for. Doing it
@@ -59,7 +63,7 @@
 		# `/api/v1/backoffice/users/<uuid>` names a person, and a filter over a URI cannot tell a path
 		# segment from an identifier.
 		format filter {
-			request>uri regexp "[?].*$" "?REDACTED"
+			request>uri regexp "(?i)([?]|%3f).*$" "?REDACTED"
 
 			# The same log line also carries the referring document's URL, and for a same-origin API
 			# request that document is the screen the ids live on — so `Referer` reproduces `actorId`

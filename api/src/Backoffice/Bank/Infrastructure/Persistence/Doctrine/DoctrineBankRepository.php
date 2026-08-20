@@ -126,8 +126,11 @@ final readonly class DoctrineBankRepository implements
         return new SearchFieldMap([
             // `In` is named rather than inherited: it is absent from the default operator set, so the two
             // fields that want it are the two that say so. A bank's name and its short code are the one
-            // place this API is asked for several values at once — nine acceptance scenarios in
-            // `features/backoffice/bank/search.feature` filter by them that way.
+            // place this API is asked for several values at once. Nine scenarios in
+            // `features/backoffice/bank/search.feature` reach them that way — one of them asserting the 422
+            // a scalar value gets. The count is reproducible rather than remembered:
+            //   awk '/^  Scenario/{s=NR} /\[field\]=(name|shortName)&filters\[[0-9]+\]\[operator\]=in/{print s}' \
+            //     api/features/backoffice/bank/search.feature | sort -un | wc -l
             'name' => new FieldMapping(
                 'b.nameNormalized',
                 $this->normalizedText,

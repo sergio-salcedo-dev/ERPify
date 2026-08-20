@@ -25,15 +25,18 @@ use SplFileInfo;
  * IBAN — and the class that declined to redact that spelling at the log edge justified the declination as
  * "a form no field mapping currently admits", which was false while it was written.
  *
- * **The universe is derived, not listed.** Both assertions read the field mappings out of the tree, so a
- * repository added tomorrow joins them without anybody remembering to. A gate whose expectation and whose
- * subject come from the same hand-maintained list cannot detect a hole in that list.
+ * **The second assertion derives its universe from the tree** — it walks every `new FieldMapping(...)` under
+ * `src` — so a repository added tomorrow joins it without anybody remembering to. The first reads one
+ * default off the constructor by reflection and lists nothing either. A gate whose expectation and whose
+ * subject come from the same hand-maintained list cannot detect a hole in that list, which is what the
+ * enumeration this replaced could not do.
  *
  * **What a green does NOT prove.** That admitting `In` on some field is *safe* — that is a judgement, and
  * the control on it is review. Nor anything about the access log: the query string never reaches it
  * (`AccessLogQueryContainmentGateTest`), which is what makes this a capability gate rather than a
- * confidentiality one. It reads constructor arguments as source text, so a mapping built from a computed
- * array, or by a factory that spreads its arguments, is invisible here.
+ * confidentiality one. It reads the tokens of each `new FieldMapping(...)`, so a mapping whose operators
+ * arrive from a computed array, a constant, a variable or a factory that spreads its arguments is invisible
+ * to the positional check below — it can see that a third argument was passed, never what is in it.
  *
  * @internal
  */
@@ -66,13 +69,17 @@ final class SearchOperatorSurfaceGateTest extends TestCase
     }
 
     /**
-     * The case above defends a default, and a default nothing reaches defends nothing — it would keep
-     * passing while every field named its own operators, and then keep passing on the day one stopped.
-     * So the reach is asserted rather than assumed: some field mapping in the tree still takes the
-     * default, which is what makes that pin live rather than decorative.
+     * The other direction, and the one a reflection read cannot reach: a field must not acquire `In` by any
+     * route other than naming it. Two ways it could, both refused here — passing the operator list
+     * POSITIONALLY (the third constructor argument, which never contains the string `operators:`), and
+     * naming `FilterOperator::In` anywhere in a call that does not use the named argument.
+     *
+     * It also asserts the default is still REACHED. A default nothing reaches defends nothing: the case
+     * above would keep passing while every field named its own operators, and keep passing on the day one
+     * stopped.
      */
     #[Test]
-    public function theDefaultIsStillReachedSoThatPinIsNotVacuous(): void
+    public function noFieldAcquiresTheListOperatorWithoutNamingIt(): void
     {
         $declarations = $this->fieldMappingDeclarations();
 
@@ -82,25 +89,34 @@ final class SearchOperatorSurfaceGateTest extends TestCase
             . 'search surface has moved and this gate has to follow it.',
         );
 
-        $inheritingTheDefault = \array_filter(
-            $declarations,
-            static fn (string $arguments): bool => !\str_contains($arguments, 'operators:'),
-        );
+        $inheritingTheDefault = [];
+
+        foreach ($declarations as $declaration) {
+            if (\str_contains($declaration['source'], 'operators:')) {
+                continue;
+            }
+
+            $this->assertStringNotContainsString('FilterOperator::In', $declaration['source'], \sprintf(
+                'A field mapping names `FilterOperator::In` without the `operators:` argument, so it grants '
+                    . "the list operator where a reader looking for the decision will not find it:\n%s",
+                $declaration['source'],
+            ));
+
+            $this->assertLessThanOrEqual(2, $declaration['arguments'], \sprintf(
+                'A field mapping passes its operators positionally (%d arguments, no `operators:`). The '
+                    . "grant is then invisible to every reader and to this gate's own check above:\n%s",
+                $declaration['arguments'],
+                $declaration['source'],
+            ));
+
+            $inheritingTheDefault[] = $declaration;
+        }
 
         $this->assertNotEmpty($inheritingTheDefault, \sprintf(
-            'Every one of the %d field mappings now names its own operators, so the default this gate '
-                . 'guards reaches nothing and its first assertion no longer defends anything reachable. '
-                . 'Either the default should be removed outright or this gate should be.',
+            'Every one of the %d field mappings now names its own operators, so the default the case above '
+                . 'guards reaches nothing and no longer defends anything reachable. Either the default '
+                . 'should be removed outright or this gate should be.',
             \count($declarations),
-        ));
-
-        // Nothing to assert per declaration beyond the default itself: a mapping that names its operators
-        // has made the decision, and one that does not gets whatever the default holds — which the case
-        // above pins. What this case adds is that the default is still REACHED, so that pin is live.
-        $this->assertNotContains(FilterOperator::In, $this->defaultOperators(), \sprintf(
-            '%d field mappings inherit the default operator set, and it grants `In`. Those fields admit a '
-                . 'list value nobody declared for them.',
-            \count($inheritingTheDefault),
         ));
     }
 
@@ -133,37 +149,167 @@ final class SearchOperatorSurfaceGateTest extends TestCase
     }
 
     /**
-     * The argument list of every `new FieldMapping(...)` under `src`, balanced-paren matched so a nested
-     * call (a normalizer, an array literal) does not truncate it.
+     * Every `new FieldMapping(...)` under `src`, read from TOKENS rather than from text. A text scan cannot
+     * tell a parenthesis inside a string literal from a real one, cannot skip a comment, and cannot see the
+     * fully-qualified spelling of the class — three ways the same call would have been miscounted or missed.
      *
-     * @return list<string>
+     * Returns the call's own source and its top-level argument count, which is what distinguishes an
+     * operator list passed positionally from a field that simply takes the default.
+     *
+     * @return list<array{source: string, arguments: int}>
      */
     private function fieldMappingDeclarations(): array
     {
         $declarations = [];
 
         foreach ($this->sourceFiles() as $source) {
-            $offset = 0;
-
-            while (false !== ($start = \strpos($source, 'new FieldMapping(', $offset))) {
-                $cursor = $start + \strlen('new FieldMapping(');
-                $depth = 1;
-
-                while ($depth > 0 && $cursor < \strlen($source)) {
-                    $depth += match ($source[$cursor]) {
-                        '(' => 1,
-                        ')' => -1,
-                        default => 0,
-                    };
-                    ++$cursor;
-                }
-
-                $declarations[] = \substr($source, $start, $cursor - $start);
-                $offset = $cursor;
+            foreach ($this->declarationsIn($source) as $declaration) {
+                $declarations[] = $declaration;
             }
         }
 
         return $declarations;
+    }
+
+    /**
+     * @return list<array{source: string, arguments: int}>
+     */
+    private function declarationsIn(string $source): array
+    {
+        $tokens = \token_get_all($source);
+        $declarations = [];
+
+        for ($index = 0; isset($tokens[$index]); ++$index) {
+            if (!$this->opensAFieldMapping($tokens, $index)) {
+                continue;
+            }
+
+            $declarations[] = $this->declarationAt($tokens, $index);
+        }
+
+        return $declarations;
+    }
+
+    /**
+     * `new` followed by the class name, whether written bare, imported, or fully qualified — the name
+     * arrives as one `T_NAME_*` token in either spelling, so the tail is what identifies it.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     */
+    private function opensAFieldMapping(array $tokens, int $index): bool
+    {
+        $token = $tokens[$index] ?? null;
+
+        if (!\is_array($token) || T_NEW !== $token[0]) {
+            return false;
+        }
+
+        for ($cursor = $index + 1; isset($tokens[$cursor]); ++$cursor) {
+            $token = $tokens[$cursor];
+
+            if (\is_array($token) && T_WHITESPACE === $token[0]) {
+                continue;
+            }
+
+            return \is_array($token)
+                && \in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
+                && \str_ends_with($token[1], 'FieldMapping');
+        }
+
+        return false;
+    }
+
+    /**
+     * Split in two on purpose: finding where the call ends is a walk over depth, and reading what it holds
+     * is a walk over the slice. Doing both in one loop put the method over the complexity threshold, and
+     * the version that did was also the one that silently truncated every declaration to `new `.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     *
+     * @return array{source: string, arguments: int}
+     */
+    private function declarationAt(array $tokens, int $index): array
+    {
+        $slice = \array_slice($tokens, $index, $this->lengthOfCallAt($tokens, $index));
+        $source = '';
+
+        foreach ($slice as $slouse) {
+            $source .= \is_array($slouse) ? $slouse[1] : $slouse;
+        }
+
+        return ['source' => $source, 'arguments' => $this->argumentCountOf($slice)];
+    }
+
+    /**
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     */
+    private function lengthOfCallAt(array $tokens, int $index): int
+    {
+        $depth = 0;
+        $opened = false;
+
+        for ($cursor = $index; isset($tokens[$cursor]); ++$cursor) {
+            $depth += $this->depthDelta($tokens[$cursor]);
+            $opened = $opened || $depth > 0;
+
+            // Only once the argument list has actually OPENED. Stopping the moment the depth reads zero
+            // ends the walk on the whitespace after `new`, which truncates the declaration to `new ` — and
+            // both assertions over it then pass on a string that cannot contain what they look for.
+            if ($opened && 0 === $depth) {
+                return $cursor - $index + 1;
+            }
+        }
+
+        return \count($tokens) - $index;
+    }
+
+    /**
+     * Top-level arguments only: a comma nested in an array literal or a nested call belongs to that, not to
+     * this call's signature.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $slice
+     */
+    private function argumentCountOf(array $slice): int
+    {
+        $depth = 0;
+        $commas = 0;
+        $seenAnything = false;
+
+        foreach ($slice as $slouse) {
+            $depth += $this->depthDelta($slouse);
+
+            if (1 !== $depth) {
+                continue;
+            }
+
+            $commas += ',' === $slouse ? 1 : 0;
+            $seenAnything = $seenAnything || $this->carriesAnArgument($slouse);
+        }
+
+        return $seenAnything ? $commas + 1 : 0;
+    }
+
+    /**
+     * @param array{0: int, 1: string, 2: int}|string $token
+     */
+    private function depthDelta(array|string $token): int
+    {
+        return match ($token) {
+            '(', '[' => 1,
+            ')', ']' => -1,
+            default => 0,
+        };
+    }
+
+    /**
+     * Anything that is not whitespace and not a bracket, i.e. the first sign that the call has an argument
+     * at all — which is what separates `new FieldMapping()` from a one-argument call for the count.
+     *
+     * @param array{0: int, 1: string, 2: int}|string $token
+     */
+    private function carriesAnArgument(array|string $token): bool
+    {
+        return !\is_array($token) || T_WHITESPACE !== $token[0];
     }
 
     /**

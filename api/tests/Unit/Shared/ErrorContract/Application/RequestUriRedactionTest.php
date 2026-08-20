@@ -78,7 +78,8 @@ final class RequestUriRedactionTest extends TestCase
 
     /**
      * The positional search grammar, which carries the same identities under a key no name-based rule
-     * reaches. These are the cases the Caddy edge cannot cover with its finite enumeration.
+     * reaches. The rule here is a PATTERN, so no filter index can outgrow it — which is the property the
+     * cases below exist to pin, and the reason an index far past `SearchQuery::MAX_FILTERS` is used.
      *
      * @return iterable<string, array{string, string}>
      */
@@ -91,11 +92,10 @@ final class RequestUriRedactionTest extends TestCase
                 . '&filters%5B0%5D%5Boperator%5D=eq&filters%5B0%5D%5Bvalue%5D=REDACTED',
         ];
 
-        // The difference from the Caddyfile, which spends one `replace` line per index on 0..19 because its
-        // grammar has no wildcard. A twentieth filter axis escapes the edge filter and must not also escape
-        // this one, so the index here has to sit beyond what the edge enumerates — inside that range the case
-        // still passes while testing none of the delta it is named for.
-        yield 'search value axis at an index beyond what the edge enumerates' => [
+        // The index deliberately sits far past `SearchQuery::MAX_FILTERS`: the API refuses such a filter,
+        // but the log line is written before it validates anything, so the redaction has to hold over an
+        // index no request will ever be served with.
+        yield 'search value axis at an index past what the API accepts' => [
             '/api/v1/backoffice/audit?filters%5B23%5D%5Bvalue%5D=019f-abc',
             '/api/v1/backoffice/audit?filters%5B23%5D%5Bvalue%5D=REDACTED',
         ];

@@ -24,8 +24,8 @@ namespace Erpify\Shared\ErrorContract\Application;
  *
  * **Sentinel, not strip.** The value is replaced with {@see SENTINEL}, deliberately unlike the map filter's
  * strip semantics: a URI's diagnostic value IS its shape, and dropping the pair would leave an operator
- * unable to tell a filtered request from an unfiltered one. The same token Caddy's access-log filter writes,
- * so both logs read alike.
+ * unable to tell a filtered request from an unfiltered one. The access log answers a different way — it
+ * keeps no query string at all — so the shape survives here and nowhere else.
  *
  * **Names are not the only place an identifier hides.** Every rule here matches a parameter NAME, and that
  * is a whole class short: an expired session redirects to `/login?next=<the entire audit URL, percent-

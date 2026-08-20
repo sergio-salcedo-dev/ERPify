@@ -97,8 +97,17 @@ services:
       # `format filter`, which is the thing under test and which this leaves untouched. Prod leaves
       # the variable unset and keeps stderr, so what the gate measures differs from the deployed
       # sink in where the line lands and in nothing else.
-      # The cost is local: `docker logs php` no longer carries access lines in dev; the file does.
-      CADDY_SERVER_LOG_OPTIONS: "output file /app/api/var/log/caddy-access.log"
+      # Two costs, both named rather than discovered later. `docker logs php` no longer carries access
+      # lines — in dev, and in CI too, whose failure-diagnostic step is `docker compose logs --tail=50 php`.
+      # And the file is DURABLE: it survives container recreation and lives in the checkout (gitignored via
+      # `api/.gitignore`), so a developer's machine accumulates real request URLs until it rolls. The roll is
+      # pinned here rather than left to Caddy's default, so the bound is stated where it is read.
+      CADDY_SERVER_LOG_OPTIONS: |
+        output file /app/api/var/log/caddy-access.log {
+          roll_size 16MiB
+          roll_keep 2
+          roll_keep_for 168h
+        }
       XDEBUG_MODE: "${XDEBUG_MODE:-off}"
       PHP_IDE_CONFIG: "serverName=${PHP_IDE_SERVER_NAME:-dev}"
       APP_ENV: "${APP_ENV:-dev}"

@@ -34,8 +34,17 @@ use RuntimeException;
  *     anywhere else would notice.
  *   - It says nothing about the URL PATH. `/api/v1/backoffice/users/<uuid>` carries a person's id and is a
  *     separately recorded, separately accepted residual.
- *   - It says nothing about any other sink: the application log, Sentry, or the Next.js container's own
- *     request line each answer this vocabulary through their own mechanism and their own tests.
+ *   - It says nothing about any other sink, and those sinks are NOT equally covered — a reader must not take
+ *     this green as "no log holds it". The application log answers a **name list**
+ *     (`RequestUriRedaction::IDENTITY_KEYS`), so the very spelling case 8 probes here,
+ *     `somethingNobodyEnumerated=<value>`, is written there in clear by the framework's own router listener
+ *     and flushed to prod stderr by any 5xx on that request. The Next.js container's request line answers
+ *     nothing at all and is an open residual in `PRODUCTION_SECURITY_CHECKLIST.md` §7. Sentry is scrubbed on
+ *     both deployables.
+ *   - It sees ONE logger. The Mercure hub embedded in this same Caddy process writes subscriber topics on
+ *     `http.handlers.mercure`, which the site's `log { format filter }` block does not govern: measured, a
+ *     `?topic=<value>` reaches stderr in clear while the access line for the same request reads
+ *     `?REDACTED`. Recorded in §7; nothing here can see it.
  *   - The spelling set below is HAND-WRITTEN, so a spelling nobody imagined is invisible to it. That is the
  *     hole its companion closes from the other side: `SearchOperatorSurfaceGateTest` derives its universe
  *     from the field mappings in the tree rather than from a list a person maintains.
@@ -48,9 +57,12 @@ final class AccessLogQueryContainmentGateTest extends TestCase
 {
     /**
      * A request that is REJECTED is logged exactly like one that is served — the entry is written before
-     * the application validates anything — so every spelling here is probed unauthenticated on purpose,
-     * and one case covers the served path as well because production's `fingers_crossed` handler discards
-     * non-error records and a 2xx therefore exists in this log and nowhere else.
+     * the application validates anything — so every spelling here is probed unauthenticated on purpose, and
+     * one case covers the served path as well, because a 2xx reaches this log by a different route than a
+     * rejected one does and the strip has to hold on both. It is NOT true that a 2xx exists only here:
+     * `AccessLogAuditListener` writes an `audit_log` row for the successful `/api/*` requests its policy
+     * admits, and `SearchObservabilityListener` emits a `keyset_search` line per successful search on an
+     * always-on channel. What no other sink records is the query STRING.
      */
     private const string REJECTED_PATH = '/api/v1/backoffice/users';
 
@@ -65,18 +77,19 @@ final class AccessLogQueryContainmentGateTest extends TestCase
     public function noQueryValueSurvivesIntoTheAccessLog(string $path, string $queryTemplate): void
     {
         $sentinel = 'sentinel' . \bin2hex(\random_bytes(10));
+        $anchor = 'anchor' . \bin2hex(\random_bytes(10));
         $offset = $this->accessLogSize();
 
-        $this->get($path . '?' . \str_replace('{sentinel}', $sentinel, $queryTemplate));
+        $this->get(\str_replace('{sentinel}', $sentinel, $path . '?' . $queryTemplate), $anchor);
 
-        $written = $this->accessLogWrittenSince($offset, $path);
+        $written = $this->accessLogWrittenSince($offset, $anchor);
 
         $this->assertStringNotContainsString($sentinel, $written, \sprintf(
             "A query value reached the access log in clear.\nSpelling: %s\nThe log has no owner of erasure "
                 . '(no compose file declares a `logging:` driver, so it is the default json-file driver with '
                 . 'neither rotation nor TTL), so whatever lands there outlives the erasure the application '
                 . 'confirmed to the subject.',
-            \str_replace('{sentinel}', '<value>', $queryTemplate),
+            \str_replace('{sentinel}', '<value>', $path . '?' . $queryTemplate),
         ));
     }
 
@@ -129,7 +142,15 @@ final class AccessLogQueryContainmentGateTest extends TestCase
             'somethingNobodyEnumerated={sentinel}',
         ];
 
-        yield 'a served 2xx, which lives in this log and in no other' => [
+        // Not a query at all as far as the URI grammar is concerned: the delimiter is encoded, so the whole
+        // thing is one path segment. It is here because a pattern anchored on a literal `?` was measured
+        // letting it through whole, which made the strip's coverage a property of the caller's spelling.
+        yield 'the delimiter itself percent-encoded' => [
+            self::SERVED_PATH . '%3Ffoo={sentinel}',
+            'x=1',
+        ];
+
+        yield 'a served 2xx, which reaches this log by a different route than a rejected one' => [
             self::SERVED_PATH,
             'filters[0][field]=email&filters[0][operator]=in&filters[0][value][]={sentinel}',
         ];
@@ -144,20 +165,24 @@ final class AccessLogQueryContainmentGateTest extends TestCase
     #[Test]
     public function theProbeReachesTheLogAtAll(): void
     {
+        $anchor = 'anchor' . \bin2hex(\random_bytes(10));
         $offset = $this->accessLogSize();
 
-        $this->get(self::SERVED_PATH . '?probe=arrival');
+        $this->get(self::SERVED_PATH . '?probe=arrival', $anchor);
 
         $this->assertStringContainsString(
             self::SERVED_PATH,
-            $this->accessLogWrittenSince($offset, self::SERVED_PATH),
+            $this->accessLogWrittenSince($offset, $anchor),
             'The probe produced no access-log entry, so every containment assertion in this class would '
                 . 'have passed over an empty string. Check that the stack is up and that '
                 . '`CADDY_SERVER_LOG_OPTIONS` still points the access log at the file this reads.',
         );
     }
 
-    private function get(string $uri): void
+    /**
+     * @param non-empty-string $anchor
+     */
+    private function get(string $uri, string $anchor): void
     {
         $handle = \curl_init('https://localhost' . $uri);
 
@@ -172,6 +197,12 @@ final class AccessLogQueryContainmentGateTest extends TestCase
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => 0,
             CURLOPT_TIMEOUT => 15,
+            // The anchor rides in a header Caddy logs verbatim, which is what makes the poll below wait for
+            // THIS probe's entry rather than for any entry naming the same path. Eight of the nine cases
+            // share a path, so a concurrent request — another worktree's suite against the same file, an
+            // open tab, or the previous case's line arriving late — would otherwise satisfy the poll and let
+            // the assertion read a window the probe never wrote to.
+            CURLOPT_USERAGENT => $anchor,
         ]);
 
         $body = \curl_exec($handle);
@@ -189,9 +220,17 @@ final class AccessLogQueryContainmentGateTest extends TestCase
         if (!\is_readable($path)) {
             // Deliberately fatal rather than skipped: a gate that disappears when its instrument does is a
             // gate that reports success for the one state it exists to catch.
+            // Fatal, and it stays fatal in the one run mode where it is inconvenient. `make php.unit
+            // IN_CONTAINER=false` runs on the host, where this file is root-owned and `https://localhost`
+            // is a different stack — so this gate aborts that mode rather than reporting a green it did not
+            // earn. That cost is deliberate: every sibling gate in this tree fails rather than skips when
+            // its instrument is missing, because a check that quietly does nothing reports the same green
+            // as a real pass.
             throw new RuntimeException(\sprintf(
-                'The access log is not readable at %s. `compose.dev.yaml` sets CADDY_SERVER_LOG_OPTIONS so '
-                    . 'Caddy writes it there; without it this gate can observe nothing.',
+                'The access log is not readable at %s, so this gate can observe nothing. Inside the '
+                    . 'container `compose.dev.yaml` sets CADDY_SERVER_LOG_OPTIONS to write it there. If you '
+                    . 'are running with IN_CONTAINER=false this gate cannot work at all — run it in the '
+                    . 'container rather than relaxing it into a skip.',
                 $path,
             ));
         }
@@ -208,10 +247,11 @@ final class AccessLogQueryContainmentGateTest extends TestCase
 
     /**
      * Caddy writes the entry after the response is sent, so a read taken the instant `curl` returns can
-     * legitimately find nothing. Polls until the line naming the probed path arrives, then returns
-     * everything written since the offset — the poll is what keeps a slow write from reading as a pass.
+     * legitimately find nothing. Polls until the probe's OWN entry arrives — identified by the per-probe
+     * anchor it sent as its user agent, not by the path, which eight of the nine cases share — then returns
+     * everything written since the offset. A timeout throws rather than returning what it has.
      */
-    private function accessLogWrittenSince(int $offset, string $path): string
+    private function accessLogWrittenSince(int $offset, string $anchor): string
     {
         $deadline = self::FLUSH_TIMEOUT_MICROSECONDS;
         $written = '';
@@ -228,7 +268,7 @@ final class AccessLogQueryContainmentGateTest extends TestCase
             $written = (string) \stream_get_contents($handle);
             \fclose($handle);
 
-            if (\str_contains($written, $path)) {
+            if (\str_contains($written, $anchor)) {
                 return $written;
             }
 
@@ -236,6 +276,15 @@ final class AccessLogQueryContainmentGateTest extends TestCase
             $deadline -= self::FLUSH_POLL_MICROSECONDS;
         }
 
-        return $written;
+        // Deliberately fatal. Returning what was read would hand the caller an empty string, and
+        // `assertStringNotContainsString($sentinel, '')` passes — so a probe that never arrived would report
+        // containment it never observed, which is the one failure this class exists to make impossible.
+        throw new RuntimeException(\sprintf(
+            'No access-log entry anchored on "%s" arrived within %d microseconds. The assertion this feeds '
+                . 'would have passed over an empty read. Check the stack is up and that Caddy still writes '
+                . 'the file CADDY_SERVER_LOG_OPTIONS points at.',
+            $anchor,
+            self::FLUSH_TIMEOUT_MICROSECONDS,
+        ));
     }
 }

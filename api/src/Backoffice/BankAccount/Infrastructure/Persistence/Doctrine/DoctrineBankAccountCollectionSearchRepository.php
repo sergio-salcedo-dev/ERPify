@@ -93,7 +93,7 @@ final readonly class DoctrineBankAccountCollectionSearchRepository implements Ba
             'holderName' => new FieldMapping('ba.holderName'),
             // iban is stored canonicalized (upper-case, spaces stripped), so its normalizer applies the
             // same rule to the search value — a human-grouped "DE89 3704" still matches. Default
-            // operators: eq/in/contains.
+            // operators: eq/contains — `In` is opt-in and this field does not ask for it.
             'iban' => new FieldMapping('ba.iban', $this->ibanNormalizer),
             'alias' => new FieldMapping('ba.alias'),
             // Human bank search: one CONTAINS over the joined bank's name AND its short code, so a

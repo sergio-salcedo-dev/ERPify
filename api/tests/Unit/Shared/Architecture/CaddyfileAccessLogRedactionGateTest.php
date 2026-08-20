@@ -17,10 +17,13 @@ use PHPUnit\Framework\TestCase;
  * Two carriers reach the entry, and they need different mechanisms because a log line records more than
  * its URI:
  *
- *  - **The query string**, dropped whole. Names are not enumerated here and must not be: Caddy's `query`
- *    filter substitutes the value of an EXACTLY NAMED parameter and has no wildcard, so an enumeration
- *    covers whatever a person remembered to write. Measured against the running stack, the enumeration
- *    that stood here contained one of nine spellings of a value.
+ *  - **The query string**, dropped whole, from the first `?` **or `%3f`**. Names are not enumerated here
+ *    and must not be: Caddy's `query` filter substitutes the value of an EXACTLY NAMED parameter and has no
+ *    wildcard, so an enumeration covers whatever a person remembered to write — measured against the
+ *    running stack, the enumeration that stood here contained one of nine spellings of a value. The encoded
+ *    delimiter is in the pattern because anchoring on a literal `?` was itself measured letting
+ *    `/api/v1/health%3Ffoo=<value>` through whole: the strip's reach would otherwise be a property of the
+ *    caller's spelling.
  *  - **The `Referer` header**, dropped whole. For a same-origin API call the referring document is the
  *    screen the ids live on, so an unfiltered header reproduces in clear exactly what the `uri` filter
  *    blanked, on the same entry. A filter over a URI field cannot reach a header, which is why this is a
@@ -52,7 +55,7 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
     public function itStripsTheWholeQueryStringFromTheLoggedUri(): void
     {
         $this->assertMatchesRegularExpression(
-            '/format filter \{(?:[^{}]|\{[^{}]*\})*request>uri regexp "\[\?\]\.\*\$" "\?REDACTED"/s',
+            '/format filter \{(?:[^{}]|\{[^{}]*\})*request>uri regexp "\(\?i\)\(\[\?\]\|%3f\)\.\*\$" "\?REDACTED"/s',
             $this->caddyfile(),
             'The Caddy access log no longer strips the query string from `request>uri`. Every value a '
             . 'client can put in a query — a person id under a name nobody listed, a single-use token, a '
@@ -70,9 +73,12 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
     #[Test]
     public function itDoesNotEnumerateQueryParameterNames(): void
     {
+        // Scoped to the `format filter` block rather than the whole file: the comment above the block
+        // discusses the `query` filter at length, and a gate that reds on its own rationale being written
+        // down teaches the next reader to delete the rationale.
         $this->assertStringNotContainsString(
             'request>uri query',
-            $this->caddyfile(),
+            $this->formatFilterBlock(),
             'The Caddy access-log filter enumerates query parameter names again. Caddy matches a '
             . 'parameter name exactly and has no wildcard, so an enumeration covers what someone '
             . 'remembered rather than what a client can send — measured, the enumeration this replaced '
@@ -94,6 +100,20 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
             . 'full, so any screen holding a person id in its query string puts that id back into the '
             . 'same log entry whose `uri` this filter strips.',
         );
+    }
+
+    /**
+     * The `format filter { … }` block alone, so a rule is read where it acts rather than anywhere in the
+     * file. Fails loudly if the block is gone: an empty string would satisfy every "does not contain"
+     * assertion here.
+     */
+    private function formatFilterBlock(): string
+    {
+        $matched = \preg_match('/format filter \{(?:[^{}]|\{[^{}]*\})*\}/s', $this->caddyfile(), $block);
+
+        $this->assertSame(1, $matched, 'The Caddyfile declares no `format filter` block at all.');
+
+        return $block[0];
     }
 
     private function caddyfile(): string

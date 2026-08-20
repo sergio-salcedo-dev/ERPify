@@ -41,12 +41,15 @@ final readonly class ArtifactGatePlacements
      * to cover this: it means an open question about a file sitting in the home, and answering a different
      * question with it would make both unreadable.
      */
-    public const string OUT_OF_CATEGORY = 'functional';
+    public const string FUNCTIONAL = 'functional';
 
     /** Where a mirror's subject may live. `tests/` is the second mirror axis: test infrastructure. */
     private const array SUBJECT_ROOTS = ['src/', 'tests/'];
 
     private const string MIRROR_ROOT = 'tests/Unit/';
+
+    /** Where a `functional` gate must sit; the token asserts its placement, so the placement is checked. */
+    private const string FUNCTIONAL_ROOT = 'tests/Functional/';
 
     /**
      * @param list<string>             $universe       api-relative paths of every artifact gate in the tree
@@ -167,13 +170,37 @@ final readonly class ArtifactGatePlacements
                 . 'file already in the home; anywhere else it has been decided by being put there.',
                 ArtifactGateSweep::HOME,
             ),
-            self::OUT_OF_CATEGORY => $inHome ? \sprintf(
-                'is classified `%s` but sits in the category home. A file declared outside the category '
-                . 'does not belong in the home of that category.',
-                self::OUT_OF_CATEGORY,
-            ) : null,
+            self::FUNCTIONAL => $this->functionalDisagreement($path, $inHome),
             default => $this->mirrorDisagreement($path, (string) $placement['subject'], $inHome),
         };
+    }
+
+    /**
+     * The token says the file is outside the category and that its placement under `tests/Functional/` is
+     * settled. Both halves are checked, because the arm that checked neither was a way OUT of the mirror
+     * rules for any path: writing `functional` on a misfiled module gate would have passed where `mirrored`
+     * refuses, which turns a classification into an escape hatch.
+     */
+    private function functionalDisagreement(string $path, bool $inHome): ?string
+    {
+        if ($inHome) {
+            return \sprintf(
+                'is classified `%s` but sits in the category home. A file declared outside the category '
+                . 'does not belong in the home of that category.',
+                self::FUNCTIONAL,
+            );
+        }
+
+        if (!\str_starts_with($path, self::FUNCTIONAL_ROOT)) {
+            return \sprintf(
+                'is classified `%s` but does not sit under %s. The token states that its placement is '
+                . 'settled, so it has to be the placement the token names.',
+                self::FUNCTIONAL,
+                self::FUNCTIONAL_ROOT,
+            );
+        }
+
+        return null;
     }
 
     private function mirrorDisagreement(string $path, string $subject, bool $inHome): ?string
@@ -230,7 +257,8 @@ final readonly class ArtifactGatePlacements
         if (null === $placement || '' === $placement) {
             throw new RuntimeException(\sprintf(
                 'Malformed line in .artifact-gate-placement: "%s". Expected `<path> :: home`, '
-                . '`<path> :: mirrored :: <subject directory>` or `<path> :: undecided :: <reason>`.',
+                . '`<path> :: mirrored :: <subject directory>`, `<path> :: undecided :: <reason>` or '
+                . '`<path> :: functional :: <what it needs to run>`.',
                 $line,
             ));
         }
@@ -264,12 +292,12 @@ final readonly class ArtifactGatePlacements
             self::UNDECIDED => [
                 'placement' => self::UNDECIDED,
                 'subject' => null,
-                'reason' => self::reason($path, $tail),
+                'reason' => self::reason($path, $tail, self::UNDECIDED),
             ],
-            self::OUT_OF_CATEGORY => [
-                'placement' => self::OUT_OF_CATEGORY,
+            self::FUNCTIONAL => [
+                'placement' => self::FUNCTIONAL,
                 'subject' => null,
-                'reason' => self::reason($path, $tail),
+                'reason' => self::reason($path, $tail, self::FUNCTIONAL),
             ],
             default => throw new RuntimeException(\sprintf(
                 'Unknown placement "%s" for "%s". Expected one of: %s, %s, %s, %s.',
@@ -278,7 +306,7 @@ final readonly class ArtifactGatePlacements
                 self::IN_HOME,
                 self::MIRRORED,
                 self::UNDECIDED,
-                self::OUT_OF_CATEGORY,
+                self::FUNCTIONAL,
             )),
         };
     }
@@ -344,14 +372,15 @@ final readonly class ArtifactGatePlacements
         ));
     }
 
-    private static function reason(string $path, ?string $tail): string
+    private static function reason(string $path, ?string $tail, string $placement): string
     {
         if (null === $tail || '' === $tail) {
             throw new RuntimeException(\sprintf(
-                'Line for "%s" is classified `undecided` but states no reason. An exemption with no reason '
+                'Line for "%s" is classified `%s` but states no reason. An exemption with no reason '
                 . 'is indistinguishable from an oversight, which is the thing the classification exists to '
                 . 'prevent.',
                 $path,
+                $placement,
             ));
         }
 

@@ -82,7 +82,7 @@ final readonly class DoctrineUserSearchRepository implements UserSearchRepositor
         return new SearchFieldMap([
             // email is stored canonicalized (lower-cased): CONTAINS runs a case-insensitive
             // LOWER(...) LIKE, so the single search box matches regardless of the query's case.
-            // Default operators: eq/in/contains.
+            // Default operators: eq/contains — `In` is opt-in and this field does not ask for it.
             'email' => new FieldMapping('u.email'),
             // status is an enum-backed string column: exact eq/in only. CONTAINS is meaningless over a
             // closed lifecycle vocabulary (and would be a LIKE over the enum string), so it is excluded.
