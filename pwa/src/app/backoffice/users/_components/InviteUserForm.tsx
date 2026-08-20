@@ -183,6 +183,13 @@ export function InviteUserForm() {
           {...register("email")}
           type="email"
           autoComplete="off"
+          // Dedicated invite route: the form is the whole page, so the first field is where the
+          // user was already going. The route names itself through `metadata`, which is what
+          // keeps the surface from being anonymous — but that naming does not precede the
+          // focus, and the claim that it does would be wrong: `autoFocus` lands in the commit
+          // phase while Next's route announcer is a passive effect, and on a direct load the
+          // announcer stays silent by design. There is no edit counterpart to exclude.
+          // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
           data-testid="invite-user-form__email"
         />

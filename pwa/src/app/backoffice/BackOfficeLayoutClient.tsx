@@ -169,9 +169,11 @@ export default function BackOfficeLayoutClient({
             to REVOKE_BUDGET_MS. This announces that window to assistive technology, which is the
             surface that otherwise gets nothing at all. It is `sr-only`, so it states the window
             without showing it: the sighted affordance is the relabelled entry, which survives on
-            the expanded sidebar and not on the two menus that close over it. */}
+            the expanded sidebar and not on the two menus that close over it.
+            `<output>` carries the `status` role natively, so spelling it out would be redundant;
+            `aria-live` is spelled out anyway, for the assistive technology that reads the attribute
+            and not the implicit mapping. */}
         <output
-          role="status"
           aria-live="polite"
           data-testid="bo-layout__leaving-status"
           className="bo-layout__leaving-status sr-only"

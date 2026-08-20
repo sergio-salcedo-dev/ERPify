@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { EmptyState } from "@/components/erpify";
@@ -6,6 +7,13 @@ import { Permission } from "@/context/shared/access/domain/Permission";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { InviteUserForm } from "../_components/InviteUserForm";
 import { userRoutes } from "../_lib/userRoutes";
+
+// Next's route announcer reads `document.title` and speaks only when it changes, so a route
+// inheriting the root title arrives silently for assistive technology. This is what announces
+// the surface before the form takes the focus.
+export const metadata: Metadata = {
+  title: "Invite user",
+};
 
 export default function InviteUserPage() {
   return (

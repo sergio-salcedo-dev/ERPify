@@ -1,8 +1,16 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { PersistenceAction } from "@/context/shared/view-state/domain/ViewState";
 import { bankRoutes } from "../_lib/bankRoutes";
 import { BankForm } from "../_components/BankForm";
+
+// Next's route announcer reads `document.title` and speaks only when it changes, so a route
+// inheriting the root title arrives silently for assistive technology. This is what announces
+// the surface before the form takes the focus.
+export const metadata: Metadata = {
+  title: "New bank",
+};
 
 export default function NewBankPage() {
   return (
