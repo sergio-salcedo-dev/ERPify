@@ -6,6 +6,7 @@ import { fixupPluginRules } from "@eslint/compat";
 import reactPlugin from "eslint-plugin-react";
 import hooksPlugin from "eslint-plugin-react-hooks";
 import nextPlugin from "@next/eslint-plugin-next";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 
 const eslintConfig = [
   {
@@ -16,8 +17,21 @@ const eslintConfig = [
       "dist/**",
       "build/**",
       "reports/**",
+      "coverage/**",
       "next-env.d.ts",
     ],
+  },
+  {
+    // A stale `eslint-disable` is a reason nobody can check any more, and as a warning it is
+    // indistinguishable from silence — `npm run lint` is a bare `eslint .` with no
+    // `--max-warnings`, the same reason the Next hard-navigation rule below cannot gate.
+    //
+    // What an error buys is asymmetric, and worth stating rather than assuming: it reds
+    // `pwa.lint.dry-run`, so CI and any check-only run name the directive and its line. It
+    // does NOT red `make pwa.quality`, which runs `eslint . --fix` — there ESLint deletes the
+    // directive and exits 0, taking the paragraph of reasoning above it and leaving no trace.
+    // So this catches a stale exemption before merge, never at the moment it goes stale.
+    linterOptions: { reportUnusedDisableDirectives: "error" },
   },
   {
     files: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
@@ -214,6 +228,44 @@ const eslintConfig = [
         },
       ],
     },
+  },
+  {
+    // The accessibility family SonarCloud reports (S6822, S6847, S6853 …) is this plugin
+    // wrapped, so without this block the only reader of an a11y regression is a cloud
+    // analysis that runs after the merge. The plugin was a declared devDependency nothing
+    // imported until now.
+    //
+    // `files` is set here rather than spreading `flatConfigs.recommended` whole: that export
+    // carries no `files` of its own and drags `parserOptions.ecmaFeatures.jsx` onto every
+    // `.mjs`/`.cjs` espree parses. Only `.tsx`/`.jsx` can ever produce a finding.
+    //
+    // The rule set follows upstream instead of being frozen here, so a release that adds a
+    // rule is adopted rather than silently skipped. The direction that costs — a release
+    // that moves a rule into the set and reds product files under a `chore(deps)` title —
+    // is bounded by tests/eslint/jsxA11yRuleSetGate.test.ts, which names the moved rule.
+    //
+    // Without `components` the plugin only inspects intrinsic elements, and this tree hands
+    // almost every interactive control to a wrapper: 66 `<Link>`, 80 `<Button>`, 21 `<Input>`
+    // against a single intrinsic `<label>`. That is not a small blind spot, it is most of the
+    // back-office. Measured, closing it costs nothing — the mapping below adds zero findings —
+    // and the mapping is live rather than inert: pointed at `a` instead, `Button` alone
+    // produces 191.
+    files: ["**/*.tsx", "**/*.jsx"],
+    plugins: { "jsx-a11y": jsxA11y },
+    settings: {
+      "jsx-a11y": {
+        components: {
+          Button: "button",
+          CopyButton: "button",
+          DateField: "input",
+          Input: "input",
+          Label: "label",
+          Link: "a",
+          SingleLineTextarea: "textarea",
+        },
+      },
+    },
+    rules: jsxA11y.flatConfigs.recommended.rules,
   },
   prettierConfig,
 ];

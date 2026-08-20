@@ -237,6 +237,14 @@ export function BankAccountForm({
         <SingleLineTextarea
           {...register("holderName")}
           autoComplete="off"
+          // Dedicated create route: the form is the whole page, so the first field is where the
+          // user was already going. The route names itself through `metadata` on its layout,
+          // which is what keeps the surface from being anonymous — but that naming does not
+          // precede the focus, and the claim that it does would be wrong: `autoFocus` lands in
+          // the commit phase while Next's route announcer is a passive effect, and on a direct
+          // load the announcer stays silent by design. Edit mode is excluded: there the record
+          // loads async, and taking the focus on arrival would be a real context change.
+          // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus={isCreating}
           data-testid="bank-account-form__holder-name"
         />
