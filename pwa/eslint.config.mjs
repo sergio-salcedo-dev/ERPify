@@ -30,6 +30,27 @@ const eslintConfig = [
           jsx: true,
         },
       },
+      // Declared inline rather than through the `globals` package, which is in neither
+      // package.json nor package-lock.json — `npm ci`, what make/pwa.mk and CI run, leaves
+      // `import globals from "globals"` at ERR_MODULE_NOT_FOUND. The list is load-bearing:
+      // @next/next/no-location-assign-relative-destination resolves a receiver only through the
+      // global scope (`scopeManager.scopes[0].set`), so a name missing here makes that rule blind
+      // to it — measured, trimming this block drops the shapes it can see from 36 to 8, and the
+      // eight survivors are `globalThis`, which ESLint supplies as an ES builtin from
+      // `ecmaVersion` and which is therefore deliberately absent below. `location` is present
+      // because the rule's bare-receiver form resolves that identifier itself.
+      // tests/eslint/hardNavigationGate.test.ts asserts one shape per receiver, so trimming this
+      // list reds it. It is NOT a full browser environment (`fetch`,
+      // `localStorage`, `setTimeout` and the rest are absent) — enabling `no-undef` or adding a
+      // rule that resolves identifiers globally needs this list widened first.
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        location: "readonly",
+        self: "readonly",
+        top: "readonly",
+        parent: "readonly",
+      },
     },
     plugins: {
       prettier,
@@ -44,6 +65,22 @@ const eslintConfig = [
       ...hooksPlugin.configs.recommended.rules,
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs["core-web-vitals"].rules,
+      // Kept on, at the severity both presets give it. The selectors below report every shape
+      // it reports, plus three it structurally cannot: `location.replace()`, which it never
+      // inspects; a destination that does not fold to a literal, which is what our real call
+      // sites pass (`Routes.HOME` is an imported binding); and a receiver it does not enumerate.
+      // So it is not the control — it is `warn` under an `eslint .` carrying no --max-warnings
+      // and cannot turn a gate red in either direction. It is kept because it costs nothing and
+      // reads differently: measured with it forced to `error` over src/**/*.{ts,tsx}, 464 files
+      // report 0, because both legitimate call sites spell the navigation `location.replace()`.
+      // Zero reports means zero extra rule ids and zero extra eslint-disable directives, so
+      // turning it off would buy none of the rule-wide-disable savings that argument suggests,
+      // and would give up a scope-aware second reader (`isGlobalReference`) that resolves the
+      // receiver instead of matching its name — something a syntactic selector cannot do. The
+      // containment is asserted, not assumed: tests/eslint/hardNavigationGate.test.ts forces
+      // this rule to `error` and requires every line it reports to be one the selectors report
+      // too.
+      "@next/next/no-location-assign-relative-destination": "warn",
       "prettier/prettier": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
@@ -67,13 +104,13 @@ const eslintConfig = [
           // scope analysis and escapes; so do `location.reload()` and `window.open(u, "_self")`,
           // which are navigations this rule does not claim. Blind spots are listed in pwa/CLAUDE.md.
           selector:
-            "CallExpression:matches([callee.property.name=/^(assign|replace)$/], [callee.computed=true][callee.property.value=/^(assign|replace)$/]):matches([callee.object.object.name=/^(window|globalThis|self|document|top|parent)$/][callee.object.property.name='location'], [callee.object.name='location'])",
+            "CallExpression:matches([callee.property.name=/^(assign|replace)$/], [callee.computed=true][callee.property.value=/^(assign|replace)$/]):matches([callee.object.object.name=/^(window|globalThis|self|document|top|parent)$/][callee.object.property.name='location'], [callee.object.object.name=/^(window|globalThis|self|document|top|parent)$/][callee.object.computed=true][callee.object.property.value='location'], [callee.object.name='location'])",
           message:
             "A full-document navigation (location.assign/replace) discards all in-memory client state; inside the app use router.push()/replace() from next/navigation. It is legitimate when leaving an authenticated area, or when no React context exists to reach a router from — disable this rule on the line and say which of the two it is.",
         },
         {
           selector:
-            "AssignmentExpression:matches([left.property.name='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.property.name='location'], [left.property.name='href'][left.object.name='location'], [left.property.name='location'][left.object.name=/^(window|globalThis|self|document|top|parent)$/])",
+            "AssignmentExpression:matches([left.property.name='href'][left.object.name='location'], [left.property.name='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.property.name='location'], [left.property.name='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.computed=true][left.object.property.value='location'], [left.computed=true][left.property.value='href'][left.object.name='location'], [left.computed=true][left.property.value='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.property.name='location'], [left.computed=true][left.property.value='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.computed=true][left.object.property.value='location'], [left.property.name='location'][left.object.name=/^(window|globalThis|self|document|top|parent)$/], [left.computed=true][left.property.value='location'][left.object.name=/^(window|globalThis|self|document|top|parent)$/])",
           message:
             "Assigning location.href — or the whole location object — is a full-document navigation wearing a property assignment. Same rule as location.assign/replace: use router.push()/replace(), or disable this rule on the line with the reason.",
         },

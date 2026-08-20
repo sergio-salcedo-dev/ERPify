@@ -56,11 +56,19 @@ import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevTool
  * section titles can never drift. Kept as plain data so the layout component
  * stays focused on rendering.
  */
+/**
+ * What a menu entry *means*, when that is not simply "go to `path`". An entry without one is
+ * a plain link; the layout's navigation handler branches on this and never on the destination,
+ * so where sign-out lands stays a routing detail rather than the trigger.
+ */
+export type NavAction = "sign-out";
+
 export interface NavSubItem {
   name: string;
   path: string;
   icon?: LucideIcon;
   testId?: string;
+  action?: NavAction;
 }
 
 export interface NavItem {
@@ -245,8 +253,9 @@ export const backofficeMenuGroups: NavGroup[] = [
 
 /**
  * Account entry pinned to the sidebar footer, rendered apart from the scrolling
- * groups. Logout points at `Routes.HOME` rather than a back-office section, which is
- * what makes the layout's navigation handler revoke the session and hard-navigate.
+ * groups. Logout carries `action: "sign-out"`, which is the only thing that triggers it — so an
+ * ordinary entry may point at `Routes.HOME` without revoking anything. Its own `path` is inert on
+ * that branch: the handler hard-codes the destination, and a test pins the two to agree.
  *
  * "My profile" repeats the parent's own path on purpose: an expanded desktop sidebar
  * only toggles the sub-item list when the parent is clicked, so the account landing
@@ -281,7 +290,13 @@ export const accountMenuItem: NavItem = {
       icon: SettingsIcon,
       testId: "bo-layout__sidebar-settings",
     },
-    { name: "Logout", path: Routes.HOME, icon: LogOut, testId: "bo-layout__sidebar-logout" },
+    {
+      name: "Logout",
+      path: Routes.HOME,
+      icon: LogOut,
+      testId: "bo-layout__sidebar-logout",
+      action: "sign-out",
+    },
   ],
 };
 
