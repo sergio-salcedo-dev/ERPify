@@ -3,10 +3,13 @@ import { render, screen } from "@testing-library/react";
 import { StatusBadge } from "@/components/erpify/StatusBadge";
 
 describe("StatusBadge", () => {
-  it("renders with role=status and the supplied label", () => {
-    render(<StatusBadge variant="success" label="Active" />);
-    const badge = screen.getByRole("status");
-    expect(badge).toHaveTextContent("Active");
+  it("renders the supplied label without claiming a live region", () => {
+    render(<StatusBadge variant="success" label="Active" testId="badge" />);
+    expect(screen.getByTestId("badge")).toHaveTextContent("Active");
+    // A badge is rendered once per row and never updates in place, so it must not be a live
+    // region: `<output>` maps to role `status` in HTML-AAM, and N rows would declare N polite
+    // regions competing with the ones that do announce.
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("renders an aria-hidden status dot alongside the label", () => {
@@ -29,8 +32,8 @@ describe("StatusBadge", () => {
   });
 
   it("supports neutral variant for non-semantic statuses", () => {
-    render(<StatusBadge variant="neutral" label="Draft" />);
-    expect(screen.getByRole("status")).toHaveTextContent("Draft");
+    render(<StatusBadge variant="neutral" label="Draft" testId="draft-badge" />);
+    expect(screen.getByTestId("draft-badge")).toHaveTextContent("Draft");
   });
 
   it("forwards the testId prop to the rendered element", () => {
