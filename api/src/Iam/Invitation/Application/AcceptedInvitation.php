@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Invitation\Application;
 
+use SensitiveParameter;
+
 /**
  * The primitive outcome of a successful {@see AcceptInvitation}: the now-active identity's id and canonical
  * email. The controller reads the email to establish the session (programmatic login) after the domain
@@ -14,6 +16,7 @@ final readonly class AcceptedInvitation
 {
     public function __construct(
         public string $userId,
+        #[SensitiveParameter]
         public string $email,
     ) {
     }

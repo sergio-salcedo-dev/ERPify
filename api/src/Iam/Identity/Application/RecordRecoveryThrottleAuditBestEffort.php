@@ -11,6 +11,7 @@ use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Psr\Log\LoggerInterface;
+use SensitiveParameter;
 use Throwable;
 
 /**
@@ -80,7 +81,7 @@ final readonly class RecordRecoveryThrottleAuditBestEffort
     ) {
     }
 
-    public function record(string $email): void
+    public function record(#[SensitiveParameter] string $email): void
     {
         try {
             if (!$this->auditBudget->claimFor($email)) {
@@ -106,7 +107,7 @@ final readonly class RecordRecoveryThrottleAuditBestEffort
      * address and an address matching no identity are the same answer here: no resource, no metadata, and in
      * particular no record of what was typed.
      */
-    private function subjectOf(string $email): ?AuditResource
+    private function subjectOf(#[SensitiveParameter] string $email): ?AuditResource
     {
         $canonicalEmail = Email::tryFrom($email);
 

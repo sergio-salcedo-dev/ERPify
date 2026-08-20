@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Domain\Repository;
 
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use SensitiveParameter;
 
 /**
  * Aggregate-lifecycle port for {@see User} backed by the system of record.
@@ -31,5 +32,5 @@ interface UserRepository
      */
     public function findByIdForUpdate(string $id): ?User;
 
-    public function findByEmail(Email $email): ?User;
+    public function findByEmail(#[SensitiveParameter] Email $email): ?User;
 }

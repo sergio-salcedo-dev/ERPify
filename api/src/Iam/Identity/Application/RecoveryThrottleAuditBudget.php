@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application;
 
+use SensitiveParameter;
+
 /**
  * The bound on how much audit work a refused recovery request can be made to do. One window's slot per
  * address: the first caller to claim it writes the row, every later one in the same window is suppressed.
@@ -26,5 +28,5 @@ interface RecoveryThrottleAuditBudget
      * it. Refusal carries no meaning beyond "already observed": it is never an error and never reaches the
      * response.
      */
-    public function claimFor(string $email): bool;
+    public function claimFor(#[SensitiveParameter] string $email): bool;
 }

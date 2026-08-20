@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Domain;
 
 use Erpify\Iam\Identity\Domain\Exception\InvalidEmail;
 use Normalizer;
+use SensitiveParameter;
 
 /**
  * Canonical form of a user's email identifier: Unicode-normalised, edge-trimmed and lower-cased so the UNIQUE
@@ -41,14 +42,14 @@ final readonly class Email
     /**
      * @param non-empty-string $value
      */
-    private function __construct(private string $value)
+    private function __construct(#[SensitiveParameter] private string $value)
     {
     }
 
     /**
      * @throws InvalidEmail when the value is blank, or is not valid UTF-8
      */
-    public static function from(string $raw): self
+    public static function from(#[SensitiveParameter] string $raw): self
     {
         $canonical = self::canonicalise($raw);
 
@@ -63,7 +64,7 @@ final readonly class Email
      * The lenient twin of {@see from()} for flows whose contract is silence, not an error: a blank value
      * yields null instead of an exception, so the caller folds it into its uniform outcome with no try/catch.
      */
-    public static function tryFrom(string $raw): ?self
+    public static function tryFrom(#[SensitiveParameter] string $raw): ?self
     {
         try {
             return self::from($raw);
@@ -80,7 +81,7 @@ final readonly class Email
         return $this->value;
     }
 
-    public function equals(self $other): bool
+    public function equals(#[SensitiveParameter] self $other): bool
     {
         return $this->value === $other->value;
     }
@@ -97,7 +98,7 @@ final readonly class Email
      * one. That is the honest outcome: bytes that are not text cannot denote a mailbox, and the callers that
      * resolve an identity through this class already answer a uniform refusal.
      */
-    private static function canonicalise(string $raw): string
+    private static function canonicalise(#[SensitiveParameter] string $raw): string
     {
         $normalised = Normalizer::normalize($raw, Normalizer::FORM_C);
 
