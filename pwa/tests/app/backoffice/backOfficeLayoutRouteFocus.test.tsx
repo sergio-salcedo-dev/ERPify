@@ -95,6 +95,17 @@ describe("BackOfficeLayoutClient route focus", () => {
     expect(globalThis.document.activeElement).toBe(screen.getByTestId("route-focus-test__field"));
   });
 
+  it("leaves the focus on the chrome control that triggered the navigation", () => {
+    // Not stranded: the control survives the navigation, so the next Tab continues from it. This
+    // is what makes a sidebar parent keep its just-expanded sub-items next in the tab order.
+    const { rerender } = render(content());
+    const toggle = screen.getByTestId("bo-layout__topbar-toggle");
+    toggle.focus();
+    nav.pathname = BANKS;
+    rerender(content());
+    expect(globalThis.document.activeElement).toBe(toggle);
+  });
+
   it("does not pull focus back on a re-render that changes no route", () => {
     const { rerender } = render(content(<button data-testid="route-focus-test__cta">Go</button>));
     const cta = screen.getByTestId("route-focus-test__cta");

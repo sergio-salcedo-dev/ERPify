@@ -87,6 +87,13 @@ export default function BackOfficeLayoutClient({
   // A page that claimed the focus itself keeps it. The create routes' first field carries
   // `autoFocus`, which React applies in the commit phase — before this passive effect — so the
   // guard reads it as already placed and yields. Only a stranded `<body>` is corrected.
+  //
+  // A menu click therefore keeps the focus on the button that did it, which survives the
+  // navigation: the next Tab continues from there, and a parent entry that just expanded its
+  // sub-items keeps them next in the order. What strands `<body>` is a trigger that goes away —
+  // an in-page link, the mobile drawer closing over itself, a redirect — and that is the case
+  // this corrects. Moving focus on every navigation is the stronger reading of "focus follows
+  // content"; it would cost that submenu behaviour, so it is a decision rather than an omission.
   const mainRef = useRef<HTMLElement | null>(null);
   const hasNavigatedRef = useRef(false);
 
