@@ -930,6 +930,65 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Accepted 2026-08-05 (Sergio):** no customer, and the cost of closing it is three seams across two
       contexts for a recoverable UX papercut. Re-assess if a session-scoped revoke becomes cheap for another
       reason, or the first time a user reports it.
+- [x] **The security stack's four person-data carriers do not reach the buffered application log.** Scoped
+      deliberately: the console `command` key is a fifth reach and stays open as
+      [#788](https://github.com/sergio-salcedo-dev/ERPify/issues/788), so "on any channel" would be false —
+      `symfony/console`'s `ErrorListener` logs a failing process's full argv at CRITICAL on the `console`
+      channel, which prod's buffer includes (`channels: ["!deprecation", "!observability"]`) and whose level
+      is above `action_level: error`, so that record does not merely sit in the buffer, it FLUSHES it; and two
+      commands take a person's email as an argument (`iam:invitation:create`,
+      `organization:administrator:create` — the second a password too). The security stack
+      names the person on every authenticated request: `ContextListener` logs `username =>
+      getUserIdentifier()` at DEBUG (and here that identifier IS the email — `SecurityUser::getUserIdentifier()`
+      returns `$this->user->email()`), on login `AuthenticatorManager` logs the token OBJECT, whose
+      `__toString()` spells the address out again, and a session token the firewall cannot use is logged whole
+      under `received` — on one branch the raw SERIALIZED token, address and password hash together. All of
+      them sit behind prod's `fingers_crossed` handler at `level: debug`, and a request is about seven records
+      into a fifty-record buffer, so any 5xx flushes them to `php://stderr` — the Docker json-file driver no
+      compose file gives a rotation, a TTL or an owner of erasure. Closed by
+      `Shared/Monitoring/Infrastructure/Monolog/PersonDataRedactionProcessor`, a **key** rule over four carriers
+      (`username`, `impersonator_username`, `token`, `received`), replacing the value whole with `REDACTED` —
+      whole rather than parsed, because a `TokenInterface` is `Stringable` and Monolog's formatter spells it out
+      downstream of every processor. Logger-scoped, so it runs ahead of the buffer AND ahead of the
+      handler-scoped `PsrLogMessageProcessor` that interpolates the message. Everything an incident needs
+      survives: `provider`, `authenticator`, `firewall_name`, `token_class`, the message, and `exception` —
+      untouched on purpose, since `HttpCodeActivationStrategy` reads it to decide what flushes at all.
+      **Exact match, not the substring rule `RedactionDenylist` uses for response bodies:** measured, a
+      substring on `token` destroys `token_class`, a class name holding no person datum.
+      **What it does not cover**, each measured rather than assumed: the record's MESSAGE (which is NOT quiet —
+      see below); a carrier nested inside another value or riding in `extra`; and the `doctrine` channel, which
+      logs every statement's bound parameters — the login `SELECT … WHERE t0.email = ?` carries the address
+      under a nested `params` key. That last one is bounded by the DBAL logging middleware, read from the
+      compiled containers rather than from the option that configures it: `Doctrine\DBAL\Logging\Middleware`
+      appears in the test container and appears **nowhere** in the prod one, so it is a property of the
+      `kernel.debug` and not of the environment name — `doctrine.dbal.logging` defaults to `%kernel.debug%`
+      and `config/packages/doctrine.yaml` never sets it, so one `APP_DEBUG` on the prod stack turns that
+      carrier on into the same unrotated sink. `compose.prod.yaml` sets no `APP_DEBUG` at all and relies on
+      Dotenv's `'prod' !== $env` default; pinning it there would make the claim structural instead of
+      default-dependent, and is not done here. The console `ErrorListener`'s `command` key is deliberately
+      NOT in the carrier set: it is #788, a distinct disclosure whose worse half is a plaintext password, and
+      a key here would close its appearance while leaving that — retiring the issue without fixing it. The
+      MESSAGE is not reachable by anything processor-shaped either, and the live vector there is not a
+      `{carrier}` placeholder: it is `{command}`, interpolated by the handler-scoped `PsrLogMessageProcessor`
+      downstream of every processor, and identifiers `sprintf`-composed into a message before Monolog sees
+      it (`CurlHttpClient` writes `Request: "%s %s"` on the buffered `http_client` channel).
+      **Enrolment is the whole control, and its two halves are verified in two different containers.** In
+      test, `PersonDataRedactionArrivalTest` drives a real login plus a real
+      authenticated request and asserts no swept record reaches the prod formatter carrying the address, and
+      separately that every one of the container's channel loggers carries the rule — behaviour alone is green
+      for any channel a request happened not to write on. In **prod**, the container compiled by
+      `make php.lint.prod-container` is the evidence, and it is read rather than assumed: 14 channel loggers,
+      14 `pushProcessor` sites for this rule, `monolog.logger.security` and `monolog.logger.request` among
+      them, on the **logger** and not on a handler — so the record is redacted before `FingersCrossedHandler`
+      buffers it. **The count is a reading, not a gate** — nothing recomputes it, so reproduce it with
+      `make php.lint.prod-container` plus a grep, over a PURGED `var/cache/prod` (a warmup on a stale cache
+      answers with the previous build). What IS gated is the property that lets the test container stand in
+      for prod: the class carries no `#[When]`/`#[WhenNot]`, asserted in `PersonDataRedactionArrivalTest`, so
+      it cannot be conditioned out of production while every test stays green. Unenrolment takes BOTH
+      mechanisms, measured on four arms with the cache purged each time: tag + autoconfiguration → 14 sites;
+      tag with `autoconfigure: false` → 14; no definition at all → 14; tag removed AND `autoconfigure: false`
+      → 0 — and only that last arm makes the test formatter emit the address inside the login record's
+      stringified token.
 - [ ] **A person's id still reaches the access log through the URL *path*, and it is accepted.** Caddy's
       access-log filter operates on `request>uri query`, so it is structurally incapable of touching a path
       segment — and the application log's `request_uri` leaves the path alone by the same decision, so the
@@ -943,6 +1002,21 @@ mitigated state. Accepting one means recording who accepted it and against which
       access log for `/api/*` at all. **Accepted for now:** there is no production deployment, and the
       query-side leak that *was* closed is the one with volume — it fired on every keystroke of a filter,
       against one entry per user record opened here.
+      **In the application log the same id is spelled twice in one record, and both spellings are this one
+      residual.** Symfony's router listener writes `route_parameters` beside `request_uri`, and a route
+      parameter IS a path segment: measured on the running stack,
+      `GET /api/v1/backoffice/users/01a01aff-87d3-7902-a5f3-c986d20d7feb` produces
+      `route_parameters.id = 01a01aff-87d3-7902-a5f3-c986d20d7feb` and a `request_uri` whose path ends in the
+      same bytes. `PersonDataRedactionProcessor` therefore leaves `route_parameters` alone: redacting one
+      spelling while the other stands in the same record removes nothing and costs an operator the route
+      parameters. **This spelling is not covered by the acceptance above**, which was written about the path
+      and Caddy's query filter; it needs its own sign-off. The declination is bounded rather than absolute,
+      and the bound is prose: the two coincide for the deployed route table, whose every placeholder is a
+      uuid, and `route_parameters` carries the DECODED value where `request_uri` stays encoded — so a route
+      that comes to carry a person-valued placeholder with a percent-encodable byte makes `route_parameters`
+      the only spelling, and nothing reds. `DeclinedRouteParameterCarrierTest` pins the other direction only:
+      the day `RequestUriRedactionProcessor` starts redacting paths it reds, and `route_parameters` must then
+      be added to `CARRIERS`. When the path closes, both close with it.
 - [ ] **The Next.js container logs the full request URL, person ids included — measured in dev, unverified in
       prod.** The audit screen navigates to `/backoffice/audit?actorId=<uuid>&resourceId=<uuid>`, Caddy
       reverse-proxies the document to the PWA, and the container prints
@@ -956,14 +1030,15 @@ mitigated state. Accepting one means recording who accepted it and against which
       running production image, so treat prod as unconfirmed rather than clean. Closing it means a `logging:`
       driver with a retention the erasure path can act on, or keeping the ids out of the document URL — which
       the deep-link design deliberately does not do.
-- [ ] **A recipient's address does not reach a log through a mail SEND failure, and five residuals around
-      that boundary are accepted.** `SmtpTransport::assertResponseCode()` quotes the server's reply verbatim,
-      and the command whose reply fails on a rejected recipient is `RCPT TO:<address>` — so a refusal names the
-      person, and every component that swallows that throwable and logs it, plus `ErrorDetailsStamp` in
-      `messenger_messages` and the error reporter that reads throwables outside the logging stack, would hold
-      an address no erasure path can reach. `RedactingTransport` decorates **`mailer.transports`** and
-      translates every failure into `MailDeliveryFailed`, whose message is COMPOSED from a class name, an SMTP
-      code, an RFC 3463 enhanced status and the origin file and line, which chains no `previous`, and whose
+- [ ] **A recipient's address does not reach a log through a mail failure raised inside `api/src`, and five
+      residuals around that boundary are recorded — four accepted, one re-opened.**
+      `SmtpTransport::assertResponseCode()` quotes the server's reply verbatim, and the command whose reply
+      fails on a rejected recipient is `RCPT TO:<address>` — so a refusal names the person, and every component
+      that swallows that throwable and logs it, plus `ErrorDetailsStamp` in `messenger_messages` and the error
+      reporter that reads throwables outside the logging stack, would hold an address no erasure path can
+      reach. `RedactingTransport` decorates **`mailer.transports`** and translates every failure into
+      `MailDeliveryFailed`, whose message is COMPOSED from a class name, an SMTP code, an RFC 3463 enhanced
+      status and the origin file and line, which chains no `previous`, and whose
       `getDebug()` is empty by construction because the transport's own exception accumulates the whole SMTP
       conversation there.
       **The boundary is the transport and not `MailerInterface`, and that is measured rather than stylistic:**
@@ -985,32 +1060,69 @@ mitigated state. Accepting one means recording who accepted it and against which
       scheduled lockout notice reports through `SendAccountLockedEmailBestEffort`, bound in `services.yaml` to
       `monolog.logger.observability` — a channel the prod `main` handler excludes **by name**, so its stream is
       always on and no 5xx is needed to flush it. Before this translation, every rejected recipient on either
-      path was written verbatim to the worker's stderr. `mailer:test`, by contrast, is
-      run by an operator through `docker exec`, whose stderr is **measured not to reach the driver** (marker
-      written to a container's stderr via `docker exec`: zero occurrences in `docker logs`); it lands in the
-      operator's terminal. It is closed here regardless, because the boundary costs nothing extra to place
-      correctly and the sink is a property of how the command happens to be invoked.
+      path was written verbatim to the worker's stderr. `mailer:test`, by contrast, is run by an operator
+      through `docker exec`, whose stderr is **measured not to reach the driver** (marker written to a
+      container's stderr via `docker exec`: zero occurrences in `docker logs`); it lands in the operator's
+      terminal. Its SEND is closed here regardless, because the boundary costs nothing extra to place correctly
+      and the sink is a property of how the command happens to be invoked. Its ASSEMBLY is a different
+      question, reachable from no boundary this repository can place, and it is residual two.
+      **Assembly inside `api/src` is inside the boundary as well, and THAT half is closed.** `Mime\Address`
+      refuses a non-compliant value with a message quoting it, and that throw happens while the message is being
+      BUILT — upstream of any transport decorator, where the `*BestEffort` wrapper logs it raw. `RedactingMailer`
+      is the single place `api/src` holds a MIME message: the four person mail paths hand it strings and it
+      assembles and sends in one call, so the assembly throw becomes the same composed `MailDeliveryFailed` —
+      class, origin and the NAME of the refused argument, with no reply code and no enhanced status, because
+      nothing has spoken to a server (measured: `550-5.1.1` is a value `Address` refuses, and the status pattern
+      reads `5.1.1` straight back out of the refusal, so a scan there would fabricate a diagnosis out of the
+      rejected value). The argument name is carried because the origin cannot separate a deployment that can
+      send no mail at all from one stored address being bad: all four of a refused `from`, an empty `from`, a
+      refused `recipientEmail` and an empty `recipientEmail` are one parser refusing at one line of one vendor
+      file. It costs no confidentiality — the name comes from a five-case enum and `from` is env-derived at
+      every call site. It is structural rather than a habit: `MailAssemblyBoundaryGateTest` pins the set of
+      `api/src` files allowed to name `Symfony\Component\Mime`, `Symfony\Bridge\Twig\Mime` or the
+      `Symfony\Component\Mailer` component, so a second construction site — or a class holding the mailer or
+      its transport directly — is an explicit edit rather than a silent reopening. Namespace prefixes rather
+      than exact types, because the exact types were measured evadable one `use` at a time: a planted
+      `TemplatedEmail`, `NotificationEmail`, concrete `Mailer` and `Transport\TransportInterface` each left the
+      interface-exact gate green. What this replaces was a bound nothing watched: every form
+      `#[Assert\Email(mode: STRICT)]` admits is also admitted by the `MessageIDValidation` that `Address` uses,
+      an undocumented agreement between two vendor validators that no test pinned (pinning it was considered and
+      declined — it would freeze an accidental implementation detail as though it were the contract) and that
+      could not report its own expiry. **What it does not cover is a message assembled outside `api/src`, which
+      is residual two, and a `MessageEvent` subscriber**: `Mailer::send()` dispatches one of its own between the
+      assembly `try` and the transport `try`, so a subscriber mutating the message there raises outside both.
+      Measured on the compiled container — `mailer.mailer` takes `messenger.default_bus` and `event_dispatcher`,
+      so the dispatch happens; no subscriber in this tree touches a message today.
       **Residual one — the recipient survives in the console error listener's `command` field.**
       `ErrorListener.php:46` logs `['exception' => …, 'command' => $inputString, 'message' => …]` at `critical`,
       and `$inputString` is the command line: measured, `bin/console mailer:test alice@example.test` yields
-      `mailer:test 'alice@example.test'`. The translation cleans `exception` and `message` and **cannot touch
-      `command`** — that field is the operator's invocation, not the failure. The `console` channel is inside
-      the prod `main` handler and `critical` is above its action level, so the line flushes; the sink is the
-      ephemeral one described above. **That argument once covered a second sink and did not hold there**:
-      `sentry/sentry-symfony`'s `ConsoleListener` sets `extra['Full command']` to the whole argv line and
-      captures it on `ConsoleErrorEvent`, so the address reached a third-party tracker with retention of its
-      own and no erasure path. `RedactionDenylist` could not help — it is a rule about KEY names and the key is
-      `Full command`. That half is **closed, not accepted**: `SentryEventScrubber` now redacts addresses in
-      `extra` VALUES, at any depth, the way it already did for `query_string`, `url` and `Referer`. What
-      remains is the Monolog line, and closing that means not naming a person on a command line.
-      **Residual two — address construction happens before the boundary.** The senders build their `Email`
-      first, and `Mime\Address` raises `RfcComplianceException` quoting the address it rejects; the
-      `*BestEffort` wrapper catches that and logs it raw. Measured bound: every form
-      `#[Assert\Email(mode: STRICT)]` admits (`NoRFCWarningsValidation`) is also admitted by the
-      `MessageIDValidation` that `Address` uses, so no stored address reaches it today — but that is an
-      undocumented agreement between two different validators, not a guarantee. A transport decorator cannot
-      reach this by position; only wrapping build and send inside the four adapters would, which is **pending
-      rather than declined**.
+      `mailer:test 'alice@example.test'`. Where the translation runs it cleans `exception` and `message`; it
+      **cannot touch `command`** in any case — that field is the operator's invocation, not the failure. The
+      `console` channel is inside the prod `main` handler and `critical` is above its action level, so the line
+      flushes; the sink is the ephemeral one described above. **That argument once covered a second sink and did
+      not hold there**: `sentry/sentry-symfony`'s `ConsoleListener` sets `extra['Full command']` to the whole
+      argv line and captures it on `ConsoleErrorEvent`, so the address reached a third-party tracker with
+      retention of its own and no erasure path. `RedactionDenylist` could not help — it is a rule about KEY
+      names and the key is `Full command`. That half is **closed, not accepted**: `SentryEventScrubber` redacts
+      addresses in `extra` VALUES, at any depth, the way it already did for `query_string`, `url` and `Referer`.
+      What remains is the Monolog line, and closing that means not naming a person on a command line.
+      **Residual two — a message built OUTSIDE `api/src` reaches no boundary, and `mailer:test` is the live
+      instance.** `MailerTestCommand` builds its own `Email` and calls `to()` on the operator's argument, which
+      is upstream of `RedactingMailer` and upstream of the transport decorator, so `Mime\Address` raises
+      `RfcComplianceException` quoting that argument verbatim and nothing translates it. Measured on this
+      branch, `bin/console mailer:test alice-the-victim` produces ONE `console.CRITICAL` record carrying the
+      value FIVE times across four fields — the record `message` twice, then `context.exception.message`,
+      `context.command` and `context.message`. The prod `main` handler excludes
+      `["!deprecation","!observability"]` and not `console`, and `critical` is above its action level, so the
+      record flushes to `nested` = `php://stderr`. Sink as in residual one: an operator's terminal when the
+      command is invoked through `docker exec` (measured: zero occurrences in `docker logs`), and the json-file
+      driver with no rotation, no TTL and no owner of erasure when it is invoked any other way. Its Sentry half
+      is **closed**: `SentryEventScrubber` now redacts `exception.values[].value` — the field the tracker titles
+      an issue with — and the event's own message, alongside the `extra` pass. Closing the Monolog half means
+      either not naming a person on that command line, or shadowing the vendor command with one that validates
+      its argument before an `Email` sees it; the second is declined here, because a debugging command is a thin
+      reason to own a vendor command's lifecycle. The notifier's email channel has the same shape and is absent
+      only because no notifier is configured.
       **Residual three — `CreateInvitationCommand` prints the recipient to stdout** on both the success and the
       send-failure branch. Its Sentry half is closed with residual one's — the address rode the same
       `Full command` extra — and what remains is stdout, whose sink is the operator's terminal.
@@ -1022,15 +1134,17 @@ mitigated state. Accepting one means recording who accepted it and against which
       so Symfony's own wiring leaves it on the `NullLogger` default — a `failover://a||b` DSN does **not** arm
       that line. Reachable only by constructing the transport by hand.
       **Accepted 2026-08-18 (Sergio):** there is no production deployment and no customer. Residuals one, three
-      and five stand on the arguments measured above — an operator-invoked **terminal** for the first two, once
+      and five stand on the arguments measured above — an operator-invoked **terminal** for one and three, once
       the tracker half of that sink was measured and **closed rather than accepted**, and Symfony's own wiring
-      never arming the third. Residual four is deferred knowingly rather than dismissed: the carrier is real and a
+      never arming five. Residual four is deferred knowingly rather than dismissed: the carrier is real and a
       database driver quoting a violated unique value has the same shape; what is declined is the survey that
-      would bound the class, not the risk. **Residual two is accepted against #764 and nothing else.** Its
-      measured bound is an agreement between two vendor validators that no test watches — pinning it was
-      considered and declined, because a test would freeze an accidental implementation detail as though it were
-      the contract — so it is not a guarantee and cannot report its own expiry; the acceptance ends when #764
-      closes.
+      would bound the class, not the risk.
+      **Residual two is RECORDED rather than accepted, and its history is the reason it is spelled out.** It was
+      briefly carried as closed, on a claim — "the one place a MIME message is built" — that was true of
+      `api/src` and stated without that scope, so the deletion of a residual rested on a boundary the vendor
+      command walks around. It reopens here narrower than the one it replaces: not "construction happens before
+      the boundary" (that is closed for every path this repository writes) but "construction outside `api/src`
+      is not reachable from inside it". It carries no acceptance date because nobody has accepted it.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

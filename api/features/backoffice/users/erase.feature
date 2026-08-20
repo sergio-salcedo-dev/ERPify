@@ -174,11 +174,12 @@ Feature: Erase an identity (GDPR right to erasure)
     # be erased by the context that owns it. A terminal invitation is seeded beside a live one — a retired delivery record
     # still carries the invited person's id, so the lifecycle state buys it no exemption.
     #
-    # The subject is seeded here rather than taken from the fixtures because the scenarios above erase theirs,
-    # and its membership carries ADMIN while its identity does not — the divergence a demote-then-erase leaves
-    # behind, and the only shape in which an orphan ADMIN membership is reachable at all.
-    Given I execute the SQL query "INSERT INTO identity_user (id, email, password_hash, roles, status, failed_attempts, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fa01', 'demoted@erpify.test', 'x', to_json(ARRAY[]::text[]), 'ACTIVE', 0, NOW(), NOW())" on connection "seed"
-    And I execute the SQL query "INSERT INTO membership (id, user_id, organization_id, roles, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fa11', '0190f200-0000-7000-8000-00000000fa01', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', to_json(ARRAY['ADMIN']::text[]), NOW(), NOW())" on connection "seed"
+    # The subject is seeded here rather than taken from the fixtures because the scenarios above erase theirs.
+    # Its identity carries no role, and that is load-bearing: a subject still holding ADMIN is refused with a
+    # 409 administrator-erasure-requires-demotion (asserted further down this file), so a role seeded here
+    # would exercise that refusal instead of the reference sweep this scenario exists for.
+    Given I execute the SQL query "INSERT INTO identity_user (id, email, password_hash, roles, status, failed_attempts, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fa01', 'referenced-subject@erpify.test', 'x', to_json(ARRAY[]::text[]), 'ACTIVE', 0, NOW(), NOW())" on connection "seed"
+    And I execute the SQL query "INSERT INTO membership (id, user_id, organization_id, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fa11', '0190f200-0000-7000-8000-00000000fa01', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', NOW(), NOW())" on connection "seed"
     And I execute the SQL query "INSERT INTO iam_invitation (id, organization_id, invited_user_id, token_hash, expires_at, status, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fa21', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', '0190f200-0000-7000-8000-00000000fa01', '70f0759d523f100bb31c67201828646721d77adfb44ce75ab59d9c6c5bf99b29', '2099-01-01 00:00:00', 'SENT', NOW(), NOW())" on connection "seed"
     And I execute the SQL query "INSERT INTO iam_invitation (id, organization_id, invited_user_id, token_hash, expires_at, status, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fa31', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', '0190f200-0000-7000-8000-00000000fa01', '70f0759d523f100bb31c67201828646721d77adfb44ce75ab59d9c6c5bf99b29', '2099-01-01 00:00:00', 'ACCEPTED', NOW(), NOW())" on connection "seed"
     And I am logged in as an administrator

@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Mail;
 use Erpify\Iam\Identity\Infrastructure\Mail\SymfonyAccountLockedEmailSender;
 use Erpify\Shared\Mailer\Infrastructure\BulletproofEmailChrome;
 use Erpify\Shared\Mailer\Infrastructure\DeliverableSecurityTransport;
+use Erpify\Shared\Mailer\Infrastructure\RedactingMailer;
 use Erpify\Shared\Mailer\Infrastructure\SecurityMailerMisconfigured;
 use Erpify\Shared\Mailer\Infrastructure\SecuritySenderAddress;
 use Erpify\Tests\Unit\Shared\Mailer\Infrastructure\CapturingMailer;
@@ -99,7 +100,7 @@ final class SymfonyAccountLockedEmailSenderTest extends TestCase
     {
         $mailer = new CapturingMailer();
         $sender = new SymfonyAccountLockedEmailSender(
-            $mailer,
+            new RedactingMailer($mailer),
             new SecuritySenderAddress(self::FROM, 'dev'),
             new BulletproofEmailChrome(),
             new DeliverableSecurityTransport('null://null', 'prod'),
@@ -117,7 +118,7 @@ final class SymfonyAccountLockedEmailSenderTest extends TestCase
     {
         $mailer = new CapturingMailer();
         $sender = new SymfonyAccountLockedEmailSender(
-            $mailer,
+            new RedactingMailer($mailer),
             new SecuritySenderAddress(self::FROM, 'dev'),
             new BulletproofEmailChrome(),
             new DeliverableSecurityTransport('smtp://localhost', 'dev'),

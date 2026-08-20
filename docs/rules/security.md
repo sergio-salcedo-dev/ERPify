@@ -82,6 +82,26 @@ an SMTP reply code, an RFC 3463 enhanced status and the origin `file:line`. It c
 `getDebug()` is empty, because a normalising formatter walks both. Nothing downstream is trusted to redact,
 because nothing downstream receives anything to redact.
 
+**A decorator only reaches what its position reaches, so the object is built inside the boundary too.**
+`Mime\Address` refuses a non-compliant value with a message quoting it, and that throw happens while the
+message is being assembled — before any transport is involved, where the best-effort wrapper around every mail
+path logs it raw. `RedactingMailer` is therefore the single place `api/src` holds a MIME message: senders hand
+it the strings and it assembles and sends in one call, so an assembly failure becomes the same composed
+exception (class, origin and the name of the refused argument, with no reply code and no status, because
+nothing has spoken to a server). The argument name is what separates a deployment that can send no mail from
+one stored address being bad — one parser refuses `from` and `recipientEmail` at the same line — and it costs
+no confidentiality, because it is drawn from a closed enum of parameter names.
+`MailAssemblyBoundaryGateTest` pins the set of `api/src` files allowed to name a message namespace or the
+mailer component, which makes the property structural rather than a habit a reviewer has to re-check per
+sender.
+
+**The scope of that claim is `api/src`, and vendor code assembles too.** `MailerTestCommand` builds its own
+message from an operator's argument, upstream of every boundary this repository can place; measured,
+`bin/console mailer:test <address>` writes that value five times, across four fields of one
+`console.CRITICAL` record, on a channel the production handler does not exclude. It is a recorded residual, not a closed path — a boundary
+covers what its position reaches, and saying otherwise is how a residual gets deleted on a claim wider than
+the change that earned it.
+
 **A diagnosis is identified by its anchor, not by its shape.** The enhanced status is read only where an SMTP
 reply code introduces it: matching the shape alone was measured reporting `5.1.1` out of the local part of
 `a-5.1.1@example.test` and `4.2.3` out of `Upgrade to version 4.2.3 first`. A fabricated diagnosis costs an
@@ -91,6 +111,38 @@ operator the time the field exists to save, so the pattern refuses one and repor
 `RedactionDenylist` in `Shared/ErrorContract/Application`, because an axis redacted in one sink must be
 redacted in all of them and the denylist alone cannot: it is a rule about KEY names, and an identifier in a
 VALUE — Sentry's `Full command` extra, a `Referer`, a raw `query_string` — needs a vocabulary instead.
+
+**A leak whose emitter lives in `vendor/` is closed by a Monolog processor, by CARRIER and not by pattern.**
+`Shared/Monitoring/Infrastructure/Monolog` holds the two: `RequestUriRedactionProcessor` for the `request_uri`
+any library may write, `PersonDataRedactionProcessor` for the keys the security stack names a person in
+(`username`, `impersonator_username`, `token`, `received`). Four properties are the pattern, not the detail.
+**Enrol on the logger, never on a handler** — a logger processor runs before the `fingers_crossed` buffer and
+before the handler-scoped `PsrLogMessageProcessor` that interpolates the message; a handler-scoped one runs
+after both and is invisible to the sweep in `FingersCrossedActivationIntegrityTest`. **Replace the value
+whole**, because a value with a `__toString()` is spelled out by the formatter downstream of every processor,
+so a rule that inspected strings would cover the plain carriers and let the object through. **Match the key
+exactly**: a substring rule reaching for `token` also destroys `token_class`, and over-redaction that costs an
+operator a diagnostic is not free just because it errs toward safety. **Leave a null value alone**: a carrier
+the emitter had nothing to put in is "none was sent", and stamping the sentinel over it asserts an identifier
+that never existed.
+
+Adding a carrier is three edits, not one, because the set fails in three independent directions: the entry in
+`CARRIERS` on the class; a case in `PersonDataRedactionProcessorTest` whose context is a shape the emitter
+really writes, asserted at the deployed formatter in **both** directions so a case that never carried a person
+datum reds instead of passing; and a row in `PersonDataCarrierEmitterGateTest`'s `EMITTERS` naming the
+installed class that spells the key, which is what reds when a dependency bump renames it and leaves the rule
+guarding a key nobody writes. `PersonDataRedactionArrivalTest` carries the orthogonal half, enrolment — the
+rule and its enrolment fail independently — and asserts it three ways: behaviourally (a real session's
+records), structurally (every channel logger carries the rule, since a channel that logged nothing is green
+for free), and by refusing a `#[When]`/`#[WhenNot]` on the class, which is what lets the test container stand
+in for the prod one.
+
+Two things a processor of this shape never proves and must say so. It cannot reach the record's **message**,
+which the handler-scoped `PsrLogMessageProcessor` interpolates downstream of it. And it asserts presence on a
+logger, never **position**: `Logger::pushProcessor` is an `array_unshift`, so anything enrolled later runs
+earlier and sees the record unredacted — dev's `DebugProcessor` does exactly that, into the profiler. Never
+touch `context['exception']` in a processor: `HttpCodeActivationStrategy` reads it to decide which statuses may
+flush the buffer at all.
 
 ## A person's identifier is declared sensitive at the parameter
 

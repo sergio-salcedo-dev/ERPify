@@ -9,7 +9,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\DbalMembershipPersonReferences;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
-use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -59,7 +58,7 @@ final class DbalMembershipPersonReferencesTest extends KernelTestCase
             $organizationId = $organization->getId();
             $this->assertNotNull($organizationId);
             $this->entityManager->persist(
-                Membership::grant(Uuid::generate(), $userId, $organizationId, Role::VIEWER),
+                Membership::grant(Uuid::generate(), $userId, $organizationId),
             );
             $this->entityManager->flush();
 

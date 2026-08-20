@@ -102,12 +102,21 @@ php.lint.bounded-context: ## Bounded-context isolation gate
 php.lint.composer-stability: ## Composer stability gate (nothing shipped tracks a branch)
 	@$(PHP_TEST) bin/phpunit --filter=ComposerStabilityGateTest
 
-## —— Event-dispatch boundary gate ——————————————————————————————————————————
+## —— Application-layer framework-seam gate ————————————————————————————————
 
-# Fails CI when a file under */Application/ imports Symfony\Component\Messenger\MessageBusInterface
-# directly instead of publishing domain events through the Erpify\Shared\Event\Domain\EventBus
-# port (skipping api/.event-dispatch-allowlist). ADR: docs/adr/event-driven-architecture.md.
-php.lint.event-bus: ## Event-dispatch boundary gate
+# Fails CI when a file under */Application/ reaches a framework seam by importing the framework type
+# instead of its port: Symfony\Component\Messenger\MessageBusInterface instead of
+# Erpify\Shared\Event\Domain\EventBus, or the Doctrine manager family (ORM\EntityManagerInterface,
+# ORM\EntityManager, Persistence\ManagerRegistry, Persistence\ObjectManager) instead of
+# Erpify\Shared\Persistence\Application\TransactionManager (skipping api/.event-dispatch-allowlist).
+# ADRs: docs/adr/event-driven-architecture.md, docs/adr/external-dependencies-in-domain.md.
+#
+# Defence in depth, not the only reader: php.deptrac already refuses Vendor.Doctrine and
+# Vendor.Symfony from every *.Application ruleset it declares. What it cannot refuse is a context
+# it has no layer for — its collectors are one directory per REGISTERED module — so a use case in a
+# module nobody added to deptrac.yaml is covered here from the day the directory exists. This gate
+# reads the import, deptrac reads the dependency; the class docblock records where each is blind.
+php.lint.event-bus: ## Application-layer framework-seam gate
 	@$(PHP_TEST) bin/phpunit --filter=EventDispatchGateTest
 
 ## —— Person-resource erasure gate ——————————————————————————————————————————

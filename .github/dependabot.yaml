@@ -11,6 +11,37 @@ updates:
     cooldown:
       default-days: 7
 
+  # `docker-compose`, not a `/` entry on the `docker` lane above. The two are separate
+  # ecosystems with separate file fetchers, and the docker one cannot see a compose file:
+  # it globs `*.ya?ml` but then keeps only what `likely_kubernetes_resource?` accepts —
+  # a mapping carrying BOTH `apiVersion` and `kind`. No compose file has either, so a
+  # docker lane pointed at `/` finds nothing it accepts and ends in DependencyFileNotFound:
+  # no PR and no CI red, visible only in the Dependabot job log — which is how such a lane
+  # can sit in this file looking correct and watch nothing.
+  #
+  # This lane is what watches the root compose pins. It matters because compose.prod.yaml
+  # declares no `image:` on its `database` service: production inherits the postgres pin
+  # from compose.yaml, so before this entry the image running the production database was
+  # the one image in the tree nothing was tracking.
+  #
+  # Reach: the fetcher's filename regex is /(docker-)?compose(-[\w]+)?(?>\.[\w-]+)?\.ya?ml/i
+  # and the listing is non-recursive, so it takes compose.yaml, compose.dev.yaml and
+  # compose.prod.yaml and nothing else. Those three carry ten `${IMAGES_PREFIX:-}app-*`
+  # references built locally from the Dockerfiles the /api and /pwa lanes already watch;
+  # they parse to nothing and are dropped without error, so they generate no noise here.
+  #
+  # An image reference is only tracked if it yields a tag or a digest; a bare
+  # `axllent/mailpit` yields neither and is skipped as silently as an interpolated tag.
+  # Pin every image this lane is meant to watch.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"
+    cooldown:
+      default-days: 7
+
   # `/api`, not `/`: the repo root holds no composer.json — the manifest is
   # api/composer.json. Pointed at `/` this lane produced ZERO routine PRs in
   # four months while npm produced ~40, and the only two composer PRs ever
