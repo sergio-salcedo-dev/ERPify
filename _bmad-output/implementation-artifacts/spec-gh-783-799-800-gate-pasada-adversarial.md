@@ -26,7 +26,7 @@ context: []
 
 ## Decisiones tomadas (humano)
 
-1. **#800 — el registro vive en el artefacto, y el artefacto se conserva.** Descartadas: mover el registro al mensaje del commit (sobrevive al rebase y a la poda, pero desplaza la evidencia fuera del sitio donde la regla la pide) y destilarlo a `docs/` (choca con la regla de densidad: la mayoría de hallazgos son locales a la historia). Coste aceptado — crecimiento del árbol — **medido y menor de lo anunciado**: los artefactos `br-*`/`g-*` que nadie podó nunca son ~1.1 MB de ese directorio, y todo el carril `spec-*.md` son 35 KB.
+1. **#800 — el registro vive en el artefacto, y el artefacto se conserva.** Descartadas: mover el registro al mensaje del commit (sobrevive al rebase y a la poda, pero desplaza la evidencia fuera del sitio donde la regla la pide) y destilarlo a `docs/` (choca con la regla de densidad: la mayoría de hallazgos son locales a la historia). Coste aceptado — crecimiento del árbol — **medido y menor de lo anunciado**: los artefactos `br-*`/`g-*` que nadie podó nunca son ~0.8 MB de ese directorio (el directorio entero son ~1.1 MB), y todo el carril `spec-*.md` son 35 KB.
 2. **#783 — hook bloqueante con escotilla.** Descartadas: sólo advertir (es la prosa-con-más-pasos que ya falló tres veces) y sólo un comando `/open-pr` (opt-in, y abrir la PR por otra vía lo saltea, que es exactamente el fallo).
 
 </frozen-after-approval>
@@ -35,7 +35,7 @@ context: []
 
 | Fichero | Qué hace |
 |---|---|
-| `scripts/adversarial-pass-check.sh` | El instrumento. Clasificador de registro, aplicabilidad del hook, escotilla, veredicto, y `--self-test` con 34 fixtures. |
+| `scripts/adversarial-pass-check.sh` | El instrumento. Clasificador de registro, aplicabilidad del hook, escotilla, veredicto, y `--self-test` con 75 fixtures. |
 | `.claude/settings.json` | Hook `PreToolUse`, matcher `Bash\|.*create_pull_request`. |
 | `make/bmad.mk` | `bmad.adversarial.check` y `bmad.adversarial.self-test`. |
 | `.claude/commands/prune-done-specs.md` | **Borrado.** `spec-*.md` era todo su alcance. |
@@ -49,41 +49,56 @@ context: []
 - Dada una rama que toca un artefacto cuya sección de pasada **es anterior a la rama**, entonces el veredicto es `missing`. (Era un falso verde: todo artefacto de historia en este árbol lleva su propia sección.)
 - Dado `ADVERSARIAL_PASS_ACK="<razón>"` en el comando, entonces procede **y** emite la razón. Un valor vacío o sólo-espacios **no** pasa.
 - Dado cualquier estado indeterminable, entonces exit 0 y nada bloquea.
-- Dado `make bmad.adversarial.self-test`, entonces 34 fixtures verdes; y mutar el código enrojece la fila correspondiente.
+- Dado `make bmad.adversarial.self-test`, entonces 75 fixtures verdes; y mutar el código enrojece la fila correspondiente, incluidas las mutaciones que reinstauran las implementaciones originales.
 
 ## Adversarial pass
 
-Corrida **por el autor**, sobre el código, antes de que exista la PR. **Esto no es la lectura independiente que `CLAUDE.md` exige**: la regla pide un lector distinto del autor (contexto fresco, otro modelo o una persona), y en esta sesión tengo instrucción explícita de no lanzar subagentes sin petición del usuario. Queda declarado como lo que es —una pasada del autor, dirigida por mutación— y la lectura independiente está **pendiente**; el gate que este cambio instala comprueba la *forma* del registro, nunca su sustancia, así que un registro honesto sobre su propia limitación es exactamente lo que debe leerse aquí.
+**Independiente, dos capas en paralelo, contexto fresco y sólo-lectura, antes de que exista la PR.** Ninguna participó en escribir el código. Capa A atacó las *afirmaciones* del cambio (bypass, falso verde, falso rojo, prosa contra código); capa B fue cazadora de casos límite sobre el shell (nombres de fichero, estados de git, entorno, el propio `--self-test`). Entre las dos, **cuatro GRAVE y once MEDIUM**, con reproducción medida en cada uno.
 
-**Método:** mutar el código y exigir que una fila del `--self-test` enrojezca. Diez mutaciones intentadas, diez cazadas — **dos sólo después de arreglar el test que las dejaba pasar**.
+**No confirmó el cambio: lo reescribió.** El instrumento pasó de 708 a ~890 líneas y de 34 a **75** fixtures.
 
-**Defectos encontrados y corregidos (7), todos vivos en el código que ya funcionaba:**
+### Lo que derribó, y era explotable en un comando
 
-1. **El modo hook no leía su propio payload.** Habría denegado *cualquier* `Bash`, no sólo el que abre una PR. Encontrado antes de cablear el hook.
-2. **La escotilla no era alcanzable en el camino CLI.** Un proceso de hook **no hereda** el entorno del comando que vigila, así que `ADVERSARIAL_PASS_ACK=… <comando>` la anunciaba en el mensaje de denegación y nada la implementaba. Ahora el valor se extrae del **texto del comando**.
-3. **El emparejamiento textual sobre-disparaba, y me bloqueó a mí.** Con la frase emparejada en cualquier posición, todo comando cuyo texto *documenta* el gate quedaba denegado — incluidos los que lo estaban escribiendo. Anclado a **posición de comando**. Coste deliberado en la otra dirección: una invocación envuelta en comillas, alias o variable pasa; eso es un bypass elegido, no un accidente.
-4. **`while read` descartaba el último segmento** de una línea sin newline final — el caso común. Deshabilitó silenciosamente todo el camino `Bash` mientras el camino MCP seguía verde, que es la peor forma posible de este fallo.
-5. **La rama sin comillas de `strip_assignments` tiraba el resto del segmento**, así que `FOO=1 <invocación>` no disparaba.
-6. **Un ack vacío pasaba**, registrando los dos caracteres de comilla como su razón.
-7. **Falso verde por sección preexistente.** Todo artefacto de historia lleva un `## Adversarial pass` de su propia historia, así que tocar uno por una errata ponía el gate en verde sin haber revisado nada. Ahora, para un fichero que ya existía en el merge base, la sección tiene que **haber cambiado**.
+1. **Un registro sin commitear ponía el gate en verde.** Un fichero que existe sólo en el working tree —nunca añadido, nunca commiteado— satisfacía el testigo del artefacto. Es **#770 reproducido exactamente**: el head desde el que se abre la PR no contiene el registro. Mi comentario defendiéndolo («un registro sin commitear sigue siendo un registro que el humano puede commitear antes de la PR») se autorrefuta en el único instante en que este script corre, que es *en* la creación. Y dispara en el orden **natural** —escribir el artefacto, abrir la PR, commitear— no en el de un adversario. Ahora los candidatos salen sólo de `git diff <merge-base>...HEAD`; un registro sin commitear produce una denegación que **lo nombra** y dice que lo commitees.
+2. **El testigo del trailer no tenía suelo.** `git commit --allow-empty -m "Adversarial-pass:"` ponía todo el gate en verde. El testigo del artefacto exigía 3 líneas y 200 caracteres precisamente porque «un encabezado solo no es un registro», y el otro aceptaba dos puntos sin nada detrás — una asimetría es un agujero, porque el testigo sin suelo es siempre el más barato de falsificar. Además `--grep='^Adversarial-pass:'` casaba un commit de documentación que **citaba** la clave a mitad del cuerpo. Ahora el valor se lee con el parser de trailers de git (así una cita a mitad de mensaje no es un trailer) y exige 40 caracteres.
+3. **Un espacio en blanco derrotaba la guarda de «la sección ha cambiado».** Las dos funciones awk gemelas coincidían exactamente en *dónde* empieza la sección —capa B lo falsó con 4000 documentos aleatorios: 0 discrepancias— pero no en *qué* contaba cada una: una comparaba líneas crudas y la otra contaba contenido normalizado. Un espacio final, una línea en blanco o un sub-encabezado vacío leían como cambio, y eso lo hace cualquier formateador de Markdown sin que nadie lo pida. Ahora hay **un solo** programa awk que emite las líneas normalizadas, y las dos preguntas se responden con él.
+4. **Mi propio `--self-test` daba verdes vacuos sobre un repositorio con cero commits.** Bajo un `commit.gpgsign=true` global —o un `core.hooksPath` que bloquee— cada `git commit` de la fixture fallaba en silencio, el repo acababa sin commits, el script respondía correctamente `undetermined`, y mi ayudante de veredicto leía el código de salida 0 como `record`: **tres filas en verde sobre un repositorio vacío**. Es exactamente la clase de defecto que `CLAUDE.md` cita como el GRAVE de #618 —«un test afirmando un invariante sobre una semilla que insertó cero filas»— reproducida dentro del arnés de falsación del gate escrito para impedirla. Ahora la fixture fuerza `commit.gpgsign=false` y `core.hooksPath=/dev/null`, **afirma que sus commits existen**, y el veredicto se lee del token impreso, no del código de salida.
 
-**Defectos del propio test (2), que es la mitad que suele no mirarse:**
+### Lo demás que cerró
 
-- **Once filas verdes eran vacuas.** El bloque de aplicabilidad corría *antes* de que existieran las funciones que invoca: `command not found` → 127 → «no aplica», y seis filas que esperaban «no aplica» pasaban por la razón equivocada.
-- **Los dos suelos de contenido no estaban fijados por separado.** Son un AND, así que toda fixture que viola uno viola el otro: bajarlos a cero uno a uno dejaba **todas** las filas verdes. Dos fixtures nuevas los aíslan.
+- **Una plantilla pasaba por registro:** un `## Adversarial pass` dentro de un bloque cercado ```` ``` ```` contaba. Es la misma clase que ya había arreglado en la aplicabilidad, con el signo cambiado: *mostrar* la forma la ejecutaba. Los dos programas awk ahora siguen el estado de la cerca.
+- **Un rename o una copia** de la sección de otra historia contaba como evidencia nueva. Ahora se compara la huella normalizada contra **todas** las secciones presentes en la base, lo que cubre rename, copia y movimiento parcial con una sola regla.
+- **La escotilla se emparejaba en cualquier parte del comando.** Un `--body` que citaba el mensaje de denegación se auto-acknowledgeaba, registrando `"<reason>"` como razón — así que el rastro en el que el diseño se apoya no registraba nada. Ahora sólo se lee como prefijo de asignación **en el segmento que abre la PR**, y en la superficie MCP sólo a principio de línea del cuerpo.
+- **Falsos rojos que refusaban el acto de registrar.** El splitter partía en cualquier separador y en cualquier newline, así que `git commit -m "a; <invocación>"`, un mensaje de commit multipárrafo y un heredoc que documenta el gate quedaban **denegados**. El splitter ahora respeta comillas y salta cuerpos de heredoc.
+- **Bypasses en posición de comando** que la prosa no admitía: `gh api …/pulls` (la ruta REST documentada), ruta absoluta, `sudo`, `command`, `exec`, `nohup`, `time`, `\gh`, subshell y grupo de llaves. Añadidos. La prosa de `CLAUDE.md` pasó de enumerar un bypass —leyéndose como exhaustiva— a decir que es una **lista nombrada de deletreos**: suelo para accidentes, nunca techo para intenciones.
+- **Tres formas de matar el gate en silencio:** un `CDPATH` puesto rompía `SCRIPT_DIR` (y las dos invocaciones cableadas usan la forma vulnerable); `GIT_DIR`/`GIT_WORK_TREE` heredados vencían a `git -C` y emitían un veredicto sobre **otro repositorio**, en ambas direcciones; y `--base-ref` sin valor giraba al 100 % de CPU para siempre, mientras `--base-ref --strict` se tragaba el flag y desactivaba la estrictez sin decirlo.
+- **Rutas con comillas o UTF-8** salían de `git diff --name-only` entrecomilladas y no casaban `*.md`, así que una rama con registro real era denegada. Todo lo que lee rutas usa ahora `-z`.
+- **Números míos mal medidos:** «29 fixtures» (eran 34, ahora 75) y «~1.1 MB de `br-*`/`g-*`» (eso es el directorio entero; ese carril son ~0.8 MB). Corregidos en los dos ficheros más leídos del repo.
 
-**Punto ciego aceptado y no cerrado:** una PR abierta fuera de esta sesión —la UI web de GitHub, otra máquina, un job de CI— no la ve nadie, porque un hook `PreToolUse` sólo observa llamadas de herramienta hechas aquí. Cerrarlo pide un control del lado del servidor (una GitHub Action sobre `pull_request.opened`), que es otro cambio y otra decisión.
+### Diferido, con issue
 
-**Coste conocido:** el gate comprueba la **forma**, nunca la sustancia. No juzga si los hallazgos son reales, si la lectura fue hostil, ni si intervino alguien distinto del autor — y esta misma sección es la prueba de que esa distinción importa. La revisión sigue siendo el único control en esa dirección.
+- **El punto ciego que ninguna de las dos capas pudo cerrar aquí:** una PR abierta fuera de esta sesión —UI web, otra máquina, un job de CI— no la ve nadie, porque un hook `PreToolUse` sólo observa llamadas de herramienta hechas aquí. Cerrarlo pide un control del lado del servidor, que no puede correr en el instante de la creación y por tanto es estrictamente más débil — **#815**.
+- **Precisión residual:** la guarda de sección cambiada no tiene suelo sobre el *delta* (una palabra nueva basta), y `--repo otro/dueño` en la ruta CLI se juzga contra este checkout (la ruta MCP ya lo trata como no-aplicable) — **#816**.
+
+### Rechazado
+
+- Bajar la aplicabilidad a un parser de shell completo. El coste es un tokenizador que mantener, y el beneficio es cero contra un adversario —que siempre puede usar `curl`— mientras que el suelo contra accidentes ya lo dan las comillas y los heredocs. La honestidad de la prosa hace el trabajo que la precisión no puede.
+
+### Coste conocido
+
+El gate comprueba la **forma**, nunca la sustancia. No juzga si los hallazgos son reales, si la lectura fue hostil, ni si intervino alguien distinto del autor. La revisión sigue siendo el único control en esa dirección — y esta sección existe porque, en la primera versión de este mismo artefacto, la pasada era del autor y lo decía.
 
 ## Verification
 
 ```
-make bmad.adversarial.self-test   → 34 fixtures verdes (clasificador 12, aplicabilidad 11, escotilla 6, veredicto 5)
-make bmad.adversarial.check       → verde en esta rama por este artefacto
+make bmad.adversarial.self-test   → 75 fixtures verdes
+                                     (clasificador 16, huella 5, aplicabilidad 21+12, escotilla 13, veredicto 10)
+make bmad.adversarial.check       → verde por el trailer del commit, que es el testigo comprobado primero
 bash -n scripts/adversarial-pass-check.sh
 python3 -c "json.load(open('.claude/settings.json'))"
 make -n bmad.adversarial.check
 ```
+
+Mutación: 15 mutaciones aplicadas al código y revertidas, incluidas tres que reinstauran las implementaciones **originales** (el barrido de la escotilla por subcadena, el splitter ciego a comillas, la unión con el working tree) — las tres enrojecen. El `--self-test` corre además limpio bajo `commit.gpgsign=true`, `core.hooksPath` bloqueante, `init.defaultBranch=trunk` y sin identidad global; con `TMPDIR` inservible salta el bloque de veredicto y **la línea de resumen dice que no lo cubre** en vez de afirmarlo.
 
 `shellcheck` y `make super-lint.*` **no** corridos: requieren docker, no disponible en este contenedor. Quedan para CI.

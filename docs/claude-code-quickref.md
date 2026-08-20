@@ -119,14 +119,14 @@ A `SessionStart` hook in `.claude/settings.json` runs it with `--quiet-when-clea
 ```bash
 make bmad.adversarial.check              # Does this branch carry its adversarial-pass record?
 make bmad.adversarial.check c='--strict' # Same, but exit 1 when the record is missing.
-make bmad.adversarial.self-test          # Prove the gate fails in both directions (29 fixtures).
+make bmad.adversarial.self-test          # Prove the gate fails in both directions (75 fixtures).
 ```
 
 `CLAUDE.md` requires the adversarial pass to run **and its findings to be written down** before a pull request exists. Prose enforced that for three occurrences (#616, #620, #770) and lost each time, so `scripts/adversarial-pass-check.sh` enforces it now, from a `PreToolUse` hook that fires when a PR is about to be opened — matching both the CLI invocation and the GitHub MCP server, because a remote session has no CLI installed and would otherwise be ungated on the exact surface that produced #770.
 
-The record is a non-empty `## Adversarial pass` section in an artifact the branch touches, or an `Adversarial-pass:` trailer on one of its commits. It is checked **at** creation time rather than reconstructed afterwards: a post-hoc comparison of commit dates against the PR's `createdAt` cannot work, because `%cI` is rewritten by every rebase and `%aI` is settable (#799).
+The record is a `## Adversarial pass` section in an artifact **committed** on the branch, or an `Adversarial-pass:` trailer on one of its commits. Both carry a content floor, and the section must not already exist on the base — a file left in the working tree, a rename, a copy and a whitespace nudge are each refused, and each was a measured green before it was. It is checked **at** creation time rather than reconstructed afterwards: a post-hoc comparison of commit dates against the PR's `createdAt` cannot work, because `%cI` is rewritten by every rebase and `%aI` is settable (#799).
 
-It fails open on anything undeterminable — not a git repo, no base ref, no `jq` — and a determinate refusal still yields to `ADVERSARIAL_PASS_ACK="<reason>"`, which proceeds and surfaces the reason. The value is read from the command text, not the environment, because a hook does not inherit the environment of the command it gates. A green proves the record has the right shape, never that its findings are real.
+It fails open on anything undeterminable — not a git repo, no base ref, no `jq` — and a determinate refusal still yields to `ADVERSARIAL_PASS_ACK="<reason>"`, which proceeds and surfaces the reason. The value is read from the command text, not the environment, because a hook does not inherit the environment of the command it gates. A green proves the record has the right shape, never that its findings are real. What it recognises as opening a pull request is a named list of spellings in command position, not a decision procedure — a floor on accidents, not a ceiling on intent.
 
 ### Dependency batches
 
