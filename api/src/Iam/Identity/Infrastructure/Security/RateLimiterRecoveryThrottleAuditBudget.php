@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Security;
 
 use Erpify\Iam\Identity\Application\RecoveryThrottleAuditBudget;
 use Override;
+use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
@@ -41,7 +42,7 @@ final readonly class RateLimiterRecoveryThrottleAuditBudget implements RecoveryT
     }
 
     #[Override]
-    public function claimFor(string $email): bool
+    public function claimFor(#[SensitiveParameter] string $email): bool
     {
         return $this->auditLimiter
             ->create(RecoveryBudgetKey::forEmail($email))

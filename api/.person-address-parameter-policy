@@ -1,0 +1,112 @@
+# Every declared site under `api/src` that carries a natural person's email address as a parameter or a
+# promoted constructor property, OUTSIDE the fixed set `SensitiveRecipientAddressGateTest` already pins by the
+# parameter name `recipientEmail`. This registry exists because that name-keyed gate cannot generalise (#769):
+# the same value crosses this codebase under `$email`, `$to`, `$identifier`, `$emailIdentifier`, `$raw` and
+# `$value`, and a rule keyed on any single name undercounts by construction — measured at 24 sites reachable by
+# name against >=31 reachable by reading what a method actually does with its argument.
+#
+# The rule this file exists to enforce is the same one `SensitiveRecipientAddressGateTest` already enforces for
+# `recipientEmail`: a person's address that can reach a stack-trace frame must be declared
+# `#[SensitiveParameter]`, so it renders as `Object(SensitiveParameterValue)` rather than in clear the day
+# `zend.exception_ignore_args` (the control that holds the line TODAY, unconditionally, for every frame
+# including vendor ones — see that gate) is ever weakened. Marking the parameter costs nothing and does not
+# depend on the parameter's declared TYPE or on whether it satisfies a third-party interface: PHP's argument
+# redaction operates on the concrete frame actually on the stack, not on an interface it happens to implement,
+# so `UserProvider::loadUserByIdentifier(string $identifier)` can carry the attribute directly even though it
+# cannot be RETYPED away from `string` without breaking Symfony's `UserProviderInterface` contract.
+#
+# Format, one per line:
+#   <Fqcn>::<method>($<param>)  => sensitive
+#   <Fqcn>::<method>($<param>)  => excluded :: <reason>
+#
+# `sensitive` requires `#[SensitiveParameter]` at that declaration. `excluded` is a conscious, reviewed
+# statement that this particular value is not a person's address DESPITE its shape — an env-derived
+# operational mailbox address is the only kind used here — and it is deliberately not a silent omission: a
+# site with no line at all is what `PersonAddressParameterGateTest::theRegistryClassifiesOnlyRecognisedVerdicts`
+# and its completeness check both refuse.
+#
+# ---------------------------------------------------------------------------------------------------------
+# What this registry's COMPLETENESS actually rests on, read as the specification of the gate's blind spots —
+# a green build proves what is below the line, and nothing above it.
+#
+#   - THE MECHANICALLY-DISCOVERED HALF IS NARROW BY DESIGN. The gate automatically requires a line for every
+#     parameter or promoted property in `api/src` typed exactly `Email` (or `?Email`,
+#     `Erpify\Iam\Identity\Domain\Email`) — that direction cannot go stale in the completeness sense, because
+#     reflection finds it whether or not a human remembered to add a line. Today that population may well be
+#     EMPTY: every site below was found holding the value as a bare `string`, which is exactly the shape the
+#     name-keyed gate and a type-keyed rule (`Email`-only) both fail to reach — see #769's second comment,
+#     which rejected a pure type-based rule for precisely this reason. The automatic half exists so that the
+#     day a caller DOES start typing a parameter `Email`, marking it is enforced rather than optional; it is
+#     not, today, doing most of the file's actual work.
+#   - EVERY STRING-TYPED SITE BELOW WAS FOUND BY ADVERSARIAL REVIEW, NOT BY THIS GATE, AND THE NEXT ONE WILL BE
+#     TOO. There is no mechanical predicate in this repository's toolchain (no dataflow/taint engine — see
+#     `api/CLAUDE.md`'s note on Psalm's removal and Semgrep's narrow, three-flow ruleset) that can soundly
+#     trace an arbitrary `string $foo` to "this becomes a person's address three calls later" without either
+#     false-negating real sites or false-positiving every other `string` parameter in the tree. The two
+#     comments on #769 that produced most of this file's population were found by a human reading call graphs,
+#     which is the same control `../CLAUDE.md`'s "No security, GDPR, or audit-surface work opens a PR without a
+#     recorded adversarial pass" already mandates for exactly this class of change. This file is where that
+#     review's findings get a permanent, reviewable, gated home instead of living only in an issue thread — it
+#     is not a replacement for the review that finds them.
+#   - IT CANNOT JUDGE THE CLASSIFICATION, and the two directions of error are not symmetric here either.
+#     Writing `excluded` over a site that does carry a real person's address is not self-refuting the way it is
+#     in `.person-reference-policy` (there, a wrong `person` line needs an erasure file that doesn't exist and
+#     the build stops) — there is no analogous forcing function here, so `excluded` passes on the classifier's
+#     word alone. `NotificationMailer::send($to)` and `PlainTextNotificationMailer::send($to)` are deliberately
+#     classified `sensitive` rather than `excluded` for this exact reason: today's only caller passes an
+#     env-derived operations mailbox, but the port is published, and the issue that found this crossing (#769,
+#     second comment) is explicit that the safety is "a property of the current call graph, not of the
+#     parameter" — an exclusion here would silently stop being true the day a second caller passes a real
+#     person's address, and nothing would notice.
+#   - ANONYMOUS CLASSES, CLOSURES AND PLAIN FUNCTIONS are unreachable by the same limitation
+#     `SensitiveRecipientAddressGateTest` already documents: the walk derives a type from a file's PSR-4 path.
+#   - IT SAYS NOTHING ABOUT `getMessage()`, which is where an address actually reaches a Monolog sink today —
+#     that axis is the mail boundary (`RedactingMailer`/`RedactingTransport`), not this one. This registry is
+#     purely the frame-ARGUMENT axis: defence in depth for the day `zend.exception_ignore_args` is off, or for
+#     a sink (unlike Monolog's `NormalizerFormatter`) that does read frame arguments.
+#   - IT DOES NOT COVER VENDOR FRAMES. `SmtpTransport::doRcptToCommand(string $address)` and similar carry the
+#     same string and cannot be marked at all — only `zend.exception_ignore_args` reaches those.
+#
+# The gate (PersonAddressParameterGateTest, run by `make php.stan`/`make php.quality` as part of the unit
+# suite) checks four mechanical things: every line still names a real, currently-declared site (staleness);
+# every `sensitive` line's site carries `#[SensitiveParameter]` (enforcement); every `Email`-typed parameter or
+# promoted property in `api/src` has a line, of either verdict (completeness of the narrow automatic half);
+# and every line's verdict is exactly `sensitive` or `excluded :: <non-empty reason>` (no silent typo reading
+# as neither).
+
+Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort::reauthenticate($emailIdentifier) => sensitive
+Erpify\Iam\Identity\Infrastructure\Security\UserProvider::loadUserByIdentifier($identifier) => sensitive
+Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice::reauthenticate($emailIdentifier) => sensitive
+Erpify\Iam\Identity\Domain\Email::__construct($value) => sensitive
+Erpify\Iam\Identity\Domain\Email::from($raw) => sensitive
+Erpify\Iam\Identity\Domain\Email::tryFrom($raw) => sensitive
+Erpify\Iam\Identity\Domain\Email::canonicalise($raw) => sensitive
+Erpify\Iam\Identity\Domain\Email::equals($other) => sensitive
+Erpify\Iam\Identity\Domain\Repository\UserRepository::findByEmail($email) => sensitive
+Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineUserRepository::findByEmail($email) => sensitive
+Erpify\Shared\Mailer\Application\NotificationMailer::send($to) => sensitive
+Erpify\Shared\Mailer\Infrastructure\PlainTextNotificationMailer::send($to) => sensitive
+Erpify\Iam\Identity\Application\RequestPasswordReset::request($email) => sensitive
+Erpify\Iam\Identity\Infrastructure\Cli\CreateInitialAdministratorCommand::createAndReport($email) => sensitive
+Erpify\Iam\Identity\Application\LoginAttemptRegistrar::recordFailure($email) => sensitive
+Erpify\Iam\Identity\Infrastructure\Security\PasswordRecoveryThrottle::allowRequest($email) => sensitive
+Erpify\Iam\Identity\Infrastructure\Security\RecoveryBudgetKey::forEmail($email) => sensitive
+Erpify\Iam\Identity\Infrastructure\Security\RateLimiterRecoveryThrottleAuditBudget::claimFor($email) => sensitive
+Erpify\Iam\Identity\Application\RecoveryThrottleAuditBudget::claimFor($email) => sensitive
+Erpify\Iam\Identity\Application\RecordRecoveryThrottleAuditBestEffort::record($email) => sensitive
+Erpify\Iam\Identity\Application\RecordRecoveryThrottleAuditBestEffort::subjectOf($email) => sensitive
+Erpify\Iam\Identity\Application\CreateUser::create($email) => sensitive
+Erpify\Iam\Identity\Application\InviteUser::invite($email) => sensitive
+Erpify\Iam\Invitation\Application\SendInvitation::invite($email) => sensitive
+Erpify\Iam\Identity\Domain\Entity\User::__construct($email) => sensitive
+Erpify\Iam\Identity\Domain\Entity\User::register($email) => sensitive
+Erpify\Iam\Identity\Domain\Entity\User::invite($email) => sensitive
+Erpify\Iam\Identity\Infrastructure\Http\ForgotPasswordRequest::__construct($email) => sensitive
+Erpify\Iam\Invitation\Infrastructure\Http\InviteUserRequest::__construct($email) => sensitive
+Erpify\Iam\Identity\Application\Resource\MeResource::__construct($email) => sensitive
+Erpify\Iam\Identity\Application\Resource\UserDetailResource::__construct($email) => sensitive
+Erpify\Iam\Identity\Application\Resource\UserListResource::__construct($email) => sensitive
+Erpify\Iam\Identity\Domain\Projection\UserRow::__construct($email) => sensitive
+Erpify\Iam\Invitation\Application\AcceptedInvitation::__construct($email) => sensitive
+Erpify\Backoffice\Bank\Infrastructure\Messenger\SendEmailOnBankChanged::__construct($notifyTo) => excluded :: env-derived operational mailbox (%env(DEFAULT_NOTIFICATION_EMAIL)%), not a person's address — see #769's second comment for why this exclusion is a property of today's call graph (the only caller) and not of the parameter itself, and stays reviewable rather than silently assumed
+Erpify\Shared\Mailer\Infrastructure\PlainTextNotificationMailer::__construct($mailFrom) => excluded :: env-derived sender mailbox (%env(MAILER_FROM)%), not a person's address

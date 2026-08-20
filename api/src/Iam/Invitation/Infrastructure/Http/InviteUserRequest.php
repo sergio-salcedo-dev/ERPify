@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Invitation\Infrastructure\Http;
 
 use Erpify\Shared\Access\Domain\Role;
+use SensitiveParameter;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
@@ -43,6 +44,7 @@ final readonly class InviteUserRequest
         #[Assert\NotBlank(message: 'An email is required.')]
         #[Assert\Email(message: 'Enter a valid email address.', mode: Assert\Email::VALIDATION_MODE_STRICT)]
         #[Assert\Length(max: 255, maxMessage: 'The email must not exceed 255 characters.')]
+        #[SensitiveParameter]
         public string $email = '',
         #[Assert\Type(type: 'list', message: 'Select roles as a list.')]
         #[Assert\Count(

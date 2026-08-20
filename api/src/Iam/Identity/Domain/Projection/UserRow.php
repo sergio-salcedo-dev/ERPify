@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Domain\Projection;
 
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
+use SensitiveParameter;
 
 /**
  * One row of the identity register — a read-only projection built by a DQL `SELECT NEW` over `User`,
@@ -31,6 +32,7 @@ final readonly class UserRow
      */
     public function __construct(
         public string $id,
+        #[SensitiveParameter]
         public string $email,
         public array $roles,
         public IdentityStatus $status,

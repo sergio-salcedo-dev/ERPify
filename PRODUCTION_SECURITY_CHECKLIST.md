@@ -1144,7 +1144,19 @@ mitigated state. Accepting one means recording who accepted it and against which
       `api/src` and stated without that scope, so the deletion of a residual rested on a boundary the vendor
       command walks around. It reopens here narrower than the one it replaces: not "construction happens before
       the boundary" (that is closed for every path this repository writes) but "construction outside `api/src`
-      is not reachable from inside it". It carries no acceptance date because nobody has accepted it.
+      is not reachable from inside it".
+
+      **Accepted 2026-08-20 (Sergio):** same basis as residuals one, three and five — no production deployment
+      and no customer — plus one fact specific to this residual, verified rather than assumed: `mailer:test` has
+      no automated caller anywhere in this repository. It is absent from every compose file, every GitHub
+      Actions workflow, and every `Makefile`/`*.mk`/script under the tree; every reference to it is in a test or
+      in this document. The exposure therefore requires an operator to type a real person's address as this
+      command's argument, which is the same operator-discretion basis residuals one and three already stand on.
+      **Owning the vendor command's lifecycle to close it is declined** (SRP/DIP: a debug command is a thin
+      reason for `api/src` to take over a framework command's validation and future compatibility — see the two
+      remediations weighed and declined in the paragraph above). **Expiry: re-assess before the first production
+      deployment or the first customer, whichever comes first** — same trigger as the repository's public-posture
+      item below, and the same trigger that unwinds residuals one, three and five.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

@@ -10,6 +10,7 @@ use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
+use SensitiveParameter;
 
 /**
  * Registers a new user: the server mints the id (UUID v7), the aggregate enforces its invariants (canonical
@@ -28,7 +29,7 @@ final readonly class CreateUser
     ) {
     }
 
-    public function create(string $email, HashedPassword $password, Role ...$roles): User
+    public function create(#[SensitiveParameter] string $email, HashedPassword $password, Role ...$roles): User
     {
         $user = User::register(Uuid::generate(), $email, $password, ...$roles);
 
