@@ -174,4 +174,32 @@ final class EmailAddressRedactionTest extends TestCase
         $this->assertLessThan(1_000, $elapsedMs, 'the pattern backtracks over the run instead of scanning it');
         $this->assertSame($hostile, $redacted, 'the engine failed and the fallback answered for it');
     }
+
+    /**
+     * `preg_replace()` returns `null` when PCRE's internal step budget is exhausted — `pcre.backtrack_limit`
+     * reaches that outcome directly, on a subject far too short to need the JIT-off run above. The assertion
+     * has to be the coarse behaviour itself, not "unchanged": the fallback splits on a literal space rather
+     * than on the pattern's own delimiters, so the whole token disappears, brackets and trailing comma
+     * included — the exact precision cost the class documents this branch as paying.
+     *
+     * The ini is restored in `finally` rather than left to process isolation: PHPUnit's own TestDox machinery
+     * runs more PCRE after the test body returns, in the SAME process, and inherits whatever `pcre.backtrack_
+     * limit` this test leaves behind.
+     */
+    #[Test]
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function itFallsBackToTheCoarseRuleWhenPcreRefusesToMatch(): void
+    {
+        $default = \ini_get('pcre.backtrack_limit');
+        \ini_set('pcre.backtrack_limit', '1');
+
+        try {
+            $redacted = EmailAddressRedaction::apply('contact <alice@example.test>, please');
+        } finally {
+            \ini_set('pcre.backtrack_limit', $default);
+        }
+
+        $this->assertSame('contact REDACTED please', $redacted);
+    }
 }
