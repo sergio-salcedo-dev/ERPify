@@ -67,12 +67,14 @@
 #   - IT DOES NOT COVER VENDOR FRAMES. `SmtpTransport::doRcptToCommand(string $address)` and similar carry the
 #     same string and cannot be marked at all — only `zend.exception_ignore_args` reaches those.
 #
-# The gate (PersonAddressParameterGateTest, run by `make php.stan`/`make php.quality` as part of the unit
-# suite) checks four mechanical things: every line still names a real, currently-declared site (staleness);
-# every `sensitive` line's site carries `#[SensitiveParameter]` (enforcement); every `Email`-typed parameter or
-# promoted property in `api/src` has a line, of either verdict (completeness of the narrow automatic half);
-# and every line's verdict is exactly `sensitive` or `excluded :: <non-empty reason>` (no silent typo reading
-# as neither).
+# The gate (PersonAddressParameterGateTest) checks four mechanical things: every line still names a real,
+# currently-declared site (staleness); every `sensitive` line's site carries `#[SensitiveParameter]`
+# (enforcement); every `Email`-typed parameter or promoted property in `api/src` has a line, of either verdict
+# (completeness of the narrow automatic half); and every line's verdict is exactly `sensitive` or
+# `excluded :: <non-empty reason>` (no silent typo reading as neither). It runs via the unfiltered
+# `make php.unit` / `make php.unit.coverage` (CI gates on the latter) — like its sibling
+# `SensitiveRecipientAddressGateTest`, it has no dedicated `php.lint.*` target, so `make php.quality` does NOT
+# exercise it; run `make php.unit` locally, or filter with `--filter=PersonAddressParameterGateTest`.
 
 Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort::reauthenticate($emailIdentifier) => sensitive
 Erpify\Iam\Identity\Infrastructure\Security\UserProvider::loadUserByIdentifier($identifier) => sensitive
@@ -110,3 +112,6 @@ Erpify\Iam\Identity\Domain\Projection\UserRow::__construct($email) => sensitive
 Erpify\Iam\Invitation\Application\AcceptedInvitation::__construct($email) => sensitive
 Erpify\Backoffice\Bank\Infrastructure\Messenger\SendEmailOnBankChanged::__construct($notifyTo) => excluded :: env-derived operational mailbox (%env(DEFAULT_NOTIFICATION_EMAIL)%), not a person's address — see #769's second comment for why this exclusion is a property of today's call graph (the only caller) and not of the parameter itself, and stays reviewable rather than silently assumed
 Erpify\Shared\Mailer\Infrastructure\PlainTextNotificationMailer::__construct($mailFrom) => excluded :: env-derived sender mailbox (%env(MAILER_FROM)%), not a person's address
+Erpify\Shared\Mailer\Infrastructure\SecuritySenderAddress::__construct($address) => excluded :: env-derived operational mailbox (%env(MAILER_SECURITY_FROM)%), not a person's address — same shape as PlainTextNotificationMailer::$mailFrom above
+Erpify\Shared\ErrorContract\Application\EmailAddressRedaction::apply($value) => sensitive
+Erpify\Shared\ErrorContract\Application\EmailAddressRedaction::blankEveryTokenHoldingAnAt($value) => sensitive

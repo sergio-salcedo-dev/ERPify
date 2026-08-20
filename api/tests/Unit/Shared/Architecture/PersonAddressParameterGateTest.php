@@ -13,6 +13,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionNamedType;
 use ReflectionParameter;
+use ReflectionUnionType;
 use SensitiveParameter;
 use Throwable;
 
@@ -197,6 +198,8 @@ final class PersonAddressParameterGateTest extends TestCase
         $contents = \file_get_contents($path);
         $this->assertIsString($contents);
 
+        $unparseable = [];
+
         foreach (\explode("\n", $contents) as $line) {
             $trimmed = \trim($line);
 
@@ -205,7 +208,9 @@ final class PersonAddressParameterGateTest extends TestCase
             }
 
             if (1 !== \preg_match(self::SITE_PATTERN, $trimmed, $matches)) {
-                $this->fail(\sprintf('Unparseable line in .person-address-parameter-policy: "%s"', $trimmed));
+                $unparseable[] = $trimmed;
+
+                continue;
             }
 
             $site = \sprintf('%s::%s($%s)', $matches['fqcn'], $matches['method'], $matches['param']);
@@ -216,6 +221,13 @@ final class PersonAddressParameterGateTest extends TestCase
                 'param' => $matches['param'],
                 'verdict' => $matches['verdict'],
             ];
+        }
+
+        if ([] !== $unparseable) {
+            $this->fail(\sprintf(
+                "Unparseable lines in .person-address-parameter-policy:\n  %s",
+                \implode("\n  ", $unparseable),
+            ));
         }
     }
 
@@ -233,7 +245,7 @@ final class PersonAddressParameterGateTest extends TestCase
 
         $class = new ReflectionClass($fqcn);
 
-        if (!$class->hasMethod($method)) {
+        if (!$this->isDeclaredUnderApiSource($class) || !$class->hasMethod($method)) {
             return null;
         }
 
@@ -244,6 +256,17 @@ final class PersonAddressParameterGateTest extends TestCase
         }
 
         return null;
+    }
+
+    /**
+     * Scoped to api/src, matching emailTypedSites() below — otherwise a registry line naming a class that
+     * happens to resolve outside the tree (a test double, a vendor class) could pass staleness undetected.
+     *
+     * @param ReflectionClass<object> $class
+     */
+    private function isDeclaredUnderApiSource(ReflectionClass $class): bool
+    {
+        return \str_starts_with((string) $class->getFileName(), ApiSourceFiles::root() . '/');
     }
 
     /**
@@ -314,6 +337,26 @@ final class PersonAddressParameterGateTest extends TestCase
     {
         $type = $parameter->getType();
 
-        return $type instanceof ReflectionNamedType && Email::class === $type->getName();
+        if ($type instanceof ReflectionUnionType) {
+            return \array_any(
+                $type->getTypes(),
+                fn (object $member): bool => $member instanceof ReflectionNamedType
+                    && $this->namedTypeIsEmail($member, $parameter),
+            );
+        }
+
+        return $type instanceof ReflectionNamedType && $this->namedTypeIsEmail($type, $parameter);
+    }
+
+    /**
+     * `self` never resolves to `Email::class` via {@see ReflectionNamedType::getName()} — it stays the literal
+     * string `"self"` — so a `self`-typed parameter (e.g. {@see Email::equals()}) needs its declaring class
+     * resolved explicitly, or it is invisible to the completeness sweep despite being a real `Email` site.
+     */
+    private function namedTypeIsEmail(ReflectionNamedType $type, ReflectionParameter $parameter): bool
+    {
+        $name = 'self' === $type->getName() ? $parameter->getDeclaringClass()?->getName() : $type->getName();
+
+        return Email::class === $name;
     }
 }
