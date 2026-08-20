@@ -1,7 +1,30 @@
 ---
 # Development overrides (monorepo root). Build context: ./api
+#
+# Two guardrails live here rather than in compose.yaml, because that file is shared with
+# compose.prod.yaml and the deployed answer to both is the opposite one:
+#
+#   restart: "no" — compose.yaml declares `unless-stopped`, which is right for a deploy and wrong
+#     here: dev runs one stack PER WORKTREE, so inheriting it makes every stack ever started come
+#     back on daemon start. Measured on a 30 GB host with seven worktrees: 32 containers up on
+#     their own and 20 GB in use three minutes after a reboot, ending in swap exhaustion
+#     (`Free swap = 52kB`, `all_unreclaimable? yes`) and a frozen desktop. A dev stack comes up
+#     because someone ran `make app.dev`, and by nothing else. A container killed by its own cap
+#     therefore stays down; `make docker.up` brings it back, and the host is still there to run it.
+#
+#   deploy.resources.limits.memory — one runaway container must not be able to take the host with
+#     it. Compose applies these outside swarm, so they are real container limits, and each service
+#     carries the measurement behind its number below. Those numbers come from the cgroup's own
+#     memory.peak, NOT from sampling `docker stats`: sampling every ~2s read php at 827 MiB, and
+#     the cap built on that figure was killed by Rector within the minute. Override per run when a
+#     one-off needs more (`make docker.up PHP_MEM_LIMIT=8g`).
 services:
   mailpit:
+    # Cap: memory.peak reads 26 MiB.
+    deploy:
+      resources:
+        limits:
+          memory: ${MAILPIT_MEM_LIMIT:-256m}
     image: axllent/mailpit:v1.30.7@sha256:d5ecbb067db3705fa953d79e1b7f81ef84038df67aba6c52825d8c02a1ea748a
     ports:
       - "${MAILPIT_UI_PORT:-8025}:8025"
@@ -10,6 +33,16 @@ services:
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
 
   php:
+    # Cap: 2g is measured NOT enough — Rector's parallel run OOM-killed this container mid-sweep
+    # (CONSTRAINT_MEMCG, exit 137). Under a 12g ceiling memory.peak reads 6157 MiB for php.quality + php.test
+    # + php.unit.coverage, nearly all of it reclaimable page cache over vendor/ and var/cache: at 4g those
+    # same three targets pass green and the peak sits at the cap, the cgroup reclaiming rather than dying.
+    deploy:
+      resources:
+        limits:
+          memory: ${PHP_MEM_LIMIT:-4g}
+    # Quoted: YAML reads a bare `no` as the boolean false, which compose rejects.
+    restart: "no"
     image: ${IMAGES_PREFIX:-}app-php-dev
     build:
       context: ./api
@@ -123,6 +156,15 @@ services:
       start_period: 180s
 
   pwa:
+    # Cap: memory.peak reads 2338 MiB. Every PWA make target runs on the host (make/pwa.mk), so this container
+    # serves `next dev` and nothing else. The headroom is bounded on the other side by what it exists to
+    # catch: a leaking dev server was OOM-killed by the HOST at 5.5 GB RSS, and this cap reaches it first.
+    deploy:
+      resources:
+        limits:
+          memory: ${PWA_MEM_LIMIT:-4g}
+    # Quoted: YAML reads a bare `no` as the boolean false, which compose rejects.
+    restart: "no"
     # Stable tag for bake + `compose up --no-build` (avoids default erpify-pwa:latest mismatch).
     image: ${IMAGES_PREFIX:-}app-pwa-dev
     build:
@@ -159,11 +201,23 @@ services:
       start_period: 180s
 
   database:
+    # Cap: memory.peak reads 93 MiB across the Behat suite.
+    deploy:
+      resources:
+        limits:
+          memory: ${DB_MEM_LIMIT:-1g}
     ports:
       - "${POSTGRES_PORT:-15432}:5432"
 
   # Dev image + bind mount for messenger_worker (service definition continues in compose.yaml).
   messenger_worker:
+    # Cap: memory.peak reads 40 MiB.
+    deploy:
+      resources:
+        limits:
+          memory: ${WORKER_MEM_LIMIT:-512m}
+    # Quoted: YAML reads a bare `no` as the boolean false, which compose rejects.
+    restart: "no"
     image: ${IMAGES_PREFIX:-}app-php-dev
     build:
       context: ./api
