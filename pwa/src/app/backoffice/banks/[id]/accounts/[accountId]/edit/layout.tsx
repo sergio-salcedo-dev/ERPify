@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 // seam that keeps the title declarative — see `tests/backoffice-route-titles.test.ts` for why a
 // route without one arrives unnamed for assistive technology.
 export const metadata: Metadata = {
-  title: "Edit bank account",
+  title: "Edit account",
 };
 
 export default function EditBankAccountOfBankLayout({

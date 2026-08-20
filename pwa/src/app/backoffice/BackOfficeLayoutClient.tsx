@@ -558,7 +558,7 @@ export default function BackOfficeLayoutClient({
               id="main-content"
               ref={mainRef}
               tabIndex={-1}
-              className="bo-layout__main flex-grow pt-14 outline-none md:pt-0"
+              className="bo-layout__main flex-grow pt-14 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:pt-0"
             >
               <div className="bo-layout__content mx-auto p-4 md:p-8">{children}</div>
             </main>

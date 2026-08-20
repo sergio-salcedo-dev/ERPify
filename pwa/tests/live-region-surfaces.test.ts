@@ -27,8 +27,6 @@ const PWA_ROOT = path.resolve(__dirname, "..");
 const SRC_ROOT = path.join(PWA_ROOT, "src");
 const SOURCE_EXTENSIONS = new Set([".tsx", ".jsx"]);
 const OUTPUT_ELEMENT_RE = /<output[\s/>]/;
-const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
-const LINE_COMMENT_RE = /^[^\n]*?\/\/[^\n]*$/gm;
 
 // Path relative to `src/` → why this surface is genuinely a live region.
 const LIVE_REGION_SURFACES: Readonly<Record<string, string>> = {
@@ -51,8 +49,44 @@ function* walk(dir: string): Generator<string> {
   }
 }
 
+/**
+ * Comments and string bodies removed, so neither can speak for the tree.
+ *
+ * Deleting a whole line for holding `//` reads `https://…` inside a string as a comment and
+ * takes the code with it — two live lines in `src/app/layout.tsx` were being destroyed that way,
+ * and an `<output>` sharing a line with a URL would have been invisible. String bodies go too:
+ * `<output` inside one is not a rendered element, so dropping them can only remove false
+ * positives. A regex literal holding an odd quote would still confuse this scanner — it is a
+ * text reader, not a parser, and that is the residual it trades for having no dependency.
+ */
 function withoutComments(source: string): string {
-  return source.replace(BLOCK_COMMENT_RE, "").replace(LINE_COMMENT_RE, "");
+  let out = "";
+  let quote = "";
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    if (quote) {
+      if (char === "\\") i++;
+      else if (char === quote) quote = "";
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+    if (char === "/" && source[i + 1] === "/") {
+      while (i < source.length && source[i] !== "\n") i++;
+      out += "\n";
+      continue;
+    }
+    if (char === "/" && source[i + 1] === "*") {
+      i += 2;
+      while (i < source.length && !(source[i] === "*" && source[i + 1] === "/")) i++;
+      i++;
+      continue;
+    }
+    out += char;
+  }
+  return out;
 }
 
 function filesRenderingOutput(): string[] {
