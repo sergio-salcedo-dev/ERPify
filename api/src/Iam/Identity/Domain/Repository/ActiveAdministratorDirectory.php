@@ -10,9 +10,10 @@ namespace Erpify\Iam\Identity\Domain\Repository;
  * excluded, and does this identity carry the role at all?
  *
  * Both return a bare `bool` — no `Membership` / `User` / `Role[]` crosses the boundary. The single-tenant
- * organization is implicit. The production adapter reads the operational role source directly — a
- * single-context read over `identity_user`, which owns roles today — and re-points to `Membership` only if
- * tenancy ever moves the authoritative source.
+ * organization is implicit. The production adapter reads the role source directly — a single-context read over
+ * `identity_user`, which is the only place a role is written. Should tenancy ever move that authority to
+ * `Membership`, re-pointing the adapter is not a swap of table: `membership` carries no roles, so the move is a
+ * schema change first. The port is what survives it unchanged.
  */
 interface ActiveAdministratorDirectory
 {

@@ -178,7 +178,7 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
 
         $this->service(UserRepository::class)->save(User::invite($userId, $email, Role::VIEWER));
         $this->service(MembershipRepository::class)->save(
-            Membership::grant(Uuid::generate(), $userId, $this->organizationId, Role::VIEWER),
+            Membership::grant(Uuid::generate(), $userId, $this->organizationId),
         );
 
         $generated = SingleUseToken::mint($expiresAt ?? (new DateTimeImmutable())->add(new DateInterval('P3D')));

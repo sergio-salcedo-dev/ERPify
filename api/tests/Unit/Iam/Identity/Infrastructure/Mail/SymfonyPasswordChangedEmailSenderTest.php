@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Mail;
 use Erpify\Iam\Identity\Infrastructure\Mail\SymfonyPasswordChangedEmailSender;
 use Erpify\Shared\Mailer\Infrastructure\BulletproofEmailChrome;
 use Erpify\Shared\Mailer\Infrastructure\DeliverableSecurityTransport;
+use Erpify\Shared\Mailer\Infrastructure\RedactingMailer;
 use Erpify\Shared\Mailer\Infrastructure\SecuritySenderAddress;
 use Erpify\Tests\Unit\Shared\Mailer\Infrastructure\CapturingMailer;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -95,7 +96,7 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
     {
         $mailer = new CapturingMailer();
         $sender = new SymfonyPasswordChangedEmailSender(
-            $mailer,
+            new RedactingMailer($mailer),
             new SecuritySenderAddress(self::FROM, 'dev'),
             new BulletproofEmailChrome(),
             new DeliverableSecurityTransport('smtp://localhost', 'dev'),

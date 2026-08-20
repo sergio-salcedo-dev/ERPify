@@ -14,12 +14,12 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
  * Single-context production adapter for {@see ActiveAdministratorDirectory}: answers both administrator
- * questions straight off `identity_user`, with no JOIN to Organization's Membership. Operational roles live on
- * the identity aggregate today, so an active administrator is a row whose `status` is `ACTIVE`, whose `roles`
+ * questions straight off `identity_user`, with no JOIN to Organization's Membership. Roles live on the identity
+ * aggregate and nowhere else, so an active administrator is a row whose `status` is `ACTIVE`, whose `roles`
  * contains `ADMIN`, and whose id differs — no cross-context seam and no phantom membership to discount,
- * because the source IS the user row (an absent/hard-deleted user is simply never counted). When tenancy moves
- * the authoritative role source to `Membership`, this adapter is re-pointed exactly as the read model will be —
- * the port never changes.
+ * because the source IS the user row (an absent/hard-deleted user is simply never counted). Moving that
+ * authority to `Membership` would take a role column that table does not have, so it is a schema decision
+ * before it is an adapter one; the port is what stays unchanged across it.
  *
  * The read takes a `FOR UPDATE` lock on the active-admin set so concurrent transitions serialize — the
  * invariant is set-based, so two last-two-admin suspends must not both pass a stale read and drain every

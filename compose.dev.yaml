@@ -2,7 +2,7 @@
 # Development overrides (monorepo root). Build context: ./api
 services:
   mailpit:
-    image: axllent/mailpit
+    image: axllent/mailpit:v1.30.7@sha256:d5ecbb067db3705fa953d79e1b7f81ef84038df67aba6c52825d8c02a1ea748a
     ports:
       - "${MAILPIT_UI_PORT:-8025}:8025"
     environment:
