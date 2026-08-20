@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
 use Psr\Log\LoggerInterface;
+use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Throwable;
 
@@ -46,7 +47,7 @@ final readonly class ReauthenticateDeviceBestEffort
     ) {
     }
 
-    public function reauthenticate(string $emailIdentifier): void
+    public function reauthenticate(#[SensitiveParameter] string $emailIdentifier): void
     {
         try {
             $this->reauthenticateDevice->reauthenticate($emailIdentifier);

@@ -7,6 +7,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Security;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use LogicException;
+use SensitiveParameter;
 use Symfony\Bundle\SecurityBundle\Security;
 
 /**
@@ -43,7 +44,7 @@ final readonly class ReauthenticateDevice
     ) {
     }
 
-    public function reauthenticate(string $emailIdentifier): void
+    public function reauthenticate(#[SensitiveParameter] string $emailIdentifier): void
     {
         $user = $this->users->findByEmail(Email::from($emailIdentifier))
             // Reached only if the row vanished between a committed credential change and this line, which is

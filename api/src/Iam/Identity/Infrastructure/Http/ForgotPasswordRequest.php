@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Http;
 
+use SensitiveParameter;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
@@ -16,6 +17,7 @@ final readonly class ForgotPasswordRequest
     public function __construct(
         #[Assert\NotBlank]
         #[Assert\Email(mode: Assert\Email::VALIDATION_MODE_STRICT)]
+        #[SensitiveParameter]
         public string $email = '',
     ) {
     }

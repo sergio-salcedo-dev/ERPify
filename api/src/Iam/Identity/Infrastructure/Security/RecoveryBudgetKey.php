@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
 use Erpify\Iam\Identity\Domain\Email;
+use SensitiveParameter;
 
 /**
  * The bucket key every per-address budget over the recovery surface is keyed by.
@@ -24,7 +25,7 @@ use Erpify\Iam\Identity\Domain\Email;
  */
 final readonly class RecoveryBudgetKey
 {
-    public static function forEmail(string $email): string
+    public static function forEmail(#[SensitiveParameter] string $email): string
     {
         return Email::tryFrom($email)?->toString() ?? \mb_strtolower(\trim($email));
     }

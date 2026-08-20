@@ -24,6 +24,7 @@ use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
+use SensitiveParameter;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -123,6 +124,7 @@ final class User extends AggregateRoot
      */
     private function __construct(
         string $id,
+        #[SensitiveParameter]
         string $email,
         ?HashedPassword $password,
         #[ORM\Column(enumType: IdentityStatus::class)]
@@ -141,8 +143,13 @@ final class User extends AggregateRoot
      * Builds an already-credentialed, `ACTIVE` identity — the bootstrap/administrator path where the
      * password is known up front. The invitation path that begins credential-less is {@see invite()}.
      */
-    public static function register(string $id, string $email, HashedPassword $password, Role ...$roles): self
-    {
+    public static function register(
+        string $id,
+        #[SensitiveParameter]
+        string $email,
+        HashedPassword $password,
+        Role ...$roles,
+    ): self {
         return new self($id, $email, $password, IdentityStatus::ACTIVE, ...$roles);
     }
 
@@ -150,8 +157,12 @@ final class User extends AggregateRoot
      * Provisions an `INVITED` identity with no credential yet: its owner sets the password when it
      * {@see activate()}s the invitation. Roles are assigned up front — they are a property of belonging.
      */
-    public static function invite(string $id, string $email, Role ...$roles): self
-    {
+    public static function invite(
+        string $id,
+        #[SensitiveParameter]
+        string $email,
+        Role ...$roles,
+    ): self {
         return new self($id, $email, null, IdentityStatus::INVITED, ...$roles);
     }
 

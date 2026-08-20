@@ -12,6 +12,7 @@ use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
+use SensitiveParameter;
 
 /**
  * Provisions an `INVITED` identity with no credential yet — the invitation onboarding path, the credential-less
@@ -50,7 +51,7 @@ final readonly class InviteUser
     ) {
     }
 
-    public function invite(string $email, Role ...$roles): User
+    public function invite(#[SensitiveParameter] string $email, Role ...$roles): User
     {
         $user = User::invite(Uuid::generate(), $email, ...$roles);
 

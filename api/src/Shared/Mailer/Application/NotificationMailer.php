@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Mailer\Application;
 
+use SensitiveParameter;
+
 /**
  * Outbound port: send operational / transactional notifications.
  *
@@ -17,5 +19,11 @@ interface NotificationMailer
      * @param string|null          $correlationLabel When set (e.g. event name), implementations may show an
      *                                               "Event: …" line.
      */
-    public function send(string $to, string $subject, array $fields, ?string $correlationLabel = null): void;
+    public function send(
+        #[SensitiveParameter]
+        string $to,
+        string $subject,
+        array $fields,
+        ?string $correlationLabel = null,
+    ): void;
 }

@@ -137,6 +137,7 @@ tests/Unit/Shared/Architecture/MonologExclusionDeclarationGateTest.php :: home
 tests/Unit/Shared/Architecture/ObservabilityChannelGateTest.php :: home
 tests/Unit/Shared/Architecture/PersistentTransportPolicyGateTest.php :: home
 tests/Unit/Shared/Architecture/PersistentTransportRoutingShapeGateTest.php :: home
+tests/Unit/Shared/Architecture/PersonAddressParameterGateTest.php :: home
 tests/Unit/Shared/Architecture/PersonContainmentRuleGateTest.php :: home
 tests/Unit/Shared/Architecture/PersonDataCarrierEmitterGateTest.php :: home
 tests/Unit/Shared/Architecture/PersonReferenceGateTest.php :: home

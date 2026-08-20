@@ -119,6 +119,7 @@ final class CreateInitialAdministratorCommand extends Command
 
     private function createAndReport(
         SymfonyStyle $io,
+        #[SensitiveParameter]
         string $email,
         #[SensitiveParameter]
         string $plainPassword,

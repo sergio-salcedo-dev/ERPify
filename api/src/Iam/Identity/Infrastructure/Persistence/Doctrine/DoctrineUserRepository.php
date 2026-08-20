@@ -13,6 +13,7 @@ use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Override;
+use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
@@ -72,7 +73,7 @@ final readonly class DoctrineUserRepository implements UserRepository
     }
 
     #[Override]
-    public function findByEmail(Email $email): ?User
+    public function findByEmail(#[SensitiveParameter] Email $email): ?User
     {
         return $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email->toString()]);
     }
