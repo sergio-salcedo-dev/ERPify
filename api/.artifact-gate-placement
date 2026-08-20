@@ -122,6 +122,7 @@ tests/Unit/Shared/Architecture/ObservabilityChannelGateTest.php :: home
 tests/Unit/Shared/Architecture/PersistentTransportPolicyGateTest.php :: home
 tests/Unit/Shared/Architecture/PersistentTransportRoutingShapeGateTest.php :: home
 tests/Unit/Shared/Architecture/PersonContainmentRuleGateTest.php :: home
+tests/Unit/Shared/Architecture/PersonDataCarrierEmitterGateTest.php :: home
 tests/Unit/Shared/Architecture/PersonReferenceGateTest.php :: home
 tests/Unit/Shared/Architecture/PersonReferenceRulesGateTest.php :: home
 tests/Unit/Shared/Architecture/PersonReferenceSourceGateTest.php :: home
