@@ -85,8 +85,8 @@ set -uo pipefail
 # CDPATH, which makes this a two-line string and REPO_ROOT empty -- measured,
 # every verdict then collapsed to "undetermined" and the gate was silently dead.
 # Both wired call sites use a bare relative path, which is the vulnerable form.
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(CDPATH='' cd -- "${SCRIPT_DIR}/.." && pwd)"
 readonly SCRIPT_DIR REPO_ROOT
 
 # `git -C` is NOT authoritative against these: a hook inherits its parent's
@@ -293,7 +293,7 @@ strip_prefixes() {
 	while [[ "${seg}" != "${previous}" ]]; do
 		previous="${seg}"
 		case "${seg}" in
-			'\'*) seg="${seg#\\}" ;;
+			\\*) seg="${seg#\\}" ;;
 			env\ *|sudo\ *|command\ *|exec\ *|nohup\ *|time\ *|then\ *|do\ *|else\ *|elif\ *)
 				seg="${seg#* }" ;;
 		esac
@@ -661,9 +661,9 @@ LONG_BODY="$(printf 'Two layers ran with fresh read-only context over the branch
 check() {
 	local name="$1" expect="$2" doc="$3"
 	if printf '%s' "${doc}" | has_record; then
-		[[ "${expect}" == accept ]] && pass_row "${name}" || fail_row "${name}: accepted, expected reject"
+		if [[ "${expect}" == accept ]]; then pass_row "${name}"; else fail_row "${name}: accepted, expected reject"; fi
 	else
-		[[ "${expect}" == reject ]] && pass_row "${name}" || fail_row "${name}: rejected, expected accept"
+		if [[ "${expect}" == reject ]]; then pass_row "${name}"; else fail_row "${name}: rejected, expected accept"; fi
 	fi
 }
 
@@ -692,9 +692,9 @@ fingerprint_is() {
 	fa="$(printf '%s' "${a}" | section_fingerprint)"
 	fb="$(printf '%s' "${b}" | section_fingerprint)"
 	if [[ "${fa}" == "${fb}" ]]; then
-		[[ "${expect}" == same ]] && pass_row "${name}" || fail_row "${name}: same, expected different"
+		if [[ "${expect}" == same ]]; then pass_row "${name}"; else fail_row "${name}: same, expected different"; fi
 	else
-		[[ "${expect}" == different ]] && pass_row "${name}" || fail_row "${name}: different, expected same"
+		if [[ "${expect}" == different ]]; then pass_row "${name}"; else fail_row "${name}: different, expected same"; fi
 	fi
 }
 
@@ -710,9 +710,9 @@ applies() {
 	local name="$1" expect="$2" payload="$3"
 	SURFACE=""; ACK_FROM_PAYLOAD=""; BASE_FROM_PAYLOAD=""
 	if hook_applies "${payload}"; then
-		[[ "${expect}" == yes ]] && pass_row "${name}" || fail_row "${name}: applied, expected not-applicable"
+		if [[ "${expect}" == yes ]]; then pass_row "${name}"; else fail_row "${name}: applied, expected not-applicable"; fi
 	else
-		[[ "${expect}" == no ]] && pass_row "${name}" || fail_row "${name}: not applicable, expected to apply"
+		if [[ "${expect}" == no ]]; then pass_row "${name}"; else fail_row "${name}: not applicable, expected to apply"; fi
 	fi
 }
 
