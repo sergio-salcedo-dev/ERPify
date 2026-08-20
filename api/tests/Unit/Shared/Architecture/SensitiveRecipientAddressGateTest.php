@@ -37,10 +37,17 @@ use Throwable;
  * `recipientEmail` under `api/src` is exactly this set, each carrying the attribute.
  *
  * What it does not prove, and why no `php.lint.*` rule was written instead:
- * - It keys on the parameter NAME. An address carried under another name is invisible, and roughly twenty
- *   deployed parameters hold one right now — `RequestPasswordReset::request(string $email)` and
- *   `SendInvitation::invite(string $email, …)` are the direct CALLERS of two sites pinned here. That axis is
- *   issue #769; a rule covering it needs a definition of "carries a person's address" that a gate can evaluate.
+ * - It keys on the parameter NAME, so the size of what it misses is a FLOOR and never a count. Measured
+ *   2026-08-19 over the names `email`/`to`/`address`/`recipient`/`emailAddress`: 24 deployed parameters hold
+ *   an address unmarked — every one of them literally named `$email`, so the spread those five names suggest
+ *   does not exist. A name key cannot reach the rest, and seven more are already known:
+ *   `UserProvider::loadUserByIdentifier(string $identifier)`, both `reauthenticate(string $emailIdentifier)`
+ *   on the login and re-login paths, and the four inside `Email` itself. One of those,
+ *   `ReauthenticateDeviceBestEffort`, is a `catch (Throwable)` logging at `critical` on the always-on
+ *   channel — the sink this pair of controls exists for. `RequestPasswordReset::request(string $email)` and
+ *   `SendInvitation::invite(string $email, …)` are, additionally, the direct CALLERS of two sites pinned
+ *   here. That axis is issue #769; a rule covering it needs a definition of "carries a person's address"
+ *   that a gate can evaluate, which keying on a name is not.
  * - Anonymous classes, closures and plain functions are unreachable: the walk derives a type from a file path.
  * - The five test doubles under `api/tests` declare the parameter bare on purpose (none is deployed), so the
  *   tree contains five examples a future adapter may be copied from, and this gate reds only afterwards.
