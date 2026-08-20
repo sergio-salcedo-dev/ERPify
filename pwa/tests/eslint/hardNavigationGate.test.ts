@@ -13,11 +13,18 @@ import config from "../../eslint.config.mjs";
  * the disable that follows is rule-wide, so it would also switch off the `maxLength` and
  * test-id contract bans on that line. Widening the selectors resurrects exactly that.
  *
- * The third direction is containment. `eslint.config.mjs` ships the upstream Next rule off on
- * the grounds that these selectors already report everything it reports — a claim that decays
- * the moment a selector is narrowed, and one no assertion over the shipped config can make,
- * because a rule set to `off` reports nothing whatever the selectors do. So the rule is forced
- * back to `error` in a cloned config and the two are compared fixture by fixture.
+ * The third direction is containment. `eslint.config.mjs` keeps the upstream Next rule at the
+ * presets' `warn`, which cannot gate on its own, and leans on these selectors instead — on the
+ * claim that they report everything it reports. That claim decays the moment a selector is
+ * narrowed, and no assertion over the shipped severity can make it, because a `warn` under an
+ * `eslint .` with no --max-warnings is indistinguishable from silence. So the rule is forced to
+ * `error` in a cloned config and the two are compared fixture by fixture.
+ *
+ * The fourth is that the comparison stays worth making. The upstream rule resolves a receiver
+ * only through the global scope, so `languageOptions.globals` is what its half of the corpus
+ * rests on: strip that block and the shapes it can see fall from 36 to 8 (the `globalThis` rows,
+ * which ESLint supplies as a builtin) while `gaps` stays empty and the non-vacuity guard still
+ * passes. A receiver-by-receiver assertion is what turns that silent shrink into a red.
  */
 const NEXT_RULE = "@next/next/no-location-assign-relative-destination";
 
@@ -115,6 +122,17 @@ describe("the hard-navigation gate", () => {
         'const self = { location: { assign: (_: string) => {} } }; self["location"].assign("x");',
       ),
     ).toBe(1);
+    // `location` itself is the largest class of the same cost, and the likeliest domain
+    // identifier of the seven: the bare-receiver arm cannot tell the global from a binding that
+    // shadows it, so an ERP field destructured out of `warehouse` is read as a navigation and its
+    // ordinary String#replace is reported. Recorded here rather than among the negatives because
+    // it is the price of covering `location.assign(u)` written without a receiver.
+    expect(navigationErrorsIn('const location = "A 1"; location.replace(/ /g, "-");')).toBe(1);
+    expect(
+      navigationErrorsIn(
+        'const warehouse = { location: "A 1" }; const { location } = warehouse; location.replace(/ /g, "-");',
+      ),
+    ).toBe(1);
     // A receiver outside the set is what the enumeration actually buys.
     expect(
       navigationErrorsIn(
@@ -136,14 +154,31 @@ describe("the hard-navigation gate", () => {
     // its bare form (`top.location.assign(u)`) is flagged — an asymmetry worth stating.
     expect(navigationErrorsIn('window.top.location.assign("/x");')).toBe(0);
     expect(navigationErrorsIn('iframe.contentWindow.location.replace("/x");')).toBe(0);
+    // Assigning the global binding itself is a navigation in every browser, and no arm reaches
+    // it: both selectors require `left` to be a MemberExpression, and this `left` is an
+    // Identifier. TypeScript refuses it in .ts/.tsx (lib.dom declares `location` read-only), but
+    // this config block also matches .js/.jsx, where nothing does.
+    expect(navigationErrorsIn('location = "/x";')).toBe(0);
+    // A computed key that is not a string Literal escapes whatever its type — the template
+    // literal above is one member of that class, not the class.
+    expect(navigationErrorsIn('const k = "location"; globalThis[k].assign("/x");')).toBe(0);
+    // Reaching the member through a call or a branch rather than naming it.
+    expect(navigationErrorsIn('Object.assign(location, { href: "/x" });')).toBe(0);
+    expect(navigationErrorsIn('const { assign } = location; assign("/x");')).toBe(0);
+    expect(navigationErrorsIn('(true ? window : self).location.assign("/x");')).toBe(0);
   });
 
-  it("reports everything the upstream rule would, so switching it off costs no coverage", () => {
+  it("reports everything the upstream rule would, so these selectors are the whole control", () => {
     // The corpus is generated, deliberately NOT drawn from POSITIVES. Filtering POSITIVES by
     // "the upstream rule sees it" would make the loop circular: every entry there is asserted
     // `toBe(1)` against the selectors two tests above, so a shape the upstream rule reports and
     // the selectors miss could never enter the universe being checked. A gap has to be able to
     // appear before an assertion about gaps means anything.
+    // A stated limit rather than an instrumented one: this axis is OUR enumeration, so a receiver
+    // upstream starts recognising and we do not — `frames`, `opener`, anything a future release
+    // adds to its GLOBAL_PREFIXES — is never emitted here and the gap it opens cannot appear.
+    // Declaring those names in the config's globals purely so this loop could see them would be
+    // config nobody reads against an event nobody has had; the honest form is this sentence.
     const receivers = ["window", "globalThis", "self", "document", "top", "parent", ""];
     const corpus: string[] = [];
     for (const receiver of receivers) {
@@ -168,6 +203,13 @@ describe("the hard-navigation gate", () => {
     // Guards the other way: a rule reporting nothing is trivially contained, which is exactly
     // what the shipped config's `off` makes it.
     expect(seenByUpstream.length).toBeGreaterThan(0);
+
+    // Guards the globals declaration itself. Every receiver below resolves only because
+    // `languageOptions.globals` names it; `globalThis` is deliberately not among them, because it
+    // resolves as an ES builtin either way and so cannot witness the block's removal.
+    for (const receiver of ["window.", "document.", "self.", "location."]) {
+      expect(seenByUpstream.some((code) => code.startsWith(receiver))).toBe(true);
+    }
 
     const gaps = seenByUpstream.filter((code) => navigationErrorsIn(code) === 0);
     expect(gaps).toEqual([]);

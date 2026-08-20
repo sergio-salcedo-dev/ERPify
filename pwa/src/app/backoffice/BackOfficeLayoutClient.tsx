@@ -90,17 +90,19 @@ export default function BackOfficeLayoutClient({
       if (isLeaving) return;
       setIsLeaving(true);
       // `action` is what makes this sign out. The destination below is hard-coded to HOME and
-      // this entry's own `path` is never read on this branch — a model test is what keeps the
-      // two from drifting apart. logout() revokes the server session (dropping its cookie) then
-      // clears client state; wait up to REVOKE_BUDGET_MS for it so the cookie is normally gone
-      // before leaving. Then leave
-      // the authenticated area with a full-document navigation rather than router.push: an
-      // SPA push keeps this guarded subtree mounted, so RequireAuth observes the just-cleared
-      // session mid-transition and redirects to /login before the push to HOME commits. A
-      // hard navigation discards all in-memory client state and lands on the public landing
-      // unconditionally — and it fires even if the server revoke failed. replace() rather
-      // than assign() so the authenticated page it leaves is not one Back press away, where
-      // a bfcache restore would put the previous user's data back on a shared machine.
+      // this entry's own `path` is never read on this branch. Two tests hold the two together,
+      // one per direction: the model guard asserts the entry's declared path, and the
+      // per-surface sign-out cases assert where this branch actually lands.
+      //
+      // logout() revokes the server session (dropping its cookie) then clears client state; wait
+      // up to REVOKE_BUDGET_MS for it so the cookie is normally gone before leaving. Then leave
+      // the authenticated area with a full-document navigation rather than router.push: an SPA
+      // push keeps this guarded subtree mounted, so RequireAuth observes the just-cleared session
+      // mid-transition and redirects to /login before the push to HOME commits. A hard navigation
+      // discards all in-memory client state and lands on the public landing unconditionally — and
+      // it fires even if the server revoke failed. replace() rather than assign() so the
+      // authenticated page it leaves is not one Back press away, where a bfcache restore would
+      // put the previous user's data back on a shared machine.
       const budget = afterMs(REVOKE_BUDGET_MS);
       void Promise.race([logout(), budget.elapsed]).finally(() => {
         budget.cancel();
@@ -108,17 +110,18 @@ export default function BackOfficeLayoutClient({
           // eslint-disable-next-line no-restricted-syntax
           globalThis.location.replace(Routes.HOME);
         } catch {
-          // The document stayed, so sign-out must be attemptable again rather than wedged. This
-          // only means anything on the budget-expired path: if logout() won the race the session
-          // is already null, RequireAuth has unmounted this subtree, and there is no menu left to
-          // attempt it from.
+          // The document stayed, so sign-out must be attemptable again rather than wedged. Only
+          // the budget-expired path can act on it: once logout() resolves it clears the session,
+          // and the guarded subtree this menu lives in goes away with it.
           setIsLeaving(false);
         }
       });
       return;
     }
     // Gated too: a sidebar click during the sign-out window would route somewhere the
-    // pending navigation is about to tear down, losing whatever the user typed there.
+    // pending navigation is about to tear down, losing whatever the user typed there. Only
+    // menu-driven navigation reaches here — the logo and any link inside the page are next/link
+    // and route on their own.
     if (isLeaving) return;
     router.push(path);
   };
@@ -135,8 +138,8 @@ export default function BackOfficeLayoutClient({
   // One derivation, so the entry cannot read as busy on one surface and idle on another. It is
   // only *visible* on the expanded sidebar, though: clicking closes the dropdown and the mobile
   // drawer, so on those paths the entry is unmounted before it could show anything. That is what
-  // the status region below is for — it survives the menu closing, and it is the announcement
-  // `aria-disabled` cannot make once its element is gone.
+  // the status region below is for — it survives the menu closing, and no attribute on an element
+  // that no longer exists can announce anything.
   const isEntryLeaving = (entry: NavSubItem) => isLeaving && entry.action === "sign-out";
   const entryLabel = (entry: NavSubItem) => (isEntryLeaving(entry) ? "Signing out…" : entry.name);
   const accountItemWithState = {
@@ -162,14 +165,16 @@ export default function BackOfficeLayoutClient({
       <TooltipProvider>
         {/* The only signal that survives the click. Both menus close on activation, so on every
             path but the expanded sidebar the relabelled entry is unmounted before it can say
-            anything — and meanwhile the in-flight guard silently drops every other navigation for
-            up to REVOKE_BUDGET_MS. A live region is what turns that dead-looking window into a
-            stated one, for a screen reader as much as for a sighted user. */}
+            anything — and meanwhile the in-flight guard drops every menu-driven navigation for up
+            to REVOKE_BUDGET_MS. This announces that window to assistive technology, which is the
+            surface that otherwise gets nothing at all. It is `sr-only`, so it states the window
+            without showing it: the sighted affordance is the relabelled entry, which survives on
+            the expanded sidebar and not on the two menus that close over it. */}
         <output
           role="status"
           aria-live="polite"
           data-testid="bo-layout__leaving-status"
-          className="sr-only"
+          className="bo-layout__leaving-status sr-only"
         >
           {isLeaving ? "Signing out…" : ""}
         </output>
@@ -359,7 +364,7 @@ export default function BackOfficeLayoutClient({
                               key={subItem.name}
                               onClick={() => handleNavigation(subItem.path, subItem.action)}
                               title={entryLabel(subItem)}
-                              aria-disabled={isEntryLeaving(subItem)}
+                              aria-disabled={isEntryLeaving(subItem) || undefined}
                               data-testid={subItem.testId ? `${subItem.testId}--mobile` : undefined}
                               className={`w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-semibold transition-all ${
                                 pathname === subItem.path
@@ -476,7 +481,7 @@ export default function BackOfficeLayoutClient({
                       {accountLinks.map((entry) => (
                         <DropdownMenuItem
                           key={entry.name}
-                          onClick={navigateTo(entry.path)}
+                          onClick={navigateTo(entry.path, entry.action)}
                           title={entry.name}
                           data-testid={entry.testId ? `${entry.testId}--menu` : undefined}
                         >
@@ -492,7 +497,7 @@ export default function BackOfficeLayoutClient({
                           variant="destructive"
                           onClick={navigateTo(accountLogout.path, accountLogout.action)}
                           title={entryLabel(accountLogout)}
-                          aria-disabled={isEntryLeaving(accountLogout)}
+                          aria-disabled={isEntryLeaving(accountLogout) || undefined}
                           data-testid={
                             accountLogout.testId ? `${accountLogout.testId}--menu` : undefined
                           }

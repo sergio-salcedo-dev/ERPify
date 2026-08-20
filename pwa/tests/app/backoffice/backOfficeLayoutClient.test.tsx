@@ -72,7 +72,9 @@ function required<T>(value: T | undefined, what: string): T {
 // covered without editing this file — and a model that stopped declaring one fails here rather than
 // leaving the assertions below true of an empty list.
 const ACCOUNT_ENTRIES: readonly NavSubItem[] = accountMenuItem.subItems ?? [];
-const ACCOUNT_LINKS = ACCOUNT_ENTRIES.filter((entry) => entry.action === undefined);
+// Mirrors the component's own predicate rather than restating it: an entry carrying some other
+// intent is a plain link there, so it has to be one here too or this grid stops covering it.
+const ACCOUNT_LINKS = ACCOUNT_ENTRIES.filter((entry) => entry.action !== SIGN_OUT);
 const ACCOUNT_LOGOUT = required(
   ACCOUNT_ENTRIES.find((entry) => entry.action === SIGN_OUT),
   "an account entry carrying the sign-out intent",
@@ -132,8 +134,8 @@ function openSidebarAccountGroup(): HTMLElement {
 /**
  * The three surfaces that render the account entries, each with its own QA address. Sign-out has to
  * work identically through all of them: the discriminator travels from the model through whichever
- * component renders the leaf, and the desktop sidebar's goes through a design-system component that
- * used to forward only the path.
+ * component renders the leaf, and the desktop sidebar's goes through a design-system component
+ * whose callback signature is the only thing carrying it across that boundary.
  */
 const SIGN_OUT_SURFACES: ReadonlyArray<
   readonly [string, () => Promise<void>, (entry: NavSubItem) => string]
@@ -215,10 +217,10 @@ describe("BackOfficeLayoutClient", () => {
   });
 
   it.each(SIGN_OUT_SURFACES)("signs out from %s", async (_label, open, addressOf) => {
-    // The top-bar menu is the only surface the suite reached before, and it is the only one whose
-    // leaf the layout renders itself. The sidebar's goes through SidebarItem — a design-system
-    // component whose callback used to carry the path alone, so an intent-keyed branch would have
-    // left this leaf navigating to the landing page with the session still alive.
+    // One case per surface, because only the top-bar leaf is rendered by the layout itself. The
+    // sidebar's goes through SidebarItem, whose callback is what carries the intent across the
+    // design-system boundary — and a second optional parameter stays assignable to
+    // `(path: string) => void`, so tsc cannot tell whether it is forwarded. Only these can.
     renderLayout();
     await open();
 
@@ -297,6 +299,35 @@ describe("BackOfficeLayoutClient", () => {
     }
   });
 
+  it("leaves even when the revoke wins the race and the guard tears the subtree down", async () => {
+    // The fast path, which no other case here renders. logout() clears the session inside its own
+    // finally, so RequireAuth returns null for this whole subtree — menu, entry and status region
+    // go with it — while the navigation is still owed. It is scheduled on the promise, not on the
+    // tree, so it has to fire regardless of what is left mounted.
+    logout.mockImplementationOnce(() => {
+      auth.session = null;
+      auth.status = "unauthenticated";
+      return Promise.resolve();
+    });
+    const { rerender } = renderLayout();
+    await openAccountMenu();
+
+    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+    await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+    // The real re-render comes from the provider's own setState; the port is mocked here and has
+    // none, so the cleared session is pushed through by hand.
+    rerender(
+      <BackOfficeLayoutClient>
+        <p data-testid="bo-layout-test__child">Section content</p>
+      </BackOfficeLayoutClient>,
+    );
+
+    expect(screen.queryByTestId("bo-layout__leaving-status")).toBeNull();
+    expect(screen.queryByTestId("bo-layout-test__child")).toBeNull();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it("drops a second sign-out while the first is still in flight", async () => {
     // Fake timers so the budget this test deliberately never resolves cannot outlive the
     // test and fire its navigation into a later one.
@@ -343,11 +374,10 @@ describe("BackOfficeLayoutClient", () => {
     }
   });
 
-  // The invariant, not the cosmetic: EVERY branch of handleNavigation closes the mobile
-  // drawer. The plain-navigation case held before this change; the sign-out branch returned
-  // early and left the authenticated drawer open — for as long as REVOKE_BUDGET_MS, now that
-  // sign-out waits. Asserted through the Sheet, the only consumer of `isSidebarOpen`;
-  // `data-sidebar-open` is bound to `isCompact`, a different state entirely.
+  // The invariant, not the cosmetic: EVERY branch of handleNavigation closes the mobile drawer,
+  // including the one that returns early. Leaving it open would leave an authenticated drawer on
+  // screen for as long as REVOKE_BUDGET_MS. Asserted through the Sheet, the only consumer of
+  // `isSidebarOpen`; `data-sidebar-open` is bound to `isCompact`, a different state entirely.
   it.each([
     ["a plain navigation entry", `${ACCOUNT_LINKS[0].testId}--mobile`, false],
     ["the sign-out entry", `${ACCOUNT_LOGOUT.testId}--mobile`, true],
