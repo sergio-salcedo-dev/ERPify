@@ -55,7 +55,7 @@ export class ApiResetPasswordRepository implements ResetPasswordRepository {
         API_ENDPOINTS.BACKOFFICE.RESET_PASSWORD,
         request,
         undefined,
-        { "X-CSRF-Token": uuidV7() },
+        { headers: { "X-CSRF-Token": uuidV7() } },
       );
       return { kind: ResetPasswordOutcomeKind.RESET };
     } catch (error) {

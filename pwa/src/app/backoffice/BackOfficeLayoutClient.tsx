@@ -28,21 +28,43 @@ import { RequireAuth, DevSessionSwitcher } from "@/context/shared/access/infrast
 import { useSession } from "@/context/shared/access/application/useSession";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { Routes } from "@/context/shared/routing/domain/Routes";
+import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNavigate";
 
 const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 
-// How long sign-out waits for the server revoke before leaving anyway. The revoke carries
-// no AbortSignal, so without a budget a request that never settles leaves the user on a
-// page that looks signed in and answers nothing — the one outcome worse than a stale cookie.
-const REVOKE_BUDGET_MS = 3_000;
+// How long sign-out waits for the server revoke before leaving anyway, handed to the
+// transport rather than enforced here: a request that never settles leaves the user on a page
+// that looks signed in and answers nothing, and "no request hangs forever" is an invariant of
+// the transport, not of a layout. What stays this component's to decide is the NUMBER — how
+// long *this* interaction is willing to wait — which is why it is passed in rather than
+// inherited from the client's default.
+const SIGN_OUT_BUDGET_MS = 3_000;
 
-function afterMs(ms: number): { elapsed: Promise<void>; cancel: () => void } {
-  let timer: ReturnType<typeof setTimeout>;
-  const elapsed = new Promise<void>((resolve) => {
-    timer = setTimeout(resolve, ms);
-  });
-  return { elapsed, cancel: () => clearTimeout(timer) };
-}
+/**
+ * Where the sign-out interaction is. `leaving` is the in-flight window; the other two are the
+ * ways it can end with the user still here, and they are distinguished because they are not
+ * the same statement to make: a refusal is final, a navigation that never committed may yet.
+ */
+const SignOut = {
+  IDLE: "idle",
+  LEAVING: "leaving",
+  REFUSED: "refused",
+  STALLED: "stalled",
+} as const;
+type SignOut = (typeof SignOut)[keyof typeof SignOut];
+
+/**
+ * What the status region says in each state. Emptying a live region announces NOTHING — a
+ * `role="status"` speaks on insertion — so every state that ends the window carries a
+ * message of its own. Falling back to "" there is what made the recovery path silent: the
+ * user heard "Signing out…", then nothing, while the visible affordance quietly reverted.
+ */
+const SIGN_OUT_MESSAGE: Record<SignOut, string> = {
+  [SignOut.IDLE]: "",
+  [SignOut.LEAVING]: "Signing out…",
+  [SignOut.REFUSED]: "Sign-out did not complete. Please try again.",
+  [SignOut.STALLED]: "Sign-out is taking longer than expected. You can try again.",
+};
 
 export default function BackOfficeLayoutClient({
   children,
@@ -78,7 +100,8 @@ export default function BackOfficeLayoutClient({
 
   // Sign-out is in flight. State rather than a ref because the click closes the menu, so a
   // second attempt needs it reopened — an asynchronous gap a re-render always wins.
-  const [isLeaving, setIsLeaving] = useState(false);
+  const [signOut, setSignOut] = useState<SignOut>(SignOut.IDLE);
+  const isLeaving = signOut === SignOut.LEAVING;
 
   const handleNavigation = (path: string, action?: NavAction) => {
     setIsSidebarOpen(false);
@@ -86,36 +109,36 @@ export default function BackOfficeLayoutClient({
       // A second click POSTs a second revoke against a session the first one already
       // revoked, and schedules a second navigation behind it. Reachable for as long as the
       // first revoke is outstanding: the click closes the menu, so it needs the menu
-      // reopened, which is exactly the window REVOKE_BUDGET_MS bounds.
+      // reopened, which is exactly the window SIGN_OUT_BUDGET_MS bounds.
       if (isLeaving) return;
-      setIsLeaving(true);
+      setSignOut(SignOut.LEAVING);
       // `action` is what makes this sign out. The destination below is hard-coded to HOME and
       // this entry's own `path` is never read on this branch. Two tests hold the two together,
       // one per direction: the model guard asserts the entry's declared path, and the
       // per-surface sign-out cases assert where this branch actually lands.
       //
-      // logout() revokes the server session (dropping its cookie) then clears client state; wait
-      // up to REVOKE_BUDGET_MS for it so the cookie is normally gone before leaving. Then leave
-      // the authenticated area with a full-document navigation rather than router.push: an SPA
-      // push keeps this guarded subtree mounted, so RequireAuth observes the just-cleared session
-      // mid-transition and redirects to /login before the push to HOME commits. A hard navigation
-      // discards all in-memory client state and lands on the public landing unconditionally — and
-      // it fires even if the server revoke failed. replace() rather than assign() so the
-      // authenticated page it leaves is not one Back press away, where a bfcache restore would
-      // put the previous user's data back on a shared machine.
-      const budget = afterMs(REVOKE_BUDGET_MS);
-      void Promise.race([logout(), budget.elapsed]).finally(() => {
-        budget.cancel();
-        try {
-          // eslint-disable-next-line no-restricted-syntax
-          globalThis.location.replace(Routes.HOME);
-        } catch {
-          // The document stayed, so sign-out must be attemptable again rather than wedged. Only
-          // the budget-expired path can act on it: once logout() resolves it clears the session,
-          // and the guarded subtree this menu lives in goes away with it.
-          setIsLeaving(false);
-        }
-      });
+      // logout() revokes the server session (dropping its cookie) then clears client state, and
+      // gives the revoke SIGN_OUT_BUDGET_MS to answer so the cookie is normally gone before
+      // leaving. Then leave the authenticated area with a full-document navigation rather than
+      // router.push: an SPA push keeps this guarded subtree mounted, so RequireAuth observes the
+      // just-cleared session mid-transition and redirects to /login before the push to HOME
+      // commits. A hard navigation discards all in-memory client state and lands on the public
+      // landing unconditionally — and it fires even if the server revoke failed.
+      void logout(SIGN_OUT_BUDGET_MS)
+        .catch(() => {
+          // logout() swallows its own failures by contract; this is the belt for one that stops
+          // doing so, because a rejection here would otherwise surface as an unhandled rejection
+          // *after* the navigation below has already been scheduled.
+        })
+        .finally(() => {
+          // Both ways the document can stay are handled, not just the one that raises: a
+          // sandboxed navigable IGNORES a navigation silently, and keying recovery on the throw
+          // left `isLeaving` latched for the life of the document — every menu-driven navigation
+          // dropped from then on, with an sr-only string as the only feedback.
+          hardNavigate(Routes.HOME, (failure) => {
+            setSignOut(failure === "refused" ? SignOut.REFUSED : SignOut.STALLED);
+          });
+        });
       return;
     }
     // Gated too: a sidebar click during the sign-out window would route somewhere the
@@ -166,7 +189,7 @@ export default function BackOfficeLayoutClient({
         {/* The only signal that survives the click. Both menus close on activation, so on every
             path but the expanded sidebar the relabelled entry is unmounted before it can say
             anything — and meanwhile the in-flight guard drops every menu-driven navigation for up
-            to REVOKE_BUDGET_MS. This announces that window to assistive technology, which is the
+            to SIGN_OUT_BUDGET_MS. This announces that window to assistive technology, which is the
             surface that otherwise gets nothing at all. It is `sr-only`, so it states the window
             without showing it: the sighted affordance is the relabelled entry, which survives on
             the expanded sidebar and not on the two menus that close over it.
@@ -178,7 +201,7 @@ export default function BackOfficeLayoutClient({
           data-testid="bo-layout__leaving-status"
           className="bo-layout__leaving-status sr-only"
         >
-          {isLeaving ? "Signing out…" : ""}
+          {SIGN_OUT_MESSAGE[signOut]}
         </output>
         <div className="bo-layout min-h-screen bg-background flex font-sans">
           <a
@@ -318,9 +341,11 @@ export default function BackOfficeLayoutClient({
                                 {item.subItems.map((subItem) => (
                                   <button
                                     type="button"
-                                    key={subItem.name}
+                                    // Identity, never the label — see the account group below.
+                                    key={subItem.testId ?? subItem.path}
                                     onClick={navigateTo(subItem.path, subItem.action)}
-                                    title={subItem.name}
+                                    title={entryLabel(subItem)}
+                                    aria-disabled={isEntryLeaving(subItem) || undefined}
                                     data-testid={
                                       subItem.testId ? `${subItem.testId}--mobile` : undefined
                                     }
@@ -331,7 +356,7 @@ export default function BackOfficeLayoutClient({
                                     }`}
                                   >
                                     {subItem.icon && <subItem.icon className="w-3.5 h-3.5" />}
-                                    {subItem.name}
+                                    {entryLabel(subItem)}
                                   </button>
                                 ))}
                               </div>
@@ -363,7 +388,11 @@ export default function BackOfficeLayoutClient({
                           {accountMenuItem.subItems?.map((subItem) => (
                             <button
                               type="button"
-                              key={subItem.name}
+                              // Identity, never the label: this site relabels the entry it is
+                              // rendering, and a key derived from the label would change with it —
+                              // React destroys the button the user just activated, focus falls to
+                              // <body>, and the new state lands on a node nothing is watching.
+                              key={subItem.testId ?? subItem.path}
                               onClick={() => handleNavigation(subItem.path, subItem.action)}
                               title={entryLabel(subItem)}
                               aria-disabled={isEntryLeaving(subItem) || undefined}

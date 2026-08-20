@@ -43,6 +43,30 @@ describe("ApiSessionsRepository", () => {
 
     await new ApiSessionsRepository(httpClient({ post })).revokeCurrent();
 
-    expect(post).toHaveBeenCalledWith(API_ENDPOINTS.IDENTITY.SESSIONS_REVOKE_CURRENT, undefined);
+    // No budget asked for, no transport options sent: the client's own default applies, and
+    // the adapter must not invent a tighter one on the caller's behalf.
+    expect(post).toHaveBeenCalledWith(
+      API_ENDPOINTS.IDENTITY.SESSIONS_REVOKE_CURRENT,
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
+  it("revokeCurrent() hands the caller's budget to the transport", async () => {
+    const post = vi.fn().mockResolvedValue(undefined);
+
+    await new ApiSessionsRepository(httpClient({ post })).revokeCurrent(1_500);
+
+    // The port speaks in intent (a number of milliseconds) and this adapter is what turns it
+    // into a transport option. Without this the budget would arrive nowhere and the sign-out
+    // that supplies it would be bounded by nothing — the exact failure the caller's own timer
+    // used to paper over.
+    expect(post).toHaveBeenCalledWith(
+      API_ENDPOINTS.IDENTITY.SESSIONS_REVOKE_CURRENT,
+      undefined,
+      undefined,
+      { timeoutMs: 1_500 },
+    );
   });
 });

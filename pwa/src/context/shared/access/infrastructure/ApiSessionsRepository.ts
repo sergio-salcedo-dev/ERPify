@@ -47,10 +47,12 @@ export class ApiSessionsRepository implements SessionsRepository {
     );
   }
 
-  async revokeCurrent(): Promise<void> {
+  async revokeCurrent(budgetMs?: number): Promise<void> {
     await this.httpClient.post<undefined, void>(
       API_ENDPOINTS.IDENTITY.SESSIONS_REVOKE_CURRENT,
       undefined,
+      undefined,
+      budgetMs === undefined ? undefined : { timeoutMs: budgetMs },
     );
   }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 const { push, logout, override, nav, auth, assign, replace } = vi.hoisted(() => ({
   push: vi.fn(),
@@ -164,9 +164,18 @@ const SIGN_OUT_SURFACES: ReadonlyArray<
   ],
 ];
 
-// Mirrors REVOKE_BUDGET_MS in BackOfficeLayoutClient: the wait is a contract with the user
+// Mirrors SIGN_OUT_BUDGET_MS in BackOfficeLayoutClient: the wait is a contract with the user
 // (leave within this budget), so the test states it rather than reaching for the module's copy.
-const REVOKE_BUDGET_MS = 3_000;
+const SIGN_OUT_BUDGET_MS = 3_000;
+
+// Mirrors NAVIGATION_COMMIT_BUDGET_MS in hardNavigate, and stated here for the same reason: how
+// long the user waits before the affordance comes back is a contract with them, not an
+// implementation detail to import.
+const NAVIGATION_COMMIT_BUDGET_MS = 10_000;
+
+/** What the status region says once the document turns out not to be leaving after all. */
+const REFUSED_MESSAGE = "Sign-out did not complete. Please try again.";
+const STALLED_MESSAGE = "Sign-out is taking longer than expected. You can try again.";
 
 function renderLayout() {
   return render(
@@ -352,23 +361,84 @@ describe("BackOfficeLayoutClient", () => {
     }
   });
 
-  it("leaves anyway when the server revoke never settles", async () => {
-    // `shouldAdvanceTime` keeps findBy*/waitFor working on real time while the sign-out
-    // budget stays under the test's control.
+  it("hands the sign-out budget to the transport instead of racing a timer here", async () => {
+    renderLayout();
+    await openAccountMenu();
+
+    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+    // The bound travels WITH the request. While it was a timer owned by this component, a
+    // revoke that never settled was survivable on exactly one call out of every call the app
+    // makes — "no request hangs forever" held for sign-out and nowhere else. Passing the number
+    // down is what moves the invariant to the only layer that can hold it for all of them.
+    expect(logout).toHaveBeenCalledWith(SIGN_OUT_BUDGET_MS);
+  });
+
+  it("recovers the menu when the navigation is refused", async () => {
+    replace.mockImplementationOnce(() => {
+      throw new Error("navigation refused");
+    });
+    renderLayout();
+    await openAccountMenu();
+
+    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+
+    // The document stayed, so sign-out has to be attemptable again rather than wedged — and
+    // the region has to SAY so. Emptying it announces nothing: a `role="status"` speaks on
+    // insertion, so the old `: ""` left a screen-reader user with "Signing out…", then silence,
+    // then a menu that quietly worked again, with no statement that it had not happened.
+    const status = screen.getByTestId("bo-layout__leaving-status");
+    await waitFor(() => expect(status).toHaveTextContent(REFUSED_MESSAGE));
+
+    await openAccountMenu();
+    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LINKS[0])));
+    expect(push).toHaveBeenCalledWith(ACCOUNT_LINKS[0].path);
+  });
+
+  it("recovers the menu when the navigation is ignored rather than refused", async () => {
+    // The case the `catch` structurally could not see. A sandboxed navigable DROPS a navigation
+    // without raising, so nothing threw, nothing unloaded, and the in-flight latch stayed set
+    // for the life of the document — every menu-driven navigation dropped from then on.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
-      logout.mockImplementationOnce(() => new Promise<void>(() => {}));
       renderLayout();
       await openAccountMenu();
 
       fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
-      expect(replace).not.toHaveBeenCalled();
-
-      // The revoke carries no AbortSignal, so without the budget the user would sit on a page
-      // that looks signed in and answers nothing.
-      await vi.advanceTimersByTimeAsync(REVOKE_BUDGET_MS);
-
       await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+
+      const status = screen.getByTestId("bo-layout__leaving-status");
+      expect(status).toHaveTextContent(LEAVING_LABEL);
+
+      await act(() => vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS));
+
+      await waitFor(() => expect(status).toHaveTextContent(STALLED_MESSAGE));
+      await openAccountMenu();
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LINKS[0])));
+      expect(push).toHaveBeenCalledWith(ACCOUNT_LINKS[0].path);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says nothing about a navigation that committed", async () => {
+    // The other direction, and the one that keeps the recovery honest: a document that IS
+    // leaving fires pagehide, and a "sign-out did not complete" announced into it would be a
+    // false statement made to the one user who cannot see the page change under it.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderLayout();
+      await openAccountMenu();
+
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+      await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+
+      globalThis.dispatchEvent(new Event("pagehide"));
+      await act(() => vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS * 2));
+
+      const status = screen.getByTestId("bo-layout__leaving-status");
+      expect(status).toHaveTextContent(LEAVING_LABEL);
     } finally {
       vi.useRealTimers();
     }
