@@ -1069,23 +1069,30 @@ mitigated state. Accepting one means recording who accepted it and against which
       leaks nothing — this is an injection channel into the same unrotated, un-TTL'd, unerasable sink, and it
       is pre-existing rather than introduced. Closing it needs a `log` override for the
       `http.handlers.mercure` logger, or dropping `subscriptions`.
-- [ ] **A person's address is declared unmarked in 27 parameter declarations outside the pinned mail
-      surface, and the axis is accepted.** `#[SensitiveParameter]` covers every declaration named
-      `recipientEmail` (`SensitiveRecipientAddressGateTest` pins that set); the same value is declared
-      unmarked in **27** further places on this reading — 25 of the 26 sites listed in #769
-      (`NotifyLockedIdentities.php:88` is a call, not a declaration) plus the two `$emailIdentifier`
-      parameters of `ReauthenticateDevice` and `ReauthenticateDeviceBestEffort`, which that list omits.
-      **Read it as a bound, not a measurement**: it is a hand count sourced from an issue rather than an
-      extraction anyone can re-run, and a looser token scan of `api/src` returns 29, of which 3 are
-      status-transition `$to` parameters on `Invalid*Transition` — 26 on a comparable definition. Nothing
-      gates the number, which is part of why this axis is accepted rather than closed.
-      **The axis is unobservable on this deployment**: `zend.exception_ignore_args = On`
-      (`api/frankenphp/conf.d/10-app.ini`) strips every argument of every frame, so no sink renders them,
-      and the attribute is the narrower half that would survive a change to that ini. It is **not** closable
-      by marking them: the gate that keeps the mail surface honest keys on the parameter NAME, so an
-      attribute on `$email` or `$to` is one nothing preserves — the exact decay the gate exists to prevent.
-      Closing it needs a definition of "carries a person's address" a gate can evaluate, which is the
-      unspecified semantics that kept #767 from adding a `php.lint.*` rule in the first place.
+- [x] **A person's address is declared unmarked in 27 parameter declarations outside the pinned mail
+      surface — closed by #811, extended by its follow-up (both 2026-08-20).** `#[SensitiveParameter]`
+      covered only declarations named `recipientEmail` (`SensitiveRecipientAddressGateTest` pins that set);
+      the same value crossed this codebase unmarked under `$email`, `$to`, `$identifier`, `$emailIdentifier`
+      and `$raw`. `PersonAddressParameterGateTest` replaces the name-keyed rule with a registry
+      (`api/.person-address-parameter-policy`) keyed on SITE instead — every parameter or promoted property
+      found carrying a person's address is classified `sensitive` (must carry `#[SensitiveParameter]`) or
+      `excluded :: <reason>` (a reviewed, non-person value — an env-derived operational mailbox). This is the
+      "definition a gate can evaluate" the previous entry said was missing: both `$emailIdentifier`
+      parameters of `ReauthenticateDevice`/`ReauthenticateDeviceBestEffort` and the rest of #769's population
+      are registered and marked, and the gate refuses a currently-declared `Email`-typed site with no line at
+      all. The follow-up adversarial pass on #811 additionally found and closed
+      `EmailAddressRedaction::apply()`/`blankEveryTokenHoldingAnAt()` (unmarked, real PII-carrying strings)
+      and registered `SecuritySenderAddress::__construct($address)` as `excluded` (env-derived, same shape as
+      `PlainTextNotificationMailer::$mailFrom`).
+      **What stays open, by the registry's own header — a residual, not a reason this item is unclosed**: the
+      string-typed population (the majority of the registry) was found by human adversarial review, not
+      mechanically — there is no dataflow/taint engine in this toolchain that could soundly rediscover an
+      arbitrary `string $foo` becoming a person's address, so a *new* unmarked site still needs the next
+      review pass; only parameters typed exactly `Email` are mechanically guaranteed a line. Also unreachable,
+      same as before: vendor frames (`SmtpTransport::doRcptToCommand`), anonymous classes/closures/plain
+      functions, and `getMessage()` (a separate axis — the mail boundary, `RedactingMailer`/`RedactingTransport`).
+      `zend.exception_ignore_args = On` (`api/frankenphp/conf.d/10-app.ini`) still holds the line
+      unconditionally today; the attribute is the narrower half that survives a change to that ini.
 - [ ] **The Next.js container logs the full request URL, person ids included — measured in dev, unverified in
       prod.** The audit screen navigates to `/backoffice/audit?actorId=<uuid>&resourceId=<uuid>`, Caddy
       reverse-proxies the document to the PWA, and the container prints

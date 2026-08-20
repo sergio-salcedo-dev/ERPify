@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\ErrorContract\Application;
 
+use SensitiveParameter;
+
 /**
  * Replaces every email address in a string with {@see SENTINEL}.
  *
@@ -62,7 +64,7 @@ enum EmailAddressRedaction
      */
     private const string PATTERN = '/(?<![^\s@()<>\[\]:;,"])[^\s@()<>\[\]:;,"]++@[^\s@()<>\[\]:;,"]++/';
 
-    public static function apply(string $value): string
+    public static function apply(#[SensitiveParameter] string $value): string
     {
         if (!\str_contains($value, '@')) {
             return $value;
@@ -86,7 +88,7 @@ enum EmailAddressRedaction
      * with it (`"a\tb@x.test\nc  d"` becomes `"REDACTED  d"`). That is the safe direction for a branch that
      * only runs once the engine has already failed.
      */
-    private static function blankEveryTokenHoldingAnAt(string $value): string
+    private static function blankEveryTokenHoldingAnAt(#[SensitiveParameter] string $value): string
     {
         return \implode(' ', \array_map(
             static fn (string $token): string => \str_contains($token, '@') ? self::SENTINEL : $token,
