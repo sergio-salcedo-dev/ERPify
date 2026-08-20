@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application\Resource;
 
+use SensitiveParameter;
+
 /**
  * Wire contract of one identity row in the register view (`GET /backoffice/users`). Plain data: the
  * serialized object is this DTO, never the {@see \Erpify\Iam\Identity\Domain\Entity\User} entity nor the
@@ -22,6 +24,7 @@ final readonly class UserListResource
      */
     public function __construct(
         public string $id,
+        #[SensitiveParameter]
         public string $email,
         public string $status,
         public array $roles,

@@ -11,6 +11,7 @@ use Erpify\Iam\Identity\Domain\Exception\InvalidEmail;
 use Erpify\Iam\Identity\Domain\Exception\InvalidHashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Override;
+use SensitiveParameter;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -36,7 +37,7 @@ final readonly class UserProvider implements UserProviderInterface
     }
 
     #[Override]
-    public function loadUserByIdentifier(string $identifier): UserInterface
+    public function loadUserByIdentifier(#[SensitiveParameter] string $identifier): UserInterface
     {
         try {
             $email = Email::from($identifier);

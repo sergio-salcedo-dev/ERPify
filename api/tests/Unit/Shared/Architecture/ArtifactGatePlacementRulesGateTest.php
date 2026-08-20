@@ -86,8 +86,8 @@ final class ArtifactGatePlacementRulesGateTest extends TestCase
     #[Test]
     public function itRejectsAPlacementTheFilesOwnPathContradicts(): void
     {
-        // Three directions of one rule. Only the first occurs in the real tree at all, so without these
-        // fixtures the other two are live code nothing can reach.
+        // Five directions of one rule. Only the first occurs in the real tree at all, so without these
+        // fixtures the other four are live code nothing can reach.
         $this->assertArrayHasKey(
             self::MIRRORED_PROBE,
             $this->over('placement.home-elsewhere')->disagreements(),
@@ -104,6 +104,21 @@ final class ArtifactGatePlacementRulesGateTest extends TestCase
             self::HOME_PROBE,
             $this->over('placement.mirrored-in-home')->disagreements(),
             'A `mirrored` line on a file sitting in the home was accepted.',
+        );
+
+        $this->assertArrayHasKey(
+            self::HOME_PROBE,
+            $this->over('placement.functional-in-home')->disagreements(),
+            'A `functional` line on a file sitting in the category home was accepted. The token declares '
+            . 'the file outside the category, so the home is the one place it cannot be.',
+        );
+
+        // Without this direction the token is an escape hatch: it would accept any out-of-home path with a
+        // reason attached, where `mirrored` refuses one that does not sit on its subject.
+        $this->assertArrayHasKey(
+            self::MIRRORED_PROBE,
+            $this->over('placement.functional-outside-its-root')->disagreements(),
+            'A `functional` line on a file outside tests/Functional/ was accepted.',
         );
     }
 
@@ -164,6 +179,11 @@ final class ArtifactGatePlacementRulesGateTest extends TestCase
         // classification exists to make impossible.
         yield 'an undecided line with no reason' => [
             ['tests/Unit/Shared/Architecture/AlphaGateTest.php :: undecided'],
+        ];
+
+        // Same reason as the undecided case above, for the token added later.
+        yield 'a functional line with no reason' => [
+            ['tests/Functional/Alpha/AlphaGateTest.php :: functional'],
         ];
 
         yield 'a mirrored subject outside src and tests' => [

@@ -6,6 +6,7 @@ namespace Erpify\Shared\Mailer\Infrastructure;
 
 use Erpify\Shared\Mailer\Application\NotificationMailer;
 use Override;
+use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -26,8 +27,13 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
      * @param array<string, mixed> $fields
      */
     #[Override]
-    public function send(string $to, string $subject, array $fields, ?string $correlationLabel = null): void
-    {
+    public function send(
+        #[SensitiveParameter]
+        string $to,
+        string $subject,
+        array $fields,
+        ?string $correlationLabel = null,
+    ): void {
         $lines = [];
 
         if (null !== $correlationLabel && '' !== $correlationLabel) {

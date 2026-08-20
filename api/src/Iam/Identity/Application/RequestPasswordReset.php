@@ -13,6 +13,7 @@ use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use SensitiveParameter;
 
 /**
  * The "forgot my password" use case. Its whole contract is a UNIFORM outcome: whatever the email — unknown,
@@ -44,7 +45,7 @@ final readonly class RequestPasswordReset
     ) {
     }
 
-    public function request(string $email): void
+    public function request(#[SensitiveParameter] string $email): void
     {
         // why: without a floor the silent branches (malformed, unknown, non-ACTIVE) answer in the time of one
         // indexed read while the ACTIVE branch pays a multi-write transaction — a latency oracle over account

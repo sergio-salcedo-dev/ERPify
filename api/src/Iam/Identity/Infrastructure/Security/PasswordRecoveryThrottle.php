@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
+use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 
@@ -32,7 +33,7 @@ final readonly class PasswordRecoveryThrottle
      * for the same mailbox in different casings share one bucket; the budget is spent for EVERY requested
      * address, known or not, so the limiter itself cannot be probed for existence.
      */
-    public function allowRequest(string $email): bool
+    public function allowRequest(#[SensitiveParameter] string $email): bool
     {
         return $this->perEmailLimiter
             ->create(RecoveryBudgetKey::forEmail($email))

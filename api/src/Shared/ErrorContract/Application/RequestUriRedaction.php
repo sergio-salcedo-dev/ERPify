@@ -24,8 +24,8 @@ namespace Erpify\Shared\ErrorContract\Application;
  *
  * **Sentinel, not strip.** The value is replaced with {@see SENTINEL}, deliberately unlike the map filter's
  * strip semantics: a URI's diagnostic value IS its shape, and dropping the pair would leave an operator
- * unable to tell a filtered request from an unfiltered one. The same token Caddy's access-log filter writes,
- * so both logs read alike.
+ * unable to tell a filtered request from an unfiltered one. The access log answers a different way — it
+ * keeps no query string at all — so the shape survives here and nowhere else.
  *
  * **Names are not the only place an identifier hides.** Every rule here matches a parameter NAME, and that
  * is a whole class short: an expired session redirects to `/login?next=<the entire audit URL, percent-
@@ -34,11 +34,16 @@ namespace Erpify\Shared\ErrorContract\Application;
  * see {@see redactNestedUri()} for the bound and for why a value with nothing to redact is returned byte for
  * byte.
  *
- * **Vocabulary parity with `api/frankenphp/Caddyfile`, with one deliberate difference.** Caddy's grammar has
- * no wildcard, so it spends one `replace` line per index on `filters[0..19][value]` and a twentieth axis would
- * escape it. Here the grammar is a pattern, so no index can outgrow it, and the `filters[N][value][]` form the
- * `in` operator would emit is covered too — that shape costs nothing on this side, whereas at the edge it would
- * be twenty more lines for a form no field mapping currently admits.
+ * **The access log is not a peer of this rule and no longer tries to be.** It used to enumerate the same
+ * vocabulary by name, and this class justified declining to cover the `in` operator's `filters[N][value][]`
+ * spelling at the edge on the grounds that no field mapping admitted it. That was false when it was written —
+ * `FieldMapping`'s default operator set granted `In` to every field that named none, `email` among them — and
+ * the spelling reached the access log in clear. Caddy now drops the query string whole, so there is nothing
+ * there to keep in step with: the two sinks differ in kind, not in vocabulary.
+ *
+ * That leaves this rule as the one that has to be a pattern rather than a list, because its sink keeps the
+ * query: no index can outgrow it, the `[]` and `[N]` sub-index spellings are both covered, and a value is
+ * decoded repeatedly before it is matched.
  */
 enum RequestUriRedaction
 {

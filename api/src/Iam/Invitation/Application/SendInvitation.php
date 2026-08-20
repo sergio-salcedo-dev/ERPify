@@ -16,6 +16,7 @@ use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use SensitiveParameter;
 
 /**
  * Orchestrates a new invitation across three contexts, in ONE transaction: it provisions the `INVITED` identity
@@ -58,7 +59,7 @@ final readonly class SendInvitation
     ) {
     }
 
-    public function invite(string $email, Role ...$roles): IssuedInvitation
+    public function invite(#[SensitiveParameter] string $email, Role ...$roles): IssuedInvitation
     {
         $invitationId = Uuid::generate();
         $generated = SingleUseToken::mint($this->clock->now()->add(new DateInterval(self::TTL_SPEC)));

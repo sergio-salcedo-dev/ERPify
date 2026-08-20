@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application\Resource;
 
+use SensitiveParameter;
+
 /**
  * Wire contract of the single-identity detail view (`GET /backoffice/users/{id}`). Plain data: the
  * serialized object is this DTO, never the {@see \Erpify\Iam\Identity\Domain\Entity\User} entity — so the
@@ -21,6 +23,7 @@ final readonly class UserDetailResource
      */
     public function __construct(
         public string $id,
+        #[SensitiveParameter]
         public string $email,
         public string $status,
         public array $roles,

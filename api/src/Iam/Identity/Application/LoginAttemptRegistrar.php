@@ -12,6 +12,7 @@ use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use SensitiveParameter;
 
 /**
  * Drives the persisted per-identity lockout counter from the two login outcomes: a failed attempt increments
@@ -42,7 +43,7 @@ final readonly class LoginAttemptRegistrar
      * identity) likewise opens NO transaction — the write is skipped when nothing changed, so a sustained
      * attack on a locked account costs no per-attempt round-trip. Mirrors {@see clear()}.
      */
-    public function recordFailure(string $email): void
+    public function recordFailure(#[SensitiveParameter] string $email): void
     {
         try {
             $canonicalEmail = Email::from($email);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application\Resource;
 
+use SensitiveParameter;
+
 /**
  * Wire contract of the "who am I" view (`GET /me`): the identity the PWA hydrates its session from. Carries the
  * real id, email and role names read off the authenticated token — never fabricated. Roles are the domain role
@@ -22,6 +24,7 @@ final readonly class MeResource
      */
     public function __construct(
         public string $id,
+        #[SensitiveParameter]
         public string $email,
         public array $roles,
         public array $permissions,
