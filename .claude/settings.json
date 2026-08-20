@@ -10,6 +10,16 @@
             "timeout": 60
           }
         ]
+      },
+      {
+        "matcher": "Bash|.*create_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/adversarial-pass-check.sh --hook",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
