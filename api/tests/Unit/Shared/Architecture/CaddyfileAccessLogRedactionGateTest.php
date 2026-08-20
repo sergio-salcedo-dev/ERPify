@@ -55,7 +55,8 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
     public function itStripsTheWholeQueryStringFromTheLoggedUri(): void
     {
         $this->assertMatchesRegularExpression(
-            '/format filter \{(?:[^{}]|\{[^{}]*\})*request>uri regexp "\(\?i\)\(\[\?\]\|%3f\)\.\*\$" "\?REDACTED"/s',
+            '/format filter \{(?:[^{}]|\{[^{}]*\})*request>uri regexp '
+                . '"\(\?i\)\(\[\?\]\|%3f\|%253f\)\.\*\$" "\?REDACTED"/s',
             $this->caddyfile(),
             'The Caddy access log no longer strips the query string from `request>uri`. Every value a '
             . 'client can put in a query — a person id under a name nobody listed, a single-use token, a '
@@ -76,8 +77,12 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
         // Scoped to the `format filter` block rather than the whole file: the comment above the block
         // discusses the `query` filter at length, and a gate that reds on its own rationale being written
         // down teaches the next reader to delete the rationale.
-        $this->assertStringNotContainsString(
-            'request>uri query',
+        //
+        // Matched by REGEX rather than a literal substring: Caddyfile whitespace between two directive
+        // tokens is not significant, so a reintroduced enumeration written with a different amount of it
+        // would parse identically to Caddy while evading a literal `assertStringNotContainsString`.
+        $this->assertDoesNotMatchRegularExpression(
+            '/request>uri\s+query\b/',
             $this->formatFilterBlock(),
             'The Caddy access-log filter enumerates query parameter names again. Caddy matches a '
             . 'parameter name exactly and has no wildcard, so an enumeration covers what someone '

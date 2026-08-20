@@ -150,6 +150,14 @@ final class AccessLogQueryContainmentGateTest extends TestCase
             'x=1',
         ];
 
+        // One more encoding layer down: `%253f` decodes to `%3f`, not to `?`, so a pattern that only
+        // recognises the singly-encoded spelling lets this one through whole — the same failure mode the
+        // case above exists to close, one layer deeper.
+        yield 'the delimiter double percent-encoded' => [
+            self::SERVED_PATH . '%253Ffoo={sentinel}',
+            'x=1',
+        ];
+
         yield 'a served 2xx, which reaches this log by a different route than a rejected one' => [
             self::SERVED_PATH,
             'filters[0][field]=email&filters[0][operator]=in&filters[0][value][]={sentinel}',

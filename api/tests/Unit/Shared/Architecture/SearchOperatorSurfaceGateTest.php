@@ -71,8 +71,12 @@ final class SearchOperatorSurfaceGateTest extends TestCase
     /**
      * The other direction, and the one a reflection read cannot reach: a field must not acquire `In` by any
      * route other than naming it. Two ways it could, both refused here — passing the operator list
-     * POSITIONALLY (the third constructor argument, which never contains the string `operators:`), and
-     * naming `FilterOperator::In` anywhere in a call that does not use the named argument.
+     * POSITIONALLY (the third constructor argument), and naming `FilterOperator::In` anywhere in a call
+     * that does not use the named argument.
+     *
+     * A call is judged to name its own operators by searching for "operators:" with comments and string
+     * literals stripped out first, never over the call's plain reconstructed source — which a comment or a
+     * string argument could also contain, exempting a positional grant from both checks below.
      *
      * It also asserts the default is still REACHED. A default nothing reaches defends nothing: the case
      * above would keep passing while every field named its own operators, and keep passing on the day one
@@ -92,7 +96,7 @@ final class SearchOperatorSurfaceGateTest extends TestCase
         $inheritingTheDefault = [];
 
         foreach ($declarations as $declaration) {
-            if (\str_contains($declaration['source'], 'operators:')) {
+            if ($declaration['namesOperators']) {
                 continue;
             }
 
@@ -153,10 +157,11 @@ final class SearchOperatorSurfaceGateTest extends TestCase
      * tell a parenthesis inside a string literal from a real one, cannot skip a comment, and cannot see the
      * fully-qualified spelling of the class — three ways the same call would have been miscounted or missed.
      *
-     * Returns the call's own source and its top-level argument count, which is what distinguishes an
-     * operator list passed positionally from a field that simply takes the default.
+     * Returns the call's own source, its top-level argument count and whether it names a real `operators`
+     * argument — the three facts that distinguish an operator list passed positionally from a field that
+     * simply takes the default.
      *
-     * @return list<array{source: string, arguments: int}>
+     * @return list<array{source: string, arguments: int, namesOperators: bool}>
      */
     private function fieldMappingDeclarations(): array
     {
@@ -172,7 +177,7 @@ final class SearchOperatorSurfaceGateTest extends TestCase
     }
 
     /**
-     * @return list<array{source: string, arguments: int}>
+     * @return list<array{source: string, arguments: int, namesOperators: bool}>
      */
     private function declarationsIn(string $source): array
     {
@@ -226,18 +231,37 @@ final class SearchOperatorSurfaceGateTest extends TestCase
      *
      * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      *
-     * @return array{source: string, arguments: int}
+     * @return array{source: string, arguments: int, namesOperators: bool}
      */
     private function declarationAt(array $tokens, int $index): array
     {
         $slice = \array_slice($tokens, $index, $this->lengthOfCallAt($tokens, $index));
         $source = '';
+        $codeOnly = '';
 
         foreach ($slice as $slouse) {
-            $source .= \is_array($slouse) ? $slouse[1] : $slouse;
+            $text = \is_array($slouse) ? $slouse[1] : $slouse;
+            $source .= $text;
+            $codeOnly .= $this->isCommentOrStringLiteral($slouse) ? '' : $text;
         }
 
-        return ['source' => $source, 'arguments' => $this->argumentCountOf($slice)];
+        return [
+            'source' => $source,
+            'arguments' => $this->argumentCountOf($slice),
+            // A real named argument, read off CODE rather than off `$source`: a comment or a string
+            // literal elsewhere in the call could also contain the words "operators:", which would then
+            // exempt a positional grant from the check above without the call naming the argument at all.
+            'namesOperators' => \str_contains($codeOnly, 'operators:'),
+        ];
+    }
+
+    /**
+     * @param array{0: int, 1: string, 2: int}|string $token
+     */
+    private function isCommentOrStringLiteral(array|string $token): bool
+    {
+        return \is_array($token)
+            && \in_array($token[0], [T_COMMENT, T_DOC_COMMENT, T_CONSTANT_ENCAPSED_STRING], true);
     }
 
     /**
@@ -265,28 +289,58 @@ final class SearchOperatorSurfaceGateTest extends TestCase
 
     /**
      * Top-level arguments only: a comma nested in an array literal or a nested call belongs to that, not to
-     * this call's signature.
+     * this call's signature. Counted by ARGUMENT-BEARING segment rather than by comma count, so a trailing
+     * comma before the closing paren — which this repo's own fixer adds to a reformatted multi-line call —
+     * does not inflate the count by one.
      *
      * @param list<array{0: int, 1: string, 2: int}|string> $slice
      */
     private function argumentCountOf(array $slice): int
     {
-        $depth = 0;
+        $tokens = $this->topLevelTokensOf($slice);
+
+        if ([] === $tokens) {
+            return 0;
+        }
+
+        if (',' === \array_last($tokens)) {
+            \array_pop($tokens);
+        }
+
         $commas = 0;
-        $seenAnything = false;
+
+        foreach ($tokens as $token) {
+            $commas += ',' === $token ? 1 : 0;
+        }
+
+        return $commas + 1;
+    }
+
+    /**
+     * /**
+     * Every token at the call's own top level (depth 1, the argument list itself) with whitespace dropped —
+     * used to count arguments; the `operators:` detection below reads a differently filtered reconstruction
+     * of the same slice instead, since a token-adjacency walk and a substring match cost the same here and
+     * the substring reads far plainer.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $slice
+     *
+     * @return list<array{0: int, 1: string, 2: int}|string>
+     */
+    private function topLevelTokensOf(array $slice): array
+    {
+        $depth = 0;
+        $tokens = [];
 
         foreach ($slice as $slouse) {
             $depth += $this->depthDelta($slouse);
 
-            if (1 !== $depth) {
-                continue;
+            if (1 === $depth && $this->carriesAnArgument($slouse)) {
+                $tokens[] = $slouse;
             }
-
-            $commas += ',' === $slouse ? 1 : 0;
-            $seenAnything = $seenAnything || $this->carriesAnArgument($slouse);
         }
 
-        return $seenAnything ? $commas + 1 : 0;
+        return $tokens;
     }
 
     /**

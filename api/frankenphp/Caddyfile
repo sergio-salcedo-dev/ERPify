@@ -63,7 +63,7 @@
 		# `/api/v1/backoffice/users/<uuid>` names a person, and a filter over a URI cannot tell a path
 		# segment from an identifier.
 		format filter {
-			request>uri regexp "(?i)([?]|%3f).*$" "?REDACTED"
+			request>uri regexp "(?i)([?]|%3f|%253f).*$" "?REDACTED"
 
 			# The same log line also carries the referring document's URL, and for a same-origin API
 			# request that document is the screen the ids live on — so `Referer` reproduces `actorId`

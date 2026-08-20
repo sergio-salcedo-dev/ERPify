@@ -151,6 +151,23 @@ Feature: Search the cross-bank account collection
     And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
+  # `In` is opt-in per field (`FieldMapping`'s default is eq/contains), and neither holderName nor iban asks
+  # for it: nothing in this product filters an account holder or an IBAN as a list, and the operator is the
+  # one whose wire spelling grows a sub-index. Pinned through the endpoint, like the equivalent email
+  # scenario in users/search.feature, because a narrowing nobody can see from the outside is a narrowing
+  # nobody notices breaking.
+  Scenario: Filtering accounts by a list of holder names is refused
+    When I send a "GET" request to "/backoffice/bank-accounts?filters[0][field]=holderName&filters[0][operator]=in&filters[0][value][]=Globex%20Corporation"
+    Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "unsupported-search-operator"
+
+  Scenario: Filtering accounts by a list of IBANs is refused
+    When I send a "GET" request to "/backoffice/bank-accounts?filters[0][field]=iban&filters[0][operator]=in&filters[0][value][]=DE89370400440532013000"
+    Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "unsupported-search-operator"
+
   # A malformed uuid bound against the bankId UUID column surfaces as input error (the field map marks
   # bankId requiresUuidValues), never a Postgres 22P02 turned 500.
   Scenario: A bankId filter with a malformed uuid returns 422 invalid-search-value
