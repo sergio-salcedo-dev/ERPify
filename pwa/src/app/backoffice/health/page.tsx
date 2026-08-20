@@ -10,6 +10,7 @@ import { apiScope } from "@/context/shared/observability/domain/TelemetryScope";
 import { telemetry } from "@/context/shared/observability/infrastructure";
 import {
   aggregateSystemStatus,
+  componentRollCall,
   deriveSystemStatus,
 } from "@/context/shared/system-status/domain/SystemStatus";
 import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
@@ -114,6 +115,12 @@ export default function HealthPage() {
     return { component, check, view };
   });
 
+  // The banner announces the worst status only, so a component that moves under it changes a row
+  // and nothing else. Read the roll call out with it, in the banner's own region.
+  const rollCall = componentRollCall(
+    componentViews.map(({ component, view }) => ({ name: component.name, status: view.status })),
+  );
+
   const bannerView = checking
     ? {
         status: deriveSystemStatus({ checking, failed: false, result: null }).status,
@@ -132,6 +139,7 @@ export default function HealthPage() {
         <SystemStatusBanner
           status={bannerView.status}
           datetime={bannerView.datetime}
+          detail={`${rollCall}.`}
           testId="backoffice-health__banner"
         />
 

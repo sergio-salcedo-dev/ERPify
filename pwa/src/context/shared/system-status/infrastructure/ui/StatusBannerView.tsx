@@ -24,6 +24,15 @@ export interface StatusBannerViewProps {
   datetime: string | null;
   theme: BannerTheme;
   testId?: string;
+  /**
+   * Detail read out with the headline, for a surface whose parts the headline folds away.
+   *
+   * The banner announces the worst status among its components, so a change confined to any
+   * other one is silent — visible in a row, absent from the audio. It rides inside this region
+   * rather than in one of its own: a second live region would announce over this one, which is
+   * the shape a per-row region already failed at.
+   */
+  detail?: string;
 }
 
 function subline(status: SystemStatus, datetime: string | null): string | null {
@@ -41,6 +50,7 @@ export function StatusBannerView({
   datetime,
   theme,
   testId,
+  detail,
 }: Readonly<StatusBannerViewProps>) {
   const Icon = ICONS[status];
   const [iconClassName, containerClassName] = theme.palette[status];
@@ -73,6 +83,11 @@ export function StatusBannerView({
         {note ? (
           <p className={cn(`${theme.classPrefix}__subline text-sm`, theme.sublineClassName)}>
             {note}
+          </p>
+        ) : null}
+        {detail ? (
+          <p className={`${theme.classPrefix}__detail sr-only`} data-testid="status-banner__detail">
+            {detail}
           </p>
         ) : null}
       </div>
