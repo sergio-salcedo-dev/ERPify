@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Mail;
 use Erpify\Iam\Identity\Infrastructure\Mail\SymfonyPasswordResetEmailSender;
 use Erpify\Shared\Mailer\Infrastructure\BulletproofEmailChrome;
 use Erpify\Shared\Mailer\Infrastructure\DeliverableSecurityTransport;
+use Erpify\Shared\Mailer\Infrastructure\RedactingMailer;
 use Erpify\Shared\Mailer\Infrastructure\SecurityLinkMailer;
 use Erpify\Shared\Mailer\Infrastructure\SecuritySenderAddress;
 use Erpify\Tests\Unit\Shared\Mailer\Infrastructure\CapturingMailer;
@@ -50,7 +51,7 @@ final class SymfonyPasswordResetEmailSenderTest extends TestCase
         $mailer = new CapturingMailer();
         $sender = new SymfonyPasswordResetEmailSender(
             new SecurityLinkMailer(
-                $mailer,
+                new RedactingMailer($mailer),
                 new SecuritySenderAddress('security@erpify.test', 'dev'),
                 'https://app.erpify.test',
                 new BulletproofEmailChrome(),

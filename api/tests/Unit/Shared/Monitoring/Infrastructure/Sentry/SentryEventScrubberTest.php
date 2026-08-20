@@ -10,6 +10,10 @@ use PHPUnit\Framework\TestCase;
 use Sentry\Event;
 
 /**
+ * Which FIELDS of an event leave the process. The complementary question — what survives inside a field that
+ * is kept, where an address rides in free text and the key name is no help — is
+ * {@see SentryEventAddressRedactionTest}.
+ *
  * @internal
  */
 #[CoversClass(SentryEventScrubber::class)]
@@ -139,32 +143,5 @@ final class SentryEventScrubberTest extends TestCase
         $this->assertSame($event, $result);
         $this->assertSame([], $event->getExtra());
         $this->assertSame([], $event->getRequest());
-    }
-
-    /**
-     * `Full command` is the field the console listener sets to the whole argv line, and the identifier is in
-     * its VALUE — so the key denylist cannot reach it. Dropping the field would take the command name with it.
-     */
-    public function testRedactsAnAddressCarriedInAnExtraValueWhileKeepingTheCommand(): void
-    {
-        $event = Event::createEvent();
-        $event->setExtra(['Full command' => "mailer:test 'alice@example.test'"]);
-
-        $scrubbed = (new SentryEventScrubber())($event)->getExtra();
-
-        // The quotes go with it: an apostrophe is an address byte to the pattern, so the shell quoting around
-        // the argument is consumed with the value rather than left framing an empty pair.
-        $this->assertSame(['Full command' => 'mailer:test REDACTED'], $scrubbed);
-    }
-
-    /** Keying on the field name would repeat the mistake: the next field carrying an address is invisible. */
-    public function testRedactsAnAddressUnderAnyExtraKeyAndAtAnyDepth(): void
-    {
-        $event = Event::createEvent();
-        $event->setExtra(['whatever' => ['nested' => 'delivery to bob@example.test failed']]);
-
-        $scrubbed = (new SentryEventScrubber())($event)->getExtra();
-
-        $this->assertSame(['whatever' => ['nested' => 'delivery to REDACTED failed']], $scrubbed);
     }
 }

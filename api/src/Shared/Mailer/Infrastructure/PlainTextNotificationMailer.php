@@ -8,8 +8,6 @@ use Erpify\Shared\Mailer\Application\NotificationMailer;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\Mime\Email;
 
 /**
  * {@link NotificationMailer} using plain text plus an HTML body wrapped in a `pre` element (Symfony Mailer).
@@ -18,7 +16,7 @@ use Symfony\Component\Mime\Email;
 final readonly class PlainTextNotificationMailer implements NotificationMailer
 {
     public function __construct(
-        private MailerInterface $mailer,
+        private RedactingMailer $mailer,
         #[Autowire(env: 'MAILER_FROM')]
         private string $mailFrom,
     ) {
@@ -43,15 +41,13 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
 
         $body = \implode("\n", $lines);
 
-        $email = (new Email())
-            ->from($this->mailFrom)
-            ->to($to)
-            ->subject($subject)
-            ->text($body)
-            ->html('<pre>' . \htmlspecialchars($body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>')
-        ;
-
-        $this->mailer->send($email);
+        $this->mailer->send(
+            from: $this->mailFrom,
+            recipientEmail: $to,
+            subject: $subject,
+            text: $body,
+            html: '<pre>' . \htmlspecialchars($body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>',
+        );
     }
 
     /**

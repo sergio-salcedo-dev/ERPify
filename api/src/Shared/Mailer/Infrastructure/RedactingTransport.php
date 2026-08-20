@@ -70,10 +70,11 @@ final readonly class RedactingTransport implements TransportInterface
      * Latent, and measured so: neither this application nor the mail library raises those markers today. The
      * shape to watch for is a transport or a listener that starts to.
      *
-     * **What this cannot reach is anything raised before the send.** The senders build their `Email` first, and
-     * `Mime\Address` quotes the argument it rejects, so a malformed recipient throws in the sender rather than
-     * here — where the `*BestEffort` wrapper logs it raw. That residual is recorded, with its measured bound,
-     * in `PRODUCTION_SECURITY_CHECKLIST.md`.
+     * **What this cannot reach is anything raised before the send**, assembly included: `Mime\Address` quotes
+     * the argument it rejects, and that throw lands while the message is being built rather than while it is
+     * being carried. {@see RedactingMailer} holds that half — it is the only place an `Email` exists, and it
+     * answers an assembly failure with the same composed exception — so the two together, and neither alone,
+     * are the boundary.
      */
     #[Override]
     public function send(RawMessage $message, ?Envelope $envelope = null): ?SentMessage
