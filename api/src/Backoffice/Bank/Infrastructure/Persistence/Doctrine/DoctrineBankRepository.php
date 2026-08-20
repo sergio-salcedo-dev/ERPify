@@ -122,6 +122,7 @@ final readonly class DoctrineBankRepository implements
     private function searchFieldMap(): SearchFieldMap
     {
         $rangeOperators = [FilterOperator::Gt, FilterOperator::Gte, FilterOperator::Lt, FilterOperator::Lte];
+        $textOperators = [FilterOperator::Eq, FilterOperator::In, FilterOperator::Contains];
 
         return new SearchFieldMap([
             // `In` is named rather than inherited: it is absent from the default operator set, so the two
@@ -131,18 +132,10 @@ final readonly class DoctrineBankRepository implements
             // a scalar value gets. The count is reproducible rather than remembered:
             //   awk '/^  Scenario/{s=NR} /\[field\]=(name|shortName)&filters\[[0-9]+\]\[operator\]=in/{print s}' \
             //     api/features/backoffice/bank/search.feature | sort -un | wc -l
-            'name' => new FieldMapping(
-                'b.nameNormalized',
-                $this->normalizedText,
-                operators: [FilterOperator::Eq, FilterOperator::In, FilterOperator::Contains],
-            ),
+            'name' => new FieldMapping('b.nameNormalized', $this->normalizedText, operators: $textOperators),
             // shortName is stored upper-case ASCII, so its normalizer upper-cases the search
             // value (the lower-casing name normalizer would never match).
-            'shortName' => new FieldMapping(
-                'b.shortName',
-                $this->asciiUpperText,
-                operators: [FilterOperator::Eq, FilterOperator::In, FilterOperator::Contains],
-            ),
+            'shortName' => new FieldMapping('b.shortName', $this->asciiUpperText, operators: $textOperators),
             // No contains on id: a LIKE over a UUID column breaks at the SQL level.
             'id' => new FieldMapping(
                 'b.id',
