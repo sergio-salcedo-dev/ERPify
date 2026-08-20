@@ -140,6 +140,26 @@ final class ArtifactGatePlacementGateTest extends TestCase
                 ArtifactGateSweep::ENGINE_HOME,
             ),
         );
+
+        // The "no extras" check above cannot see an engine that vanished from this directory without
+        // landing in the engine home — deleted rather than moved. A missing entry silently satisfies
+        // array_diff's emptiness, so a departed engine is checked for at its only sanctioned destination.
+        foreach (self::GRANDFATHERED_ENGINES as $engine) {
+            if (\in_array($engine, $engines, true)) {
+                continue;
+            }
+
+            $this->assertFileExists(
+                $apiRoot . '/' . ArtifactGateSweep::ENGINE_HOME . '/' . $engine,
+                \sprintf(
+                    '%s is gone from %s but not in %s. The set empties by moving the engines home, never by '
+                    . 'deleting them out of it.',
+                    $engine,
+                    ArtifactGateSweep::GRANDFATHERED_ENGINE_HOME,
+                    ArtifactGateSweep::ENGINE_HOME,
+                ),
+            );
+        }
     }
 
     private function placements(): ArtifactGatePlacements

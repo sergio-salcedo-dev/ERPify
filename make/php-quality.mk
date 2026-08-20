@@ -369,7 +369,7 @@ php.lint.public-access: ## Firewall public-exemption classification gate
 #
 # A green proves every artifact gate the sweep SEES is classified and sits where its line says. Outside the
 # home that sweep is a text heuristic erring in both directions — it skips a gate that also credits
-# production coverage (thirteen such tests today, all already mirrored on their module) and admits any test
+# production coverage (sixteen such tests today, all already mirrored on their module) and admits any test
 # importing a rule engine — and a gate it never matched has no line to go stale, which is how one sat
 # unclassified through this gate's first green run. It never judges a classification. The registry header
 # enumerates the rest, and says why the list cannot be exhaustive.

@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Shared\Architecture;
 
 use Erpify\Tests\Support\ArtifactGatePlacements;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -106,53 +107,68 @@ final class ArtifactGatePlacementRulesGateTest extends TestCase
         );
     }
 
+    /**
+     * @param list<string> $lines
+     */
     #[Test]
-    public function itRefusesABareSourceRootAsASubject(): void
+    #[DataProvider('provideItRefusesAMalformedRegistryLineCases')]
+    public function itRefusesAMalformedRegistryLine(array $lines): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        ArtifactGatePlacements::parse($lines);
+    }
+
+    /**
+     * One case per grammar refusal, each reduced to the single line (or pair of lines) that trips it —
+     * consolidated into one data-driven test rather than one method per case, which is what pushed this
+     * class over PHPMD's public-method ceiling the day the bare-root-without-a-slash and empty-path cases
+     * were added.
+     *
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function provideItRefusesAMalformedRegistryLineCases(): iterable
     {
         // `src` mirrors the whole of `tests/Unit`, which is not a placement — and it is the one value that
         // reaches the arm of mirrorOf() whose comment calls it unreachable.
-        $this->expectException(RuntimeException::class);
+        yield 'a bare source root as a subject' => [
+            ['tests/Unit/Alpha/AlphaGateTest.php :: mirrored :: src/'],
+        ];
 
-        ArtifactGatePlacements::parse(['tests/Unit/Alpha/AlphaGateTest.php :: mirrored :: src/']);
-    }
+        // The same refusal, spelled without the trailing slash: `str_starts_with('src', 'src/')` is false,
+        // so the bare-root check must not depend on the prefix match finding it first.
+        yield 'a bare source root missing its trailing slash' => [
+            ['tests/Unit/Alpha/AlphaGateTest.php :: mirrored :: src'],
+        ];
 
-    #[Test]
-    public function itRefusesADuplicatePath(): void
-    {
+        // A path-less line would otherwise register under the empty string and surface only later, as a
+        // confusing `stale()` entry with no line to point at.
+        yield 'a line with no path' => [
+            [' :: home'],
+        ];
+
         // PHP array assignment keeps the later value for a repeated key, so without the refusal one of the
         // two classifications is never evaluated while the file still reads as complete.
-        $this->expectException(RuntimeException::class);
+        yield 'a duplicate path' => [
+            [
+                'tests/Unit/Alpha/AlphaGateTest.php :: home',
+                'tests/Unit/Alpha/AlphaGateTest.php :: mirrored :: src/Alpha',
+            ],
+        ];
 
-        ArtifactGatePlacements::parse([
-            'tests/Unit/Alpha/AlphaGateTest.php :: home',
-            'tests/Unit/Alpha/AlphaGateTest.php :: mirrored :: src/Alpha',
-        ]);
-    }
+        yield 'an unknown placement' => [
+            ['tests/Unit/Alpha/AlphaGateTest.php :: wherever'],
+        ];
 
-    #[Test]
-    public function itRefusesAnUnknownPlacement(): void
-    {
-        $this->expectException(RuntimeException::class);
-
-        ArtifactGatePlacements::parse(['tests/Unit/Alpha/AlphaGateTest.php :: wherever']);
-    }
-
-    #[Test]
-    public function itRefusesAnUndecidedLineWithNoReason(): void
-    {
         // An exemption with no reason is indistinguishable from an oversight, which is the state the
         // classification exists to make impossible.
-        $this->expectException(RuntimeException::class);
+        yield 'an undecided line with no reason' => [
+            ['tests/Unit/Shared/Architecture/AlphaGateTest.php :: undecided'],
+        ];
 
-        ArtifactGatePlacements::parse(['tests/Unit/Shared/Architecture/AlphaGateTest.php :: undecided']);
-    }
-
-    #[Test]
-    public function itRefusesAMirroredSubjectOutsideSrcAndTests(): void
-    {
-        $this->expectException(RuntimeException::class);
-
-        ArtifactGatePlacements::parse(['tests/Unit/Alpha/AlphaGateTest.php :: mirrored :: config/Alpha']);
+        yield 'a mirrored subject outside src and tests' => [
+            ['tests/Unit/Alpha/AlphaGateTest.php :: mirrored :: config/Alpha'],
+        ];
     }
 
     private function over(string $registry): ArtifactGatePlacements

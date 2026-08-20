@@ -55,18 +55,26 @@
 #     non-gate. So is a class whose `extends TestCase` arrives through an intermediate abstract base (a text
 #     matcher cannot follow one; nothing in the tree has one today). A gate this half never matched has no
 #     line to go stale, which is how one sat unclassified through the first green build of this gate.
+#   - The `TestCase` import and `#[CoversClass]` target are read per statement, not per token: a grouped
+#     import (`use PHPUnit\Framework\{TestCase};`) is invisible to both. `php.lint.event-bus` paid for this
+#     exact class of gap with `token_get_all`; this detector does not. The window is narrow rather than open —
+#     `@Symfony`/`@PhpCsFixer` (`api/tools/ecs/.php-cs-fixer.dist.php`) split grouped imports back to one per
+#     statement, `php.cs-fixer` runs before this gate in both `php.quality` and `php.quality.dry-run`, and
+#     CI's `php.cs.dry-run` refuses a PR still carrying one — so the only reachable miss is a gate authored
+#     with a grouped import and checked locally before a full `php.quality` run normalises it.
 #   - It over-approximates. An import of anything in `api/tests/Support/` is read as reaching the tree, so a
 #     plain unit test that merely uses a helper from there joins the universe and needs a line. That is
 #     deliberate — the engines' own unit tests are exactly the files whose placement is in question — but it
 #     is not the definition at the top of this file.
 #   - A gate that also `#[CoversClass]`es the production class it reads is skipped outside the home. That is
 #     deliberate: such a test is not wholly a gate, and its placement follows the subject it covers.
-#     Measured, thirteen tests sit in that overlap today, every one already mirrored on an existing `src/`
+#     Measured, sixteen tests sit in that overlap today, every one already mirrored on an existing `src/`
 #     directory. Coverage credited through a docblock `@covers` is not read at all (the source is
 #     comment-stripped first); the tree carries none.
-#   - A gate that must boot a kernel is out of the category, because the category is kernel-free. One
-#     exists (`tests/Functional/Shared/Architecture/SchedulerCheckpointDurabilityGateTest.php`) and this
-#     file says nothing about where functional tests are filed.
+#   - A gate that must boot a kernel is out of the category, because the category is kernel-free. Two
+#     exist (`tests/Functional/Shared/Architecture/SchedulerCheckpointDurabilityGateTest.php`,
+#     `tests/Functional/Shared/Monitoring/ApiClientErrorBufferCouplingGateTest.php`) and this file says
+#     nothing about where functional tests are filed.
 #   - The sweep does not descend into a SYMLINKED directory under `tests/`, so a gate placed behind one is
 #     invisible in both directions. Following links would open a loop hazard; nothing in the tree uses one.
 #   - It reads text, not an AST. A heredoc holding gate-shaped source reads as the gate itself, and an

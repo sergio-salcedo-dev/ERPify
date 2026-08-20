@@ -201,6 +201,14 @@ final readonly class ArtifactGatePlacements
         $placement = \array_shift($parts);
         $tail = \array_shift($parts);
 
+        if ('' === $path) {
+            throw new RuntimeException(\sprintf(
+                'Malformed line in .artifact-gate-placement: "%s". A line with no path classifies nothing '
+                . 'and would register under the empty string instead of failing at parse time.',
+                $line,
+            ));
+        }
+
         if (null === $placement || '' === $placement) {
             throw new RuntimeException(\sprintf(
                 'Malformed line in .artifact-gate-placement: "%s". Expected `<path> :: home`, '
@@ -277,16 +285,18 @@ final readonly class ArtifactGatePlacements
             ));
         }
 
-        foreach (self::SUBJECT_ROOTS as $root) {
-            if (!\str_starts_with($tail, $root)) {
-                continue;
-            }
+        $trimmed = \rtrim($tail, '/');
 
-            $subject = \rtrim($tail, '/');
+        foreach (self::SUBJECT_ROOTS as $root) {
+            $bareRoot = \rtrim($root, '/');
 
             // A bare root is not a subject: `src` mirrors the whole of `tests/Unit`, which is not a
-            // placement, and it is the one value that reaches the "unreachable" arm of mirrorOf().
-            if (\rtrim($root, '/') === $subject) {
+            // placement, and it is the one value that reaches the "unreachable" arm of mirrorOf(). Compared
+            // against the TRIMMED tail and checked before the prefix match below — `str_starts_with` fails
+            // on a bare root missing its own trailing slash (`"src"` does not start with `"src/"`) and would
+            // otherwise fall through to the generic "under neither src/ nor tests/" refusal instead of this
+            // one.
+            if ($bareRoot === $trimmed) {
                 throw new RuntimeException(\sprintf(
                     'Line for "%s" names "%s" as its subject. A whole source root is not a module; name the '
                     . 'directory the file mirrors.',
@@ -295,7 +305,11 @@ final readonly class ArtifactGatePlacements
                 ));
             }
 
-            return $subject;
+            if (!\str_starts_with($tail, $root)) {
+                continue;
+            }
+
+            return $trimmed;
         }
 
         throw new RuntimeException(\sprintf(
