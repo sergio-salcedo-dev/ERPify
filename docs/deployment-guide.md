@@ -153,11 +153,25 @@ container that the web `php` container recompiled out from under it — see
   the minimum, and carries parametrizable CPU/memory ceilings.
 - Every service carries `restart: unless-stopped` in the **merged** prod config — `database` and
   `scheduler_worker` declare it in this overlay, the rest inherit it from `compose.yaml`, so
-  grepping this file alone shows only two. The database's is not decoration: `depends_on` orders a
-  `compose up` and has no say in the daemon's own restart pass, so a database missing it returns
-  only when an operator runs `make docker.up ENV=prod`, while `php`, `pwa` and the workers come
-  back on their own and fail against a database that is not there. (Dev overrides this for `pwa`
-  only — see `compose.dev.yaml`.)
+  grepping this file alone shows only two. The database's is not decoration: `depends_on` only
+  orders a `compose up` — it has no say in the daemon's own restart pass, nor in an in-session
+  restart (e.g. `database` OOM-killed under `${DB_MEM_LIMIT}`). **That is retryable, not
+  terminal.** `php`, `messenger_worker` and `scheduler_worker` all run the same
+  `api/frankenphp/docker-entrypoint.sh`, which retries up to 60 times (1s apart, each also
+  booting a Symfony kernel to probe — so wall time exceeds 60s) before exiting 1; Docker then
+  restarts the container and the wait runs again, self-healing once the database returns.
+  Measured (`SIGKILL` under a live transaction): the database reported `pg_isready`-healthy in
+  ~11s, and a `messenger_worker` crash-to-consuming-again cycle took ~36s. **No corruption risk
+  either**: Postgres crash recovery replays the WAL to the last consistent committed state — there
+  is no "half-restored schema" to reconnect to (measured: only the row committed before the kill
+  survived; an in-flight uncommitted one did not). What is real is a bounded unavailability window
+  that, until this change, nothing observed at all — the entrypoint's wait-exhaustion branch now
+  logs it clearly, the one point in this retry loop that runs before Sentry's SDK even boots
+  (Sentry's own `before_send` filter already lets a genuine mid-flight outage through; it drops
+  only the worker's graceful-teardown noise — see `SentryEventFilter`). That log line is a
+  readability fix, not an alert: nothing here pages anyone or sets a ceiling on the crash-loop —
+  it only makes the state legible to whoever is reading `docker compose logs` at the time. (Dev
+  overrides `restart` for `pwa` only — see `compose.dev.yaml`.)
 - Postgres is on an `internal` `backend` network with **no published host port**.
 - `pwa` runs with a read-only root filesystem.
 - `php` and `messenger_worker` disable core dumps (`ulimits.core: 0` in the base
