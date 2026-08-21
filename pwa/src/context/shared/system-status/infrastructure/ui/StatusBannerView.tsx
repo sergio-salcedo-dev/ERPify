@@ -86,7 +86,10 @@ export function StatusBannerView({
           </p>
         ) : null}
         {detail ? (
-          <p className={`${theme.classPrefix}__detail sr-only`} data-testid="status-banner__detail">
+          <p
+            className={`${theme.classPrefix}__detail sr-only`}
+            data-testid={testId ? `${testId}__detail` : undefined}
+          >
             {detail}
           </p>
         ) : null}

@@ -11,9 +11,13 @@ export type StatusBadgeVariant = "success" | "warning" | "danger" | "info" | "ne
  * --erpify-status-dot-* fills to clear 1.4.11 (≥3:1).
  *
  * The wrapper is a `<span>`, and that is load-bearing: `<output>` maps to role `status` in
- * HTML-AAM, so it IS a polite live region. One badge per row means a table of N rows declaring
- * N live regions that announce nothing and compete with the regions that do. `jsx-a11y` has no
- * rule for it — the wiring in `eslint.config.mjs` does not see this — so the gate is
+ * HTML-AAM, so it IS a polite live region, and one badge per row means a table of N rows
+ * declaring N live regions that announce nothing and compete with the regions that do. A badge
+ * that changes status in place — a health row's, a user's after an admin edit — relies on a live
+ * region living elsewhere instead: the health page's roll-call `detail`, or the toast the
+ * mutation fires on success. The badge itself is deliberately not one, so a new single/few-badge
+ * in-place-update usage gets no announcement for free and needs to add its own. `jsx-a11y` has no
+ * rule for any of this — the wiring in `eslint.config.mjs` does not see it — so the gate is
  * `tests/live-region-surfaces.test.ts`, which refuses a new `<output>` outside its registry.
  */
 const dotVariants = cva("size-1.5 flex-none rounded-full", {

@@ -139,7 +139,7 @@ export default function HealthPage() {
         <SystemStatusBanner
           status={bannerView.status}
           datetime={bannerView.datetime}
-          detail={`${rollCall}.`}
+          detail={rollCall ? `${rollCall}.` : undefined}
           testId="backoffice-health__banner"
         />
 

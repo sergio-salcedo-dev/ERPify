@@ -68,7 +68,7 @@ describe("SystemStatusBanner", () => {
       />,
     );
     const banner = screen.getByTestId("x-banner");
-    const detail = screen.getByTestId("status-banner__detail");
+    const detail = screen.getByTestId("x-banner__detail");
     expect(banner).toContainElement(detail);
     expect(detail).toHaveClass("sr-only");
     expect(detail).toHaveTextContent("Database: Degraded.");
@@ -78,7 +78,7 @@ describe("SystemStatusBanner", () => {
     render(
       <SystemStatusBanner status={SystemStatus.OPERATIONAL} datetime={null} testId="x-banner" />,
     );
-    expect(screen.queryByTestId("status-banner__detail")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("x-banner__detail")).not.toBeInTheDocument();
   });
 
   it("renders an aria-hidden icon", () => {

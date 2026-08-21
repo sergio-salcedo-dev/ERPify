@@ -39,4 +39,15 @@ describe("componentRollCall", () => {
   it("is empty for no components, so a caller adding punctuation says nothing", () => {
     expect(componentRollCall([])).toBe("");
   });
+
+  it("strips the CHECKING label's ellipsis so it never stacks against sentence punctuation", () => {
+    const rollCall = componentRollCall([
+      { name: "BackOffice API", status: SystemStatus.CHECKING },
+      { name: "Database", status: SystemStatus.CHECKING },
+    ]);
+
+    expect(rollCall).toBe("BackOffice API: Checking. Database: Checking");
+    expect(rollCall).not.toMatch(/[.…]\s*\./);
+    expect(`${rollCall}.`).toBe("BackOffice API: Checking. Database: Checking.");
+  });
 });

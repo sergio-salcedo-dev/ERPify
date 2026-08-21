@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
  * and `app/layout.tsx` fixes a static one — so on this tree that fallback is dead code. A
  * back-office route that declares no title of its own therefore inherits the root title, the
  * title never changes between routes, and the navigation is **never announced**. That was the
- * state of 46 routes, and nothing said so: no gate, no lint rule, no failing test.
+ * state of 47 routes, and nothing said so: no gate, no lint rule, no failing test.
  *
  * A title is resolved from the page's own `metadata` or from the nearest layout above it, which
  * is how a Client Component page declares one (`metadata` is server-only). The segment root

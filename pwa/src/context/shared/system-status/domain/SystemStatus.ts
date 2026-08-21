@@ -102,6 +102,12 @@ export interface NamedComponentStatus {
 }
 
 /**
+ * `COMPONENT_LABEL[CHECKING]` carries a decorative ellipsis for the status pill; stripped here
+ * so it never stacks against this function's own `". "` join or the caller's trailing period.
+ */
+const SENTENCE_PUNCTUATION_RE = /[.…]+$/;
+
+/**
  * Every component named with its status, for a live region whose headline is the worst of them.
  *
  * `aggregateSystemStatus` is worst-wins, so a component moving under the maximum changes no
@@ -111,6 +117,9 @@ export interface NamedComponentStatus {
  */
 export function componentRollCall(components: readonly NamedComponentStatus[]): string {
   return components
-    .map(({ name, status }) => `${name}: ${componentStatusLabel(status)}`)
+    .map(
+      ({ name, status }) =>
+        `${name}: ${componentStatusLabel(status).replace(SENTENCE_PUNCTUATION_RE, "")}`,
+    )
     .join(". ");
 }
