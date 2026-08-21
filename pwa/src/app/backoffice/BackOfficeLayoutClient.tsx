@@ -26,6 +26,7 @@ import {
 } from "./_lib/backofficeMenu";
 import { RequireAuth, DevSessionSwitcher } from "@/context/shared/access/infrastructure/ui";
 import { useSession } from "@/context/shared/access/application/useSession";
+import { isSessionExpiring } from "@/context/shared/access/application/sessionExpiry";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNavigate";
@@ -59,6 +60,7 @@ const SignOut = {
   LEAVING: "leaving",
   REFUSED: "refused",
   STALLED: "stalled",
+  SUPERSEDED: "superseded",
 } as const;
 type SignOut = (typeof SignOut)[keyof typeof SignOut];
 
@@ -67,12 +69,17 @@ type SignOut = (typeof SignOut)[keyof typeof SignOut];
  * `role="status"` speaks on insertion — so every state that ends the window carries a
  * message of its own. Falling back to "" there is what made the recovery path silent: the
  * user heard "Signing out…", then nothing, while the visible affordance quietly reverted.
+ * `SUPERSEDED` deliberately does not claim "you are signed out" — `logout()` swallows its own
+ * failures by contract and can be pre-empted by `SIGN_OUT_BUDGET_MS`, so that isn't actually
+ * guaranteed here — and does not name a destination, since a future third caller of
+ * `hardNavigate` could supersede this one too.
  */
 const SIGN_OUT_MESSAGE: Record<SignOut, string> = {
   [SignOut.IDLE]: "",
   [SignOut.LEAVING]: "Signing out…",
   [SignOut.REFUSED]: "Sign-out did not complete. Please try again.",
   [SignOut.STALLED]: "Sign-out is taking longer than expected. You can try again.",
+  [SignOut.SUPERSEDED]: "Redirecting…",
 };
 
 export default function BackOfficeLayoutClient({
@@ -219,6 +226,33 @@ export default function BackOfficeLayoutClient({
           // left `isLeaving` latched for the life of the document — every menu-driven navigation
           // dropped from then on, with an sr-only string as the only feedback.
           hardNavigate(Routes.HOME, (failure) => {
+            if (failure === "superseded") {
+              // Another hard navigation already owned the document — sign-out itself did not
+              // fail, it just isn't the one leaving. Not a failure, so no REFUSED/STALLED
+              // styling — but still a real, non-empty live-region message: an adversarial pass
+              // caught the earlier silent-IDLE version of this branch reproducing the exact
+              // defect the comment above already closed for REFUSED/STALLED.
+              setSignOut(SignOut.SUPERSEDED);
+              // The toast is what REFUSED/STALLED lean on for the case their own subtree is
+              // already unmounted — but the ONLY real caller that can supersede this one today
+              // is the session-expiry bounce, and winning the sink is what mounts
+              // <SessionExpiryCurtain> over this entire subtree in the first place. A second
+              // adversarial pass (both reviewers, independently) caught that: by the time this
+              // callback runs the curtain already owns the screen — its role="alert" already
+              // announced something, and Sonner's viewport sits BELOW the curtain's
+              // z-index, so a toast raised now would enqueue and never paint. Skip it in
+              // exactly that case, since the curtain already carries the announcement; keep it
+              // for a hypothetical future caller that supersedes this one without bringing its
+              // own.
+              if (!isSessionExpiring()) {
+                toastNotifier.info(SIGN_OUT_MESSAGE[SignOut.SUPERSEDED]);
+              }
+              // isSigningOut still has to release — if that OTHER navigation itself never
+              // commits, nothing else will, and this would stay latched for the life of the
+              // document, exactly the class of bug this module already guards against.
+              setIsSigningOut(false);
+              return;
+            }
             const outcome = failure === "refused" ? SignOut.REFUSED : SignOut.STALLED;
             setSignOut(outcome);
             // The status region is no longer guaranteed to still be mounted by the time an
