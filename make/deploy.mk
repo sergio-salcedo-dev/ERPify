@@ -54,6 +54,32 @@ prod.env.check: ## Validate .env.prod.local holds every required prod secret (fa
 			exit 1; \
 		fi; \
 	fi; \
+	bad_mem=""; \
+	for key in PHP_MEM_LIMIT PWA_MEM_LIMIT DB_MEM_LIMIT WORKER_MEM_LIMIT SCHEDULER_MEM_LIMIT; do \
+		val=$$(grep -E "^$$key=" "$$file" | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'); \
+		[ -n "$$val" ] || continue; \
+		if ! printf '%s' "$$val" | grep -qE '^[0-9]{1,9}[bBkKmMgG]$$'; then \
+			bad_mem="$$bad_mem\n    - $$key='$$val': not a valid Docker memory limit (need a positive integer, max 9 digits, with a b/k/m/g suffix — a bare '512' reads as 512 BYTES)"; \
+			continue; \
+		fi; \
+		unit=$$(printf '%s' "$$val" | sed -E 's/^[0-9]+//' | tr '[:upper:]' '[:lower:]'); \
+		digits=$$(printf '%s' "$$val" | sed -E 's/[bBkKmMgG]$$//'); \
+		case "$$unit" in \
+			b) mult=1 ;; \
+			k) mult=1024 ;; \
+			m) mult=1048576 ;; \
+			g) mult=1073741824 ;; \
+		esac; \
+		bytes=$$(( digits * mult )); \
+		if [ "$$bytes" -lt 6291456 ]; then \
+			bad_mem="$$bad_mem\n    - $$key='$$val' ($$bytes bytes): below Docker's own ~6 MiB minimum — the container fails to start with 'Minimum memory limit allowed is 6MB', naming neither key nor service"; \
+		fi; \
+	done; \
+	if [ -n "$$bad_mem" ]; then \
+		echo "✗ $(PROD_ENV_FILE) has invalid memory-limit knobs:"; \
+		printf '%b\n' "$$bad_mem"; \
+		exit 1; \
+	fi; \
 	echo "✓ $(PROD_ENV_FILE) is complete — all required keys set."
 
 deploy.local: ## Stand up the prod profile on this host at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance)
