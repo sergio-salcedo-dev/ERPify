@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Spinner } from "@/components/erpify";
 import { TokenActionScreen } from "../_components/TokenActionScreen";
+
+export const metadata: Metadata = {
+  title: "Create your password",
+};
 
 export default function AcceptInvitationPage() {
   // TokenActionScreen reads the invitation token via useSearchParams, which

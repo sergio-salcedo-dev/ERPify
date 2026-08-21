@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -16,17 +17,25 @@ import { describe, expect, it } from "vitest";
  * arriving with its first `<output>` is the moment a decision is owed. Adding an entry means
  * stating why that surface is a live region — a reason review can refuse.
  *
- * Comments are stripped before matching: the two badges document why they are NOT `<output>`,
- * and a gate that reads its own rationale as a violation is one nobody can write the reason in.
+ * The tree is read with the TypeScript compiler's AST, not a regex over the source text: an
+ * `<output` spelled inside a comment or a string is not a rendered element, and a comment is
+ * trivia attached to a token rather than a node the walk visits, so it never competes with a
+ * live one for the match. The walk also reaches a **dynamically** created element —
+ * `createElement("output", …)` — which no text-based scan sees at all. A tag whose name is
+ * itself a variable (`const Tag = "output"; <Tag />`) stays out of scope: that is not a
+ * defect literate analysis fails to close, it is the boundary of what a static read of the
+ * source can ever answer.
  *
- * A green proves no unregistered file spells `<output>`. It proves nothing about the
- * OTHER spellings of a live region (`role="status"`, `role="alert"`, `aria-live`), which are
- * explicit, greppable and self-documenting — the trap closed here is the one that is neither.
+ * A green proves no unregistered file spells `<output>`, statically or via `createElement`. It
+ * proves nothing about the OTHER spellings of a live region (`role="status"`, `role="alert"`,
+ * `aria-live`), which are explicit, greppable and self-documenting — the trap closed here is
+ * the one that is neither.
  */
 const PWA_ROOT = path.resolve(__dirname, "..");
 const SRC_ROOT = path.join(PWA_ROOT, "src");
 const SOURCE_EXTENSIONS = new Set([".tsx", ".jsx"]);
-const OUTPUT_ELEMENT_RE = /<output[\s/>]/;
+const OUTPUT_TAG = "output";
+const CREATE_ELEMENT_CALLEES = new Set(["createElement", "React.createElement"]);
 
 // Path relative to `src/` → why this surface is genuinely a live region.
 const LIVE_REGION_SURFACES: Readonly<Record<string, string>> = {
@@ -49,52 +58,88 @@ function* walk(dir: string): Generator<string> {
   }
 }
 
-/**
- * Comments and string bodies removed, so neither can speak for the tree.
- *
- * Deleting a whole line for holding `//` reads `https://…` inside a string as a comment and
- * takes the code with it — two live lines in `src/app/layout.tsx` were being destroyed that way,
- * and an `<output>` sharing a line with a URL would have been invisible. String bodies go too:
- * `<output` inside one is not a rendered element, so dropping them can only remove false
- * positives. A regex literal holding an odd quote would still confuse this scanner — it is a
- * text reader, not a parser, and that is the residual it trades for having no dependency.
- */
-function withoutComments(source: string): string {
-  let out = "";
-  let quote = "";
-  for (let i = 0; i < source.length; i++) {
-    const char = source[i];
-    if (quote) {
-      if (char === "\\") i++;
-      else if (char === quote) quote = "";
-      continue;
-    }
-    if (char === '"' || char === "'" || char === "`") {
-      quote = char;
-      continue;
-    }
-    if (char === "/" && source[i + 1] === "/") {
-      while (i < source.length && source[i] !== "\n") i++;
-      out += "\n";
-      continue;
-    }
-    if (char === "/" && source[i + 1] === "*") {
-      i += 2;
-      while (i < source.length && !(source[i] === "*" && source[i + 1] === "/")) i++;
-      i++;
-      continue;
-    }
-    out += char;
+function isOutputJsxElement(node: ts.Node): boolean {
+  if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+    return node.tagName.getText() === OUTPUT_TAG;
   }
-  return out;
+  return false;
+}
+
+function isOutputCreateElementCall(node: ts.Node): boolean {
+  if (!ts.isCallExpression(node)) return false;
+  if (!CREATE_ELEMENT_CALLEES.has(node.expression.getText())) return false;
+  const [tagArgument] = node.arguments;
+  return !!tagArgument && ts.isStringLiteralLike(tagArgument) && tagArgument.text === OUTPUT_TAG;
+}
+
+/** Whether `source` renders an `<output>` — as static JSX or via a `createElement` call. */
+function rendersOutputInSource(fileName: string, source: string): boolean {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (isOutputJsxElement(node) || isOutputCreateElementCall(node)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+}
+
+function rendersOutputElement(file: string): boolean {
+  return rendersOutputInSource(file, readFileSync(file, "utf8"));
 }
 
 function filesRenderingOutput(): string[] {
   return [...walk(SRC_ROOT)]
-    .filter((file) => OUTPUT_ELEMENT_RE.test(withoutComments(readFileSync(file, "utf8"))))
+    .filter((file) => rendersOutputElement(file))
     .map((file) => path.relative(SRC_ROOT, file).replaceAll(path.sep, "/"))
     .sort();
 }
+
+describe("output detection reads the AST, not the source text", () => {
+  it("finds a real <output> even past a regex literal an odd-quote text scanner would misread", () => {
+    // A text scanner that tracks quotes with a single flag treats the apostrophe inside this
+    // regex literal as opening a string, then silently drops everything after it — including a
+    // genuine <output> — until it happens to find another apostrophe to "close" it with.
+    const source = `
+      const CANT_MATCH_RE = /don't match/;
+      export function Widget() {
+        return <output data-testid="widget__status">hi</output>;
+      }
+    `;
+    expect(rendersOutputInSource("fixture.tsx", source)).toBe(true);
+  });
+
+  it("finds an <output> created via createElement, which no text-based scan can see", () => {
+    const source = `
+      import { createElement } from "react";
+      export function Widget() {
+        return createElement("output", { "data-testid": "widget__status" }, "hi");
+      }
+    `;
+    expect(rendersOutputInSource("fixture.tsx", source)).toBe(true);
+  });
+
+  it("does not flag createElement calls building a different tag", () => {
+    const source = `
+      import { createElement } from "react";
+      export function Widget() {
+        return createElement("div", null, "hi");
+      }
+    `;
+    expect(rendersOutputInSource("fixture.tsx", source)).toBe(false);
+  });
+});
 
 describe("live-region surfaces", () => {
   it("declares `<output>` only where the registry says the surface announces", () => {
