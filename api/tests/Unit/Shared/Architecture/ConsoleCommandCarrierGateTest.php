@@ -208,34 +208,52 @@ final class ConsoleCommandCarrierGateTest extends TestCase
     private function overrideDefinitions(): array
     {
         $configDir = \dirname(__DIR__, 4) . '/config';
-        $overrides = [];
-
-        $base = Yaml::parseFile($configDir . '/services.yaml', Yaml::PARSE_CUSTOM_TAGS);
-
-        if (\is_array($base)) {
-            foreach ($base as $key => $block) {
-                if (!\is_string($key) || !\str_starts_with($key, 'when@') || !\is_array($block)) {
-                    continue;
-                }
-
-                $services = $block['services'] ?? null;
-
-                if (\is_array($services)) {
-                    $overrides['config/services.yaml → ' . $key] = $services;
-                }
-            }
-        }
+        $overrides = $this->whenBlocksOf($configDir . '/services.yaml');
 
         foreach (\glob($configDir . '/services_*.yaml') ?: [] as $file) {
-            $parsed = Yaml::parseFile($file, Yaml::PARSE_CUSTOM_TAGS);
-            $services = \is_array($parsed) ? ($parsed['services'] ?? null) : null;
+            $services = $this->servicesOf(Yaml::parseFile($file, Yaml::PARSE_CUSTOM_TAGS));
 
-            if (\is_array($services)) {
+            if (null !== $services) {
                 $overrides['config/' . \basename($file)] = $services;
             }
         }
 
         return $overrides;
+    }
+
+    /**
+     * The `when@<env>:` blocks inside the base file, which the kernel applies after its root.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function whenBlocksOf(string $file): array
+    {
+        $parsed = Yaml::parseFile($file, Yaml::PARSE_CUSTOM_TAGS);
+        $blocks = [];
+
+        foreach (\is_array($parsed) ? $parsed : [] as $key => $block) {
+            if (!\is_string($key) || !\str_starts_with($key, 'when@')) {
+                continue;
+            }
+
+            $services = $this->servicesOf($block);
+
+            if (null !== $services) {
+                $blocks['config/services.yaml → ' . $key] = $services;
+            }
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function servicesOf(mixed $block): ?array
+    {
+        $services = \is_array($block) ? ($block['services'] ?? null) : null;
+
+        return \is_array($services) ? $services : null;
     }
 
     /**

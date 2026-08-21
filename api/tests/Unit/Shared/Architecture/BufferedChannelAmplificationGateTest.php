@@ -119,7 +119,7 @@ final class BufferedChannelAmplificationGateTest extends TestCase
      * describes the deployment and its verdict has to be revisited rather than inherited.
      */
     #[Test]
-    #[DataProvider('channels')]
+    #[DataProvider('provideTheChannelIsStillInsideTheBufferedHandlerCases')]
     public function theChannelIsStillInsideTheBufferedHandler(string $channel): void
     {
         $declared = $this->deployedHandler()['channels'] ?? [];
@@ -151,6 +151,16 @@ final class BufferedChannelAmplificationGateTest extends TestCase
         }
 
         $this->assertNotContains('!' . $channel, $entries, $refused);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideTheChannelIsStillInsideTheBufferedHandlerCases(): iterable
+    {
+        foreach (self::CHANNELS as $channel) {
+            yield $channel => [$channel];
+        }
     }
 
     /**
@@ -189,7 +199,7 @@ final class BufferedChannelAmplificationGateTest extends TestCase
      * @param list<string> $pinned
      */
     #[Test]
-    #[DataProvider('emitters')]
+    #[DataProvider('provideTheEmitterActivatesTheBufferAtExactlyThePinnedLevelsCases')]
     public function theEmitterActivatesTheBufferAtExactlyThePinnedLevels(string $emitter, array $pinned): void
     {
         $source = $this->sourceOf($emitter);
@@ -242,6 +252,16 @@ final class BufferedChannelAmplificationGateTest extends TestCase
     }
 
     /**
+     * @return iterable<string, array{string, list<string>}>
+     */
+    public static function provideTheEmitterActivatesTheBufferAtExactlyThePinnedLevelsCases(): iterable
+    {
+        foreach (self::ACTIVATING_LEVELS as $emitter => $levels) {
+            yield $emitter => [$emitter, $levels];
+        }
+    }
+
+    /**
      * The one carrier that would reopen #804 on its own: the retry listener has the message OBJECT in hand
      * and puts only its class name into the record. A bump that added the payload back would put a queued
      * aggregate id — and, for an event about a person, the personal datum itself — into a sink with no
@@ -275,26 +295,6 @@ final class BufferedChannelAmplificationGateTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string}>
-     */
-    public static function channels(): iterable
-    {
-        foreach (self::CHANNELS as $channel) {
-            yield $channel => [$channel];
-        }
-    }
-
-    /**
-     * @return iterable<string, array{string, list<string>}>
-     */
-    public static function emitters(): iterable
-    {
-        foreach (self::ACTIVATING_LEVELS as $emitter => $levels) {
-            yield $emitter => [$emitter, $levels];
-        }
-    }
-
-    /**
      * Every class the installed vendor configuration tags onto one of these channels.
      *
      * Read from the PHP service-configuration files rather than from a booted container, because this gate is
@@ -312,36 +312,8 @@ final class BufferedChannelAmplificationGateTest extends TestCase
         foreach (\glob(\dirname(__DIR__, 4) . '/vendor/symfony/*/Resources/config/*.php') ?: [] as $file) {
             $source = \file_get_contents($file);
 
-            if (!\is_string($source) || !\str_contains($source, "'monolog.logger'")) {
-                continue;
-            }
-
-            \preg_match_all('/^use\s+([\w\\\\]+);/m', $source, $imports);
-            $fqcn = [];
-
-            foreach ($imports[1] as $import) {
-                $parts = \explode('\\', $import);
-                $fqcn[\end($parts)] = $import;
-            }
-
-            $current = null;
-
-            foreach (\explode("\n", $source) as $line) {
-                if (1 === \preg_match('/->set\(\s*\'[^\']+\'\s*,\s*(\w+)::class/', $line, $set)) {
-                    $current = $fqcn[$set[1]] ?? null;
-                }
-
-                if (1 !== \preg_match('/\'monolog\.logger\'.*\'channel\'\s*=>\s*\'([^\']+)\'/', $line, $tag)) {
-                    continue;
-                }
-
-                if (null === $current || !\in_array($tag[1], self::CHANNELS, true)) {
-                    continue;
-                }
-
-                if (\class_exists($current)) {
-                    $found[] = $current;
-                }
+            if (\is_string($source) && \str_contains($source, "'monolog.logger'")) {
+                $found = [...$found, ...$this->taggedIn($source)];
             }
         }
 
@@ -349,6 +321,60 @@ final class BufferedChannelAmplificationGateTest extends TestCase
         $unique = \array_values(\array_unique($found));
 
         return $unique;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function taggedIn(string $source): array
+    {
+        $shortNames = $this->importsOf($source);
+        $current = null;
+        $found = [];
+
+        foreach (\explode("\n", $source) as $line) {
+            if (1 === \preg_match('/->set\(\s*\'[^\']+\'\s*,\s*(\w+)::class/', $line, $set)) {
+                $current = $shortNames[$set[1]] ?? null;
+            }
+
+            $channel = $this->channelTaggedOn($line);
+
+            if (null !== $current && null !== $channel && \class_exists($current)) {
+                $found[] = $current;
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * Captured as `\S+` rather than as an explicit backslash class: a namespace separator inside a character
+     * class needs an escape depth the code-style fixer rewrites into a broken pattern, and an import has no
+     * whitespace in it anyway.
+     *
+     * @return array<string, string>
+     */
+    private function importsOf(string $source): array
+    {
+        \preg_match_all('/^use\s+(\S+);/m', $source, $imports);
+
+        $shortNames = [];
+
+        foreach ($imports[1] as $import) {
+            $parts = \explode('\\', $import);
+            $shortNames[\end($parts)] = $import;
+        }
+
+        return $shortNames;
+    }
+
+    private function channelTaggedOn(string $line): ?string
+    {
+        if (1 !== \preg_match('/\'monolog\.logger\'.*\'channel\'\s*=>\s*\'([^\']+)\'/', $line, $tag)) {
+            return null;
+        }
+
+        return \in_array($tag[1], self::CHANNELS, true) ? $tag[1] : null;
     }
 
     /**

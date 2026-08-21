@@ -161,7 +161,7 @@ final readonly class ConsoleCommandRedactionProcessor implements ProcessorInterf
      */
     private function redact(string $command): string
     {
-        $tokens = \preg_split(self::SEPARATOR, \trim($command), -1, \PREG_SPLIT_NO_EMPTY);
+        $tokens = \preg_split(self::SEPARATOR, \trim($command), -1, PREG_SPLIT_NO_EMPTY);
 
         // `false` is invalid UTF-8 under the `u` modifier, which is a value nothing here can read — same
         // verdict as any other unreadable carrier.
