@@ -23,6 +23,16 @@
 #     made that expensive was `next dev`: 312-577 MiB per stack at idle, against 2 MiB for an idle
 #     php and ~20 MiB for a worker. The other services keep the inherited policy because their
 #     restart is a contract rather than an accident — see the note on each.
+# Same bound, and the values are literals for the same reason — see the note on compose.yaml's
+# `x-logging`. Repeated rather than shared because a YAML anchor does not cross files: Compose merges
+# the SERVICE maps, never the anchors, so each overlay has to spell the bound for the services it is
+# the first to introduce. Services it merely overrides inherit compose.yaml's block untouched.
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   mailpit:
     # Cap: memory.peak reads 26 MiB.
@@ -32,6 +42,7 @@ services:
           memory: ${DEV_MAILPIT_MEM_LIMIT:-256m}
     memswap_limit: ${DEV_MAILPIT_MEM_LIMIT:-256m}
     image: axllent/mailpit:v1.30.7@sha256:d5ecbb067db3705fa953d79e1b7f81ef84038df67aba6c52825d8c02a1ea748a
+    logging: *bounded-logging
     ports:
       - "${MAILPIT_UI_PORT:-8025}:8025"
     environment:
