@@ -17,6 +17,11 @@ describe("AuditLevelBadge", () => {
     expect(container.querySelector(".bg-danger")).toBeNull();
   });
 
+  it("is not a live region — one badge per timeline row would be one region per row", () => {
+    render(<AuditLevelBadge level="security" />);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("renders an unknown level verbatim with the neutral dot (forensic faithfulness)", () => {
     const { container } = render(<AuditLevelBadge level="mystery" />);
     expect(screen.getByText("mystery")).toBeInTheDocument();

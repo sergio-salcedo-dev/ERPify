@@ -13,6 +13,10 @@ import { AuditLevel } from "@/context/backoffice/audit/domain/AuditEntry";
  * (a second channel). `change` rides `{color.brand}` — a write event, distinct from `security` and
  * never `{color.danger}`. `level` is the raw stored string: an unknown token still renders, dot
  * neutral, label verbatim — a forensic read never breaks on an unexpected value.
+ *
+ * A `<span>`, for the reason `<StatusBadge>` records: `<output>` carries role `status`, and a
+ * timeline page renders one of these per row — every one of them a live region announcing
+ * nothing. Gated by `tests/live-region-surfaces.test.ts`.
  */
 const dotVariants = cva("size-1.5 flex-none rounded-full", {
   variants: {
@@ -47,7 +51,7 @@ export function AuditLevelBadge({ level, className, testId }: Readonly<AuditLeve
   const tone = toneFor(level);
   const label = KNOWN_LABEL[level] ?? level;
   return (
-    <output
+    <span
       className={cn(
         "audit-level-badge bg-muted text-muted-foreground inline-flex h-5 items-center gap-1.5 rounded-full px-2 text-2xs font-medium",
         className,
@@ -57,6 +61,6 @@ export function AuditLevelBadge({ level, className, testId }: Readonly<AuditLeve
     >
       <span className={dotVariants({ tone })} aria-hidden="true" />
       {label}
-    </output>
+    </span>
   );
 }

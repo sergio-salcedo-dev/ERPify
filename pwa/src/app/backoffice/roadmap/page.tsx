@@ -16,7 +16,7 @@ import {
 
 export const metadata: Metadata = {
   title: "Product Roadmap",
-  description: "Backlog vivo de producto + ingeniería de ERPify, por fases y módulos.",
+  description: "ERPify's living product and engineering backlog, by phase and module.",
 };
 
 const STATUS_LABEL: Record<RoadmapStatus, string> = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Menu, Bell, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { Logo, MonogramAvatar, SidebarItem, ThemeToggle } from "@/components/erpify";
@@ -103,6 +103,39 @@ export default function BackOfficeLayoutClient({
     globalThis.addEventListener("keydown", handleKey);
     return () => globalThis.removeEventListener("keydown", handleKey);
   }, []);
+
+  // Focus follows the route. Next calls `.focus()` on the first host node of the changed segment
+  // (`layout-router.js`), and that node is the page's own root, which carries no `tabIndex` — so
+  // the call is a no-op and focus stays on `<body>`: after a client navigation the next Tab
+  // restarts at the skip link and walks the whole chrome before reaching content. `<main>` takes
+  // the focus here instead of every page root taking a `tabIndex` of its own, which is also what
+  // makes the skip link land (a fragment link moves focus only to a focusable target).
+  //
+  // Keyed on `usePathname()`, never on the full URL: the lists write their filters and cursor to
+  // the query string, so keying on that would pull focus out of a filter input on every keystroke.
+  //
+  // A page that claimed the focus itself keeps it. The create routes' first field carries
+  // `autoFocus`, which React applies in the commit phase — before this passive effect — so the
+  // guard reads it as already placed and yields. Only a stranded `<body>` is corrected.
+  //
+  // A menu click therefore keeps the focus on the button that did it, which survives the
+  // navigation: the next Tab continues from there, and a parent entry that just expanded its
+  // sub-items keeps them next in the order. What strands `<body>` is a trigger that goes away —
+  // an in-page link, the mobile drawer closing over itself, a redirect — and that is the case
+  // this corrects. Moving focus on every navigation is the stronger reading of "focus follows
+  // content"; it would cost that submenu behaviour, so it is a decision rather than an omission.
+  const mainRef = useRef<HTMLElement | null>(null);
+  const hasNavigatedRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasNavigatedRef.current) {
+      hasNavigatedRef.current = true;
+      return;
+    }
+    const active = globalThis.document.activeElement;
+    if (active !== null && active !== globalThis.document.body) return;
+    mainRef.current?.focus({ preventScroll: true });
+  }, [pathname]);
 
   const menuGroups = backofficeMenuGroups;
 
@@ -598,7 +631,12 @@ export default function BackOfficeLayoutClient({
                 re-scope every descendant `position: sticky` to a scrollport
                 that never scrolls — breaking e.g. the banks bulk bar. Wide
                 content (tables) brings its own overflow-x wrapper. */}
-              <main id="main-content" className="bo-layout__main flex-grow pt-14 md:pt-0">
+              <main
+                id="main-content"
+                ref={mainRef}
+                tabIndex={-1}
+                className="bo-layout__main flex-grow pt-14 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:pt-0"
+              >
                 <div className="bo-layout__content mx-auto p-4 md:p-8">{children}</div>
               </main>
             </div>

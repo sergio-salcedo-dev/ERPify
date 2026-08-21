@@ -1,16 +1,21 @@
-"use client";
-
+import type { Metadata } from "next";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { PersistenceAction } from "@/context/shared/view-state/domain/ViewState";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { bankAccountRoutes } from "../_lib/bankAccountRoutes";
 import { BankAccountForm } from "../_components/BankAccountForm";
 
-export default function NewBankAccountPage() {
-  const params = useParams<{ id: string }>();
-  const bankId = params?.id ?? "";
+// Next's route announcer reads `document.title` and speaks only when it changes, so a route
+// inheriting the root title arrives unnamed for assistive technology.
+export const metadata: Metadata = {
+  title: "New account",
+};
+
+export default async function NewBankAccountPage({
+  params,
+}: Readonly<{ params: Promise<{ id: string }> }>) {
+  const { id: bankId } = await params;
 
   return (
     <div
