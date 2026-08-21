@@ -72,17 +72,14 @@ function isAuthHandshakeEndpoint(input: string): boolean {
 // Browser-only: bounce an expired session to /login once, preserving the blocked
 // target in `?next=` (open-redirect-guarded) and flagging the reason. No-op during
 // SSR (no document/location) and for the auth-handshake endpoints above.
-//
-// Returns whether THIS call started the bounce, so the caller can tell a 401 that is being
-// navigated away from apart from one the screen still owns.
-function redirectToLoginOnSessionExpiry(input: string): boolean {
-  if (typeof window === "undefined") return false;
-  if (isAuthHandshakeEndpoint(input)) return false;
+function redirectToLoginOnSessionExpiry(input: string): void {
+  if (typeof window === "undefined") return;
+  if (isAuthHandshakeEndpoint(input)) return;
   // Already on /login: the bounce would replace the document with itself, and the claim is
   // module state that a fresh document resets — so a 401 raised from this screen could
   // reload it for as long as the call keeps failing.
-  if (globalThis.location.pathname === Routes.LOGIN) return false;
-  if (!beginSessionExpiry()) return false;
+  if (globalThis.location.pathname === Routes.LOGIN) return;
+  if (!beginSessionExpiry()) return;
   const current = `${globalThis.location.pathname}${globalThis.location.search}`;
   const next = encodeURIComponent(safeInternalPath(current, Routes.BACKOFFICE));
   // A router is unreachable from here: this is a module-level function inside an
@@ -96,7 +93,6 @@ function redirectToLoginOnSessionExpiry(input: string): boolean {
   // raises, and an ignored navigation, which does not. The second is the one that used to
   // wedge this adapter — every later 401 in the document swallowed, no bounce and no signal.
   hardNavigate(`${Routes.LOGIN}?next=${next}&reason=session-expired`, endSessionExpiry);
-  return true;
 }
 
 function browserApiBase(): string {

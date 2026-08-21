@@ -91,7 +91,7 @@ export function hardNavigate(
   // the claim it releases is never released, leaving the application blanked with no route
   // away — the exact outcome the curtain's safety argument rests on being impossible.
   const onPageHide = (event: PageTransitionEvent): void => {
-    if (event.persisted) return;
+    if (event.persisted !== false) return;
     disarm();
   };
 

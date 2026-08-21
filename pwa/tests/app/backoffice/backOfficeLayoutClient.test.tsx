@@ -308,11 +308,13 @@ describe("BackOfficeLayoutClient", () => {
     }
   });
 
-  it("leaves even when the revoke wins the race and the guard tears the subtree down", async () => {
+  it("keeps announcing the leaving state even when the guard tears the guarded subtree down", async () => {
     // The fast path, which no other case here renders. logout() clears the session inside its own
-    // finally, so RequireAuth returns null for this whole subtree — menu, entry and status region
-    // go with it — while the navigation is still owed. It is scheduled on the promise, not on the
-    // tree, so it has to fire regardless of what is left mounted.
+    // finally, so RequireAuth returns null for the subtree it guards — menu and entry go with it —
+    // while the navigation is still owed. The status region is a sibling of RequireAuth precisely
+    // so it survives that unmount and keeps the outcome (not just the wait) reachable: the
+    // navigation itself is scheduled on the promise, not on the tree, so it has to fire regardless
+    // of what is left mounted.
     logout.mockImplementationOnce(() => {
       auth.session = null;
       auth.status = "unauthenticated";
@@ -331,7 +333,7 @@ describe("BackOfficeLayoutClient", () => {
       </BackOfficeLayoutClient>,
     );
 
-    expect(screen.queryByTestId("bo-layout__leaving-status")).toBeNull();
+    expect(screen.getByTestId("bo-layout__leaving-status")).toHaveTextContent(LEAVING_LABEL);
     expect(screen.queryByTestId("bo-layout-test__child")).toBeNull();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
     expect(push).not.toHaveBeenCalled();
@@ -612,13 +614,15 @@ describe("BackOfficeLayoutClient", () => {
     );
   });
 
-  it("renders no chrome and no children while the session is still hydrating", () => {
+  it("renders only the (empty, sr-only) status region and no chrome or children while the session is still hydrating", () => {
     auth.status = "hydrating";
     auth.session = null;
 
-    const { container } = renderLayout();
+    renderLayout();
 
-    expect(container).toBeEmptyDOMElement();
+    // The status region is a sibling of RequireAuth, so it is present regardless of auth status —
+    // but idle it carries no message, so nothing is announced.
+    expect(screen.getByTestId("bo-layout__leaving-status")).toBeEmptyDOMElement();
     expect(screen.queryByTestId("bo-layout-test__child")).toBeNull();
     expect(screen.queryByTestId("bo-layout__topbar-account")).toBeNull();
   });
