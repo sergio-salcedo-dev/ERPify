@@ -348,6 +348,14 @@ Commit (`chore(deps): …`), **push the branch**, and open the PR listing the
 superseded numbers. Per `CLAUDE.md` → "Finishing substantial work means committed
 **and pushed**", a local commit is not a deliverable.
 
+A dependency batch produces no story artifact and runs no adversarial pass, so
+the gate on opening a pull request (`scripts/adversarial-pass-check.sh`) will
+refuse it. That is the correct verdict, not a malfunction — proceed on the
+record, naming what makes this batch exempt:
+`ADVERSARIAL_PASS_ACK="dependency-only batch, no source touched" <your command>`.
+If step 3C turned this into a source-touching PR, the exemption no longer holds
+and the pass is owed.
+
 **Never merge** — that needs the user's explicit per-PR permission.
 
 **Leave the dependabot PRs open.** Dependabot closes them itself on its next pass
