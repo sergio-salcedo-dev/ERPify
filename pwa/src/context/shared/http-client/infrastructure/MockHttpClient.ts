@@ -1,12 +1,12 @@
 import { injectable } from "inversify";
 import { API_ENDPOINTS } from "./ApiEndpoints";
-import type { HttpClient, ResponseGuard } from "../domain/HttpClient";
+import type { HttpClient, RequestOptions, ResponseGuard } from "../domain/HttpClient";
 
 @injectable()
 export class MockHttpClient implements HttpClient {
   // why: the mock returns surface-specific fake bodies, so it deliberately
   // ignores response guards — enforcing real envelopes is FetchHttpClient's job.
-  async get<T>(url: string, _validate?: ResponseGuard<T>): Promise<T> {
+  async get<T>(url: string, _validate?: ResponseGuard<T>, _options?: RequestOptions): Promise<T> {
     return new Promise((resolve) => {
       setTimeout(() => {
         if (url.includes(API_ENDPOINTS.BACKOFFICE.HEALTH_DATABASE)) {
@@ -44,19 +44,34 @@ export class MockHttpClient implements HttpClient {
     });
   }
 
-  async post<TBody, T>(_url: string, _body: TBody, _validate?: ResponseGuard<T>): Promise<T> {
+  async post<TBody, T>(
+    _url: string,
+    _body: TBody,
+    _validate?: ResponseGuard<T>,
+    _options?: RequestOptions,
+  ): Promise<T> {
     return {} as T;
   }
 
-  async put<TBody, T>(_url: string, _body: TBody, _validate?: ResponseGuard<T>): Promise<T> {
+  async put<TBody, T>(
+    _url: string,
+    _body: TBody,
+    _validate?: ResponseGuard<T>,
+    _options?: RequestOptions,
+  ): Promise<T> {
     return {} as T;
   }
 
-  async patch<TBody, T>(_url: string, _body: TBody, _validate?: ResponseGuard<T>): Promise<T> {
+  async patch<TBody, T>(
+    _url: string,
+    _body: TBody,
+    _validate?: ResponseGuard<T>,
+    _options?: RequestOptions,
+  ): Promise<T> {
     return {} as T;
   }
 
-  async delete(_url: string): Promise<void> {
+  async delete(_url: string, _options?: RequestOptions): Promise<void> {
     return;
   }
 }

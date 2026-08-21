@@ -151,6 +151,13 @@ container that the web `php` container recompiled out from under it — see
 
 - Every service runs `no-new-privileges`, drops all Linux caps and re-adds only
   the minimum, and carries parametrizable CPU/memory ceilings.
+- Every service carries `restart: unless-stopped` in the **merged** prod config — `database` and
+  `scheduler_worker` declare it in this overlay, the rest inherit it from `compose.yaml`, so
+  grepping this file alone shows only two. The database's is not decoration: `depends_on` orders a
+  `compose up` and has no say in the daemon's own restart pass, so a database missing it returns
+  only when an operator runs `make docker.up ENV=prod`, while `php`, `pwa` and the workers come
+  back on their own and fail against a database that is not there. (Dev overrides this for `pwa`
+  only — see `compose.dev.yaml`.)
 - Postgres is on an `internal` `backend` network with **no published host port**.
 - `pwa` runs with a read-only root filesystem.
 - `php` and `messenger_worker` disable core dumps (`ulimits.core: 0` in the base

@@ -7,18 +7,33 @@
  * origin.
  *
  * Rejected (returns `fallback`): absolute URLs, protocol-relative `//host`,
- * backslash-smuggled `/\host` (browsers normalise `\` to `/`), and anything not
- * starting with a single `/`.
+ * backslash-smuggled `/\host` (browsers normalise `\` to `/`), whitespace-smuggled
+ * `/<TAB>/host` (the URL parser strips TAB/LF/CR from ANYWHERE in a URL, while
+ * `String.trim()` only strips them at the ends), and anything not starting with a
+ * single `/`.
  *
  * @param value    Candidate path — typically untrusted.
  * @param fallback Returned when `value` is missing or not a safe in-app path.
  */
+/** Origin no real deployment can hold, used only to resolve a candidate against. */
+const SENTINEL_ORIGIN = "https://safe-internal-path.invalid";
+
 export function safeInternalPath(value: string | null | undefined, fallback: string): string {
   if (typeof value !== "string") return fallback;
   const trimmed = value.trim();
-  // A safe target is a single leading slash NOT followed by another slash or a
-  // backslash — `/path` is in-app, `//host` and `/\host` resolve to a foreign
-  // origin once the browser parses them.
-  if (!/^\/(?![/\\])/.test(trimmed)) return fallback;
+  if (!trimmed.startsWith("/")) return fallback;
+  // Ask the URL parser instead of describing it. A regex has to enumerate the shapes
+  // that reach a foreign origin, and the enumeration was short by one whole class:
+  // `String.trim()` strips TAB/LF/CR only at the ENDS, while the WHATWG parser strips
+  // them ANYWHERE — so `/<TAB>/evil.com` satisfied "a single leading slash not followed
+  // by a slash" and then resolved to `https://evil.com/`. Measured, all three of TAB,
+  // LF and CR. Resolving against a sentinel is the same control the pagination
+  // navigator already uses, and it is authoritative rather than descriptive: it answers
+  // with the origin the consumer's own `new URL(...)` will compute.
+  try {
+    if (new URL(trimmed, SENTINEL_ORIGIN).origin !== SENTINEL_ORIGIN) return fallback;
+  } catch {
+    return fallback;
+  }
   return trimmed;
 }

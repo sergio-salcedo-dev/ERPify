@@ -3,12 +3,14 @@ import { FetchHttpClient } from "@/context/shared/http-client/infrastructure/Fet
 import {
   MALFORMED_RESPONSE_ENVELOPE,
   NETWORK_ERROR,
+  REQUEST_TIMEOUT,
 } from "@/context/shared/http-client/domain/HttpClient";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import type { Telemetry } from "@/context/shared/observability/domain/Telemetry";
 import { isProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { Routes } from "@/context/shared/routing/domain/Routes";
+import { NAVIGATION_COMMIT_BUDGET_MS } from "@/context/shared/navigation/infrastructure/hardNavigate";
 
 // v7-shaped: ProblemDetails.instance / correlation-id are UUID v7, minted via @/context/shared/uuid/infrastructure/uuidV7.
 const { STUB_UUID } = vi.hoisted(() => ({
@@ -490,6 +492,130 @@ describe("FetchHttpClient", () => {
     });
   });
 
+  describe("the request budget", () => {
+    /** Mirrors DEFAULT_TIMEOUT_MS: what every caller gets without asking. */
+    const DEFAULT_TIMEOUT_MS = 30_000;
+
+    /** A server that accepted the request and will never answer it. */
+    function neverAnswers(): void {
+      fetchSpy.mockImplementation(
+        (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => {
+              reject(new DOMException("The operation was aborted.", "AbortError"));
+            });
+          }),
+      );
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("gives up on a request that never answers", async () => {
+      neverAnswers();
+      const pending = new FetchHttpClient().get("/api/v1/backoffice/banks");
+      // Attached before the clock moves: the rejection lands inside advanceTimersByTimeAsync,
+      // and an assertion attached after it would be an unhandled rejection first.
+      const settled = expect(pending).rejects.toMatchObject({
+        problem: { type: REQUEST_TIMEOUT, status: 0 },
+      });
+
+      await vi.advanceTimersByTimeAsync(DEFAULT_TIMEOUT_MS);
+
+      await settled;
+    });
+
+    it("does not give up before the budget is spent", async () => {
+      neverAnswers();
+      const pending = new FetchHttpClient().get("/api/v1/backoffice/banks");
+      const outcome = vi.fn();
+      void pending.then(outcome, outcome);
+
+      await vi.advanceTimersByTimeAsync(DEFAULT_TIMEOUT_MS - 1);
+
+      expect(outcome).not.toHaveBeenCalled();
+      // Drain it, so the pending rejection does not surface inside a later test.
+      const settled = expect(pending).rejects.toBeInstanceOf(HttpError);
+      await vi.advanceTimersByTimeAsync(1);
+      await settled;
+    });
+
+    it("honours a caller's own budget", async () => {
+      neverAnswers();
+      // The per-call override is what lets sign-out stop owning a timer of its own: it can
+      // state a tighter bound than the default without every other caller inheriting it.
+      const pending = new FetchHttpClient().get("/api/v1/backoffice/banks", undefined, {
+        timeoutMs: 50,
+      });
+      const settled = expect(pending).rejects.toMatchObject({
+        problem: { type: REQUEST_TIMEOUT },
+      });
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      await settled;
+    });
+
+    it("tells a timeout apart from never reaching the server", async () => {
+      // Both surface as status 0 with no response to correlate against, and reading them as
+      // the same thing misleads a triage: an offline client sent nothing, while a timed-out
+      // request may well have been received and applied.
+      fetchSpy.mockRejectedValue(new TypeError("Failed to fetch"));
+
+      await expect(new FetchHttpClient().get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+        problem: { type: NETWORK_ERROR },
+      });
+    });
+
+    it("gives up on a response whose headers land and whose body never does", async () => {
+      // The direction a headers-only bound cannot see, and the one that reproduces the very
+      // wedge the sign-out budget exists to prevent: `fetch()` resolves on HEADERS, so a
+      // timer cleared at that point leaves the body read unbounded. A chunked reply held
+      // open by a proxy then keeps the promise pending for ever, with the controller already
+      // unreferenced — the caller never settles, so nothing downstream ever runs.
+      fetchSpy.mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                init?.signal?.addEventListener("abort", () =>
+                  controller.error(new Error("aborted")),
+                );
+              },
+            }),
+            { status: HttpStatus.OK, headers: new Headers({ "Content-Type": "application/json" }) },
+          ),
+        ),
+      );
+      const pending = new FetchHttpClient().get("/api/v1/backoffice/banks");
+      const settled = expect(pending).rejects.toMatchObject({
+        problem: { type: REQUEST_TIMEOUT, status: 0 },
+      });
+
+      await vi.advanceTimersByTimeAsync(DEFAULT_TIMEOUT_MS);
+
+      await settled;
+    });
+
+    it("stops the clock once the body lands, not merely the headers", async () => {
+      fetchSpy.mockResolvedValue(makeResponse(HttpStatus.OK, { data: [] }));
+
+      await new FetchHttpClient().get("/api/v1/backoffice/banks");
+      await vi.advanceTimersByTimeAsync(DEFAULT_TIMEOUT_MS * 2);
+
+      // Nothing is left pending to abort a connection this client is no longer using — and
+      // a timer per in-flight request that outlives it is a leak on a long-lived document.
+      // Asserted AFTER the whole response is consumed: asserting it the instant headers
+      // arrived is what pinned the defect above in place.
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
+
   describe("401 session-expired redirect (browser)", () => {
     const PROBLEM_401 = {
       type: "session-expired",
@@ -510,11 +636,17 @@ describe("FetchHttpClient", () => {
       return new mod.FetchHttpClient();
     }
 
+    // A fresh Response per call, never one instance reused: a body can be read once, and
+    // these cases deliberately issue two or three requests. Handing back the same instance
+    // made the second read fail — which the old error path swallowed into a generic 401, so
+    // the fixture looked fine while proving less than it claimed.
     function respond401(): void {
-      fetchSpy.mockResolvedValue(
-        makeResponse(HttpStatus.UNAUTHORIZED, PROBLEM_401, {
-          contentType: "application/problem+json",
-        }),
+      fetchSpy.mockImplementation(() =>
+        Promise.resolve(
+          makeResponse(HttpStatus.UNAUTHORIZED, PROBLEM_401, {
+            contentType: "application/problem+json",
+          }),
+        ),
       );
     }
 
@@ -638,6 +770,33 @@ describe("FetchHttpClient", () => {
 
       // The page never left, so the second 401 must still be able to bounce.
       expect(replace).toHaveBeenCalledTimes(2);
+    });
+
+    it("clears the single-flight latch when the navigation is ignored rather than refused", async () => {
+      // The sibling of the case above, and the one that actually happens: a sandboxed navigable
+      // DROPS the navigation without raising, so the `catch` never runs. The latch survived, and
+      // every later 401 in that document was swallowed — no bounce, no signal, for the life of
+      // the page. Nothing here can observe an ignored navigation directly; what it observes is
+      // the document still being alive when the commit budget runs out.
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        respond401();
+        const client = await freshClient();
+
+        await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+          problem: { status: HttpStatus.UNAUTHORIZED },
+        });
+        expect(replace).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS);
+
+        await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+          problem: { status: HttpStatus.UNAUTHORIZED },
+        });
+        expect(replace).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("does not redirect for the login endpoint's own 401 (bad credentials)", async () => {

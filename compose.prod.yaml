@@ -101,6 +101,13 @@ services:
       - frontend
 
   database:
+    # The other services declare this and this one did not, which is the asymmetry that bites: a
+    # daemon restart brings php, pwa and messenger_worker back against a database that never
+    # returns, because `depends_on` orders a `compose up` and has no say in the daemon's own
+    # restart pass. The resulting shape was observed in dev, where a stack whose database was down
+    # left php and messenger_worker looping on "Still waiting for database to be ready" for hours
+    # while every container it depended on reported itself running.
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required in prod}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}
