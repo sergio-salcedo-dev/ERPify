@@ -6,6 +6,11 @@
 # invoking compose()/require_running_stack()/verify_dump().
 #
 # Not executable on its own; meant for `source`.
+#
+# No shebang, so shellcheck cannot infer the dialect: both callers are bash and
+# the helpers below use bash-only constructs, so name it rather than let the
+# analysis fall back to an unknown shell.
+# shellcheck shell=bash
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[0;33m'; NC='\033[0m'
 log_info()    { echo -e "${BLUE}ℹ ${*}${NC}"; return 0; }

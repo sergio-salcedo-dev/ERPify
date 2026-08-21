@@ -78,6 +78,10 @@ db_file="$BACKUP_DIR/db-$STAMP.dump"
 
 # —— 1) PostgreSQL logical dump (consistent MVCC snapshot, no downtime) ———
 log_info "Dumping database to $db_file …"
+# The single quotes are load-bearing: $POSTGRES_USER and $POSTGRES_DB are the
+# container's environment, expanded by the shell inside it. Expanding them here
+# would pass the host's empty values.
+# shellcheck disable=SC2016
 compose exec -T database sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$db_file"
 
 # Prove the dump is fully restorable (magic + full read-back), not just headed.

@@ -121,7 +121,9 @@ if [[ -n "$TARGET_USER" ]]; then
     if ! command -v certutil >/dev/null 2>&1; then
         log_info "Installing libnss3-tools (provides certutil)..."
         if command -v apt-get >/dev/null 2>&1; then
-            apt-get update -qq && apt-get install -y -qq libnss3-tools || log_warning "apt install failed — install libnss3-tools manually."
+            if ! { apt-get update -qq && apt-get install -y -qq libnss3-tools; }; then
+                log_warning "apt install failed — install libnss3-tools manually."
+            fi
         else
             log_warning "No apt-get — install certutil (libnss3-tools / nss) manually, then re-run."
         fi

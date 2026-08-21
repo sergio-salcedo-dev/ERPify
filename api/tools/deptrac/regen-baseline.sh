@@ -18,7 +18,7 @@
 # latent, never shipped. Regenerating under the old rule produced 41 entries against 21
 # under this one, which is what a materialised version of it would have looked like.
 set -eu
-cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)" # -> api root
+cd "$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)" # -> api root
 
 raw="$(mktemp)"
 out="$(mktemp)"

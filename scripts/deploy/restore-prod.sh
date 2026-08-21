@@ -161,6 +161,10 @@ compose stop php messenger_worker
 # one BEGIN/COMMIT: any error rolls the database back to its pre-restore state
 # instead of leaving it half-restored. It implies --exit-on-error.
 log_info "Restoring database from $db_file …"
+# The single quotes are load-bearing: $POSTGRES_USER and $POSTGRES_DB are the
+# container's environment, expanded by the shell inside it. Expanding them here
+# would pass the host's empty values.
+# shellcheck disable=SC2016
 compose exec -T database sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --single-transaction' < "$db_file"
 
 log_info "Starting writers (php, messenger_worker) …"
