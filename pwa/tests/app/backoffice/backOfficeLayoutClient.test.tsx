@@ -376,24 +376,43 @@ describe("BackOfficeLayoutClient", () => {
   });
 
   it("recovers the menu when the navigation is refused", async () => {
-    replace.mockImplementationOnce(() => {
-      throw new Error("navigation refused");
-    });
-    renderLayout();
-    await openAccountMenu();
+    // The revoke is held open so the BUDGET wins the race. That ordering is not a convenience:
+    // it is the only one in which a recovery exists to be seen. When logout() settles first it
+    // clears the session, RequireAuth returns null, and menu, entry and status region are gone
+    // before the navigation is even attempted — so a case whose logout resolves immediately
+    // *without* clearing the session proves the recovery works in a world the app never enters.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      logout.mockImplementationOnce(() => new Promise<void>(() => {}));
+      replace.mockImplementationOnce(() => {
+        throw new Error("navigation refused");
+      });
+      renderLayout();
+      await openAccountMenu();
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
 
-    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+      await act(() => vi.advanceTimersByTimeAsync(SIGN_OUT_BUDGET_MS));
 
-    // The document stayed, so sign-out has to be attemptable again rather than wedged — and
-    // the region has to SAY so. Emptying it announces nothing: a `role="status"` speaks on
-    // insertion, so the old `: ""` left a screen-reader user with "Signing out…", then silence,
-    // then a menu that quietly worked again, with no statement that it had not happened.
-    const status = screen.getByTestId("bo-layout__leaving-status");
-    await waitFor(() => expect(status).toHaveTextContent(REFUSED_MESSAGE));
+      // The document stayed, so sign-out has to be attemptable again rather than wedged — and
+      // the region has to SAY so. Emptying it announces nothing: a `role="status"` speaks on
+      // insertion, so the old `: ""` left a screen-reader user with "Signing out…", then silence,
+      // then a menu that quietly worked again, with no statement that it had not happened.
+      const status = screen.getByTestId("bo-layout__leaving-status");
+      await waitFor(() => expect(status).toHaveTextContent(REFUSED_MESSAGE));
+      // An action error is `assertive` and VISIBLE (DESIGN.md): every surface but the expanded
+      // sidebar closes over the entry on activation, and a reverted label cannot distinguish
+      // "failed" from "never started".
+      expect(status).toHaveAttribute("aria-live", "assertive");
+      expect(status).not.toHaveClass("sr-only");
 
-    await openAccountMenu();
-    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LINKS[0])));
-    expect(push).toHaveBeenCalledWith(ACCOUNT_LINKS[0].path);
+      await openAccountMenu();
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LINKS[0])));
+      expect(push).toHaveBeenCalledWith(ACCOUNT_LINKS[0].path);
+      // And the message describes one interaction, not the rest of the document's life.
+      await waitFor(() => expect(status).toHaveTextContent(""));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("recovers the menu when the navigation is ignored rather than refused", async () => {
@@ -402,10 +421,12 @@ describe("BackOfficeLayoutClient", () => {
     // for the life of the document — every menu-driven navigation dropped from then on.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
+      logout.mockImplementationOnce(() => new Promise<void>(() => {}));
       renderLayout();
       await openAccountMenu();
-
       fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+
+      await act(() => vi.advanceTimersByTimeAsync(SIGN_OUT_BUDGET_MS));
       await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
 
       const status = screen.getByTestId("bo-layout__leaving-status");
@@ -424,21 +445,53 @@ describe("BackOfficeLayoutClient", () => {
 
   it("says nothing about a navigation that committed", async () => {
     // The other direction, and the one that keeps the recovery honest: a document that IS
-    // leaving fires pagehide, and a "sign-out did not complete" announced into it would be a
-    // false statement made to the one user who cannot see the page change under it.
+    // leaving is discarded, and "sign-out did not complete" announced into it would be a false
+    // statement made to the one user who cannot see the page change under them.
+    //
+    // `persisted: false` is load-bearing. `pagehide` states two different facts, and the other
+    // one — bfcache entry or a freeze, which iOS Safari fires whenever the app is backgrounded —
+    // leaves a document that can come back; treating it as a commit disarms the only bound the
+    // caller has. A bare Event would assert nothing about that distinction.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
+      logout.mockImplementationOnce(() => new Promise<void>(() => {}));
       renderLayout();
       await openAccountMenu();
-
       fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+      await act(() => vi.advanceTimersByTimeAsync(SIGN_OUT_BUDGET_MS));
       await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
 
-      globalThis.dispatchEvent(new Event("pagehide"));
+      globalThis.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
       await act(() => vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS * 2));
 
       const status = screen.getByTestId("bo-layout__leaving-status");
       expect(status).toHaveTextContent(LEAVING_LABEL);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says only what is true when a real navigation outruns its own budget", async () => {
+    // The oracle is one-sided by construction — it reads "the document is still here" — so a
+    // genuine navigation slower than the budget reports `not-committed` too. That is why the
+    // message is a statement about the WAIT, never about the outcome: announcing a failure here
+    // would be a lie told to the one user who cannot see the page change under them. This pins
+    // the ordering the case above cannot: the budget elapses FIRST, pagehide arrives after.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      logout.mockImplementationOnce(() => new Promise<void>(() => {}));
+      renderLayout();
+      await openAccountMenu();
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+      await act(() => vi.advanceTimersByTimeAsync(SIGN_OUT_BUDGET_MS));
+
+      await act(() => vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS));
+      const status = screen.getByTestId("bo-layout__leaving-status");
+      await waitFor(() => expect(status).toHaveTextContent(STALLED_MESSAGE));
+
+      globalThis.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
+
+      expect(status).not.toHaveTextContent("did not complete");
     } finally {
       vi.useRealTimers();
     }

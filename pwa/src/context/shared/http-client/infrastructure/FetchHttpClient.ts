@@ -38,6 +38,12 @@ function trimBase(url: string): string {
 // in the tree was a timer owned by a layout component, which bounded exactly one call.
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/** A response whose body has already been drained, inside the request's budget. */
+interface ReadResponse {
+  res: Response;
+  raw: string;
+}
+
 // Endpoints whose 401/403 is a handshake outcome, not a mid-session expiry:
 //  - `/me` is the cold-load probe the AuthProvider owns; a redirect here would
 //    loop the unauthenticated landing (AuthProvider sets `unauthenticated` and
@@ -145,20 +151,43 @@ export class FetchHttpClient implements HttpClient {
   // dev-only toolbar. No-op in prod (header absent + inert observer). It is also
   // where a request is bounded, and where a session-expiry 401 bounces the browser to
   // /login exactly once.
+  //
+  // The BODY is read here, inside the budget, and handed back with the response — not
+  // left for the callers to read afterwards. `fetch()` resolves on response HEADERS, so
+  // clearing the timer at that point armed the abort for the handshake and nothing else:
+  // a response whose headers land and whose body never completes (a chunked reply held
+  // open by a proxy, a half-closed connection) left the promise pending for ever, with
+  // the controller already unreferenced. That is the whole invariant this module claims,
+  // failing in the one direction nobody would look.
   private async request(
     input: string,
     init: RequestInit,
     options?: RequestOptions,
-  ): Promise<Response> {
+  ): Promise<ReadResponse> {
     const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     // An AbortController rather than `AbortSignal.timeout()`: the abort has to be
     // distinguishable from an offline/DNS failure once fetch rejects, and reading the
     // controller's own signal is what tells the two apart without matching on an error name.
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    let res: Response;
     try {
-      res = await fetch(input, { ...init, signal: controller.signal });
+      const res = await fetch(input, { ...init, signal: controller.signal });
+      const token = res.headers.get("X-Debug-Token");
+      if (token) {
+        this.debugTokens.publish({ token, profilerUrl: res.headers.get("X-Debug-Token-Link") });
+      }
+      if (res.status === HttpStatus.UNAUTHORIZED) {
+        // The 401 still travels back to its caller and still throws: the HTTP contract is
+        // unchanged, so no caller has to learn a second failure shape. What stops the error UI
+        // painting during the unload window is <SessionExpiryCurtain>, which reads the same
+        // claim this call publishes.
+        redirectToLoginOnSessionExpiry(input);
+      }
+      // Aborting mid-stream rejects this too, which is the point: it is inside the try, so
+      // a stalled body surfaces as the adapter's own timeout rather than escaping as a raw
+      // DOMException from a caller reading the body later.
+      const raw = await res.text();
+      return { res, raw };
     } catch (cause) {
       if (controller.signal.aborted) {
         this.telemetry.error("The API did not answer within the request budget", {
@@ -175,22 +204,10 @@ export class FetchHttpClient implements HttpClient {
     } finally {
       clearTimeout(timer);
     }
-    const token = res.headers.get("X-Debug-Token");
-    if (token) {
-      this.debugTokens.publish({ token, profilerUrl: res.headers.get("X-Debug-Token-Link") });
-    }
-    if (res.status === HttpStatus.UNAUTHORIZED) {
-      // The 401 still travels back to its caller and still throws: the HTTP contract is
-      // unchanged, so no caller has to learn a second failure shape. What stops the error UI
-      // painting during the unload window is <SessionExpiryCurtain>, which reads the same
-      // claim this call publishes.
-      redirectToLoginOnSessionExpiry(input);
-    }
-    return res;
   }
 
   async get<T>(url: string, validate?: ResponseGuard<T>, options?: RequestOptions): Promise<T> {
-    const res = await this.request(
+    const { res, raw } = await this.request(
       this.resolveUrl(url),
       {
         headers: { ...options?.headers, Accept: "application/json" },
@@ -200,10 +217,10 @@ export class FetchHttpClient implements HttpClient {
     );
 
     if (!res.ok) {
-      throw await this.toHttpError(res);
+      throw this.toHttpError(res, raw);
     }
 
-    return this.parseBody<T>(res, url, validate);
+    return this.parseBody<T>(res, raw, url, validate);
   }
 
   async post<TBody, T>(
@@ -234,7 +251,7 @@ export class FetchHttpClient implements HttpClient {
   }
 
   async delete(url: string, options?: RequestOptions): Promise<void> {
-    const res = await this.request(
+    const { res, raw } = await this.request(
       this.resolveUrl(url),
       {
         method: "DELETE",
@@ -245,7 +262,7 @@ export class FetchHttpClient implements HttpClient {
     );
 
     if (!res.ok) {
-      throw await this.toHttpError(res);
+      throw this.toHttpError(res, raw);
     }
   }
 
@@ -256,7 +273,7 @@ export class FetchHttpClient implements HttpClient {
     validate?: ResponseGuard<T>,
     options?: RequestOptions,
   ): Promise<T> {
-    const res = await this.request(
+    const { res, raw } = await this.request(
       this.resolveUrl(url),
       {
         method,
@@ -275,18 +292,16 @@ export class FetchHttpClient implements HttpClient {
     );
 
     if (!res.ok) {
-      throw await this.toHttpError(res);
+      throw this.toHttpError(res, raw);
     }
 
-    return this.parseBody<T>(res, url, validate);
+    return this.parseBody<T>(res, raw, url, validate);
   }
 
   // why: a 2xx whose body drifted from the expected envelope must surface as a
   // typed boundary error here, not as a TypeError deep inside a mapper (e.g. a
   // stale browser bundle fetching a newer, reshaped API response).
-  private async parseBody<T>(res: Response, url: string, validate?: ResponseGuard<T>): Promise<T> {
-    const raw = await res.text();
-
+  private parseBody<T>(res: Response, raw: string, url: string, validate?: ResponseGuard<T>): T {
     if (!validate) {
       // why: a guard-less caller (e.g. get<void>) tolerates an empty body on ANY 2xx, not only a
       // 204 — an endpoint answering 200 with no payload must not surface as a malformed envelope.
@@ -381,8 +396,14 @@ export class FetchHttpClient implements HttpClient {
     return `${baseUrl}${path}`;
   }
 
-  private async toHttpError(res: Response): Promise<HttpError> {
-    const parsed = await res.json().catch(() => null);
+  private toHttpError(res: Response, raw: string): HttpError {
+    const parsed = ((): unknown => {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    })();
     const problem: ProblemDetails = isProblemDetails(parsed)
       ? parsed
       : {

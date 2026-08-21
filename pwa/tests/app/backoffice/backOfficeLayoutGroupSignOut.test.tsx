@@ -1,14 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const { push, logout, replace, auth, override, GROUP_LOGOUT_TEST_ID } = vi.hoisted(() => ({
-  push: vi.fn(),
-  logout: vi.fn(() => Promise.resolve()),
-  replace: vi.fn(),
-  override: vi.fn(),
-  auth: { session: null as Session | null, status: "authenticated" as string },
-  GROUP_LOGOUT_TEST_ID: "bo-layout-decoy__group-sign-out",
-}));
+const { push, logout, replace, auth, override, GROUP_LOGOUT_TEST_ID, GROUP_PARENT_TEST_ID } =
+  vi.hoisted(() => ({
+    push: vi.fn(),
+    logout: vi.fn(() => Promise.resolve()),
+    replace: vi.fn(),
+    override: vi.fn(),
+    auth: { session: null as Session | null, status: "authenticated" as string },
+    GROUP_LOGOUT_TEST_ID: "bo-layout-decoy__group-sign-out",
+    GROUP_PARENT_TEST_ID: "bo-layout-decoy__group-parent",
+  }));
 
 vi.mock("@/context/shared/access/application/useSession", () => ({
   useSession: () => ({ ...auth, login: vi.fn(), logout, override }),
@@ -46,6 +48,7 @@ vi.mock("@/app/backoffice/_lib/backofficeMenu", async (importOriginal) => {
         items: [
           {
             ...firstItem,
+            testId: GROUP_PARENT_TEST_ID,
             subItems: [
               ...(firstItem.subItems ?? []),
               {
@@ -105,7 +108,7 @@ describe("a group sub-item carrying the sign-out intent", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the busy state the other three sub-item sites render", async () => {
+  it("renders the busy state on every surface that forwards it", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       // Held open so the window is observable: the drawer closes on activation, so the entry is
@@ -127,6 +130,14 @@ describe("a group sub-item carrying the sign-out intent", () => {
       await waitFor(() => expect(entry).toHaveTextContent(LEAVING_LABEL));
       expect(entry).toHaveAttribute("aria-disabled", "true");
       expect(entry).toHaveAttribute("title", LEAVING_LABEL);
+
+      // The desktop sidebar too. Its group items go through SidebarItem, which forwards
+      // `action` to the click handler but was only ever handed `isBusy` for the ACCOUNT item —
+      // so fixing the drawer alone left the same half-support one surface over, uncovered.
+      fireEvent.click(screen.getByTestId(GROUP_PARENT_TEST_ID));
+      const sidebarEntry = await screen.findByTestId(GROUP_LOGOUT_TEST_ID);
+      expect(sidebarEntry).toHaveTextContent(LEAVING_LABEL);
+      expect(sidebarEntry).toHaveAttribute("aria-disabled", "true");
     } finally {
       vi.useRealTimers();
     }

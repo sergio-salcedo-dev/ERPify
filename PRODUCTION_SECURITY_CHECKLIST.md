@@ -143,12 +143,12 @@ you change anything here.
       `api/features/backoffice/health/get.feature` that also asserts the body carries
       no `data` node — the status alone cannot tell a firewall rejection apart from a
       controller that answered.
-- [ ] **Two invariants over the health surface.** *Any deep health check is
-      authenticated* — the dependency probe `/api/v1/backoffice/health/database`
+- [ ] **Two invariants over the health surface.** _Any deep health check is
+      authenticated_ — the dependency probe `/api/v1/backoffice/health/database`
       falls through to `IS_AUTHENTICATED_FULLY`, pinned by an `@anonymous` 401
-      scenario in `api/features/backoffice/health/database.feature`. And *no liveness
-      route ever grows dependency status* — both liveness features assert `0 requests
-      got executed across all doctrine connections`.
+      scenario in `api/features/backoffice/health/database.feature`. And _no liveness
+      route ever grows dependency status_ — both liveness features assert `0 requests
+    got executed across all doctrine connections`.
 - [ ] **Every public exemption is classified, and the classification is gated.** The
       firewall is default-deny, so an `access_control` line is the entire
       authorization story for an unauthenticated caller — and nothing used to read
@@ -200,7 +200,7 @@ you change anything here.
       in place: the IBAN is **masked at the presentation edge** (`maskIban` / `IbanCell`),
       the backend never masks; and the realtime channel keeping the list/detail live is
       **PII-free** — the Mercure broadcast carries only `{ type, id, bankId }` and drives
-      a refetch, never the IBAN (see the *Realtime wire contract* section of
+      a refetch, never the IBAN (see the _Realtime wire contract_ section of
       [`docs/architecture/event-catalog.md`](docs/architecture/event-catalog.md)). Same
       two invariants as the nested route: the IBAN value is **never logged**, and these
       are **not** public-by-design endpoints — **route-level RBAC gating is required
@@ -241,7 +241,7 @@ you change anything here.
       and access-restricted, but NOT tamper-evident**: no hash chain, signature or checksum
       column exists, so never assert integrity beyond what the mutation paths give. Note the
       **five-year floor covers `change` rows only**; `security` rows (access, denials and
-      role-change records) carry a 365-day privacy *ceiling* and are pruned — do
+      role-change records) carry a 365-day privacy _ceiling_ and are pruned — do
       not cite the floor as a retention guarantee over access evidence. **The one exception
       is the trail's own proof that it executed an erasure** (`GDPR_SUBJECT_ERASED`,
       `GDPR_ERASURE_EXECUTED`, listed in `AuditErasureEvidence` and classified in
@@ -258,16 +258,16 @@ you change anything here.
       `user_agent` are retained indefinitely along with their `actor_id`** — clearable only
       if that administrator is themself erased, since the actor-axis pass matches by
       `actor_id`. **Say the precondition with it, or the sentence promises a route that is
-      refused:** *identity* erasure is rejected while the subject still carries `ADMIN` (409
+      refused:** _identity_ erasure is rejected while the subject still carries `ADMIN` (409
       `administrator-erasure-requires-demotion`, `FulfilIdentityErasure`), so on that route
       clearing those columns requires demoting them first — which the ≥1-admin invariant
       permits only while a **second active administrator exists**. It does not require that
-      administrator to *act*: nothing guards self-demotion, so one principal may drop their own
+      administrator to _act_: nothing guards self-demotion, so one principal may drop their own
       `ADMIN` unilaterally, and the invariant is about who survives, not who performs. Be
       equally exact about the other direction: this gates the identity route, **not** the
       actor-axis anonymiser. The operator CLI `audit:gdpr:erase` reaches those same columns for
       any UUID with **no role check at all**, so a sole administrator's rows are clearable
-      there. What the CLI paths do not do is *write* `ip`/`user_agent` on rows they mint — they
+      there. What the CLI paths do not do is _write_ `ip`/`user_agent` on rows they mint — they
       run off-request as `system`, with both columns NULL. **Weighed and accepted:** stripping
       request metadata at write time would take attribution off the one class of row whose
       purpose is attribution, and a bounded floor for `GDPR_ERASURE_EXECUTED` alone splits
@@ -297,7 +297,7 @@ you change anything here.
       their erasure requires onboarding a second administrator first (pre-existing).
       The writer parameterises every value (no string-interpolated SQL). **GDPR erasure is
       implemented** as an in-place, irreversible anonymisation: `audit:gdpr:erase
-      <actor-id>` overwrites the subject's `actor_id` with a single fresh random UUID
+    <actor-id>` overwrites the subject's `actor_id` with a single fresh random UUID
       and redacts `ip` / `user_agent` to `[REDACTED]` and sets the materialised,
       queryable, non-PII `actor_erased` flag in one `UPDATE`, never deleting a row, and
       self-audits a `security` `GDPR_ERASURE_EXECUTED` entry carrying only the resulting
@@ -309,7 +309,7 @@ you change anything here.
       their own lockout or recovery, and once `resource_erased` is raised no detective
       control can ever surface it, so the erasure is the only chance. No discriminant is
       sealed at write time today, and minting one is its own change with its own cost: the
-      requester is unauthenticated and supplies only a *claimed* identity, so the only
+      requester is unauthenticated and supplies only a _claimed_ identity, so the only
       candidate is a heuristic (does the address match one the subject has held on an
       `iam_session`?) bought by making the audit writer read a second context's PII at
       capture time. Weighed and not taken — not impossible.
@@ -326,7 +326,7 @@ you change anything here.
       **This is a new insider capability, not a widened one, and an admin-initiated erasure
       is not forensically neutral.** The actor pass matches `actor_id = <subject>`, so every
       column it overwrites belonged to the person being erased; this pass matches on the
-      resource, so it destroys request metadata belonging to whoever *acted* — an admin
+      resource, so it destroys request metadata belonging to whoever _acted_ — an admin
       erasing a brute-forced account destroys the attacker's address, which no admin action
       could do before. It leaves `actor_erased` FALSE, because that actor was never
       identified and so was never erased: **`ip = '[REDACTED]'` does not imply
@@ -390,7 +390,7 @@ you change anything here.
       CORS must echo the header (`nelmio_cors.allow_headers`) or a cross-origin preflight blocks the call
       before it is sent; the browser default is same-origin, which needs no preflight.
       **Naming foot-gun:** `tokenKey: 'X-CSRF-Token'` (where `#[IsCsrfTokenValid]` reads the submitted token)
-      is a different axis from `check_header`, which governs the *cookie* half and reads a header named after
+      is a different axis from `check_header`, which governs the _cookie_ half and reads a header named after
       `cookie_name` (Symfony default `csrf-token`). Turning `check_header` on would have Symfony look for
       `csrf-token`, **not** our `X-CSRF-Token` — two similar-looking headers with unrelated jobs.
       Password hashing is Infrastructure (the DTO enforces the 8..128 policy at the boundary) and is **deferred
@@ -440,7 +440,7 @@ you change anything here.
       regeneration, so the device that made the change walks away signed in. That teardown is **best-effort by
       construction**: it swallows its own failure and the 204 carries no word on it, so "every other device is
       out" is an intention, not a guarantee the response proves — which is why the UI copy and the notification
-      mail both point at *Active sessions* instead of asserting it. The login is likewise contained (a failure
+      mail both point at _Active sessions_ instead of asserting it. The login is likewise contained (a failure
       logs `critical` and still answers 204: the credential is already gone, so a 5xx would invite a retry that
       can no longer succeed). `Security::login()` re-enters only `checkPreAuth`, so it does **not** re-run the
       SUSPENDED/DEACTIVATED/locked walls on its own; `ReauthenticateDevice` — shared with the reset and
@@ -467,12 +467,12 @@ you change anything here.
       `audit_log.resource_id` person axis) with only the route in `metadata`. The two halves ship together on
       purpose: a synchronous write per attempt on an unbudgeted endpoint is a write amplifier handed to the
       attacker it records. Still **no CDC row**: `User` stays out of `AuditedEntity`, because a field-level diff
-      is the one thing that could carry `password_hash` into the trail. The durable record of a *successful*
+      is the one thing that could carry `password_hash` into the trail. The durable record of a _successful_
       change remains the `event_store` row.
 - [ ] **Recovery-throttle exhaustion is observed internally, and the observation is budgeted.**
       A throttled `POST /forgot-password` answers the uniform 202 with the work silenced, which is
       deliberate and unchanged — a per-account 429 would be an existence oracle and would let an
-      attacker keep superseding a live token. What used to be missing was the *internal* counterpart:
+      attacker keep superseding a live token. What used to be missing was the _internal_ counterpart:
       the refusal raises no exception and changes no response, so neither generic audit hook could see
       it, and an administrator denied their only recovery edge left no trace. `PASSWORD_RECOVERY_THROTTLED`
       (`security`) now records it, behind `recovery_throttle_audit_per_email` — one claim per
@@ -484,8 +484,8 @@ you change anything here.
       signal; it now logs at `error` on the always-on `observability` channel, so it survives to the
       container's stderr, but the Monolog→Sentry bridge is deliberately unwired and nothing pages); the budget lives in
       the rate-limiter cache pool, so a redeploy, a `cache:clear` or a second FrankenPHP worker
-      produces extra rows for one siege; and the row says *that* exhaustion happened and *when*, never
-      *how much* — a six-request accident and a hundred-thousand-request siege look identical, volume
+      produces extra rows for one siege; and the row says _that_ exhaustion happened and _when_, never
+      _how much_ — a six-request accident and a hundred-thousand-request siege look identical, volume
       being left to `anonymous_api` and the access log. A third: two callers crossing the window boundary
       together can both be granted, because the limiter carries `lock_factory: null` — a duplicate row is
       operator noise, an unbounded row count would be the amplifier. **A timing channel found by review was
@@ -597,7 +597,7 @@ you change anything here.
       same `PermissionVoter` — so a role-less authenticated caller gets **403 `forbidden`** and an anonymous one
       **401 `unauthenticated`**, retiring the authenticate-only catch-all as their sole gate (a bank is never
       closed, only deleted, so there is no `bank.close`). **Deploy backfill (a runbook, not a schema change):**
-      assign a tier role to any pre-existing **non-`ADMIN`** principal *before* the gate ships, or it loses bank
+      assign a tier role to any pre-existing **non-`ADMIN`** principal _before_ the gate ships, or it loses bank
       access it held under the catch-all; greenfield today means only the bootstrap `ADMIN` (wildcard) exists, so
       no data migration is required. **The `BankAccount` routes are gated the same way:** every `BankAccount`
       controller — including the nested `GET /banks/{id}/accounts`, which the **same** `bankAccount.read`
@@ -641,7 +641,7 @@ you change anything here.
       `ip`/`device` live. `PruneRetiredSessions` drops a row when the **first** of its windows elapses: 30 days
       after `revokedAt` for a revoked row, 90 days after `expiresAt` for any row. Only the revocation branch
       names a status, deliberately — a bulk revocation stamps `revokedAt = now` on rows already long expired, so
-      judging a revoked row by its revocation alone would let a password change *extend* the life of a row dead
+      judging a revoked row by its revocation alone would let a password change _extend_ the life of a row dead
       for months. With the seven-day session TTL the ceiling is ~97 days after the login that minted the row.
       It runs on demand as `iam:session:prune` and daily as a tick on `IdentityMaintenanceSchedule`.
       **Subject erasure never waits for it:**
@@ -653,7 +653,7 @@ you change anything here.
       prove:** that the daily tick ever fired. Folding it into an existing schedule mints no transport, so
       `make php.lint.schedule-consumption` is satisfied by a transport that already existed and never sees the
       tick; one unit assertion is the only mechanical guard that it is registered at all, and nothing at any
-      level observes that it *ran* — the handler is silent on success, as both sibling prunes are. **Closing
+      level observes that it _ran_ — the handler is silent on success, as both sibling prunes are. **Closing
       that** means an operational signal (a log line the prune emits, or an alert on the tick), not another
       test. **Concurrency, accepted:** the sweep is one unbounded `DELETE` with no ordering or advisory lock,
       unlike `audit_log`'s batched prune, so it can deadlock with the erasure transaction that deletes from the
@@ -691,9 +691,25 @@ you change anything here.
 ## 7. Known weaknesses — open, must be closed or consciously accepted before the first customer
 
 Every item here is a **known** gap, not a suspicion. They are listed together because each is
-described in its own topic above or in an ADR, where a reader looking for *this* question will not
+described in its own topic above or in an ADR, where a reader looking for _this_ question will not
 find them. Closing one means striking it here **and** correcting whatever above describes the
 mitigated state. Accepting one means recording who accepted it and against which customer.
+
+- [x] **Post-auth open redirect through `?next=`, closed 2026-08-21.** `safeInternalPath` accepted a
+      destination whose second character was a TAB, LF or CR and returned it unchanged, because
+      `String.trim()` strips those three only at the **ends** while the WHATWG URL parser strips them
+      **anywhere**. Measured against `new URL(v, "https://app.example/x")`: `/<TAB>/evil.com`,
+      `/<LF>/evil.com` and `/<CR>/evil.com` each satisfied the guard's "a single leading slash not
+      followed by a slash or a backslash" and each resolved to `https://evil.com/`. Live vector:
+      `…/login?next=/%09/evil.com` — `URLSearchParams.get()` decodes `%09` to a raw TAB before the
+      guard sees it, `safeHref` blocks only script-bearing schemes, and Next's router leaves the
+      origin on a `mpaNavigation`. The redirect fired **after** a successful sign-in, which is the
+      moment a "your session expired, sign in again" phishing page is most credible. The guard now
+      resolves the candidate against a sentinel origin and compares — the authoritative check the
+      pagination navigator already used — rather than enumerating shapes with a regex. Three
+      whitespace cases are pinned in `pwa/tests/context/shared/navigation/domain/safeInternalPath.test.ts`,
+      and the old regex reds them. **Residual:** `safeHref` is unchanged and still admits an absolute
+      `https://` URL by design; it is `safeInternalPath` that a redirect target must additionally pass.
 
 - [ ] **The audit trail is not tamper-evident.** No hash chain, signature or checksum column exists
       in any migration; append-only is a property of the mutation paths, not cryptography. Anyone
@@ -714,7 +730,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       thing that ever deleted them. That surface was removed, so the pattern named an artifact nothing
       produces and it was retired — which means a host that ran the paired backup keeps those archives, with
       the same PII as the dump, until an operator sweeps them by hand
-      (`docs/vps-deployment.md` § Backups → *Orphan object archives*). `backup-prod.sh` warns on every run
+      (`docs/vps-deployment.md` § Backups → _Orphan object archives_). `backup-prod.sh` warns on every run
       when it finds any, so the obligation is surfaced rather than only documented; the sweep is not a
       one-off, because a host still on a pre-removal checkout keeps producing them. **Unchecked on purpose:
       it closes when the deploy has landed and the sweep has been run twice, `RETENTION_DAYS + 1` days
@@ -730,7 +746,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       route without naming a class, and a gate reading keys as class names would miss every one. Verify when
       adding an event: classify its aggregate, and do not route a person's aggregate off the request.
       **Two limits, stated so a green build is not read as more than it is:** the gate classifies the
-      *aggregate*, not the payload — a non-person aggregate carrying a person's id (`Iam.Session`'s
+      _aggregate_, not the payload — a non-person aggregate carrying a person's id (`Iam.Session`'s
       `userId`) is out of its reach — and it says nothing about `event_store`, which keeps the real
       `aggregate_id` forever regardless of routing (below). `Iam.Invitation` left that first limit by
       becoming a `person` aggregate: its six events now name the invited user and carry an empty payload,
@@ -756,13 +772,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       entity properties, so references born in configuration and tables with no Doctrine entity
       (`audit_log.*`, `event_store.aggregate_id`) are outside it.
 - [ ] **The person-reference axis has no DETECTIVE control and no backfill.** The gate above is static: it
-      proves a deletion is *written*, never that a row *went*. Two consequences, both open. (1) Any subject
+      proves a deletion is _written_, never that a row _went_. Two consequences, both open. (1) Any subject
       erased before this shipped left its `membership.user_id` / `iam_invitation.invited_user_id` row behind,
       and nothing in the codebase would ever name those rows again — they are not migrated or swept here.
       (2) A future write path that creates a person-referencing row without going through the erasure chain
       reintroduces the residue silently. The sibling axis already answers this with
       `identity:gdpr:reconcile-subject-references`, whose docblock states the reasoning
-      (*"divergence surfaced beats divergence assumed away"*); the equivalent join is not built. Its scope is
+      (_"divergence surfaced beats divergence assumed away"_); the equivalent join is not built. Its scope is
       **four** columns, not the two this axis closed: `membership.user_id`, `iam_invitation.invited_user_id`,
       `iam_session.user_id` and `identity_password_reset_token.user_id` carry the same defect exactly, and
       none of them has a foreign key — nothing in the schema references `identity_user` at all.
@@ -793,7 +809,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       ([`docs/adr/regulatory-audit-trail.md`](docs/adr/regulatory-audit-trail.md) separates it, as the
       business log, from the retention-bound PII-erasable trail).
 - [ ] **`audit:gdpr:erase` is not atomic.** The anonymisation `UPDATE` commits and the
-      `GDPR_ERASURE_EXECUTED` self-audit is written *after*, outside any transaction — a crash
+      `GDPR_ERASURE_EXECUTED` self-audit is written _after_, outside any transaction — a crash
       between them leaves the erasure done with no evidence of it, and the original id no longer
       matches anything, so a re-run falsely reports "nothing to erase". Accepted while the only
       trigger is a synchronous operator command (`audit-activity-log.md` D4). **Its revisit trigger
@@ -805,8 +821,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       erasure requires onboarding a second administrator first. Pre-existing and named in
       [`docs/adr/authorization-model-boundaries.md`](docs/adr/authorization-model-boundaries.md) D3;
       it becomes a real obligation the moment a single-administrator installation has a customer.
-      **Mitigated, not closed:** [`docs/deployment-guide.md`](docs/deployment-guide.md) § *Provisioning
-      administrators* now instructs the operator to onboard a second administrator at install time, and
+      **Mitigated, not closed:** [`docs/deployment-guide.md`](docs/deployment-guide.md) § _Provisioning
+      administrators_ now instructs the operator to onboard a second administrator at install time, and
       [`docs/adr/administrative-recovery-channel.md`](docs/adr/administrative-recovery-channel.md) D4
       records why it must stay a **recommendation** — a ≥2 floor would make erasing an administrator
       require a third. An unenforced recommendation cannot make the invariant hold in an installation
@@ -842,7 +858,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Half of it is now enforced, and the half that is not is the reason this stays open.**
       `ScheduleConsumptionGateTest` refuses any of the three root compose files giving that consumer
       more than one replica, and refuses `compose.prod.yaml` declaring none — so a duplicated clock
-      *committed to the repository* is a red build. It cannot see one asked for at the command line:
+      _committed to the repository_ is a red build. It cannot see one asked for at the command line:
       measured, `docker compose up -d --scale <svc>=2` leaves two containers running for a service
       declaring `replicas: 1`, exit 0, exactly as for one declaring none. Compose treats the value as a
       default, never a ceiling. Closing this therefore still means a scheduler lock (`symfony/lock`,
@@ -871,7 +887,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       the knowledge they carried is now a gate rather than prose: `make php.lint.composer-stability`
       fails any branch constraint or `@`-stability flag in `require`.
       Closed [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
-- [x] **`failOnDeprecation` was structurally blind in CI — fixed 2026-08-12.** A deprecated *class*
+- [x] **`failOnDeprecation` was structurally blind in CI — fixed 2026-08-12.** A deprecated _class_
       triggers at file scope, so it fires once per process, while the container compiles. Any
       `bin/console` call under `APP_ENV=test` compiles it first, and CI runs several inside
       `php.quality.dry-run` **before** the suite (`ci.yml`: PHP lint precedes PHPUnit). `Kernel::getCacheDir()`
@@ -898,14 +914,14 @@ mitigated state. Accepting one means recording who accepted it and against which
       customer deployment:** land the catch-up as one consolidated batch (`/deps-update`, which
       re-resolves the ranges in a single install and reads every claimed version back out of the
       lock) and re-run `composer audit`.
-- [ ] **A stolen session can deny the owner a credential *rotation*, but not an *eviction*.** Both budgets a
+- [ ] **A stolen session can deny the owner a credential _rotation_, but not an _eviction_.** Both budgets a
       session holder can reach are keyed by something they already have: `password_change_per_identity`
       (10 / 15 min, a visible 429) by the identity itself, and `password_recovery_per_email` (5 / hour, whose
       exhaustion is **silent by contract**, so the owner meets the uniform 202 and no email arrives) by the
       address `GET /me` hands them. Neither one is the security objective. **Eviction is, and it has a path no
       budget gates:** `POST /sessions/revoke-others` carries no limiter of any kind — every throttle in the
       repo lives in `Iam/Identity` or `Iam/Invitation`, none in `Iam/Session` — needs only a live session, and
-      ships in the PWA as *Active sessions*. The owner's route to a live session is untouched: the credential
+      ships in the PWA as _Active sessions_. The owner's route to a live session is untouched: the credential
       still works, a stolen session feeds no failed attempts into the lockout (`LoginAttemptRegistrar` is
       reached only from the login failure handler, never from the password-change path), and the persisted
       lock is enforced at `UserChecker::checkPostAuth` alone, never by `SessionAdmissionGate`. So the sequence
@@ -916,7 +932,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       the owner returns with the credential, while a revoked cookie is dead and no path re-mints one without
       the password. Each round costs the owner one login.
       **What survives is the composition, and it belongs to
-      [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602), not here:** an attacker who *also*
+      [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602), not here:** an attacker who _also_
       drives the per-email lockout (10 failures → `PT15M`, needing ≥2 source addresses to clear the per-IP
       throttle) denies the owner the very session eviction requires. Until #602 closes, what the product owes
       is **ordering guidance — evict first, rotate second** — in the UI copy and the password-changed mail.
@@ -944,7 +960,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       commands take a person's email as an argument (`iam:invitation:create`,
       `organization:administrator:create` — the second a password too). The security stack
       names the person on every authenticated request: `ContextListener` logs `username =>
-      getUserIdentifier()` at DEBUG (and here that identifier IS the email — `SecurityUser::getUserIdentifier()`
+    getUserIdentifier()` at DEBUG (and here that identifier IS the email — `SecurityUser::getUserIdentifier()`
       returns `$this->user->email()`), on login `AuthenticatorManager` logs the token OBJECT, whose
       `__toString()` spells the address out again, and a session token the firewall cannot use is logged whole
       under `received` — on one branch the raw SERIALIZED token, address and password hash together. All of
@@ -994,7 +1010,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       tag with `autoconfigure: false` → 14; no definition at all → 14; tag removed AND `autoconfigure: false`
       → 0 — and only that last arm makes the test formatter emit the address inside the login record's
       stringified token.
-- [ ] **A person's id still reaches the access log through the URL *path*, and it is accepted.** Caddy's
+- [ ] **A person's id still reaches the access log through the URL _path_, and it is accepted.** Caddy's
       access-log filter strips the query string and keeps the path, so a path segment is untouched by
       construction — and the application log's `request_uri` leaves the path alone by the same decision, so
       the residual is one residual across both logs rather than a difference between them. The producer is
@@ -1005,7 +1021,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       the application confirmed to the subject. Closing it is not a wider `replace` but a different mechanism —
       a log-level rewrite of `uri`, a `logging:` driver whose retention the erasure path can act on, or no
       access log for `/api/*` at all. **Accepted for now:** there is no production deployment, and the
-      query-side leak that *was* closed is the one with volume — it fired on every keystroke of a filter,
+      query-side leak that _was_ closed is the one with volume — it fired on every keystroke of a filter,
       against one entry per user record opened here.
       **In the application log the same id is spelled twice in one record, and both spellings are this one
       residual.** Symfony's router listener writes `route_parameters` beside `request_uri`, and a route
@@ -1087,7 +1103,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       **What stays open, by the registry's own header — a residual, not a reason this item is unclosed**: the
       string-typed population (the majority of the registry) was found by human adversarial review, not
       mechanically — there is no dataflow/taint engine in this toolchain that could soundly rediscover an
-      arbitrary `string $foo` becoming a person's address, so a *new* unmarked site still needs the next
+      arbitrary `string $foo` becoming a person's address, so a _new_ unmarked site still needs the next
       review pass; only parameters typed exactly `Email` are mechanically guaranteed a line. Also unreachable,
       same as before: vendor frames (`SmtpTransport::doRcptToCommand`), anonymous classes/closures/plain
       functions, and `getMessage()` (a separate axis — the mail boundary, `RedactingMailer`/`RedactingTransport`).
@@ -1223,16 +1239,17 @@ mitigated state. Accepting one means recording who accepted it and against which
       is not reachable from inside it".
 
       **Accepted 2026-08-20 (Sergio):** same basis as residuals one, three and five — no production deployment
-      and no customer — plus one fact specific to this residual, verified rather than assumed: `mailer:test` has
-      no automated caller anywhere in this repository. It is absent from every compose file, every GitHub
-      Actions workflow, and every `Makefile`/`*.mk`/script under the tree; every reference to it is in a test or
-      in this document. The exposure therefore requires an operator to type a real person's address as this
-      command's argument, which is the same operator-discretion basis residuals one and three already stand on.
-      **Owning the vendor command's lifecycle to close it is declined** (SRP/DIP: a debug command is a thin
-      reason for `api/src` to take over a framework command's validation and future compatibility — see the two
-      remediations weighed and declined in the paragraph above). **Expiry: re-assess before the first production
-      deployment or the first customer, whichever comes first** — same trigger as the repository's public-posture
-      item below, and the same trigger that unwinds residuals one, three and five.
+          and no customer — plus one fact specific to this residual, verified rather than assumed: `mailer:test` has
+          no automated caller anywhere in this repository. It is absent from every compose file, every GitHub
+          Actions workflow, and every `Makefile`/`*.mk`/script under the tree; every reference to it is in a test or
+          in this document. The exposure therefore requires an operator to type a real person's address as this
+          command's argument, which is the same operator-discretion basis residuals one and three already stand on.
+          **Owning the vendor command's lifecycle to close it is declined** (SRP/DIP: a debug command is a thin
+          reason for `api/src` to take over a framework command's validation and future compatibility — see the two
+          remediations weighed and declined in the paragraph above). **Expiry: re-assess before the first production
+          deployment or the first customer, whichever comes first** — same trigger as the repository's public-posture
+          item below, and the same trigger that unwinds residuals one, three and five.
+
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

@@ -572,7 +572,37 @@ describe("FetchHttpClient", () => {
       });
     });
 
-    it("stops the clock once the response lands", async () => {
+    it("gives up on a response whose headers land and whose body never does", async () => {
+      // The direction a headers-only bound cannot see, and the one that reproduces the very
+      // wedge the sign-out budget exists to prevent: `fetch()` resolves on HEADERS, so a
+      // timer cleared at that point leaves the body read unbounded. A chunked reply held
+      // open by a proxy then keeps the promise pending for ever, with the controller already
+      // unreferenced — the caller never settles, so nothing downstream ever runs.
+      fetchSpy.mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                init?.signal?.addEventListener("abort", () =>
+                  controller.error(new Error("aborted")),
+                );
+              },
+            }),
+            { status: HttpStatus.OK, headers: new Headers({ "Content-Type": "application/json" }) },
+          ),
+        ),
+      );
+      const pending = new FetchHttpClient().get("/api/v1/backoffice/banks");
+      const settled = expect(pending).rejects.toMatchObject({
+        problem: { type: REQUEST_TIMEOUT, status: 0 },
+      });
+
+      await vi.advanceTimersByTimeAsync(DEFAULT_TIMEOUT_MS);
+
+      await settled;
+    });
+
+    it("stops the clock once the body lands, not merely the headers", async () => {
       fetchSpy.mockResolvedValue(makeResponse(HttpStatus.OK, { data: [] }));
 
       await new FetchHttpClient().get("/api/v1/backoffice/banks");
@@ -580,6 +610,8 @@ describe("FetchHttpClient", () => {
 
       // Nothing is left pending to abort a connection this client is no longer using — and
       // a timer per in-flight request that outlives it is a leak on a long-lived document.
+      // Asserted AFTER the whole response is consumed: asserting it the instant headers
+      // arrived is what pinned the defect above in place.
       expect(vi.getTimerCount()).toBe(0);
     });
   });
@@ -604,11 +636,17 @@ describe("FetchHttpClient", () => {
       return new mod.FetchHttpClient();
     }
 
+    // A fresh Response per call, never one instance reused: a body can be read once, and
+    // these cases deliberately issue two or three requests. Handing back the same instance
+    // made the second read fail — which the old error path swallowed into a generic 401, so
+    // the fixture looked fine while proving less than it claimed.
     function respond401(): void {
-      fetchSpy.mockResolvedValue(
-        makeResponse(HttpStatus.UNAUTHORIZED, PROBLEM_401, {
-          contentType: "application/problem+json",
-        }),
+      fetchSpy.mockImplementation(() =>
+        Promise.resolve(
+          makeResponse(HttpStatus.UNAUTHORIZED, PROBLEM_401, {
+            contentType: "application/problem+json",
+          }),
+        ),
       );
     }
 

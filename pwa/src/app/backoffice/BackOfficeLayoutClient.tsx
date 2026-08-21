@@ -40,6 +40,14 @@ const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 // inherited from the client's default.
 const SIGN_OUT_BUDGET_MS = 3_000;
 
+function afterMs(ms: number): { elapsed: Promise<void>; cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout>;
+  const elapsed = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  return { elapsed, cancel: () => clearTimeout(timer) };
+}
+
 /**
  * Where the sign-out interaction is. `leaving` is the in-flight window; the other two are the
  * ways it can end with the user still here, and they are distinguished because they are not
@@ -102,6 +110,12 @@ export default function BackOfficeLayoutClient({
   // second attempt needs it reopened — an asynchronous gap a re-render always wins.
   const [signOut, setSignOut] = useState<SignOut>(SignOut.IDLE);
   const isLeaving = signOut === SignOut.LEAVING;
+  // A failure is an action error, so it is `assertive` per DESIGN.md and — unlike the busy
+  // window, whose sighted affordance is the relabelled entry — it is VISIBLE. Every surface
+  // but the expanded sidebar closes over that entry on activation, and on the sidebar a
+  // silent revert cannot distinguish "failed" from "never started", so an sr-only-only
+  // failure is the silent dismissal pwa/CLAUDE.md forbids.
+  const isSignOutFailure = signOut === SignOut.REFUSED || signOut === SignOut.STALLED;
 
   const handleNavigation = (path: string, action?: NavAction) => {
     setIsSidebarOpen(false);
@@ -124,13 +138,24 @@ export default function BackOfficeLayoutClient({
       // just-cleared session mid-transition and redirects to /login before the push to HOME
       // commits. A hard navigation discards all in-memory client state and lands on the public
       // landing unconditionally — and it fires even if the server revoke failed.
-      void logout(SIGN_OUT_BUDGET_MS)
+      // The budget is raced here AND handed to the transport, and the two are not
+      // alternatives. The transport bound covers a REQUEST; this one covers the OPERATION,
+      // and only the second keeps the interaction from being pinned on something that is not
+      // a fetch. It is also what makes the recovery below reachable at all: logout() clears
+      // the session in its own `finally`, and the guarded subtree this menu lives in — the
+      // status region included — goes away with it. Waiting for logout() to settle before
+      // navigating therefore guarantees there is nothing left to announce into. When the
+      // budget wins instead, the session is still live, the subtree is still mounted, and a
+      // navigation that does not commit is exactly the case the recovery states.
+      const budget = afterMs(SIGN_OUT_BUDGET_MS);
+      void Promise.race([logout(SIGN_OUT_BUDGET_MS), budget.elapsed])
         .catch(() => {
           // logout() swallows its own failures by contract; this is the belt for one that stops
           // doing so, because a rejection here would otherwise surface as an unhandled rejection
           // *after* the navigation below has already been scheduled.
         })
         .finally(() => {
+          budget.cancel();
           // Both ways the document can stay are handled, not just the one that raises: a
           // sandboxed navigable IGNORES a navigation silently, and keying recovery on the throw
           // left `isLeaving` latched for the life of the document — every menu-driven navigation
@@ -146,6 +171,9 @@ export default function BackOfficeLayoutClient({
     // menu-driven navigation reaches here — the logo and any link inside the page are next/link
     // and route on their own.
     if (isLeaving) return;
+    // A failure message describes one interaction, not the rest of the document's life: left
+    // standing it stays in the accessibility tree through every later route change.
+    setSignOut(SignOut.IDLE);
     router.push(path);
   };
 
@@ -165,14 +193,19 @@ export default function BackOfficeLayoutClient({
   // that no longer exists can announce anything.
   const isEntryLeaving = (entry: NavSubItem) => isLeaving && entry.action === "sign-out";
   const entryLabel = (entry: NavSubItem) => (isEntryLeaving(entry) ? "Signing out…" : entry.name);
-  const accountItemWithState = {
-    ...accountMenuItem,
-    subItems: accountEntries.map((entry) => ({
+  // Applied to EVERY parent, not only the account one. `action` lives on NavSubItem, which
+  // every group shares, and SidebarItem forwards it — so a group sub-item that ever carries
+  // the intent would sign the user out while keeping its idle label and staying operable.
+  // Handing the derivation to one parent and the raw model to the rest is the same
+  // half-support this diff removes from the mobile drawer.
+  const withEntryState = (item: NavItem): NavItem => ({
+    ...item,
+    subItems: item.subItems?.map((entry) => ({
       ...entry,
       name: entryLabel(entry),
       isBusy: isEntryLeaving(entry),
     })),
-  };
+  });
   const accountEmail = session?.user.email ?? "";
 
   const isItemActive = (item: NavItem) => {
@@ -197,9 +230,13 @@ export default function BackOfficeLayoutClient({
             `aria-live` is spelled out anyway, for the assistive technology that reads the attribute
             and not the implicit mapping. */}
         <output
-          aria-live="polite"
+          aria-live={isSignOutFailure ? "assertive" : "polite"}
           data-testid="bo-layout__leaving-status"
-          className="bo-layout__leaving-status sr-only"
+          className={
+            isSignOutFailure
+              ? "bo-layout__leaving-status border-destructive/30 bg-destructive/10 text-destructive fixed top-4 left-1/2 z-60 -translate-x-1/2 rounded-md border px-3 py-2 text-sm font-medium shadow-sm"
+              : "bo-layout__leaving-status sr-only"
+          }
         >
           {SIGN_OUT_MESSAGE[signOut]}
         </output>
@@ -252,7 +289,7 @@ export default function BackOfficeLayoutClient({
                   {group.items.map((item) => (
                     <SidebarItem
                       key={item.name}
-                      {...item}
+                      {...withEntryState(item)}
                       isActive={isItemActive(item)}
                       onClick={handleNavigation}
                       isCompact={isCompact}
@@ -270,7 +307,7 @@ export default function BackOfficeLayoutClient({
                 </p>
               )}
               <SidebarItem
-                {...accountItemWithState}
+                {...withEntryState(accountMenuItem)}
                 isActive={isItemActive(accountMenuItem)}
                 onClick={handleNavigation}
                 isCompact={isCompact}
@@ -355,7 +392,9 @@ export default function BackOfficeLayoutClient({
                                         : "text-muted-foreground hover:bg-accent"
                                     }`}
                                   >
-                                    {subItem.icon && <subItem.icon className="w-3.5 h-3.5" />}
+                                    {subItem.icon && (
+                                      <subItem.icon className="w-3.5 h-3.5" aria-hidden />
+                                    )}
                                     {entryLabel(subItem)}
                                   </button>
                                 ))}
@@ -403,7 +442,7 @@ export default function BackOfficeLayoutClient({
                                   : "text-muted-foreground hover:bg-accent"
                               }`}
                             >
-                              {subItem.icon && <subItem.icon className="w-3.5 h-3.5" />}
+                              {subItem.icon && <subItem.icon className="w-3.5 h-3.5" aria-hidden />}
                               {entryLabel(subItem)}
                             </button>
                           ))}
@@ -511,7 +550,7 @@ export default function BackOfficeLayoutClient({
                       </DropdownMenuLabel>
                       {accountLinks.map((entry) => (
                         <DropdownMenuItem
-                          key={entry.name}
+                          key={entry.testId ?? entry.path}
                           onClick={navigateTo(entry.path, entry.action)}
                           title={entry.name}
                           data-testid={entry.testId ? `${entry.testId}--menu` : undefined}

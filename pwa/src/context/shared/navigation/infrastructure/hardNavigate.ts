@@ -1,9 +1,15 @@
+import { safeInternalPath } from "../domain/safeInternalPath";
+
+/** Sentinel `safeInternalPath` returns for a destination this module will not follow. */
+const REFUSED_DESTINATION = "\u0000refused";
+
 /** How long a caller waits for the document to go away before assuming it never will. */
 export const NAVIGATION_COMMIT_BUDGET_MS = 10_000;
 
 /**
  * Why a hard navigation left the caller still running.
- *  - `refused`  — `replace()` raised, so nothing was ever scheduled.
+ *  - `refused`  — the destination was refused here, or `replace()` raised. Either way
+ *    nothing was ever scheduled.
  *  - `not-committed` — nothing raised and the document is still here past its budget.
  */
 export type HardNavigationFailure = "refused" | "not-committed";
@@ -28,11 +34,18 @@ export type HardNavigationFailure = "refused" | "not-committed";
  * That is the safe action under both readings — the alternative, believing a navigation
  * that never happened, is the wedge this exists to remove.
  *
- * `url` is NOT validated here, and that is a decision rather than an omission: this is the
- * sink, so a guard would have to rewrite a destination it disliked, and a navigation that
- * silently goes somewhere else is a worse failure than the one it prevents. Callers pass a
- * `Routes.*` constant or a value already through `safeInternalPath` — both of today's do —
- * and that is a review rule, not something a green build proves.
+ * A destination that is not a root-relative in-app path is REFUSED, not rewritten and not
+ * trusted. This is the single sanctioned hard-navigation sink in `src/`, so it is also the
+ * one line the navigation linter will never look at again; leaving it unguarded on the
+ * strength of "callers pass a constant" is a review rule, and the review rule it leaned on
+ * had already failed once (`safeInternalPath` passed `/<TAB>/evil.com`). Refusing is
+ * reported through the ordinary `refused` channel rather than thrown, so a caller that
+ * latched state still releases it instead of unwinding through an adapter that never
+ * promised to throw.
+ *
+ * `replace()` rather than `assign()`, always: the page being left is authenticated, and an
+ * `assign()` leaves it one Back press away, where a bfcache restore puts the previous user's
+ * data back on a shared machine.
  *
  * Nothing is handed back to cancel with. The budget is a single self-clearing timer per
  * navigation, and a document performs at most one; a caller that goes away before it fires
@@ -44,6 +57,11 @@ export function hardNavigate(
   onFailure: (failure: HardNavigationFailure) => void,
   budgetMs: number = NAVIGATION_COMMIT_BUDGET_MS,
 ): void {
+  if (safeInternalPath(url, REFUSED_DESTINATION) === REFUSED_DESTINATION) {
+    onFailure("refused");
+    return;
+  }
+
   try {
     // Leaving an authenticated area / running where no React context reaches a router: this
     // module is the single place either one is spelled, so the disable is stated once rather
@@ -57,16 +75,29 @@ export function hardNavigate(
 
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const cancel = (): void => {
+  const disarm = (): void => {
     if (timer === undefined) return;
     clearTimeout(timer);
     timer = undefined;
-    globalThis.removeEventListener("pagehide", cancel);
+    globalThis.removeEventListener("pagehide", onPageHide);
+  };
+
+  // `persisted` is the half that makes pagehide usable as a commit oracle at all. It fires
+  // for two different facts: the document is being DISCARDED (`persisted: false` — this
+  // navigation committed), or it is going into the back/forward cache or being frozen
+  // (`persisted: true` — iOS Safari does this whenever the app is backgrounded), from which
+  // it can come back alive. Treating both as "committed" disarmed the only bound a caller
+  // has, permanently, on an ordinary phone interaction: background the tab mid-bounce and
+  // the claim it releases is never released, leaving the application blanked with no route
+  // away — the exact outcome the curtain's safety argument rests on being impossible.
+  const onPageHide = (event: PageTransitionEvent): void => {
+    if (event.persisted) return;
+    disarm();
   };
 
   timer = setTimeout(() => {
-    cancel();
+    disarm();
     onFailure("not-committed");
   }, budgetMs);
-  globalThis.addEventListener("pagehide", cancel);
+  globalThis.addEventListener("pagehide", onPageHide);
 }

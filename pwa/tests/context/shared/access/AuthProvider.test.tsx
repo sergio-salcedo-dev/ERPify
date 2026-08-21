@@ -135,6 +135,36 @@ describe("AuthProvider", () => {
     expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
   });
 
+  it("logout() hands the caller's budget to the session registry", async () => {
+    me.mockResolvedValue(ADMIN);
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
+
+    await act(async () => {
+      await result.current.logout(1_500);
+    });
+
+    // The middle hop of the sign-out budget, and the only one nothing was reading. Every other
+    // link is pinned — layout→logout, repository→post, transport→abort — so dropping the
+    // argument HERE let sign-out silently inherit the transport's 30 s default, a tenfold
+    // regression of a user-facing bound with vitest, eslint, dependency-cruiser and tsc all green.
+    expect(revokeCurrent).toHaveBeenCalledWith(1_500);
+  });
+
+  it("logout() asks for no budget when the caller names none", async () => {
+    me.mockResolvedValue(ADMIN);
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(revokeCurrent).toHaveBeenCalledWith(undefined);
+  });
+
   it("logout() still clears the local session when the server revoke fails", async () => {
     me.mockResolvedValue(ADMIN);
     revokeCurrent.mockRejectedValueOnce(new Error("network down"));

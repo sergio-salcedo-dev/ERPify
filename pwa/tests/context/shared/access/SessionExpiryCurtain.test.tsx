@@ -48,6 +48,16 @@ describe("SessionExpiryCurtain", () => {
     // render, on every surface at once, without a single caller learning a new failure shape.
     expect(screen.queryByTestId(CHILD)).toBeNull();
     expect(screen.getByTestId("session-expiry__message")).toBeInTheDocument();
+    // Not a bare message in a div. Unmounting the whole tree destroys whatever control raised
+    // the 401, so focus falls to <body>; and a live region mounted ALREADY carrying its text is
+    // the classic non-announcement — readers register it on insertion and speak later mutations.
+    // `role="alert"` is the one role browsers fire on insertion itself.
+    expect(screen.getByRole("alert")).toHaveTextContent("Your session expired");
+    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+    expect(screen.getByTestId("session-expiry__curtain")).toHaveFocus();
+    // The bound the user holds, rather than the one they wait out: a navigation that never
+    // commits would otherwise leave them on a screen with no controls at all.
+    expect(screen.getByTestId("session-expiry__sign-in")).toHaveAttribute("href", "/login");
   });
 
   it("gives the application back when the navigation never committed", () => {
@@ -114,5 +124,12 @@ describe("SessionExpiryCurtain", () => {
     expect(raised).toMatchObject({ problem: { status: HttpStatus.UNAUTHORIZED } });
     expect(screen.queryByTestId(CHILD)).toBeNull();
     expect(screen.getByTestId("session-expiry__curtain")).toBeInTheDocument();
+
+    // This case runs on real timers, so without releasing here the file ends holding the claim,
+    // a live navigation budget and a `pagehide` listener — and any test appended after it would
+    // inherit them, silently, as an ordering dependency.
+    act(() => {
+      endSessionExpiry();
+    });
   });
 });
