@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 
@@ -8,6 +9,12 @@ import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevTool
  */
 export const THROW_FIXTURE_MESSAGE =
   "Triggered by /dev-throw — debug fixture for the error.tsx boundary.";
+
+// Never actually seen — this route always throws or 404s below — but declared anyway so the
+// route-titles gate covers this tree uniformly, with no per-route exclusion to maintain.
+export const metadata: Metadata = {
+  title: "Debug: dev-throw",
+};
 
 /**
  * Debug-only fixture route used to exercise `app/error.tsx` end-to-end.

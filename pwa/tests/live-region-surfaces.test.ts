@@ -21,10 +21,12 @@ import { describe, expect, it } from "vitest";
  * `<output` spelled inside a comment or a string is not a rendered element, and a comment is
  * trivia attached to a token rather than a node the walk visits, so it never competes with a
  * live one for the match. The walk also reaches a **dynamically** created element —
- * `createElement("output", …)` — which no text-based scan sees at all. A tag whose name is
- * itself a variable (`const Tag = "output"; <Tag />`) stays out of scope: that is not a
- * defect literate analysis fails to close, it is the boundary of what a static read of the
- * source can ever answer.
+ * `createElement("output", …)` — which no text-based scan sees at all, and resolves that call
+ * through the file's own `import … from "react"` (a named import under any alias, or a
+ * namespace/default import used as `X.createElement(...)`), not just the two literal spellings
+ * `createElement`/`React.createElement`. A tag whose name is itself a variable
+ * (`const Tag = "output"; <Tag />`) stays out of scope: that is not a defect literate analysis
+ * fails to close, it is the boundary of what a static read of the source can ever answer.
  *
  * A green proves no unregistered file spells `<output>`, statically or via `createElement`. It
  * proves nothing about the OTHER spellings of a live region (`role="status"`, `role="alert"`,
@@ -35,7 +37,7 @@ const PWA_ROOT = path.resolve(__dirname, "..");
 const SRC_ROOT = path.join(PWA_ROOT, "src");
 const SOURCE_EXTENSIONS = new Set([".tsx", ".jsx"]);
 const OUTPUT_TAG = "output";
-const CREATE_ELEMENT_CALLEES = new Set(["createElement", "React.createElement"]);
+const REACT_MODULE_SPECIFIER = "react";
 
 // Path relative to `src/` → why this surface is genuinely a live region.
 const LIVE_REGION_SURFACES: Readonly<Record<string, string>> = {
@@ -65,9 +67,52 @@ function isOutputJsxElement(node: ts.Node): boolean {
   return false;
 }
 
-function isOutputCreateElementCall(node: ts.Node): boolean {
+/** Local names bound to React's `createElement`, resolved from the file's own imports. */
+interface CreateElementBindings {
+  /** Called directly: `h("output", …)`. */
+  readonly direct: ReadonlySet<string>;
+  /** Called through a namespace/default import: `React.createElement("output", …)`. */
+  readonly namespaces: ReadonlySet<string>;
+}
+
+/**
+ * `createElement`/`React` are seeded unconditionally so a file reaching either name without
+ * importing it (a global JSX runtime shim, a test fixture) still matches, exactly as the two
+ * literal spellings this replaces did — every real `import … from "react"` only adds aliases.
+ */
+function createElementBindings(sourceFile: ts.SourceFile): CreateElementBindings {
+  const direct = new Set<string>(["createElement"]);
+  const namespaces = new Set<string>(["React"]);
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    if (statement.moduleSpecifier.text !== REACT_MODULE_SPECIFIER) continue;
+    const clause = statement.importClause;
+    if (!clause) continue;
+    if (clause.name) namespaces.add(clause.name.text); // `import React from "react"`
+    const bindings = clause.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const element of bindings.elements) {
+        if ((element.propertyName ?? element.name).text === "createElement") {
+          direct.add(element.name.text);
+        }
+      }
+    }
+  }
+  return { direct, namespaces };
+}
+
+function isOutputCreateElementCall(node: ts.Node, bindings: CreateElementBindings): boolean {
   if (!ts.isCallExpression(node)) return false;
-  if (!CREATE_ELEMENT_CALLEES.has(node.expression.getText())) return false;
+  const callee = node.expression;
+  const isDirectCall = ts.isIdentifier(callee) && bindings.direct.has(callee.text);
+  const isNamespacedCall =
+    ts.isPropertyAccessExpression(callee) &&
+    callee.name.text === "createElement" &&
+    ts.isIdentifier(callee.expression) &&
+    bindings.namespaces.has(callee.expression.text);
+  if (!isDirectCall && !isNamespacedCall) return false;
   const [tagArgument] = node.arguments;
   return !!tagArgument && ts.isStringLiteralLike(tagArgument) && tagArgument.text === OUTPUT_TAG;
 }
@@ -81,11 +126,12 @@ function rendersOutputInSource(fileName: string, source: string): boolean {
     true,
     ts.ScriptKind.TSX,
   );
+  const bindings = createElementBindings(sourceFile);
 
   let found = false;
   const visit = (node: ts.Node): void => {
     if (found) return;
-    if (isOutputJsxElement(node) || isOutputCreateElementCall(node)) {
+    if (isOutputJsxElement(node) || isOutputCreateElementCall(node, bindings)) {
       found = true;
       return;
     }
@@ -138,6 +184,49 @@ describe("output detection reads the AST, not the source text", () => {
       }
     `;
     expect(rendersOutputInSource("fixture.tsx", source)).toBe(false);
+  });
+
+  it("follows a renamed named import of createElement", () => {
+    const source = `
+      import { createElement as h } from "react";
+      export function Widget() {
+        return h("output", { "data-testid": "widget__status" }, "hi");
+      }
+    `;
+    expect(rendersOutputInSource("fixture.tsx", source)).toBe(true);
+  });
+
+  it("follows an aliased namespace import used as X.createElement", () => {
+    const source = `
+      import * as R from "react";
+      export function Widget() {
+        return R.createElement("output", { "data-testid": "widget__status" }, "hi");
+      }
+    `;
+    expect(rendersOutputInSource("fixture.tsx", source)).toBe(true);
+  });
+
+  it("follows a default import of React used as React.createElement", () => {
+    const source = `
+      import React from "react";
+      export function Widget() {
+        return React.createElement("output", { "data-testid": "widget__status" }, "hi");
+      }
+    `;
+    expect(rendersOutputInSource("fixture.tsx", source)).toBe(true);
+  });
+
+  it("still flags a same-named createElement imported from an unrelated module — over-matching is the safe direction here", () => {
+    // `createElement`/`React` are seeded unconditionally (see createElementBindings), so a
+    // same-named import from any other module is a false positive this walk accepts rather
+    // than resolves — a missed live region is the dangerous direction, an extra flag is not.
+    const source = `
+      import { createElement } from "some-other-library";
+      export function Widget() {
+        return createElement("output", { "data-testid": "widget__status" }, "hi");
+      }
+    `;
+    expect(rendersOutputInSource("fixture.tsx", source)).toBe(true);
   });
 });
 

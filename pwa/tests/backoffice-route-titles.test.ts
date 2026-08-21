@@ -29,10 +29,18 @@ import { describe, expect, it } from "vitest";
  * from one nested in a sub-object (`openGraph: { title: … }`), and it cannot tell a live
  * `title:` from one sitting inside a comment. Neither ambiguity survives parsing — a comment
  * is trivia attached to a token, never a node the walk visits, and a nested object's properties
- * are children of that object, not of `metadata`'s own literal.
+ * are children of that object, not of `metadata`'s own literal. The walk also unwraps a
+ * `satisfies`/`as`/parenthesized initializer down to its object literal. What it does NOT
+ * resolve: a `title` written as a shorthand property (`{ title }`, sourced from a local binding)
+ * or reached only through a spread (`{ ...shared }` with no direct `title:` of its own) — both
+ * need resolving an identifier's declaration elsewhere in the file, a bigger lift than this walk
+ * takes on. Neither form is in use today.
  *
- * A green proves each route resolves a distinct title within its own tree. It proves nothing
- * about that title being meaningful or matching what the page shows.
+ * A green proves each route resolves a distinct title within its own tree, and that no two
+ * trees hand the same title to routes a real transition can connect (a successful login lands
+ * on a deep link into `app/backoffice`, so `app/(auth)` and `app/backoffice` share a boundary a
+ * screen reader can actually cross). It proves nothing about a title being meaningful or
+ * matching what the page shows.
  */
 const PWA_ROOT = path.resolve(__dirname, "..");
 const DYNAMIC_METADATA_RE = /export\s+async\s+function\s+generateMetadata/;
@@ -51,13 +59,19 @@ const ROUTE_GROUPS: readonly RouteGroup[] = [
   {
     label: "back-office",
     root: path.join(PWA_ROOT, "src", "app", "backoffice"),
-    minRoutes: 50,
+    minRoutes: 51,
     urlPrefix: "/backoffice",
   },
   {
     label: "auth",
     root: path.join(PWA_ROOT, "src", "app", "(auth)"),
     minRoutes: 4,
+    urlPrefix: "",
+  },
+  {
+    label: "errors",
+    root: path.join(PWA_ROOT, "src", "app", "(errors)"),
+    minRoutes: 6,
     urlPrefix: "",
   },
 ];
@@ -67,6 +81,20 @@ function titleOf(file: string): string | null {
   if (!existsSync(file)) return null;
   const metadataObject = metadataObjectLiteral(file, readFileSync(file, "utf8"));
   return metadataObject ? titlePropertyValue(metadataObject) : null;
+}
+
+/** Strips `satisfies X` / `as X` / redundant parentheses down to the wrapped expression. */
+function unwrapExpression(node: ts.Expression): ts.Expression {
+  let current = node;
+  for (;;) {
+    if (ts.isSatisfiesExpression(current) || ts.isAsExpression(current)) {
+      current = current.expression;
+    } else if (ts.isParenthesizedExpression(current)) {
+      current = current.expression;
+    } else {
+      return current;
+    }
+  }
 }
 
 /** The top-level `export const metadata = {...}` object literal, if the file declares one. */
@@ -85,9 +113,9 @@ function metadataObjectLiteral(file: string, source: string): ts.ObjectLiteralEx
     if (!isExported) continue;
     for (const declaration of statement.declarationList.declarations) {
       if (declaration.name.getText() !== "metadata") continue;
-      if (declaration.initializer && ts.isObjectLiteralExpression(declaration.initializer)) {
-        return declaration.initializer;
-      }
+      if (!declaration.initializer) continue;
+      const value = unwrapExpression(declaration.initializer);
+      if (ts.isObjectLiteralExpression(value)) return value;
     }
   }
   return null;
@@ -158,7 +186,11 @@ function titleSources(page: string, group: RouteGroup): string[] {
 
 function routeOf(page: string, group: RouteGroup): string {
   const segment = path.relative(group.root, path.dirname(page)).replaceAll(path.sep, "/");
-  return `${group.urlPrefix}${segment ? `/${segment}` : ""}` || "/";
+  const url = `${group.urlPrefix}${segment ? `/${segment}` : ""}`;
+  // Only a group root page can produce an empty url (no urlPrefix, no segment) — currently just
+  // `(auth)`. A bare "/" would silently read as the real site root in a failure message; this
+  // reads as neither a URL nor a coincidence.
+  return url || `(${group.label} root)`;
 }
 
 describe("title extraction reads the AST, not the source text", () => {
@@ -199,6 +231,27 @@ describe("title extraction reads the AST, not the source text", () => {
       title: { default: "Default title", template: "%s | ERPify" },
     };`;
     expect(titleFromSource(source)).toBe("Default title");
+  });
+
+  it("unwraps a satisfies-typed metadata initializer", () => {
+    const source = `export const metadata = {
+      title: "Real title",
+    } satisfies Metadata;`;
+    expect(titleFromSource(source)).toBe("Real title");
+  });
+
+  it("unwraps an as-cast metadata initializer", () => {
+    const source = `export const metadata = {
+      title: "Real title",
+    } as Metadata;`;
+    expect(titleFromSource(source)).toBe("Real title");
+  });
+
+  it("unwraps a parenthesized metadata initializer", () => {
+    const source = `export const metadata: Metadata = (
+      { title: "Real title" }
+    );`;
+    expect(titleFromSource(source)).toBe("Real title");
   });
 });
 
@@ -250,5 +303,24 @@ describe.each(ROUTE_GROUPS)("$label route titles", (group) => {
       .filter((page) => DYNAMIC_METADATA_RE.test(readFileSync(page, "utf8")))
       .map((page) => routeOf(page, group));
     expect(dynamic).toEqual([]);
+  });
+});
+
+describe("title distinctness across every gated tree", () => {
+  it("gives no two routes in different trees the same title — a real transition crosses them", () => {
+    // A successful login (`LoginForm.tsx`) does `router.push` into `app/backoffice` (its own
+    // root, or wherever `?next=` deep-links) — a genuine client-side transition between two of
+    // these trees, so the per-tree distinctness above is not the whole guarantee an announcer
+    // needs; the union has to hold it too.
+    const byTitle = new Map<string, string[]>();
+    for (const group of ROUTE_GROUPS) {
+      for (const page of routes(group.root)) {
+        const title = resolvedTitle(page, group);
+        if (title === null) continue;
+        byTitle.set(title, [...(byTitle.get(title) ?? []), routeOf(page, group)]);
+      }
+    }
+    const shared = [...byTitle].filter(([, matchedRoutes]) => matchedRoutes.length > 1);
+    expect(shared).toEqual([]);
   });
 });

@@ -138,14 +138,21 @@ export default function BackOfficeLayoutClient({
   }, [pathname]);
 
   // The mobile Sheet never strands <body>, so the effect above never fires for it: the item a
-  // click lands on stays focused until the Sheet's own close (Base UI's modal-dialog default,
-  // ~200ms behind the CSS transition) returns focus to the hamburger trigger — measured, that
-  // return lands roughly 250ms after the route has already changed. `handleNavigation` is the
-  // only path that closes the Sheet to go somewhere, so it is the one place that can tell a
-  // navigating close from Escape/backdrop/the X button, which must still return focus to the
-  // trigger (the correct default for a dialog that closes without going anywhere). Read via the
-  // Sheet's own `finalFocus`, timed to when it actually unmounts, rather than trying to race the
-  // route-focus effect above against an animation neither controls.
+  // click lands on stays focused until the Sheet's own close (Base UI's modal-dialog default)
+  // returns focus to the hamburger trigger, which — measured live — lands well after the route
+  // has already changed. `handleNavigation` is the only path that closes the Sheet to go
+  // somewhere, so it is the one place that can tell a navigating close from Escape/backdrop/the
+  // X button, which must still return focus to the trigger (the correct default for a dialog
+  // that closes without going anywhere). Read via the Sheet's own `finalFocus`, timed to when it
+  // actually unmounts, rather than trying to race the route-focus effect above against an
+  // animation neither controls.
+  //
+  // Armed only once navigation is certain, not on entry to `handleNavigation`: that function is
+  // also the desktop sidebar's and the top-bar dropdown's handler, neither of which opens the
+  // mobile Sheet, and armed-but-never-consumed would sit `true` until the Sheet next closes for
+  // an unrelated reason (Escape, with no navigation) and misdirect that close's focus. `isLeaving`
+  // gates two branches to a no-op return with the Sheet already closing — a click landing there
+  // still closes the mobile Sheet without navigating anywhere, and must not claim otherwise.
   const closingSheetViaNavigationRef = useRef(false);
 
   const menuGroups = backofficeMenuGroups;
@@ -162,7 +169,10 @@ export default function BackOfficeLayoutClient({
   const isSignOutFailure = signOut === SignOut.REFUSED || signOut === SignOut.STALLED;
 
   const handleNavigation = (path: string, action?: NavAction) => {
-    closingSheetViaNavigationRef.current = true;
+    // Read before closing: this is the only signal, once the Sheet is shut, of whether it WAS
+    // the mobile Sheet that just closed (desktop's sidebar and the top-bar dropdown call this
+    // same function and never open it).
+    const closingMobileSheet = isSidebarOpen;
     setIsSidebarOpen(false);
     if (action === "sign-out") {
       // A second click POSTs a second revoke against a session the first one already
@@ -170,6 +180,7 @@ export default function BackOfficeLayoutClient({
       // first revoke is outstanding: the click closes the menu, so it needs the menu
       // reopened, which is exactly the window SIGN_OUT_BUDGET_MS bounds.
       if (isLeaving) return;
+      if (closingMobileSheet) closingSheetViaNavigationRef.current = true;
       setSignOut(SignOut.LEAVING);
       // `action` is what makes this sign out. The destination below is hard-coded to HOME and
       // this entry's own `path` is never read on this branch. Two tests hold the two together,
@@ -216,6 +227,7 @@ export default function BackOfficeLayoutClient({
     // menu-driven navigation reaches here — the logo and any link inside the page are next/link
     // and route on their own.
     if (isLeaving) return;
+    if (closingMobileSheet) closingSheetViaNavigationRef.current = true;
     // A failure message describes one interaction, not the rest of the document's life: left
     // standing it stays in the accessibility tree through every later route change.
     setSignOut(SignOut.IDLE);
@@ -390,8 +402,10 @@ export default function BackOfficeLayoutClient({
                       const viaNavigation = closingSheetViaNavigationRef.current;
                       closingSheetViaNavigationRef.current = false;
                       // `true` keeps Base UI's own default (return focus to the trigger) for
-                      // Escape / backdrop / the X button — a real close, not a navigation.
-                      return viaNavigation ? mainRef.current : true;
+                      // Escape / backdrop / the X button — a real close, not a navigation. It is
+                      // also the fallback if `<main>` were somehow not yet mounted, rather than
+                      // handing Base UI a `null` whose meaning this prop never documents.
+                      return viaNavigation ? (mainRef.current ?? true) : true;
                     }}
                   >
                     <SheetHeader className="bo-layout__sidebar-mobile-header p-4 flex flex-row items-center justify-between border-b border-border">
