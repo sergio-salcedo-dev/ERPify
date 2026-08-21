@@ -67,14 +67,12 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           storageKey={THEME_STORAGE_KEY}
           disableTransitionOnChange
         >
-          {/* The toast viewport lives INSIDE AuthProvider so <SessionExpiryCurtain> is its
-              ancestor. Sonner's queue is module state, so a toast raised by the same 401 that
-              started a session-expiry bounce would otherwise render on top of the curtain —
-              pointing the user at error details that were unmounted with the rest of the app. */}
-          <AuthProvider>
-            {children}
-            <SonnerToaster />
-          </AuthProvider>
+          {/* The toast viewport is global infrastructure, a sibling of AuthProvider so it
+              never unmounts with the guarded subtree — including under <SessionExpiryCurtain>,
+              which clears any stale toast itself (`dismissAll()`) the instant it engages,
+              rather than relying on an incidental unmount to hide one. */}
+          <AuthProvider>{children}</AuthProvider>
+          <SonnerToaster />
           {showDebugToolbar ? <SymfonyDebugToolbar /> : null}
         </ThemeProvider>
       </body>

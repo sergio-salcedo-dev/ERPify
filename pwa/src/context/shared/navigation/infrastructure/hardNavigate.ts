@@ -74,12 +74,26 @@ export function hardNavigate(
   }
 
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let remainingMs = budgetMs;
+  let runningSince = 0;
 
   const disarm = (): void => {
-    if (timer === undefined) return;
-    clearTimeout(timer);
-    timer = undefined;
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
     globalThis.removeEventListener("pagehide", onPageHide);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+  };
+
+  const fire = (): void => {
+    disarm();
+    onFailure("not-committed");
+  };
+
+  const arm = (ms: number): void => {
+    runningSince = performance.now();
+    timer = setTimeout(fire, ms);
   };
 
   // `persisted` is the half that makes pagehide usable as a commit oracle at all. It fires
@@ -95,9 +109,28 @@ export function hardNavigate(
     disarm();
   };
 
-  timer = setTimeout(() => {
-    disarm();
-    onFailure("not-committed");
-  }, budgetMs);
+  // A backgrounded tab is not evidence either way — some browsers throttle or suspend
+  // timers while hidden, which would report a real, still-pending navigation as
+  // `not-committed` purely because the tab was in the background for the wait. Pausing the
+  // budget while hidden and resuming it with whatever was left, rather than a fresh one,
+  // keeps the report about the navigation instead of about how long the tab sat backgrounded.
+  const onVisibilityChange = (): void => {
+    if (document.hidden) {
+      if (timer === undefined) return;
+      clearTimeout(timer);
+      timer = undefined;
+      remainingMs = Math.max(0, remainingMs - (performance.now() - runningSince));
+    } else if (timer === undefined) {
+      arm(remainingMs);
+    }
+  };
+
+  // A tab that is ALREADY hidden when the navigation starts (e.g. a background-tab realtime
+  // reconnect that then 401s) must not spend any of the budget while unobserved either — arming
+  // now and only pausing on the next transition would let the whole budget elapse hidden, which
+  // is the exact throttling problem this exists to avoid. `onVisibilityChange`'s visible branch
+  // arms it once the tab is actually watched.
+  if (!document.hidden) arm(budgetMs);
   globalThis.addEventListener("pagehide", onPageHide);
+  document.addEventListener("visibilitychange", onVisibilityChange);
 }

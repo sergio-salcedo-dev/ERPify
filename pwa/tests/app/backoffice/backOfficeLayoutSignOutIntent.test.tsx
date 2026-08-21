@@ -11,7 +11,7 @@ const { push, logout, replace, auth, override, DECOY_TEST_ID } = vi.hoisted(() =
 }));
 
 vi.mock("@/context/shared/access/application/useSession", () => ({
-  useSession: () => ({ ...auth, login: vi.fn(), logout, override }),
+  useSession: () => ({ ...auth, login: vi.fn(), logout, override, setIsSigningOut: vi.fn() }),
 }));
 
 vi.mock("next/navigation", () => {
