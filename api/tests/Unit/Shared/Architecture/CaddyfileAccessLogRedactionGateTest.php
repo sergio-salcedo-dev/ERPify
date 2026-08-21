@@ -9,10 +9,11 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Static gate over the Caddy access-log filter. The log is a sink with no owner of erasure — no compose
- * file declares a `logging:` driver, so it is the default json-file driver with no rotation and no TTL,
- * and no erasure path can reach it. What lands there is retained, and retention is the obligation this
- * gate serves: not "an attacker could read it", but "we hold a person's identifier and cannot erase it".
+ * Static gate over the Caddy access-log filter. The log is a sink with no owner of erasure — the compose
+ * `logging:` blocks bound the json-file driver by SIZE, which is eviction by volume and not an
+ * expiry, so it still has no TTL and no erasure path can reach it. What lands there is retained, and
+ * retention is the obligation this gate serves: not "an attacker could read it", but "we hold a
+ * person's identifier and cannot erase it".
  *
  * Two carriers reach the entry, and they need different mechanisms because a log line records more than
  * its URI:

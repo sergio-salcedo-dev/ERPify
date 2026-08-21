@@ -18,7 +18,7 @@ namespace Erpify\Shared\ErrorContract\Application;
  *
  * The sink is what makes it matter. In prod Monolog writes to `php://stderr` behind a `fingers_crossed`
  * handler, so one 5xx flushes the whole buffer — WARNING lines from unrelated 4xx included — into the
- * default json-file Docker driver, which no compose file gives a rotation, a TTL, or an owner. Nothing in
+ * default json-file Docker driver, which no compose file gives a TTL or an owner (only a size bound). Nothing in
  * the erasure path can reach it, so a person id logged here outlives the erasure the application confirmed
  * to the subject.
  *

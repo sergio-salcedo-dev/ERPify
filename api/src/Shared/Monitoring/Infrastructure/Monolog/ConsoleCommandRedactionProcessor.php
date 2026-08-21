@@ -21,11 +21,19 @@ use Stringable;
  * `deprecation` and `observability`) and CRITICAL is above its `action_level: error`, so that record does not
  * merely sit in the buffer, it FLUSHES it to `php://stderr`.
  *
- * Two argv shapes in this application carry what must not reach that sink. `identity:gdpr:erase-subject
- * <uuid>` writes a person's identifier into a record of the erasure the command exists to perform — the
- * subject is told they were erased and the identifier survives the telling. `organization:administrator:create
- * <email> <password>` writes a password IN CLEAR beside the address it belongs to. `iam:invitation:create`
- * takes an email too.
+ * **Which invocations actually reach the CRITICAL path is narrower than "a command that fails", and getting
+ * this wrong is what an adversarial pass caught.** Every `#[AsCommand]` in this application that takes person
+ * data catches `Throwable` and returns `Command::FAILURE` — `EraseIdentitySubjectCommand`,
+ * `CreateInitialAdministratorCommand` and `CreateInvitationCommand` all do — so none of them can raise a
+ * `ConsoleErrorEvent`, and their own failures reach only `:67` at DEBUG. A DEBUG record buffers without
+ * activating, and `FingersCrossedHandler::flushBuffer()` DISCARDS the buffer when no `passthru_level` is
+ * configured, which is this deployment. The live producer of `:46` is an invocation the console cannot BIND —
+ * an unknown option, a wrong arity, a mistyped command name — because that raises outside the command's own
+ * `try`. Its argv is the operator's, and it carries whatever they typed: `identity:gdpr:erase-subject <uuid>
+ * --typo` puts a person's identifier into the record of the erasure the command exists to perform, and
+ * `organization:administrator:create <email> <password> --typo` puts a password IN CLEAR beside the address
+ * it belongs to. The DEBUG path is the second producer and needs no error at all — it reaches the sink
+ * whenever something else in the same process activates the buffer.
  *
  * A processor rather than a fix at the listener, for the same reason its two siblings are one: the emitter
  * lives in `vendor/`, where a sweep of `api/src` cannot see it and a patch cannot reach it. Logger-scoped, so
@@ -52,11 +60,12 @@ use Stringable;
  * **The degradation is real and is not hidden.** An invocation LEADING with a global option
  * (`bin/console -v <command>`, `--env=prod <command>`) loses the name too, because locating it past an
  * option would take the command's own input definition — whether `-e` consumes the next token or not — which
- * a processor does not have and must not guess. Measured over this repository, nothing invokes that shape:
- * `make sf`, the two compose `command:` arrays and `docker-entrypoint.sh` all spell `bin/console <command>`
- * first. So the cost is a diagnostic in a shape nobody runs, against a rule that needs no knowledge of the
- * console at all — and the day someone runs it, they get a redacted line rather than a leaked one, which is
- * the direction to fail in.
+ * a processor does not have and must not guess. Measured over this repository, the shape IS invoked, once:
+ * `api/frankenphp/docker-entrypoint.sh` runs `php bin/console -V`, the first console call the prod container
+ * makes. (`make sf` and both compose `command:` arrays spell `bin/console <command>` first, and
+ * `make/php-quality.mk`'s `cache:clear --env=prod` puts its option after the name.) That invocation carries
+ * no argument at all, so what the degradation costs there is the string `-V` — and it fails toward a redacted
+ * line rather than a leaked one, which is the direction to fail in.
  *
  * **What a green does not cover.** The `message` sibling key, which holds `$throwable->getMessage()` — a
  * throwable composed from a person datum reaches this sink through it, undefended here by construction and
@@ -65,6 +74,8 @@ use Stringable;
  * a password passed positionally is disclosed to every local process regardless of this class. That residual
  * is recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §7 and is why
  * `organization:administrator:create` keeps its hidden prompt and says so in its own argument description.
+ * And the one spelling {@see COMMAND_NAME} still admits: a value glued to the command name using only the
+ * characters a command name may contain.
  */
 final readonly class ConsoleCommandRedactionProcessor implements ProcessorInterface
 {
@@ -85,6 +96,27 @@ final readonly class ConsoleCommandRedactionProcessor implements ProcessorInterf
      */
     private const string FIELD = 'command';
 
+    /**
+     * Unicode-aware, and the `u` modifier is the whole point. `\s` on its own is the BYTE class
+     * `[ \t\n\r\f\v]`, so an argv separated by a non-breaking space (U+00A0), a figure space (U+2007) or an
+     * ideographic space (U+3000) parsed as ONE token and was returned verbatim — measured, with a person's id
+     * riding in it. `\p{Z}` is the separator category those three belong to.
+     */
+    private const string SEPARATOR = '/[\s\p{Z}]+/u';
+
+    /**
+     * What a Symfony command name may look like here: lowercase colon-separated segments, hyphens and
+     * underscores inside a segment. Anything else is operator input wearing the first token's position.
+     *
+     * **Its residual is declared rather than papered over.** A value glued to the name using only characters
+     * this pattern admits — a bare uuid after a `-` or a `:` — is indistinguishable from a longer command
+     * name by shape alone, and survives. It cannot carry an address (`@` and `.` are refused) or a password
+     * with any symbol in it. Closing that last spelling means matching against the REGISTERED command names
+     * rather than a shape, which couples this processor to the console registry; recorded as follow-up
+     * rather than done blind.
+     */
+    private const string COMMAND_NAME = '/^[a-z][a-z0-9_-]*(?::[a-z0-9][a-z0-9_-]*)*$/';
+
     #[Override]
     public function __invoke(LogRecord $record): LogRecord
     {
@@ -97,8 +129,16 @@ final readonly class ConsoleCommandRedactionProcessor implements ProcessorInterf
             $command = (string) $command;
         }
 
-        if (!\is_string($command) || '' === $command) {
+        // Fails CLOSED on a value of any other type, which is the direction the sibling argues for and this
+        // class originally got wrong: `context['command'] = ['identity:gdpr:erase-subject', '<uuid>']` was
+        // returned untouched and `JsonFormatter` emitted the array verbatim. A carrier this rule cannot read
+        // is a carrier it cannot vouch for. Only a genuinely absent or empty one is left alone.
+        if (null === $command || '' === $command) {
             return $record;
+        }
+
+        if (!\is_string($command)) {
+            return $record->with(context: [...$record->context, self::FIELD => self::SENTINEL]);
         }
 
         $redacted = self::redact($command);
@@ -121,8 +161,10 @@ final readonly class ConsoleCommandRedactionProcessor implements ProcessorInterf
      */
     private static function redact(string $command): string
     {
-        $tokens = \preg_split('/\s+/', \trim($command), -1, \PREG_SPLIT_NO_EMPTY);
+        $tokens = \preg_split(self::SEPARATOR, \trim($command), -1, \PREG_SPLIT_NO_EMPTY);
 
+        // `false` is invalid UTF-8 under the `u` modifier, which is a value nothing here can read — same
+        // verdict as any other unreadable carrier.
         if (false === $tokens || [] === $tokens) {
             return self::SENTINEL;
         }
@@ -130,6 +172,16 @@ final readonly class ConsoleCommandRedactionProcessor implements ProcessorInterf
         // A leading option means the name cannot be located without the command's input definition — see the
         // class docblock. Redact whole rather than guess, which is the direction that fails safe.
         if (\str_starts_with($tokens[0], '-')) {
+            return self::SENTINEL;
+        }
+
+        // The surviving token is kept only if it LOOKS like a command name, and that check is what closes the
+        // single-token leak: `identity:gdpr:erase-subject=<uuid>` and
+        // `organization:administrator:create:alice@example.test` are each ONE token — the shape an operator
+        // produces by typing the separator wrong, and the shape `Application::run()` hands to
+        // `ConsoleErrorEvent` on `CommandNotFoundException`, where no command bound and the whole token is
+        // operator input. Both used to be returned verbatim at CRITICAL.
+        if (1 !== \preg_match(self::COMMAND_NAME, $tokens[0])) {
             return self::SENTINEL;
         }
 

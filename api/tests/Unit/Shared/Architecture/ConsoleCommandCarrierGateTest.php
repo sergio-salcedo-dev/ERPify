@@ -105,7 +105,7 @@ final class ConsoleCommandCarrierGateTest extends TestCase
     #[Test]
     public function theProcessorIsEnrolledOnEveryChannelLogger(): void
     {
-        $services = $this->serviceDefinitions();
+        $services = $this->rootDefinitions();
 
         $this->assertArrayHasKey(
             ConsoleCommandRedactionProcessor::class,
@@ -124,6 +124,54 @@ final class ConsoleCommandCarrierGateTest extends TestCase
             $tags,
             \sprintf('the processor is not tagged "%s", so no channel logger carries it', self::PROCESSOR_TAG),
         );
+    }
+
+    /**
+     * The root block is not the whole file, and it is not the whole configuration either — which is a measured
+     * hole rather than a hypothetical one. `MicroKernelTrait` imports `config/services_{env}.yaml` after
+     * `config/services.yaml` (`services_dev.yaml` and `services_test.yaml` already exist here), and a
+     * `when@prod:` block inside the base file is applied later than its own root. Either can redeclare this
+     * service with `autoconfigure: false` and `tags: []`, which unenrols it in production ALONE. Appending
+     * exactly that to `config/services.yaml` was measured leaving the assertion above green.
+     *
+     * The sibling gate parses per-environment overrides for the same reason and says so at its own method:
+     * the override is applied after the base file and wins.
+     */
+    #[Test]
+    public function noEnvironmentOverrideUnenrolsIt(): void
+    {
+        $overrides = $this->overrideDefinitions();
+
+        // Not merely a guard against emptiness reading as compliance: it is what makes this test assert
+        // something on a tree that happens to declare no override for THIS service, which is today's tree.
+        // Without it the loop body never runs and PHPUnit reports the test risky, which `failOnRisky` turns
+        // into a red for the wrong reason.
+        $this->assertNotEmpty(
+            $overrides,
+            'no per-environment services block was found at all, so this check is reading nothing — '
+            . '`config/services_dev.yaml` and `config/services_test.yaml` exist, so the reader is broken',
+        );
+
+        foreach ($overrides as $origin => $services) {
+            if (!\array_key_exists(ConsoleCommandRedactionProcessor::class, $services)) {
+                continue;
+            }
+
+            $definition = $services[ConsoleCommandRedactionProcessor::class];
+            $tags = \is_array($definition) ? ($definition['tags'] ?? []) : [];
+
+            $this->assertIsArray($tags);
+            $this->assertContains(
+                self::PROCESSOR_TAG,
+                $tags,
+                \sprintf(
+                    '"%s" redeclares the processor without the "%s" tag, which unenrols it in that '
+                    . 'environment while the root declaration keeps every other assertion green.',
+                    $origin,
+                    self::PROCESSOR_TAG,
+                ),
+            );
+        }
     }
 
     /**
@@ -152,9 +200,48 @@ final class ConsoleCommandCarrierGateTest extends TestCase
     }
 
     /**
+     * Every `services:` map that is NOT the base file's root: the `when@<env>:` blocks inside it, and the
+     * per-environment `config/services_<env>.yaml` files the kernel imports after it.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function overrideDefinitions(): array
+    {
+        $configDir = \dirname(__DIR__, 4) . '/config';
+        $overrides = [];
+
+        $base = Yaml::parseFile($configDir . '/services.yaml', Yaml::PARSE_CUSTOM_TAGS);
+
+        if (\is_array($base)) {
+            foreach ($base as $key => $block) {
+                if (!\is_string($key) || !\str_starts_with($key, 'when@') || !\is_array($block)) {
+                    continue;
+                }
+
+                $services = $block['services'] ?? null;
+
+                if (\is_array($services)) {
+                    $overrides['config/services.yaml → ' . $key] = $services;
+                }
+            }
+        }
+
+        foreach (\glob($configDir . '/services_*.yaml') ?: [] as $file) {
+            $parsed = Yaml::parseFile($file, Yaml::PARSE_CUSTOM_TAGS);
+            $services = \is_array($parsed) ? ($parsed['services'] ?? null) : null;
+
+            if (\is_array($services)) {
+                $overrides['config/' . \basename($file)] = $services;
+            }
+        }
+
+        return $overrides;
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function serviceDefinitions(): array
+    private function rootDefinitions(): array
     {
         // `PARSE_CUSTOM_TAGS`, because the file carries `!tagged_iterator` and the parser refuses it
         // otherwise — the same reason `MonologExclusionDeclarationGateTest` passes the flag.

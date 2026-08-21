@@ -109,10 +109,6 @@
 # engines move, which is the placement PhpSourceTest already has.
 # ---------------------------------------------------------------------------------------------------------
 
-
-# Reads no repository artifact: it puts candidate separators through `Assert\Iban` at runtime and requires
-# against a dependency is open, and nothing is moved on an open question.
-# the canonical form to absorb whatever the validator accepts. Whether the category covers a contract test
 tests/Unit/Shared/Architecture/AdministratorSetLockStatementGateTest.php :: home
 tests/Unit/Shared/Architecture/ArtifactGateDetectionRulesGateTest.php :: home
 tests/Unit/Shared/Architecture/ArtifactGatePlacementGateTest.php :: home
@@ -137,7 +133,6 @@ tests/Unit/Shared/Architecture/DomainPresentationSeparationGateTest.php :: home
 tests/Unit/Shared/Architecture/EnumWireContractGateTest.php :: home
 tests/Unit/Shared/Architecture/EventDispatchGateTest.php :: home
 tests/Unit/Shared/Architecture/FailedMessagePruneStatementGateTest.php :: home
-tests/Unit/Shared/Architecture/IbanSeparatorContractGateTest.php :: undecided :: asks a validator at runtime rather than reading an artifact
 tests/Unit/Shared/Architecture/MailAssemblyBoundaryGateTest.php :: home
 tests/Unit/Shared/Architecture/MigrationColumnDefaultGateTest.php :: home
 tests/Unit/Shared/Architecture/MigrationColumnDefaultRulesGateTest.php :: home
@@ -171,6 +166,11 @@ tests/Unit/Shared/Architecture/SearchOperatorSurfaceGateTest.php :: home
 tests/Unit/Shared/Architecture/SensitiveRecipientAddressGateTest.php :: home
 tests/Unit/Shared/Architecture/StepVocabularyRegistryTest.php :: home
 tests/Unit/Shared/Architecture/StrictRequestPayloadGateTest.php :: home
+
+# Reads no repository artifact: it puts candidate separators through `Assert\Iban` at runtime and requires
+# the canonical form to absorb whatever the validator accepts. Whether the category covers a contract test
+# against a dependency is open, and nothing is moved on an open question.
+tests/Unit/Shared/Architecture/IbanSeparatorContractGateTest.php :: undecided :: asks a validator at runtime rather than reading an artifact
 
 # Filed on the module whose contract they enforce.
 tests/Unit/Behat/Context/OutboxUnqualifiedStepsTest.php :: mirrored :: tests/Behat/Context

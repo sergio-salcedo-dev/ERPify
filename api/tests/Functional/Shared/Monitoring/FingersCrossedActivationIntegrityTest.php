@@ -24,7 +24,7 @@ use Throwable;
  * processors run before any handler sees the record, so a processor that replaces that Throwable with an
  * array — a normalised map, a string, anything — leaves the strategy unable to recognise a 404. The handler
  * then activates on a request the configuration excludes by name and flushes its whole buffer of preceding
- * records to `php://stderr`: the sink with no rotation, no TTL and no owner of erasure.
+ * records to `php://stderr`: the sink with a size bound but no TTL and no owner of erasure.
  *
  * **The processors AND the activation strategy are read from the container**, because a test that names its
  * own processors proves nothing about the application's, and one that builds its own activation strategy from

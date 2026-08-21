@@ -71,7 +71,7 @@
 ## A vendor exception message is composed, never copied, at the boundary that raises it
 
 An exception message is a general carrier of caller data, and the sinks that hold it — `php://stderr` under a
-driver with no rotation, `messenger_messages` via `ErrorDetailsStamp`, a third-party error tracker with its own
+driver bounded by size but with no TTL, `messenger_messages` via `ErrorDetailsStamp`, a third-party error tracker with its own
 retention — are reached by no erasure path. `SmtpTransport::assertResponseCode()` interpolates the server's
 reply verbatim, and the command whose reply fails on a rejected recipient is `RCPT TO:<address>`, so the
 message names a person.

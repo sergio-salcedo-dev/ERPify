@@ -95,7 +95,10 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
             );
 
             $inherited = $base[$name] ?? [];
-            $this->assertIsArray($inherited);
+
+            if (!\is_array($inherited)) {
+                $inherited = [];
+            }
 
             $logging = $definition['logging'] ?? $inherited['logging'] ?? null;
 
@@ -172,6 +175,14 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
     #[DataProvider('composeFiles')]
     public function itSweepsTheServicesTheDeploymentRuns(string $composeFile): void
     {
+        // Guarded like `ScheduleConsumptionGateTest` guards its own per-file map: a compose file added to the
+        // sweep without a line here would otherwise fail on a missing offset rather than say what is wrong.
+        $this->assertArrayHasKey(
+            $composeFile,
+            self::EXPECTED_SERVICES,
+            \sprintf('"%s" is swept but names no expected service set', $composeFile),
+        );
+
         $declared = \array_keys($this->servicesIn($composeFile));
         $expected = self::EXPECTED_SERVICES[$composeFile];
 
@@ -191,6 +202,35 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
     }
 
     /**
+     * Compose's `include:` merges another file's services into the stack, and this gate reads only each
+     * file's own `services:` key — so an included service is invisible to every assertion above AND to
+     * `EXPECTED_SERVICES`, the anti-vacuity pin. Measured: a `compose.extra.yaml` declaring an unbounded
+     * `otel_collector`, pulled in by one `include:` line, showed up in `docker compose config` with no
+     * `logging:` block while this gate reported `OK (10 tests, 72 assertions)`.
+     *
+     * Refused outright rather than resolved. Resolving it means reimplementing Compose's merge order for a
+     * feature nothing here uses, and a gate that quietly half-resolves is worse than one that says it cannot.
+     */
+    #[Test]
+    #[DataProvider('composeFiles')]
+    public function itRefusesAnIncludeItCannotResolve(string $composeFile): void
+    {
+        $parsed = Yaml::parseFile($this->composeDirectory() . '/' . $composeFile);
+        $this->assertIsArray($parsed);
+
+        $this->assertArrayNotHasKey(
+            'include',
+            $parsed,
+            \sprintf(
+                '"%s" pulls in another compose file, whose services this gate cannot see — so an unbounded '
+                . 'one would ship with every assertion here green. Declare the service directly, or teach '
+                . 'this gate to resolve the include before adding one.',
+                $composeFile,
+            ),
+        );
+    }
+
+    /**
      * @return iterable<string, array{string}>
      */
     public static function composeFiles(): iterable
@@ -201,7 +241,11 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
     }
 
     /**
-     * @return array<string, array<string, mixed>>
+     * Deliberately typed `mixed` per value rather than `array<string, mixed>`: a `service: ~` key parses to
+     * null, and annotating it away would tell PHPStan the runtime guard at the call site is unreachable while
+     * leaving the real case live. The guard is the control; the annotation must not contradict it.
+     *
+     * @return array<string, mixed>
      */
     private function servicesIn(string $composeFile): array
     {
@@ -211,7 +255,7 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
             $this->fail(\sprintf('"%s" declares no services to read.', $composeFile));
         }
 
-        /** @var array<string, array<string, mixed>> $services */
+        /** @var array<string, mixed> $services */
         $services = $parsed['services'];
 
         return $services;

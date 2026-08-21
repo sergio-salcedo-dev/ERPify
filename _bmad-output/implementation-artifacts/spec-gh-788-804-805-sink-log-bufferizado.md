@@ -39,6 +39,13 @@ rotación en los tres compose con gate.
 
 </frozen-after-approval>
 
+> **Corrección de hecho sobre el bloque de arriba, que no se edita por estar congelado.** La frase «dos formas
+> de argv aquí llevan lo que no puede llegar ahí» describe el CRITICAL de `:46` como alcanzable por un fallo de
+> esos comandos. No lo es: los tres capturan `Throwable`, así que sólo llegan al DEBUG de `:67`, que se
+> descarta sin `passthru_level`. El productor vivo de `:46` es una invocación que la consola no puede *bindear*
+> (opción desconocida, aridad incorrecta, nombre mal escrito). Lo midió el pase adversarial; el detalle está en
+> su sección y en §7 del checklist.
+
 ## Lo entregado
 
 | Issue | Mecanismo | Gate |
@@ -58,81 +65,122 @@ en claro por defecto y nada enrojece.
 
 ## Adversarial pass
 
-**Alcance y honestidad sobre quién la hizo.** Esta pasada la ejecutó **el propio autor del cambio**, en la
-misma sesión y con el mismo contexto. `CLAUDE.md` → «Security review on every change» → Process dice
-explícitamente que la autocertificación **no cuenta**: el gate es una lectura hostil por alguien distinto del
-autor (un contexto fresco, otro modelo o una persona). Por tanto **este registro no satisface la regla por sí
-solo** y queda anotado como lo que es. No se abre PR sobre esta base sin una pasada independiente o un
-`ADVERSARIAL_PASS_ACK` explícito del usuario. Se registra igualmente porque encontró defectos reales y
-arreglarlos costó una edición en lugar de una segunda PR, que es exactamente lo que la regla persigue.
+**Independiente, dos lentes en paralelo, contexto fresco y antes de que exista la PR.** Ninguna de las dos
+escribió una línea de este código. Lente A atacó **los gates y el código** (falsos verdes, bypass del
+processor, PHPStan `level: max` calibrado contra el resto del directorio); lente B atacó **las afirmaciones y
+el argumento de privacidad** (¿cierra de verdad lo que dice?, ¿qué prosa vuelve falsa?, ¿qué pidieron los
+issues que no ha llegado?). Entre las dos, **cuatro GRAVE y ocho MEDIUM**, cada uno con reproducción medida.
 
-### Lo que derribó, y se arregló en el mismo diff
+Una pasada previa del autor había encontrado dos defectos (el `#[When]` y el servicio malformado) y está
+registrada como lo que era: autocertificación, que la regla dice que no cuenta. **No confirmó el cambio: lo
+reescribió** — el processor, los tres gates y dieciocho sitios de prosa.
 
-1. **El processor se podía condicionar fuera de producción y todo seguía verde.** La clase no llevaba ninguna
-   guarda contra `#[When]`/`#[WhenNot]`, que es el modo de fallo que `CLAUDE.md` documenta bajo «Declaring a
-   class out of production» y que `PersonDataRedactionArrivalTest` sí pincha para la regla hermana. Un
-   `#[When(env: 'dev')]` habría dejado el test del processor, el test del carrier y toda la suite en verde
-   mientras quitaba la redacción del **único** entorno cuyo sumidero no tiene dueño. Cerrado con
-   `theProcessorIsNotConditionedIntoOrOutOfAnyEnvironment`, y **falsado**: plantando el atributo, la fila
-   enrojece con «the rule is conditioned into named environments, so production may not have it».
-2. **El gate de retención leía un servicio malformado como conforme.** Una clave de servicio sin mapa debajo
-   parsea a `null`, y `$definition['logging'] ?? $base[$name]['logging'] ?? null` la habría hecho caer al
-   segundo eslabón — es decir, un servicio roto se leía como «hereda del base» en vez de como el fichero
-   malformado que es. Cerrado con un `assertIsArray` por servicio antes de resolver la herencia.
-3. **Hueco de tipos para PHPStan `level: max`.** El método guiado por `DataProvider` recibía `array $pinned`
-   sin `@param list<string>`, que en `level: max` es un `missingType.iterableValue`. Añadido junto con
-   `@param class-string $emitter`, retirando un `@var` en línea que afirmaba el tipo en vez de declararlo.
+### Lo que derribó, y era una fuga real
 
-### Lo que atacó y resistió
+1. **La regla de redacción fallaba ABIERTA con cualquier argv sin espacio ASCII, y eso es una fuga en
+   CRITICAL.** `\s` sin el modificador `u` es la clase de BYTES `[ \t\n\r\f\v]`, así que un separador
+   Unicode dejaba todo el argv como **un** token, y un token único se devolvía verbatim. Medido, cuatro
+   formas: `identity:gdpr:erase-subject=<uuid>`, `organization:administrator:create:alice@example.com`, y el
+   mismo comando separado por U+00A0, U+2007 o U+3000. Y es alcanzable sin error del operador:
+   `Application::run()` despacha `ConsoleErrorEvent` **sin comando** en `CommandNotFoundException`, de modo
+   que el token entero es entrada del operador y aterriza dos veces (contexto y mensaje interpolado). Cerrado
+   con un split `/[\s\p{Z}]+/u` y una comprobación de FORMA sobre el token superviviente: se conserva sólo si
+   parece un nombre de comando.
+2. **El processor fallaba ABIERTO con un portador que no puede leer, y el test lo tenía PINCHADO COMO
+   CORRECTO.** `context['command'] = ['identity:gdpr:erase-subject', '<uuid>']` se devolvía intacto y
+   `JsonFormatter` emitía el array verbatim — mientras `PersonDataRedactionProcessor` argumenta explícitamente
+   lo contrario para este mismo caso («redactar el valor sea cual sea su tipo es lo que cierra eso»). Ahora
+   falla **cerrado**, y el caso del test se invirtió.
+3. **Siete ficheros afirmaban «ningún compose declara un driver `logging:`», que este cambio vuelve falso, y
+   el diff no tocaba ninguno.** Al verificarlo resultaron ser **dieciocho** sitios, incluidos docblocks de
+   gates y dos documentos. Corregidos con una cláusula quirúrgica: la rotación acota TAMAÑO, y el TTL y el
+   dueño siguen sin existir.
+4. **`PersonDataRedactionProcessor` seguía nombrando `{command}` como la fuga viva que su hermano no alcanza,
+   y contaba tres processors.** Son cuatro, y esa fuga la cierra precisamente la clase nueva — que además
+   *citaba* esa frase como si siguiera en pie. Corregido en los tres puntos.
 
-- **Colisión de la clave `command`.** Si algún emisor propio escribiera un `command` con otro significado, el
-  processor le borraría los argumentos. Medido: `grep -rn "'command' =>" api/src/` no devuelve **ningún**
-  emisor (la única coincidencia es la propia docblock del processor). El portador es exclusivamente del
-  framework.
-- **La premisa de `FingersCrossedActivationIntegrityTest`.** Ese test recorre los processors del contenedor y
-  exige que ninguno destruya el `HttpExceptionInterface` que lee `HttpCodeActivationStrategy`. El processor
-  nuevo sólo toca `command` y devuelve el registro intacto cuando no hay nada que redactar, así que la
-  exclusión por código HTTP sigue siendo legible. No pincha un CONJUNTO de processors, así que añadir un
-  tercero no lo enrojece.
-- **El `assertCount(1, ...)` de `PersonDataRedactionArrivalTest`.** Filtra por `instanceof
-  PersonDataRedactionProcessor`, no por cardinalidad total, así que el processor nuevo no lo altera.
-- **Semántica de merge de Compose.** Verificada con el instrumento real y no con mi reimplementación:
-  `docker compose -f compose.yaml -f compose.prod.yaml config` resuelve el bloque acotado en **los cinco**
-  servicios de prod, incluido `scheduler_worker`, que es el único que el overlay introduce.
-- **Los tres gates enrojecen.** Falsados uno a uno mutando el árbol y observando la fila: `mailpit` sin bloque
-  → rojo; cota de prod servida por el entorno (`${LOG_MAX_SIZE:-10m}`) → rojo por dos vías; `Worker` con un
-  productor activante plantado → rojo; el payload devuelto al registro del retry listener → rojo; la etiqueta
-  `monolog.processor` retirada → rojo; el portador `command` renombrado en vendor → rojo.
+### Los cuatro falsos verdes de los gates, cada uno reproducido y ahora en rojo
 
-### Lo que este cambio deja abierto, y no está cerrado por él
+- **El universo del gate de amplificación era una lista a mano de cuatro clases** bajo el rótulo «every
+  installed class that logs on one of those channels». El framework etiqueta **ocho** servicios sobre el canal
+  `messenger`; plantar `$this->logger?->error('…', $context + ['payload' => $message])` en
+  `HandleMessageMiddleware` — que tiene el objeto mensaje en la mano — dejaba el gate en `OK`. El universo se
+  **deriva** ahora de los tags `monolog.logger` de la configuración vendor instalada.
+- **La forma PSR-3 `->log($level, …)` era invisible.** Cambiar un `->info(` por `->log('critical', ` en una
+  clase pinchada como «no puede activar» daba `OK`. Ahora esa forma se rechaza de plano: su nivel es un
+  argumento que ningún matcher por nivel puede clasificar.
+- **La comprobación del payload era una denylist de dos deletreos.** Añadir `'payload' => $message` al mismo
+  array daba `OK`. Ahora se afirma el literal del contexto **entero** — la misma lección que el propio
+  processor aplica al rechazar enumerar comandos sensibles.
+- **`channels:` sólo se leía en su forma denylist.** Reescribir el handler como `channels: ["request",
+  "security"]` saca ambos canales del buffer, y tanto este gate como `MonologExclusionDeclarationGateTest`
+  seguían verdes. Ahora se detecta la forma allowlist y la pertenencia se invierte.
 
-- **`error` y `exception` llevan el mensaje del propio throwable en todos los canales.** Un throwable compuesto
-  a partir de un dato personal llega a este sumidero por ahí. Indefendible por construcción con un processor,
-  misma clase que el residual cuatro de §7, sin regla en este repositorio.
-- **La rotación acota TAMAÑO, no EDAD.** Desaloja por volumen, así que un despliegue ocioso conserva su línea
-  más antigua indefinidamente. Sigue sin haber TTL ni vía de borrado, y por eso la entrada de #805 en §7 queda
-  **sin marcar**.
-- **El argv sigue en la lista de procesos del host.** Ningún processor la alcanza, así que una contraseña
-  pasada posicionalmente se expone a todo proceso local con independencia de esta regla.
-- **La degradación declarada del processor:** una invocación que EMPIEZA por una opción global pierde también
-  el nombre, porque localizarlo pasada una opción exige la definición de entrada del propio comando. Medido:
-  nada en este repositorio invoca esa forma.
+### Y dos huecos más, de otra clase
+
+- **`include:` derrotaba entero el gate de retención.** Una línea trayendo un `compose.extra.yaml` con un
+  `otel_collector` sin cota: `docker compose config` lo mostraba sin bloque `logging:` y el gate reportaba
+  `OK (10 tests, 72 assertions)` — porque también satisface `EXPECTED_SERVICES`, que es la propia guarda
+  anti-vacuidad. Ahora se rechaza de plano en vez de medio resolverse.
+- **Un bloque `when@prod:` desenrolaba el processor con el gate verde.** El gate de enrolamiento leía sólo la
+  clave `services:` raíz; `MicroKernelTrait` importa además `config/services_{env}.yaml` (y `services_dev` y
+  `services_test` ya existen). Añadir `autoconfigure: false` + `tags: []` en un `when@prod:` daba `OK`. Ahora
+  se leen los bloques `when@` y los ficheros por entorno.
+
+### Lo que atacaron y resistió
+
+- **La afirmación de ORDEN es cierta**, verificada en las fuentes: `AddProcessorsPass` empuja un
+  `monolog.processor` sin scope sobre cada `monolog.channel_logger`, `LoggerChannelPass` corre antes, y
+  `MonologExtension` desactiva `process_psr_3_messages` en cualquier handler que declare `handler:` — así que
+  `PsrLogMessageProcessor` vive sólo en `nested`. Medido de punta a punta: `context.command`, el hueco
+  `{command}` interpolado, el email y la contraseña desaparecen.
+- **Sin stack trace y sin argumentos**: `zend.exception_ignore_args = On` está fijado en
+  `api/frankenphp/conf.d/10-app.ini` para todos los entornos, e `include_stacktraces` no está puesto.
+- **La conclusión de la enumeración de #804 es correcta**: un solo `critical` en toda la pila messenger, y el
+  payload es realmente sólo `$message::class`.
+- **El merge de Compose y la efectividad de #805**: `docker compose config` muestra `json-file / 10m / 5` en
+  los cinco servicios de prod y en los cinco de dev.
+- **`ArgvInput` no derrota la regla** en ninguna invocación multi-token: el escapado entrecomilla el nombre,
+  `getInputString()` lo desentrecomilla, y un argumento con espacios sólo produce más fragmentos descartados.
+- **Ningún test existente se rompe**: `PersonDataRedactionArrivalTest` filtra por clase, y
+  `FingersCrossedActivationIntegrityTest` barre processors que DESTRUYAN `context['exception']`, que este no
+  toca.
+
+### Lo que sigue abierto, y queda escrito en §7 en vez de insinuarse cerrado
+
+- **El texto del propio throwable.** Medido con una pipeline Monolog real: un valor que la consola rechazó
+  sobrevive **tres** veces en el mismo registro (`context.message`, `context.exception.message` y el hueco
+  `{message}`). Por eso el encabezado de §7 dice «under `command`» y no «no longer writes its argv».
+- **Un valor pegado al nombre del comando** usando sólo caracteres que un nombre de comando admite (un uuid
+  tras un `-` o un `:`) sobrevive a la comprobación de forma. No puede llevar una dirección ni una contraseña
+  con símbolos. Cerrarlo exige casar contra los nombres de comando REGISTRADOS, lo que acopla el processor al
+  registro de la consola: anotado como seguimiento en vez de hecho a ciegas.
+- **PostgreSQL escribe al mismo sumidero.** `log_min_error_statement = error` vuelca la sentencia infractora
+  al stderr del contenedor `database`, y una violación de unicidad lleva `DETAIL: Key (email)=(…)`. El eje de
+  retención lo cubre; el de contenido se detiene en Monolog. Ningún issue de los tres lo vio.
+- **La rotación acota TAMAÑO, no EDAD**, y el argv sigue en la lista de procesos del host.
 
 ### Verificación que NO se pudo ejecutar aquí, y es una limitación de este registro
 
-El entorno remoto no tiene daemon de Docker, y el proxy de egress deniega con **403** las descargas de archivos
-zip de GitHub (`api.github.com/.../zipball`, `codeload.github.com`), que es como Composer instala
+El entorno remoto no tiene daemon de Docker, y el proxy de egress deniega con **403** las descargas de
+archivos zip de GitHub (`api.github.com/.../zipball`, `codeload.github.com`), que es como Composer instala
 `phpstan/phpstan` — cuya entrada en el lock tiene `source: null`, así que `--prefer-source` no lo salva. En
 consecuencia:
 
-- **`make php.stan`, `make php.quality` y `make php.deptrac` no se han ejecutado.** Los huecos de tipos se
-  buscaron a mano; eso no sustituye al analizador.
-- **Las suites Functional y Behat no se han ejecutado** (sin base de datos, y con `behat/behat` y
-  `justinrainbow/json-schema` ausentes del árbol instalado).
-- **El enrolamiento en el contenedor COMPILADO no está verificado.** El gate lee la declaración de
-  `config/services.yaml`; que el processor acabe empujado en cada logger de canal es una propiedad del
-  contenedor, y ahí `PersonDataRedactionArrivalTest` es el instrumento — que aquí no corre.
+- **`make php.stan`, `make php.quality` y `make php.deptrac` no se han ejecutado.** La lente A sí consiguió
+  correr `phpstan.phar` a `level: max` de forma aislada sobre el directorio de gates y calibrarlo contra los
+  ficheros preexistentes; sus cinco hallazgos (`offsetAccess.nonOffsetAccessible` encadenado sobre `mixed`,
+  `argument.type` en `Level::fromName`, `method.alreadyNarrowedType` por un `@var` que afirmaba en vez de
+  declarar, y un `offsetAccess.notFound` sin `assertArrayHasKey`) están corregidos. Eso no equivale a haber
+  pasado el gate del repo.
+- **Las suites Functional y Behat no se han ejecutado** (sin base de datos, y con `behat/behat`,
+  `justinrainbow/json-schema` y `DoctrineFixturesBundle` ausentes del árbol instalado).
+- **El enrolamiento en el contenedor COMPILADO sigue sin verificarse.** Los gates leen ahora la declaración
+  raíz *y* los overrides por entorno, que era el vector concreto; que el processor acabe empujado en cada
+  logger de canal es una propiedad del contenedor, y el instrumento para eso es
+  `PersonDataRedactionArrivalTest`, que aquí no arranca.
 
-Lo que sí se ejecutó: la suite `tests/Unit` completa, con línea base. Sin los cambios, **2665 tests, 20 errores
-y 9 fallos**; con ellos, **2701 tests, los mismos 20 errores y los mismos 9 fallos** — los 29 son de paquetes
-dev ausentes, idénticos en ambas ramas. Los 37 tests nuevos pasan (127 aserciones).
+Lo que sí se ejecutó: la suite `tests/Unit` completa, con línea base. Sin los cambios, **2665 tests, 20
+errores y 9 fallos**; con ellos, **2721 tests, los mismos 20 errores y los mismos 9 fallos** — los 29 son de
+paquetes dev ausentes, idénticos en ambas ramas. Y cada aserción nueva se falsó mutando el árbol y observando
+la fila enrojecer.

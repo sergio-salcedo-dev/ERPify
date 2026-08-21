@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
  * Two deployables hold the same redaction vocabulary and neither imports the other: {@see RequestUriRedaction}
  * writes the API's per-error log line, and the PWA's `redaction.ts` writes the Sentry event. Each is a
  * different sink, and an axis one of them stops recognising is a person's identifier reaching a store with
- * no rotation, no TTL and no erasure path.
+ * a size bound but no TTL and no erasure path.
  *
  * Both sites are read as TEXT on purpose — one is PHP and the other TypeScript, so there is no import that
  * could make them agree by construction.

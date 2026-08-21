@@ -47,7 +47,7 @@ use Throwable;
  * the level is a token any edit can move and the channel is wired in configuration a gate can read.
  *
  * **Existing is not alerting, and this class stops at existing.** The Monolog→Sentry bridge is deliberately
- * unwired (config/packages/sentry.yaml) and no compose file declares a logging driver, so the line reaches
+ * unwired (config/packages/sentry.yaml) and the compose files bound that driver by size alone, so the line reaches
  * container stderr and nothing more.
  *
  * **What a prune of the trail costs is not what a lost row costs.** The CONTEXT carries only

@@ -1008,17 +1008,32 @@ mitigated state. Accepting one means recording who accepted it and against which
       tag with `autoconfigure: false` → 14; no definition at all → 14; tag removed AND `autoconfigure: false`
       → 0 — and only that last arm makes the test formatter emit the address inside the login record's
       stringified token.
-- [x] **A failing console command no longer writes its argv to the buffered log**
+- [x] **The console error listener no longer writes argv under `command`**
       ([#788](https://github.com/sergio-salcedo-dev/ERPify/issues/788)). `symfony/console`'s `ErrorListener`
-      logs the full argv of a failing process on two paths, measured against the installed source: `:46`
-      writes `'command' => (string) $event->getInput()` at CRITICAL on a `ConsoleErrorEvent`, and `:67`
-      writes the same string at DEBUG on ANY non-zero exit. The `console` channel is inside prod's
-      `fingers_crossed` handler (it excludes only `deprecation` and `observability`) and CRITICAL is above
+      logs the full argv on two paths, measured against the installed source: `:46` writes
+      `'command' => (string) $event->getInput()` at CRITICAL on a `ConsoleErrorEvent`, and `:67` writes the
+      same string at DEBUG on ANY non-zero exit. The `console` channel is inside prod's `fingers_crossed`
+      handler (it excludes only `deprecation` and `observability`) and CRITICAL is above
       `action_level: error`, so that record does not merely sit in the buffer — it FLUSHES it to
-      `php://stderr`. Two argv shapes here carry what must not land there: `identity:gdpr:erase-subject
-      <uuid>` writes a person's identifier into the record of the erasure the command exists to perform, and
-      `organization:administrator:create <email> <password>` writes a password IN CLEAR beside the address it
-      belongs to (`iam:invitation:create` takes an email too). Closed by
+      `php://stderr`.
+      **Which invocations reach that CRITICAL path is narrower than "a failing command", and the first
+      version of this entry got it wrong.** An adversarial pass measured that every `#[AsCommand]` here
+      taking person data catches `Throwable` and returns `Command::FAILURE` — `EraseIdentitySubjectCommand`,
+      `CreateInitialAdministratorCommand` and `CreateInvitationCommand` all do — so none of them raises a
+      `ConsoleErrorEvent`, and their own failures reach only `:67` at DEBUG, which buffers without activating
+      and is DISCARDED by `FingersCrossedHandler::flushBuffer()` when no `passthru_level` is configured (this
+      deployment configures none). The live producer of `:46` is an invocation the console cannot BIND — an
+      unknown option, a wrong arity, a mistyped command name — which raises outside the command's own `try`
+      and carries whatever the operator typed. `identity:gdpr:erase-subject <uuid> --typo` puts a person's
+      identifier into the record of the erasure that identifier was to end;
+      `organization:administrator:create <email> <password> --typo` puts a password IN CLEAR beside the
+      address it belongs to. The DEBUG path is the second producer and needs no error at all: it reaches the
+      sink whenever something else in the same process activates the buffer.
+      **The argv-carrying commands are not enumerated, and that is the design** — the rule is structural, so
+      it covers a command nobody listed. For the record, the ones taking person-valued argv today are
+      `identity:gdpr:erase-subject`, `bank-account:gdpr:erase-subject`, `audit:gdpr:erase`,
+      `iam:invitation:create`, `iam:invitation:resend`, `iam:invitation:revoke` and
+      `organization:administrator:create`. Closed by
       `Shared/Monitoring/Infrastructure/Monolog/ConsoleCommandRedactionProcessor`, which reduces the value to
       the command NAME plus a `REDACTED` sentinel and is logger-scoped, so it runs ahead of the buffer and
       ahead of the handler-scoped `PsrLogMessageProcessor` that interpolates `{command}` into the message.
@@ -1033,9 +1048,17 @@ mitigated state. Accepting one means recording who accepted it and against which
       command's own input definition, which a processor does not have and must not guess; measured over this
       repository nothing invokes that shape (`make sf`, both compose `command:` arrays and
       `docker-entrypoint.sh` all spell `bin/console <command>` first), and the failure direction is a redacted
-      line rather than a leaked one. **Residual, and no processor can reach it:** the argv is also in the host
+      line rather than a leaked one. **Residuals, none of which this rule reaches.** The argv is also in the host
       PROCESS LIST, so a password passed positionally is disclosed to every local process regardless of this
-      rule. `organization:administrator:create` keeps the password OPTIONAL with a hidden prompt and says so
+      rule. The throwable's own text is untouched: measured through a real Monolog pipeline, a value the
+      console refused survives three times in the same record — `context.message`,
+      `context.exception.message` and the `{message}` slot of the record message — which is why the heading
+      above says "under `command`" rather than "no longer writes its argv". And the processor's command-name
+      shape check still admits a value glued to the name using only characters a command name may contain: a
+      bare uuid after a `-` or a `:`. It cannot carry an address (`@` and `.` are refused) or a password with
+      any symbol in it. Closing that last spelling means matching against the REGISTERED command names rather
+      than a shape, which couples the processor to the console registry — recorded as follow-up rather than
+      done blind. `organization:administrator:create` keeps the password OPTIONAL with a hidden prompt and says so
       in the argument description; making it prompt-only was weighed and declined here because the e2e seed
       (`make/pwa.mk`) invokes it non-interactively. Gates: `make php.lint.log-carriers`
       (`ConsoleCommandCarrierGateTest` — the listener still writes the carrier, and the processor is still
@@ -1054,13 +1077,20 @@ mitigated state. Accepting one means recording who accepted it and against which
       id IS the personal datum. So the only person-data carrier either channel had was `command`, closed
       above. **Excluding either channel was the obvious fix and is wrong twice over:** it would remove every
       command and worker failure from the deployed log, which is the only place an operator learns a consumer
-      is dying, and it would not even close the argv leak, since the DEBUG path writes the same string and the
-      always-on `console` handler does not carry DEBUG — the record would be lost rather than redacted.
+      is dying, and it would not close the argv leak either — the DEBUG path writes the same string, and it
+      reaches the sink whenever anything else in that process activates the buffer, so the record would be
+      lost rather than redacted. (That last clause is conditional and is stated as such: on its own a DEBUG
+      record is discarded, since the handler declares no `passthru_level`.)
       **Residual, undefended by construction:** `error` and `exception` carry a throwable's own message on any
       channel, so a throwable composed from a person datum reaches this sink through them. That is the same
       class as residual four below and has no rule in this repository. Gate: `make php.lint.log-carriers`
-      (`BufferedChannelAmplificationGateTest` pins both channels as still buffered, the set of activating
-      levels per producer, and the absence of the payload).
+      (`BufferedChannelAmplificationGateTest`). It pins both channels as still buffered — reading the
+      `channels:` key in BOTH forms, since rewriting it as an allowlist (`["request", "security"]`) removes
+      them while a denylist-only check stays green — derives the producer universe from the `monolog.logger`
+      tags in the installed vendor configuration rather than keeping a list by hand, refuses the PSR-3
+      `log($level, …)` form outright because no per-level matcher can classify it, and asserts the retry
+      listener's log context as a WHOLE literal rather than denylisting two payload spellings. Every one of
+      those four is a false green an adversarial pass demonstrated against the first version.
 - [ ] **The container log sink is bounded in SIZE but still has no TTL and no erasure path**
       ([#805](https://github.com/sergio-salcedo-dev/ERPify/issues/805)). No compose file declared a `logging:`
       block, so every container ran Docker's json-file driver at its unbounded default: any record reaching it
@@ -1077,10 +1107,17 @@ mitigated state. Accepting one means recording who accepted it and against which
       a sink that has one — and is deliberately not attempted while there is no production deployment and no
       customer, mirroring how the mail-boundary residuals are accepted. Gate:
       `make php.lint.log-retention` (`BoundedContainerLogRetentionGateTest`), which resolves the three root
-      compose files the way Compose merges them, refuses an interpolated bound, and pins the service set so a
-      file that stopped declaring services cannot pass by having nothing to check. A green proves the
-      DECLARATION only: nothing here reads the host daemon, and nothing sees a container started outside
-      these files.
+      compose files the way Compose merges them, refuses an interpolated bound, refuses a top-level `include:`
+      (whose services the sweep cannot see — measured: one `include:` line added an unbounded `otel_collector`
+      to `docker compose config` with the gate reporting green), and pins the service set so a file that
+      stopped declaring services cannot pass by having nothing to check. A green proves the DECLARATION only:
+      nothing here reads the host daemon, and nothing sees a container started outside these files.
+      **A second producer writes into the same sink and no rule here touches it.** The bound now covers every
+      container, `database` included — but the CONTENT axis stops at Monolog. PostgreSQL's default
+      `log_min_error_statement = error` writes the offending statement to the `database` container's stderr,
+      and a unique violation carries `DETAIL: Key (email)=(someone@example.test) already exists`. A duplicate
+      registration is enough to produce it. Not verified against a running stack (this was found by reading);
+      recorded here rather than left for the next reader to rediscover.
 - [ ] **A person's id still reaches the access log through the URL _path_, and it is accepted.** Caddy's
       access-log filter strips the query string and keeps the path, so a path segment is untouched by
       construction — and the application log's `request_uri` leaves the path alone by the same decision, so
@@ -1289,7 +1326,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       `["!deprecation","!observability"]` and not `console`, and `critical` is above its action level, so the
       record flushes to `nested` = `php://stderr`. Sink as in residual one: an operator's terminal when the
       command is invoked through `docker exec` (measured: zero occurrences in `docker logs`), and the json-file
-      driver with no rotation, no TTL and no owner of erasure when it is invoked any other way. Its Sentry half
+      driver with a size bound but no TTL and no owner of erasure when it is invoked any other way. Its Sentry half
       is **closed**: `SentryEventScrubber` now redacts `exception.values[].value` — the field the tracker titles
       an issue with — and the event's own message, alongside the `extra` pass. Closing the Monolog half means
       either not naming a person on that command line, or shadowing the vendor command with one that validates

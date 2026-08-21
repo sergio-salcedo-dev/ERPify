@@ -108,6 +108,88 @@ final class ConsoleCommandRedactionProcessorTest extends TestCase
     }
 
     /**
+     * The single-token leak an adversarial pass measured, and the reason the surviving token is now shape
+     * checked. Each of these is ONE token — what an operator produces by typing the separator wrong, and what
+     * `Application::run()` hands to `ConsoleErrorEvent` on `CommandNotFoundException`, where no command bound
+     * at all and the whole token is operator input. Every one of them used to be returned VERBATIM at
+     * CRITICAL, carrying a person's id or an address into the sink.
+     */
+    #[Test]
+    #[DataProvider('provideItRedactsATokenThatOnlyLooksLikeACommandNameCases')]
+    public function itRedactsATokenThatOnlyLooksLikeACommandName(string $argv): void
+    {
+        $processed = (new ConsoleCommandRedactionProcessor())($this->recordWith(['command' => $argv]));
+
+        $this->assertSame('REDACTED', $processed->context['command'] ?? null);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideItRedactsATokenThatOnlyLooksLikeACommandNameCases(): iterable
+    {
+        yield 'a uuid glued to the name with =' => [
+            'identity:gdpr:erase-subject=0193a1f2-7c4d-7e21-9b3a-8f14e45fceea',
+        ];
+        yield 'an address glued to the name with a colon' => [
+            'organization:administrator:create:someone@example.test',
+        ];
+        yield 'an address as the whole token, no command bound at all' => ['someone@example.test'];
+        yield 'an uppercase token, which no command name here is' => ['SELECT'];
+    }
+
+    /**
+     * `\s` without the `u` modifier is a BYTE class, so a separator outside ASCII made the whole argv one
+     * token and the case above could not even be reached. Three real ones from the `\p{Z}` category.
+     */
+    #[Test]
+    #[DataProvider('provideItSplitsOnANonAsciiSeparatorCases')]
+    public function itSplitsOnANonAsciiSeparator(string $separator): void
+    {
+        $argv = 'identity:gdpr:erase-subject' . $separator . '0193a1f2-7c4d-7e21-9b3a-8f14e45fceea';
+
+        $processed = (new ConsoleCommandRedactionProcessor())($this->recordWith(['command' => $argv]));
+
+        $this->assertSame('identity:gdpr:erase-subject REDACTED', $processed->context['command'] ?? null);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideItSplitsOnANonAsciiSeparatorCases(): iterable
+    {
+        yield 'non-breaking space U+00A0' => ["\u{00A0}"];
+        yield 'figure space U+2007' => ["\u{2007}"];
+        yield 'ideographic space U+3000' => ["\u{3000}"];
+    }
+
+    /**
+     * A carrier this rule cannot READ is a carrier it cannot vouch for, so it fails CLOSED — the direction
+     * `PersonDataRedactionProcessor` argues for explicitly and this class originally got wrong: an array
+     * reached `JsonFormatter` verbatim, and the first version of this test PINNED that as correct.
+     *
+     * @param array<string, mixed> $context
+     */
+    #[Test]
+    #[DataProvider('provideItRedactsACarrierItCannotReadCases')]
+    public function itRedactsACarrierItCannotRead(array $context): void
+    {
+        $processed = (new ConsoleCommandRedactionProcessor())($this->recordWith($context));
+
+        $this->assertSame('REDACTED', $processed->context['command'] ?? null);
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>}>
+     */
+    public static function provideItRedactsACarrierItCannotReadCases(): iterable
+    {
+        yield 'an array of argv tokens' => [['command' => ['identity:gdpr:erase-subject', '0193a1f2']]];
+        yield 'an object that is not Stringable' => [['command' => new \stdClass()]];
+        yield 'invalid UTF-8, which the unicode split cannot parse' => [['command' => "cmd \xB1\x31"]];
+    }
+
+    /**
      * Every record on every channel passes through this processor, so it has to be inert on the ones carrying
      * no argv — including a `command` that is not a string, which no emitter writes today and none is
      * prevented from writing tomorrow.
@@ -130,7 +212,6 @@ final class ConsoleCommandRedactionProcessorTest extends TestCase
     {
         yield 'no command key' => [['route' => 'backoffice_bank_search', 'method' => 'GET']];
         yield 'empty context' => [[]];
-        yield 'command is not a string' => [['command' => ['identity:gdpr:erase-subject', '0193a1f2']]];
         yield 'command is an empty string' => [['command' => '']];
     }
 

@@ -11,8 +11,13 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Symfony\Component\Console\EventListener\ErrorListener as ConsoleErrorListener;
+use Symfony\Component\Messenger\Command\ConsumeMessagesCommand;
+use Symfony\Component\Messenger\Command\FailedMessagesRetryCommand;
 use Symfony\Component\Messenger\EventListener\SendFailedMessageForRetryListener;
 use Symfony\Component\Messenger\EventListener\SendFailedMessageToFailureTransportListener;
+use Symfony\Component\Messenger\EventListener\StopWorkerOnRestartSignalListener;
+use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
+use Symfony\Component\Messenger\Middleware\SendMessageMiddleware;
 use Symfony\Component\Messenger\Worker;
 use Symfony\Component\Yaml\Yaml;
 
@@ -68,14 +73,38 @@ final class BufferedChannelAmplificationGateTest extends TestCase
      * An empty list is a claim, not an omission: it says this class cannot flush the buffer today, and it
      * goes red the moment a bump gives it a way to.
      *
+     * **This list is pinned but NOT hand-kept**, which is the correction an adversarial pass forced. It named
+     * four classes and called them "every installed class that logs on one of those channels"; the framework
+     * tags EIGHT services onto the `messenger` channel, and planting
+     * `$this->logger?->error('No handler for message {class}', $context + ['payload' => $message])` in
+     * `HandleMessageMiddleware` — which holds the message object — left the gate green. The universe is now
+     * derived from the `monolog.logger` tags in the installed vendor configuration and compared against this
+     * map in both directions, so a ninth producer cannot arrive unnamed.
+     *
      * @var array<class-string, list<string>>
      */
     private const array ACTIVATING_LEVELS = [
         ConsoleErrorListener::class => ['critical'],
         SendFailedMessageForRetryListener::class => ['critical'],
-        Worker::class => [],
         SendFailedMessageToFailureTransportListener::class => [],
+        StopWorkerOnRestartSignalListener::class => [],
+        SendMessageMiddleware::class => [],
+        HandleMessageMiddleware::class => [],
+        ConsumeMessagesCommand::class => [],
+        FailedMessagesRetryCommand::class => [],
+        Worker::class => [],
     ];
+
+    /**
+     * The producer no `monolog.logger` tag names, so the derived universe cannot find it.
+     *
+     * `Worker` is constructed by `ConsumeMessagesCommand` and handed that command's logger, which IS the
+     * `messenger` channel one — so its records land on the channel without the class ever being tagged. Named
+     * here rather than folded into the map above, so the completeness check below stays a real question.
+     *
+     * @var list<class-string>
+     */
+    private const array UNTAGGED_PRODUCERS = [Worker::class];
 
     /**
      * Every level a PSR-3 logger exposes as a method, so the census reads what the class CAN do rather than
@@ -93,17 +122,65 @@ final class BufferedChannelAmplificationGateTest extends TestCase
     #[DataProvider('channels')]
     public function theChannelIsStillInsideTheBufferedHandler(string $channel): void
     {
-        $excluded = $this->deployedHandler()['channels'] ?? [];
-        $this->assertIsArray($excluded);
+        $declared = $this->deployedHandler()['channels'] ?? [];
+        $this->assertIsArray($declared);
 
-        $this->assertNotContains(
-            '!' . $channel,
-            $excluded,
-            \sprintf(
-                '"%s" is now excluded from prod\'s buffered handler. That changes what this gate and the §7 '
-                . 'record describe — re-read both rather than deleting this assertion.',
-                $channel,
-            ),
+        $entries = [];
+
+        foreach ($declared as $entry) {
+            $this->assertIsString($entry, 'a channel entry that is not a string cannot be reasoned about');
+            $entries[] = $entry;
+        }
+
+        $refused = \sprintf(
+            '"%s" is no longer inside prod\'s buffered handler. That changes what this gate and the §7 record '
+            . 'describe — re-read both rather than deleting this assertion.',
+            $channel,
+        );
+
+        // MonologBundle accepts the key either way round, and reading only the denylist form was a measured
+        // hole: rewriting the handler to `channels: ["request", "security"]` takes BOTH channels out of the
+        // buffer while `assertNotContains('!console', …)` — and `MonologExclusionDeclarationGateTest` — stay
+        // green. An entry without a leading `!` means the list is an allowlist, so membership inverts.
+        $isAllowlist = [] !== \array_filter($entries, static fn (string $e): bool => !\str_starts_with($e, '!'));
+
+        if ($isAllowlist) {
+            $this->assertContains($channel, $entries, $refused);
+
+            return;
+        }
+
+        $this->assertNotContains('!' . $channel, $entries, $refused);
+    }
+
+    /**
+     * The map above is a pin; this is what stops it being a hand-kept list that ages. The universe comes from
+     * the `monolog.logger` tags in the installed vendor configuration, so a service the framework starts
+     * routing to either channel arrives here as a red rather than as silence.
+     */
+    #[Test]
+    public function everyTaggedProducerOnThoseChannelsIsPinned(): void
+    {
+        $derived = $this->taggedProducers();
+
+        $this->assertNotEmpty(
+            $derived,
+            'no tagged producer was found at all, so this check is reading nothing — the vendor configuration '
+            . 'layout changed and the parser below no longer matches it',
+        );
+
+        $expected = \array_values(\array_unique([...$derived, ...self::UNTAGGED_PRODUCERS]));
+        $pinned = \array_keys(self::ACTIVATING_LEVELS);
+
+        \sort($expected);
+        \sort($pinned);
+
+        $this->assertSame(
+            $expected,
+            $pinned,
+            'the classes the framework routes to the `console`/`messenger` channels are not the ones this '
+            . 'gate pins. Read what the new one logs before adding its line — one of them holds the message '
+            . 'object.',
         );
     }
 
@@ -117,6 +194,22 @@ final class BufferedChannelAmplificationGateTest extends TestCase
     {
         $source = $this->sourceOf($emitter);
         $threshold = $this->deployedActionLevel();
+
+        // `->log($level, …)` names its level in an ARGUMENT, so no per-level matcher can classify it. Changing
+        // one `->info(` to `->log('critical', ` in a class pinned as `[]` was measured leaving this gate
+        // green, so the dynamic form is refused outright rather than parsed: a producer that reaches it has to
+        // be read by a person.
+        foreach (['logger->log(', 'logger?->log('] as $dynamic) {
+            $this->assertStringNotContainsString(
+                $dynamic,
+                $source,
+                \sprintf(
+                    '%s logs through the PSR-3 `log()` form, whose level is an argument this census cannot '
+                    . 'read. Read what level it reaches and pin it explicitly.',
+                    $emitter,
+                ),
+            );
+        }
 
         $found = [];
 
@@ -165,14 +258,20 @@ final class BufferedChannelAmplificationGateTest extends TestCase
             'the retry listener no longer identifies the message by class name — read what it writes instead',
         );
 
-        foreach (["'message' => \$message", "'message' => \$envelope->getMessage()"] as $payload) {
-            $this->assertStringNotContainsString(
-                $payload,
-                $source,
-                'the retry listener now writes the message PAYLOAD into a record that flushes the buffer to '
-                . 'an unowned sink. For an event about a person the aggregate id IS the personal datum.',
-            );
-        }
+        // The whole literal, not a denylist of spellings. Naming two was measured useless: adding
+        // `'payload' => $message` to the same array left this green, and a denylist can only ever refuse the
+        // spellings somebody thought of — the same failure this change's own processor refuses to repeat.
+        $matched = \preg_match('/\$context = \[(?<body>.*?)\];/s', $source, $captured);
+
+        $this->assertSame(1, $matched, 'the retry listener no longer builds its context as one array literal');
+
+        $this->assertSame(
+            "'class' => \$message::class, 'message_id' => \$envelope->last(TransportMessageIdStamp::class)?->getId(),",
+            \preg_replace('/\s+/', ' ', \trim($captured['body'])),
+            'the retry listener\'s log context changed. It is the one activating record on the `messenger` '
+            . 'channel, so read every key it now carries: for an event about a person the aggregate id IS '
+            . 'the personal datum, and the payload must not be among them.',
+        );
     }
 
     /**
@@ -196,6 +295,63 @@ final class BufferedChannelAmplificationGateTest extends TestCase
     }
 
     /**
+     * Every class the installed vendor configuration tags onto one of these channels.
+     *
+     * Read from the PHP service-configuration files rather than from a booted container, because this gate is
+     * kernel-free by design and its home is the artifact-gate folder. It resolves `->set('id', Foo::class)`
+     * against the file's own `use` statements, then keeps the tag that follows it — so a service whose class
+     * is not installed (`AmazonSqsTransportFactory`, absent here) drops out by `class_exists` rather than by
+     * anybody remembering to exclude it.
+     *
+     * @return list<class-string>
+     */
+    private function taggedProducers(): array
+    {
+        $found = [];
+
+        foreach (\glob(\dirname(__DIR__, 4) . '/vendor/symfony/*/Resources/config/*.php') ?: [] as $file) {
+            $source = \file_get_contents($file);
+
+            if (!\is_string($source) || !\str_contains($source, "'monolog.logger'")) {
+                continue;
+            }
+
+            \preg_match_all('/^use\s+([\w\\\\]+);/m', $source, $imports);
+            $fqcn = [];
+
+            foreach ($imports[1] as $import) {
+                $parts = \explode('\\', $import);
+                $fqcn[\end($parts)] = $import;
+            }
+
+            $current = null;
+
+            foreach (\explode("\n", $source) as $line) {
+                if (1 === \preg_match('/->set\(\s*\'[^\']+\'\s*,\s*(\w+)::class/', $line, $set)) {
+                    $current = $fqcn[$set[1]] ?? null;
+                }
+
+                if (1 !== \preg_match('/\'monolog\.logger\'.*\'channel\'\s*=>\s*\'([^\']+)\'/', $line, $tag)) {
+                    continue;
+                }
+
+                if (null === $current || !\in_array($tag[1], self::CHANNELS, true)) {
+                    continue;
+                }
+
+                if (\class_exists($current)) {
+                    $found[] = $current;
+                }
+            }
+        }
+
+        /** @var list<class-string> $unique */
+        $unique = \array_values(\array_unique($found));
+
+        return $unique;
+    }
+
+    /**
      * @param class-string $class
      */
     private function sourceOf(string $class): string
@@ -214,6 +370,11 @@ final class BufferedChannelAmplificationGateTest extends TestCase
         $declared = $this->deployedHandler()['action_level'] ?? null;
 
         $this->assertIsString($declared, 'prod\'s buffered handler declares no action_level to read');
+        $this->assertContains(
+            $declared,
+            self::PSR3_LEVELS,
+            'prod\'s buffered handler declares an action_level that is not a PSR-3 level name',
+        );
 
         return Level::fromName($declared);
     }
@@ -225,7 +386,17 @@ final class BufferedChannelAmplificationGateTest extends TestCase
     {
         $parsed = Yaml::parseFile(\dirname(__DIR__, 4) . '/config/packages/monolog.yaml');
 
-        $handler = $parsed['when@prod']['monolog']['handlers']['main'] ?? null;
+        // Guarded rather than chained off `mixed`: four offsets deep, the sibling gate does the same, and
+        // PHPStan at `level: max` refuses the unguarded form.
+        $this->assertIsArray($parsed, 'monolog.yaml does not parse to a map');
+
+        $prod = $parsed['when@prod'] ?? null;
+        $this->assertIsArray($prod, 'monolog.yaml declares no `when@prod` block');
+
+        $handlers = $prod['monolog']['handlers'] ?? null;
+        $this->assertIsArray($handlers, 'the `when@prod` block declares no handlers');
+
+        $handler = $handlers['main'] ?? null;
 
         if (!\is_array($handler)) {
             $this->fail('prod declares no `main` handler, so this gate cannot read what buffers.');
