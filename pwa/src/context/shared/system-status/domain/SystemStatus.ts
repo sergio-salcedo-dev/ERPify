@@ -95,3 +95,42 @@ const COMPONENT_LABEL: Record<SystemStatus, string> = {
 export function componentStatusLabel(status: SystemStatus): string {
   return COMPONENT_LABEL[status];
 }
+
+export interface NamedComponentStatus {
+  name: string;
+  status: SystemStatus;
+}
+
+const SENTENCE_PUNCTUATION_CHARS = new Set([".", "…"]);
+
+/**
+ * `COMPONENT_LABEL[CHECKING]` carries a decorative ellipsis for the status pill; stripped here
+ * so it never stacks against this function's own `". "` join or the caller's trailing period. A
+ * manual scan rather than a `/[.…]+$/` regex: unanchored at the start, that shape backtracks
+ * quadratically over an input that almost-but-doesn't end in the class (`"." * n + "X"`) — no
+ * attacker reaches this label, but the shape is worth not having at all.
+ */
+function stripTrailingSentencePunctuation(label: string): string {
+  let end = label.length;
+  while (end > 0 && SENTENCE_PUNCTUATION_CHARS.has(label[end - 1])) {
+    end -= 1;
+  }
+  return label.slice(0, end);
+}
+
+/**
+ * Every component named with its status, for a live region whose headline is the worst of them.
+ *
+ * `aggregateSystemStatus` is worst-wins, so a component moving under the maximum changes no
+ * headline and announces nothing — visible in its row, absent from the audio. This is the line
+ * that carries it. It lives here, beside the other two label functions, so the case it exists
+ * for can be asserted without rendering a page.
+ */
+export function componentRollCall(components: readonly NamedComponentStatus[]): string {
+  return components
+    .map(
+      ({ name, status }) =>
+        `${name}: ${stripTrailingSentencePunctuation(componentStatusLabel(status))}`,
+    )
+    .join(". ");
+}

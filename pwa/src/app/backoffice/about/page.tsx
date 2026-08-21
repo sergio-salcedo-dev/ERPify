@@ -14,9 +14,9 @@ import {
 } from "./_lib/domainModel";
 
 export const metadata: Metadata = {
-  title: "Qué es ERPify",
+  title: "About ERPify",
   description:
-    "Qué es ERPify y para qué sirve: lenguaje ubicuo, bounded contexts y los eventos de dominio que los integran.",
+    "What ERPify is and what it is for: ubiquitous language, bounded contexts, and the domain events that integrate them.",
 };
 
 const AREA_ICON: Record<ContextArea, LucideIcon> = {

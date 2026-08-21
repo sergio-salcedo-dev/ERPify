@@ -4,8 +4,8 @@ import { cn } from "@/components/cn";
 import { flows, type Flow, type FlowDiagramNode, type FlowTone } from "./_lib/flows";
 
 export const metadata: Metadata = {
-  title: "Cómo funciona ERPify",
-  description: "Flujos de trabajo de ERPify explicados de forma sencilla, para todo el mundo.",
+  title: "How ERPify Works",
+  description: "ERPify's workflows explained in plain language, for everyone.",
 };
 
 const TONE_ICON: Record<FlowTone, string> = {

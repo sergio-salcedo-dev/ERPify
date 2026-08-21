@@ -46,7 +46,7 @@ describe("ApiAcceptInvitationRepository.accept", () => {
       API_ENDPOINTS.BACKOFFICE.INVITATIONS.ACCEPT,
       { token: COMMAND.token, password: COMMAND.password },
       undefined,
-      expect.objectContaining({ "X-CSRF-Token": expect.any(String) }),
+      { headers: expect.objectContaining({ "X-CSRF-Token": expect.any(String) }) },
     );
   });
 
@@ -59,7 +59,7 @@ describe("ApiAcceptInvitationRepository.accept", () => {
     // not declare, so the nonce must not appear there.
     expect(post.mock.calls[0][1]).not.toHaveProperty("_token");
     // The nonce satisfies the backend's >= 24 char contract (a v7 UUID is 36 chars).
-    const headers = post.mock.calls[0][3] as Record<string, string>;
+    const { headers } = post.mock.calls[0][3] as { headers: Record<string, string> };
     expect(headers["X-CSRF-Token"].length).toBeGreaterThanOrEqual(24);
   });
 

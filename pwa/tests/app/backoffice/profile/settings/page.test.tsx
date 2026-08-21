@@ -11,6 +11,8 @@ describe("Backoffice settings page", () => {
   });
 
   it("declares the settings page title in its metadata", () => {
-    expect(metadata.title).toBe("Settings");
+    // Distinct from `/backoffice/settings`, which also shows a "Settings" heading: two routes
+    // resolving one title leave `document.title` unchanged, and the announcer silent.
+    expect(metadata.title).toBe("Profile settings");
   });
 });

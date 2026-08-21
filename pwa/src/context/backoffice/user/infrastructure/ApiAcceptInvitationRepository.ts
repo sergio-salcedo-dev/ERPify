@@ -49,7 +49,7 @@ export class ApiAcceptInvitationRepository implements AcceptInvitationRepository
         API_ENDPOINTS.BACKOFFICE.INVITATIONS.ACCEPT,
         request,
         undefined,
-        { "X-CSRF-Token": uuidV7() },
+        { headers: { "X-CSRF-Token": uuidV7() } },
       );
       return { kind: AcceptInvitationOutcomeKind.ACCEPTED };
     } catch (error) {
