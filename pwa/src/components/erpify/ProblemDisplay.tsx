@@ -12,15 +12,21 @@ import {
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
+import { REQUEST_TIMEOUT } from "@/context/shared/http-client/domain/HttpClient";
 import { NodeEnv } from "@/context/shared/environment/domain/NodeEnv";
 import { cn } from "@/components/cn";
 import { CorrelationIdChip } from "./CorrelationIdChip";
 
 /**
- * Visual tone driven by the HTTP status code. 5xx (and the synthetic 0 we
- * use for "no response / network blip") gets the destructive ramp; every
- * other client-side problem gets the warning ramp because it's typically
+ * Visual tone driven by the HTTP status code. 5xx (and the synthetic 0 the client
+ * mints when no response arrived) gets the destructive ramp; every other
+ * client-side problem gets the warning ramp because it's typically
  * recoverable with a user action (re-auth, fix input, retry later).
+ *
+ * Status-keyed by design, and it stays that way: `type` is the contract-level signal a CALLER
+ * routes on (FR44), while this component is the last common surface and must render a problem
+ * it has never heard of. The one exception is the status-0 LABEL below, where status alone is
+ * not enough to say what happened.
  */
 type ProblemTone = "destructive" | "warning";
 
@@ -106,6 +112,28 @@ function isProblemDebug(value: unknown): value is ProblemDebug {
   return (
     "exception_class" in v || "message" in v || "file" in v || "line" in v || "previous_chain" in v
   );
+}
+
+/** The pill for a client-minted problem, which carries no status of its own to print. */
+const NO_RESPONSE_LABEL = "No response";
+const TIMED_OUT_LABEL = "Timed out";
+
+/**
+ * The status pill. A non-zero status prints itself; status 0 is the sentinel the transport mints
+ * when no response ever arrived, and there the pill has to read `type` to stay true.
+ *
+ * "No response" is accurate for a network failure and asserts the OPPOSITE of what a timeout means:
+ * a request given up on may well have been received and applied, which is the entire distinction
+ * `request-timeout` exists to draw. Printing it under a "No response" pill told the user the one
+ * thing the type next to it was minted to deny.
+ *
+ * Only status 0 consults the type. Any other status prints its own code, so a problem type this
+ * component has never seen still renders correctly — which is what keeps the status-keyed design
+ * above intact rather than quietly turning this into a type switch.
+ */
+function labelForProblem(problem: ProblemDetails): string {
+  if (problem.status > 0) return `HTTP ${problem.status}`;
+  return problem.type === REQUEST_TIMEOUT ? TIMED_OUT_LABEL : NO_RESPONSE_LABEL;
 }
 
 export const isProductionEnv = (): boolean => process.env.NODE_ENV === NodeEnv.PRODUCTION;
@@ -198,9 +226,7 @@ export function ProblemDisplay({
   const isUrgent = problem.status === 0 || problem.status >= HttpStatus.INTERNAL_SERVER_ERROR;
   const debugCandidate = (problem as { debug?: unknown }).debug;
   const debug = !isProductionEnv() && isProblemDebug(debugCandidate) ? debugCandidate : undefined;
-  // The status pill renders a non-zero numeric code; status === 0 is our
-  // synthetic "no response" sentinel and reads better as text.
-  const statusLabel = problem.status > 0 ? `HTTP ${problem.status}` : "No response";
+  const statusLabel = labelForProblem(problem);
 
   return (
     <section

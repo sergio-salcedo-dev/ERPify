@@ -35,6 +35,12 @@ import { AccessContext } from "@/context/shared/access/domain/AccessContext";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import type { Session } from "@/context/shared/access/domain/Session";
+import {
+  claimDeparture,
+  currentDeparture,
+  releaseDeparture,
+  DepartureReason,
+} from "@/context/shared/navigation/application/departure";
 
 const SESSION: Session = {
   user: {
@@ -202,10 +208,14 @@ describe("BackOfficeLayoutClient", () => {
     nav.pathname = Routes.BACKOFFICE;
     auth.session = SESSION;
     auth.status = "authenticated";
+    // Module state, so it outlives a test file: a claim left standing silences every later case
+    // that depends on one being available.
+    releaseDeparture();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    releaseDeparture();
   });
 
   it("signs out with a full-document navigation rather than a client-side push", async () => {
@@ -260,6 +270,71 @@ describe("BackOfficeLayoutClient", () => {
         expect(screen.getByTestId(address)).toHaveAttribute("aria-disabled", "true"),
       );
       expect(screen.getByTestId(address)).toHaveTextContent(LEAVING_LABEL);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The departure claim, whose whole point is a window nothing else here can see: between the
+  // click and the navigation every gated request still in flight can come back 401, and the
+  // transport bounces a 401 to `?reason=session-expired` unless a departure is already claimed.
+  // The transport's exemption list covers the revoke CALL and never covered its neighbours, so a
+  // dashboard poll or a Mercure authorize could land the user on "session expired" — the outcome
+  // that exemption exists to prevent, reached around it.
+  it("claims the departure before it revokes, not after it navigates", async () => {
+    // Read INSIDE the revoke, which is the only moment that matters: claiming after it resolves
+    // would leave the whole network round-trip uncovered, and that round-trip IS the race.
+    let claimedDuringRevoke: string | null = null;
+    logout.mockImplementationOnce(() => {
+      claimedDuringRevoke = currentDeparture();
+      return Promise.resolve();
+    });
+    renderLayout();
+    await openAccountMenu();
+
+    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+    expect(claimedDuringRevoke).toBe(DepartureReason.SIGN_OUT);
+  });
+
+  it("releases the departure only once the navigation turns out not to have committed", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderLayout();
+      await openAccountMenu();
+
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+      await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+
+      // Still held while the navigation may yet commit: releasing here hands a 401 arriving one
+      // tick later the claim this sign-out is using.
+      expect(currentDeparture()).toBe(DepartureReason.SIGN_OUT);
+
+      await vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS);
+
+      // The document stayed. Holding the claim now is the wedge the release exists to remove:
+      // nothing would ever bounce again for the life of the page.
+      expect(currentDeparture()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not release a departure it never won", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      // An expiry bounce got there first and is already navigating to /login. Releasing its claim
+      // on the way out would hand the next 401 a fresh one, which is the flap this cannot cause.
+      claimDeparture(DepartureReason.SESSION_EXPIRED);
+      renderLayout();
+      await openAccountMenu();
+
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+      await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+      await vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS);
+
+      expect(currentDeparture()).toBe(DepartureReason.SESSION_EXPIRED);
     } finally {
       vi.useRealTimers();
     }

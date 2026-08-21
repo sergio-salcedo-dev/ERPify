@@ -2,17 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import { SessionExpiryCurtain } from "@/context/shared/access/infrastructure/ui/SessionExpiryCurtain";
 import {
-  beginSessionExpiry,
-  endSessionExpiry,
-} from "@/context/shared/access/application/sessionExpiry";
-import { FetchHttpClient } from "@/context/shared/http-client/infrastructure/FetchHttpClient";
+  claimDeparture,
+  releaseDeparture,
+  DepartureReason,
+} from "@/context/shared/navigation/application/departure";
+import {
+  FetchHttpClient,
+  resetExpiryBounceBudget,
+} from "@/context/shared/http-client/infrastructure/FetchHttpClient";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 
 const CHILD = "session-expiry-test__child";
 
 describe("SessionExpiryCurtain", () => {
   beforeEach(() => {
-    endSessionExpiry();
+    releaseDeparture();
+    resetExpiryBounceBudget();
   });
 
   // The claim is reset in beforeEach, never here: Testing Library unmounts in its own
@@ -41,7 +46,7 @@ describe("SessionExpiryCurtain", () => {
     );
 
     act(() => {
-      beginSessionExpiry();
+      claimDeparture(DepartureReason.SESSION_EXPIRED);
     });
 
     // The point is the ABSENCE: whatever error UI the 401 was about to paint has nowhere to
@@ -68,10 +73,10 @@ describe("SessionExpiryCurtain", () => {
     );
 
     act(() => {
-      beginSessionExpiry();
+      claimDeparture(DepartureReason.SESSION_EXPIRED);
     });
     act(() => {
-      endSessionExpiry();
+      releaseDeparture();
     });
 
     // Without this direction the curtain is a worse bug than the flash it replaces: an ignored
@@ -129,7 +134,25 @@ describe("SessionExpiryCurtain", () => {
     // a live navigation budget and a `pagehide` listener — and any test appended after it would
     // inherit them, silently, as an ordering dependency.
     act(() => {
-      endSessionExpiry();
+      releaseDeparture();
     });
+  });
+
+  // A sign-out is a departure too, and it must not raise this: the user asked to leave, the
+  // layout owns that interaction's feedback, and "your session expired" is the one thing it did
+  // not do. Before the claim carried a reason there was nothing here to tell the two apart.
+  it("stays down while the departure is a sign-out", () => {
+    render(
+      <SessionExpiryCurtain>
+        <p data-testid={CHILD}>Section content</p>
+      </SessionExpiryCurtain>,
+    );
+
+    act(() => {
+      claimDeparture(DepartureReason.SIGN_OUT);
+    });
+
+    expect(screen.getByTestId(CHILD)).toBeInTheDocument();
+    expect(screen.queryByTestId("session-expiry__curtain")).toBeNull();
   });
 });

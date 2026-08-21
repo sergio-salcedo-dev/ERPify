@@ -19,7 +19,10 @@ import {
  * `request` sub-objects (`data` / `headers` / `cookies`), plus the raw
  * `query_string` and the `url`'s query (both strings, so they bypass key-based
  * filtering and are parsed param-by-param — where the identity axes are
- * redacted alongside the denylist, since a URL is where those travel).
+ * redacted alongside the denylist, since a URL is where those travel). A
+ * breadcrumb's URL-shaped values get that same treatment, for the same reason
+ * and by the same reading: the SDK writes one breadcrumb per `fetch` and per
+ * history entry, and each carries the whole request URL as a STRING.
  * Free-text (`message`, the captured
  * `Error.message`/stack) is intentionally NOT key-scrubbed — same scope as the
  * API scrubber; `sendDefaultPii: false` already keeps headers/cookies/bodies off
@@ -36,7 +39,7 @@ export function scrubSentryEvent<E extends Event>(event: E): E {
     event.user = scrubDeep(event.user) as E["user"];
   }
   if (event.breadcrumbs) {
-    event.breadcrumbs = scrubDeep(event.breadcrumbs) as E["breadcrumbs"];
+    event.breadcrumbs = scrubBreadcrumbs(event.breadcrumbs) as E["breadcrumbs"];
   }
 
   if (event.request) {
@@ -44,6 +47,81 @@ export function scrubSentryEvent<E extends Event>(event: E): E {
   }
 
   return event;
+}
+
+/** One entry of `event.breadcrumbs`, named off the event type so no `Breadcrumb` import is needed. */
+type SentryBreadcrumb = NonNullable<Event["breadcrumbs"]>[number];
+
+/**
+ * How deep a breadcrumb's `data` is walked for URL-shaped values. Breadcrumb data is flat in
+ * every SDK-authored crumb; the bound exists for a hand-authored one and is deliberately far
+ * below {@link scrubDeep}'s, since nothing here needs to reach an arbitrary payload.
+ */
+const MAX_BREADCRUMB_DATA_DEPTH = 4;
+
+/**
+ * A value the SDK wrote as a URL: absolute, protocol-relative, or root-relative. Matched by SHAPE
+ * rather than by the key it sits under, because a key list is exactly what failed for this class
+ * twice already — in the access log (#389/#803) and here. The SDK's own crumbs put the URL under
+ * `data.url` for fetch/xhr and `data.from`/`data.to` for a history entry, but a hand-authored crumb
+ * names it whatever it likes and the rule must not depend on having guessed that name.
+ *
+ * The `?` is what makes the rewrite safe on free text: a string with no query is returned by
+ * {@link scrubUrl} unchanged anyway, so requiring one narrows the walk to values that actually
+ * carry parameters. A URL embedded MID-string (a console message quoting one) is not seen — the
+ * same free-text scope the rest of this module keeps, recorded as a residual rather than closed.
+ */
+function isUrlLikeValue(value: string): boolean {
+  return /^(?:https?:\/\/|\/)/i.test(value) && value.includes("?");
+}
+
+/**
+ * Sentry adds an automatic breadcrumb per `fetch`, and that breadcrumb carries the full request
+ * URL — query string included. Key-based scrubbing does not look inside a URL string, so a search
+ * whose filter names a person rode into Sentry in clear under a key (`url`) that no denylist would
+ * ever hold. Sentry is a third-party sink with retention of its own that no erasure path reaches.
+ *
+ * The denylist pass runs first and the URL pass second, over what it left: a `data` key the
+ * denylist strips has no URL to scrub afterwards, and the reverse order would scrub a value that
+ * was about to be dropped.
+ */
+function scrubBreadcrumbs(breadcrumbs: SentryBreadcrumb[]): SentryBreadcrumb[] {
+  const denylisted = scrubDeep(breadcrumbs) as SentryBreadcrumb[];
+
+  return denylisted.map((crumb: SentryBreadcrumb) => {
+    if (!crumb || typeof crumb !== "object" || !crumb.data) {
+      return crumb;
+    }
+    return { ...crumb, data: scrubUrlLikeValues(crumb.data, 0) as SentryBreadcrumb["data"] };
+  });
+}
+
+/** Rewrites every URL-shaped string inside a breadcrumb's `data`, to {@link MAX_BREADCRUMB_DATA_DEPTH}. */
+function scrubUrlLikeValues(value: unknown, depth: number): unknown {
+  if (typeof value === "string") {
+    return isUrlLikeValue(value) ? scrubUrl(value) : value;
+  }
+
+  if (depth >= MAX_BREADCRUMB_DATA_DEPTH || value === null || typeof value !== "object") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item: unknown) => scrubUrlLikeValues(item, depth + 1));
+  }
+
+  // Same reading as scrubDeep: a non-plain object (Date, Map, a class instance) is passed through
+  // rather than rebuilt, so nothing here can break an instance the SDK attached.
+  const ctor = (value as Record<string, unknown>).constructor;
+  if (ctor && ctor !== Object) {
+    return value;
+  }
+
+  const scrubbed: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    scrubbed[key] = scrubUrlLikeValues(nested, depth + 1);
+  }
+  return scrubbed;
 }
 
 /**

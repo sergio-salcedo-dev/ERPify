@@ -23,13 +23,37 @@ import { Routes } from "@/context/shared/routing/domain/Routes";
 import { safeInternalPath } from "@/context/shared/navigation/domain/safeInternalPath";
 import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNavigate";
 import {
-  beginSessionExpiry,
-  endSessionExpiry,
-} from "@/context/shared/access/application/sessionExpiry";
+  claimDeparture,
+  releaseDeparture,
+  DepartureReason,
+} from "@/context/shared/navigation/application/departure";
 import { API_ENDPOINTS } from "./ApiEndpoints";
 
 function trimBase(url: string): string {
   return url.replace(/\/$/, "");
+}
+
+// How many times this document will try the expiry bounce before it stops trying.
+//
+// Releasing the claim on a navigation that never committed is what keeps a later 401 from being
+// swallowed for ever — but the NEXT 401 then re-claims and re-blanks the app for another commit
+// budget, and `useMercureRealtime`'s reconnect re-fires `authorize()` through this client. In a
+// navigable that drops navigations the app therefore cycles blank/usable indefinitely, unmounting
+// the whole tree each time and taking page state and unsaved input with it.
+//
+// Two, because the first give-up is indistinguishable from a slow-but-real navigation — the
+// commit oracle is one-sided by construction — while a second one says the document is staying.
+// Past the cap the 401 renders as the ordinary error its caller already handles: worse than a
+// bounce, better than an app that blanks itself on a loop with nothing left to click.
+const MAX_EXPIRY_BOUNCES = 2;
+
+// Per document, like the claim it guards: a committed navigation discards this module with the
+// rest of the document, so only a bounce that DEMONSTRABLY failed is ever counted.
+let bouncesGivenUpOn = 0;
+
+/** Test seam: a module counter outlives a test file, and a stale one silences the next test. */
+export function resetExpiryBounceBudget(): void {
+  bouncesGivenUpOn = 0;
 }
 
 // How long any single request is given before the client gives up on it. A default, not a
@@ -58,6 +82,10 @@ interface ReadResponse {
 //    navigation and strand the user on "session expired" instead of the public
 //    landing they asked for.
 // Every other gated 401 means "was authenticated, now isn't".
+//
+// This list exempts the sign-out CALL and nothing else in flight beside it. What covers the rest —
+// a dashboard poll, a Mercure authorize, a list refetch, any of which can 401 in the same window —
+// is the departure claim below, which the sign-out takes before it revokes.
 function isAuthHandshakeEndpoint(input: string): boolean {
   const path = input.split("?")[0];
   return (
@@ -79,7 +107,11 @@ function redirectToLoginOnSessionExpiry(input: string): void {
   // module state that a fresh document resets — so a 401 raised from this screen could
   // reload it for as long as the call keeps failing.
   if (globalThis.location.pathname === Routes.LOGIN) return;
-  if (!beginSessionExpiry()) return;
+  if (bouncesGivenUpOn >= MAX_EXPIRY_BOUNCES) return;
+  // Losing the claim is not a failure to report. Either a sign-out is already leaving — and it is
+  // going somewhere better than "session expired" — or another 401 in this same burst already
+  // started the bounce. Both are the single flight working.
+  if (!claimDeparture(DepartureReason.SESSION_EXPIRED)) return;
   const current = `${globalThis.location.pathname}${globalThis.location.search}`;
   const next = encodeURIComponent(safeInternalPath(current, Routes.BACKOFFICE));
   // A router is unreachable from here: this is a module-level function inside an
@@ -92,7 +124,10 @@ function redirectToLoginOnSessionExpiry(input: string): void {
   // Releasing the claim on failure covers BOTH ways the document can stay: a refusal, which
   // raises, and an ignored navigation, which does not. The second is the one that used to
   // wedge this adapter — every later 401 in the document swallowed, no bounce and no signal.
-  hardNavigate(`${Routes.LOGIN}?next=${next}&reason=session-expired`, endSessionExpiry);
+  hardNavigate(`${Routes.LOGIN}?next=${next}&reason=session-expired`, () => {
+    bouncesGivenUpOn += 1;
+    releaseDeparture();
+  });
 }
 
 function browserApiBase(): string {

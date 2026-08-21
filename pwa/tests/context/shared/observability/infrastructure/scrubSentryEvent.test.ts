@@ -194,4 +194,82 @@ describe("scrubSentryEvent", () => {
     const event = { extra: { id: 1 } } as unknown as ErrorEvent;
     expect(scrubSentryEvent(event).extra).toEqual({ id: 1 });
   });
+  // The SDK adds one breadcrumb per `fetch` and one per history entry, and each carries the whole
+  // URL as a STRING under a key no denylist holds. Every rule above matches a parameter name or a
+  // structured key, so this whole class travelled in clear until the URL pass ran here too.
+  it("redacts the query of a fetch breadcrumb's url", () => {
+    const event = {
+      breadcrumbs: [
+        {
+          category: "fetch",
+          data: {
+            method: "GET",
+            url: "https://app.example/api/v1/backoffice/audit?filters%5B0%5D%5Bfield%5D=email&filters%5B0%5D%5Bvalue%5D=someone@example.com",
+            status_code: 500,
+          },
+        },
+      ],
+    } as unknown as ErrorEvent;
+
+    const url = scrubSentryEvent(event).breadcrumbs?.[0]?.data?.url as string;
+
+    expect(url).toContain("filters%5B0%5D%5Bvalue%5D=REDACTED");
+    expect(url).not.toContain("someone@example.com");
+    // The shape is the diagnostic worth of a URL, so the path and the non-sensitive axes stay.
+    expect(url).toContain("/api/v1/backoffice/audit");
+    expect(url).toContain("filters%5B0%5D%5Bfield%5D=email");
+  });
+
+  // A history breadcrumb names the URL under `from`/`to`, which is why the pass is keyed on the
+  // SHAPE of the value rather than on the key it sits under.
+  it("redacts a person id carried by a navigation breadcrumb", () => {
+    const event = {
+      breadcrumbs: [
+        {
+          category: "navigation",
+          data: {
+            from: "/backoffice/audit?actorId=8f14e45f",
+            to: "/login?next=%2Fbackoffice%2Faudit%3FactorId%3D8f14e45f&reason=session-expired",
+          },
+        },
+      ],
+    } as unknown as ErrorEvent;
+
+    const data = scrubSentryEvent(event).breadcrumbs?.[0]?.data as Record<string, string>;
+
+    expect(data.from).toBe("/backoffice/audit?actorId=REDACTED");
+    expect(data.to).not.toContain("8f14e45f");
+    expect(data.to).toContain("reason=session-expired");
+  });
+
+  it("leaves a breadcrumb value that is not URL-shaped alone", () => {
+    const event = {
+      breadcrumbs: [
+        {
+          category: "console",
+          // Free text is out of scope here exactly as it is for `message` and a captured stack —
+          // a recorded residual, not an oversight. Rewriting it would mangle any prose holding a `?`.
+          message: "Could not reach /api/v1/banks?page=2 — retrying",
+          data: { arguments: ["what? really"], level: "warn" },
+        },
+      ],
+    } as unknown as ErrorEvent;
+
+    const crumb = scrubSentryEvent(event).breadcrumbs?.[0];
+
+    expect(crumb?.message).toBe("Could not reach /api/v1/banks?page=2 — retrying");
+    expect(crumb?.data?.arguments).toEqual(["what? really"]);
+  });
+
+  it("applies the denylist before the url pass, so a stripped key has no url left to scrub", () => {
+    const event = {
+      breadcrumbs: [
+        { category: "fetch", data: { authorization: "Bearer x", url: "/api/v1/banks?token=abc" } },
+      ],
+    } as unknown as ErrorEvent;
+
+    expect(scrubSentryEvent(event).breadcrumbs?.[0]?.data).toEqual({
+      url: "/api/v1/banks?token=REDACTED",
+    });
+  });
 });

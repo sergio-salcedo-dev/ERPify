@@ -822,5 +822,90 @@ describe("FetchHttpClient", () => {
 
       expect(replace).not.toHaveBeenCalled();
     });
+
+    // The exemption list covers the sign-out CALL. It never covered everything else in flight
+    // beside it — a dashboard poll, a Mercure authorize, a list refetch — any of which 401s in
+    // the same window and used to fire a SECOND `location.replace`, to `?reason=session-expired`.
+    // The later navigation generally wins, so a user who asked to sign out landed on "session
+    // expired": the outcome the exemption exists to prevent, reached around it.
+    it("does not bounce a concurrent 401 while a sign-out is already leaving", async () => {
+      respond401();
+      // Imported after `resetModules`, so this is the same module instance the fresh client
+      // writes to. A static import here would claim a different one and prove nothing.
+      const { claimDeparture, DepartureReason } =
+        await import("@/context/shared/navigation/application/departure");
+      claimDeparture(DepartureReason.SIGN_OUT);
+      const client = await freshClient();
+
+      await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+        problem: { status: HttpStatus.UNAUTHORIZED },
+      });
+
+      // The 401 still travels back to its caller unchanged; what it no longer does is navigate.
+      expect(replace).not.toHaveBeenCalled();
+      expect(assign).not.toHaveBeenCalled();
+    });
+
+    // Releasing the claim on a navigation that never committed is what #786 required, and the
+    // cost is that the NEXT 401 re-claims and re-blanks the tree for another commit budget.
+    // With `useMercureRealtime` re-firing `authorize()` on every reconnect, an environment that
+    // drops navigations cycles the app blank/usable for ever — unmounting page state and unsaved
+    // input each time. Two attempts, then the 401 renders as the ordinary error its caller
+    // already handles.
+    it("stops re-blanking the application after two navigations that never committed", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        respond401();
+        const client = await freshClient();
+
+        for (const expected of [1, 2]) {
+          await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+            problem: { status: HttpStatus.UNAUTHORIZED },
+          });
+          expect(replace).toHaveBeenCalledTimes(expected);
+          await vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS);
+        }
+
+        await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+          problem: { status: HttpStatus.UNAUTHORIZED },
+        });
+
+        expect(replace).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    // The cap counts give-ups, never bounces. A navigation that COMMITS discards the document and
+    // this counter with it, so a budget spent by a real navigation is not a budget at all — it
+    // would silently halve what the cap allows on the one path that is working correctly.
+    // Three rounds, because two would still pass under a counter that increments per bounce.
+    it("does not spend the budget on a bounce whose document actually left", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        respond401();
+        const { releaseDeparture } =
+          await import("@/context/shared/navigation/application/departure");
+        const client = await freshClient();
+
+        for (const expected of [1, 2, 3]) {
+          await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+            problem: { status: HttpStatus.UNAUTHORIZED },
+          });
+          expect(replace).toHaveBeenCalledTimes(expected);
+
+          // `pagehide` with `persisted: false` IS the commit: the document is being discarded, so
+          // the budget timer disarms and nothing is counted. Standing in for a real document
+          // teardown, which a test cannot perform — hence the explicit release afterwards.
+          globalThis.dispatchEvent(
+            Object.assign(new Event("pagehide"), { persisted: false }) as PageTransitionEvent,
+          );
+          await vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS);
+          releaseDeparture();
+        }
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

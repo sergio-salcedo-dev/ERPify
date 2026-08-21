@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useRef, type ReactNode } from "react";
-import { useSessionExpiring } from "../../application/useSessionExpiring";
+import { useDeparture } from "@/context/shared/navigation/application/useDeparture";
+import { DepartureReason } from "@/context/shared/navigation/application/departure";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 
 const HEADING = "Your session expired";
@@ -30,12 +31,17 @@ const LEAVING_MESSAGE = "Taking you to the sign-in screen…";
  * raised by the same 401's catch would otherwise render on top of this curtain and point
  * the user at error details that were just unmounted.
  *
- * Blanking the app is only safe because the bounce is bounded: an ignored navigation
- * releases the claim and this lifts. The sign-in link is the second half of that — a bound
- * the user holds rather than one they wait out.
+ * Blanking the app is only safe because the bounce is bounded, and it is bounded twice over: an
+ * ignored navigation releases the claim and this lifts, and the transport stops re-claiming after
+ * two give-ups, so a navigable that drops navigations cannot cycle the app blank/usable for ever.
+ * The sign-in link is the third — a bound the user holds rather than one they wait out.
+ *
+ * It reads the departure REASON, not merely that one is in flight. A sign-out is a departure too
+ * and must not raise this: the user asked to leave, the layout owns that interaction's feedback,
+ * and telling them their session expired is the one thing it did not do.
  */
 export function SessionExpiryCurtain({ children }: Readonly<{ children: ReactNode }>) {
-  const expiring = useSessionExpiring();
+  const expiring = useDeparture() === DepartureReason.SESSION_EXPIRED;
   const curtain = useRef<HTMLElement>(null);
 
   useEffect(() => {

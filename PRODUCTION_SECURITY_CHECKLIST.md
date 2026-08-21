@@ -1250,6 +1250,38 @@ mitigated state. Accepting one means recording who accepted it and against which
           deployment or the first customer, whichever comes first** — same trigger as the repository's public-posture
           item below, and the same trigger that unwinds residuals one, three and five.
 
+- [x] **A person's identifier reached Sentry inside a `fetch` breadcrumb's URL, closed 2026-08-21.**
+      `scrubSentryEvent` treated `event.request.url` and `event.request.query_string` as strings and
+      parsed them parameter-by-parameter, but sent `event.breadcrumbs` through the key-based
+      `scrubDeep` only. The SDK adds one breadcrumb per `fetch` and one per history entry, and each
+      carries the whole URL — query included — under `data.url` / `data.from` / `data.to`, so a search
+      filtering on `email` rode into the tracker in clear under a key no denylist will ever hold. Same
+      class as the access-log defect closed in #389/#803, one sink over, and the same reason it
+      matters: Sentry has retention of its own that no erasure path reaches, so an identifier that
+      arrives outlives the erasure the application confirmed to the subject. The URL pass now runs over
+      every URL-shaped value in a breadcrumb's `data`, after the denylist pass. Matched by **shape**
+      (`https?://`, `//`, or `/`, and containing a `?`) rather than by key name, deliberately: a key
+      list is what failed for this class twice, and a hand-authored breadcrumb names its URL whatever
+      it likes. Pinned by four rows in `pwa/tests/.../scrubSentryEvent.test.ts`, each falsified by
+      reverting the call and watching it go red.
+      **Residual one — free text is still out of scope, and that is the same scope the rest of the
+      module keeps.** A breadcrumb's `message` and a `console` breadcrumb's `data.arguments` are not
+      rewritten, so a URL quoted inside prose (`Could not reach /api/v1/audit?actorId=…`) reaches the
+      tracker intact. Rewriting them was declined rather than overlooked: the pass would mangle any
+      prose holding a `?`, and the module already states free text — `message`, the captured
+      `Error.message` and stack — as outside its reach, matching the API scrubber.
+      **Residual two — a URL embedded MID-string is not seen**, since the shape test reads the start of
+      the value. A value that is a URL is covered; a value that mentions one is not.
+      **Residual three — a green proves the transformation, never the sink.** These are unit rows over
+      a synthetic event; nothing here observes what a running SDK actually attaches, and `beforeSend`
+      is the only interception point, so an SDK field outside `breadcrumbs` / `request` / `extra` /
+      `contexts` / `user` is untouched by construction.
+      **Accepted 2026-08-21 (Sergio):** residuals one to three, on the same basis as the access-log
+      residuals above — no production deployment and no customer — and on the narrower fact that all
+      three require an identifier to travel somewhere the shape rule does not read, rather than under a
+      name the vocabulary failed to enumerate, which is the direction that actually shipped. **Expiry:
+      re-assess before the first production deployment or the first customer**, whichever comes first.
+
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

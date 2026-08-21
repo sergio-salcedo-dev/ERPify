@@ -208,6 +208,28 @@ const PROBLEM_FIXTURES: ReadonlyArray<ProblemCase> = [
       detail: "Check your connection and try again.",
     }),
   },
+  {
+    label: "0 — request given up on (timeout)",
+    description:
+      "The second status-0 case, and visually distinct: the pill reads `Timed out`, because the server may have received and applied the request.",
+    problem: makeProblem({
+      type: "request-timeout",
+      title: "The server did not answer in time",
+      status: 0,
+      detail: "The request was given up on after 30000ms.",
+    }),
+  },
+  {
+    label: "200 — malformed response envelope",
+    description:
+      "A 2xx whose body failed its response guard: the only fixture here carrying a SUCCESS status, which is what makes it easy to forget.",
+    problem: makeProblem({
+      type: "malformed-response-envelope",
+      title: "API response did not match the expected shape",
+      status: 200,
+      detail: "Unexpected response body shape for /api/v1/backoffice/banks",
+    }),
+  },
 ];
 
 export const metadata = {

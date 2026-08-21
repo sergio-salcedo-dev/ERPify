@@ -29,6 +29,11 @@ import { useSession } from "@/context/shared/access/application/useSession";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNavigate";
+import {
+  claimDeparture,
+  releaseDeparture,
+  DepartureReason,
+} from "@/context/shared/navigation/application/departure";
 
 const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 
@@ -180,6 +185,13 @@ export default function BackOfficeLayoutClient({
       // navigating therefore guarantees there is nothing left to announce into. When the
       // budget wins instead, the session is still live, the subtree is still mounted, and a
       // navigation that does not commit is exactly the case the recovery states.
+      // Claimed BEFORE the revoke, which is the whole point: everything else in flight when the
+      // session dies — a dashboard poll, a Mercure authorize, a list refetch — 401s inside this
+      // window, and the transport bounces a 401 to `/login?reason=session-expired` unless a
+      // departure is already claimed. That second navigation generally wins, so a user who asked
+      // to sign out used to land on "session expired". The exemption for the revoke CALL never
+      // covered its neighbours; this does.
+      const claimed = claimDeparture(DepartureReason.SIGN_OUT);
       const budget = afterMs(SIGN_OUT_BUDGET_MS);
       void Promise.race([logout(SIGN_OUT_BUDGET_MS), budget.elapsed])
         .catch(() => {
@@ -194,6 +206,9 @@ export default function BackOfficeLayoutClient({
           // left `isLeaving` latched for the life of the document — every menu-driven navigation
           // dropped from then on, with an sr-only string as the only feedback.
           hardNavigate(Routes.HOME, (failure) => {
+            // Only the winner releases. Losing the claim means an expiry bounce is already
+            // leaving, and releasing it here would hand the next 401 a fresh one.
+            if (claimed) releaseDeparture();
             setSignOut(failure === "refused" ? SignOut.REFUSED : SignOut.STALLED);
           });
         });
