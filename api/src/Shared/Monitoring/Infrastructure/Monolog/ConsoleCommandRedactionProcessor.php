@@ -141,7 +141,7 @@ final readonly class ConsoleCommandRedactionProcessor implements ProcessorInterf
             return $record->with(context: [...$record->context, self::FIELD => self::SENTINEL]);
         }
 
-        $redacted = self::redact($command);
+        $redacted = $this->redact($command);
 
         if ($redacted === $command) {
             return $record;
@@ -159,7 +159,7 @@ final readonly class ConsoleCommandRedactionProcessor implements ProcessorInterf
      * fragments after the name, and every one of them is discarded. The split is used to find the boundary,
      * never to interpret what is past it.
      */
-    private static function redact(string $command): string
+    private function redact(string $command): string
     {
         $tokens = \preg_split(self::SEPARATOR, \trim($command), -1, \PREG_SPLIT_NO_EMPTY);
 

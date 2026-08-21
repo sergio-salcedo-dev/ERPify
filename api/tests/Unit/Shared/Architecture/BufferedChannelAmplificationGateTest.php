@@ -233,7 +233,7 @@ final class BufferedChannelAmplificationGateTest extends TestCase
             $pinned,
             $found,
             \sprintf(
-                '%s now activates prod\'s buffered handler at a different set of levels. A new activating '
+                "%s now activates prod's buffered handler at a different set of levels. A new activating "
                 . 'record flushes the preceding fifty to php://stderr — read what it carries, then update '
                 . 'this pin and the §7 record together.',
                 $emitter,
@@ -268,7 +268,7 @@ final class BufferedChannelAmplificationGateTest extends TestCase
         $this->assertSame(
             "'class' => \$message::class, 'message_id' => \$envelope->last(TransportMessageIdStamp::class)?->getId(),",
             \preg_replace('/\s+/', ' ', \trim($captured['body'])),
-            'the retry listener\'s log context changed. It is the one activating record on the `messenger` '
+            "the retry listener's log context changed. It is the one activating record on the `messenger` "
             . 'channel, so read every key it now carries: for an event about a person the aggregate id IS '
             . 'the personal datum, and the payload must not be among them.',
         );
@@ -369,11 +369,11 @@ final class BufferedChannelAmplificationGateTest extends TestCase
     {
         $declared = $this->deployedHandler()['action_level'] ?? null;
 
-        $this->assertIsString($declared, 'prod\'s buffered handler declares no action_level to read');
+        $this->assertIsString($declared, "prod's buffered handler declares no action_level to read");
         $this->assertContains(
             $declared,
             self::PSR3_LEVELS,
-            'prod\'s buffered handler declares an action_level that is not a PSR-3 level name',
+            "prod's buffered handler declares an action_level that is not a PSR-3 level name",
         );
 
         return Level::fromName($declared);

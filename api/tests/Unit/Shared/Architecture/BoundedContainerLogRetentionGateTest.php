@@ -286,7 +286,7 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
     {
         if (\is_array($logging)) {
             foreach ($logging as $key => $value) {
-                yield from $this->scalarsOf($value, $path . '.' . (string) $key);
+                yield from $this->scalarsOf($value, $path . '.' . $key);
             }
 
             return;

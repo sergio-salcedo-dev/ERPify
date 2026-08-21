@@ -91,7 +91,7 @@ final class ConsoleCommandCarrierGateTest extends TestCase
             $source,
             \sprintf(
                 '%s no longer stringifies the whole input into its log context. Re-read what it writes now '
-                . 'before trusting this processor\'s docblock.',
+                . "before trusting this processor's docblock.",
                 ErrorListener::class,
             ),
         );
