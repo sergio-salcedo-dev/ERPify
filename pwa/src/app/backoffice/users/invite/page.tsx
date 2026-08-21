@@ -49,8 +49,8 @@ export default function InviteUserPage() {
             Invite user
           </h1>
           <p className="text-muted-foreground text-sm" data-testid="users-invite__subtitle">
-            Invite a new member by email and assign their roles. The alta is an invitation — they
-            set their own password from the emailed link.
+            Invite a new member by email and assign their roles. Sign-up is by invitation — they set
+            their own password from the emailed link.
           </p>
         </header>
 

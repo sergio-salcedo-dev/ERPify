@@ -8,6 +8,7 @@ interface SystemStatusBannerProps {
   status: SystemStatus;
   datetime: string | null;
   testId?: string;
+  detail?: string;
 }
 
 const BACKOFFICE_THEME: BannerTheme = {

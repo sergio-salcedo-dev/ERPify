@@ -56,6 +56,31 @@ describe("SystemStatusBanner", () => {
     expect(banner).not.toHaveTextContent(/as of/i);
   });
 
+  it("carries the detail inside its own live region, visually hidden", () => {
+    // Inside, not beside: a second live region would announce over this one, which is what the
+    // per-row regions did before they were removed.
+    render(
+      <SystemStatusBanner
+        status={SystemStatus.DISRUPTED}
+        datetime={null}
+        detail="BackOffice API: Disrupted. Database: Degraded."
+        testId="x-banner"
+      />,
+    );
+    const banner = screen.getByTestId("x-banner");
+    const detail = screen.getByTestId("x-banner__detail");
+    expect(banner).toContainElement(detail);
+    expect(detail).toHaveClass("sr-only");
+    expect(detail).toHaveTextContent("Database: Degraded.");
+  });
+
+  it("renders no detail element when the caller passes none", () => {
+    render(
+      <SystemStatusBanner status={SystemStatus.OPERATIONAL} datetime={null} testId="x-banner" />,
+    );
+    expect(screen.queryByTestId("x-banner__detail")).not.toBeInTheDocument();
+  });
+
   it("renders an aria-hidden icon", () => {
     const { container } = render(
       <SystemStatusBanner status={SystemStatus.OPERATIONAL} datetime={null} testId="x-banner" />,
