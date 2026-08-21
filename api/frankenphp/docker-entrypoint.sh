@@ -34,7 +34,8 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 
 	if grep -q ^DATABASE_URL= .env; then
 		echo 'Waiting for database to be ready...'
-		ATTEMPTS_LEFT_TO_REACH_DATABASE=60
+		DB_WAIT_ATTEMPTS=60
+		ATTEMPTS_LEFT_TO_REACH_DATABASE=$DB_WAIT_ATTEMPTS
 		# SENTRY_DSN= makes the SDK inert for THIS probe only. The retry loop boots the
 		# full Symfony kernel each second, and until the `database` host resolves and
 		# accepts connections every failed `SELECT 1` is captured by the bundle's error
@@ -55,8 +56,20 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 		done
 
 		if [ $ATTEMPTS_LEFT_TO_REACH_DATABASE -eq 0 ]; then
-			echo 'The database is not up or not reachable:'
+			# This container is about to exit 1. That is retryable, not terminal: every service
+			# running this entrypoint has `restart: unless-stopped` (compose.yaml), so Docker
+			# restarts it and the ${DB_WAIT_ATTEMPTS}-attempt wait above runs again — the stack
+			# self-heals once the database is reachable, at the cost of a visible crash-loop in
+			# the meantime (and of nothing paging anyone while it does — this line makes the
+			# state legible to a log reader, not to an on-call rotation). Said explicitly here
+			# because this is the one point in that loop nothing else observes: it runs before
+			# Sentry's SDK boots, so an outage long enough to exhaust this loop is otherwise
+			# silent until something greps container logs. Framed as attempts, not seconds: each
+			# iteration also boots the Symfony kernel to run the probe, so wall time is strictly
+			# more than ${DB_WAIT_ATTEMPTS}s.
+			echo "✗ giving up after ${DB_WAIT_ATTEMPTS} attempts waiting for the database:"
 			echo "$DATABASE_ERROR"
+			echo '  Exiting 1 — restart: unless-stopped will retry this container automatically.'
 			exit 1
 		else
 			echo 'The database is now ready and reachable'

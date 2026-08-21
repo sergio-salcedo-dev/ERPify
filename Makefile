@@ -56,9 +56,12 @@ app.clean.sudo: sf.clear.sudo pwa.clean.sudo ## Host-side sudo wipe of all build
 # worker's private compiled-container cache can be dropped without racing a live process, and dropping it is
 # what keeps a changed constructor signature from boot-looping the worker while everything else looks healthy.
 # It costs the worker one container recompile per cold start.
-app.dev: docker.down docker.worker.cache.reset pwa.install.if-missing docker.up.wait php.fix.ownership ## Full dev stack with --wait
+app.dev: $(DOCKER_UP_GUARDS) docker.down docker.worker.cache.reset pwa.install.if-missing docker.up.wait php.fix.ownership ## Full dev stack with --wait
 
-app.dev.clean: docker.down app.clean.sudo app.dev ## Full dev stack with --wait (destructive)
+# Guardrails run before app.clean.sudo too: that target is an irreversible sudo wipe of
+# node_modules/vendor/build caches, and a malformed DEV_*_MEM_LIMIT is not worth discovering only
+# after paying for it.
+app.dev.clean: $(DOCKER_UP_GUARDS) docker.down app.clean.sudo app.dev ## Full dev stack with --wait (destructive)
 
 .PHONY: app.quality app.test app.update app.upgrade \
 		app.dev app.dev.clean \
