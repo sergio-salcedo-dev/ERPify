@@ -101,11 +101,22 @@ export interface NamedComponentStatus {
   status: SystemStatus;
 }
 
+const SENTENCE_PUNCTUATION_CHARS = new Set([".", "…"]);
+
 /**
  * `COMPONENT_LABEL[CHECKING]` carries a decorative ellipsis for the status pill; stripped here
- * so it never stacks against this function's own `". "` join or the caller's trailing period.
+ * so it never stacks against this function's own `". "` join or the caller's trailing period. A
+ * manual scan rather than a `/[.…]+$/` regex: unanchored at the start, that shape backtracks
+ * quadratically over an input that almost-but-doesn't end in the class (`"." * n + "X"`) — no
+ * attacker reaches this label, but the shape is worth not having at all.
  */
-const SENTENCE_PUNCTUATION_RE = /[.…]+$/;
+function stripTrailingSentencePunctuation(label: string): string {
+  let end = label.length;
+  while (end > 0 && SENTENCE_PUNCTUATION_CHARS.has(label[end - 1])) {
+    end -= 1;
+  }
+  return label.slice(0, end);
+}
 
 /**
  * Every component named with its status, for a live region whose headline is the worst of them.
@@ -119,7 +130,7 @@ export function componentRollCall(components: readonly NamedComponentStatus[]): 
   return components
     .map(
       ({ name, status }) =>
-        `${name}: ${componentStatusLabel(status).replace(SENTENCE_PUNCTUATION_RE, "")}`,
+        `${name}: ${stripTrailingSentencePunctuation(componentStatusLabel(status))}`,
     )
     .join(". ");
 }
