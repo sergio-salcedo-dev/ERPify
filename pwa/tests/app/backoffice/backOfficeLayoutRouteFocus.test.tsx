@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 const { push, logout, override, nav, auth } = vi.hoisted(() => ({
   push: vi.fn(),
@@ -112,5 +112,35 @@ describe("BackOfficeLayoutClient route focus", () => {
     cta.focus();
     rerender(content(<button data-testid="route-focus-test__cta">Go</button>));
     expect(globalThis.document.activeElement).toBe(cta);
+  });
+
+  /**
+   * The mobile Sheet never strands `<body>`: the clicked item keeps focus until Base UI's own
+   * modal-dialog close hands it back to the trigger, so the correction above never fires for it
+   * — measured live, that hand-back landed focus on the hamburger button, not the new page. The
+   * fix reads a closing-via-navigation flag through the Sheet's own `finalFocus`, which is timed
+   * to when it actually unmounts rather than to the route change.
+   */
+  describe("mobile Sheet close", () => {
+    it("moves focus to <main> when the Sheet closes by navigating", async () => {
+      render(content());
+      fireEvent.click(screen.getByLabelText("Open navigation menu"));
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByTitle("Dashboard"));
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(globalThis.document.activeElement).toBe(main());
+    });
+
+    it("still returns focus to the trigger when the Sheet closes without navigating", async () => {
+      render(content());
+      const trigger = screen.getByLabelText("Open navigation menu");
+      fireEvent.click(trigger);
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.keyDown(dialog, { key: "Escape" });
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(globalThis.document.activeElement).toBe(trigger);
+    });
   });
 });

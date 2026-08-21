@@ -137,6 +137,17 @@ export default function BackOfficeLayoutClient({
     mainRef.current?.focus({ preventScroll: true });
   }, [pathname]);
 
+  // The mobile Sheet never strands <body>, so the effect above never fires for it: the item a
+  // click lands on stays focused until the Sheet's own close (Base UI's modal-dialog default,
+  // ~200ms behind the CSS transition) returns focus to the hamburger trigger — measured, that
+  // return lands roughly 250ms after the route has already changed. `handleNavigation` is the
+  // only path that closes the Sheet to go somewhere, so it is the one place that can tell a
+  // navigating close from Escape/backdrop/the X button, which must still return focus to the
+  // trigger (the correct default for a dialog that closes without going anywhere). Read via the
+  // Sheet's own `finalFocus`, timed to when it actually unmounts, rather than trying to race the
+  // route-focus effect above against an animation neither controls.
+  const closingSheetViaNavigationRef = useRef(false);
+
   const menuGroups = backofficeMenuGroups;
 
   // Sign-out is in flight. State rather than a ref because the click closes the menu, so a
@@ -151,6 +162,7 @@ export default function BackOfficeLayoutClient({
   const isSignOutFailure = signOut === SignOut.REFUSED || signOut === SignOut.STALLED;
 
   const handleNavigation = (path: string, action?: NavAction) => {
+    closingSheetViaNavigationRef.current = true;
     setIsSidebarOpen(false);
     if (action === "sign-out") {
       // A second click POSTs a second revoke against a session the first one already
@@ -209,8 +221,6 @@ export default function BackOfficeLayoutClient({
     setSignOut(SignOut.IDLE);
     router.push(path);
   };
-
-  const navigateTo = (path: string, action?: NavAction) => () => handleNavigation(path, action);
 
   // The top-bar menu mirrors the sidebar's Account group rather than declaring its own
   // entries, so the two can never drift. Logout is split out: it is the only entry whose
@@ -373,7 +383,17 @@ export default function BackOfficeLayoutClient({
                       </button>
                     }
                   />
-                  <SheetContent side="left" className="bo-layout__sidebar-mobile p-0 w-72">
+                  <SheetContent
+                    side="left"
+                    className="bo-layout__sidebar-mobile p-0 w-72"
+                    finalFocus={() => {
+                      const viaNavigation = closingSheetViaNavigationRef.current;
+                      closingSheetViaNavigationRef.current = false;
+                      // `true` keeps Base UI's own default (return focus to the trigger) for
+                      // Escape / backdrop / the X button — a real close, not a navigation.
+                      return viaNavigation ? mainRef.current : true;
+                    }}
+                  >
                     <SheetHeader className="bo-layout__sidebar-mobile-header p-4 flex flex-row items-center justify-between border-b border-border">
                       <SheetTitle className="hidden">Navigation Menu</SheetTitle>
                       <Logo
@@ -414,7 +434,7 @@ export default function BackOfficeLayoutClient({
                                       type="button"
                                       // Identity, never the label — see the account group below.
                                       key={subItem.testId ?? subItem.path}
-                                      onClick={navigateTo(subItem.path, subItem.action)}
+                                      onClick={() => handleNavigation(subItem.path, subItem.action)}
                                       title={entryLabel(subItem)}
                                       aria-disabled={isEntryLeaving(subItem) || undefined}
                                       data-testid={
@@ -593,7 +613,7 @@ export default function BackOfficeLayoutClient({
                         {accountLinks.map((entry) => (
                           <DropdownMenuItem
                             key={entry.testId ?? entry.path}
-                            onClick={navigateTo(entry.path, entry.action)}
+                            onClick={() => handleNavigation(entry.path, entry.action)}
                             title={entry.name}
                             data-testid={entry.testId ? `${entry.testId}--menu` : undefined}
                           >
@@ -607,7 +627,9 @@ export default function BackOfficeLayoutClient({
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             variant="destructive"
-                            onClick={navigateTo(accountLogout.path, accountLogout.action)}
+                            onClick={() =>
+                              handleNavigation(accountLogout.path, accountLogout.action)
+                            }
                             title={entryLabel(accountLogout)}
                             aria-disabled={isEntryLeaving(accountLogout) || undefined}
                             data-testid={
