@@ -521,8 +521,8 @@ you change anything here.
       reach was whatever a person remembered to write. **The threat model the old acceptance was signed
       against was the wrong one**: it argued that whoever plants an index past the cap already knows the
       identifier, which answers confidentiality and answers nothing about **retention** — the harm is that
-      the deployment then holds a person's identifier in a sink with no rotation, no TTL and no owner of
-      erasure, and any client can force that for free. Both cliffs (index and sub-index) are closed by the
+      the deployment then holds a person's identifier in a sink bounded by size alone, with no TTL and no
+      owner of erasure, and any client can force that for free. Both cliffs (index and sub-index) are closed by the
       strip rather than by a longer list. **Caddy also drops the `Referer` header**, because a
       log line records more than its URI: for a same-origin API call the referring document is the screen the
       ids live on, so an unfiltered `Referer` reproduces in clear exactly what the `uri` filter blanked, on the
@@ -1046,9 +1046,11 @@ mitigated state. Accepting one means recording who accepted it and against which
       sink, has an owner of erasure. **Declared degradation:** an invocation LEADING with a global option
       (`-v <command>`, `--env=prod <command>`) loses the name too, since locating it past an option needs the
       command's own input definition, which a processor does not have and must not guess; measured over this
-      repository nothing invokes that shape (`make sf`, both compose `command:` arrays and
-      `docker-entrypoint.sh` all spell `bin/console <command>` first), and the failure direction is a redacted
-      line rather than a leaked one. **Residuals, none of which this rule reaches.** The argv is also in the host
+      repository the shape IS invoked, once: `api/frankenphp/docker-entrypoint.sh` runs `php bin/console -V`,
+      the first console call the prod container makes (`make sf` and both compose `command:` arrays spell
+      `bin/console <command>` first, and `make/php-quality.mk`'s `cache:clear --env=prod` puts its option
+      after the name). That invocation carries no argument at all, so the failure direction there is a
+      redacted line rather than a leaked one. **Residuals, none of which this rule reaches.** The argv is also in the host
       PROCESS LIST, so a password passed positionally is disclosed to every local process regardless of this
       rule. The throwable's own text is untouched: measured through a real Monolog pipeline, a value the
       console refused survives three times in the same record — `context.message`,
@@ -1124,8 +1126,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       the residual is one residual across both logs rather than a difference between them. The producer is
       `pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts`, which composes
       `/api/v1/backoffice/users/<uuid>`, where the uuid is the person's id. The sink has no owner of erasure:
-      no compose file declares a `logging:` driver, so it is the default json-file driver with neither rotation
-      nor TTL, and nothing in `FulfilIdentityErasure` can reach it. An id that lands there outlives the erasure
+      the compose files bound the driver by size alone, so it still has no TTL and no age-based expiry,
+      and nothing in `FulfilIdentityErasure` can reach it. An id that lands there outlives the erasure
       the application confirmed to the subject. Closing it is not a wider `replace` but a different mechanism —
       a log-level rewrite of `uri`, a `logging:` driver whose retention the erasure path can act on, or no
       access log for `/api/*` at all. **Accepted for now:** there is no production deployment, and the
@@ -1220,8 +1222,8 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **The Next.js container logs the full request URL, person ids included — measured in dev, unverified in
       prod.** The audit screen navigates to `/backoffice/audit?actorId=<uuid>&resourceId=<uuid>`, Caddy
       reverse-proxies the document to the PWA, and the container prints
-      `GET /backoffice/audit?actorId=… 200 in 73ms` to stderr — the same json-file driver with no rotation and
-      no TTL that Caddy's access log uses, and one that Caddy's `query` filter cannot reach because it is a
+      `GET /backoffice/audit?actorId=… 200 in 73ms` to stderr — the same json-file driver, bounded by size but
+      with no TTL, that Caddy's access log uses, and one that Caddy's `query` filter cannot reach because it is a
       different process. **Caddy's redaction does not cover this**; anyone reading "the access log redacts
       `actorId`" as "no log holds it" would be wrong. `pwa/next.config.ts` also sets
       `logging.fetches.fullUrl: true`, widening what server-side fetches record.
@@ -1251,8 +1253,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       pins the collection itself for that reason, and both named consumers on top, plus the absence of a `When`
       or `WhenNot` condition that would remove the decorator from production while leaving every gate green.
       **Which path actually reaches a durable sink, stated because the two differ.** `MessageHandler` runs in
-      the worker, which is PID 1, so its stderr is the json-file driver with no rotation, no TTL and no owner —
-      and `ErrorDetailsStamp` would persist the message in `messenger_messages`. That is the path worth the
+      the worker, which is PID 1, so its stderr is the json-file driver — bounded by size, still no TTL, no
+      owner of erasure — and `ErrorDetailsStamp` would persist the message in `messenger_messages`. That is the path worth the
       control, and it is **live rather than latent**: an earlier reading called it latent because
       `SendEmailMessage` is unrouted, which is true of that message and not of the sink. Two paths reach it
       without it. `SendEmailOnBankChanged` handles `BankCreated`/`BankUpdated`, both routed `async`, and
