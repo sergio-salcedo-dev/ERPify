@@ -7,7 +7,9 @@ import { HttpError } from "../domain/HttpError";
 import {
   MALFORMED_RESPONSE_ENVELOPE,
   NETWORK_ERROR,
+  REQUEST_TIMEOUT,
   type HttpClient,
+  type RequestOptions,
   type ResponseGuard,
 } from "../domain/HttpClient";
 import { HttpStatus } from "../domain/HttpStatus";
@@ -19,17 +21,28 @@ import { apiScope } from "@/context/shared/observability/domain/TelemetryScope";
 import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { safeInternalPath } from "@/context/shared/navigation/domain/safeInternalPath";
+import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNavigate";
+import {
+  beginSessionExpiry,
+  endSessionExpiry,
+} from "@/context/shared/access/application/sessionExpiry";
 import { API_ENDPOINTS } from "./ApiEndpoints";
 
 function trimBase(url: string): string {
   return url.replace(/\/$/, "");
 }
 
-// Single-flight guard for the session-expired bounce: a burst of concurrent
-// 401s (e.g. a dashboard firing several gated requests at once) must navigate to
-// /login exactly once, not race N redirects. Cleared again only if the navigation is
-// refused, because then the page is NOT leaving and every later 401 would be swallowed.
-let sessionExpiredRedirectStarted = false;
+// How long any single request is given before the client gives up on it. A default, not a
+// policy: it exists because "no request hangs forever" is a transport invariant and this
+// module is the only place that can hold it for every caller. Before it, the sole enforcer
+// in the tree was a timer owned by a layout component, which bounded exactly one call.
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+/** A response whose body has already been drained, inside the request's budget. */
+interface ReadResponse {
+  res: Response;
+  raw: string;
+}
 
 // Endpoints whose 401/403 is a handshake outcome, not a mid-session expiry:
 //  - `/me` is the cold-load probe the AuthProvider owns; a redirect here would
@@ -61,13 +74,12 @@ function isAuthHandshakeEndpoint(input: string): boolean {
 // SSR (no document/location) and for the auth-handshake endpoints above.
 function redirectToLoginOnSessionExpiry(input: string): void {
   if (typeof window === "undefined") return;
-  if (sessionExpiredRedirectStarted) return;
   if (isAuthHandshakeEndpoint(input)) return;
-  // Already on /login: the bounce would replace the document with itself, and the latch
-  // is module state that a fresh document resets — so a 401 raised from this screen could
+  // Already on /login: the bounce would replace the document with itself, and the claim is
+  // module state that a fresh document resets — so a 401 raised from this screen could
   // reload it for as long as the call keeps failing.
   if (globalThis.location.pathname === Routes.LOGIN) return;
-  sessionExpiredRedirectStarted = true;
+  if (!beginSessionExpiry()) return;
   const current = `${globalThis.location.pathname}${globalThis.location.search}`;
   const next = encodeURIComponent(safeInternalPath(current, Routes.BACKOFFICE));
   // A router is unreachable from here: this is a module-level function inside an
@@ -76,19 +88,11 @@ function redirectToLoginOnSessionExpiry(input: string): void {
   // the session is gone, so discarding every piece of in-memory client state is the
   // point, not a side effect. replace() rather than assign() so the dead, now
   // unauthenticated page does not sit in history one Back press away.
-  try {
-    // eslint-disable-next-line no-restricted-syntax
-    globalThis.location.replace(`${Routes.LOGIN}?next=${next}&reason=session-expired`);
-  } catch {
-    // No known browser path reaches here: unlike assign(), replace() is cross-origin
-    // callable and performs no security check, and a sandboxed navigable *ignores* a
-    // navigation rather than raising. It stands so that an environment which cannot
-    // navigate at all cannot escape this adapter's HttpError contract with a raw
-    // exception, and it drops the latch because the document stayed. It does NOT cover
-    // the ignored-navigation case: nothing is raised there, so the latch survives and
-    // later 401s in that document are swallowed.
-    sessionExpiredRedirectStarted = false;
-  }
+  //
+  // Releasing the claim on failure covers BOTH ways the document can stay: a refusal, which
+  // raises, and an ignored navigation, which does not. The second is the one that used to
+  // wedge this adapter — every later 401 in the document swallowed, no bounce and no signal.
+  hardNavigate(`${Routes.LOGIN}?next=${next}&reason=session-expired`, endSessionExpiry);
 }
 
 function browserApiBase(): string {
@@ -141,67 +145,120 @@ export class FetchHttpClient implements HttpClient {
   // Single fetch chokepoint: every request reads the Symfony profiler token off
   // the response (success and error paths share this) and publishes it for the
   // dev-only toolbar. No-op in prod (header absent + inert observer). It is also
-  // where a session-expiry 401 bounces the browser to /login exactly once.
-  private async request(input: string, init: RequestInit): Promise<Response> {
-    let res: Response;
+  // where a request is bounded, and where a session-expiry 401 bounces the browser to
+  // /login exactly once.
+  //
+  // The BODY is read here, inside the budget, and handed back with the response — not
+  // left for the callers to read afterwards. `fetch()` resolves on response HEADERS, so
+  // clearing the timer at that point armed the abort for the handshake and nothing else:
+  // a response whose headers land and whose body never completes (a chunked reply held
+  // open by a proxy, a half-closed connection) left the promise pending for ever, with
+  // the controller already unreferenced. That is the whole invariant this module claims,
+  // failing in the one direction nobody would look.
+  private async request(
+    input: string,
+    init: RequestInit,
+    options?: RequestOptions,
+  ): Promise<ReadResponse> {
+    const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    // An AbortController rather than `AbortSignal.timeout()`: the abort has to be
+    // distinguishable from an offline/DNS failure once fetch rejects, and reading the
+    // controller's own signal is what tells the two apart without matching on an error name.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      res = await fetch(input, init);
+      const res = await fetch(input, { ...init, signal: controller.signal });
+      const token = res.headers.get("X-Debug-Token");
+      if (token) {
+        this.debugTokens.publish({ token, profilerUrl: res.headers.get("X-Debug-Token-Link") });
+      }
+      if (res.status === HttpStatus.UNAUTHORIZED) {
+        // The 401 still travels back to its caller and still throws: the HTTP contract is
+        // unchanged, so no caller has to learn a second failure shape. What stops the error UI
+        // painting during the unload window is <SessionExpiryCurtain>, which reads the same
+        // claim this call publishes.
+        redirectToLoginOnSessionExpiry(input);
+      }
+      // Aborting mid-stream rejects this too, which is the point: it is inside the try, so
+      // a stalled body surfaces as the adapter's own timeout rather than escaping as a raw
+      // DOMException from a caller reading the body later.
+      const raw = await res.text();
+      return { res, raw };
     } catch (cause) {
+      if (controller.signal.aborted) {
+        this.telemetry.error("The API did not answer within the request budget", {
+          scope: apiScope("transport"),
+          cause,
+        });
+        throw this.timeoutError(timeoutMs);
+      }
       this.telemetry.error("Transport failure reaching the API", {
         scope: apiScope("transport"),
         cause,
       });
       throw this.transportError();
+    } finally {
+      clearTimeout(timer);
     }
-    const token = res.headers.get("X-Debug-Token");
-    if (token) {
-      this.debugTokens.publish({ token, profilerUrl: res.headers.get("X-Debug-Token-Link") });
-    }
-    if (res.status === HttpStatus.UNAUTHORIZED) {
-      redirectToLoginOnSessionExpiry(input);
-    }
-    return res;
   }
 
-  async get<T>(url: string, validate?: ResponseGuard<T>): Promise<T> {
-    const res = await this.request(this.resolveUrl(url), {
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
+  async get<T>(url: string, validate?: ResponseGuard<T>, options?: RequestOptions): Promise<T> {
+    const { res, raw } = await this.request(
+      this.resolveUrl(url),
+      {
+        headers: { ...options?.headers, Accept: "application/json" },
+        cache: "no-store",
+      },
+      options,
+    );
 
     if (!res.ok) {
-      throw await this.toHttpError(res);
+      throw this.toHttpError(res, raw);
     }
 
-    return this.parseBody<T>(res, url, validate);
+    return this.parseBody<T>(res, raw, url, validate);
   }
 
   async post<TBody, T>(
     url: string,
     body: TBody,
     validate?: ResponseGuard<T>,
-    headers?: Record<string, string>,
+    options?: RequestOptions,
   ): Promise<T> {
-    return this.sendWithBody<TBody, T>("POST", url, body, validate, headers);
+    return this.sendWithBody<TBody, T>("POST", url, body, validate, options);
   }
 
-  async put<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T> {
-    return this.sendWithBody<TBody, T>("PUT", url, body, validate);
+  async put<TBody, T>(
+    url: string,
+    body: TBody,
+    validate?: ResponseGuard<T>,
+    options?: RequestOptions,
+  ): Promise<T> {
+    return this.sendWithBody<TBody, T>("PUT", url, body, validate, options);
   }
 
-  async patch<TBody, T>(url: string, body: TBody, validate?: ResponseGuard<T>): Promise<T> {
-    return this.sendWithBody<TBody, T>("PATCH", url, body, validate);
+  async patch<TBody, T>(
+    url: string,
+    body: TBody,
+    validate?: ResponseGuard<T>,
+    options?: RequestOptions,
+  ): Promise<T> {
+    return this.sendWithBody<TBody, T>("PATCH", url, body, validate, options);
   }
 
-  async delete(url: string): Promise<void> {
-    const res = await this.request(this.resolveUrl(url), {
-      method: "DELETE",
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
+  async delete(url: string, options?: RequestOptions): Promise<void> {
+    const { res, raw } = await this.request(
+      this.resolveUrl(url),
+      {
+        method: "DELETE",
+        headers: { ...options?.headers, Accept: "application/json" },
+        cache: "no-store",
+      },
+      options,
+    );
 
     if (!res.ok) {
-      throw await this.toHttpError(res);
+      throw this.toHttpError(res, raw);
     }
   }
 
@@ -210,35 +267,37 @@ export class FetchHttpClient implements HttpClient {
     url: string,
     body: TBody,
     validate?: ResponseGuard<T>,
-    headers?: Record<string, string>,
+    options?: RequestOptions,
   ): Promise<T> {
-    const res = await this.request(this.resolveUrl(url), {
-      method,
-      headers: {
-        // Caller headers first: the body is always JSON.stringify'd, so Accept and Content-Type
-        // describe what this client actually sends and a caller must not be able to contradict
-        // them — a "text/plain" override would ship a JSON body the API then refuses as 415.
-        ...headers,
-        Accept: "application/json",
-        "Content-Type": "application/json",
+    const { res, raw } = await this.request(
+      this.resolveUrl(url),
+      {
+        method,
+        headers: {
+          // Caller headers first: the body is always JSON.stringify'd, so Accept and Content-Type
+          // describe what this client actually sends and a caller must not be able to contradict
+          // them — a "text/plain" override would ship a JSON body the API then refuses as 415.
+          ...options?.headers,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+        body: JSON.stringify(body),
       },
-      cache: "no-store",
-      body: JSON.stringify(body),
-    });
+      options,
+    );
 
     if (!res.ok) {
-      throw await this.toHttpError(res);
+      throw this.toHttpError(res, raw);
     }
 
-    return this.parseBody<T>(res, url, validate);
+    return this.parseBody<T>(res, raw, url, validate);
   }
 
   // why: a 2xx whose body drifted from the expected envelope must surface as a
   // typed boundary error here, not as a TypeError deep inside a mapper (e.g. a
   // stale browser bundle fetching a newer, reshaped API response).
-  private async parseBody<T>(res: Response, url: string, validate?: ResponseGuard<T>): Promise<T> {
-    const raw = await res.text();
-
+  private parseBody<T>(res: Response, raw: string, url: string, validate?: ResponseGuard<T>): T {
     if (!validate) {
       // why: a guard-less caller (e.g. get<void>) tolerates an empty body on ANY 2xx, not only a
       // 204 — an endpoint answering 200 with no payload must not surface as a malformed envelope.
@@ -300,6 +359,21 @@ export class FetchHttpClient implements HttpClient {
     });
   }
 
+  // why: a request the client gave up on is not "could not reach the server" — the server may
+  // well have received and applied it. Naming the budget in the detail is what keeps a triage
+  // from reading a timeout as an outage. status 0 for the same reason transportError uses it:
+  // there is no response, so there is no status and no X-Correlation-Id to join.
+  private timeoutError(timeoutMs: number): HttpError {
+    return new HttpError({
+      type: REQUEST_TIMEOUT,
+      title: "The server did not answer in time",
+      status: 0,
+      detail: `The request was given up on after ${timeoutMs}ms.`,
+      instance: uuidV7(),
+      "correlation-id": uuidV7(),
+    });
+  }
+
   // why: prefer the server's X-Correlation-Id so the surfaced error joins the same server-log
   // span. Only when the response carries none (a proxy stripped it, or the request never reached
   // the API's correlation-id listener) is a client-side v7 minted — a last resort that, by
@@ -318,8 +392,14 @@ export class FetchHttpClient implements HttpClient {
     return `${baseUrl}${path}`;
   }
 
-  private async toHttpError(res: Response): Promise<HttpError> {
-    const parsed = await res.json().catch(() => null);
+  private toHttpError(res: Response, raw: string): HttpError {
+    const parsed = ((): unknown => {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    })();
     const problem: ProblemDetails = isProblemDetails(parsed)
       ? parsed
       : {

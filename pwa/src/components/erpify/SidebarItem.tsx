@@ -85,7 +85,7 @@ export function SidebarItem({
         <div
           className={`sidebar-item__content flex items-center ${isCompact ? "justify-center" : "gap-3"}`}
         >
-          <Icon className="sidebar-item__icon w-5 h-5 shrink-0" />
+          <Icon className="sidebar-item__icon w-5 h-5 shrink-0" aria-hidden />
           {!isCompact && <span className="sidebar-item__name text-sm truncate">{name}</span>}
         </div>
         {!isCompact && (
@@ -126,7 +126,7 @@ export function SidebarItem({
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
               >
-                {SubIcon && <SubIcon className="w-3.5 h-3.5 shrink-0" />}
+                {SubIcon && <SubIcon className="w-3.5 h-3.5 shrink-0" aria-hidden />}
                 <span className="truncate">{subItem.name}</span>
               </button>
             );
