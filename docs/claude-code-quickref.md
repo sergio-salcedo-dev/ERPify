@@ -96,6 +96,7 @@ make app.upgrade                    # Force upgrade API + PWA deps to latest (ac
 make ci                             # Full CI (ci.quality + ci.test).
 make ci.api                         # API only: lint + tests.
 make ci.pwa                         # PWA only: lint + unit + build (no E2E).
+make shell.lint                     # shellcheck over every tracked shell script in one pass (CI job: Shell (ShellCheck)).
 make super-lint.full                # SuperLinter over the whole repo (requires GITHUB_TOKEN).
 make super-lint.fast                # SuperLinter on changed files only (faster).
 make super-lint.slim                # SuperLinter on changed files only (slim image).
