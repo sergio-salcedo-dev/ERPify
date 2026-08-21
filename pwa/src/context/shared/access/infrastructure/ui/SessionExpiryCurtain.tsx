@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, type ReactNode } from "react";
 import { useSessionExpiring } from "../../application/useSessionExpiring";
 import { Routes } from "@/context/shared/routing/domain/Routes";
+import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 
 const HEADING = "Your session expired";
 const LEAVING_MESSAGE = "Taking you to the sign-in screen…";
@@ -25,10 +26,12 @@ const LEAVING_MESSAGE = "Taking you to the sign-in screen…";
  *
  * "Every surface" is a claim about the React tree, so it covers exactly what this component
  * is an ancestor of. Portalled dialogs and sheets keep their React parentage and go with
- * the children; the toast viewport does NOT unless it is mounted inside this boundary,
- * which is why `app/layout.tsx` puts it there — Sonner's queue is module state, so a toast
- * raised by the same 401's catch would otherwise render on top of this curtain and point
- * the user at error details that were just unmounted.
+ * the children; the toast viewport is global infrastructure mounted OUTSIDE this boundary
+ * (`app/layout.tsx`) and outlives it, so two things hold it back instead: `dismissAll()`
+ * below clears whatever is visible the instant the bounce starts, and the curtain's own
+ * z-index (set above Sonner's `--z-index: 999999999` default) keeps anything raised
+ * AFTER that instant — a toast in flight from an unrelated interaction — from painting on
+ * top of it. Neither alone covers both directions; together they do.
  *
  * Blanking the app is only safe because the bounce is bounded: an ignored navigation
  * releases the claim and this lifts. The sign-in link is the second half of that — a bound
@@ -40,6 +43,11 @@ export function SessionExpiryCurtain({ children }: Readonly<{ children: ReactNod
 
   useEffect(() => {
     if (!expiring) return;
+    // Sonner's queue is module state and its viewport is global infrastructure that never
+    // unmounts, so a toast raised by the same 401 would otherwise sit on top of this curtain,
+    // pointing at error details that are no longer reachable — clearing it here is what the
+    // curtain's own doc comment promises for "every surface at once".
+    toastNotifier.dismissAll();
     // The control that raised the 401 was just destroyed with the rest of the tree, so focus
     // has fallen to <body>. Without this a keyboard user's next Tab starts from the top of a
     // document whose content is gone, and a screen reader is left on a node that no longer
@@ -54,7 +62,7 @@ export function SessionExpiryCurtain({ children }: Readonly<{ children: ReactNod
       ref={curtain}
       tabIndex={-1}
       data-testid="session-expiry__curtain"
-      className="session-expiry__curtain bg-background text-foreground flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center"
+      className="session-expiry__curtain fixed inset-0 z-[2147483647] bg-background text-foreground flex flex-col items-center justify-center gap-3 p-6 text-center"
     >
       {/* `role="alert"` rather than a status region: this is a system alert (DESIGN.md), and
           it is mounted ALREADY CARRYING its text. A live region born with content is the

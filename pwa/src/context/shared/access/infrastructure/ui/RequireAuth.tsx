@@ -17,10 +17,14 @@ import { safeInternalPath } from "@/context/shared/navigation/domain/safeInterna
  */
 export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
   const router = useRouter();
-  const { status } = useSession();
+  const { status, isSigningOut } = useSession();
 
   useEffect(() => {
     if (status !== AuthStatus.UNAUTHENTICATED) return;
+    // A sign-out already owns a navigation away from here; redirecting on top of it would
+    // race two navigations against the same document. The interaction that started it clears
+    // this once its own outcome is known, which re-runs this effect.
+    if (isSigningOut) return;
     // Read the live location inside the effect (client-only) so the deep link is
     // preserved without pulling useSearchParams + a Suspense boundary into the
     // guard. safeInternalPath keeps a tampered target from becoming an open
@@ -30,7 +34,7 @@ export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
       Routes.BACKOFFICE,
     );
     router.replace(`${Routes.LOGIN}?next=${encodeURIComponent(target)}`);
-  }, [status, router]);
+  }, [status, isSigningOut, router]);
 
   if (status !== AuthStatus.AUTHENTICATED) return null;
   return <>{children}</>;

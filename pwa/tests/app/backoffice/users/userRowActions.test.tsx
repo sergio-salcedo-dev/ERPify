@@ -27,7 +27,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/context/shared/notification/infrastructure/Toast", () => ({
-  toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+  toastNotifier: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+    dismissAll: vi.fn(),
+  },
 }));
 
 import UsersListPage from "@/app/backoffice/users/page";

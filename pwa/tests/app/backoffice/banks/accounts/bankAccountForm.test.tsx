@@ -28,7 +28,13 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
 }));
 
 vi.mock("@/context/shared/notification/infrastructure/Toast", () => ({
-  toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+  toastNotifier: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+    dismissAll: vi.fn(),
+  },
 }));
 
 const INITIAL = {

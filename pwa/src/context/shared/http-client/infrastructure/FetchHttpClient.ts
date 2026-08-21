@@ -166,8 +166,11 @@ export class FetchHttpClient implements HttpClient {
     // controller's own signal is what tells the two apart without matching on an error name.
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // Hoisted so the catch block below can tell a body-read abort that already saw a 401
+    // apart from one that never observed any status at all.
+    let res: Response | undefined;
     try {
-      const res = await fetch(input, { ...init, signal: controller.signal });
+      res = await fetch(input, { ...init, signal: controller.signal });
       const token = res.headers.get("X-Debug-Token");
       if (token) {
         this.debugTokens.publish({ token, profilerUrl: res.headers.get("X-Debug-Token-Link") });
@@ -186,6 +189,15 @@ export class FetchHttpClient implements HttpClient {
       return { res, raw };
     } catch (cause) {
       if (controller.signal.aborted) {
+        // The status line already landed and it was a 401. Reporting this as a timeout would
+        // be the wrong shape regardless of whether this call site bounces the browser
+        // (`redirectToLoginOnSessionExpiry` is a deliberate no-op for the auth-handshake
+        // endpoints above, `revoke-current` included) — an empty body still resolves to the
+        // same 401 through the ordinary !res.ok path below, matching what the status line
+        // already said.
+        if (res?.status === HttpStatus.UNAUTHORIZED) {
+          return { res, raw: "" };
+        }
         this.telemetry.error("The API did not answer within the request budget", {
           scope: apiScope("transport"),
           cause,

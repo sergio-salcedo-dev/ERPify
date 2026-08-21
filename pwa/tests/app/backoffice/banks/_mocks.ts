@@ -53,10 +53,16 @@ export function containerMock(handlers: Record<string, object>) {
   };
 }
 
-/** Toast notifier port mock — all four channels are spies. */
+/** Toast notifier port mock — every channel plus `dismissAll` is a spy. */
 export function toastNotifierMock() {
   return {
-    toastNotifier: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+    toastNotifier: {
+      success: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+      warning: vi.fn(),
+      dismissAll: vi.fn(),
+    },
   };
 }
 
