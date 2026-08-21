@@ -10,9 +10,19 @@ export const NAVIGATION_COMMIT_BUDGET_MS = 10_000;
  * Why a hard navigation left the caller still running.
  *  - `refused`  — the destination was refused here, or `replace()` raised. Either way
  *    nothing was ever scheduled.
+ *  - `superseded` — another hard navigation already owned the document when this one was
+ *    attempted. Distinct from `refused`: this caller did nothing wrong, it lost a race, and a
+ *    caller that maps `refused` to a user-visible "try again" would say something false here.
  *  - `not-committed` — nothing raised and the document is still here past its budget.
  */
-export type HardNavigationFailure = "refused" | "not-committed";
+export type HardNavigationFailure = "refused" | "superseded" | "not-committed";
+
+// The document leaves for at most one destination, ever — a second `replace()` before the
+// first commits does not queue, it SUPERSEDES, so racing two callers used to make the winner
+// arbitrary (whichever executed last). Held for the life of the claim, not a plain boolean:
+// `disarm()` below releases it by identity, so a stale callback from an already-superseded
+// call can never release a later, unrelated claim.
+let claimedBy: symbol | undefined;
 
 /**
  * Leave the current document for `url`, and tell the caller when the document stayed.
@@ -62,6 +72,13 @@ export function hardNavigate(
     return;
   }
 
+  if (claimedBy !== undefined) {
+    onFailure("superseded");
+    return;
+  }
+
+  const ownClaim = Symbol();
+
   try {
     // Leaving an authenticated area / running where no React context reaches a router: this
     // module is the single place either one is spelled, so the disable is stated once rather
@@ -73,11 +90,14 @@ export function hardNavigate(
     return;
   }
 
+  claimedBy = ownClaim;
+
   let timer: ReturnType<typeof setTimeout> | undefined;
   let remainingMs = budgetMs;
   let runningSince = 0;
 
   const disarm = (): void => {
+    if (claimedBy === ownClaim) claimedBy = undefined;
     if (timer !== undefined) {
       clearTimeout(timer);
       timer = undefined;
