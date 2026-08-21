@@ -271,7 +271,9 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
         $declared = [];
 
         foreach ($this->servicesIn($composeFile) as $name => $definition) {
-            if (\array_key_exists('logging', $definition)) {
+            // `is_array` before the key probe, not merely for the analyser: a `service: ~` key parses to
+            // null, and this reader must skip it rather than fault on it.
+            if (\is_array($definition) && \array_key_exists('logging', $definition)) {
                 $declared[$name] = $definition['logging'];
             }
         }

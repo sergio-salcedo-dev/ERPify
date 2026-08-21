@@ -253,7 +253,19 @@ final class ConsoleCommandCarrierGateTest extends TestCase
     {
         $services = \is_array($block) ? ($block['services'] ?? null) : null;
 
-        return \is_array($services) ? $services : null;
+        if (!\is_array($services)) {
+            return null;
+        }
+
+        // Re-keyed as strings rather than annotated as such: a YAML map can carry a numeric-looking key, and
+        // asserting the shape in a docblock the parser cannot honour is the `@var`-instead-of-declare smell.
+        $byServiceId = [];
+
+        foreach ($services as $id => $definition) {
+            $byServiceId[(string) $id] = $definition;
+        }
+
+        return $byServiceId;
     }
 
     /**

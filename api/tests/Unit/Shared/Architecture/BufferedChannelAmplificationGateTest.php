@@ -419,7 +419,10 @@ final class BufferedChannelAmplificationGateTest extends TestCase
         $prod = $parsed['when@prod'] ?? null;
         $this->assertIsArray($prod, 'monolog.yaml declares no `when@prod` block');
 
-        $handlers = $prod['monolog']['handlers'] ?? null;
+        $monolog = $prod['monolog'] ?? null;
+        $this->assertIsArray($monolog, 'the `when@prod` block declares no monolog configuration');
+
+        $handlers = $monolog['handlers'] ?? null;
         $this->assertIsArray($handlers, 'the `when@prod` block declares no handlers');
 
         $handler = $handlers['main'] ?? null;
