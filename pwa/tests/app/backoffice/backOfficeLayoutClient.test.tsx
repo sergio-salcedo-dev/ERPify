@@ -1,17 +1,26 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
-const { push, logout, override, nav, auth, assign, replace } = vi.hoisted(() => ({
-  push: vi.fn(),
-  logout: vi.fn(() => Promise.resolve()),
-  override: vi.fn(),
-  assign: vi.fn(),
-  replace: vi.fn(),
-  nav: { pathname: "/backoffice" },
-  // `status` is the literal the guard compares against rather than `AuthStatus.AUTHENTICATED`:
-  // a mock factory is hoisted above the imports, so it cannot read a value imported here.
-  auth: { session: null as Session | null, status: "authenticated" as string },
-}));
+const { push, logout, override, nav, auth, assign, replace, routerReplace, toastError } =
+  vi.hoisted(() => ({
+    push: vi.fn(),
+    logout: vi.fn(() => Promise.resolve()),
+    override: vi.fn(),
+    assign: vi.fn(),
+    replace: vi.fn(),
+    // Distinct from `replace` above: this is next/navigation's router.replace, the one
+    // RequireAuth calls — kept separate so a test can assert on ONE of the two navigations
+    // without the other's calls polluting the count.
+    routerReplace: vi.fn(),
+    toastError: vi.fn(),
+    nav: { pathname: "/backoffice" },
+    // `status` is the literal the guard compares against rather than `AuthStatus.AUTHENTICATED`:
+    // a mock factory is hoisted above the imports, so it cannot read a value imported here.
+    auth: {
+      session: null as Session | null,
+      status: "authenticated" as string,
+    },
+  }));
 
 // One mock covers all three consumers: the layout reaches for `useSession` through the `@/` alias
 // while RequireAuth and DevSessionSwitcher import it relatively, and both resolve to this module.
@@ -19,14 +28,29 @@ const { push, logout, override, nav, auth, assign, replace } = vi.hoisted(() => 
 // because `isDevToolsAvailable()` is true outside production — reads `session.roles`/`user.status`
 // and `override`, so an incomplete value here would empty the tree instead of failing loudly.
 vi.mock("@/context/shared/access/application/useSession", () => ({
-  useSession: () => ({ ...auth, login: vi.fn(), logout, override }),
+  useSession: () => ({
+    ...auth,
+    login: vi.fn(),
+    logout,
+    override,
+  }),
 }));
 
 // The router object is built once so RequireAuth's effect does not re-run on every render.
 vi.mock("next/navigation", () => {
-  const router = { push, replace: vi.fn(), refresh: vi.fn(), back: vi.fn(), prefetch: vi.fn() };
+  const router = {
+    push,
+    replace: routerReplace,
+    refresh: vi.fn(),
+    back: vi.fn(),
+    prefetch: vi.fn(),
+  };
   return { useRouter: () => router, usePathname: () => nav.pathname };
 });
+
+vi.mock("@/context/shared/notification/infrastructure/Toast", () => ({
+  toastNotifier: { error: toastError, success: vi.fn(), info: vi.fn(), warning: vi.fn() },
+}));
 
 import BackOfficeLayoutClient from "@/app/backoffice/BackOfficeLayoutClient";
 import { accountMenuItem, type NavSubItem } from "@/app/backoffice/_lib/backofficeMenu";
@@ -383,13 +407,13 @@ describe("BackOfficeLayoutClient", () => {
     }
   });
 
-  it("keeps announcing the leaving state even when the guard tears the guarded subtree down", async () => {
+  it("does not race RequireAuth's own redirect when the guard tears the guarded subtree down", async () => {
     // The fast path, which no other case here renders. logout() clears the session inside its own
-    // finally, so RequireAuth returns null for the subtree it guards — menu and entry go with it —
-    // while the navigation is still owed. The status region is a sibling of RequireAuth precisely
-    // so it survives that unmount and keeps the outcome (not just the wait) reachable: the
-    // navigation itself is scheduled on the promise, not on the tree, so it has to fire regardless
-    // of what is left mounted.
+    // finally, so RequireAuth returns null for the subtree it guards — status region, menu and
+    // entry all go with it — before the sign-out's own navigation is even attempted. The
+    // departure is still claimed at that point: without it, RequireAuth's own redirect effect
+    // would fire a SECOND navigation (to /login) on top of the one hardNavigate is about to
+    // perform.
     logout.mockImplementationOnce(() => {
       auth.session = null;
       auth.status = "unauthenticated";
@@ -408,10 +432,77 @@ describe("BackOfficeLayoutClient", () => {
       </BackOfficeLayoutClient>,
     );
 
-    expect(screen.getByTestId("bo-layout__leaving-status")).toHaveTextContent(LEAVING_LABEL);
+    // The guarded subtree — status region included — is gone.
     expect(screen.queryByTestId("bo-layout-test__child")).toBeNull();
+    expect(screen.queryByTestId("bo-layout__leaving-status")).toBeNull();
+    // RequireAuth's own redirect did not fire on top of the sign-out's navigation.
+    expect(routerReplace).not.toHaveBeenCalled();
+    // hardNavigate's own navigation still lands — it is scheduled on the promise, not on the
+    // tree, so it fires regardless of what is left mounted.
     await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("still announces a refusal by toast when the status region is already gone", async () => {
+    // The realistic timing the two cases above don't cover: in production logout()'s own
+    // finally clears the session well before an outcome is known (it's bound by
+    // SIGN_OUT_BUDGET_MS, the same budget racing it here), so by the time hardNavigate's
+    // failure callback runs, RequireAuth has usually already torn the status region down.
+    // The toast is the channel that does NOT depend on that region still being mounted.
+    logout.mockImplementationOnce(() => {
+      auth.session = null;
+      auth.status = "unauthenticated";
+      return Promise.resolve();
+    });
+    replace.mockImplementationOnce(() => {
+      throw new Error("navigation refused");
+    });
+    const { rerender } = renderLayout();
+    await openAccountMenu();
+
+    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+    await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+    rerender(
+      <BackOfficeLayoutClient>
+        <p data-testid="bo-layout-test__child">Section content</p>
+      </BackOfficeLayoutClient>,
+    );
+
+    // The guarded subtree, status region included, is already gone by the time the refusal
+    // is known.
+    expect(screen.queryByTestId("bo-layout__leaving-status")).toBeNull();
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(REFUSED_MESSAGE));
+  });
+
+  it("lets RequireAuth redirect once the departure is released, even though session is already unauthenticated", async () => {
+    // The other half of the race guard, isolated from the sign-out click: RequireAuth must not
+    // redirect WHILE another interaction still owns the outcome, and must redirect the moment
+    // it no longer does — this is what re-enables the ordinary unauthenticated-route guard once
+    // hardNavigate's own failure callback has released the claim.
+    //
+    // It reads the claim rather than a context boolean, and that is the point of collapsing the
+    // two: the third reader of this same fact is `FetchHttpClient`, a module-level function that
+    // reaches no provider, so a value on `AuthContextValue` could never have served it.
+    auth.status = "unauthenticated";
+    auth.session = null;
+    act(() => {
+      claimDeparture(DepartureReason.SIGN_OUT);
+    });
+    renderLayout();
+
+    expect(screen.queryByTestId("bo-layout-test__child")).toBeNull();
+    expect(routerReplace).not.toHaveBeenCalled();
+
+    // No rerender: the claim publishes to its subscribers, so `useSyncExternalStore` inside
+    // RequireAuth re-runs the effect on its own. A rerender here would hide a store that does
+    // not notify.
+    act(() => {
+      releaseDeparture();
+    });
+
+    await waitFor(() =>
+      expect(routerReplace).toHaveBeenCalledWith(expect.stringContaining(`${Routes.LOGIN}?next=`)),
+    );
   });
 
   it("drops a second sign-out while the first is still in flight", async () => {
@@ -481,6 +572,9 @@ describe("BackOfficeLayoutClient", () => {
       // "failed" from "never started".
       expect(status).toHaveAttribute("aria-live", "assertive");
       expect(status).not.toHaveClass("sr-only");
+      // The outcome is announced this way too, reaching the user regardless of whether the
+      // guarded subtree this region lives in is still mounted by the time it is known.
+      expect(toastError).toHaveBeenCalledWith(REFUSED_MESSAGE);
 
       await openAccountMenu();
       fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LINKS[0])));
@@ -512,6 +606,7 @@ describe("BackOfficeLayoutClient", () => {
       await act(() => vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS));
 
       await waitFor(() => expect(status).toHaveTextContent(STALLED_MESSAGE));
+      expect(toastError).toHaveBeenCalledWith(STALLED_MESSAGE);
       await openAccountMenu();
       fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LINKS[0])));
       expect(push).toHaveBeenCalledWith(ACCOUNT_LINKS[0].path);
@@ -689,15 +784,15 @@ describe("BackOfficeLayoutClient", () => {
     );
   });
 
-  it("renders only the (empty, sr-only) status region and no chrome or children while the session is still hydrating", () => {
+  it("renders nothing at all while the session is still hydrating", () => {
     auth.status = "hydrating";
     auth.session = null;
 
     renderLayout();
 
-    // The status region is a sibling of RequireAuth, so it is present regardless of auth status —
-    // but idle it carries no message, so nothing is announced.
-    expect(screen.getByTestId("bo-layout__leaving-status")).toBeEmptyDOMElement();
+    // The status region is a child of RequireAuth, so it shares its render gate: nothing renders
+    // — not even an idle, empty status region — until the session resolves one way or the other.
+    expect(screen.queryByTestId("bo-layout__leaving-status")).toBeNull();
     expect(screen.queryByTestId("bo-layout-test__child")).toBeNull();
     expect(screen.queryByTestId("bo-layout__topbar-account")).toBeNull();
   });

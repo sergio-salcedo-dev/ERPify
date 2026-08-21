@@ -12,12 +12,19 @@ import {
 } from "@/context/shared/http-client/infrastructure/FetchHttpClient";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 
+const { dismissAll } = vi.hoisted(() => ({ dismissAll: vi.fn() }));
+
+vi.mock("@/context/shared/notification/infrastructure/Toast", () => ({
+  toastNotifier: { dismissAll, success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+}));
+
 const CHILD = "session-expiry-test__child";
 
 describe("SessionExpiryCurtain", () => {
   beforeEach(() => {
     releaseDeparture();
     resetExpiryBounceBudget();
+    dismissAll.mockClear();
   });
 
   // The claim is reset in beforeEach, never here: Testing Library unmounts in its own
@@ -60,9 +67,17 @@ describe("SessionExpiryCurtain", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Your session expired");
     expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
     expect(screen.getByTestId("session-expiry__curtain")).toHaveFocus();
+    // `dismissAll()` only clears what's visible at the instant the bounce starts — a toast
+    // raised after that (an unrelated interaction's own failure toast, arriving seconds
+    // later) needs a stacking guarantee, not a timing one, to stay from painting on top of
+    // a screen whose whole point is to be the only thing visible.
+    expect(screen.getByTestId("session-expiry__curtain")).toHaveClass("fixed", "z-[2147483647]");
     // The bound the user holds, rather than the one they wait out: a navigation that never
     // commits would otherwise leave them on a screen with no controls at all.
     expect(screen.getByTestId("session-expiry__sign-in")).toHaveAttribute("href", "/login");
+    // The toast viewport is global infrastructure that no longer unmounts with this tree, so
+    // a stale toast has to be cleared explicitly instead of hidden by an incidental unmount.
+    expect(dismissAll).toHaveBeenCalledTimes(1);
   });
 
   it("gives the application back when the navigation never committed", () => {

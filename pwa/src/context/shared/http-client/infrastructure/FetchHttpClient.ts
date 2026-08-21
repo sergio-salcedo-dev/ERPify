@@ -43,8 +43,14 @@ function trimBase(url: string): string {
 //
 // Two, because the first give-up is indistinguishable from a slow-but-real navigation — the
 // commit oracle is one-sided by construction — while a second one says the document is staying.
-// Past the cap the 401 renders as the ordinary error its caller already handles: worse than a
-// bounce, better than an app that blanks itself on a loop with nothing left to click.
+//
+// What happens at the cap is the part that took a second look. Giving up by RELEASING the claim
+// was the obvious spelling and it was wrong: the curtain, and the client-side `Link` to /login it
+// carries, are the user's only remaining exit in a navigable that drops document navigations, and
+// releasing takes them away exactly when they are needed — the Sign out entry cannot help either,
+// since it leaves through the same dropped mechanism. So the last attempt KEEPS the claim: the
+// curtain stays up, its `Link` still routes client-side, and no further bounce is ever attempted,
+// which is what stops the flapping without spending the affordance.
 const MAX_EXPIRY_BOUNCES = 2;
 
 // Per document, like the claim it guards: a committed navigation discards this module with the
@@ -124,8 +130,11 @@ function redirectToLoginOnSessionExpiry(input: string): void {
   // Releasing the claim on failure covers BOTH ways the document can stay: a refusal, which
   // raises, and an ignored navigation, which does not. The second is the one that used to
   // wedge this adapter — every later 401 in the document swallowed, no bounce and no signal.
+  //
+  // Except on the last attempt, where the claim is deliberately kept — see MAX_EXPIRY_BOUNCES.
   hardNavigate(`${Routes.LOGIN}?next=${next}&reason=session-expired`, () => {
     bouncesGivenUpOn += 1;
+    if (bouncesGivenUpOn >= MAX_EXPIRY_BOUNCES) return;
     releaseDeparture();
   });
 }
@@ -201,8 +210,11 @@ export class FetchHttpClient implements HttpClient {
     // controller's own signal is what tells the two apart without matching on an error name.
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // Hoisted so the catch block below can tell a body-read abort that already saw a 401
+    // apart from one that never observed any status at all.
+    let res: Response | undefined;
     try {
-      const res = await fetch(input, { ...init, signal: controller.signal });
+      res = await fetch(input, { ...init, signal: controller.signal });
       const token = res.headers.get("X-Debug-Token");
       if (token) {
         this.debugTokens.publish({ token, profilerUrl: res.headers.get("X-Debug-Token-Link") });
@@ -210,8 +222,13 @@ export class FetchHttpClient implements HttpClient {
       if (res.status === HttpStatus.UNAUTHORIZED) {
         // The 401 still travels back to its caller and still throws: the HTTP contract is
         // unchanged, so no caller has to learn a second failure shape. What stops the error UI
-        // painting during the unload window is <SessionExpiryCurtain>, which reads the same
-        // claim this call publishes.
+        // painting during the unload window is <SessionExpiryCurtain>, which reads the claim this
+        // call publishes — with two stated exceptions, because the curtain reads the REASON and
+        // not merely that a departure is in flight. During a SIGN-OUT it stays down on purpose
+        // (blanking the app would destroy the status region that announces the leaving state), so
+        // a 401 from a request still in flight does paint its caller's error for that window; and
+        // past the bounce cap nothing new is ever claimed, so the curtain up at that moment is the
+        // terminal one.
         redirectToLoginOnSessionExpiry(input);
       }
       // Aborting mid-stream rejects this too, which is the point: it is inside the try, so
@@ -221,6 +238,15 @@ export class FetchHttpClient implements HttpClient {
       return { res, raw };
     } catch (cause) {
       if (controller.signal.aborted) {
+        // The status line already landed and it was a 401. Reporting this as a timeout would
+        // be the wrong shape regardless of whether this call site bounces the browser
+        // (`redirectToLoginOnSessionExpiry` is a deliberate no-op for the auth-handshake
+        // endpoints above, `revoke-current` included) — an empty body still resolves to the
+        // same 401 through the ordinary !res.ok path below, matching what the status line
+        // already said.
+        if (res?.status === HttpStatus.UNAUTHORIZED) {
+          return { res, raw: "" };
+        }
         this.telemetry.error("The API did not answer within the request budget", {
           scope: apiScope("transport"),
           cause,

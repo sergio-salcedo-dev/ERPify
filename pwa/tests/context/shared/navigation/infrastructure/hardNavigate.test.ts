@@ -10,6 +10,9 @@ describe("hardNavigate", () => {
   let replace: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    // The default `toFake` list fakes `performance.now()` in lockstep with `setTimeout`, which
+    // is what lets the pause/resume assertions below advance the module's own elapsed-time
+    // math via `vi.advanceTimersByTime` — a narrower list here would desync the two silently.
     vi.useFakeTimers();
     replace = vi.fn();
     // jsdom's `location` is unforgeable — its own methods are neither writable nor
@@ -115,5 +118,75 @@ describe("hardNavigate", () => {
     expect(onFailure).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(onFailure).toHaveBeenCalledWith("not-committed");
+  });
+
+  it("does not fire while the tab is backgrounded, even well past the original budget", () => {
+    const hidden = vi.spyOn(document, "hidden", "get");
+    try {
+      const onFailure = vi.fn();
+      hardNavigate(DESTINATION, onFailure);
+
+      vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS / 2);
+      hidden.mockReturnValue(true);
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // A backgrounded tab is not evidence either way — some browsers throttle timers here
+      // regardless, but the pause has to make the report independent of that.
+      vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS * 2);
+
+      expect(onFailure).not.toHaveBeenCalled();
+    } finally {
+      hidden.mockRestore();
+    }
+  });
+
+  it("resumes with only the remaining budget, not a fresh one, once visible again", () => {
+    const hidden = vi.spyOn(document, "hidden", "get");
+    try {
+      const onFailure = vi.fn();
+      hardNavigate(DESTINATION, onFailure);
+
+      vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS / 2);
+      hidden.mockReturnValue(true);
+      document.dispatchEvent(new Event("visibilitychange"));
+      vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS * 2);
+
+      hidden.mockReturnValue(false);
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // Only the half that was left when it was backgrounded is owed now.
+      vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS / 2 - 1);
+      expect(onFailure).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(onFailure).toHaveBeenCalledWith("not-committed");
+    } finally {
+      hidden.mockRestore();
+    }
+  });
+
+  it("does not spend any of the budget while already backgrounded when the navigation starts", () => {
+    // The transition-only guard cannot see this: a navigation kicked off from an
+    // already-hidden tab (e.g. a background-tab realtime reconnect that then 401s) gets no
+    // `visibilitychange` event at all until it becomes visible, so arming unconditionally
+    // would burn the whole budget hidden — the exact throttling problem the pause exists for.
+    const hidden = vi.spyOn(document, "hidden", "get");
+    try {
+      hidden.mockReturnValue(true);
+      const onFailure = vi.fn();
+      hardNavigate(DESTINATION, onFailure);
+
+      vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS * 2);
+      expect(onFailure).not.toHaveBeenCalled();
+
+      hidden.mockReturnValue(false);
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS - 1);
+      expect(onFailure).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(onFailure).toHaveBeenCalledWith("not-committed");
+    } finally {
+      hidden.mockRestore();
+    }
   });
 });

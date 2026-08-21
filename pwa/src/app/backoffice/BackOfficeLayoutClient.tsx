@@ -34,6 +34,7 @@ import {
   releaseDeparture,
   DepartureReason,
 } from "@/context/shared/navigation/application/departure";
+import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 
 const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
 
@@ -142,6 +143,24 @@ export default function BackOfficeLayoutClient({
     mainRef.current?.focus({ preventScroll: true });
   }, [pathname]);
 
+  // The mobile Sheet never strands <body>, so the effect above never fires for it: the item a
+  // click lands on stays focused until the Sheet's own close (Base UI's modal-dialog default)
+  // returns focus to the hamburger trigger, which — measured live — lands well after the route
+  // has already changed. `handleNavigation` is the only path that closes the Sheet to go
+  // somewhere, so it is the one place that can tell a navigating close from Escape/backdrop/the
+  // X button, which must still return focus to the trigger (the correct default for a dialog
+  // that closes without going anywhere). Read via the Sheet's own `finalFocus`, timed to when it
+  // actually unmounts, rather than trying to race the route-focus effect above against an
+  // animation neither controls.
+  //
+  // Armed only once navigation is certain, not on entry to `handleNavigation`: that function is
+  // also the desktop sidebar's and the top-bar dropdown's handler, neither of which opens the
+  // mobile Sheet, and armed-but-never-consumed would sit `true` until the Sheet next closes for
+  // an unrelated reason (Escape, with no navigation) and misdirect that close's focus. `isLeaving`
+  // gates two branches to a no-op return with the Sheet already closing — a click landing there
+  // still closes the mobile Sheet without navigating anywhere, and must not claim otherwise.
+  const closingSheetViaNavigationRef = useRef(false);
+
   const menuGroups = backofficeMenuGroups;
 
   // Sign-out is in flight. State rather than a ref because the click closes the menu, so a
@@ -156,6 +175,10 @@ export default function BackOfficeLayoutClient({
   const isSignOutFailure = signOut === SignOut.REFUSED || signOut === SignOut.STALLED;
 
   const handleNavigation = (path: string, action?: NavAction) => {
+    // Read before closing: this is the only signal, once the Sheet is shut, of whether it WAS
+    // the mobile Sheet that just closed (desktop's sidebar and the top-bar dropdown call this
+    // same function and never open it).
+    const closingMobileSheet = isSidebarOpen;
     setIsSidebarOpen(false);
     if (action === "sign-out") {
       // A second click POSTs a second revoke against a session the first one already
@@ -163,7 +186,21 @@ export default function BackOfficeLayoutClient({
       // first revoke is outstanding: the click closes the menu, so it needs the menu
       // reopened, which is exactly the window SIGN_OUT_BUDGET_MS bounds.
       if (isLeaving) return;
+      if (closingMobileSheet) closingSheetViaNavigationRef.current = true;
       setSignOut(SignOut.LEAVING);
+      // Claimed HERE, before anything else in this branch: the revoke below drops the session
+      // cookie, so everything already in flight — a dashboard poll, a Mercure authorize, a list
+      // refetch — 401s inside this window, and the transport bounces a 401 to
+      // `/login?reason=session-expired` unless a departure is already claimed. That second
+      // navigation generally wins, so a user who asked to sign out used to land on "session
+      // expired". The transport's exemption for the revoke CALL never covered its neighbours.
+      //
+      // One claim, three readers: this single flight, `RequireAuth` (which must not race its own
+      // redirect against a navigation already leaving) and `SessionExpiryCurtain` (which reads
+      // the REASON, so a sign-out does not raise a screen saying the session expired). It is
+      // module state rather than context because the third reader is a module-level function
+      // inside an infrastructure adapter, which reaches no provider.
+      const claimed = claimDeparture(DepartureReason.SIGN_OUT);
       // `action` is what makes this sign out. The destination below is hard-coded to HOME and
       // this entry's own `path` is never read on this branch. Two tests hold the two together,
       // one per direction: the model guard asserts the entry's declared path, and the
@@ -185,13 +222,6 @@ export default function BackOfficeLayoutClient({
       // navigating therefore guarantees there is nothing left to announce into. When the
       // budget wins instead, the session is still live, the subtree is still mounted, and a
       // navigation that does not commit is exactly the case the recovery states.
-      // Claimed BEFORE the revoke, which is the whole point: everything else in flight when the
-      // session dies — a dashboard poll, a Mercure authorize, a list refetch — 401s inside this
-      // window, and the transport bounces a 401 to `/login?reason=session-expired` unless a
-      // departure is already claimed. That second navigation generally wins, so a user who asked
-      // to sign out used to land on "session expired". The exemption for the revoke CALL never
-      // covered its neighbours; this does.
-      const claimed = claimDeparture(DepartureReason.SIGN_OUT);
       const budget = afterMs(SIGN_OUT_BUDGET_MS);
       void Promise.race([logout(SIGN_OUT_BUDGET_MS), budget.elapsed])
         .catch(() => {
@@ -207,9 +237,17 @@ export default function BackOfficeLayoutClient({
           // dropped from then on, with an sr-only string as the only feedback.
           hardNavigate(Routes.HOME, (failure) => {
             // Only the winner releases. Losing the claim means an expiry bounce is already
-            // leaving, and releasing it here would hand the next 401 a fresh one.
+            // leaving, and releasing it here would hand the next 401 a fresh one. Releasing is
+            // also what re-enables RequireAuth's own redirect, which reads the same claim: the
+            // sign-out navigation did not commit, so the ordinary route guard takes back over.
             if (claimed) releaseDeparture();
-            setSignOut(failure === "refused" ? SignOut.REFUSED : SignOut.STALLED);
+            const outcome = failure === "refused" ? SignOut.REFUSED : SignOut.STALLED;
+            setSignOut(outcome);
+            // The status region is no longer guaranteed to still be mounted by the time an
+            // outcome is known (RequireAuth may already have unmounted it), so the outcome
+            // itself is announced here instead — reaching the user regardless of what the
+            // guarded subtree is doing.
+            toastNotifier.error(SIGN_OUT_MESSAGE[outcome]);
           });
         });
       return;
@@ -219,13 +257,12 @@ export default function BackOfficeLayoutClient({
     // menu-driven navigation reaches here — the logo and any link inside the page are next/link
     // and route on their own.
     if (isLeaving) return;
+    if (closingMobileSheet) closingSheetViaNavigationRef.current = true;
     // A failure message describes one interaction, not the rest of the document's life: left
     // standing it stays in the accessibility tree through every later route change.
     setSignOut(SignOut.IDLE);
     router.push(path);
   };
-
-  const navigateTo = (path: string, action?: NavAction) => () => handleNavigation(path, action);
 
   // The top-bar menu mirrors the sidebar's Account group rather than declaring its own
   // entries, so the two can never drift. Logout is split out: it is the only entry whose
@@ -265,14 +302,16 @@ export default function BackOfficeLayoutClient({
   };
 
   return (
-    <>
+    <RequireAuth>
       {/* The only signal that survives the click. Both menus close on activation, so on every
           path but the expanded sidebar the relabelled entry is unmounted before it can say
           anything — and meanwhile the in-flight guard drops every menu-driven navigation for up
           to SIGN_OUT_BUDGET_MS. This announces that window to assistive technology, which is the
           surface that otherwise gets nothing at all. It is `sr-only`, so it states the window
           without showing it: the sighted affordance is the relabelled entry, which survives on
-          the expanded sidebar and not on the two menus that close over it.
+          the expanded sidebar and not on the two menus that close over it. It only has to reach
+          the pre-outcome WAIT state — the outcome itself is a toast, which does not depend on
+          this guarded subtree still being mounted once it is known.
           `<output>` carries the `status` role natively, so spelling it out would be redundant;
           `aria-live` is spelled out anyway, for the assistive technology that reads the attribute
           and not the implicit mapping. */}
@@ -287,377 +326,379 @@ export default function BackOfficeLayoutClient({
       >
         {SIGN_OUT_MESSAGE[signOut]}
       </output>
-      <RequireAuth>
-        <TooltipProvider>
-          <div className="bo-layout min-h-screen bg-background flex font-sans">
-            <a
-              href="#main-content"
-              className="bo-layout__skip-link bg-primary text-primary-foreground sr-only z-50 px-3 py-2 focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:rounded-md"
-            >
-              Skip to main content
-            </a>
+      <TooltipProvider>
+        <div className="bo-layout min-h-screen bg-background flex font-sans">
+          <a
+            href="#main-content"
+            className="bo-layout__skip-link bg-primary text-primary-foreground sr-only z-50 px-3 py-2 focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:rounded-md"
+          >
+            Skip to main content
+          </a>
 
-            {/* Sidebar Desktop */}
-            <aside
-              data-sidebar-open={!isCompact}
-              className={`bo-layout__sidebar hidden md:flex flex-col bg-card border-r border-border sticky top-0 h-screen shadow-sm transition-all duration-300 ${
-                isCompact ? "w-20" : "w-64"
-              }`}
-            >
-              <div className="bo-layout__sidebar-header flex items-center border-b border-border h-16 px-4">
-                {!isCompact && (
-                  <Logo
-                    href="/backoffice"
-                    variant="badge"
-                    size="md"
-                    className="bo-layout__logo"
-                    iconClassName="bo-layout__logo-icon"
-                    textClassName="bo-layout__logo-text"
-                  />
-                )}
-                {isCompact && (
-                  <Logo
-                    href="/backoffice"
-                    variant="badge"
-                    size="md"
-                    iconOnly
-                    className="bo-layout__logo bo-layout__logo--compact mx-auto"
-                    iconClassName="bo-layout__logo-icon"
-                  />
-                )}
-              </div>
-
-              <nav className="bo-layout__sidebar-nav flex-grow p-3 space-y-6 overflow-y-auto">
-                {menuGroups.map((group) => (
-                  <div key={group.label} className="bo-layout__nav-group space-y-1">
-                    {!isCompact && (
-                      <p className="bo-layout__nav-label text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-3 mb-2">
-                        {group.label}
-                      </p>
-                    )}
-                    {group.items.map((item) => (
-                      <SidebarItem
-                        key={item.name}
-                        {...withEntryState(item)}
-                        isActive={isItemActive(item)}
-                        onClick={handleNavigation}
-                        isCompact={isCompact}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </nav>
-
-              {/* User Profile at bottom */}
-              <div className="bo-layout__footer p-3 border-t border-border">
-                {!isCompact && (
-                  <p className="bo-layout__nav-label text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-3 mb-2">
-                    Account
-                  </p>
-                )}
-                <SidebarItem
-                  {...withEntryState(accountMenuItem)}
-                  isActive={isItemActive(accountMenuItem)}
-                  onClick={handleNavigation}
-                  isCompact={isCompact}
+          {/* Sidebar Desktop */}
+          <aside
+            data-sidebar-open={!isCompact}
+            className={`bo-layout__sidebar hidden md:flex flex-col bg-card border-r border-border sticky top-0 h-screen shadow-sm transition-all duration-300 ${
+              isCompact ? "w-20" : "w-64"
+            }`}
+          >
+            <div className="bo-layout__sidebar-header flex items-center border-b border-border h-16 px-4">
+              {!isCompact && (
+                <Logo
+                  href="/backoffice"
+                  variant="badge"
+                  size="md"
+                  className="bo-layout__logo"
+                  iconClassName="bo-layout__logo-icon"
+                  textClassName="bo-layout__logo-text"
                 />
-              </div>
-            </aside>
-
-            {/* Mobile Header */}
-            <div className="bo-layout__header-mobile md:hidden fixed top-0 left-0 right-0 bg-card border-b border-border h-14 flex items-center justify-between px-4 z-50">
-              <Logo
-                href="/backoffice"
-                variant="badge"
-                size="md"
-                className="bo-layout__logo-mobile"
-                iconClassName="bo-layout__logo-icon"
-                textClassName="bo-layout__logo-text"
-              />
-              <div className="bo-layout__header-mobile-actions flex items-center gap-1">
-                <ThemeToggle testId="bo-layout__header-mobile-theme" />
-                <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
-                  <SheetTrigger
-                    render={
-                      <button
-                        type="button"
-                        aria-label="Open navigation menu"
-                        className="bo-layout__toggle-mobile p-2 text-foreground"
-                      >
-                        <Menu className="w-6 h-6" aria-hidden />
-                      </button>
-                    }
-                  />
-                  <SheetContent side="left" className="bo-layout__sidebar-mobile p-0 w-72">
-                    <SheetHeader className="bo-layout__sidebar-mobile-header p-4 flex flex-row items-center justify-between border-b border-border">
-                      <SheetTitle className="hidden">Navigation Menu</SheetTitle>
-                      <Logo
-                        href="/backoffice"
-                        variant="badge"
-                        size="md"
-                        className="bo-layout__logo-mobile"
-                        iconClassName="bo-layout__logo-icon"
-                        textClassName="bo-layout__logo-text"
-                      />
-                    </SheetHeader>
-                    <nav className="bo-layout__sidebar-mobile-nav p-4 space-y-6 overflow-y-auto h-[calc(100vh-64px)]">
-                      {menuGroups.map((group) => (
-                        <div key={group.label} className="bo-layout__mobile-group space-y-1">
-                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-4 mb-2">
-                            {group.label}
-                          </p>
-                          {group.items.map((item) => (
-                            <div key={item.name} className="bo-layout__sidebar-mobile-item-wrapper">
-                              <button
-                                type="button"
-                                onClick={() => handleNavigation(item.path)}
-                                title={item.name}
-                                data-testid={item.testId ? `${item.testId}--mobile` : undefined}
-                                className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
-                                  pathname === item.path
-                                    ? "bg-primary/15 text-primary"
-                                    : "text-muted-foreground hover:bg-accent"
-                                }`}
-                              >
-                                <item.icon className="w-5 h-5" />
-                                <span className="text-sm">{item.name}</span>
-                              </button>
-                              {item.subItems && (
-                                <div className="ml-8 mt-1 space-y-1">
-                                  {item.subItems.map((subItem) => (
-                                    <button
-                                      type="button"
-                                      // Identity, never the label — see the account group below.
-                                      key={subItem.testId ?? subItem.path}
-                                      onClick={navigateTo(subItem.path, subItem.action)}
-                                      title={entryLabel(subItem)}
-                                      aria-disabled={isEntryLeaving(subItem) || undefined}
-                                      data-testid={
-                                        subItem.testId ? `${subItem.testId}--mobile` : undefined
-                                      }
-                                      className={`w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-semibold transition-all ${
-                                        pathname === subItem.path
-                                          ? "text-primary bg-primary/10"
-                                          : "text-muted-foreground hover:bg-accent"
-                                      }`}
-                                    >
-                                      {subItem.icon && (
-                                        <subItem.icon className="w-3.5 h-3.5" aria-hidden />
-                                      )}
-                                      {entryLabel(subItem)}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-
-                      <div className="bo-layout__mobile-group space-y-1 pt-4 border-t border-border">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-4 mb-2">
-                          Account
-                        </p>
-                        <div className="bo-layout__sidebar-mobile-item-wrapper">
-                          <button
-                            type="button"
-                            onClick={() => handleNavigation(accountMenuItem.path)}
-                            title={accountMenuItem.name}
-                            className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
-                              pathname === accountMenuItem.path
-                                ? "bg-primary/15 text-primary"
-                                : "text-muted-foreground hover:bg-accent"
-                            }`}
-                          >
-                            <accountMenuItem.icon className="w-5 h-5" />
-                            <span className="text-sm">{accountMenuItem.name}</span>
-                          </button>
-                          <div className="ml-8 mt-1 space-y-1">
-                            {accountMenuItem.subItems?.map((subItem) => (
-                              <button
-                                type="button"
-                                // Identity, never the label: this site relabels the entry it is
-                                // rendering, and a key derived from the label would change with it —
-                                // React destroys the button the user just activated, focus falls to
-                                // <body>, and the new state lands on a node nothing is watching.
-                                key={subItem.testId ?? subItem.path}
-                                onClick={() => handleNavigation(subItem.path, subItem.action)}
-                                title={entryLabel(subItem)}
-                                aria-disabled={isEntryLeaving(subItem) || undefined}
-                                data-testid={
-                                  subItem.testId ? `${subItem.testId}--mobile` : undefined
-                                }
-                                className={`w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-semibold transition-all ${
-                                  pathname === subItem.path
-                                    ? "text-primary bg-primary/10"
-                                    : "text-muted-foreground hover:bg-accent"
-                                }`}
-                              >
-                                {subItem.icon && (
-                                  <subItem.icon className="w-3.5 h-3.5" aria-hidden />
-                                )}
-                                {entryLabel(subItem)}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </nav>
-                  </SheetContent>
-                </Sheet>
-              </div>
+              )}
+              {isCompact && (
+                <Logo
+                  href="/backoffice"
+                  variant="badge"
+                  size="md"
+                  iconOnly
+                  className="bo-layout__logo bo-layout__logo--compact mx-auto"
+                  iconClassName="bo-layout__logo-icon"
+                />
+              )}
             </div>
 
-            {/* Main column: desktop top bar + scrollable content */}
-            <div className="bo-layout__column flex min-w-0 flex-1 flex-col">
-              <header className="bo-layout__topbar hidden md:flex items-center gap-3 bg-card border-b border-border h-16 px-4">
+            <nav className="bo-layout__sidebar-nav flex-grow p-3 space-y-6 overflow-y-auto">
+              {menuGroups.map((group) => (
+                <div key={group.label} className="bo-layout__nav-group space-y-1">
+                  {!isCompact && (
+                    <p className="bo-layout__nav-label text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-3 mb-2">
+                      {group.label}
+                    </p>
+                  )}
+                  {group.items.map((item) => (
+                    <SidebarItem
+                      key={item.name}
+                      {...withEntryState(item)}
+                      isActive={isItemActive(item)}
+                      onClick={handleNavigation}
+                      isCompact={isCompact}
+                    />
+                  ))}
+                </div>
+              ))}
+            </nav>
+
+            {/* User Profile at bottom */}
+            <div className="bo-layout__footer p-3 border-t border-border">
+              {!isCompact && (
+                <p className="bo-layout__nav-label text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-3 mb-2">
+                  Account
+                </p>
+              )}
+              <SidebarItem
+                {...withEntryState(accountMenuItem)}
+                isActive={isItemActive(accountMenuItem)}
+                onClick={handleNavigation}
+                isCompact={isCompact}
+              />
+            </div>
+          </aside>
+
+          {/* Mobile Header */}
+          <div className="bo-layout__header-mobile md:hidden fixed top-0 left-0 right-0 bg-card border-b border-border h-14 flex items-center justify-between px-4 z-50">
+            <Logo
+              href="/backoffice"
+              variant="badge"
+              size="md"
+              className="bo-layout__logo-mobile"
+              iconClassName="bo-layout__logo-icon"
+              textClassName="bo-layout__logo-text"
+            />
+            <div className="bo-layout__header-mobile-actions flex items-center gap-1">
+              <ThemeToggle testId="bo-layout__header-mobile-theme" />
+              <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+                <SheetTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="Open navigation menu"
+                      className="bo-layout__toggle-mobile p-2 text-foreground"
+                    >
+                      <Menu className="w-6 h-6" aria-hidden />
+                    </button>
+                  }
+                />
+                <SheetContent
+                  side="left"
+                  className="bo-layout__sidebar-mobile p-0 w-72"
+                  finalFocus={() => {
+                    const viaNavigation = closingSheetViaNavigationRef.current;
+                    closingSheetViaNavigationRef.current = false;
+                    // `true` keeps Base UI's own default (return focus to the trigger) for
+                    // Escape / backdrop / the X button — a real close, not a navigation. It is
+                    // also the fallback if `<main>` were somehow not yet mounted, rather than
+                    // handing Base UI a `null` whose meaning this prop never documents.
+                    return viaNavigation ? (mainRef.current ?? true) : true;
+                  }}
+                >
+                  <SheetHeader className="bo-layout__sidebar-mobile-header p-4 flex flex-row items-center justify-between border-b border-border">
+                    <SheetTitle className="hidden">Navigation Menu</SheetTitle>
+                    <Logo
+                      href="/backoffice"
+                      variant="badge"
+                      size="md"
+                      className="bo-layout__logo-mobile"
+                      iconClassName="bo-layout__logo-icon"
+                      textClassName="bo-layout__logo-text"
+                    />
+                  </SheetHeader>
+                  <nav className="bo-layout__sidebar-mobile-nav p-4 space-y-6 overflow-y-auto h-[calc(100vh-64px)]">
+                    {menuGroups.map((group) => (
+                      <div key={group.label} className="bo-layout__mobile-group space-y-1">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-4 mb-2">
+                          {group.label}
+                        </p>
+                        {group.items.map((item) => (
+                          <div key={item.name} className="bo-layout__sidebar-mobile-item-wrapper">
+                            <button
+                              type="button"
+                              onClick={() => handleNavigation(item.path)}
+                              title={item.name}
+                              data-testid={item.testId ? `${item.testId}--mobile` : undefined}
+                              className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
+                                pathname === item.path
+                                  ? "bg-primary/15 text-primary"
+                                  : "text-muted-foreground hover:bg-accent"
+                              }`}
+                            >
+                              <item.icon className="w-5 h-5" />
+                              <span className="text-sm">{item.name}</span>
+                            </button>
+                            {item.subItems && (
+                              <div className="ml-8 mt-1 space-y-1">
+                                {item.subItems.map((subItem) => (
+                                  <button
+                                    type="button"
+                                    // Identity, never the label — see the account group below.
+                                    key={subItem.testId ?? subItem.path}
+                                    onClick={() => handleNavigation(subItem.path, subItem.action)}
+                                    title={entryLabel(subItem)}
+                                    aria-disabled={isEntryLeaving(subItem) || undefined}
+                                    data-testid={
+                                      subItem.testId ? `${subItem.testId}--mobile` : undefined
+                                    }
+                                    className={`w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-semibold transition-all ${
+                                      pathname === subItem.path
+                                        ? "text-primary bg-primary/10"
+                                        : "text-muted-foreground hover:bg-accent"
+                                    }`}
+                                  >
+                                    {subItem.icon && (
+                                      <subItem.icon className="w-3.5 h-3.5" aria-hidden />
+                                    )}
+                                    {entryLabel(subItem)}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+
+                    <div className="bo-layout__mobile-group space-y-1 pt-4 border-t border-border">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-4 mb-2">
+                        Account
+                      </p>
+                      <div className="bo-layout__sidebar-mobile-item-wrapper">
+                        <button
+                          type="button"
+                          onClick={() => handleNavigation(accountMenuItem.path)}
+                          title={accountMenuItem.name}
+                          className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
+                            pathname === accountMenuItem.path
+                              ? "bg-primary/15 text-primary"
+                              : "text-muted-foreground hover:bg-accent"
+                          }`}
+                        >
+                          <accountMenuItem.icon className="w-5 h-5" />
+                          <span className="text-sm">{accountMenuItem.name}</span>
+                        </button>
+                        <div className="ml-8 mt-1 space-y-1">
+                          {accountMenuItem.subItems?.map((subItem) => (
+                            <button
+                              type="button"
+                              // Identity, never the label: this site relabels the entry it is
+                              // rendering, and a key derived from the label would change with it —
+                              // React destroys the button the user just activated, focus falls to
+                              // <body>, and the new state lands on a node nothing is watching.
+                              key={subItem.testId ?? subItem.path}
+                              onClick={() => handleNavigation(subItem.path, subItem.action)}
+                              title={entryLabel(subItem)}
+                              aria-disabled={isEntryLeaving(subItem) || undefined}
+                              data-testid={subItem.testId ? `${subItem.testId}--mobile` : undefined}
+                              className={`w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-semibold transition-all ${
+                                pathname === subItem.path
+                                  ? "text-primary bg-primary/10"
+                                  : "text-muted-foreground hover:bg-accent"
+                              }`}
+                            >
+                              {subItem.icon && <subItem.icon className="w-3.5 h-3.5" aria-hidden />}
+                              {entryLabel(subItem)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </nav>
+                </SheetContent>
+              </Sheet>
+            </div>
+          </div>
+
+          {/* Main column: desktop top bar + scrollable content */}
+          <div className="bo-layout__column flex min-w-0 flex-1 flex-col">
+            <header className="bo-layout__topbar hidden md:flex items-center gap-3 bg-card border-b border-border h-16 px-4">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={isCompact ? "Expand sidebar" : "Collapse sidebar"}
+                aria-expanded={!isCompact}
+                title={isCompact ? "Expand sidebar (Ctrl/Cmd+B)" : "Collapse sidebar (Ctrl/Cmd+B)"}
+                data-testid="bo-layout__topbar-toggle"
+                onClick={() => setIsCompact((compact) => !compact)}
+                className="bo-layout__topbar-toggle"
+              >
+                {isCompact ? (
+                  <PanelLeftOpen className="size-4" aria-hidden />
+                ) : (
+                  <PanelLeftClose className="size-4" aria-hidden />
+                )}
+                <span className="sr-only">{isCompact ? "Expand sidebar" : "Collapse sidebar"}</span>
+              </Button>
+
+              <span
+                data-testid="bo-layout__topbar-title"
+                className="bo-layout__topbar-title text-foreground text-sm font-semibold truncate"
+              >
+                {sectionTitle}
+              </span>
+
+              <div className="bo-layout__topbar-actions ml-auto flex items-center gap-1">
+                {isDevToolsAvailable() ? <DevSessionSwitcher /> : null}
+                <ThemeToggle testId="bo-layout__topbar-theme" />
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={isCompact ? "Expand sidebar" : "Collapse sidebar"}
-                  aria-expanded={!isCompact}
-                  title={
-                    isCompact ? "Expand sidebar (Ctrl/Cmd+B)" : "Collapse sidebar (Ctrl/Cmd+B)"
-                  }
-                  data-testid="bo-layout__topbar-toggle"
-                  onClick={() => setIsCompact((compact) => !compact)}
-                  className="bo-layout__topbar-toggle"
+                  aria-label="Search"
+                  title="Search"
+                  data-testid="bo-layout__topbar-search"
+                  className="bo-layout__topbar-search"
                 >
-                  {isCompact ? (
-                    <PanelLeftOpen className="size-4" aria-hidden />
-                  ) : (
-                    <PanelLeftClose className="size-4" aria-hidden />
-                  )}
-                  <span className="sr-only">
-                    {isCompact ? "Expand sidebar" : "Collapse sidebar"}
-                  </span>
+                  <Search className="size-4" aria-hidden />
+                  <span className="sr-only">Search</span>
                 </Button>
-
-                <span
-                  data-testid="bo-layout__topbar-title"
-                  className="bo-layout__topbar-title text-foreground text-sm font-semibold truncate"
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Notifications"
+                  title="Notifications"
+                  data-testid="bo-layout__topbar-notifications"
+                  className="bo-layout__topbar-notifications relative"
                 >
-                  {sectionTitle}
-                </span>
-
-                <div className="bo-layout__topbar-actions ml-auto flex items-center gap-1">
-                  {isDevToolsAvailable() ? <DevSessionSwitcher /> : null}
-                  <ThemeToggle testId="bo-layout__topbar-theme" />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Search"
-                    title="Search"
-                    data-testid="bo-layout__topbar-search"
-                    className="bo-layout__topbar-search"
+                  <Bell className="size-4" aria-hidden />
+                  <span
+                    className="bo-layout__topbar-badge absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary"
+                    aria-hidden
+                  />
+                  <span className="sr-only">Notifications</span>
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Account menu"
+                        title="Account menu"
+                        data-testid="bo-layout__topbar-account"
+                        className="bo-layout__topbar-account"
+                      >
+                        {/* The monogram is aria-hidden by contract, so the trigger keeps its
+                          own static name in aria-label and the sr-only fallback. It is fed the
+                          local part because `initials()` reads a single-word input as a name and
+                          takes its first two characters — on a whole address that yields "A@". */}
+                        <MonogramAvatar
+                          name={accountEmail.split("@")[0]}
+                          className="size-6 rounded-md text-[10px]"
+                        />
+                        <span className="sr-only">Account menu</span>
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-56"
+                    data-testid="bo-layout__account-menu"
                   >
-                    <Search className="size-4" aria-hidden />
-                    <span className="sr-only">Search</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Notifications"
-                    title="Notifications"
-                    data-testid="bo-layout__topbar-notifications"
-                    className="bo-layout__topbar-notifications relative"
-                  >
-                    <Bell className="size-4" aria-hidden />
-                    <span
-                      className="bo-layout__topbar-badge absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary"
-                      aria-hidden
-                    />
-                    <span className="sr-only">Notifications</span>
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Account menu"
-                          title="Account menu"
-                          data-testid="bo-layout__topbar-account"
-                          className="bo-layout__topbar-account"
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel className="truncate" title={accountEmail}>
+                        {accountEmail}
+                      </DropdownMenuLabel>
+                      {accountLinks.map((entry) => (
+                        <DropdownMenuItem
+                          key={entry.testId ?? entry.path}
+                          onClick={() => handleNavigation(entry.path, entry.action)}
+                          title={entry.name}
+                          data-testid={entry.testId ? `${entry.testId}--menu` : undefined}
                         >
-                          {/* The monogram is aria-hidden by contract, so the trigger keeps its
-                            own static name in aria-label and the sr-only fallback. It is fed the
-                            local part because `initials()` reads a single-word input as a name and
-                            takes its first two characters — on a whole address that yields "A@". */}
-                          <MonogramAvatar
-                            name={accountEmail.split("@")[0]}
-                            className="size-6 rounded-md text-[10px]"
-                          />
-                          <span className="sr-only">Account menu</span>
-                        </Button>
-                      }
-                    />
-                    <DropdownMenuContent
-                      align="end"
-                      className="w-56"
-                      data-testid="bo-layout__account-menu"
-                    >
-                      <DropdownMenuGroup>
-                        <DropdownMenuLabel className="truncate" title={accountEmail}>
-                          {accountEmail}
-                        </DropdownMenuLabel>
-                        {accountLinks.map((entry) => (
-                          <DropdownMenuItem
-                            key={entry.testId ?? entry.path}
-                            onClick={navigateTo(entry.path, entry.action)}
-                            title={entry.name}
-                            data-testid={entry.testId ? `${entry.testId}--menu` : undefined}
-                          >
-                            {entry.icon ? <entry.icon className="size-4" aria-hidden /> : null}
-                            {entry.name}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuGroup>
-                      {accountLogout ? (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onClick={navigateTo(accountLogout.path, accountLogout.action)}
-                            title={entryLabel(accountLogout)}
-                            aria-disabled={isEntryLeaving(accountLogout) || undefined}
-                            data-testid={
-                              accountLogout.testId ? `${accountLogout.testId}--menu` : undefined
-                            }
-                          >
-                            {accountLogout.icon ? (
-                              <accountLogout.icon className="size-4" aria-hidden />
-                            ) : null}
-                            {entryLabel(accountLogout)}
-                          </DropdownMenuItem>
-                        </>
-                      ) : null}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </header>
+                          {entry.icon ? <entry.icon className="size-4" aria-hidden /> : null}
+                          {entry.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuGroup>
+                    {accountLogout ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => handleNavigation(accountLogout.path, accountLogout.action)}
+                          title={entryLabel(accountLogout)}
+                          aria-disabled={isEntryLeaving(accountLogout) || undefined}
+                          data-testid={
+                            accountLogout.testId ? `${accountLogout.testId}--menu` : undefined
+                          }
+                        >
+                          {accountLogout.icon ? (
+                            <accountLogout.icon className="size-4" aria-hidden />
+                          ) : null}
+                          {entryLabel(accountLogout)}
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </header>
 
-              {/* No overflow on <main>: the window is the scroll container (the
-                column grows with content), and an overflow value here would
-                re-scope every descendant `position: sticky` to a scrollport
-                that never scrolls — breaking e.g. the banks bulk bar. Wide
-                content (tables) brings its own overflow-x wrapper. */}
-              <main
-                id="main-content"
-                ref={mainRef}
-                tabIndex={-1}
-                className="bo-layout__main flex-grow pt-14 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:pt-0"
-              >
-                <div className="bo-layout__content mx-auto p-4 md:p-8">{children}</div>
-              </main>
-            </div>
+            {/* No overflow on <main>: the window is the scroll container (the
+              column grows with content), and an overflow value here would
+              re-scope every descendant `position: sticky` to a scrollport
+              that never scrolls — breaking e.g. the banks bulk bar. Wide
+              content (tables) brings its own overflow-x wrapper. */}
+            <main
+              id="main-content"
+              ref={mainRef}
+              tabIndex={-1}
+              className="bo-layout__main flex-grow pt-14 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:pt-0"
+            >
+              <div className="bo-layout__content mx-auto p-4 md:p-8">{children}</div>
+            </main>
           </div>
-        </TooltipProvider>
-      </RequireAuth>
-    </>
+        </div>
+      </TooltipProvider>
+    </RequireAuth>
   );
 }

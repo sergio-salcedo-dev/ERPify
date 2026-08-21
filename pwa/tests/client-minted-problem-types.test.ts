@@ -18,8 +18,20 @@ import { describe, expect, it } from "vitest";
  * the names declared in `HttpClient.ts`, and the API mints none of them.
  *
  * It lives on the PWA side because the subject is the PWA's namespace — the three constants and the
- * gallery that exhibits them. The cost of that home is stated rather than hidden: an API developer
- * adding a colliding `type:` sees this in CI, not in `make php.quality`.
+ * gallery that exhibits them. Two costs of that home, stated rather than hidden: an API developer
+ * adding a colliding `type:` sees this in CI and not in `make php.quality`, and this file is the
+ * one thing making the PWA suite depend on a sibling tree — a checkout with no `api/src` fails
+ * here rather than skipping. Today every sanctioned path runs the PWA targets from the repo root
+ * (`make/pwa.mk`), so that dependency is satisfied; a standalone `pwa/` checkout is not a
+ * supported configuration and this row is where it would first say so.
+ *
+ * The rule it enforces on `HttpClient.ts` is stronger than a completeness check and is meant to
+ * be: EVERY exported string constant in that module must be a minted problem type. The module has
+ * no other string exports today, and the alternative — narrowing the universe by naming
+ * convention — would let a non-type sit next to the types with nothing saying which is which. If a
+ * genuine non-type string export is ever needed there, move it rather than giving it the doc
+ * marker: the marker enrols a name into the API collision check and the gallery-exemplar check,
+ * so marking a non-type forces a bogus gallery entry.
  *
  * A green proves three things and no more: every exported constant in `HttpClient.ts` is declared as
  * a client-minted type, none of those names is minted in `api/src`, and each has an exemplar in the
@@ -88,11 +100,21 @@ describe("the client-minted ProblemDetails.type namespace", () => {
     // `request-timeout` in the second family passed a position-matching check with every row green.
     // Over-matching is the safe direction here: the names are distinctive, so a hit is either a real
     // collision or a mention worth a reviewer's eye, and neither should be silent.
+    // The haystack is read as UTF-8 and the needles are asserted ASCII, rather than reading the
+    // haystack as latin1 and asserting nothing: a latin1 haystack with a UTF-8 needle silently
+    // never matches, so a future minted name carrying a non-ASCII byte would report "no collision"
+    // while colliding. (An earlier cut of this file justified latin1 with "one file under api/src
+    // is not valid UTF-8" — measured over all 598 of them with a fatal decoder, there is no such
+    // file.)
+    for (const value of names) {
+      expect(value).toMatch(/^[\x20-\x7e]+$/);
+    }
+
+    let walked = 0;
     const collisions: string[] = [];
     for (const file of walkPhp(API_SRC)) {
-      // `latin1`, because one file under `api/src` is not valid UTF-8 and reading it as UTF-8
-      // substitutes replacement characters. Nothing here is matched outside ASCII.
-      const source = readFileSync(file, "latin1");
+      walked += 1;
+      const source = readFileSync(file, "utf8");
       for (const value of names) {
         if (source.includes(`'${value}'`) || source.includes(`"${value}"`)) {
           collisions.push(`${path.relative(REPO_ROOT, file)} names "${value}"`);
@@ -100,6 +122,10 @@ describe("the client-minted ProblemDetails.type namespace", () => {
       }
     }
 
+    // The floor. Without it a directory that exists but holds no `.php` — an `api/` skeleton, a
+    // sparse checkout, a future move of `api/src` — walks nothing and the row is green having
+    // proved nothing. A MISSING directory already throws, which is the other half.
+    expect(walked).toBeGreaterThan(100);
     expect(collisions).toEqual([]);
   });
 

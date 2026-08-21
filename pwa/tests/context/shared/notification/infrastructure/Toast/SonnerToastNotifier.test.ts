@@ -9,6 +9,7 @@ vi.mock("sonner", () => ({
     error: vi.fn(),
     info: vi.fn(),
     warning: vi.fn(),
+    dismiss: vi.fn(),
   },
 }));
 
@@ -39,6 +40,11 @@ describe("SonnerToastNotifier", () => {
       id: "x",
     });
   });
+
+  it("forwards dismissAll to toast.dismiss with no id (dismiss every toast)", () => {
+    notifier.dismissAll();
+    expect(toast.dismiss).toHaveBeenCalledWith();
+  });
 });
 
 describe("toastNotifier singleton", () => {
@@ -47,5 +53,6 @@ describe("toastNotifier singleton", () => {
     expect(typeof toastNotifier.error).toBe("function");
     expect(typeof toastNotifier.info).toBe("function");
     expect(typeof toastNotifier.warning).toBe("function");
+    expect(typeof toastNotifier.dismissAll).toBe("function");
   });
 });

@@ -15,14 +15,17 @@ import {
  * shared {@link scrubDeep} denylist so the browser/Next scrub stays in parity
  * with the back-end's RFC 9457 + Sentry redaction.
  *
- * Scrubs `extra`, `contexts`, `user`, `breadcrumbs`, and the caller-controlled
- * `request` sub-objects (`data` / `headers` / `cookies`), plus the raw
- * `query_string` and the `url`'s query (both strings, so they bypass key-based
- * filtering and are parsed param-by-param — where the identity axes are
- * redacted alongside the denylist, since a URL is where those travel). A
- * breadcrumb's URL-shaped values get that same treatment, for the same reason
- * and by the same reading: the SDK writes one breadcrumb per `fetch` and per
- * history entry, and each carries the whole request URL as a STRING.
+ * Scrubs `extra`, `contexts`, `user`, `breadcrumbs`, `spans`, and the
+ * caller-controlled `request` sub-objects (`data` / `headers` / `cookies`), plus
+ * the raw `query_string` and the `url`'s query (both strings, so they bypass
+ * key-based filtering and are parsed param-by-param — where the identity axes
+ * are redacted alongside the denylist, since a URL is where those travel).
+ *
+ * Every structured surface gets BOTH passes — the denylist and the URL one. The
+ * SDK writes a request URL as a plain string in more places than a key list can
+ * anticipate: one breadcrumb per `fetch` and per history entry, and four span
+ * attributes per traced fetch (`url`, `http.url`, `url.full`, `http.query`),
+ * which `beforeSendTransaction` hands to this same function.
  * Free-text (`message`, the captured
  * `Error.message`/stack) is intentionally NOT key-scrubbed — same scope as the
  * API scrubber; `sendDefaultPii: false` already keeps headers/cookies/bodies off
@@ -30,16 +33,19 @@ import {
  */
 export function scrubSentryEvent<E extends Event>(event: E): E {
   if (event.extra) {
-    event.extra = scrubDeep(event.extra) as E["extra"];
+    event.extra = scrubStructured(event.extra) as E["extra"];
   }
   if (event.contexts) {
-    event.contexts = scrubDeep(event.contexts) as E["contexts"];
+    event.contexts = scrubStructured(event.contexts) as E["contexts"];
   }
   if (event.user) {
-    event.user = scrubDeep(event.user) as E["user"];
+    event.user = scrubStructured(event.user) as E["user"];
   }
   if (event.breadcrumbs) {
-    event.breadcrumbs = scrubBreadcrumbs(event.breadcrumbs) as E["breadcrumbs"];
+    event.breadcrumbs = scrubStructured(event.breadcrumbs) as E["breadcrumbs"];
+  }
+  if (event.spans) {
+    event.spans = scrubStructured(event.spans) as E["spans"];
   }
 
   if (event.request) {
@@ -49,60 +55,55 @@ export function scrubSentryEvent<E extends Event>(event: E): E {
   return event;
 }
 
-/** One entry of `event.breadcrumbs`, named off the event type so no `Breadcrumb` import is needed. */
-type SentryBreadcrumb = NonNullable<Event["breadcrumbs"]>[number];
-
 /**
- * How deep a breadcrumb's `data` is walked for URL-shaped values. Breadcrumb data is flat in
- * every SDK-authored crumb; the bound exists for a hand-authored one and is deliberately far
- * below {@link scrubDeep}'s, since nothing here needs to reach an arbitrary payload.
- */
-const MAX_BREADCRUMB_DATA_DEPTH = 4;
-
-/**
- * A value the SDK wrote as a URL: absolute, protocol-relative, or root-relative. Matched by SHAPE
- * rather than by the key it sits under, because a key list is exactly what failed for this class
- * twice already — in the access log (#389/#803) and here. The SDK's own crumbs put the URL under
- * `data.url` for fetch/xhr and `data.from`/`data.to` for a history entry, but a hand-authored crumb
- * names it whatever it likes and the rule must not depend on having guessed that name.
+ * The denylist pass, then the URL pass over what survived.
  *
- * The `?` is what makes the rewrite safe on free text: a string with no query is returned by
- * {@link scrubUrl} unchanged anyway, so requiring one narrows the walk to values that actually
- * carry parameters. A URL embedded MID-string (a console message quoting one) is not seen — the
- * same free-text scope the rest of this module keeps, recorded as a residual rather than closed.
+ * Applied to EVERY structured surface rather than to the ones known to carry URLs. Naming the
+ * surfaces was the defect: the URL pass was pointed at `breadcrumbs` alone, and `spans` — which
+ * `beforeSendTransaction` hands over on a sampled fraction of every traced fetch — carried
+ * `url`, `http.url`, `url.full` and `http.query` straight through, the whole request URL three
+ * times over. The vocabulary was already right; it was simply never asked about that surface.
+ *
+ * Order matters: a key the denylist strips has no URL left to scrub, and the reverse order would
+ * scrub a value that was about to be dropped.
  */
-function isUrlLikeValue(value: string): boolean {
-  return /^(?:https?:\/\/|\/)/i.test(value) && value.includes("?");
+function scrubStructured(value: unknown): unknown {
+  return scrubUrlLikeValues(scrubDeep(value), 0);
 }
 
 /**
- * Sentry adds an automatic breadcrumb per `fetch`, and that breadcrumb carries the full request
- * URL — query string included. Key-based scrubbing does not look inside a URL string, so a search
- * whose filter names a person rode into Sentry in clear under a key (`url`) that no denylist would
- * ever hold. Sentry is a third-party sink with retention of its own that no erasure path reaches.
- *
- * The denylist pass runs first and the URL pass second, over what it left: a `data` key the
- * denylist strips has no URL to scrub afterwards, and the reverse order would scrub a value that
- * was about to be dropped.
+ * How deep the URL pass walks. Mirrors {@link scrubDeep}'s own bound, which runs first and
+ * replaces anything past it with a marker string — so a deeper limit here could not reach
+ * further even in principle.
  */
-function scrubBreadcrumbs(breadcrumbs: SentryBreadcrumb[]): SentryBreadcrumb[] {
-  const denylisted = scrubDeep(breadcrumbs) as SentryBreadcrumb[];
+const MAX_URL_PASS_DEPTH = 8;
 
-  return denylisted.map((crumb: SentryBreadcrumb) => {
-    if (!crumb || typeof crumb !== "object" || !crumb.data) {
-      return crumb;
-    }
-    return { ...crumb, data: scrubUrlLikeValues(crumb.data, 0) as SentryBreadcrumb["data"] };
-  });
-}
-
-/** Rewrites every URL-shaped string inside a breadcrumb's `data`, to {@link MAX_BREADCRUMB_DATA_DEPTH}. */
-function scrubUrlLikeValues(value: unknown, depth: number): unknown {
-  if (typeof value === "string") {
-    return isUrlLikeValue(value) ? scrubUrl(value) : value;
+/**
+ * A value the SDK wrote as a URL, or as the query of one. Matched by SHAPE rather than by the key
+ * it sits under, because a key list is exactly what failed for this class twice — in the access
+ * log (#389/#803) and here. The SDK puts the URL under `data.url` for a fetch breadcrumb,
+ * `data.from`/`data.to` for a history entry, and `url` / `http.url` / `url.full` / `http.query`
+ * for a fetch span; a hand-authored crumb names it whatever it likes, and the rule must not depend
+ * on having guessed any of those.
+ *
+ * `http.query` is the reason the second arm exists: it is a bare `?a=b`, which is neither
+ * absolute nor root-relative and would sail past a rule that only knows what a whole URL looks like.
+ */
+function scrubUrlLikeValue(value: string): string {
+  if (value.startsWith("?")) {
+    return `?${scrubQueryString(value.slice(1))}`;
   }
 
-  if (depth >= MAX_BREADCRUMB_DATA_DEPTH || value === null || typeof value !== "object") {
+  return /^(?:https?:\/\/|\/)/i.test(value) && value.includes("?") ? scrubUrl(value) : value;
+}
+
+/** Rewrites every URL-shaped string in a structure, to {@link MAX_URL_PASS_DEPTH}. */
+function scrubUrlLikeValues(value: unknown, depth: number): unknown {
+  if (typeof value === "string") {
+    return scrubUrlLikeValue(value);
+  }
+
+  if (depth >= MAX_URL_PASS_DEPTH || value === null || typeof value !== "object") {
     return value;
   }
 
@@ -197,7 +198,21 @@ function tryScrubJson(data: string): string {
  * that arrives here outlives the erasure the application confirmed to the subject.
  */
 function scrubQueryString(queryString: string): string {
-  return scrubPairs(queryString, 0);
+  const outcome: ScrubOutcome = { redacted: false };
+  const scrubbed = scrubPairs(queryString, 0, outcome);
+
+  // Only a query that WAS carrying something sensitive is rewritten. `URLSearchParams` normalises
+  // whatever it round-trips — `%20` becomes `+`, a trailing `?` is dropped, and a value with no
+  // `=` gains one — so rewriting unconditionally corrupted strings that merely LOOK like a URL:
+  // measured, `/help? what now` came back `/help?+what+now=`, a sentence turned into a fabricated
+  // parameter. It also flattened the encoding depth an operator reads the request by, which is the
+  // very reason `scrubNestedUri` one level down already applies this same rule.
+  return outcome.redacted ? scrubbed : queryString;
+}
+
+/** Whether a pass actually replaced something, which is what licenses rewriting the caller's bytes. */
+interface ScrubOutcome {
+  redacted: boolean;
 }
 
 /**
@@ -215,30 +230,37 @@ const MAX_NESTED_URI_DEPTH = 2;
  * name no denylist will ever contain. A value that is itself a URI is therefore followed and scrubbed by
  * the same vocabulary, to the bound above.
  */
-function scrubNestedUri(value: string, depth: number): string {
+function scrubNestedUri(value: string, depth: number, outcome: ScrubOutcome): string {
   const decoded = decodeUntilQuerySurfaces(value);
   const queryStart = decoded.indexOf("?");
   if (queryStart === -1) {
     return value;
   }
 
-  const scrubbed = `${decoded.slice(0, queryStart + 1)}${scrubPairs(decoded.slice(queryStart + 1), depth)}`;
+  const nested: ScrubOutcome = { redacted: false };
+  const scrubbed = `${decoded.slice(0, queryStart + 1)}${scrubPairs(decoded.slice(queryStart + 1), depth, nested)}`;
 
   // Only a value that WAS carrying an identifier is rewritten. Returning the caller's bytes otherwise keeps
   // the encoding depth an operator reads the request by, which decoding here would otherwise flatten.
-  return scrubbed === decoded ? value : scrubbed;
+  if (!nested.redacted) {
+    return value;
+  }
+
+  outcome.redacted = true;
+  return scrubbed;
 }
 
-function scrubPairs(query: string, depth: number): string {
+function scrubPairs(query: string, depth: number, outcome: ScrubOutcome): string {
   const params = new URLSearchParams(query);
   const scrubbed = new URLSearchParams();
   for (const [key, value] of params) {
     if (isDenylistedKey(key) || isIdentityAxisKey(key)) {
       scrubbed.append(key, REDACTION_SENTINEL);
+      outcome.redacted = true;
       continue;
     }
     const follows = depth < MAX_NESTED_URI_DEPTH;
-    scrubbed.append(key, follows ? scrubNestedUri(value, depth + 1) : value);
+    scrubbed.append(key, follows ? scrubNestedUri(value, depth + 1, outcome) : value);
   }
   return scrubbed.toString();
 }
@@ -258,6 +280,9 @@ function scrubUrl(url: string): string {
   const query = pathAndQuery.slice(queryStart + 1);
 
   const scrubbedQuery = scrubQueryString(query);
+  if (scrubbedQuery === query) {
+    return url;
+  }
   const result = scrubbedQuery === "" ? path : `${path}?${scrubbedQuery}`;
 
   return result + hash;

@@ -689,6 +689,51 @@ describe("FetchHttpClient", () => {
       expect(assign).not.toHaveBeenCalled();
     });
 
+    it("preserves an already-observed 401 through a body-read abort, agreeing with the redirect it already fired", async () => {
+      // The direction G2's "headers land, body never does" case cannot see: this time the
+      // status line WAS a 401, so the redirect above already fired before the body read then
+      // hangs. Reporting the eventual abort as a generic timeout would disagree with a
+      // redirect that already happened — the thrown shape has to be the 401 instead.
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        fetchSpy.mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
+          Promise.resolve(
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  init?.signal?.addEventListener("abort", () =>
+                    controller.error(new Error("aborted")),
+                  );
+                },
+              }),
+              {
+                status: HttpStatus.UNAUTHORIZED,
+                headers: new Headers({ "Content-Type": "application/problem+json" }),
+              },
+            ),
+          ),
+        );
+        const client = await freshClient();
+        const pending = client.get("/api/v1/backoffice/banks");
+        // `type: "about:blank"` is the synthetic-fallback marker `toHttpError` uses for an
+        // empty body — proof this rejected through the ordinary 401 path, not REQUEST_TIMEOUT.
+        const settled = expect(pending).rejects.toMatchObject({
+          problem: { type: "about:blank", status: HttpStatus.UNAUTHORIZED },
+        });
+
+        // Mirrors DEFAULT_TIMEOUT_MS: the body read never completes on its own, so only the
+        // request budget elapsing can settle this.
+        await vi.advanceTimersByTimeAsync(30_000);
+
+        await settled;
+        // The redirect fired on the strength of the status line, before the body read ever
+        // aborted — once, not a second time when the abort was handled.
+        expect(replace).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("redirects only once for concurrent 401s (single-flight)", async () => {
       respond401();
       const client = await freshClient();
@@ -871,6 +916,34 @@ describe("FetchHttpClient", () => {
         });
 
         expect(replace).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    // Giving up by RELEASING the claim was the obvious spelling and it spends the user's only
+    // exit: the curtain, and the client-side `Link` to /login it carries, are all that is left in
+    // a navigable that drops document navigations — the Sign out entry leaves through the same
+    // dropped mechanism, so it stalls too. The last attempt therefore keeps the claim.
+    it("keeps the curtain reachable once it stops bouncing", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        respond401();
+        const { currentDeparture, DepartureReason } =
+          await import("@/context/shared/navigation/application/departure");
+        const client = await freshClient();
+
+        for (const _ of [1, 2]) {
+          await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+            problem: { status: HttpStatus.UNAUTHORIZED },
+          });
+          await vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS);
+        }
+
+        expect(replace).toHaveBeenCalledTimes(2);
+        // Held, not released: the curtain the user is looking at is the terminal one, and it is
+        // the only surface still offering a route away from this document.
+        expect(currentDeparture()).toBe(DepartureReason.SESSION_EXPIRED);
       } finally {
         vi.useRealTimers();
       }

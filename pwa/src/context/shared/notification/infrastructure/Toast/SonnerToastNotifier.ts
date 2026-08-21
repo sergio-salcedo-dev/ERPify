@@ -26,6 +26,10 @@ export class SonnerToastNotifier implements ToastNotifier {
     toast.warning(message, this.map(options));
   }
 
+  dismissAll(): void {
+    toast.dismiss();
+  }
+
   private map(
     options?: ToastOptions,
   ): { description?: string; duration?: number; id?: string } | undefined {

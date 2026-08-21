@@ -272,4 +272,75 @@ describe("scrubSentryEvent", () => {
       url: "/api/v1/banks?token=REDACTED",
     });
   });
+  // `beforeSendTransaction` is wired to this same function and tracing is on in every environment
+  // (sampled 0.2 in prod), so a traced fetch hands over a span carrying the request URL — under
+  // `url`, `http.url`, `url.full` and `http.query`, three of them whole. The span NAME is
+  // sanitised by the SDK, which is what made this easy to miss; the attributes are not. This is
+  // the leak #821 was filed for, one surface over from the one it named.
+  it("redacts the request URL a traced fetch leaves on its span", () => {
+    const event = {
+      spans: [
+        {
+          op: "http.client",
+          description: "GET /api/v1/backoffice/audit",
+          data: {
+            url: "https://app.example/api/v1/backoffice/audit?filters%5B0%5D%5Bvalue%5D=jane@example.com",
+            "http.url":
+              "https://app.example/api/v1/backoffice/audit?filters%5B0%5D%5Bvalue%5D=jane@example.com",
+            "url.full":
+              "https://app.example/api/v1/backoffice/audit?filters%5B0%5D%5Bvalue%5D=jane@example.com",
+            "http.query": "?filters%5B0%5D%5Bvalue%5D=jane%40example.com",
+            "http.response.status_code": 500,
+          },
+        },
+      ],
+    } as unknown as ErrorEvent;
+
+    const data = (
+      scrubSentryEvent(event) as unknown as { spans: { data: Record<string, unknown> }[] }
+    ).spans[0].data;
+
+    expect(JSON.stringify(data)).not.toContain("jane");
+    expect(data.url).toContain("filters%5B0%5D%5Bvalue%5D=REDACTED");
+    expect(data["http.url"]).toContain("filters%5B0%5D%5Bvalue%5D=REDACTED");
+    expect(data["url.full"]).toContain("filters%5B0%5D%5Bvalue%5D=REDACTED");
+    // A bare query is neither absolute nor root-relative, so it needs its own arm of the rule.
+    expect(data["http.query"]).toBe("?filters%5B0%5D%5Bvalue%5D=REDACTED");
+    // The shape stays readable: an operator still sees which endpoint was called.
+    expect(data.url).toContain("/api/v1/backoffice/audit");
+    expect(data["http.response.status_code"]).toBe(500);
+  });
+
+  it("redacts a person id on the trace context's own attributes", () => {
+    const event = {
+      contexts: {
+        trace: {
+          trace_id: "01H",
+          data: { "url.full": "https://app.example/backoffice/audit?actorId=8f14e45f" },
+        },
+      },
+    } as unknown as ErrorEvent;
+
+    const trace = scrubSentryEvent(event).contexts?.trace as { data: Record<string, string> };
+
+    expect(trace.data["url.full"]).toBe("https://app.example/backoffice/audit?actorId=REDACTED");
+  });
+
+  // The URL pass rewrites the caller's bytes, so it may only do so when it actually replaced
+  // something. `URLSearchParams` normalises everything it round-trips, and applying that to a
+  // string that merely LOOKS like a URL is corruption of the one thing this sink is kept for.
+  it.each([
+    { case: "prose holding a question mark", value: "/help? what now" },
+    { case: "an encoded space an operator reads the request by", value: "/x?a=b%20c" },
+    { case: "a trailing question mark with no query at all", value: "/foo?" },
+    { case: "a value with no equals sign", value: "/x?flag" },
+  ])("leaves $case exactly as the caller sent it", ({ value }) => {
+    const event = {
+      breadcrumbs: [{ category: "console", data: { arguments: [value] } }],
+    } as unknown as ErrorEvent;
+
+    const args = scrubSentryEvent(event).breadcrumbs?.[0]?.data?.arguments as string[];
+
+    expect(args[0]).toBe(value);
+  });
 });

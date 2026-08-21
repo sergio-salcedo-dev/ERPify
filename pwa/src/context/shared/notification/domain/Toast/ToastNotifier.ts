@@ -21,4 +21,6 @@ export interface ToastNotifier {
   error(message: string, options?: ToastOptions): void;
   info(message: string, options?: ToastOptions): void;
   warning(message: string, options?: ToastOptions): void;
+  /** Dismisses every currently-visible toast. */
+  dismissAll(): void;
 }
