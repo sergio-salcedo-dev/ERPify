@@ -111,9 +111,48 @@ suavizar:
 - **Nadie leyó una traza simbolizada real en Sentry.** Eso necesita un token, un deploy y un
   error de producción.
 
+## Code review — ronda independiente (post-PR)
+
+La pasada adversarial de arriba declaraba, por delante, que una lectura independiente seguía
+debiéndose. Se ejecutó, y **encontró ocho hallazgos, todos en la mitad de idioma**. La mitad de
+Sentry salió sin hallazgos: el revisor verificó contra `@sentry/nextjs` 10.70.0 que
+`deleteSourcemapsAfterUpload` sí viene por defecto a `true` en la ruta cliente
+(`config/webpack.js:236`), que `filesToDeleteAfterUpload` lo anula, que una subida fallida aún
+ejecuta `deleteArtifacts()` (`handleRecoverableError(e, false)` no relanza), y que
+`docker compose config` resuelve con `SENTRY_AUTH_TOKEN` ausente.
+
+**El hallazgo serio es una regresión de accesibilidad introducida por esta misma rama.** En
+`AuditPagination` se tradujo la mitad `aria-label` y se dejó el texto visible en español:
+`text: "Anterior"` contra `label: "Previous page"`. El nombre accesible ya no contiene el texto
+visible, que es un fallo de **WCAG 2.5.3 Label in Name** — y ningún gate del repo lo ve, porque
+`jsx-a11y` no compara ambas mitades.
+
+Los otros siete son residuo de traducción: `"Todo"` y `"Cambios"` en los segmentos de nivel
+(que además discrepaban en pantalla con el badge, ya traducido a `"Change"` en el mismo diff),
+`<Section title="Cambios">` en el drawer, `"Cualquiera"` en el select de tipo de actor,
+`"Sin metadata"`, `title="Ordenar por hora"` sobre un botón que ya leía "Time", y ~45 `name`
+españoles en `roadmap.ts` bajo una cabecera que este diff acababa de reescribir para afirmar
+que toda la superficie es inglesa.
+
+**Lo que importa no es el residuo, es que el gate estaba verde sobre todo él.** Los dos
+detectores originales exigen una *frase* — una tilde o varias palabras función — así que ven
+prosa y son ciegos a la etiqueta corta, que es la mayor parte de una UI. El gate era, sobre esa
+clase de cadena, decorativo, mientras `CLAUDE.md` y `pwa/CLAUDE.md` ya declaraban la invariante
+como sostenida. Corregido con un tercer detector: un léxico curado de palabras de contenido
+españolas, cuya regla de pertenencia es que la palabra **no** sea también inglesa ni un
+fragmento de Tailwind (`media`, `total`, `actor`, `metadata`, `global`, `error` quedan fuera a
+propósito). Al activarlo encontró **un noveno** string que ni la revisión ni un barrido manual
+habían visto (`"Recibir y enviar eventos a sistemas externos (webhooks)."`). Los ocho quedan
+fijados literalmente como casos de regresión.
+
+`sin` es la única palabra función promovida al léxico, y por una razón medida: `"Sin metadata"`
+empareja una preposición española con un sustantivo inglés, así que escapaba a los tres
+detectores; promoverla añade **cero** hallazgos sobre `src/`. `con` no se promovió — en inglés
+existe "pros and cons".
+
 ## Outcome
 
 - `pwa/tests/ui-copy-language.test.ts` — 3 casos, `src/` en cero.
 - `pwa/tests/sentry-sourcemap-exposure.test.ts` — 5 casos.
 - Suite completa: eslint 0, prettier limpio, dependency-cruiser limpio (507 módulos),
-  `tsc` 0, vitest **1502 passed / 247 ficheros**.
+  `tsc` 0, vitest **1503 passed / 247 ficheros**.

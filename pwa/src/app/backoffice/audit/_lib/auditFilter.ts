@@ -51,10 +51,10 @@ export function isAuditView(value: string): value is AuditView {
 
 /** The segmented level control's options. The empty-value segment applies no level filter. */
 export const AUDIT_LEVEL_SEGMENTS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "", label: "Todo" },
+  { value: "", label: "All" },
   { value: AuditLevel.Activity, label: "Activity" },
   { value: AuditLevel.Security, label: "Security" },
-  { value: AuditLevel.Change, label: "Cambios" },
+  { value: AuditLevel.Change, label: "Change" },
 ];
 
 /** True when `value` is a level the segmented control can represent ("" = no level filter). */

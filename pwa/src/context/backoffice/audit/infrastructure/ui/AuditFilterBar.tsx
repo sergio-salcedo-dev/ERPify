@@ -28,7 +28,7 @@ interface TextDraft {
 }
 
 const ACTOR_TYPE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "", label: "Cualquiera" },
+  { value: "", label: "Any" },
   { value: ActorType.User, label: "user" },
   { value: ActorType.ApiKey, label: "api_key" },
   { value: ActorType.System, label: "system" },

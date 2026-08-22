@@ -9,8 +9,8 @@ import {
 const LABELS: KeysetPaginationLabels = {
   nav: "Audit pagination",
   pageSize: "Entries per page",
-  prev: { text: "Anterior", label: "Previous page" },
-  next: { text: "Siguiente", label: "Next page" },
+  prev: { text: "Previous", label: "Previous page" },
+  next: { text: "Next", label: "Next page" },
 };
 
 interface AuditPaginationProps {

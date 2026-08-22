@@ -205,7 +205,7 @@ function AuditEntryDrawerBody({
       </Section>
 
       {entry.level === AuditLevel.Change ? (
-        <Section title="Cambios">
+        <Section title="Changes">
           {detail ? (
             <AuditChangeDiff
               changes={detail.metadata.changes ?? {}}

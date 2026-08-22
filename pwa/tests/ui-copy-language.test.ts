@@ -110,6 +110,129 @@ const FUNCTION_WORD_RE = new RegExp(
   "giu",
 );
 
+/**
+ * Spanish CONTENT words — the third signal, and the one this gate was missing.
+ *
+ * The two signals above are both about *sentences*: they need a diacritic or several
+ * function words, so they see prose and are blind to the short label. That blindness was
+ * not theoretical — an independent review found eight surviving Spanish strings that this
+ * gate reported green over, every one of them too short to carry either signal: `"Todo"`,
+ * `"Cambios"`, `"Cualquiera"`, `"Anterior"`, `"Siguiente"`, `"Sin metadata"`,
+ * `"Ordenar por hora"`, `"Cambios"` again as a section title. A UI is mostly short labels,
+ * so that was most of the surface.
+ *
+ * Membership rule, and it is what keeps the list honest: a word belongs here only if it is
+ * **not** also English and **not** a Tailwind fragment. That is why `media`, `total`,
+ * `actor`, `metadata`, `final`, `global`, `error`, `material`, `local`, `real` and `no` are
+ * deliberately absent despite being Spanish — each of them occurs in correct English copy in
+ * this tree, and a gate that reports those trains people to ignore it.
+ *
+ * `sin` is the one function word promoted into this list, and it was promoted for a
+ * measured reason: `"Sin metadata"` pairs a Spanish preposition with an English noun, so it
+ * carries one function word, no diacritic, and no content word — it escaped all three
+ * signals even after this list existed. Promoting it reports zero additional findings across
+ * `src/`, so the tightening costs no exemption. `con` was NOT promoted alongside it: English
+ * copy says "pros and cons".
+ *
+ * This list is a floor on accidents, never a ceiling on Spanish: a word not in it still
+ * escapes all three signals. It is derived from a real miss rather than invented, and the
+ * right response to the next miss is another entry, not a wider heuristic.
+ */
+const CONTENT_WORDS = [
+  "todo",
+  "todos",
+  "toda",
+  "todas",
+  "cambio",
+  "cambios",
+  "cualquiera",
+  "cualquier",
+  "anterior",
+  "siguiente",
+  "ordenar",
+  "buscar",
+  "guardar",
+  "cancelar",
+  "eliminar",
+  "borrar",
+  "cerrar",
+  "abrir",
+  "copiar",
+  "seguir",
+  "mostrar",
+  "ocultar",
+  "enviar",
+  "anadir",
+  "crear",
+  "editar",
+  "filtro",
+  "filtros",
+  "pagina",
+  "accion",
+  "acciones",
+  "recurso",
+  "recursos",
+  "nivel",
+  "jornada",
+  "auditoria",
+  "fecha",
+  "usuario",
+  "usuarios",
+  "nombre",
+  "estado",
+  "contrasena",
+  "correo",
+  "ninguno",
+  "ninguna",
+  "vacio",
+  "vacia",
+  "cifrado",
+  "booleano",
+  "pendiente",
+  "pendientes",
+  "hecho",
+  "obra",
+  "obras",
+  "proveedor",
+  "proveedores",
+  "cliente",
+  "clientes",
+  "empresa",
+  "empresas",
+  "empleado",
+  "empleados",
+  "factura",
+  "facturas",
+  "pedido",
+  "pedidos",
+  "horas",
+  "tarea",
+  "tareas",
+  "proyecto",
+  "proyectos",
+  "transporte",
+  "registro",
+  "informes",
+  "contratos",
+  "pliegos",
+  "mediciones",
+  "rendimientos",
+  "permisos",
+  "entidades",
+  "patrones",
+  "adaptadores",
+  "persistencia",
+  "lanzar",
+  "cobros",
+  "pagos",
+  "hora",
+  "sin",
+];
+const CONTENT_WORD_RE = new RegExp(
+  `(?<![\\p{L}])(?:${CONTENT_WORDS.join("|")})(?![\\p{L}])`,
+  "giu",
+);
+
 /** JSX attributes whose value is a machine address or a style hook — never rendered copy. */
 const NON_COPY_ATTRIBUTES = new Set([
   "className",
@@ -147,6 +270,10 @@ function sourceFiles(dir: string): string[] {
 
 /** Returns why the text reads as Spanish, or `null` when it does not. */
 function spanishReason(text: string): string | null {
+  const content = new Set((text.match(CONTENT_WORD_RE) ?? []).map((word) => word.toLowerCase()));
+  if (content.size > 0) {
+    return `the Spanish word(s) ${[...content].join(", ")}`;
+  }
   const matches = text.match(FUNCTION_WORD_RE) ?? [];
   const distinct = new Set(matches.map((word) => word.toLowerCase()));
   if (DIACRITIC.test(text) && distinct.size >= DIACRITIC_MIN_WORDS) {
@@ -218,6 +345,24 @@ describe("rendered copy speaks the language the document declares", () => {
     expect(spanishReason("Ninguna entrada coincide con estos filtros")).not.toBeNull();
     // Two function words and no diacritic — the shape that survived the first threshold.
     expect(spanishReason("Progreso global de la obra")).not.toBeNull();
+  });
+
+  it("recognises the short labels an independent review found it green over", () => {
+    // Every one of these shipped in the same PR that added this gate, and every one of them
+    // passed it: too short for a diacritic, too short for two function words. They are kept
+    // verbatim so the third signal can never quietly stop covering the case that earned it.
+    const missed = [
+      "Todo",
+      "Cambios",
+      "Cualquiera",
+      "Anterior",
+      "Siguiente",
+      "Sin metadata",
+      "Ordenar por hora",
+      "Recibir y enviar eventos a sistemas externos (webhooks).",
+    ];
+
+    expect(missed.filter((text) => spanishReason(text) === null)).toEqual([]);
   });
 
   it("does not claim the English it would otherwise report", () => {

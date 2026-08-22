@@ -15,7 +15,7 @@ interface MetadataBlockProps {
  * Renders the audit `metadata` JSON. Every key and value is React-escaped text — **never**
  * `dangerouslySetInnerHTML`/`innerHTML` (the field is untrusted input). A size guard truncates a
  * pathological object so it cannot break the drawer layout, while «copy» always yields the full
- * raw JSON. `null` / an empty object reads as «Sin metadata», not an empty block.
+ * raw JSON. `null` / an empty object reads as «No metadata», not an empty block.
  *
  * By invariant D4 the field carries no sensitive payload; if that ever changes the redaction policy
  * grows in the backend, not here.
@@ -24,7 +24,7 @@ export function MetadataBlock({ value, className, testId }: Readonly<MetadataBlo
   if (isEmptyMetadata(value)) {
     return (
       <p className={cn("text-text-subtle text-xs", className)} data-testid={testId}>
-        Sin metadata
+        No metadata
       </p>
     );
   }

@@ -3,11 +3,11 @@ import { render, screen } from "@testing-library/react";
 import { MetadataBlock } from "@/context/backoffice/audit/infrastructure/ui/MetadataBlock";
 
 describe("MetadataBlock", () => {
-  it("reads null or an empty object as «Sin metadata», not an empty block", () => {
+  it("reads null or an empty object as «No metadata», not an empty block", () => {
     const { rerender } = render(<MetadataBlock value={null} />);
-    expect(screen.getByText("Sin metadata")).toBeInTheDocument();
+    expect(screen.getByText("No metadata")).toBeInTheDocument();
     rerender(<MetadataBlock value={{}} />);
-    expect(screen.getByText("Sin metadata")).toBeInTheDocument();
+    expect(screen.getByText("No metadata")).toBeInTheDocument();
   });
 
   it("renders the JSON as escaped text with a copy-raw control", () => {

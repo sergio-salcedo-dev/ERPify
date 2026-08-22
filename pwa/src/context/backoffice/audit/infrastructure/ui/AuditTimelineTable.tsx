@@ -155,7 +155,7 @@ export function AuditTimelineTable({
                   type="button"
                   onClick={onToggleSort}
                   className="hover:text-foreground inline-flex items-center gap-1 transition-colors"
-                  title="Ordenar por hora"
+                  title="Sort by time"
                 >
                   Time
                   {direction === SortDirection.ASC ? (
