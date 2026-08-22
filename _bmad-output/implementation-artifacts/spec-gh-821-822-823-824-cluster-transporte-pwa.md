@@ -3,8 +3,8 @@ title: 'Cluster del transporte PWA: URLs en Sentry, un solo dueño de la salida,
 type: 'bugfix'
 created: '2026-08-21'
 baseline_commit: '3f8145c876aabb29125dbd99933ec6b388e0737d'
-status: 'in-review'
-review_loop_iteration: 1
+status: 'done'
+review_loop_iteration: 2
 context: []
 ---
 
