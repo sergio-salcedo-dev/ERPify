@@ -208,10 +208,16 @@ const NAVIGATION_COMMIT_BUDGET_MS = 10_000;
 /** What the status region says while the document is on its way out. */
 const LEAVING_MESSAGE = "Signing out…";
 
-/** What the status region says once the document turns out not to be leaving after all. */
-const REFUSED_MESSAGE = "Sign-out did not complete. Please try again.";
-const STALLED_MESSAGE = "Sign-out is taking longer than expected. You can try again.";
-const SUPERSEDED_MESSAGE = "Another redirect took over and did not complete. You can try again.";
+/**
+ * What the status region says once the document turns out not to be leaving after all — one
+ * sentence for all three ways that can happen, because they are one event from the user's chair.
+ * The three names are kept because the three PATHS are still asserted separately below; that they
+ * resolve to the same string is the point, and a rename back to one constant would hide it.
+ */
+const UNFINISHED_MESSAGE = "Sign-out didn't finish. Please try again.";
+const REFUSED_MESSAGE = UNFINISHED_MESSAGE;
+const STALLED_MESSAGE = UNFINISHED_MESSAGE;
+const SUPERSEDED_MESSAGE = UNFINISHED_MESSAGE;
 
 function renderLayout() {
   return render(
@@ -491,13 +497,13 @@ describe("BackOfficeLayoutClient", () => {
     await waitFor(() => expect(toastError).toHaveBeenCalledWith(REFUSED_MESSAGE));
   });
 
-  it("announces a real message and an info toast when superseded by a caller with no announcement of its own", async () => {
+  it("announces the unfinished message and a toast when superseded by a caller with no announcement of its own", async () => {
     // Not today's realistic trigger (see the session-expiry case below for that) — this
     // covers a hypothetical future third hardNavigate caller that supersedes sign-out without
-    // ever claiming a departure of its own. Sign-out itself did not fail — it just is not the
-    // navigation that gets to leave — so this must not read as "refused", and (an adversarial
-    // pass on this fix caught this) must not go silent either: a live region that goes from
-    // "Signing out…" to "" announces nothing at all.
+    // ever claiming a departure of its own. It must not go silent: a live region that goes from
+    // "Signing out…" to "" announces nothing at all (an adversarial pass caught that once).
+    // It reads as the same outcome as a refusal, because by the time this callback runs it IS
+    // the same outcome — nobody left.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       hardNavigate("/somewhere-with-no-announcement-of-its-own", vi.fn());
@@ -514,7 +520,7 @@ describe("BackOfficeLayoutClient", () => {
       // known, and reverting the affordance mid-unload is what used to paint a redirect on top
       // of a departure that was still committing.
       expect(screen.getByTestId("bo-layout__leaving-status")).toHaveTextContent(LEAVING_MESSAGE);
-      expect(toastInfo).not.toHaveBeenCalled();
+      expect(toastError).not.toHaveBeenCalled();
       expect(currentDeparture()).toBe(DepartureReason.SIGN_OUT);
 
       await vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS);
@@ -524,8 +530,10 @@ describe("BackOfficeLayoutClient", () => {
       await waitFor(() => expect(currentDeparture()).toBeNull());
       // Sign-out's own navigation never reached location: the other call already owned it.
       expect(replace).not.toHaveBeenCalledWith(Routes.HOME);
-      expect(toastError).not.toHaveBeenCalled();
-      await waitFor(() => expect(toastInfo).toHaveBeenCalledWith(SUPERSEDED_MESSAGE));
+      // `error`, not `info`: one message at two severities would be the same incoherence three
+      // messages for one event were.
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith(SUPERSEDED_MESSAGE));
+      expect(toastInfo).not.toHaveBeenCalled();
       expect(screen.getByTestId("bo-layout__leaving-status")).toHaveTextContent(SUPERSEDED_MESSAGE);
     } finally {
       vi.useRealTimers();
