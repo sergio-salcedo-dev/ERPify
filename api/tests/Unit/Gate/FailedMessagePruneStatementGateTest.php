@@ -157,7 +157,7 @@ final class FailedMessagePruneStatementGateTest extends TestCase
      */
     private function failureTransportDsn(): string
     {
-        $configFile = \dirname(__DIR__, 4) . '/config/packages/messenger.yaml';
+        $configFile = \dirname(__DIR__, 3) . '/config/packages/messenger.yaml';
         $parsed = Yaml::parseFile($configFile);
         $this->assertIsArray($parsed);
 
@@ -174,7 +174,7 @@ final class FailedMessagePruneStatementGateTest extends TestCase
 
     private function configuredFailureQueue(): string
     {
-        $configFile = \dirname(__DIR__, 4) . '/config/packages/messenger.yaml';
+        $configFile = \dirname(__DIR__, 3) . '/config/packages/messenger.yaml';
         $this->assertFileExists($configFile);
 
         $parsed = Yaml::parseFile($configFile);

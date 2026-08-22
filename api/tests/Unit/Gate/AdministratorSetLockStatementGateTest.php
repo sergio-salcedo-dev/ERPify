@@ -40,7 +40,7 @@ use PHPUnit\Framework\TestCase;
 final class AdministratorSetLockStatementGateTest extends TestCase
 {
     private const string ADAPTER = __DIR__
-        . '/../../../../src/Iam/Identity/Infrastructure/Persistence/Doctrine/DoctrineActiveAdministratorDirectory.php';
+        . '/../../../src/Iam/Identity/Infrastructure/Persistence/Doctrine/DoctrineActiveAdministratorDirectory.php';
 
     #[Test]
     public function theActiveAdministratorSetIsSelectedOrderedAndLocked(): void

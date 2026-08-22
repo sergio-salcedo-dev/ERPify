@@ -117,7 +117,7 @@ final class SensitiveRecipientAddressGateTest extends TestCase
     #[Test]
     public function theDeployedIniStripsEveryStackTraceArgument(): void
     {
-        $ini = \dirname(__DIR__, 4) . self::ARGUMENT_STRIPPING_INI;
+        $ini = \dirname(__DIR__, 3) . self::ARGUMENT_STRIPPING_INI;
         $this->assertFileExists($ini, 'the ini that strips frame arguments is gone, so every argument is captured');
 
         $declared = \file_get_contents($ini);

@@ -309,7 +309,7 @@ final class BufferedChannelAmplificationGateTest extends TestCase
     {
         $found = [];
 
-        foreach (\glob(\dirname(__DIR__, 4) . '/vendor/symfony/*/Resources/config/*.php') ?: [] as $file) {
+        foreach (\glob(\dirname(__DIR__, 3) . '/vendor/symfony/*/Resources/config/*.php') ?: [] as $file) {
             $source = \file_get_contents($file);
 
             if (\is_string($source) && \str_contains($source, "'monolog.logger'")) {
@@ -410,7 +410,7 @@ final class BufferedChannelAmplificationGateTest extends TestCase
      */
     private function deployedHandler(): array
     {
-        $parsed = Yaml::parseFile(\dirname(__DIR__, 4) . '/config/packages/monolog.yaml');
+        $parsed = Yaml::parseFile(\dirname(__DIR__, 3) . '/config/packages/monolog.yaml');
 
         // Guarded rather than chained off `mixed`: four offsets deep, the sibling gate does the same, and
         // PHPStan at `level: max` refuses the unguarded form.

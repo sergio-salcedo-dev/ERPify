@@ -373,7 +373,7 @@ final class SearchOperatorSurfaceGateTest extends TestCase
     {
         $sources = [];
         $directory = new RecursiveDirectoryIterator(
-            \dirname(__DIR__, 4) . '/src',
+            \dirname(__DIR__, 3) . '/src',
             FilesystemIterator::SKIP_DOTS,
         );
 

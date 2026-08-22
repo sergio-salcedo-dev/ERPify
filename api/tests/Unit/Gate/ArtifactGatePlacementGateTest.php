@@ -178,7 +178,7 @@ final class ArtifactGatePlacementGateTest extends TestCase
      */
     private function apiRoot(): string
     {
-        $root = \dirname(__DIR__, 4);
+        $root = \dirname(__DIR__, 3);
 
         $this->assertDirectoryExists($root . '/tests', 'The test tree is not reachable from the suite.');
 

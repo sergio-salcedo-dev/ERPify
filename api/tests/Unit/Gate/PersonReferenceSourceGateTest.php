@@ -140,7 +140,7 @@ final class PersonReferenceSourceGateTest extends TestCase
     private function services(): array
     {
         $parsed = Yaml::parseFile(
-            \dirname(__DIR__, 4) . '/config/services.yaml',
+            \dirname(__DIR__, 3) . '/config/services.yaml',
             Yaml::PARSE_CUSTOM_TAGS,
         );
 

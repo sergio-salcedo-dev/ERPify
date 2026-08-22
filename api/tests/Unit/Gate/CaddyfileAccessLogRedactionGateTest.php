@@ -124,7 +124,7 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
 
     private function caddyfile(): string
     {
-        $caddyfile = \file_get_contents(\dirname(__DIR__, 4) . '/frankenphp/Caddyfile');
+        $caddyfile = \file_get_contents(\dirname(__DIR__, 3) . '/frankenphp/Caddyfile');
 
         $this->assertIsString($caddyfile);
 

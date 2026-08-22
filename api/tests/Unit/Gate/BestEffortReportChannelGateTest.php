@@ -66,7 +66,7 @@ final class BestEffortReportChannelGateTest extends TestCase
      */
     private const string OBSERVABILITY_AUTOWIRE = "#[Autowire(service: 'monolog.logger.observability')]";
 
-    private const string SERVICES_CONFIG = __DIR__ . '/../../../../config/services.yaml';
+    private const string SERVICES_CONFIG = __DIR__ . '/../../../config/services.yaml';
 
     /**
      * Every class this gate holds to the channel — a PIN, not an input.

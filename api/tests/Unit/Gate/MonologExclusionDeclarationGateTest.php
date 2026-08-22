@@ -90,7 +90,7 @@ final class MonologExclusionDeclarationGateTest extends TestCase
      */
     private function exclusionsDeclaredPerEnvironment(): array
     {
-        $configDir = \dirname(__DIR__, 4) . '/config/packages';
+        $configDir = \dirname(__DIR__, 3) . '/config/packages';
         $base = Yaml::parseFile($configDir . '/monolog.yaml');
         $this->assertIsArray($base);
 
@@ -169,7 +169,7 @@ final class MonologExclusionDeclarationGateTest extends TestCase
     private function serviceDefinitions(): array
     {
         // `PARSE_CUSTOM_TAGS`, because the file carries `!tagged_iterator` and the parser refuses it otherwise.
-        $parsed = Yaml::parseFile(\dirname(__DIR__, 4) . '/config/services.yaml', Yaml::PARSE_CUSTOM_TAGS);
+        $parsed = Yaml::parseFile(\dirname(__DIR__, 3) . '/config/services.yaml', Yaml::PARSE_CUSTOM_TAGS);
         $this->assertIsArray($parsed);
         $services = $parsed['services'] ?? [];
         $this->assertIsArray($services);

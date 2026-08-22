@@ -168,7 +168,7 @@ final class ComposerStabilityGateTest extends TestCase
      */
     private function manifest(): array
     {
-        $path = \dirname(__DIR__, 4) . '/composer.json';
+        $path = \dirname(__DIR__, 3) . '/composer.json';
 
         $this->assertFileExists($path, 'composer.json not found — the gate cannot read what it guards.');
 

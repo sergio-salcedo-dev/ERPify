@@ -107,7 +107,7 @@ final class MigrationColumnDefaultGateTest extends TestCase
      */
     private function migrationsDirectory(): string
     {
-        $directory = \dirname(__DIR__, 4) . '/migrations';
+        $directory = \dirname(__DIR__, 3) . '/migrations';
 
         $this->assertDirectoryExists($directory, 'The migrations directory is not reachable from the suite.');
 

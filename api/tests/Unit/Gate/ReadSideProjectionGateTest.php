@@ -112,7 +112,7 @@ final class ReadSideProjectionGateTest extends TestCase
      */
     private function allowlistTargets(): array
     {
-        $path = \dirname(__DIR__, 4) . '/.bounded-context-allowlist';
+        $path = \dirname(__DIR__, 3) . '/.bounded-context-allowlist';
         $raw = \is_file($path) ? \file_get_contents($path) : false;
 
         if (false === $raw) {

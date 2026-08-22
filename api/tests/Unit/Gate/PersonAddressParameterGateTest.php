@@ -192,7 +192,7 @@ final class PersonAddressParameterGateTest extends TestCase
      */
     private function registryLines(): iterable
     {
-        $path = \dirname(__DIR__, 4) . self::REGISTRY_RELATIVE_PATH;
+        $path = \dirname(__DIR__, 3) . self::REGISTRY_RELATIVE_PATH;
         $this->assertFileExists($path, 'the person-address-parameter registry is gone');
 
         $contents = \file_get_contents($path);

@@ -163,7 +163,7 @@ final class ProjectContextVersionGateTest extends TestCase
 
     private function registryPath(): string
     {
-        return \dirname(__DIR__, 4) . '/' . ProjectContextVersions::REGISTRY;
+        return \dirname(__DIR__, 3) . '/' . ProjectContextVersions::REGISTRY;
     }
 
     /**
@@ -174,7 +174,7 @@ final class ProjectContextVersionGateTest extends TestCase
      */
     private function repoRoot(): string
     {
-        $apiRoot = \dirname(__DIR__, 4);
+        $apiRoot = \dirname(__DIR__, 3);
 
         foreach ([\dirname($apiRoot), \dirname($apiRoot) . '/repo'] as $candidate) {
             if (\is_dir($candidate . '/pwa/src')) {

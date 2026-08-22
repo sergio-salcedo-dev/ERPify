@@ -68,7 +68,7 @@ final class BehatVocabularyReaderTest extends TestCase
      */
     public function testAFencedDocstringIsNotHarvestedAsSteps(): void
     {
-        $apiRoot = \dirname(__DIR__, 4);
+        $apiRoot = \dirname(__DIR__, 3);
         $reader = new BehatVocabularyReader(
             $apiRoot . '/tests/Behat',
             __DIR__ . '/Fixture/VocabularyFeatures',
@@ -90,7 +90,7 @@ final class BehatVocabularyReaderTest extends TestCase
 
     private function reader(): BehatVocabularyReader
     {
-        $apiRoot = \dirname(__DIR__, 4);
+        $apiRoot = \dirname(__DIR__, 3);
 
         return new BehatVocabularyReader($apiRoot . '/tests/Behat', $apiRoot . '/features');
     }

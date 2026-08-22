@@ -198,6 +198,6 @@ final class DeptracSeamSyncGateTest extends TestCase
 
     private function apiRoot(): string
     {
-        return \dirname(__DIR__, 4);
+        return \dirname(__DIR__, 3);
     }
 }

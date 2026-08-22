@@ -132,7 +132,7 @@ final class ObservabilityChannelGateTest extends TestCase
      */
     private function handlers(string $environment): array
     {
-        $configFile = \dirname(__DIR__, 4) . '/config/packages/monolog.yaml';
+        $configFile = \dirname(__DIR__, 3) . '/config/packages/monolog.yaml';
         $this->assertFileExists($configFile);
 
         $parsed = Yaml::parseFile($configFile);

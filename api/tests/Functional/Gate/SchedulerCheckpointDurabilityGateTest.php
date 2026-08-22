@@ -122,7 +122,7 @@ final class SchedulerCheckpointDurabilityGateTest extends KernelTestCase
     #[Test]
     public function thePoolIsBackedByAStoreThatOutlivesTheContainer(): void
     {
-        $configFile = \dirname(__DIR__, 4) . '/config/packages/cache.yaml';
+        $configFile = \dirname(__DIR__, 3) . '/config/packages/cache.yaml';
         $this->assertFileExists($configFile);
 
         $parsed = Yaml::parseFile($configFile);
@@ -161,7 +161,7 @@ final class SchedulerCheckpointDurabilityGateTest extends KernelTestCase
      */
     private function scheduleProviders(): array
     {
-        $sourceRoot = \dirname(__DIR__, 4) . '/src';
+        $sourceRoot = \dirname(__DIR__, 3) . '/src';
         $prefix = \strlen($sourceRoot) + 1;
         $found = [];
 

@@ -156,7 +156,7 @@ final class MigrationColumnDefaultRulesGateTest extends TestCase
     {
         $found = \array_map(
             \basename(...),
-            MigrationColumnDefaults::migrationFilesIn(\dirname(__DIR__, 4) . '/migrations'),
+            MigrationColumnDefaults::migrationFilesIn(\dirname(__DIR__, 3) . '/migrations'),
         );
 
         $this->assertNotEmpty($found, 'The migration sweep found no files to read.');

@@ -295,7 +295,7 @@ final class ConsoleCommandCarrierGateTest extends TestCase
      */
     private function overrideDefinitions(): array
     {
-        $configDir = \dirname(__DIR__, 4) . '/config';
+        $configDir = \dirname(__DIR__, 3) . '/config';
         $overrides = $this->whenBlocksOf($configDir . '/services.yaml');
 
         foreach (\glob($configDir . '/services_*.yaml') ?: [] as $file) {
@@ -363,7 +363,7 @@ final class ConsoleCommandCarrierGateTest extends TestCase
     {
         // `PARSE_CUSTOM_TAGS`, because the file carries `!tagged_iterator` and the parser refuses it
         // otherwise — the same reason `MonologExclusionDeclarationGateTest` passes the flag.
-        $parsed = Yaml::parseFile(\dirname(__DIR__, 4) . '/config/services.yaml', Yaml::PARSE_CUSTOM_TAGS);
+        $parsed = Yaml::parseFile(\dirname(__DIR__, 3) . '/config/services.yaml', Yaml::PARSE_CUSTOM_TAGS);
 
         if (!\is_array($parsed) || !\is_array($parsed['services'] ?? null)) {
             $this->fail('config/services.yaml declares no services to read.');

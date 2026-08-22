@@ -227,7 +227,7 @@ final class PersonReferenceRulesGateTest extends TestCase
     private function overFixtures(string $registry): PersonReferences
     {
         return new PersonReferences(
-            \dirname(__DIR__, 4),
+            \dirname(__DIR__, 3),
             self::FIXTURES,
             self::FIXTURE_NAMESPACE,
             self::FIXTURES . '/' . $registry,

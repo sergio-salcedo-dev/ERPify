@@ -265,7 +265,7 @@ final class EnumWireContractGateTest extends TestCase
      */
     private function repoRoot(): string
     {
-        $apiRoot = \dirname(__DIR__, 4);
+        $apiRoot = \dirname(__DIR__, 3);
 
         foreach ([\dirname($apiRoot), \dirname($apiRoot) . '/repo'] as $candidate) {
             if (\is_dir($candidate . '/pwa/src')) {

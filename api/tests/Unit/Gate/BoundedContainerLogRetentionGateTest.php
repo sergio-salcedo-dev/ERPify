@@ -312,7 +312,7 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
 
     private function composeDirectory(): string
     {
-        $apiRoot = \dirname(__DIR__, 4);
+        $apiRoot = \dirname(__DIR__, 3);
 
         foreach ([\dirname($apiRoot), \dirname($apiRoot) . '/repo'] as $candidate) {
             if (\is_file($candidate . '/' . self::BASE_FILE)) {
