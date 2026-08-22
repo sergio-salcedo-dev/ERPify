@@ -14,16 +14,25 @@ import { describe, expect, it } from "vitest";
  * identically either way, no test exercises a production bundle, and the
  * standalone image would ship it silently.
  *
- * Two invariants, in two files, and neither implies the other:
+ * Three invariants, and none implies another:
  *
- *  1. `next.config.ts` sets `deleteSourcemapsAfterUpload: true`, so the maps
- *     exist only between the build step and the upload.
- *  2. `Dockerfile` takes the auth token as a BuildKit **secret**, never as an
+ *  1. `next.config.ts` sets `deleteSourcemapsAfterUpload: true`. This one is a
+ *     PIN, not a switch, and saying otherwise would overstate it: the option
+ *     already defaults to `true` in @sentry/nextjs (verified against 10.70.0's
+ *     own type docs). Writing it makes a future default flip, or a casual
+ *     removal, a visible change instead of a silent republish.
+ *  2. `filesToDeleteAfterUpload` is ABSENT. This is the invariant that actually
+ *     bites, and it is the hole the first version of this gate left open: the
+ *     option **overrides** `deleteSourcemapsAfterUpload` outright, so a narrow
+ *     glob there deletes only what it names and serves everything else — with
+ *     assertion (1) still green. Adding it is a decision that has to be argued
+ *     at review, not a config tweak.
+ *  3. `Dockerfile` takes the auth token as a BuildKit **secret**, never as an
  *     `ARG`. An `ARG` is recorded in the image metadata and printed by
  *     `docker history`, so a token passed that way leaks to anyone who can pull
- *     the image — a different failure from (1), and a worse one, because it
- *     grants WRITE access to the Sentry project rather than read access to the
- *     source.
+ *     the image — a different failure from (1) and (2), and a worse one, because
+ *     it grants WRITE access to the Sentry project rather than read access to
+ *     the source.
  *
  * The config half is read with the TypeScript AST rather than a regex: the
  * literal `deleteSourcemapsAfterUpload: true` is equally easy to find in a
@@ -43,6 +52,7 @@ const NEXT_CONFIG = path.join(PWA_ROOT, "next.config.ts");
 const DOCKERFILE = path.join(PWA_ROOT, "Dockerfile");
 const TOKEN_VAR = "SENTRY_AUTH_TOKEN";
 const DELETE_AFTER_UPLOAD = "deleteSourcemapsAfterUpload";
+const FILES_TO_DELETE = "filesToDeleteAfterUpload";
 
 /** Every `<name>: <initializer>` property assignment in the file, from the AST. */
 function propertyAssignments(file: string): Map<string, ts.Expression> {
@@ -81,6 +91,17 @@ describe("Sentry source maps are uploaded, never published", () => {
       `next.config.ts must set ${DELETE_AFTER_UPLOAD}: true — without it every ` +
         "built .js.map is served at a public /_next/static URL.",
     ).toBe(ts.SyntaxKind.TrueKeyword);
+  });
+
+  it("declares no glob that would override the deletion", () => {
+    const assignments = propertyAssignments(NEXT_CONFIG);
+
+    expect(
+      assignments.has(FILES_TO_DELETE),
+      `next.config.ts must not set ${FILES_TO_DELETE}: it OVERRIDES ` +
+        `${DELETE_AFTER_UPLOAD}, so a narrow glob republishes every map it does ` +
+        "not name while the deletion flag still reads true.",
+    ).toBe(false);
   });
 
   it("never takes the auth token as a build ARG", () => {

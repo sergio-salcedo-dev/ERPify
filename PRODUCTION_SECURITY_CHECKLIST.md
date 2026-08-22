@@ -106,11 +106,14 @@ you change anything here.
 - [ ] Sentry source maps are **uploaded, not published**. Upload is on only when
       `SENTRY_AUTH_TOKEN` **and** `SENTRY_ORG` are both set at build time; the
       project slug defaults to `erpify-pwa-${NEXT_PUBLIC_APP_ENV}` so one image
-      cannot ship its maps to the other environment's project. The load-bearing
-      flag is `deleteSourcemapsAfterUpload: true` in `pwa/next.config.ts`: with
-      it, the maps exist only between the build step and the upload; without it,
-      every `/_next/static/**/*.js.map` is a public URL handing the whole client
-      source to any visitor. The token reaches the build as a **BuildKit secret**
+      cannot ship its maps to the other environment's project.
+      `deleteSourcemapsAfterUpload: true` in `pwa/next.config.ts` is a **pin,
+      not a switch** — the option already defaults to `true` in @sentry/nextjs
+      10.70.0, so writing it makes a future default flip or a casual removal a
+      visible change rather than a silent republish. The option that would
+      genuinely republish the maps is `filesToDeleteAfterUpload`, which
+      **overrides** the flag outright: a narrow glob there deletes only what it
+      names and serves the rest. It must stay absent. The token reaches the build as a **BuildKit secret**
       (`--mount=type=secret,id=sentry_auth_token`), never as a build `ARG` —
       `docker history` prints build args, and this token grants *write* access to
       the Sentry project. Both invariants are gated by

@@ -199,14 +199,17 @@ const uploadsSourcemaps = Boolean(sentryAuthToken && sentryOrg);
 // (`/monitoring`) so the locked-down CSP `connect-src 'self'` covers them with
 // no widening, and ad-blockers can't drop them.
 //
-// `deleteSourcemapsAfterUpload` is the load-bearing security property, not a
-// tidiness flag: generating maps is what makes a prod stack trace readable in
-// Sentry, and SERVING them is what would hand the entire client source — and
-// every comment in it — to any visitor who opens devtools. The maps exist only
-// between the build step and the upload, and are removed from the output before
-// the standalone bundle is assembled. Pinned by
-// `tests/sentry-sourcemap-exposure.test.ts`, because the difference between
-// "uploaded" and "published" is one boolean and no runtime check would catch it.
+// Maps are uploaded, never published: SERVING them would hand the entire client
+// source — every identifier and every comment — to any visitor who opens
+// devtools, while uploading them is the whole point of the exercise.
+//
+// `deleteSourcemapsAfterUpload` already DEFAULTS to true in @sentry/nextjs
+// (10.70.0), so writing it here does not switch the behaviour on — it pins it,
+// so a future default flip or a casual edit is a visible change rather than a
+// silent one. The thing that would genuinely republish the maps is
+// `filesToDeleteAfterUpload`, which OVERRIDES this flag entirely: a narrow glob
+// there deletes only what it names and leaves the rest served. Both are held by
+// `tests/sentry-sourcemap-exposure.test.ts`.
 export default withSentryConfig(nextConfig, {
   tunnelRoute: "/monitoring",
   silent: !process.env.CI,
