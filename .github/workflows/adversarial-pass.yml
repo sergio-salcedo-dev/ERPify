@@ -1,0 +1,149 @@
+# =============================================================================
+# Adversarial-pass record — the server-side half.
+# =============================================================================
+#
+# `scripts/adversarial-pass-check.sh` runs from a `PreToolUse` hook, and a
+# PreToolUse hook only observes tool calls made in the session it is wired into.
+# A pull request opened any other way — the GitHub web UI, another machine, a
+# session with hooks disabled, a CI job, or an HTTP client hitting
+# `POST /repos/{owner}/{repo}/pulls` — is never seen at all. Measured on the
+# branch that built the local gate: `curl -X POST … /pulls -d @body.json` opens a
+# real pull request and the gate stays silent.
+#
+# This job sees those. It composes with the local gate rather than replacing it,
+# and the split is not symmetric — each is blind exactly where the other is not:
+#
+#   · the LOCAL gate is the only one that can witness the ORDER. It runs at the
+#     moment of creation, so "now" is creation time and no timestamp is
+#     consulted. #799 measured why no post-hoc instrument can recover this:
+#     `%cI` is rewritten by every rebase (five commits on #789's branch share one
+#     committer timestamp while their author dates span 71 minutes) and `%aI` is
+#     settable and survives a reordering rebase.
+#   · THIS job is the only one that sees a pull request the session did not open.
+#
+# WHAT A GREEN HERE PROVES, STATED AT ITS REAL STRENGTH
+#
+# That the record is present ON THE HEAD, right now. NOT that it was present
+# before the pull request opened — that is strictly weaker than the local gate's
+# claim, it cannot be strengthened for the reason above, and it must not be read
+# as the stronger one. A branch that opens a PR and then pushes the record turns
+# this green; only the local gate refuses that.
+#
+# It also gates the form and never the substance: whether the findings are real,
+# whether the read was hostile, or whether anyone but the author was involved is
+# review's job here exactly as it is there.
+#
+# TWO FURTHER LIMITS, NAMED RATHER THAN IMPLIED
+#
+#   · It runs the HEAD's copy of the script. A pull request may therefore weaken
+#     its own check, in its own diff. `pull_request_target` would run the base's
+#     copy instead, but it grants a write-scoped token to a workflow reasoning
+#     about untrusted head content, which is a much larger hole than the one it
+#     closes. The diff is the control: a change to this file or to the script is
+#     visible in review, which is where the substance already lives.
+#   · The escape hatch had to MOVE. On the CLI the acknowledgement is an
+#     assignment prefix on the gated command; here the only free-text field is
+#     the pull request body, which anyone who can open the PR can write. So the
+#     hatch is weaker here too — it records WHY a PR is unchecked, it does not
+#     restrict WHO may say so. It is extracted by the script itself
+#     (`--ack-from-body`), never re-implemented in YAML, because two spellings of
+#     "what counts as an acknowledgement" drift and the cheaper one always wins.
+#
+# FAILING OPEN IS **NOT** INHERITED
+#
+# The local gate exits 0 on anything it cannot determine, because a wedged
+# branch is worse than an unchecked PR. That trade does not carry: nothing here
+# can wedge anybody, and a check that cannot run is the silent-green shape this
+# repository keeps paying for. So an undeterminable state — a base ref missing
+# from the checkout — is a RED with a reason, not a pass.
+
+name: Adversarial pass
+
+on:
+  pull_request:
+    # No `branches:` filter: the base ref is read dynamically below, and a
+    # filter naming only `main` left every PR targeting another base
+    # (a feature stacked on another feature branch) with no gate at all --
+    # the same "opened outside this session" silence #815 exists to close,
+    # reopened for one shape of base ref.
+    #
+    # `synchronize` and `reopened` so a missing record can be fixed by pushing
+    # it; `edited` so the body hatch takes effect without an empty commit.
+    types: [opened, reopened, synchronize, edited]
+
+concurrency:
+  group: adversarial-pass-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    name: Adversarial-pass record
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      # The real head, not the merge commit: the claim being checked is about
+      # what the branch carries. fetch-depth 0 because the verdict needs a merge
+      # base with the target branch, and a shallow clone has none.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Every untrusted value reaches the shell through env, never through a
+      # `${{ }}` expansion inside the run block — a PR body is attacker-controlled
+      # text and inline expansion is textual substitution into the script.
+      - name: Check the record
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -uo pipefail
+
+          # A base ref the checkout does not hold means the gate cannot run.
+          # Red, not silent — see the header on why failing open is not inherited.
+          if ! git rev-parse --verify --quiet "origin/${BASE_REF}" >/dev/null; then
+            echo "::error::origin/${BASE_REF} is not present in this checkout — the adversarial-pass gate could not run"
+            exit 1
+          fi
+
+          ack="$(printf '%s' "${PR_BODY}" | ./scripts/adversarial-pass-check.sh --ack-from-body)"
+
+          # `--surface mcp` because this check shares that surface's escape
+          # hatch — a line in the pull request body. Without it a denial here
+          # would tell the reader to write an assignment prefix on a command
+          # nobody is running.
+          out="$(ADVERSARIAL_PASS_ACK="${ack}" \
+            ./scripts/adversarial-pass-check.sh --surface mcp --base-ref "origin/${BASE_REF}" --strict 2>&1)"
+          status=$?
+
+          # The script itself exits 0 on an "undetermined" verdict under
+          # --strict, by design, for the PreToolUse hook and interactive use —
+          # a wedged branch is worse than an unchecked PR there. That trade
+          # does not carry here (see the header): nothing here can wedge a
+          # branch, so any undetermined verdict is promoted to a failure, not
+          # only the base-ref case pre-checked above. This also covers a base
+          # ref that resolves but shares no history with HEAD, or a PR with
+          # nothing over its base — cases the pre-check above does not name.
+          case "${out}" in
+            "· "*) status=1 ;;
+          esac
+
+          printf '%s\n' "${out}"
+          {
+            echo "### Adversarial-pass record"
+            echo
+            echo '```'
+            printf '%s\n' "${out}"
+            echo '```'
+            echo
+            echo "_Presence on the head, at this moment. Not proof the record existed before the pull request did — only the \`PreToolUse\` gate can witness that._"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          exit "${status}"

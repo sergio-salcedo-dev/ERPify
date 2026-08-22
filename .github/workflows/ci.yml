@@ -243,6 +243,35 @@ jobs:
           category: erpify-semgrep
 
   # -------------------------
+  # SHELL LINT (host tool, no stack, no container)
+  # -------------------------
+  shell-lint:
+    name: Shell (ShellCheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Asserted rather than assumed: shellcheck ships in the runner image, and a
+      # future image that drops it must fail here with a reason instead of the
+      # gate quietly reporting nothing. The version is also the one thing that
+      # explains a red appearing on a commit that touched no shell — see
+      # make/shell.mk on why this is the runner's version and not a pin.
+      - name: ShellCheck version
+        run: shellcheck --version
+
+      # One invocation over every tracked *.sh. Zero findings, no baseline; the
+      # target itself explains why a per-file loop would report three findings
+      # that are artefacts of the invocation.
+      - name: Lint tracked shell scripts
+        run: make shell.lint
+
+  # -------------------------
   # PWA NODE (isolated, fast)
   # -------------------------
   pwa-node:
@@ -600,7 +629,7 @@ jobs:
   ci-summary:
     name: CI Summary
     if: always()
-    needs: [api-build, api-test, api-behat, api-semgrep, pwa-node, pwa-e2e, pwa-burn-in, sonar]
+    needs: [api-build, api-test, api-behat, api-semgrep, shell-lint, pwa-node, pwa-e2e, pwa-burn-in, sonar]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
@@ -612,6 +641,7 @@ jobs:
           R_API_TEST: ${{ needs.api-test.result }}
           R_API_BEHAT: ${{ needs.api-behat.result }}
           R_API_SEMGREP: ${{ needs.api-semgrep.result }}
+          R_SHELL_LINT: ${{ needs.shell-lint.result }}
           R_PWA_NODE: ${{ needs.pwa-node.result }}
           R_PWA_E2E: ${{ needs.pwa-e2e.result }}
           R_PWA_BURNIN: ${{ needs.pwa-burn-in.result }}
@@ -626,6 +656,7 @@ jobs:
             echo "| API Tests       | $R_API_TEST |"
             echo "| API Behat       | $R_API_BEHAT |"
             echo "| API Semgrep     | $R_API_SEMGREP |"
+            echo "| Shell (ShellCheck) | $R_SHELL_LINT |"
             echo "| PWA (Node)      | $R_PWA_NODE |"
             echo "| PWA (E2E)       | $R_PWA_E2E |"
             echo "| PWA (Burn-In)   | $R_PWA_BURNIN |"
@@ -644,7 +675,7 @@ jobs:
   # -------------------------
   ci-success:
     name: CI Status
-    needs: [api-test, api-behat, pwa-node, pwa-e2e]
+    needs: [api-test, api-behat, shell-lint, pwa-node, pwa-e2e]
     runs-on: ubuntu-latest
     permissions: {}
     steps:
