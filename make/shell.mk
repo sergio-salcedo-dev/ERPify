@@ -72,11 +72,22 @@
 ## —— Shell ————————————————————————————————————————————————————————————————
 
 # Every tracked shell script: named *.sh, or carrying a shell shebang on line 1.
+# `-z` NUL-delimits the path from the `lineno:content` that follows it, because
+# a plain `:`-joined `path:lineno:content` line silently mis-splits on a path
+# that itself contains a colon (git allows one) -- `awk -F:` then reads a
+# fragment of the path as the line number, the shebang test never matches, and
+# the file drops out of the list with nothing red to show for it. `-z` puts a
+# NUL after the path and after the line number, but each MATCH still ends in a
+# real newline (git never NUL-terminates that), so `awk -v RS='\0'` glues one
+# match's content onto the next match's path once there is more than one hit --
+# measured, that read the 4th tracked shebang's own content as if it were a
+# 5th file's path. Reading records by NEWLINE and splitting each on NUL keeps
+# the two boundaries apart, because content and paths are always single lines.
 shell.files:
 	@cd "$(PROJECT_ROOT)" && { \
 		git ls-files '*.sh'; \
-		git grep -I --no-color -n -E '^#!' -- ':!*.sh' \
-			| awk -F: '$$2 == 1 && $$3 ~ /^#!.*(\/|env +)(ba)?sh([[:space:]]|$$)/ { print $$1 }'; \
+		git grep -Iz --no-color -n -E '^#!' -- ':!*.sh' \
+			| awk -v FS='\0' '{ if ($$2 == 1 && $$3 ~ /^#!.*(\/|env +)(ba)?sh([[:space:]]|$$)/) print $$1 }'; \
 	} | sort -u
 
 shell.lint: ## shellcheck every tracked shell script in ONE pass (zero findings, no baseline)
@@ -85,5 +96,11 @@ shell.lint: ## shellcheck every tracked shell script in ONE pass (zero findings,
 		echo "  install it with 'pip install shellcheck-py', your distro package, or a pinned release binary."; \
 		exit 1; \
 	}
-	@cd "$(PROJECT_ROOT)" && $(MAKE) --no-print-directory shell.files | tr '\n' '\0' | xargs -0 -r shellcheck -f gcc
-	@echo "✓ shell.lint: no findings across $$($(MAKE) --no-print-directory shell.files | wc -l | tr -d ' ') tracked shell scripts"
+	@cd "$(PROJECT_ROOT)" && files="$$($(MAKE) --no-print-directory shell.files)"; \
+	count=$$(printf '%s\n' "$$files" | grep -c .); \
+	if [ "$$count" -eq 0 ]; then \
+		echo "✗ shell.lint: shell.files discovered zero tracked shell scripts -- the check did not run"; \
+		exit 1; \
+	fi; \
+	printf '%s\n' "$$files" | tr '\n' '\0' | xargs -0 shellcheck -f gcc; \
+	echo "✓ shell.lint: no findings across $$count tracked shell scripts"

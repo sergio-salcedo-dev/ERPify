@@ -113,6 +113,21 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY
 readonly ARTIFACT_DIR="_bmad-output/implementation-artifacts"
 readonly TRAILER_KEY="Adversarial-pass"
 
+# The hatch's own placeholders, quoted verbatim in usage() and deny_reason().
+# Pasting either of those unfenced into a PR body reproduces this text after
+# "ADVERSARIAL_PASS_ACK=", which is not a reason anyone wrote -- it is this
+# script's own instructions. Rejected by identity rather than by fencing, so
+# it stays refused whether or not the paste happens to be fenced.
+readonly -a ACK_PLACEHOLDERS=("<why this PR needs no pass>" "<reason>")
+
+is_ack_placeholder() {
+	local candidate="$1" p
+	for p in "${ACK_PLACEHOLDERS[@]}"; do
+		[[ "${candidate}" == "${p}" ]] && return 0
+	done
+	return 1
+}
+
 # A heading alone is not a record, and neither is a colon with nothing after it.
 # The live example (#789) runs to ~40 lines; these floors reject a stub without
 # demanding a particular length.
@@ -396,6 +411,13 @@ segment_opens_pr() {
 # across every worktree, which is where every feature branch lives. The remote
 # is the authority; the SHARED git directory is the fallback, because that is
 # the one path a linked worktree and its primary agree on.
+#
+# A non-zero return means "cannot determine", never a guess: `basename
+# REPO_ROOT` used to be the last resort, and it is the exact defect this
+# function exists to fix -- a linked worktree's root is its slug, and a
+# `--separate-git-dir`/submodule/bare-mirror layout with no origin remote
+# would fall through to the same wrong guess. Every caller must treat "cannot
+# determine" as "apply the check", not as a name to compare against.
 this_repo_name() {
 	local url name common
 	url="$(git_c remote get-url origin 2>/dev/null || true)"
@@ -411,7 +433,7 @@ this_repo_name() {
 			[[ -n "${name}" ]] && { printf '%s' "${name}"; return 0; }
 		fi
 	fi
-	basename -- "${REPO_ROOT}"
+	return 1
 }
 
 # One segment, split into its ARGUMENTS the way the shell would: NUL-delimited,
@@ -462,24 +484,41 @@ segment_args() {
 # carries the same name in its path. Only the last path segment is compared, so
 # a fork of this repository still reads as this repository -- the same
 # approximation the MCP path makes, since `tool_input.repo` is the bare name.
+#
+# The REST-route pattern is tested only on a `gh api` segment's own arguments,
+# never on `gh pr create`'s -- matching it against ANY argument answered
+# `gh pr create --title x --body "docs: also see /repos/o/other/pulls"` out of
+# a repository the body merely MENTIONS, a false not-applicable and a silent,
+# unrecorded pull request from a string the author controls. `gh pr create`
+# already has `--repo`/`-R` for this; it never needs the route fallback.
+#
+# Repeated flags keep the LAST value, matching gh's own flag semantics (each
+# occurrence overwrites the one before it) rather than the first: a call
+# correcting an earlier `--repo` with a second one naming THIS repository was
+# read from the first and judged not-applicable. A trailing `.git` is stripped
+# the same way `this_repo_name` strips it from the origin URL, so a value
+# copied from a remote URL still compares equal.
 segment_target_repo() {
 	local -a args=()
 	local arg value="" i count
+	local program is_api=0
+	program="$(strip_prefixes "$1")"
+	[[ "${program}" =~ ^([^[:space:]]*/)?gh[[:space:]]+api([[:space:]]|$) ]] && is_api=1
 	while IFS= read -r -d '' arg; do args+=("${arg}"); done < <(segment_args "$1")
 	count=${#args[@]}
 	for (( i = 0; i < count; i++ )); do
 		arg="${args[i]}"
 		case "${arg}" in
 			--repo=*) value="${arg#--repo=}" ;;
-			--repo|-R) (( i + 1 < count )) && value="${args[i + 1]}" ;;
+			--repo|-R) (( i + 1 < count )) && { value="${args[i + 1]}"; (( i++ )); } ;;
 			*)
-				if [[ "${arg}" =~ (^|/)repos/[A-Za-z0-9._-]+/([A-Za-z0-9._-]+)/pulls ]]; then
+				if (( is_api )) && [[ "${arg}" =~ (^|/)repos/[A-Za-z0-9._-]+/([A-Za-z0-9._-]+)/pulls ]]; then
 					value="${BASH_REMATCH[2]}"
 				fi ;;
 		esac
-		[[ -n "${value}" ]] && break
 	done
 	value="${value%/}"
+	value="${value%.git}"
 	[[ -n "${value}" ]] || return 1
 	printf '%s' "${value##*/}"
 }
@@ -487,19 +526,21 @@ segment_target_repo() {
 # The base branch a matched segment names, read as an ARGUMENT for the same
 # reason: a `--base` lifted out of a quoted title picks the wrong merge base,
 # and a wrong merge base is a wrong verdict in whichever direction it lands.
+# Keeps the LAST occurrence, for the same reason segment_target_repo does.
 segment_base_ref() {
 	local -a args=()
-	local arg i count
+	local arg i count value="" found=1
 	while IFS= read -r -d '' arg; do args+=("${arg}"); done < <(segment_args "$1")
 	count=${#args[@]}
 	for (( i = 0; i < count; i++ )); do
 		arg="${args[i]}"
 		case "${arg}" in
-			--base=*) printf '%s' "${arg#--base=}"; return 0 ;;
-			--base|-B) (( i + 1 < count )) && { printf '%s' "${args[i + 1]}"; return 0; } ;;
+			--base=*) value="${arg#--base=}"; found=0 ;;
+			--base|-B) (( i + 1 < count )) && { value="${args[i + 1]}"; found=0; (( i++ )); } ;;
 		esac
 	done
-	return 1
+	(( found == 0 )) || return 1
+	printf '%s' "${value}"
 }
 
 # The acknowledgement, read only as an assignment PREFIX on the segment that is
@@ -525,7 +566,7 @@ extract_ack_prefix() {
 			esac
 			value="${value#"${value%%[![:space:]]*}"}"
 			value="${value%"${value##*[![:space:]]}"}"
-			[[ -n "${value}" ]] && { printf '%s' "${value}"; return 0; }
+			[[ -n "${value}" ]] && ! is_ack_placeholder "${value}" && { printf '%s' "${value}"; return 0; }
 			return 1
 		fi
 		seg="${seg#*=}"
@@ -540,9 +581,14 @@ extract_ack_prefix() {
 
 # On the MCP surface there is no command line, so the hatch has to live in the
 # only free-text field the call carries. Anchored to the start of a line, so a
-# body that DESCRIBES the hatch in a sentence does not trigger it.
+# body that DESCRIBES the hatch in a sentence does not trigger it. A body that
+# QUOTES this script's own placeholder unfenced (a paste of usage() or
+# deny_reason()'s hatch text) is the same shape and is refused the same way.
 extract_ack_body() {
-	printf '%s' "$1" | sed -n 's/^ADVERSARIAL_PASS_ACK=["'"'"']\{0,1\}\([^"'"'"']*\).*/\1/p' | head -1
+	local value
+	value="$(printf '%s' "$1" | sed -n 's/^ADVERSARIAL_PASS_ACK=["'"'"']\{0,1\}\([^"'"'"']*\).*/\1/p' | head -1)"
+	is_ack_placeholder "${value}" && return
+	printf '%s' "${value}"
 }
 
 # --- The payload -------------------------------------------------------------
@@ -575,10 +621,14 @@ hook_applies() {
 			SURFACE="mcp"
 			local this_repo target_repo body
 			target_repo="$(jq -r '.tool_input.repo // empty' <<<"${payload}" 2>/dev/null || true)"
-			this_repo="$(this_repo_name)"
+			this_repo="$(this_repo_name || true)"
 			# A call targeting a different repository is not this checkout's to
-			# judge: judging it would be a verdict about the wrong branch.
-			if [[ -n "${target_repo}" ]] && [[ "${target_repo,,}" != "${this_repo,,}" ]]; then
+			# judge: judging it would be a verdict about the wrong branch. But
+			# that verdict needs a known name to compare against -- when this
+			# checkout's own name cannot be determined, guessing one wrong is
+			# the exact defect `this_repo_name` refuses; apply the check
+			# instead of silently standing down.
+			if [[ -n "${target_repo}" ]] && [[ -n "${this_repo}" ]] && [[ "${target_repo,,}" != "${this_repo,,}" ]]; then
 				return 1
 			fi
 			BASE_FROM_PAYLOAD="$(jq -r '.tool_input.base // empty' <<<"${payload}" 2>/dev/null || true)"
@@ -599,14 +649,15 @@ hook_applies() {
 	[[ "${command_text}" == *"pr create"* || "${command_text}" == *pulls* ]] || return 1
 
 	local segment matched=1 target_repo this_repo
-	this_repo="$(this_repo_name)"
+	this_repo="$(this_repo_name || true)"
 	while IFS= read -r -d '' segment; do
 		segment_opens_pr "${segment}" || continue
 		# A segment naming another repository is not this checkout's to judge,
 		# mirroring what the MCP path already does. `continue`, not `break`: a
-		# later segment may still open one here.
+		# later segment may still open one here. Same rule as the MCP branch on
+		# an unknown `this_repo`: apply the check rather than guess a name.
 		target_repo="$(segment_target_repo "${segment}" || true)"
-		if [[ -n "${target_repo}" ]] && [[ "${target_repo,,}" != "${this_repo,,}" ]]; then
+		if [[ -n "${target_repo}" ]] && [[ -n "${this_repo}" ]] && [[ "${target_repo,,}" != "${this_repo,,}" ]]; then
 			continue
 		fi
 		matched=0
@@ -700,35 +751,44 @@ decide() {
 		candidates+=("${path}")
 	done < <(git_c diff -z --name-only "${merge_base}...HEAD" -- "${ARTIFACT_DIR}" 2>/dev/null)
 
-	# Every adversarial-pass section already present on the base, as its
-	# normalised lines. A candidate that adds too little to any one of them is a
-	# rename, a copy or a nudge of somebody else's pass, not this branch's
-	# evidence.
-	local -a base_sections=()
-	local base_path base_section
+	# Every adversarial-pass section already present on the base, pooled into
+	# ONE set of normalised lines rather than kept apart per file. Checking a
+	# candidate against each base section SEPARATELY (accept if it clears the
+	# floor against every one, taken one at a time) missed a candidate built by
+	# concatenating two DIFFERENT prior passes: against pass A alone, all of
+	# pass B's lines read as new, and against pass B alone, all of pass A's
+	# lines read as new -- both checks clear the floor even though the whole
+	# candidate is a copy of pre-existing content, zero lines of which this
+	# branch actually wrote. Pooling first closes that: a line already on
+	# EITHER prior pass no longer counts as new against the union.
+	#
+	# The trade running the other way is real and stays unaddressed here: a
+	# genuinely new pass that happens to share a few lines of house-style
+	# phrasing with an unrelated older one now has those lines subtracted too,
+	# which was never true of the per-file check. At these floors (3
+	# lines/200 chars against a live example of ~40 lines) that costs a false
+	# `missing` only for a candidate that is mostly overlap, and the escape
+	# hatch is the recorded, always-available answer to a false `missing` --
+	# unlike the exploit above, which recorded nothing at all.
+	local base_pool="" base_path base_section
 	while IFS= read -r -d '' base_path; do
 		[[ "${base_path}" == *.md ]] || continue
 		base_section="$(git_c show "${merge_base}:${base_path}" 2>/dev/null | section_lines)"
-		[[ -n "${base_section}" ]] && base_sections+=("${base_section}")
+		[[ -n "${base_section}" ]] && base_pool="${base_pool}${base_section}
+"
 	done < <(git_c ls-tree -r -z --name-only "${merge_base}" -- "${ARTIFACT_DIR}" 2>/dev/null)
 
-	local found="" reason="" content candidate_section derivative
+	local found="" reason="" content candidate_section
 	for path in "${candidates[@]}"; do
 		content="$(git_c show "HEAD:${path}" 2>/dev/null || true)"
 		[[ -n "${content}" ]] || continue
 		printf '%s' "${content}" | has_record || continue
 		candidate_section="$(printf '%s' "${content}" | section_lines)"
-		derivative=""
-		for base_section in "${base_sections[@]}"; do
-			delta_clears_floor "${base_section}" "${candidate_section}" && continue
-			derivative=1; break
-		done
-		if [[ -n "${derivative}" ]]; then
-			reason="${reason}
-    ${path} (adds too little to a pass already on ${resolved})"
-			continue
+		if delta_clears_floor "${base_pool}" "${candidate_section}"; then
+			found="${path}"; break
 		fi
-		found="${path}"; break
+		reason="${reason}
+    ${path} (adds too little to the passes already on ${resolved})"
 	done
 
 	if [[ -n "${found}" ]]; then
@@ -860,6 +920,7 @@ fail_row() { echo "  ✗ $1"; FAILURES=$(( FAILURES + 1 )); }
 
 LONG_BODY="$(printf 'Two layers ran with fresh read-only context over the branch diff; neither failed.\nApplied 10 patches, two of which demolish a claim the spec itself made.\nRejected 2 with measurements, deferred 3 as pre-existing and unchanged here.\n')"
 SECOND_BODY="$(printf 'A second read, by a fresh context that did not see the first, over the same branch diff.\nIt found three defects the first pass missed, one of them a wrong-green over an empty fixture.\nTwo were fixed in place; the third is recorded as a residual, with the measurement that bounds it.\n')"
+THIRD_BODY="$(printf 'An unrelated story, reviewed on a different day against a different diff entirely.\nIts own pass found a query missing a parameter binding and one N+1 in a list endpoint.\nBoth were fixed; a migration index was added and confirmed against a fresh plan.\n')"
 
 check() {
 	local name="$1" expect="$2" doc="$3"
@@ -961,6 +1022,10 @@ applies "-R naming this repo"        yes "$(bash_payload "${P} -R o/${THIS_REPO}
 applies "--repo quoted in a title"   yes "$(bash_payload "${P} --title \"chore: pass --repo other/thing to gh\"")"
 applies "--repo quoted in a body"    yes "$(bash_payload "${P} --body \"see --repo somebody-else/thing\"")"
 applies "-R quoted in a title"       yes "$(bash_payload "${P} --title \"use -R other/thing\"")"
+applies "REST-route text in a title" yes "$(bash_payload "${P} --title \"see /repos/o/other-repo/pulls for reference\"")"
+applies "REST-route text in a body"  yes "$(bash_payload "${P} --body \"docs: also see /repos/o/other-repo/pulls for reference\"")"
+applies "--repo repeated, last names this repo" yes "$(bash_payload "${P} --repo somebody-else/thing --repo o/${THIS_REPO}")"
+applies "--repo with a trailing .git, this repo" yes "$(bash_payload "${P} --repo o/${THIS_REPO}.git")"
 applies "MCP create_pull_request"    yes '{"tool_name":"mcp__github__create_pull_request","tool_input":{"title":"x"}}'
 
 echo
@@ -986,6 +1051,7 @@ applies "--repo= for another repo"       no "$(bash_payload "${P} --repo=somebod
 applies "-R for another repo"            no "$(bash_payload "${P} -R somebody-else/thing")"
 applies "--repo quoted, another repo"    no "$(bash_payload "${P} --repo \"somebody-else/thing\"")"
 applies "the REST route, another repo"   no "$(bash_payload 'gh api --method POST /repos/o/somebody-else/pulls')"
+applies "--repo repeated, last names another repo" no "$(bash_payload "${P} --repo o/${THIS_REPO} --repo somebody-else/thing")"
 applies "an unparseable payload"         no 'not json'
 
 base_is() {
@@ -1006,6 +1072,7 @@ base_is "--base=value"                  "develop" "$(bash_payload "${P} --base=d
 base_is "-B with a value"               "develop" "$(bash_payload "${P} -B develop")"
 base_is "quoted in a title only"        ""        "$(bash_payload "${P} --title \"see --base develop\"")"
 base_is "a title mention, then the flag" "main"   "$(bash_payload "${P} --title \"see --base develop\" --base main")"
+base_is "repeated, last wins"           "main"    "$(bash_payload "${P} --base develop --base main")"
 base_is "absent"                        ""        "$(bash_payload "${P}")"
 base_is "the MCP payload"               "main"    '{"tool_name":"mcp__github__create_pull_request","tool_input":{"base":"main"}}'
 
@@ -1033,7 +1100,9 @@ ack_is "quoted in the PR title"        ""                "$(bash_payload "${P} -
 ack_is "quoted in the PR body"         ""                "$(bash_payload "${P} --body \"yields to ADVERSARIAL_PASS_ACK=<reason> on the command line\"")"
 ack_is "in a later segment"            ""                "$(bash_payload "${P} ; echo ADVERSARIAL_PASS_ACK=later")"
 ack_is "in an earlier echo"            ""                "$(bash_payload "echo ADVERSARIAL_PASS_ACK=bogus && ${P}")"
+ack_is "the tool's own placeholder, as a real prefix" "" "$(bash_payload "ADVERSARIAL_PASS_ACK=\"<why this PR needs no pass>\" ${P}")"
 ack_is "MCP body, own line"            "release train"   '{"tool_name":"mcp__github__create_pull_request","tool_input":{"body":"## What\nstuff\nADVERSARIAL_PASS_ACK=release train\n"}}'
+ack_is "MCP body, the tool's own placeholder" ""          '{"tool_name":"mcp__github__create_pull_request","tool_input":{"body":"ADVERSARIAL_PASS_ACK=<why this PR needs no pass>\n"}}'
 ack_is "MCP body, described in prose"  ""                '{"tool_name":"mcp__github__create_pull_request","tool_input":{"body":"The gate yields to ADVERSARIAL_PASS_ACK=<reason> in the body."}}'
 
 # --- The verdict, over a real repository -------------------------------------
@@ -1084,6 +1153,10 @@ else
 	mkdir -p "${FIXTURE}/scripts" "${FIXTURE}/${AD}"
 	cp -- "${BASH_SOURCE[0]}" "${FIXTURE}/scripts/adversarial-pass-check.sh"
 	printf '# Story one\n\n## Adversarial pass\n\n%s' "${LONG_BODY}" > "${FIXTURE}/${AD}/br-1-old-story.md"
+	# A second, unrelated base pass -- present from the seed so a later row can
+	# pin the pooled-delta fix (a candidate stitched from THIS pass and
+	# br-1's, below) without disturbing any row that only ever touches br-1.
+	printf '# Story two\n\n## Adversarial pass\n\n%s' "${THIRD_BODY}" > "${FIXTURE}/${AD}/br-2-second-story.md"
 	echo seed > "${FIXTURE}/seed.txt"
 	fixture_git init -q -b main >/dev/null 2>&1
 	fixture_git config user.email gate@example.invalid
@@ -1152,6 +1225,18 @@ else
 
 		fixture_git commit -q --allow-empty -m "$(printf 'fix: x\n\nAdversarial-pass: two layers ran, ten patches applied, two rejected with measurements.')" >/dev/null 2>&1
 		verdict_is "a populated trailer" record
+		fixture_git reset -q --hard HEAD~1 >/dev/null 2>&1
+
+		# The per-file check #816 introduced closed a candidate matching ONE
+		# prior pass, but missed a candidate pasted together from TWO
+		# different ones: against br-1 alone every line of br-2's content
+		# reads as new, and against br-2 alone every line of br-1's does --
+		# a per-file check clears both. Pooled first, nothing in it is new.
+		printf '# Stitched\n\n## Adversarial pass\n\n%s\n%s\n' "${LONG_BODY}" "${THIRD_BODY}" \
+			> "${FIXTURE}/${AD}/spec-stitched.md"
+		fixture_git add -A >/dev/null 2>&1; fixture_git commit -qm stitched >/dev/null 2>&1
+		verdict_is "a pass stitched from two different base passes" missing
+		fixture_git reset -q --hard HEAD~1 >/dev/null 2>&1
 
 		# CLAUDE.md requires every feature branch to live in a linked worktree,
 		# whose root basename is the worktree slug rather than the repository.

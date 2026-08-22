@@ -77,11 +77,39 @@ no nombra repositorio alguno, pero la coincidencia de texto extraía `other/thin
 
 **RESIDUAL-1 — el workflow ejecuta la copia del script que trae la cabeza,** así que una PR puede debilitar su propio check dentro de su propio diff. La alternativa (`pull_request_target`) es peor. El diff es el control, y queda dicho en la cabecera del workflow en esos términos.
 
-**RESIDUAL-2 — la escotilla del servidor la escribe cualquiera que pueda abrir la PR.** Registra *por qué* una PR va sin comprobar; no restringe *quién* puede decirlo. Escrito, no insinuado.
+**RESIDUAL-2 — la escotilla del servidor la escribe cualquiera que pueda abrir *o editar* la PR.** El workflow dispara también en `edited`, y lee el cuerpo VIVO en cada ejecución, así que la escotilla puede introducirse o cambiarse después de abrir la PR, no solo al abrirla. Registra *por qué* una PR va sin comprobar; no restringe *quién* puede decirlo. Escrito, no insinuado — corregido tras una lectura independiente (ver más abajo).
 
 **RESIDUAL-3 — `shell.lint` no ve un script sin rastrear.** La lista sale de `git ls-files`, así que un fichero nuevo se linta desde el commit que lo añade, nunca antes.
 
 **RESIDUAL-4 — `extract_ack_body` casa `ADVERSARIAL_PASS_ACK=` a principio de línea aunque esa línea esté dentro de un bloque de código** en el cuerpo de la PR. Preexistente, y la escotilla es declarativa (registra una razón), así que no se toca aquí.
+
+### Pasada independiente (revisión hostil de PR #832)
+
+La lectura hostil que quedaba pendiente arriba se ejecutó: tres capas paralelas y ciegas entre sí (Blind Hunter, Edge Case Hunter, Auditor de aceptación contra este mismo spec), cada una releyendo el código real de la rama, no solo el diff. El Auditor reejecutó en vivo — dos veces, con shellcheck 0.10.0 y 0.11.0 — cada afirmación de la sección `Verification` original y no encontró ningún AC incumplido; los otros dos encontraron defectos nuevos, no vistos por la pasada del autor.
+
+**GRAVE-4 — `segment_target_repo`'s el fallback de ruta REST comparaba CUALQUIER argumento, no solo el endpoint de `gh api`.** `gh pr create --title x --body "docs: also see /repos/o/other-repo/pulls"` no nombra ningún `--repo`, pero el texto libre de `--body` casaba el patrón `/repos/O/R/pulls` igual que si fuera la ruta real de un `gh api`, y el hook declaraba la llamada dirigida a "other-repo" — no-aplicable, sin registro, en silencio. Reproducido igual que el propio GRAVE-1/2 de este spec, en el vector que quedó sin cerrar. Corregido: el fallback de ruta REST solo se evalúa cuando el segmento es realmente `gh api` (nunca `gh pr create`, que ya tiene `--repo`/`-R`).
+
+**GRAVE-5 — `--repo`/`-R`/`--base`/`-B` repetidos se leían por la PRIMERA ocurrencia, no la última.** `gh`/Cobra sobrescriben con cada ocurrencia (la última gana); un `--repo somebody-else/x --repo o/<este-repo>` se leía como dirigido a otro repositorio y el gate se saltaba, aunque la llamada real apunta aquí. Corregido: se recorre todo el segmento y se conserva la última coincidencia.
+
+**GRAVE-6 — el workflow de servidor afirma "todo indeterminado es rojo" pero solo precomprueba la base ausente.** `decide()`'s otros veredictos `undetermined` (`no merge base`, `nada que revisar sobre la base`, sin directorio de artefactos) seguían saliendo en verde bajo `--strict`, contradiciendo la cabecera del propio workflow. Corregido: cualquier línea `· adversarial-pass: undetermined` promueve el paso a fallo.
+
+**MEDIA-5 — `this_repo_name()` caía a `basename REPO_ROOT` sin remoto `origin` y con un git-common-dir no estándar** — reintroduce, en ese caso estrecho, el mismo bug de worktree que GRAVE-3 cerró. Corregido: sin adivinar; "no se puede determinar" ahora hace que el hook se APLIQUE en vez de saltarse.
+
+**MEDIA-6 — el trigger `branches: [main]` del workflow deja sin cubrir un PR contra una base distinta de `main`.** El cuerpo del job ya resuelve `BASE_REF` dinámicamente; el filtro del trigger era la única razón de que se saltara. Corregido: sin filtro de `branches`.
+
+**MEDIA-7 — el chequeo de delta comparaba cada pase base por separado (AND de comprobaciones individuales), no contra la unión.** Un candidato pegado de DOS pases previos DISTINTOS libraba ambas comprobaciones por separado aunque cero líneas fueran realmente nuevas. Corregido: la unión de todas las secciones base se calcula una vez y el candidato se mide contra ella. Trade-off nombrado, no cerrado: un pase genuinamente nuevo que comparta frases de estilo con un pase antiguo no relacionado ahora también las pierde del cómputo — la escotilla registrada sigue siendo la respuesta a un `missing` falso, igual que ya lo era para el resto del diseño.
+
+**BAJA-1 — `extract_ack_body`/`extract_ack_prefix` aceptaban el propio texto de marcador (`<why this PR needs no pass>`, `<reason>`) como si fuera una razón real** cuando alguien pega sin rellenar las instrucciones de la propia herramienta. Corregido: un valor idéntico al marcador se rechaza igual que un valor vacío.
+
+**BAJA-2 — un nombre de fichero rastreado con `:` rompía `awk -F:` en `shell.files`,** excluyéndolo en silencio de la lista. Corregido: `git grep -z` + parseo por NUL, verificado con un fichero de prueba `weird:name`.
+
+**BAJA-3 — `shell.lint` podía imprimir "✓ sin hallazgos" si el descubrimiento de ficheros fallaba (sin `pipefail`, `xargs -r` no invoca nada con entrada vacía).** Corregido: el recuento se calcula una vez y falla explícitamente si es cero.
+
+**BAJA-4 — un `--repo owner/repo.git` no se comparaba igual que `this_repo_name()`,** que sí recorta el `.git` de la URL del remoto. Corregido: mismo recorte en `segment_target_repo`.
+
+**Dejado como residual, sin tocar (riesgo real bajo, arreglo arriesgado sin caso reproducido en este entorno):** la forma `#!/usr/bin/env -S bash --posix` no la reconoce el escaneo de shebangs de `shell.files` (ningún fichero vivo la usa hoy); el floor de `delta_clears_floor` no dedupe líneas repetidas dentro del propio candidato (el floor ya es deliberadamente bajo — "gates the form, not the substance"); el conteo de caracteres UTF-8 multibyte con `length()` de awk puede divergir entre mawk y gawk cerca del umbral de 200; `segment_args`'s manejo de `\` dentro de comillas dobles no seq. la semántica POSIX exacta (ningún vector de bypass demostrado); continuaciones de línea con `\` sin comillas dentro de un segmento no se probaron.
+
+**Fuera del alcance de esta PR — decisión del propietario del repositorio, no un parche de código:** `main` no tiene branch protection (`gh api repos/.../branches/main/protection` → 404), así que ni `ci-success` ni este propio check son en realidad obligatorios para mergear.
 
 ## Verification
 
@@ -89,12 +117,18 @@ no nombra repositorio alguno, pero la coincidencia de texto extraía `other/thin
 | --- | --- |
 | `make shell.lint` | `✓ no findings across 20 tracked shell scripts`, exit 0 |
 | `make shell.lint` con un hallazgo plantado | `Error 123`, exit ≠ 0 |
-| `make bmad.adversarial.self-test` | 101 filas, exit 0 |
-| mutación: pisos del delta a 1/1 | 4 filas rojas |
+| `make bmad.adversarial.self-test` | 111 filas, exit 0 (101 + 10 de la pasada independiente) |
+| mutación: `MIN_RECORD_LINES`/`MIN_RECORD_CHARS` a 1/1 (global) | 7 filas rojas |
+| mutación: solo los floors internos de `delta_clears_floor` a 1/1 | 4 filas rojas |
 | mutación: `this_repo_name` → `basename REPO_ROOT` | 1 fila roja (worktree) |
 | mutación: sin guarda de repositorio en CLI | 5 filas rojas |
 | mutación: `segment_args` deja de respetar comillas | 5 filas rojas |
 | mutación: `--base` desde texto crudo | 2 filas rojas |
-| `shellcheck` sobre los 20 scripts | 0 |
+| mutación: fallback de ruta REST activo en `gh pr create` | 2 filas rojas (título y cuerpo con texto `/repos/.../pulls`) |
+| mutación: `--repo`/`--base` repetidos vuelven a "primera ocurrencia gana" | 3 filas rojas |
+| mutación: `is_ack_placeholder` eliminada | 2 filas rojas |
+| `shellcheck` sobre los 20 scripts (0.10.0 y 0.11.0) | 0 en ambas versiones |
+| `shell.files` con un fichero `weird:name` de prueba | listado correctamente (antes: excluido en silencio) |
 | bloque `run` del workflow, tres direcciones | 1 / 0 (UNCHECKED) / 1 con `::error::` |
+| bloque `run` del workflow, veredicto `undetermined` no precomprobado | promovido a fallo (antes: verde) |
 | `ci.yml` y `adversarial-pass.yml` | parsean; `ci-success` depende de `shell-lint` |

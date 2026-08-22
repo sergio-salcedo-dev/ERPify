@@ -61,7 +61,12 @@ name: Adversarial pass
 
 on:
   pull_request:
-    branches: [main]
+    # No `branches:` filter: the base ref is read dynamically below, and a
+    # filter naming only `main` left every PR targeting another base
+    # (a feature stacked on another feature branch) with no gate at all --
+    # the same "opened outside this session" silence #815 exists to close,
+    # reopened for one shape of base ref.
+    #
     # `synchronize` and `reopened` so a missing record can be fixed by pushing
     # it; `edited` so the body hatch takes effect without an empty commit.
     types: [opened, reopened, synchronize, edited]
@@ -117,6 +122,18 @@ jobs:
           out="$(ADVERSARIAL_PASS_ACK="${ack}" \
             ./scripts/adversarial-pass-check.sh --surface mcp --base-ref "origin/${BASE_REF}" --strict 2>&1)"
           status=$?
+
+          # The script itself exits 0 on an "undetermined" verdict under
+          # --strict, by design, for the PreToolUse hook and interactive use —
+          # a wedged branch is worse than an unchecked PR there. That trade
+          # does not carry here (see the header): nothing here can wedge a
+          # branch, so any undetermined verdict is promoted to a failure, not
+          # only the base-ref case pre-checked above. This also covers a base
+          # ref that resolves but shares no history with HEAD, or a PR with
+          # nothing over its base — cases the pre-check above does not name.
+          case "${out}" in
+            "· "*) status=1 ;;
+          esac
 
           printf '%s\n' "${out}"
           {
