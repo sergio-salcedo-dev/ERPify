@@ -26,10 +26,15 @@ import {
 } from "./_lib/backofficeMenu";
 import { RequireAuth, DevSessionSwitcher } from "@/context/shared/access/infrastructure/ui";
 import { useSession } from "@/context/shared/access/application/useSession";
-import { isSessionExpiring } from "@/context/shared/access/application/sessionExpiry";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNavigate";
+import {
+  claimDeparture,
+  releaseDeparture,
+  currentDeparture,
+  DepartureReason,
+} from "@/context/shared/navigation/application/departure";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 
 const SIDEBAR_STORAGE_KEY = "erpify:sidebar-open";
@@ -94,7 +99,7 @@ export default function BackOfficeLayoutClient({
   const router = useRouter();
   const pathname = usePathname();
   const sectionTitle = sectionTitleFor(pathname);
-  const { logout, session, setIsSigningOut } = useSession();
+  const { logout, session } = useSession();
 
   useEffect(() => {
     if (globalThis.window === undefined) return;
@@ -190,7 +195,19 @@ export default function BackOfficeLayoutClient({
       if (isLeaving) return;
       if (closingMobileSheet) closingSheetViaNavigationRef.current = true;
       setSignOut(SignOut.LEAVING);
-      setIsSigningOut(true);
+      // Claimed HERE, before anything else in this branch: the revoke below drops the session
+      // cookie, so everything already in flight — a dashboard poll, a Mercure authorize, a list
+      // refetch — 401s inside this window, and the transport bounces a 401 to
+      // `/login?reason=session-expired` unless a departure is already claimed. That second
+      // navigation generally wins, so a user who asked to sign out used to land on "session
+      // expired". The transport's exemption for the revoke CALL never covered its neighbours.
+      //
+      // One claim, three readers: this single flight, `RequireAuth` (which must not race its own
+      // redirect against a navigation already leaving) and `SessionExpiryCurtain` (which reads
+      // the REASON, so a sign-out does not raise a screen saying the session expired). It is
+      // module state rather than context because the third reader is a module-level function
+      // inside an infrastructure adapter, which reaches no provider.
+      const claimed = claimDeparture(DepartureReason.SIGN_OUT);
       // `action` is what makes this sign out. The destination below is hard-coded to HOME and
       // this entry's own `path` is never read on this branch. Two tests hold the two together,
       // one per direction: the model guard asserts the entry's declared path, and the
@@ -235,22 +252,22 @@ export default function BackOfficeLayoutClient({
               setSignOut(SignOut.SUPERSEDED);
               // The toast is what REFUSED/STALLED lean on for the case their own subtree is
               // already unmounted — but the ONLY real caller that can supersede this one today
-              // is the session-expiry bounce, and winning the sink is what mounts
-              // <SessionExpiryCurtain> over this entire subtree in the first place. A second
-              // adversarial pass (both reviewers, independently) caught that: by the time this
-              // callback runs the curtain already owns the screen — its role="alert" already
-              // announced something, and Sonner's viewport sits BELOW the curtain's
-              // z-index, so a toast raised now would enqueue and never paint. Skip it in
-              // exactly that case, since the curtain already carries the announcement; keep it
-              // for a hypothetical future caller that supersedes this one without bringing its
-              // own.
-              if (!isSessionExpiring()) {
+              // is the session-expiry bounce, which claims the departure below before it ever
+              // reaches `hardNavigate`. So `claimed` is false here exactly when the reason
+              // currently held is SESSION_EXPIRED, and winning that claim is what mounts
+              // <SessionExpiryCurtain> over this entire subtree in the first place — by the
+              // time this callback runs, the curtain's role="alert" already announced the
+              // leaving state, and Sonner's viewport sits BELOW the curtain's z-index, so a
+              // toast raised now would enqueue and never paint. Skip it in exactly that case;
+              // keep it for a hypothetical future caller that supersedes this one without ever
+              // claiming a departure of its own.
+              if (currentDeparture() !== DepartureReason.SESSION_EXPIRED) {
                 toastNotifier.info(SIGN_OUT_MESSAGE[SignOut.SUPERSEDED]);
               }
-              // isSigningOut still has to release — if that OTHER navigation itself never
-              // commits, nothing else will, and this would stay latched for the life of the
-              // document, exactly the class of bug this module already guards against.
-              setIsSigningOut(false);
+              // Only the winner releases. A `claimed` of false means this attempt never owned
+              // the departure to begin with — the session-expiry bounce already does, and it
+              // is the one that will release it when ITS OWN navigation settles.
+              if (claimed) releaseDeparture();
               return;
             }
             const outcome = failure === "refused" ? SignOut.REFUSED : SignOut.STALLED;
@@ -261,8 +278,9 @@ export default function BackOfficeLayoutClient({
             // guarded subtree is doing.
             toastNotifier.error(SIGN_OUT_MESSAGE[outcome]);
             // Re-enables RequireAuth's own redirect: the sign-out navigation did not commit,
-            // so the ordinary unauthenticated-route guard takes back over.
-            setIsSigningOut(false);
+            // so the ordinary unauthenticated-route guard takes back over. Only the winner
+            // releases — see the superseded branch above.
+            if (claimed) releaseDeparture();
           });
         });
       return;

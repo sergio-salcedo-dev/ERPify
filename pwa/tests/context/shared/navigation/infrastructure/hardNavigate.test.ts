@@ -20,10 +20,10 @@ describe("hardNavigate", () => {
     // configurable — so the global is replaced wholesale.
     vi.stubGlobal("location", { pathname: "/here", search: "", replace });
     // The single-flight claim is module state, so a fresh module per test is what isolates
-    // one test's in-flight navigation from the next — the same pattern already used for
-    // sessionExpiry's guard in FetchHttpClient.test.ts. A stale claim held past a test that
-    // deliberately never disarms (the backgrounded-tab cases below) would otherwise make the
-    // next test's own call spuriously "superseded".
+    // one test's in-flight navigation from the next — the same pattern already used for the
+    // expiry-bounce budget's guard in FetchHttpClient.test.ts. A stale claim held past a test
+    // that deliberately never disarms (the backgrounded-tab cases below) would otherwise make
+    // the next test's own call spuriously "superseded".
     vi.resetModules();
     const mod = await import(MODULE_PATH);
     hardNavigate = mod.hardNavigate;

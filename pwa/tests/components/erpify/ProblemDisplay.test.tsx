@@ -50,6 +50,44 @@ describe("ProblemDisplay", () => {
     expect(screen.getByTestId("problem-display__status")).toHaveTextContent("No response");
   });
 
+  // "No response" asserts the opposite of what a timeout means: the request may well have been
+  // received and applied, which is the entire distinction `request-timeout` exists to draw. The
+  // pill was contradicting the type printed beside it.
+  it("says a request was given up on rather than unanswered, for a timeout", () => {
+    render(
+      <ProblemDisplay
+        problem={{
+          ...baseProblem,
+          type: "request-timeout",
+          status: 0,
+          title: "The server did not answer in time",
+        }}
+      />,
+    );
+    expect(screen.getByTestId("problem-display__status")).toHaveTextContent("Timed out");
+  });
+
+  it("keeps the no-response pill for the transport failure that earned it", () => {
+    render(
+      <ProblemDisplay
+        problem={{
+          ...baseProblem,
+          type: "network-error",
+          status: 0,
+          title: "Could not reach the server",
+        }}
+      />,
+    );
+    expect(screen.getByTestId("problem-display__status")).toHaveTextContent("No response");
+  });
+
+  // Only status 0 consults the type, which is what keeps this component status-keyed: a problem
+  // type it has never seen still prints its own code.
+  it("prints the numeric code for a type it has never heard of", () => {
+    render(<ProblemDisplay problem={{ ...baseProblem, type: "some-future-type", status: 409 }} />);
+    expect(screen.getByTestId("problem-display__status")).toHaveTextContent("HTTP 409");
+  });
+
   it("renders the correlation ID as a copyable chip", () => {
     render(<ProblemDisplay problem={baseProblem} />);
     expect(screen.getByRole("button", { name: /Copy correlation ID/ })).toBeInTheDocument();

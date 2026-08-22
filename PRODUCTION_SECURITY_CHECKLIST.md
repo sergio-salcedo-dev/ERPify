@@ -1370,6 +1370,57 @@ mitigated state. Accepting one means recording who accepted it and against which
           deployment or the first customer, whichever comes first** — same trigger as the repository's public-posture
           item below, and the same trigger that unwinds residuals one, three and five.
 
+- [x] **A person's identifier reached Sentry inside a request URL, on two surfaces, closed 2026-08-21.**
+      `scrubSentryEvent` parsed `event.request.url` and `query_string` parameter-by-parameter but
+      sent every other structured surface through the key-based `scrubDeep` only, and a request URL
+      is a **string** under a key no denylist will ever hold.
+      **Surface one — breadcrumbs.** The SDK adds one per `fetch` and one per history entry, carrying
+      the URL under `data.url` / `data.from` / `data.to`.
+      **Surface two — spans, and this is the one that shipped further.** `sentryInitOptions` wires the
+      same function to `beforeSendTransaction`, `browserTracingIntegration` is a default integration
+      with `traceFetch: true`, and `getFetchSpanAttributes` writes the raw URL to `url`, `http.url`
+      and `url.full` plus the bare query to `http.query` — four attributes, on 20 % of traced fetches
+      in production. The span NAME is sanitised by the SDK, which is exactly what made this easy to
+      miss. `contexts.trace.data` carries the same attributes. Measured before the fix: a search
+      filtering on an email came back from `scrubSentryEvent` **identical**, the address in clear
+      three times over, while the same value inside a breadcrumb on the same event came back
+      `REDACTED`. The vocabulary was already right; it was never pointed at that surface.
+      Same class as the access-log defect closed in #389/#803, and the same reason it matters:
+      Sentry has retention of its own that no erasure path reaches, so an identifier that arrives
+      outlives the erasure the application confirmed to the subject.
+      The URL pass now runs over **every** structured surface — `extra`, `contexts`, `user`,
+      `breadcrumbs`, `spans`, `tags`, and the `request` sub-objects (`data` / `headers` / `cookies`)
+      — after the denylist pass, rather than over a named list of the ones believed to carry URLs;
+      naming the surfaces is what produced this defect. Values are matched by **shape** (`https?://`,
+      `//` or `/` with a `?`, or a bare leading `?` for `http.query`) rather than by key name, because
+      a key list is what failed for this class twice. Pinned by rows in
+      `pwa/tests/.../scrubSentryEvent.test.ts`, each falsified by mutating the source and watching it
+      go red.
+      **Residual one — free text is out of scope, and this is narrower than it first reads.** A
+      breadcrumb's `message`, `event.message` and a captured `Error.message`/stack are not rewritten,
+      so a URL quoted inside prose reaches the tracker intact. This is the same scope the module has
+      always kept, matching the API scrubber. A `console` breadcrumb's `data.arguments` is **not** in
+      this residual — it is an array under `data` and the pass walks it.
+      **Residual two — a URL embedded MID-string is not seen**, since the shape test reads the start
+      of the value. A value that *is* a URL is covered; a value that *mentions* one is not.
+      **Residual three — two spellings that are shapes and still escape.** A relative URL with no
+      leading `/` (`api/audit?actorId=…`) and a query living inside the fragment
+      (`https://app/x#/route?actorId=…`, where `scrubUrl` splits on `#` first) both carry a query and
+      both pass through. Neither is produced by this application today — `browserApiBase()` returns
+      `""`, so every request this transport issues starts with `/`, and nothing here uses hash
+      routing — but a third-party script or a future relative fetch would leak. Leading whitespace is
+      a third, hand-authored only.
+      **Residual four — a green proves the transformation, never the sink.** These are unit rows over
+      synthetic events; nothing here observes what a running SDK attaches, and `beforeSend` /
+      `beforeSendTransaction` are the only interception points, so an SDK field outside the surfaces
+      enumerated above is untouched by construction.
+      **Accepted 2026-08-21 (Sergio):** residuals one to four, on the same basis as the access-log
+      residuals above — no production deployment and no customer — and on the narrower fact that all
+      four require an identifier to travel somewhere the shape rule does not read, rather than under
+      a name the vocabulary failed to enumerate, which is the direction that actually shipped.
+      **Expiry: re-assess before the first production deployment or the first customer**, whichever
+      comes first.
+
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

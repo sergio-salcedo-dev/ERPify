@@ -23,13 +23,50 @@ import { Routes } from "@/context/shared/routing/domain/Routes";
 import { safeInternalPath } from "@/context/shared/navigation/domain/safeInternalPath";
 import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNavigate";
 import {
-  beginSessionExpiry,
-  endSessionExpiry,
-} from "@/context/shared/access/application/sessionExpiry";
+  claimDeparture,
+  releaseDeparture,
+  DepartureReason,
+} from "@/context/shared/navigation/application/departure";
 import { API_ENDPOINTS } from "./ApiEndpoints";
 
 function trimBase(url: string): string {
   return url.replace(/\/$/, "");
+}
+
+// How many times this document will try the expiry bounce before it stops trying.
+//
+// Releasing the claim on a navigation that never committed is what keeps a later 401 from being
+// swallowed for ever — but the NEXT 401 then re-claims and re-blanks the app for another commit
+// budget, and `useMercureRealtime`'s reconnect re-fires `authorize()` through this client. In a
+// navigable that drops navigations the app therefore cycles blank/usable indefinitely, unmounting
+// the whole tree each time and taking page state and unsaved input with it.
+//
+// Two, because the first give-up is indistinguishable from a slow-but-real navigation — the
+// commit oracle is one-sided by construction — while a second one says the document is staying.
+//
+// What happens at the cap is the part that took a second look. Giving up by RELEASING the claim
+// was the obvious spelling and it was wrong: the curtain, and the client-side `Link` to /login it
+// carries, are the user's only remaining exit in a navigable that drops document navigations, and
+// releasing takes them away exactly when they are needed — the Sign out entry cannot help either,
+// since it leaves through the same dropped mechanism. So the last attempt KEEPS the claim: the
+// curtain stays up, its `Link` still routes client-side, and no further bounce is ever attempted,
+// which is what stops the flapping without spending the affordance.
+//
+// Kept, not merely bounded: once this cap is reached the claim stays SESSION_EXPIRED for the
+// rest of the document's life, and with it RequireAuth's own redirect effect (gated on the same
+// claim) never fires again either — the curtain's `Link` is the only route out from that point
+// on. Accepted, since the alternative was flapping the whole app blank/usable; a document reaching
+// the cap is rare enough (two DEMONSTRABLY failed navigations in a navigable that drops them) that
+// the manual link is a reasonable floor rather than a dead end.
+const MAX_EXPIRY_BOUNCES = 2;
+
+// Per document, like the claim it guards: a committed navigation discards this module with the
+// rest of the document, so only a bounce that DEMONSTRABLY failed is ever counted.
+let bouncesGivenUpOn = 0;
+
+/** Test seam: a module counter outlives a test file, and a stale one silences the next test. */
+export function resetExpiryBounceBudget(): void {
+  bouncesGivenUpOn = 0;
 }
 
 // How long any single request is given before the client gives up on it. A default, not a
@@ -58,6 +95,10 @@ interface ReadResponse {
 //    navigation and strand the user on "session expired" instead of the public
 //    landing they asked for.
 // Every other gated 401 means "was authenticated, now isn't".
+//
+// This list exempts the sign-out CALL and nothing else in flight beside it. What covers the rest —
+// a dashboard poll, a Mercure authorize, a list refetch, any of which can 401 in the same window —
+// is the departure claim below, which the sign-out takes before it revokes.
 function isAuthHandshakeEndpoint(input: string): boolean {
   const path = input.split("?")[0];
   return (
@@ -79,7 +120,11 @@ function redirectToLoginOnSessionExpiry(input: string): void {
   // module state that a fresh document resets — so a 401 raised from this screen could
   // reload it for as long as the call keeps failing.
   if (globalThis.location.pathname === Routes.LOGIN) return;
-  if (!beginSessionExpiry()) return;
+  if (bouncesGivenUpOn >= MAX_EXPIRY_BOUNCES) return;
+  // Losing the claim is not a failure to report. Either a sign-out is already leaving — and it is
+  // going somewhere better than "session expired" — or another 401 in this same burst already
+  // started the bounce. Both are the single flight working.
+  if (!claimDeparture(DepartureReason.SESSION_EXPIRED)) return;
   const current = `${globalThis.location.pathname}${globalThis.location.search}`;
   const next = encodeURIComponent(safeInternalPath(current, Routes.BACKOFFICE));
   // A router is unreachable from here: this is a module-level function inside an
@@ -92,7 +137,13 @@ function redirectToLoginOnSessionExpiry(input: string): void {
   // Releasing the claim on failure covers BOTH ways the document can stay: a refusal, which
   // raises, and an ignored navigation, which does not. The second is the one that used to
   // wedge this adapter — every later 401 in the document swallowed, no bounce and no signal.
-  hardNavigate(`${Routes.LOGIN}?next=${next}&reason=session-expired`, endSessionExpiry);
+  //
+  // Except on the last attempt, where the claim is deliberately kept — see MAX_EXPIRY_BOUNCES.
+  hardNavigate(`${Routes.LOGIN}?next=${next}&reason=session-expired`, () => {
+    bouncesGivenUpOn += 1;
+    if (bouncesGivenUpOn >= MAX_EXPIRY_BOUNCES) return;
+    releaseDeparture();
+  });
 }
 
 function browserApiBase(): string {
@@ -178,8 +229,13 @@ export class FetchHttpClient implements HttpClient {
       if (res.status === HttpStatus.UNAUTHORIZED) {
         // The 401 still travels back to its caller and still throws: the HTTP contract is
         // unchanged, so no caller has to learn a second failure shape. What stops the error UI
-        // painting during the unload window is <SessionExpiryCurtain>, which reads the same
-        // claim this call publishes.
+        // painting during the unload window is <SessionExpiryCurtain>, which reads the claim this
+        // call publishes — with two stated exceptions, because the curtain reads the REASON and
+        // not merely that a departure is in flight. During a SIGN-OUT it stays down on purpose
+        // (blanking the app would destroy the status region that announces the leaving state), so
+        // a 401 from a request still in flight does paint its caller's error for that window; and
+        // past the bounce cap nothing new is ever claimed, so the curtain up at that moment is the
+        // terminal one.
         redirectToLoginOnSessionExpiry(input);
       }
       // Aborting mid-stream rejects this too, which is the point: it is inside the try, so

@@ -52,13 +52,6 @@ export interface AuthContextValue {
   logout: (budgetMs?: number) => Promise<void>;
   /** Dev-only partial override (role/status/permissions), used by the switcher. */
   override: (patch: Omit<Partial<Session>, "user"> & { user?: Partial<Identity> }) => void;
-  /**
-   * True from the moment a sign-out is initiated until its outcome (committed navigation,
-   * refusal, or stall) is known. `RequireAuth` must not race its own redirect against an
-   * interaction that is already leaving — see `BackOfficeLayoutClient`'s sign-out branch.
-   */
-  isSigningOut: boolean;
-  setIsSigningOut: (isSigningOut: boolean) => void;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -92,7 +85,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   // the probe (or a login re-probe) has settled.
   const [session, setSession] = useState<Session | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const resolveSession = useCallback(async (): Promise<Session | null> => {
     try {
@@ -167,8 +159,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   }, [hydrated, session]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, session, login, logout, override, isSigningOut, setIsSigningOut }),
-    [status, session, login, logout, override, isSigningOut],
+    () => ({ status, session, login, logout, override }),
+    [status, session, login, logout, override],
   );
 
   return (

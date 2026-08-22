@@ -194,4 +194,193 @@ describe("scrubSentryEvent", () => {
     const event = { extra: { id: 1 } } as unknown as ErrorEvent;
     expect(scrubSentryEvent(event).extra).toEqual({ id: 1 });
   });
+  // The SDK adds one breadcrumb per `fetch` and one per history entry, and each carries the whole
+  // URL as a STRING under a key no denylist holds. Every rule above matches a parameter name or a
+  // structured key, so this whole class travelled in clear until the URL pass ran here too.
+  it("redacts the query of a fetch breadcrumb's url", () => {
+    const event = {
+      breadcrumbs: [
+        {
+          category: "fetch",
+          data: {
+            method: "GET",
+            url: "https://app.example/api/v1/backoffice/audit?filters%5B0%5D%5Bfield%5D=email&filters%5B0%5D%5Bvalue%5D=someone@example.com",
+            status_code: 500,
+          },
+        },
+      ],
+    } as unknown as ErrorEvent;
+
+    const url = scrubSentryEvent(event).breadcrumbs?.[0]?.data?.url as string;
+
+    expect(url).toContain("filters%5B0%5D%5Bvalue%5D=REDACTED");
+    expect(url).not.toContain("someone@example.com");
+    // The shape is the diagnostic worth of a URL, so the path and the non-sensitive axes stay.
+    expect(url).toContain("/api/v1/backoffice/audit");
+    expect(url).toContain("filters%5B0%5D%5Bfield%5D=email");
+  });
+
+  // A history breadcrumb names the URL under `from`/`to`, which is why the pass is keyed on the
+  // SHAPE of the value rather than on the key it sits under.
+  it("redacts a person id carried by a navigation breadcrumb", () => {
+    const event = {
+      breadcrumbs: [
+        {
+          category: "navigation",
+          data: {
+            from: "/backoffice/audit?actorId=8f14e45f",
+            to: "/login?next=%2Fbackoffice%2Faudit%3FactorId%3D8f14e45f&reason=session-expired",
+          },
+        },
+      ],
+    } as unknown as ErrorEvent;
+
+    const data = scrubSentryEvent(event).breadcrumbs?.[0]?.data as Record<string, string>;
+
+    expect(data.from).toBe("/backoffice/audit?actorId=REDACTED");
+    expect(data.to).not.toContain("8f14e45f");
+    expect(data.to).toContain("reason=session-expired");
+  });
+
+  it("leaves a breadcrumb value that is not URL-shaped alone", () => {
+    const event = {
+      breadcrumbs: [
+        {
+          category: "console",
+          // Free text is out of scope here exactly as it is for `message` and a captured stack —
+          // a recorded residual, not an oversight. Rewriting it would mangle any prose holding a `?`.
+          message: "Could not reach /api/v1/banks?page=2 — retrying",
+          data: { arguments: ["what? really"], level: "warn" },
+        },
+      ],
+    } as unknown as ErrorEvent;
+
+    const crumb = scrubSentryEvent(event).breadcrumbs?.[0];
+
+    expect(crumb?.message).toBe("Could not reach /api/v1/banks?page=2 — retrying");
+    expect(crumb?.data?.arguments).toEqual(["what? really"]);
+  });
+
+  it("applies the denylist before the url pass, so a stripped key has no url left to scrub", () => {
+    const event = {
+      breadcrumbs: [
+        { category: "fetch", data: { authorization: "Bearer x", url: "/api/v1/banks?token=abc" } },
+      ],
+    } as unknown as ErrorEvent;
+
+    expect(scrubSentryEvent(event).breadcrumbs?.[0]?.data).toEqual({
+      url: "/api/v1/banks?token=REDACTED",
+    });
+  });
+  // `beforeSendTransaction` is wired to this same function and tracing is on in every environment
+  // (sampled 0.2 in prod), so a traced fetch hands over a span carrying the request URL — under
+  // `url`, `http.url`, `url.full` and `http.query`, three of them whole. The span NAME is
+  // sanitised by the SDK, which is what made this easy to miss; the attributes are not. This is
+  // the leak #821 was filed for, one surface over from the one it named.
+  it("redacts the request URL a traced fetch leaves on its span", () => {
+    const event = {
+      spans: [
+        {
+          op: "http.client",
+          description: "GET /api/v1/backoffice/audit",
+          data: {
+            url: "https://app.example/api/v1/backoffice/audit?filters%5B0%5D%5Bvalue%5D=jane@example.com",
+            "http.url":
+              "https://app.example/api/v1/backoffice/audit?filters%5B0%5D%5Bvalue%5D=jane@example.com",
+            "url.full":
+              "https://app.example/api/v1/backoffice/audit?filters%5B0%5D%5Bvalue%5D=jane@example.com",
+            "http.query": "?filters%5B0%5D%5Bvalue%5D=jane%40example.com",
+            "http.response.status_code": 500,
+          },
+        },
+      ],
+    } as unknown as ErrorEvent;
+
+    const data = (
+      scrubSentryEvent(event) as unknown as { spans: { data: Record<string, unknown> }[] }
+    ).spans[0].data;
+
+    expect(JSON.stringify(data)).not.toContain("jane");
+    expect(data.url).toContain("filters%5B0%5D%5Bvalue%5D=REDACTED");
+    expect(data["http.url"]).toContain("filters%5B0%5D%5Bvalue%5D=REDACTED");
+    expect(data["url.full"]).toContain("filters%5B0%5D%5Bvalue%5D=REDACTED");
+    // A bare query is neither absolute nor root-relative, so it needs its own arm of the rule.
+    expect(data["http.query"]).toBe("?filters%5B0%5D%5Bvalue%5D=REDACTED");
+    // The shape stays readable: an operator still sees which endpoint was called.
+    expect(data.url).toContain("/api/v1/backoffice/audit");
+    expect(data["http.response.status_code"]).toBe(500);
+  });
+
+  it("redacts a person id on the trace context's own attributes", () => {
+    const event = {
+      contexts: {
+        trace: {
+          trace_id: "01H",
+          data: { "url.full": "https://app.example/backoffice/audit?actorId=8f14e45f" },
+        },
+      },
+    } as unknown as ErrorEvent;
+
+    const trace = scrubSentryEvent(event).contexts?.trace as { data: Record<string, string> };
+
+    expect(trace.data["url.full"]).toBe("https://app.example/backoffice/audit?actorId=REDACTED");
+  });
+
+  // The URL pass rewrites the caller's bytes, so it may only do so when it actually replaced
+  // something. `URLSearchParams` normalises everything it round-trips, and applying that to a
+  // string that merely LOOKS like a URL is corruption of the one thing this sink is kept for.
+  it.each([
+    { case: "prose holding a question mark", value: "/help? what now" },
+    { case: "an encoded space an operator reads the request by", value: "/x?a=b%20c" },
+    { case: "a trailing question mark with no query at all", value: "/foo?" },
+    { case: "a value with no equals sign", value: "/x?flag" },
+  ])("leaves $case exactly as the caller sent it", ({ value }) => {
+    const event = {
+      breadcrumbs: [{ category: "console", data: { arguments: [value] } }],
+    } as unknown as ErrorEvent;
+
+    const args = scrubSentryEvent(event).breadcrumbs?.[0]?.data?.arguments as string[];
+
+    expect(args[0]).toBe(value);
+  });
+
+  it("redacts a URL-shaped value inside request.data, not just a denylisted key", () => {
+    const event = {
+      request: {
+        data: { returnUrl: "https://app.example/backoffice/audit?actorId=8f14e45f", ok: true },
+      },
+    } as unknown as ErrorEvent;
+
+    const data = scrubSentryEvent(event).request?.data as Record<string, unknown>;
+
+    expect(data.returnUrl).toBe("https://app.example/backoffice/audit?actorId=REDACTED");
+    expect(data.ok).toBe(true);
+  });
+
+  it("redacts a URL-shaped value inside a stringified request.data JSON body", () => {
+    const event = {
+      request: {
+        data: JSON.stringify({ returnUrl: "/backoffice/audit?actorId=8f14e45f", ok: true }),
+      },
+    } as unknown as ErrorEvent;
+
+    const data = JSON.parse(scrubSentryEvent(event).request?.data as string) as {
+      returnUrl: string;
+      ok: boolean;
+    };
+
+    expect(data.returnUrl).toBe("/backoffice/audit?actorId=REDACTED");
+    expect(data.ok).toBe(true);
+  });
+
+  it("redacts a URL-shaped value inside tags, a surface no key-based scrub reaches", () => {
+    const event = {
+      tags: { "telemetry.scope": "api:transport", referer: "/audit?actorId=8f14e45f" },
+    } as unknown as ErrorEvent;
+
+    const tags = scrubSentryEvent(event).tags as Record<string, string>;
+
+    expect(tags.referer).toBe("/audit?actorId=REDACTED");
+    expect(tags["telemetry.scope"]).toBe("api:transport");
+  });
 });

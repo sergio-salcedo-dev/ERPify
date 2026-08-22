@@ -2,10 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import { SessionExpiryCurtain } from "@/context/shared/access/infrastructure/ui/SessionExpiryCurtain";
 import {
-  beginSessionExpiry,
-  endSessionExpiry,
-} from "@/context/shared/access/application/sessionExpiry";
-import { FetchHttpClient } from "@/context/shared/http-client/infrastructure/FetchHttpClient";
+  claimDeparture,
+  releaseDeparture,
+  DepartureReason,
+} from "@/context/shared/navigation/application/departure";
+import {
+  FetchHttpClient,
+  resetExpiryBounceBudget,
+} from "@/context/shared/http-client/infrastructure/FetchHttpClient";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNavigate";
 import { Routes } from "@/context/shared/routing/domain/Routes";
@@ -20,14 +24,15 @@ const CHILD = "session-expiry-test__child";
 
 describe("SessionExpiryCurtain", () => {
   beforeEach(() => {
-    endSessionExpiry();
+    releaseDeparture();
+    resetExpiryBounceBudget();
     dismissAll.mockClear();
   });
 
-  // sessionExpiry's own claim is reset in beforeEach, never here: Testing Library unmounts in
-  // its own afterEach, and releasing the claim while the tree is still mounted updates a
-  // component outside act(). hardNavigate's SEPARATE single-flight claim is a different piece
-  // of module state that `endSessionExpiry()` never touches, so it needs its own release — a
+  // The departure claim is reset in beforeEach, never here: Testing Library unmounts in its
+  // own afterEach, and releasing the claim while the tree is still mounted updates a component
+  // outside act(). hardNavigate's SEPARATE single-flight claim is a different piece of module
+  // state that `releaseDeparture()` never touches, so it needs its own release — a
   // `pagehide`/`persisted: false` dispatch is a no-op when nothing is in flight, and disarms
   // whatever is otherwise, the same way an actual navigation commit would (lighter than
   // hardNavigate.test.ts's module reset for the same reason noted there: this file never holds
@@ -56,7 +61,7 @@ describe("SessionExpiryCurtain", () => {
     );
 
     act(() => {
-      beginSessionExpiry();
+      claimDeparture(DepartureReason.SESSION_EXPIRED);
     });
 
     // The point is the ABSENCE: whatever error UI the 401 was about to paint has nowhere to
@@ -91,10 +96,10 @@ describe("SessionExpiryCurtain", () => {
     );
 
     act(() => {
-      beginSessionExpiry();
+      claimDeparture(DepartureReason.SESSION_EXPIRED);
     });
     act(() => {
-      endSessionExpiry();
+      releaseDeparture();
     });
 
     // Without this direction the curtain is a worse bug than the flash it replaces: an ignored
@@ -162,17 +167,36 @@ describe("SessionExpiryCurtain", () => {
     );
 
     act(() => {
-      beginSessionExpiry();
-      // Refused as "superseded": nothing raises, nothing unloads, and `endSessionExpiry` (the
-      // real onFailure this call site uses in production) runs synchronously, in the same tick.
-      hardNavigate(`${Routes.LOGIN}?reason=session-expired`, endSessionExpiry);
+      claimDeparture(DepartureReason.SESSION_EXPIRED);
+      // Refused as "superseded": nothing raises, nothing unloads, and releasing the claim (the
+      // real onFailure this call site uses in production, short of the bounce budget) runs
+      // synchronously, in the same tick.
+      hardNavigate(`${Routes.LOGIN}?reason=session-expired`, releaseDeparture);
     });
 
-    // React never renders the intermediate `true` a plain `beginSessionExpiry()` alone would
-    // have produced: the curtain — and the toast-clearing it would otherwise trigger — never
-    // appears, because by the time this effect could run, `expiring` is already back to false.
+    // React never renders the intermediate SESSION_EXPIRED reason a plain claimDeparture() alone
+    // would have produced: the curtain — and the toast-clearing it would otherwise trigger —
+    // never appears, because by the time this effect could run, the claim is already released.
     expect(screen.getByTestId(CHILD)).toBeInTheDocument();
     expect(screen.queryByTestId("session-expiry__curtain")).toBeNull();
     expect(dismissAll).not.toHaveBeenCalled();
+  });
+
+  // A sign-out is a departure too, and it must not raise this: the user asked to leave, the
+  // layout owns that interaction's feedback, and "your session expired" is the one thing it did
+  // not do. Before the claim carried a reason there was nothing here to tell the two apart.
+  it("stays down while the departure is a sign-out", () => {
+    render(
+      <SessionExpiryCurtain>
+        <p data-testid={CHILD}>Section content</p>
+      </SessionExpiryCurtain>,
+    );
+
+    act(() => {
+      claimDeparture(DepartureReason.SIGN_OUT);
+    });
+
+    expect(screen.getByTestId(CHILD)).toBeInTheDocument();
+    expect(screen.queryByTestId("session-expiry__curtain")).toBeNull();
   });
 });

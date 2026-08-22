@@ -20,7 +20,6 @@ const { push, logout, override, nav, auth, assign, replace, routerReplace, toast
     auth: {
       session: null as Session | null,
       status: "authenticated" as string,
-      isSigningOut: false,
     },
   }));
 
@@ -35,11 +34,6 @@ vi.mock("@/context/shared/access/application/useSession", () => ({
     login: vi.fn(),
     logout,
     override,
-    // A plain mutation, not React state: the component's OWN setSignOut call in the same
-    // handler is what triggers the re-render that then reads this back through useSession().
-    setIsSigningOut: (value: boolean) => {
-      auth.isSigningOut = value;
-    },
   }),
 }));
 
@@ -63,14 +57,16 @@ import BackOfficeLayoutClient from "@/app/backoffice/BackOfficeLayoutClient";
 import { accountMenuItem, type NavSubItem } from "@/app/backoffice/_lib/backofficeMenu";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNavigate";
-import {
-  beginSessionExpiry,
-  endSessionExpiry,
-} from "@/context/shared/access/application/sessionExpiry";
 import { AccessContext } from "@/context/shared/access/domain/AccessContext";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import type { Session } from "@/context/shared/access/domain/Session";
+import {
+  claimDeparture,
+  currentDeparture,
+  releaseDeparture,
+  DepartureReason,
+} from "@/context/shared/navigation/application/departure";
 
 const SESSION: Session = {
   user: {
@@ -239,7 +235,9 @@ describe("BackOfficeLayoutClient", () => {
     nav.pathname = Routes.BACKOFFICE;
     auth.session = SESSION;
     auth.status = "authenticated";
-    auth.isSigningOut = false;
+    // Module state, so it outlives a test file: a claim left standing silences every later case
+    // that depends on one being available.
+    releaseDeparture();
   });
 
   afterEach(() => {
@@ -254,11 +252,8 @@ describe("BackOfficeLayoutClient", () => {
     // dispatch can't safely interrupt mid-test — this file never does that, so a dispatch here
     // is enough and a fresh module per test would be unnecessary overhead.
     globalThis.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
-    // sessionExpiry's own claim, separate module state again — released here rather than only
-    // in a per-test act(), since a test can leave it set on purpose (isSessionExpiring() cases
-    // below) and the next test must not inherit it.
-    endSessionExpiry();
     vi.unstubAllGlobals();
+    releaseDeparture();
   });
 
   it("signs out with a full-document navigation rather than a client-side push", async () => {
@@ -318,6 +313,71 @@ describe("BackOfficeLayoutClient", () => {
     }
   });
 
+  // The departure claim, whose whole point is a window nothing else here can see: between the
+  // click and the navigation every gated request still in flight can come back 401, and the
+  // transport bounces a 401 to `?reason=session-expired` unless a departure is already claimed.
+  // The transport's exemption list covers the revoke CALL and never covered its neighbours, so a
+  // dashboard poll or a Mercure authorize could land the user on "session expired" — the outcome
+  // that exemption exists to prevent, reached around it.
+  it("claims the departure before it revokes, not after it navigates", async () => {
+    // Read INSIDE the revoke, which is the only moment that matters: claiming after it resolves
+    // would leave the whole network round-trip uncovered, and that round-trip IS the race.
+    let claimedDuringRevoke: string | null = null;
+    logout.mockImplementationOnce(() => {
+      claimedDuringRevoke = currentDeparture();
+      return Promise.resolve();
+    });
+    renderLayout();
+    await openAccountMenu();
+
+    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+    expect(claimedDuringRevoke).toBe(DepartureReason.SIGN_OUT);
+  });
+
+  it("releases the departure only once the navigation turns out not to have committed", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderLayout();
+      await openAccountMenu();
+
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+      await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+
+      // Still held while the navigation may yet commit: releasing here hands a 401 arriving one
+      // tick later the claim this sign-out is using.
+      expect(currentDeparture()).toBe(DepartureReason.SIGN_OUT);
+
+      await vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS);
+
+      // The document stayed. Holding the claim now is the wedge the release exists to remove:
+      // nothing would ever bounce again for the life of the page.
+      expect(currentDeparture()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not release a departure it never won", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      // An expiry bounce got there first and is already navigating to /login. Releasing its claim
+      // on the way out would hand the next 401 a fresh one, which is the flap this cannot cause.
+      claimDeparture(DepartureReason.SESSION_EXPIRED);
+      renderLayout();
+      await openAccountMenu();
+
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+      await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(Routes.HOME));
+      await vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS);
+
+      expect(currentDeparture()).toBe(DepartureReason.SESSION_EXPIRED);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("announces that it is leaving on the paths where the menu closes over the entry", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
@@ -364,9 +424,10 @@ describe("BackOfficeLayoutClient", () => {
   it("does not race RequireAuth's own redirect when the guard tears the guarded subtree down", async () => {
     // The fast path, which no other case here renders. logout() clears the session inside its own
     // finally, so RequireAuth returns null for the subtree it guards — status region, menu and
-    // entry all go with it — before the sign-out's own navigation is even attempted. isSigningOut
-    // is still true at that point: without it, RequireAuth's own redirect effect would fire a
-    // SECOND navigation (to /login) on top of the one hardNavigate is about to perform.
+    // entry all go with it — before the sign-out's own navigation is even attempted. The
+    // departure is still claimed at that point: without it, RequireAuth's own redirect effect
+    // would fire a SECOND navigation (to /login) on top of the one hardNavigate is about to
+    // perform.
     logout.mockImplementationOnce(() => {
       auth.session = null;
       auth.status = "unauthenticated";
@@ -428,12 +489,12 @@ describe("BackOfficeLayoutClient", () => {
   });
 
   it("announces a real message and an info toast when superseded by a caller with no announcement of its own", async () => {
-    // Not today's realistic trigger (see the isSessionExpiring() case below for that) — this
+    // Not today's realistic trigger (see the session-expiry case below for that) — this
     // covers a hypothetical future third hardNavigate caller that supersedes sign-out without
-    // bringing its own UI. Sign-out itself did not fail — it just is not the navigation that
-    // gets to leave — so this must not read as "refused", and (an adversarial pass on this fix
-    // caught this) must not go silent either: a live region that goes from "Signing out…" to
-    // "" announces nothing at all.
+    // ever claiming a departure of its own. Sign-out itself did not fail — it just is not the
+    // navigation that gets to leave — so this must not read as "refused", and (an adversarial
+    // pass on this fix caught this) must not go silent either: a live region that goes from
+    // "Signing out…" to "" announces nothing at all.
     hardNavigate("/somewhere-with-no-announcement-of-its-own", vi.fn());
     replace.mockClear();
 
@@ -443,10 +504,9 @@ describe("BackOfficeLayoutClient", () => {
     fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
     await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
 
-    // The guard suppression releases regardless — if the OTHER navigation itself never
-    // commits either, nothing else would, and RequireAuth's redirect would stay latched off
-    // for the life of the document.
-    await waitFor(() => expect(auth.isSigningOut).toBe(false));
+    // Sign-out won its own departure claim (nothing else claims one here), so the release below
+    // is unconditional and the guard suppression lifts regardless of the OTHER navigation's fate.
+    await waitFor(() => expect(currentDeparture()).toBeNull());
     // Sign-out's own navigation never reached location: the other call already owned it.
     expect(replace).not.toHaveBeenCalledWith(Routes.HOME);
     expect(toastError).not.toHaveBeenCalled();
@@ -455,12 +515,10 @@ describe("BackOfficeLayoutClient", () => {
   });
 
   it("skips the toast when superseded by the session-expiry bounce, since its curtain already announced something", async () => {
-    // Today's ONLY realistic trigger for "superseded": a second adversarial pass (both
-    // reviewers, independently) caught that claiming the sink via beginSessionExpiry() is what
-    // mounts <SessionExpiryCurtain> over this entire subtree — a toast raised after that would
-    // enqueue behind the curtain's higher z-index and never paint. isSessionExpiring() is the
-    // signal this branch reads to know that already happened.
-    beginSessionExpiry();
+    // Today's ONLY realistic trigger for "superseded": winning the departure claim with
+    // SESSION_EXPIRED is what mounts <SessionExpiryCurtain> over this entire subtree — a toast
+    // raised after that would enqueue behind the curtain's higher z-index and never paint.
+    claimDeparture(DepartureReason.SESSION_EXPIRED);
     hardNavigate(`${Routes.LOGIN}?reason=session-expired`, vi.fn());
     replace.mockClear();
 
@@ -470,7 +528,9 @@ describe("BackOfficeLayoutClient", () => {
     fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
     await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
 
-    await waitFor(() => expect(auth.isSigningOut).toBe(false));
+    // Sign-out never won this departure — the bounce already held it — so it must not release
+    // what it does not own.
+    expect(currentDeparture()).toBe(DepartureReason.SESSION_EXPIRED);
     expect(replace).not.toHaveBeenCalledWith(Routes.HOME);
     expect(toastInfo).not.toHaveBeenCalled();
     expect(toastError).not.toHaveBeenCalled();
@@ -482,10 +542,10 @@ describe("BackOfficeLayoutClient", () => {
   it("still lets RequireAuth redirect after a superseded sign-out, even once the winning navigation itself later resolves as not-committed", async () => {
     // The combination an adversarial pass flagged as untested: logout() actually flips the
     // session to unauthenticated (as it does in production, in its own `finally`, regardless
-    // of which hard navigation wins) while the sink is already claimed by something else. The
-    // superseded branch must release isSigningOut immediately — not wait to see whether the
-    // OTHER navigation ever commits — or this safety net stays permanently suppressed whenever
-    // it doesn't.
+    // of which hard navigation wins) while sign-out won its own departure claim but its
+    // hardNavigate call lost to an in-flight one. The superseded branch must release that claim
+    // immediately — not wait to see whether the OTHER navigation ever commits — or this safety
+    // net stays permanently suppressed whenever it doesn't.
     const onWinnerFailure = vi.fn();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
@@ -501,7 +561,7 @@ describe("BackOfficeLayoutClient", () => {
 
       fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
       await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(auth.isSigningOut).toBe(false));
+      await waitFor(() => expect(currentDeparture()).toBeNull());
       rerender(
         <BackOfficeLayoutClient>
           <p data-testid="bo-layout-test__child">Section content</p>
@@ -527,25 +587,31 @@ describe("BackOfficeLayoutClient", () => {
     }
   });
 
-  it("lets RequireAuth redirect once isSigningOut clears, even though session is already unauthenticated", async () => {
+  it("lets RequireAuth redirect once the departure is released, even though session is already unauthenticated", async () => {
     // The other half of the race guard, isolated from the sign-out click: RequireAuth must not
     // redirect WHILE another interaction still owns the outcome, and must redirect the moment
     // it no longer does — this is what re-enables the ordinary unauthenticated-route guard once
-    // hardNavigate's own failure callback has cleared isSigningOut.
+    // hardNavigate's own failure callback has released the claim.
+    //
+    // It reads the claim rather than a context boolean, and that is the point of collapsing the
+    // two: the third reader of this same fact is `FetchHttpClient`, a module-level function that
+    // reaches no provider, so a value on `AuthContextValue` could never have served it.
     auth.status = "unauthenticated";
     auth.session = null;
-    auth.isSigningOut = true;
-    const { rerender } = renderLayout();
+    act(() => {
+      claimDeparture(DepartureReason.SIGN_OUT);
+    });
+    renderLayout();
 
     expect(screen.queryByTestId("bo-layout-test__child")).toBeNull();
     expect(routerReplace).not.toHaveBeenCalled();
 
-    auth.isSigningOut = false;
-    rerender(
-      <BackOfficeLayoutClient>
-        <p data-testid="bo-layout-test__child">Section content</p>
-      </BackOfficeLayoutClient>,
-    );
+    // No rerender: the claim publishes to its subscribers, so `useSyncExternalStore` inside
+    // RequireAuth re-runs the effect on its own. A rerender here would hide a store that does
+    // not notify.
+    act(() => {
+      releaseDeparture();
+    });
 
     await waitFor(() =>
       expect(routerReplace).toHaveBeenCalledWith(expect.stringContaining(`${Routes.LOGIN}?next=`)),

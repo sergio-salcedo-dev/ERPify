@@ -238,6 +238,44 @@ X-Correlation-Id: 019045c3-7b8a-7c4e-9f30-000000000001
 
 The `bank_id` extension is the `context` array, with reserved keys stripped and the redaction denylist applied.
 
+## Who may mint a `type`
+
+Two processes mint `type`, and until #824 nothing said so. The API mints one per domain failure
+(the table above, plus `ProblemDetailsFactory`'s marker and status defaults). The **client** mints
+three, for failures that never reached a server and therefore have no API problem to carry:
+
+| `type`                        | Minted when                                                       | `status` |
+|-------------------------------|--------------------------------------------------------------------|----------|
+| `network-error`               | `fetch` rejected — offline, DNS, CORS, server down. Never sent.     | `0`      |
+| `request-timeout`             | the client aborted its own request. **May have been received and applied.** | `0`      |
+| `malformed-response-envelope` | a 2xx body failed its `ResponseGuard`                               | the 2xx  |
+
+The rule: **these three names belong to the client, and the API mints none of them.** No prefix and
+no registry — a `type` is an opaque category identifier, and prefixing `client:` would read as a URI
+scheme that does not exist while showing up in every `data-problem-type` selector and in the UI.
+
+What makes it worth stating is the collision, not the aesthetics. A 408/504 marker claiming
+`request-timeout` is a plausible next addition here; the moment it exists, a client-minted and a
+server-minted problem are indistinguishable to the `data-problem-type` selectors and to the four
+`switch (problem.type)` sites under `pwa/src/app/backoffice/**`, so a caller picks a recovery action
+from a name that means two different things. Adding a fourth client-minted type means adding it to
+`pwa/src/context/shared/http-client/domain/HttpClient.ts` with its `ProblemDetails.type` doc comment,
+to this table, and to the error gallery.
+
+Gate: `pwa/tests/client-minted-problem-types.test.ts` — it derives the names from the constants
+(never a hand-kept list), fails when the API names one of them anywhere under `api/src`, when a
+constant is declared without the doc marker, and when the gallery has no exemplar. It matches the
+**quoted literal**, not the literal in type position: `type: 'x'` is only how a `DomainException`
+subclass spells it, while the factory spells its defaults `Marker::class => 'x'`, and a
+position-matching check was measured passing over a planted collision in that second family. It runs
+in the PWA suite because the namespace is the PWA's; an API developer therefore sees it in CI rather
+than in `make php.quality`.
+
+`status: 0` is a client sentinel and never appears on the wire. `ProblemDisplay` prints a pill from
+the status, and status 0 is the one case where it reads the `type` as well: `request-timeout` renders
+**Timed out**, everything else at status 0 renders **No response** — which is accurate for a transport
+failure and the opposite of what a timeout means.
+
 ## PWA consumption example
 
 A form creating bank accounts can hit validation failures, not-found, forbidden and unexpected 500s. The client routes on `body.type` (FR44 — `type` is the contract-level signal; status is the transport-level signal):

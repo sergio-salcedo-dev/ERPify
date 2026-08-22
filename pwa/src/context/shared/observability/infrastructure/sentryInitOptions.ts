@@ -33,8 +33,10 @@ export function sentryInitOptions() {
     sendDefaultPii: false,
     tracesSampleRate:
       appEnv === AppEnv.DEVELOPMENT ? DEV_TRACES_SAMPLE_RATE : PROD_TRACES_SAMPLE_RATE,
-    // Scrub both error and performance/transaction events (tracing is on in
-    // every env), so denylisted keys can't ride out on a traced payload either.
+    // Scrub both error and performance/transaction events (tracing is on in every
+    // env), so neither a denylisted key nor a request URL can ride out on a traced
+    // payload — a transaction's `spans` carry the URL of every traced fetch, which
+    // is the half of this that only `beforeSendTransaction` ever sees.
     beforeSend: scrubSentryEvent,
     beforeSendTransaction: scrubSentryEvent,
   };
