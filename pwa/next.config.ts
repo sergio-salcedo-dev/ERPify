@@ -175,15 +175,46 @@ const nextConfig: NextConfig = {
   },
 };
 
+// Source-map upload credentials. All three are server-only and must NEVER take
+// the `NEXT_PUBLIC_` prefix: the token grants write access to the Sentry
+// project, and Next inlines every prefixed literal into the browser bundle.
+//
+// The project slug is derived per environment (`erpify-pwa-dev` /
+// `erpify-pwa-prod`) from the same `NEXT_PUBLIC_APP_ENV` that selects the DSN,
+// so one image build cannot upload its maps to the other environment's project
+// while reporting events to this one. An explicit `SENTRY_PROJECT` overrides it.
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN?.trim();
+const sentryOrg = process.env.SENTRY_ORG?.trim();
+const sentryProject =
+  process.env.SENTRY_PROJECT?.trim() ||
+  `erpify-pwa-${process.env.NEXT_PUBLIC_APP_ENV?.trim() || "dev"}`;
+
+// Upload is opt-in on the credentials being present, and its absence is not an
+// error: a contributor, a fork and every CI job that only type-checks build
+// without the secret, and failing there would make the token a prerequisite for
+// compiling the app rather than for symbolicating it.
+const uploadsSourcemaps = Boolean(sentryAuthToken && sentryOrg);
+
 // Wrap with Sentry. Events are routed through a same-origin tunnel
 // (`/monitoring`) so the locked-down CSP `connect-src 'self'` covers them with
-// no widening, and ad-blockers can't drop them. Source-map upload is disabled
-// (no `authToken`/`org`/`project`) — readable prod stack traces are deferred
-// (see deferred-work.md); maps are never shipped to the browser.
+// no widening, and ad-blockers can't drop them.
+//
+// `deleteSourcemapsAfterUpload` is the load-bearing security property, not a
+// tidiness flag: generating maps is what makes a prod stack trace readable in
+// Sentry, and SERVING them is what would hand the entire client source — and
+// every comment in it — to any visitor who opens devtools. The maps exist only
+// between the build step and the upload, and are removed from the output before
+// the standalone bundle is assembled. Pinned by
+// `tests/sentry-sourcemap-exposure.test.ts`, because the difference between
+// "uploaded" and "published" is one boolean and no runtime check would catch it.
 export default withSentryConfig(nextConfig, {
   tunnelRoute: "/monitoring",
   silent: !process.env.CI,
+  ...(uploadsSourcemaps
+    ? { authToken: sentryAuthToken, org: sentryOrg, project: sentryProject }
+    : {}),
   sourcemaps: {
-    disable: true,
+    disable: !uploadsSourcemaps,
+    deleteSourcemapsAfterUpload: true,
   },
 });

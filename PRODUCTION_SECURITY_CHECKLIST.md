@@ -102,7 +102,21 @@ you change anything here.
       `pwa/tests/next-public-env-allowlist.test.ts` guard (in `make pwa.test.unit`)
       fails the build on any other. The Sentry DSN is intentionally public
       (write-only, browser-embeddable); the real Sentry secret is
-      `SENTRY_AUTH_TOKEN` (source-map upload — not used yet, never `NEXT_PUBLIC_`).
+      `SENTRY_AUTH_TOKEN`, never `NEXT_PUBLIC_`.
+- [ ] Sentry source maps are **uploaded, not published**. Upload is on only when
+      `SENTRY_AUTH_TOKEN` **and** `SENTRY_ORG` are both set at build time; the
+      project slug defaults to `erpify-pwa-${NEXT_PUBLIC_APP_ENV}` so one image
+      cannot ship its maps to the other environment's project. The load-bearing
+      flag is `deleteSourcemapsAfterUpload: true` in `pwa/next.config.ts`: with
+      it, the maps exist only between the build step and the upload; without it,
+      every `/_next/static/**/*.js.map` is a public URL handing the whole client
+      source to any visitor. The token reaches the build as a **BuildKit secret**
+      (`--mount=type=secret,id=sentry_auth_token`), never as a build `ARG` —
+      `docker history` prints build args, and this token grants *write* access to
+      the Sentry project. Both invariants are gated by
+      `pwa/tests/sentry-sourcemap-exposure.test.ts`; a green proves the two
+      declarations, never what a real build emits, and never that a CDN or a
+      workflow artifact is not serving a copy from somewhere else.
 - [ ] Sentry events are scrubbed before send: `sendDefaultPii: false` plus a
       `beforeSend` denylist scrub in parity with the API's `SentryEventScrubber`
       (`scrubSentryEvent` / shared `redaction` keys); deliberate `telemetry.*`

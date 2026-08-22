@@ -19,7 +19,7 @@ npm is pinned to **12.0.1** on all three surfaces — the host (`.nvmrc` + `engi
 protobufjs (postinstall)
 ```
 
-None of the three is load-bearing: the `@google/genai` preinstall is a literal no-op, `protobufjs` only prints a version-scheme warning, and the `@sentry/cli` postinstall is a **fallback binary downloader** — the package ships the real artifact as a platform `optionalDependency` (`@sentry/cli-linux-x64`), which npm installs normally. `sentry-cli` therefore stays functional on the host and in the image, so Sentry source-map upload remains available when `SENTRY_AUTH_TOKEN` is eventually wired.
+None of the three is load-bearing: the `@google/genai` preinstall is a literal no-op, `protobufjs` only prints a version-scheme warning, and the `@sentry/cli` postinstall is a **fallback binary downloader** — the package ships the real artifact as a platform `optionalDependency` (`@sentry/cli-linux-x64`), which npm installs normally. `sentry-cli` therefore stays functional on the host and in the image, so Sentry source-map upload works wherever `SENTRY_AUTH_TOKEN` and `SENTRY_ORG` are set.
 
 Review the list with `npm install-scripts ls`; `npm install-scripts approve|deny <pkg>` writes a pinned entry to `allowScripts`. Approve only after reading the script — the default-deny is a supply-chain control, not friction to route around. A platform without a prebuilt optional binary (e.g. a non-glibc or non-x64 image) would need an explicit approval to fall back to the download.
 

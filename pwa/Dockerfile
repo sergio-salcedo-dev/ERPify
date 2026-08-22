@@ -63,7 +63,26 @@ ENV NEXT_PUBLIC_APP_ENV=${NEXT_PUBLIC_APP_ENV}
 ARG NEXT_PUBLIC_SENTRY_DSN=
 ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
 
-RUN npm run build
+# Sentry source-map upload. The org and the project slug are not secrets, so
+# they are ordinary build args; the project defaults to the per-environment
+# slug next.config.ts derives (erpify-pwa-dev / erpify-pwa-prod).
+ARG SENTRY_ORG=
+ENV SENTRY_ORG=${SENTRY_ORG}
+ARG SENTRY_PROJECT=
+ENV SENTRY_PROJECT=${SENTRY_PROJECT}
+
+# The auth token is a BuildKit SECRET, deliberately not an ARG. An ARG is
+# recorded in the image metadata and `docker history` prints it, so a token
+# passed that way leaks to anyone who can pull the image — including through a
+# registry the deploy does not control. Mounted this way it exists only for the
+# lifetime of this RUN and lands in no layer.
+#
+# Absent secret is the normal case (local builds, CI jobs without the secret):
+# the redirect swallows the missing file, the variable stays empty, and
+# next.config.ts leaves upload off instead of failing the build.
+RUN --mount=type=secret,id=sentry_auth_token \
+    SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token 2>/dev/null || true)" \
+    npm run build
 
 # Production — copy standalone output (same idea as upstream `prod` stage)
 FROM node_upstream AS prod
