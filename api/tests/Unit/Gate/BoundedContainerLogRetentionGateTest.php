@@ -100,7 +100,16 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
                 $inherited = [];
             }
 
-            $logging = $definition['logging'] ?? $inherited['logging'] ?? null;
+            // `array_key_exists` rather than `??` on both arms: an overlay spelling `logging: ~`
+            // parses to null, and a null-coalescing read cannot tell that deliberate UNSET from a
+            // key that was never there — it falls through to the inherited block and reports the
+            // service as bounded while Compose resolves it to no logging block at all. The reader
+            // below already draws that distinction; this is the same distinction on the resolver.
+            $logging = match (true) {
+                \array_key_exists('logging', $definition) => $definition['logging'],
+                \array_key_exists('logging', $inherited) => $inherited['logging'],
+                default => null,
+            };
 
             $this->assertSame(
                 self::EXPECTED_BOUND,
@@ -108,7 +117,9 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
                 \sprintf(
                     'Service "%s" resolves to no bounded log retention in "%s". Docker\'s default json-file '
                     . 'driver keeps every line for ever, so this service\'s stderr — where Monolog\'s prod '
-                    . 'handler flushes its buffer — becomes an unbounded sink with no owner.',
+                    . 'handler flushes its buffer — becomes an unbounded sink with no owner. An explicit '
+                    . '`logging: ~` reaches here as null: that is an overlay UNSETTING the inherited bound, '
+                    . 'not inheriting it.',
                     $name,
                     $composeFile,
                 ),

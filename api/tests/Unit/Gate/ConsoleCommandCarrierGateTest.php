@@ -175,6 +175,94 @@ final class ConsoleCommandCarrierGateTest extends TestCase
     }
 
     /**
+     * The check above looks the processor up BY FQCN, so every unenrolling shape that never spells the name
+     * passes it. A namespace prefix is the one that reaches this service: `Erpify\: { resource: '../src/' }`
+     * inside a `when@prod:` block re-registers the class from the filesystem, and a re-registration REPLACES
+     * the root definition rather than merging with it — the explicit `tags:` there is gone. What decides
+     * enrolment from that point is the scope's own `_defaults.autoconfigure`, because the class implements
+     * `Monolog\Processor\ProcessorInterface`, which MonologBundle autoconfigures with the tag.
+     *
+     * And the safe-looking half is the trap: `autoconfigure` defaults to **false** when `_defaults` omits it.
+     * A scope that merely forgets the line unenrols the processor exactly as thoroughly as one that writes
+     * `autoconfigure: false` on purpose, with the per-class lookup above green throughout. So the assertion
+     * is on the positive declaration, not on the absence of a negative one.
+     *
+     * Today's overrides register `Erpify\Tests\DataFixtures\` and `Erpify\Tests\Behat\Context\`, neither of
+     * which covers this class — so this refuses a shape the tree does not have, which is the point: the
+     * per-class lookup could not report it if it arrived.
+     */
+    #[Test]
+    public function noOverrideReRegistersItThroughANamespacePrefix(): void
+    {
+        $overrides = $this->overrideDefinitions();
+
+        // Two guards before the sweep, and neither is ceremony: today's tree registers no covering
+        // prefix, so the loop below asserts NOTHING on it — and `failOnRisky` turns a test with no
+        // assertions into a red for the wrong reason. They are also the anti-vacuity pin. The first
+        // says the reader still finds the override scopes; the second says it still finds PREFIXES
+        // in them, which is the shape being judged. A parser change that yielded neither would
+        // otherwise leave this green over exactly the blind spot it was written to close.
+        $this->assertNotEmpty(
+            $overrides,
+            'no per-environment services block was found at all, so this check is reading nothing — '
+            . '`config/services_dev.yaml` and `config/services_test.yaml` exist, so the reader is broken',
+        );
+
+        $prefixes = [];
+
+        foreach ($overrides as $origin => $services) {
+            foreach (\array_keys($services) as $id) {
+                if (\str_ends_with($id, '\\')) {
+                    $prefixes[] = $origin . ' → ' . $id;
+                }
+            }
+        }
+
+        $this->assertNotEmpty(
+            $prefixes,
+            'no override registers a namespace prefix at all, so the check below judges nothing — '
+            . 'the per-environment files register `Erpify\\Tests\\DataFixtures\\` and '
+            . '`Erpify\\Tests\\Behat\\Context\\`, so the reader is broken',
+        );
+
+        foreach ($overrides as $origin => $services) {
+            $autoconfigures = $this->autoconfiguresByDefault($services);
+
+            foreach (\array_keys($services) as $id) {
+                if (!\str_ends_with($id, '\\') || !\str_starts_with(ConsoleCommandRedactionProcessor::class, $id)) {
+                    continue;
+                }
+
+                $this->assertTrue(
+                    $autoconfigures,
+                    \sprintf(
+                        '"%s" re-registers "%s", which covers the processor and drops the explicit "%s" tag '
+                        . 'the root file gives it — and the scope does not declare `_defaults.autoconfigure: '
+                        . 'true`, so nothing puts the tag back. The per-class check cannot see this: the '
+                        . 'service is never named.',
+                        $origin,
+                        $id,
+                        self::PROCESSOR_TAG,
+                    ),
+                );
+            }
+        }
+    }
+
+    /**
+     * Whether a scope autoconfigures what it registers. Absent is FALSE — Symfony's own default — which is
+     * why this reads the value rather than asking whether it was set to false.
+     *
+     * @param array<string, mixed> $services
+     */
+    private function autoconfiguresByDefault(array $services): bool
+    {
+        $defaults = $services['_defaults'] ?? null;
+
+        return \is_array($defaults) && true === ($defaults['autoconfigure'] ?? false);
+    }
+
+    /**
      * The tag makes the rule reachable; this makes it reachable IN PRODUCTION. An attribute conditioning the
      * class into or out of a named environment leaves every assertion here and in the processor's own test
      * green while removing the redaction from the only environment whose sink has no owner — the failure mode
