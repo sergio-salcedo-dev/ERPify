@@ -1,7 +1,7 @@
 /**
  * Layout-stable loading placeholder for the timeline: a day-divider header plus a handful of compact
  * skeleton rows, so the column rhythm is present before data arrives and the swap to real rows does
- * not shift the page. Purely decorative — the live region / "aún cargando…" copy lives in the page's
+ * not shift the page. Purely decorative — the live region / "still loading…" copy lives in the page's
  * `<AsyncBoundary>`.
  */
 interface AuditTimelineSkeletonProps {

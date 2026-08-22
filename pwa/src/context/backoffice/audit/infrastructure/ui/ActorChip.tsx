@@ -83,8 +83,8 @@ export function ActorChip({
             iconOnly
             size="sm"
             variant="ghost"
-            label="Copiar id de actor"
-            title="Copiar id de actor"
+            label="Copy actor id"
+            title="Copy actor id"
             testId={testId ? `${testId}-copy` : undefined}
           />
         </span>

@@ -1,5 +1,5 @@
 /**
- * Humanizes an audit `action` token into a readable Spanish label. The raw token is forensic
+ * Humanizes an audit `action` token into a readable English label. The raw token is forensic
  * evidence and is rendered verbatim **alongside** this label by the UI — this function only produces
  * the secondary, friendlier line and must never be treated as a replacement for the token (OQ-4).
  *
@@ -9,15 +9,15 @@
  * catalogue is never frozen over the open `ROUTE_*` space; the fallback covers the tail.
  */
 const CURATED_LABELS: Readonly<Record<string, string>> = {
-  BANK_CREATED: "Banco creado",
-  BANK_UPDATED: "Banco actualizado",
-  BANK_DELETED: "Banco eliminado",
-  BANK_ACCOUNT_CREATED: "Cuenta bancaria creada",
-  BANK_ACCOUNT_UPDATED: "Cuenta bancaria actualizada",
-  BANK_ACCOUNT_DELETED: "Cuenta bancaria eliminada",
-  BANK_ACCOUNTS_VIEWED: "Cuentas bancarias consultadas",
-  ACCESS_DENIED: "Acceso denegado",
-  GDPR_ERASURE_EXECUTED: "Borrado GDPR ejecutado",
+  BANK_CREATED: "Bank created",
+  BANK_UPDATED: "Bank updated",
+  BANK_DELETED: "Bank deleted",
+  BANK_ACCOUNT_CREATED: "Bank account created",
+  BANK_ACCOUNT_UPDATED: "Bank account updated",
+  BANK_ACCOUNT_DELETED: "Bank account deleted",
+  BANK_ACCOUNTS_VIEWED: "Bank accounts viewed",
+  ACCESS_DENIED: "Access denied",
+  GDPR_ERASURE_EXECUTED: "GDPR erasure executed",
 };
 
 const ROUTE_PREFIX = "ROUTE_";

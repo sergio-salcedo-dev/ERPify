@@ -40,13 +40,13 @@ describe("AuditFilterBar", () => {
     expect(screen.getByTestId("audit-filter-bar__count")).toHaveTextContent("2");
   });
 
-  it("offers Limpiar filtros only when a filter is active, and fires onReset", () => {
+  it("offers Clear filters only when a filter is active, and fires onReset", () => {
     const { onReset } = renderBar({ level: "activity" });
     fireEvent.click(screen.getByTestId("audit-filter-bar__reset"));
     expect(onReset).toHaveBeenCalledTimes(1);
   });
 
-  it("hides Limpiar filtros when no filter is active", () => {
+  it("hides Clear filters when no filter is active", () => {
     renderBar();
     expect(screen.queryByTestId("audit-filter-bar__reset")).toBeNull();
   });

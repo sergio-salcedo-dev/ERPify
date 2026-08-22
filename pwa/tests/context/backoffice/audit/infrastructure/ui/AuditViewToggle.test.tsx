@@ -4,7 +4,7 @@ import { AuditViewToggle } from "@/context/backoffice/audit/infrastructure/ui/Au
 import { AuditView } from "@/app/backoffice/audit/_lib/auditFilter";
 
 describe("AuditViewToggle", () => {
-  it("switches to Timeline / Jornada when enabled", () => {
+  it("switches to Timeline / Journey when enabled", () => {
     const onViewChange = vi.fn();
     render(
       <AuditViewToggle view={AuditView.Timeline} onViewChange={onViewChange} journeyEnabled />,
@@ -13,7 +13,7 @@ describe("AuditViewToggle", () => {
     expect(onViewChange).toHaveBeenCalledWith("journey");
   });
 
-  it("gates Jornada behind a fixed actor: aria-disabled + a visible, described hint", () => {
+  it("gates Journey behind a fixed actor: aria-disabled + a visible, described hint", () => {
     const onViewChange = vi.fn();
     render(
       <AuditViewToggle

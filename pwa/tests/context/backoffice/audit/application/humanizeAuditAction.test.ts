@@ -3,15 +3,15 @@ import { humanizeAuditAction } from "@/context/backoffice/audit/application/huma
 
 describe("humanizeAuditAction", () => {
   it("uses the curated label for a known action", () => {
-    expect(humanizeAuditAction("BANK_ACCOUNTS_VIEWED")).toBe("Cuentas bancarias consultadas");
-    expect(humanizeAuditAction("ACCESS_DENIED")).toBe("Acceso denegado");
-    expect(humanizeAuditAction("GDPR_ERASURE_EXECUTED")).toBe("Borrado GDPR ejecutado");
+    expect(humanizeAuditAction("BANK_ACCOUNTS_VIEWED")).toBe("Bank accounts viewed");
+    expect(humanizeAuditAction("ACCESS_DENIED")).toBe("Access denied");
+    expect(humanizeAuditAction("GDPR_ERASURE_EXECUTED")).toBe("GDPR erasure executed");
   });
 
   it("uses the curated label for a BankAccount write action", () => {
-    expect(humanizeAuditAction("BANK_ACCOUNT_CREATED")).toBe("Cuenta bancaria creada");
-    expect(humanizeAuditAction("BANK_ACCOUNT_UPDATED")).toBe("Cuenta bancaria actualizada");
-    expect(humanizeAuditAction("BANK_ACCOUNT_DELETED")).toBe("Cuenta bancaria eliminada");
+    expect(humanizeAuditAction("BANK_ACCOUNT_CREATED")).toBe("Bank account created");
+    expect(humanizeAuditAction("BANK_ACCOUNT_UPDATED")).toBe("Bank account updated");
+    expect(humanizeAuditAction("BANK_ACCOUNT_DELETED")).toBe("Bank account deleted");
   });
 
   it("strips the ROUTE_ prefix and title-cases the rest for route actions", () => {

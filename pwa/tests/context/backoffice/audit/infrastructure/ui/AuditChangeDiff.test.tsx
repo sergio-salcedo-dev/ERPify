@@ -13,7 +13,7 @@ describe("AuditChangeDiff", () => {
 
     expect(screen.getByText("BBVA")).toBeInTheDocument();
     expect(screen.getByText("BBVA S.A.")).toBeInTheDocument();
-    expect(screen.getByText("Modificado")).toBeInTheDocument();
+    expect(screen.getByText("Changed")).toBeInTheDocument();
   });
 
   it("renders untrusted values as escaped text and never executes markup", () => {
@@ -32,9 +32,9 @@ describe("AuditChangeDiff", () => {
       name: { old: "BBVA", new: "BBVA S.A." },
     });
 
-    expect(screen.getByText("Añadido")).toBeInTheDocument();
-    expect(screen.getByText("Eliminado")).toBeInTheDocument();
-    expect(screen.getByText("Modificado")).toBeInTheDocument();
+    expect(screen.getByText("Added")).toBeInTheDocument();
+    expect(screen.getByText("Removed")).toBeInTheDocument();
+    expect(screen.getByText("Changed")).toBeInTheDocument();
   });
 
   it("hides a no-op field (both sides null) while keeping an empty-string value visible", () => {
@@ -44,8 +44,8 @@ describe("AuditChangeDiff", () => {
     });
 
     expect(screen.queryByTestId("diff__field-cleared")).not.toBeInTheDocument();
-    expect(screen.queryByText("— (vacío)")).not.toBeInTheDocument();
-    expect(screen.getByText("(cadena vacía)")).toBeInTheDocument();
+    expect(screen.queryByText("— (empty)")).not.toBeInTheDocument();
+    expect(screen.getByText("(empty string)")).toBeInTheDocument();
     expect(screen.getByText("x")).toBeInTheDocument();
   });
 
@@ -56,7 +56,7 @@ describe("AuditChangeDiff", () => {
     });
 
     expect(screen.getByText("BBVA S.A.")).toBeInTheDocument();
-    expect(screen.getByText("Modificado")).toBeInTheDocument();
+    expect(screen.getByText("Changed")).toBeInTheDocument();
     expect(screen.queryByTestId("diff__field-bic")).not.toBeInTheDocument();
   });
 
@@ -66,7 +66,7 @@ describe("AuditChangeDiff", () => {
       bic: { old: null, new: null },
     });
 
-    expect(screen.getByText("Estado final antes del borrado")).toBeInTheDocument();
+    expect(screen.getByText("Final state before deletion")).toBeInTheDocument();
     expect(screen.queryByTestId("diff__field-bic")).not.toBeInTheDocument();
   });
 
@@ -76,18 +76,18 @@ describe("AuditChangeDiff", () => {
       bic: { old: null, new: null },
     });
 
-    expect(screen.getByText("Estado inicial")).toBeInTheDocument();
+    expect(screen.getByText("Initial state")).toBeInTheDocument();
     expect(screen.queryByTestId("diff__field-bic")).not.toBeInTheDocument();
   });
 
-  it("reads an all-empty snapshot as «Registro sin campos con valor», not «Sin cambios registrados»", () => {
+  it("reads an all-empty snapshot as «Record with no populated fields», not «No changes recorded»", () => {
     renderDiff({
       bic: { old: null, new: null },
       alias: { old: null, new: null },
     });
 
-    expect(screen.getByText("Registro sin campos con valor")).toBeInTheDocument();
-    expect(screen.queryByText("Sin cambios registrados")).not.toBeInTheDocument();
+    expect(screen.getByText("Record with no populated fields")).toBeInTheDocument();
+    expect(screen.queryByText("No changes recorded")).not.toBeInTheDocument();
   });
 
   it("names a CREATE snapshot (all added) and a DELETE snapshot (all removed)", () => {
@@ -95,24 +95,24 @@ describe("AuditChangeDiff", () => {
       name: { old: null, new: "BBVA" },
       swift: { old: null, new: "BBVAESMM" },
     });
-    expect(screen.getByText("Estado inicial")).toBeInTheDocument();
+    expect(screen.getByText("Initial state")).toBeInTheDocument();
     created.unmount();
 
     renderDiff({ name: { old: "BBVA", new: null } });
-    expect(screen.getByText("Estado final antes del borrado")).toBeInTheDocument();
+    expect(screen.getByText("Final state before deletion")).toBeInTheDocument();
   });
 
   it("shows a sealed sentinel for a crypto-shredded value and never the ciphertext", () => {
     renderDiff({ holderName: { old: null, new: { __enc__: "c2VjcmV0LWNpcGhlcnRleHQ" } } });
 
-    expect(screen.getByText("cifrado (no disponible)")).toBeInTheDocument();
+    expect(screen.getByText("encrypted (not available)")).toBeInTheDocument();
     expect(screen.queryByText(/c2VjcmV0/)).not.toBeInTheDocument();
   });
 
-  it("renders an empty-changes map as «Sin cambios registrados»", () => {
+  it("renders an empty-changes map as «No changes recorded»", () => {
     renderDiff({});
 
-    expect(screen.getByText("Sin cambios registrados")).toBeInTheDocument();
+    expect(screen.getByText("No changes recorded")).toBeInTheDocument();
   });
 
   it("collapses a large diff behind a reveal toggle", () => {
@@ -125,10 +125,10 @@ describe("AuditChangeDiff", () => {
 
     renderDiff(changes);
 
-    expect(screen.getByTestId("diff__toggle")).toHaveTextContent("Ver 3 campos más");
+    expect(screen.getByTestId("diff__toggle")).toHaveTextContent("Show 3 more fields");
   });
 
-  it("reveals every hidden field and flips the toggle to «Ver menos» when expanded", () => {
+  it("reveals every hidden field and flips the toggle to «Show less» when expanded", () => {
     const changes: AuditChanges = Object.fromEntries(
       Array.from({ length: 9 }, (_unused, index) => [
         `field${index}`,
@@ -141,7 +141,7 @@ describe("AuditChangeDiff", () => {
 
     fireEvent.click(screen.getByTestId("diff__toggle"));
 
-    expect(screen.getByTestId("diff__toggle")).toHaveTextContent("Ver menos");
+    expect(screen.getByTestId("diff__toggle")).toHaveTextContent("Show less");
     expect(screen.getByText("after8")).toBeInTheDocument();
   });
 
@@ -151,7 +151,7 @@ describe("AuditChangeDiff", () => {
     renderDiff({ legalName: { old: null, new: longValue } });
 
     expect(screen.getByText(longValue)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /copiar valor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /copy value/i })).toBeInTheDocument();
   });
 
   it("renders without a testId, emitting no data-testid attributes", () => {

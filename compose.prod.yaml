@@ -81,6 +81,13 @@ services:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?NEXT_PUBLIC_API_BASE_URL is required in prod}
         NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-prod}
         NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:?NEXT_PUBLIC_SENTRY_DSN is required in prod (erpify-pwa-prod DSN)}
+        # Not secrets — an org and a project slug. The token is NOT here on
+        # purpose: a build arg is recorded in the image and `docker history`
+        # prints it, so it rides the secret mount below instead.
+        SENTRY_ORG: ${SENTRY_ORG:-}
+        SENTRY_PROJECT: ${SENTRY_PROJECT:-}
+      secrets:
+        - sentry_auth_token
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -285,6 +292,16 @@ services:
           cpus: ${SCHEDULER_CPU_LIMIT:-0.25}
           memory: ${SCHEDULER_MEM_LIMIT:-256m}
     command: ["php", "bin/console", "messenger:consume", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "--time-limit=3600", "--memory-limit=256M"]
+
+# Build-time only. The Sentry auth token grants write access to the project, so
+# it rides a BuildKit secret mount rather than a build arg: an arg is recorded in
+# the image and `docker history` prints it to anyone who can pull. Sourced from
+# the environment (.env.prod.local), where it is declared EMPTY by default —
+# empty means "build without uploading source maps", which is not an error, so a
+# rehearsal build on a machine with no Sentry credentials still succeeds.
+secrets:
+  sentry_auth_token:
+    environment: SENTRY_AUTH_TOKEN
 
 # frontend: host-facing + inter-service. backend: internal-only (no egress,
 # no host port) so the database is fully isolated. mailpit lives in the dev

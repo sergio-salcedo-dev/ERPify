@@ -54,7 +54,7 @@ describe("AuditInvestigationScreen", () => {
   it("renders the screen header and the timeline when data is ready", () => {
     timelineState = stateWith({});
     render(<AuditInvestigationScreen />);
-    expect(screen.getByRole("heading", { name: "Auditoría" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Audit" })).toBeInTheDocument();
     expect(screen.getByTestId("audit-timeline")).toBeInTheDocument();
     expect(screen.getByTestId(`audit-timeline__row-${ENTRY.id}`)).toBeInTheDocument();
   });
@@ -72,23 +72,23 @@ describe("AuditInvestigationScreen", () => {
     timelineState = stateWith({});
     render(<AuditInvestigationScreen />);
     expect(screen.getByTestId("audit-entry-drawer")).toBeInTheDocument();
-    expect(screen.getAllByText("Acceso denegado").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Access denied").length).toBeGreaterThan(0);
   });
 
   it("shows the filtered-to-zero empty state when a ready result is empty", () => {
     searchParamsStr = "level=security";
     timelineState = stateWith({ entries: [] });
     render(<AuditInvestigationScreen />);
-    expect(screen.getByText("Ningún resultado")).toBeInTheDocument();
+    expect(screen.getByText("No results")).toBeInTheDocument();
   });
 
   it("shows the first-run empty state when the log is genuinely empty", () => {
     timelineState = stateWith({ state: ViewStatus.EMPTY, entries: [] });
     render(<AuditInvestigationScreen />);
-    expect(screen.getByText("Sin actividad registrada")).toBeInTheDocument();
+    expect(screen.getByText("No activity recorded")).toBeInTheDocument();
   });
 
-  it("gates the Jornada toggle until an actor is fixed", () => {
+  it("gates the Journey toggle until an actor is fixed", () => {
     timelineState = stateWith({});
     render(<AuditInvestigationScreen />);
     expect(screen.getByTestId("audit-view-toggle__journey")).toHaveAttribute(
@@ -98,11 +98,11 @@ describe("AuditInvestigationScreen", () => {
     expect(screen.getByTestId("audit-view-toggle__hint")).toBeInTheDocument();
   });
 
-  it("reconstructs the jornada grouped by correlation when an actor is fixed and view=journey", () => {
+  it("reconstructs the journey grouped by correlation when an actor is fixed and view=journey", () => {
     searchParamsStr = `actorType=api_key&actorId=${ENTRY.actorId}&view=journey`;
     timelineState = stateWith({});
     render(<AuditInvestigationScreen />);
-    // Jornada is now reachable (no hint) and the session header summarises the correlation.
+    // Journey is now reachable (no hint) and the session header summarises the correlation.
     expect(screen.queryByTestId("audit-view-toggle__hint")).toBeNull();
     expect(screen.getByText(/1 entrada/)).toBeInTheDocument();
     expect(screen.getByTestId(`audit-timeline__row-${ENTRY.id}`)).toBeInTheDocument();
@@ -123,6 +123,6 @@ describe("AuditInvestigationScreen", () => {
     });
     render(<AuditInvestigationScreen />);
     expect(screen.getByText("Error de carga")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /reintentar/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
   });
 });

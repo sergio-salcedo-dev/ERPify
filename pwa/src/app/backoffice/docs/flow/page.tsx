@@ -197,11 +197,11 @@ function FlowChart({ flow }: Readonly<{ flow: Flow }>) {
       <figcaption className="flow__chart-legend text-muted-foreground mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
         <span className="flex items-center gap-2">
           <span className="border-muted-foreground w-5 border-t" aria-hidden="true" />
-          Camino de tu petición (ida y vuelta)
+          Your request&apos;s path (there and back)
         </span>
         <span className="flex items-center gap-2">
           <span className="border-muted-foreground w-5 border-t border-dashed" aria-hidden="true" />
-          En segundo plano (asíncrono)
+          In the background (asynchronous)
         </span>
       </figcaption>
     </figure>
@@ -275,12 +275,12 @@ export default function DocsFlowPage() {
           className="text-foreground text-2xl font-semibold tracking-tight"
           data-testid="docs-flow__title"
         >
-          Cómo funciona ERPify
+          How ERPify works
         </h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-          Cómo está construido ERPify por dentro, con las piezas reales y sus nombres reales,
-          explicado para que cualquiera pueda seguirlo. Cada paso lleva una nota «entre bastidores»
-          con la tecnología exacta por si quieres profundizar.
+          How ERPify is built on the inside, with the real pieces under their real names, explained
+          so anyone can follow it. Every step carries a &laquo;behind the scenes&raquo; note with
+          the exact technology, in case you want to go deeper.
         </p>
       </header>
 

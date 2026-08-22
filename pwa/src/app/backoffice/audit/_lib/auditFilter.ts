@@ -21,7 +21,7 @@ export interface AuditFilter {
   resourceType: string;
   resourceId: string;
   action: string;
-  /** Set only by the "Ver esta correlación" pivot / a deep link — no dedicated panel input. */
+  /** Set only by the "Follow this correlation" pivot / a deep link — no dedicated panel input. */
   correlationId: string;
 }
 
@@ -37,7 +37,7 @@ export const EMPTY_AUDIT_FILTER: AuditFilter = {
   correlationId: "",
 };
 
-/** Render modes of the single screen — Timeline (chronological) or Jornada (grouped by correlation). */
+/** Render modes of the single screen — Timeline (chronological) or Journey (grouped by correlation). */
 export const AuditView = {
   Timeline: "timeline",
   Journey: "journey",
@@ -51,10 +51,10 @@ export function isAuditView(value: string): value is AuditView {
 
 /** The segmented level control's options. The empty-value segment applies no level filter. */
 export const AUDIT_LEVEL_SEGMENTS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "", label: "Todo" },
+  { value: "", label: "All" },
   { value: AuditLevel.Activity, label: "Activity" },
   { value: AuditLevel.Security, label: "Security" },
-  { value: AuditLevel.Change, label: "Cambios" },
+  { value: AuditLevel.Change, label: "Change" },
 ];
 
 /** True when `value` is a level the segmented control can represent ("" = no level filter). */
@@ -63,7 +63,7 @@ export function isAuditLevelValue(value: string): boolean {
 }
 
 /**
- * Count of populated panel-hosted filters (actor + recurso + acción). Level and the date range live
+ * Count of populated panel-hosted filters (actor + resource + action). Level and the date range live
  * in the always-visible bar, so the "Filtros (n)" badge only counts what a collapsed panel hides.
  */
 export function countPanelFilters(filter: AuditFilter): number {
@@ -76,7 +76,7 @@ export function countPanelFilters(filter: AuditFilter): number {
   return count;
 }
 
-/** True when ANY filter axis is populated — drives empty-state copy and the "Limpiar filtros" path. */
+/** True when ANY filter axis is populated — drives empty-state copy and the "Clear filters" path. */
 export function hasActiveAuditFilter(filter: AuditFilter): boolean {
   return (
     Boolean(filter.level.trim()) ||
@@ -88,7 +88,7 @@ export function hasActiveAuditFilter(filter: AuditFilter): boolean {
 }
 
 /**
- * A fixed actor — type + a resolvable UUID id — is the precondition for the Jornada render mode
+ * A fixed actor — type + a resolvable UUID id — is the precondition for the Journey render mode
  * (UX-DR3). The id must pass the same `isUuid` gate `toAuditFilters` applies to the wire, so the mode
  * turns on only when the query genuinely pins one actor; a half-typed id would otherwise reconstruct
  * a "session" spanning every actor of that type.

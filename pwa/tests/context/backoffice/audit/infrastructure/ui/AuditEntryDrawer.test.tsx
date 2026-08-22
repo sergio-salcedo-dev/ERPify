@@ -21,7 +21,7 @@ describe("AuditEntryDrawer", () => {
   it("renders the humanized action title with the raw token preserved", () => {
     render(<AuditEntryDrawer entry={ENTRY} open onClose={vi.fn()} />);
     // Appears as the drawer title and as the «Acción» field value.
-    expect(screen.getAllByText("Acceso denegado").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Access denied").length).toBeGreaterThan(0);
     expect(screen.getAllByText("ACCESS_DENIED").length).toBeGreaterThan(0);
   });
 
@@ -110,7 +110,7 @@ describe("AuditEntryDrawer", () => {
     render(<AuditEntryDrawer entry={{ ...ENTRY, resourceErased: true }} open onClose={vi.fn()} />);
     expect(screen.getByText("anonimizado (GDPR)")).toBeInTheDocument();
     expect(screen.queryByText(ENTRY.resourceId as string)).toBeNull();
-    expect(screen.queryByTitle("Copiar id de recurso")).toBeNull();
+    expect(screen.queryByTitle("Copy resource id")).toBeNull();
   });
 
   it("copies the entry id", () => {

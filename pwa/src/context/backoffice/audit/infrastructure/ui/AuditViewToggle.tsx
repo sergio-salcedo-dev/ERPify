@@ -7,12 +7,12 @@ import { AuditView } from "@/app/backoffice/audit/_lib/auditFilter";
 interface AuditViewToggleProps {
   view: AuditView;
   onViewChange: (view: AuditView) => void;
-  /** Jornada is only reachable once an actor is fixed (UX-DR3). */
+  /** Journey is only reachable once an actor is fixed (UX-DR3). */
   journeyEnabled: boolean;
 }
 
 /**
- * The render-mode toggle. «Jornada» is gated on a fixed actor: when unavailable it is
+ * The render-mode toggle. «Journey» is gated on a fixed actor: when unavailable it is
  * `aria-disabled` (not the native `disabled`, which hides the reason from keyboard/SR) with
  * `aria-describedby` pointing at a **visible** hint — so the "why" reaches everyone, not only a hover.
  */
@@ -27,7 +27,7 @@ export function AuditViewToggle({
     <div className="audit-view-toggle flex items-center gap-2" data-testid="audit-view-toggle">
       <div
         role="radiogroup"
-        aria-label="Modo de vista"
+        aria-label="View mode"
         className="border-border inline-flex rounded-md border p-0.5"
       >
         <ToggleOption
@@ -54,7 +54,7 @@ export function AuditViewToggle({
           )}
           data-testid="audit-view-toggle__journey"
         >
-          Jornada
+          Journey
         </button>
       </div>
       {!journeyEnabled && (
@@ -63,7 +63,7 @@ export function AuditViewToggle({
           className="text-text-subtle text-xs"
           data-testid="audit-view-toggle__hint"
         >
-          Fija un actor para reconstruir su jornada.
+          Pin an actor to reconstruct their journey.
         </span>
       )}
     </div>
