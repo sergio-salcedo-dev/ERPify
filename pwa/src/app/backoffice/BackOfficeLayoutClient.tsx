@@ -77,14 +77,16 @@ type SignOut = (typeof SignOut)[keyof typeof SignOut];
  * `SUPERSEDED` deliberately does not claim "you are signed out" — `logout()` swallows its own
  * failures by contract and can be pre-empted by `SIGN_OUT_BUDGET_MS`, so that isn't actually
  * guaranteed here — and does not name a destination, since a future third caller of
- * `hardNavigate` could supersede this one too.
+ * `hardNavigate` could supersede this one too. It does not claim a redirect is UNDER WAY either:
+ * the report arrives only once the departure that took the sink is known not to have committed,
+ * so a message promising a redirect would be false at the one moment it is read out.
  */
 const SIGN_OUT_MESSAGE: Record<SignOut, string> = {
   [SignOut.IDLE]: "",
   [SignOut.LEAVING]: "Signing out…",
   [SignOut.REFUSED]: "Sign-out did not complete. Please try again.",
   [SignOut.STALLED]: "Sign-out is taking longer than expected. You can try again.",
-  [SignOut.SUPERSEDED]: "Redirecting…",
+  [SignOut.SUPERSEDED]: "Another redirect took over and did not complete. You can try again.",
 };
 
 export default function BackOfficeLayoutClient({
@@ -244,11 +246,15 @@ export default function BackOfficeLayoutClient({
           // dropped from then on, with an sr-only string as the only feedback.
           hardNavigate(Routes.HOME, (failure) => {
             if (failure === "superseded") {
-              // Another hard navigation already owned the document — sign-out itself did not
-              // fail, it just isn't the one leaving. Not a failure, so no REFUSED/STALLED
-              // styling — but still a real, non-empty live-region message: an adversarial pass
-              // caught the earlier silent-IDLE version of this branch reproducing the exact
-              // defect the comment above already closed for REFUSED/STALLED.
+              // Another hard navigation already owned the document, and it has now demonstrably
+              // stayed — sign-out itself did not fail, it just wasn't the one leaving, and the
+              // one that was is not leaving either. Reaching here at all means the window is
+              // over, which is why releasing the affordance below is no longer early: while the
+              // winner was still pending this callback had not been called yet. Not a failure of
+              // this interaction, so no REFUSED/STALLED styling — but still a real, non-empty
+              // live-region message: an adversarial pass caught the earlier silent-IDLE version
+              // of this branch reproducing the exact defect the comment above already closed for
+              // REFUSED/STALLED.
               setSignOut(SignOut.SUPERSEDED);
               // The toast is what REFUSED/STALLED lean on for the case their own subtree is
               // already unmounted — but the ONLY real caller that can supersede this one today
@@ -266,7 +272,8 @@ export default function BackOfficeLayoutClient({
               }
               // Only the winner releases. A `claimed` of false means this attempt never owned
               // the departure to begin with — the session-expiry bounce already does, and it
-              // is the one that will release it when ITS OWN navigation settles.
+              // is the one that will release it when ITS OWN navigation settles — which, by the
+              // time this runs, it has.
               if (claimed) releaseDeparture();
               return;
             }

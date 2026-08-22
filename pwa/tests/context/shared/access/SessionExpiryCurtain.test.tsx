@@ -154,9 +154,14 @@ describe("SessionExpiryCurtain", () => {
     expect(screen.getByTestId("session-expiry__curtain")).toBeInTheDocument();
   });
 
-  it("never paints when superseded — the claim begins and ends in the same synchronous tick", () => {
-    // Something else (sign-out, in the real race this closes) already owns hardNavigate's one
-    // sanctioned sink when the session-expiry bounce is attempted.
+  it("paints when superseded, because the suppression contract is unconditional", () => {
+    // Something else (sign-out, in the real race) already owns hardNavigate's one sanctioned sink
+    // when the session-expiry bounce is attempted. The contract this component and
+    // `FetchHttpClient` both state in prose is that the 401 which started the bounce has nowhere
+    // to render — and a contract that holds except when another caller happens to hold the sink
+    // is not the contract, it is a coincidence. What makes it unconditional is that `superseded`
+    // is reported when the race is DECIDED, not when it is joined: `releaseDeparture` does not run
+    // in this tick, so React renders the SESSION_EXPIRED reason it was always owed.
     vi.stubGlobal("location", { pathname: "/backoffice/banks", search: "", replace: vi.fn() });
     hardNavigate(Routes.HOME, vi.fn());
 
@@ -168,18 +173,12 @@ describe("SessionExpiryCurtain", () => {
 
     act(() => {
       claimDeparture(DepartureReason.SESSION_EXPIRED);
-      // Refused as "superseded": nothing raises, nothing unloads, and releasing the claim (the
-      // real onFailure this call site uses in production, short of the bounce budget) runs
-      // synchronously, in the same tick.
       hardNavigate(`${Routes.LOGIN}?reason=session-expired`, releaseDeparture);
     });
 
-    // React never renders the intermediate SESSION_EXPIRED reason a plain claimDeparture() alone
-    // would have produced: the curtain — and the toast-clearing it would otherwise trigger —
-    // never appears, because by the time this effect could run, the claim is already released.
-    expect(screen.getByTestId(CHILD)).toBeInTheDocument();
-    expect(screen.queryByTestId("session-expiry__curtain")).toBeNull();
-    expect(dismissAll).not.toHaveBeenCalled();
+    expect(screen.getByTestId("session-expiry__curtain")).toBeInTheDocument();
+    expect(screen.queryByTestId(CHILD)).toBeNull();
+    expect(dismissAll).toHaveBeenCalled();
   });
 
   // A sign-out is a departure too, and it must not raise this: the user asked to leave, the
