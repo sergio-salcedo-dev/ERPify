@@ -11,6 +11,17 @@
 # (override via the *_CPU_LIMIT / *_MEM_LIMIT knobs in .env.prod.local).
 # Minimal caps are a starting point — widen only if a service fails to boot
 # (that is an "Ask First" per the spec). Verify with a real `make deploy.local`.
+
+# Same bound, and the values are literals for the same reason — see the note on compose.yaml's
+# `x-logging`. Repeated rather than shared because a YAML anchor does not cross files: Compose merges
+# the SERVICE maps, never the anchors, so each overlay has to spell the bound for the services it is
+# the first to introduce. Services it merely overrides inherit compose.yaml's block untouched.
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   php:
     image: ${IMAGES_PREFIX:-}app-php-prod
@@ -219,6 +230,7 @@ services:
   # docs/vps-deployment.md) passes no `--scale`.
   scheduler_worker:
     image: ${IMAGES_PREFIX:-}app-php-prod
+    logging: *bounded-logging
     build:
       context: ./api
       target: frankenphp_prod

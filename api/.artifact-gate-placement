@@ -120,9 +120,12 @@ tests/Unit/Shared/Architecture/BehatStepVocabularyGateTest.php :: home
 tests/Unit/Shared/Architecture/BehatSuiteCoverageGateTest.php :: home
 tests/Unit/Shared/Architecture/BehatVocabularyReaderTest.php :: home
 tests/Unit/Shared/Architecture/BestEffortReportChannelGateTest.php :: home
+tests/Unit/Shared/Architecture/BoundedContainerLogRetentionGateTest.php :: home
 tests/Unit/Shared/Architecture/BoundedContextGateTest.php :: home
+tests/Unit/Shared/Architecture/BufferedChannelAmplificationGateTest.php :: home
 tests/Unit/Shared/Architecture/CaddyfileAccessLogRedactionGateTest.php :: home
 tests/Unit/Shared/Architecture/ComposerStabilityGateTest.php :: home
+tests/Unit/Shared/Architecture/ConsoleCommandCarrierGateTest.php :: home
 tests/Unit/Shared/Architecture/ConstraintMessageValueGateTest.php :: home
 tests/Unit/Shared/Architecture/ConstraintValidatorResolutionGateTest.php :: home
 tests/Unit/Shared/Architecture/DeptracSeamSyncGateTest.php :: home

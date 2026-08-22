@@ -31,8 +31,8 @@ use Throwable;
  * to pay: `handleBatch` emits every record the request had buffered, including other components' — Symfony's
  * `ContextListener` logs `'User was reloaded from a user provider.'` at `debug` with the user identifier, and
  * in this application that identifier is the person's email address. Reporting a lost audit row by flushing a
- * person's email into a sink with no rotation, no TTL and no declared owner of its erasure trades one
- * integrity defect for a worse one. `RedactionDenylist` cannot intervene: it strips by key, and the key
+ * person's email into a sink bounded by size alone, with no TTL and no declared owner of its erasure, trades
+ * one integrity defect for a worse one. `RedactionDenylist` cannot intervene: it strips by key, and the key
  * belongs to a vendor record.
  *
  * `observability` is the always-on stream this repository built for exactly this shape — a line that must
@@ -47,7 +47,7 @@ use Throwable;
  * the level is a token any edit can move and the channel is wired in configuration a gate can read.
  *
  * **Existing is not alerting, and this class stops at existing.** The Monolog→Sentry bridge is deliberately
- * unwired (config/packages/sentry.yaml) and no compose file declares a logging driver, so the line reaches
+ * unwired (config/packages/sentry.yaml) and the compose files bound that driver by size alone, so the line reaches
  * container stderr and nothing more.
  *
  * **What a prune of the trail costs is not what a lost row costs.** The CONTEXT carries only

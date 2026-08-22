@@ -1,7 +1,31 @@
+# Every container's stdout/stderr lands in Docker's json-file driver, and that driver is the sink
+# `php://stderr` reaches: Monolog's prod `nested` handler writes there, so a flushed `fingers_crossed`
+# buffer ends up here. Declared because the DEFAULT IS UNBOUNDED — with no `logging:` block the driver
+# keeps every line for ever, so any record that reaches it outlives every other retention control this
+# application has (the `audit_log` prune, the `messenger_messages` prune, the GDPR erasure use cases),
+# which have owners while this had none.
+#
+# Literals, not `${...}` knobs, for the reason `deploy.replicas` is a literal on scheduler_worker: this is
+# a retention control, and a control whose bound is supplied by the environment is a bound the deployment
+# can quietly remove. 10m x 5 caps each container at ~50 MiB.
+#
+# WHAT THIS BOUNDS IS SIZE, NOT AGE. Rotation evicts by volume, so a busy deployment reaches a bounded
+# window of hours while an IDLE one keeps its oldest line indefinitely — there is still no TTL and no
+# erasure path here. That residual is declared in PRODUCTION_SECURITY_CHECKLIST.md §7 rather than implied
+# closed; a person id that lands in this sink can still outlive the erasure the application confirmed.
+#
+# Gate: BoundedContainerLogRetentionGateTest (`make php.lint.log-retention`).
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   php:
     image: ${IMAGES_PREFIX:-}app-php-dev
     restart: unless-stopped
+    logging: *bounded-logging
     # FrankenPHP (PID 1) can crash on heavy filesystem churn (e.g. the var/cache/test rename
     # storm during in-container test runs) and would dump a ~1 GB root-owned core file into
     # the bind-mounted /app/api. Core dumps are useless here — disable them outright.
@@ -61,6 +85,7 @@ services:
     # The digest is what docker actually resolves anyway, so the variable never selected a
     # version here; POSTGRES_VERSION still drives serverVersion= in DATABASE_URL below.
     image: postgres:18-alpine@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+    logging: *bounded-logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-erpify_db}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-erpify_password}
@@ -75,6 +100,7 @@ services:
 
   pwa:
     image: ${IMAGES_PREFIX:-}app-pwa-dev
+    logging: *bounded-logging
     build:
       context: ./pwa
       dockerfile: Dockerfile
@@ -102,6 +128,7 @@ services:
   messenger_worker:
     image: ${IMAGES_PREFIX:-}app-php-dev
     restart: unless-stopped
+    logging: *bounded-logging
     # Same rationale as the php service: never dump cores into the bind-mounted repo tree.
     ulimits:
       core:

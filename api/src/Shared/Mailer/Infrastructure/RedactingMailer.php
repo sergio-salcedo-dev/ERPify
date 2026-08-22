@@ -18,7 +18,7 @@ use Throwable;
  * that value verbatim. A sender that assembled its own message therefore raised that inside itself — upstream
  * of {@see RedactingTransport}, which by position reaches only what the send raises — and every one of these
  * paths is wrapped best-effort by a caller that logs the throwable raw, onto `php://stderr` under a driver
- * with no rotation, no TTL and no owner of erasure.
+ * with a size bound but no TTL and no owner of erasure.
  *
  * **The senders hand over strings and never hold an `Email`.** That is what makes the guarantee structural
  * rather than a habit a reviewer has to re-check per sender: naming the MIME component anywhere else in

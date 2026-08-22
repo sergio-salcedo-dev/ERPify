@@ -378,6 +378,42 @@ php.lint.gate-placement: ## Artifact-gate placement classification gate
 	@$(PHP_TEST) bin/phpunit --filter=ArtifactGatePlacementRulesGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ArtifactGateDetectionRulesGateTest
 
+## —— Buffered-log sink: what reaches it, and how long it is kept ———————————
+
+# Two targets, two axes, and neither substitutes for the other. `php://stderr` under Docker's json-file
+# driver is where Monolog's prod handler flushes its buffer, and until these landed the sink had no owner
+# on either axis: nothing bounded how long a record was kept, and nothing bounded what a record could be.
+#
+# CONTENT. `console` and `messenger` sit inside the prod `fingers_crossed` handler (it excludes only
+# `deprecation` and `observability`) and both have producers logging ABOVE `action_level: error`, so their
+# records do not merely buffer — they flush the preceding fifty. The console error listener writes a
+# failing process's full argv under `command`, and two commands here take a person's email while one takes
+# a password in clear. ConsoleCommandRedactionProcessor reduces that value to the command NAME; this gate
+# pins that the listener still writes the carrier and that the processor is still enrolled logger-wide,
+# neither of which any assertion over a fabricated record can prove. The amplification half pins the set of
+# levels each installed producer on those two channels activates at, so a framework bump that adds an
+# activating record — or puts a message PAYLOAD back into one — goes red instead of silently widening what
+# the sink holds.
+php.lint.log-carriers: ## Buffered-log carrier gate (console argv redaction + channel amplification)
+	@$(PHP_TEST) bin/phpunit --filter=ConsoleCommandCarrierGateTest
+	@$(PHP_TEST) bin/phpunit --filter=BufferedChannelAmplificationGateTest
+
+# RETENTION. No compose file declared a `logging:` block, so every container ran the json-file driver's
+# unbounded default and any record that reached it outlived the `audit_log` prune, the
+# `messenger_messages` prune and the GDPR erasure use cases — all of which have owners. Each service now
+# declares a bounded block, and this reads the three root compose files the way Compose merges them: a
+# service an overlay merely extends inherits the base block, a service an overlay INTRODUCES has no base
+# and must spell its own. It refuses an interpolated bound for the same reason the schedule gate refuses an
+# interpolated replica count — a bound an env file can widen is not a bound — and pins the service set so
+# a file that stopped declaring services cannot pass by having nothing to check.
+#
+# What a green proves is the DECLARATION. It says nothing about the host daemon, nothing about a container
+# started outside these files, and it does not make the sink erasable: rotation evicts by VOLUME, so an
+# idle deployment keeps its oldest line indefinitely. There is still no TTL and no erasure path, recorded
+# as a residual in PRODUCTION_SECURITY_CHECKLIST.md §7 rather than implied closed by this target existing.
+php.lint.log-retention: ## Bounded container-log retention gate (compose `logging:` blocks)
+	@$(PHP_TEST) bin/phpunit --filter=BoundedContainerLogRetentionGateTest
+
 ## —— Deptrac (architectural boundaries) ————————————————————————————————————
 
 # Static, AST-aware gate over api/src enforcing three concerns in one ruleset
@@ -413,7 +449,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.log-carriers php.lint.log-retention php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -431,7 +467,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.log-carriers php.lint.log-retention php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -442,6 +478,6 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence \
         php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary \
         php.lint.composer-stability php.lint.prod-container php.lint.project-context php.lint.public-access \
-        php.lint.gate-placement \
+        php.lint.gate-placement php.lint.log-carriers php.lint.log-retention \
         php.deptrac php.deptrac.baseline \
         php.quality php.quality.dry-run

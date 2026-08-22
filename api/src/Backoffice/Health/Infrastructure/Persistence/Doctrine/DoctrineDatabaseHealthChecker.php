@@ -31,7 +31,7 @@ use Throwable;
  * on the buffered channel a `warning` there is discarded outright.
  *
  * Two costs, named rather than discovered later. Volume is unbounded: one line per external probe for as
- * long as an outage lasts, on a stream with no rotation and no declared owner of its deletion. And a DBAL
+ * long as an outage lasts, on a stream with a size bound but no TTL and no declared owner of its deletion. And a DBAL
  * connection exception carries the DSN host, port and user in its message — infrastructure detail, not a
  * person's, but it is written to that stream on every failed probe.
  */

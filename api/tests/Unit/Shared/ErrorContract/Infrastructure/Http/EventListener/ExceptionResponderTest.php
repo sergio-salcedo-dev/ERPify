@@ -399,8 +399,8 @@ final class ExceptionResponderTest extends TestCase
      * `request_uri` is the one context field built from caller-controlled bytes, and the denylist that
      * guards the rest matches KEY names — it cannot see inside a value. The sink is what makes that a
      * leak: in prod Monolog writes to `php://stderr` behind `fingers_crossed`, so one 5xx flushes the
-     * buffered WARNING lines of unrelated 4xx into a json-file driver with no rotation, no TTL and no
-     * owner of erasure, where a person id outlives the erasure the application confirmed to the subject.
+     * buffered WARNING lines of unrelated 4xx into a json-file driver bounded by size alone, still with no
+     * TTL and no owner of erasure, where a person id outlives the erasure the application confirmed to the subject.
      */
     public function testLogRecordNeverCarriesAPersonIdFromTheQueryString(): void
     {
