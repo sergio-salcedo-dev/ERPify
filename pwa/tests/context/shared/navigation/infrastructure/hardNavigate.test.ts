@@ -362,6 +362,36 @@ describe("hardNavigate", () => {
       }
     });
 
+    it("arms the new claim before running the preempted caller's callback, so a throw cannot wedge the sink", () => {
+      const hidden = vi.spyOn(document, "hidden", "get");
+      try {
+        // `abandon()` is the only foreign code this module executes with the sink already claimed.
+        // Run before the timer and the listeners are installed, a callback that throws would leave
+        // the claim held for the life of the document with nothing left to release it — the exact
+        // wedge the module exists to remove, reintroduced by the preemption path.
+        hidden.mockReturnValue(true);
+        hardNavigate(DESTINATION, () => {
+          throw new Error("a caller's own recovery blew up");
+        });
+        hidden.mockReturnValue(false);
+        document.dispatchEvent(new Event("visibilitychange"));
+
+        const onFailureTakeover = vi.fn();
+        expect(() => hardNavigate(OTHER_DESTINATION, onFailureTakeover)).toThrow();
+
+        // The throw escaped, and the claim it left behind is still a live, self-releasing one.
+        vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS);
+        expect(onFailureTakeover).toHaveBeenCalledWith("not-committed");
+
+        const onFailureLater = vi.fn();
+        hardNavigate(DESTINATION, onFailureLater);
+        expect(replace).toHaveBeenLastCalledWith(DESTINATION);
+        expect(onFailureLater).not.toHaveBeenCalled();
+      } finally {
+        hidden.mockRestore();
+      }
+    });
+
     it("keeps a preemptible claim's losers when the preempting call is refused by the browser", () => {
       const hidden = vi.spyOn(document, "hidden", "get");
       try {

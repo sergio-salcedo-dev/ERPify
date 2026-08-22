@@ -206,13 +206,20 @@ export function hardNavigate(
   // is the exact throttling problem this exists to avoid. `onVisibilityChange`'s visible branch
   // arms it once the tab is actually watched.
   claim = ownClaim;
-  // After the new claim is installed, never before: `abandon()` calls the preempted caller back,
-  // and a caller that navigates again from inside that callback must find this claim live rather
-  // than an empty sink it can claim twice. Its own report is `not-committed` and it is true —
-  // the document is demonstrably still here.
-  held?.abandon();
 
   if (!document.hidden) arm(budgetMs);
   globalThis.addEventListener("pagehide", onPageHide);
   document.addEventListener("visibilitychange", onVisibilityChange);
+
+  // LAST, and the ordering is the whole of it. `abandon()` runs the preempted caller's own
+  // callback, which is the only foreign code this function executes — and it executes it with the
+  // sink already claimed. Called before the lines above, a callback that throws would propagate
+  // out of here leaving this claim installed with no timer and no listeners: the sink held for
+  // the life of the document with nothing left to release it, which is the exact wedge this
+  // module exists to remove. After them, the same throw leaves a fully armed claim that still
+  // reports and still releases itself. It also has to come after `claim = ownClaim`, so a caller
+  // that navigates again from inside that callback finds this claim live rather than an empty
+  // sink it can claim twice. Its own report is `not-committed`, and it is true — the document is
+  // demonstrably still here.
+  held?.abandon();
 }
