@@ -70,8 +70,16 @@ final class PersonReferences
 
     public static function fromGateLocation(string $gateDirectory): self
     {
-        $apiRoot = \dirname($gateDirectory, 3);
+        return self::fromApiRoot(\dirname($gateDirectory, 3));
+    }
 
+    /**
+     * For a caller outside `tests/Unit/Gate/`, whose distance to the api root a shared depth constant
+     * cannot assume — {@see fromGateLocation} counts levels from one fixed directory and breaks silently
+     * for any other, the exact way the gate-home rename broke it for 33 gate tests at once.
+     */
+    public static function fromApiRoot(string $apiRoot): self
+    {
         return new self($apiRoot, $apiRoot . '/src', 'Erpify\\', $apiRoot . '/.person-reference-policy');
     }
 

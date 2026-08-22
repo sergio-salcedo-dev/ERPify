@@ -113,7 +113,7 @@ final class PersonReferenceCollectionFunctionalTest extends KernelTestCase
      */
     private function expectedAxisCount(): int
     {
-        $references = PersonReferences::fromGateLocation(__DIR__);
+        $references = PersonReferences::fromApiRoot(\dirname(__DIR__, 4));
 
         return \count(PersonReferenceKeys::referencesIn($references->classification())) + 1;
     }
