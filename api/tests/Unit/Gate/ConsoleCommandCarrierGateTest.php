@@ -221,8 +221,8 @@ final class ConsoleCommandCarrierGateTest extends TestCase
         $this->assertNotEmpty(
             $prefixes,
             'no override registers a namespace prefix at all, so the check below judges nothing — '
-            . 'the per-environment files register `Erpify\\Tests\\DataFixtures\\` and '
-            . '`Erpify\\Tests\\Behat\\Context\\`, so the reader is broken',
+            . 'the per-environment files register `Erpify\Tests\DataFixtures\` and '
+            . '`Erpify\Tests\Behat\Context\`, so the reader is broken',
         );
 
         foreach ($overrides as $origin => $services) {
