@@ -7,7 +7,7 @@
 #      shared kernel + the blessed value-object / passive-metadata namespaces.
 #   2. Bounded-context isolation — a business module (e.g. Backoffice/Bank) never
 #      reaches into another module's Domain/Application/Infrastructure. This is the
-#      AST-aware sibling of tests/Unit/Shared/Architecture/BoundedContextGateTest.php
+#      AST-aware sibling of tests/Unit/Gate/BoundedContextGateTest.php
 #      (the text-walk gate stays the primary, auto-discovering check; deptrac is
 #      defence-in-depth). The published seams blessed in
 #      api/.bounded-context-allowlist are mirrored in `skip_violations` below — read

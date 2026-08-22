@@ -1,0 +1,3 @@
+# A `mirrored` line on a file that sits in the home. The two placements are exclusive.
+tests/Unit/Gate/HomeGateProbe.txt :: mirrored :: src/Alpha
+tests/Unit/Alpha/MirroredGateProbe.txt :: mirrored :: src/Alpha

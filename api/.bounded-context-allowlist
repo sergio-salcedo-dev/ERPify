@@ -1,6 +1,6 @@
 # bounded-context isolation gate allowlist.
 #
-# The gate (tests/Unit/Shared/Architecture/BoundedContextGateTest.php) fails the
+# The gate (tests/Unit/Gate/BoundedContextGateTest.php) fails the
 # build when a file in one business context imports another business context's
 # `Domain\`, `Application\`, or `Infrastructure\` namespace — see the Level 1 rule
 # in docs/rules/database.md#bounded-context-data-isolation-modular-monolith.

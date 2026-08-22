@@ -41,7 +41,7 @@ invariants, state transitions (`isTerminal()`, `canTransitionTo()`), identity ac
 
 ### DPS5 — Split enforcement: a static gate for the name-visible half, review for the semantic half
 
-`DomainPresentationSeparationGateTest` (`api/tests/Unit/Shared/Architecture/`) scans:
+`DomainPresentationSeparationGateTest` (`api/tests/Unit/Gate/`) scans:
 
 - every `/Domain/` type — presentation **method names** (per DPS4) + `#[*Label*]`/`#[HumanReadable*]`
   **attributes** + reintroduction of a `HumanReadable*` **abstraction** (`implements`/`use`);

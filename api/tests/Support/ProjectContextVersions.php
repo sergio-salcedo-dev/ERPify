@@ -30,7 +30,7 @@ use RuntimeException;
  * (what a declared constraint satisfies), `ProjectContextPageRulesGateTest` (which words are claims and
  * which token covers one) and `ProjectContextRegistryRulesGateTest` (how a line parses and how a defect is
  * reported); the assertions over the real tree are `ProjectContextVersionGateTest`. All four live in
- * `tests/Unit/Shared/Architecture/`.
+ * `tests/Unit/Gate/`.
  *
  * @phpstan-type RegistryEntry array{manifest: string, path: string, token: string, version: string}
  * @phpstan-type PageClaim array{claim: string, line: int}

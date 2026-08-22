@@ -8,7 +8,7 @@ use Closure;
 use Erpify\Tests\Behat\Context\MessengerConsumerContext;
 use Erpify\Tests\Behat\Context\SymfonyCommandContext;
 use Erpify\Tests\Unit\Behat\Context\Fixtures\RunContextFactory;
-use Erpify\Tests\Unit\Shared\Architecture\Support\BehatVocabularyReader;
+use Erpify\Tests\Unit\Gate\Support\BehatVocabularyReader;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;

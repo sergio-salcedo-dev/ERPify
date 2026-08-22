@@ -252,7 +252,7 @@ Indexes are tenant-led composites (`(company_id, …)`).
 
 > **Enforcement status:** a 3-level static gate is wired into `make php.quality`
 > as `make php.lint.bounded-context` (PHPUnit gate that tokenizes imports —
-> `api/tests/Unit/Shared/Architecture/BoundedContextGateTest.php`). **Level 1**
+> `api/tests/Unit/Gate/BoundedContextGateTest.php`). **Level 1**
 > (cross-context `Domain\`/`Application\`/`Infrastructure\` import — including
 > injecting a foreign repository) **fails** the build; imports are read via
 > `token_get_all` so grouped/aliased/multiline `use` cannot evade it.

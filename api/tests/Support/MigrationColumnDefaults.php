@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Support;
 
 /**
- * The rule behind {@see \Erpify\Tests\Unit\Shared\Architecture\MigrationColumnDefaultGateTest}: a migration
+ * The rule behind {@see \Erpify\Tests\Unit\Gate\MigrationColumnDefaultGateTest}: a migration
  * must not add a `NOT NULL` column and then drop the default that made the add possible.
  *
  * The shape is idiomatic and looks harmless — `ADD COLUMN … NOT NULL DEFAULT FALSE` backfills the existing
@@ -57,7 +57,7 @@ final class MigrationColumnDefaults
     /**
      * The migrations that already carry the shape, frozen. It is a closed list and MUST NOT GROW: a new
      * entry means the defect shipped again, and the point of the gate is that it cannot. Removing one is
-     * the only legal edit, and {@see \Erpify\Tests\Unit\Shared\Architecture\MigrationColumnDefaultGateTest}
+     * the only legal edit, and {@see \Erpify\Tests\Unit\Gate\MigrationColumnDefaultGateTest}
      * fails on a stale entry so a fixed migration cannot leave its exemption behind as cover for the next.
      *
      * Two of them are closed at the database by a later migration that re-adds the default; the exemption

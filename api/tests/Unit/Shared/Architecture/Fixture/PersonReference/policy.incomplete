@@ -1,4 +1,0 @@
-# Fixture registry: a persisted identifier column the entity declares carries no line here. This is the
-# direction that separates a detector from a document — a gate that only verifies what is declared passes
-# dressed as one.
-Erpify\Tests\Unit\Shared\Architecture\Fixture\PersonReference\PersonReferenceFixtureEntity::$tenantId => non-person
