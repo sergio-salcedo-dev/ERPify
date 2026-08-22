@@ -24,15 +24,22 @@ One branch, four issues the user selected, three commits:
 - **PWA — executed.** Full Vitest suite `245 files / 1523 tests` green, plus `eslint .`,
   `prettier --check .`, `tsc --noEmit`, `depcruise src` (507 modules, 1974 dependencies, no
   violations). `hardNavigate.test.ts` is at 26 tests; `hardNavigationGate.test.ts` at 51.
-- **API — NOT executed, and this is the branch's largest gap.** The session container has no
-  Docker daemon, and the agent proxy answers `403` to the GitHub tarball routes Composer needs
-  (`api.github.com/repos/**/zipball`, `codeload.github.com`), so all 185 vendor packages are
-  empty and neither PHPUnit nor PHPStan can run. What was done instead: `php -l` over every
-  changed and renamed file; a structural script asserting PSR-4 namespace↔path agreement across
-  all 861 test files, that all 70 `.artifact-gate-placement` subjects exist, and that class name
-  matches file name for every gate; and an exhaustive `git grep` proving zero surviving
-  references to the old path or namespace. **`make php.quality` and `make php.unit` have not been
-  run and must be, locally, before merge.**
+- **API — executed, after building `vendor/` a different way.** Composer cannot complete here: the
+  proxy answers `403` to the GitHub tarball routes it uses (`api.github.com/repos/**/zipball`,
+  `codeload.github.com`). Plain `git` is not blocked, so all 186 locked packages were cloned at
+  their locked references, `vendor/composer/installed.json` was reconstructed from
+  `composer.lock`, and the autoloader dumped with `--no-plugins`. PHPUnit 13.3.0 then runs.
+  Nothing in the repository was touched to achieve it — the two local edits are inside the
+  gitignored `vendor/` (`platform_check.php`, this sandbox being PHP 8.4 against a `^8.5`
+  requirement).
+- **The API result is stated as a DIFFERENCE, never as a green.** This container has no database,
+  so 432 tests error on their own regardless of the branch. The baseline was measured by running
+  the same suite against `origin/main` in a detached worktree with its own autoloader:
+  `3159 tests, 432 errors, 1 failure`. This branch: `3160 tests, 432 errors, 1 failure` — the
+  extra test is #833's new one, and the set of failing test identities is **identical** once the
+  renamed namespaces are normalised. Zero regressions.
+- **PHPStan still cannot run**: it ships as a phar, and its git source carries no binary. So
+  `make php.stan` remains unrun and is the one required check with no evidence here.
 
 ## Adversarial pass
 
@@ -79,12 +86,36 @@ two `MAX_EXPIRY_BOUNCES`. Left unchanged: the deferred report arrives only when 
 demonstrably still here, which is the condition the counter is about, and the caller's own
 budget logic was out of scope for this branch.
 
+**A5 — GRAVE, fixed, and only executing the suite could have found it. The #794 rename silently
+broke 33 tests.** `api/tests/Unit/Gate/` is one directory shallower than
+`api/tests/Unit/Shared/Architecture/`, and the moved tree resolves the api root by COUNTING
+levels — `dirname(__DIR__, 4)` in 37 places, `__DIR__ . '/../../../../'` in one, and
+`dirname($gateDirectory, 4)` inside the six `fromGateLocation()` helpers in `tests/Support/`,
+which did not move but are called with the gate's `__DIR__`. Every one of them pointed one level
+too high after the rename. The structural verification this branch leaned on could not see it:
+namespaces, registry subjects and class-vs-file names were all still perfectly consistent, and
+`git grep` had nothing to find, because the old path survived nowhere — only the arithmetic about
+it did. Measured against the baseline: 33 failing test identities that `origin/main` does not
+have, from `PublicAccessExemptionGateTest`, `PersonResourceErasure*`, `PersistentTransport*`,
+`PersonReference*`, `AuditEvidenceActionRegistryGateTest` and `AdministratorSetLockStatementGateTest`.
+Fixed by decrementing every real depth by one — with the six shared helpers fixed once rather than
+33 times, and with `ArtifactGateDetectionRulesGateTest` deliberately untouched, since every
+`dirname(__DIR__, …)` in it is fixture text inside heredocs describing what a gate's source looks
+like. Re-measured after: zero regressions against the baseline.
+
+**A6 — recorded, not fixed. The api root is resolved by level-counting in 43 places.** A5 is the
+symptom; this is the shape. Nothing derives the root from a marker (`composer.json`), so any
+future move of a gate silently breaks every path it computes, and no gate watches for it. Not
+changed here because a shared resolver is a new abstraction and this branch's licence was four
+issues, not a refactor — but it is past the Rule of Three by an order of magnitude and it has now
+cost one real incident. Proposed as a follow-up rather than smuggled in.
+
 **Where this pass is weak, stated rather than implied.** It was performed by the authoring
 session, so it does **not** meet the bar CLAUDE.md sets — "a hostile read by someone other than
-the author (a fresh context, a different model, or a human)". It is recorded as what it is. The
-API half compounds it: no PHP gate was executed, so the #833 and #794 commits carry no runtime
-evidence at all, only structural evidence. A fresh-context or human pass over the API commits is
-the outstanding obligation.
+the author (a fresh context, a different model, or a human)". It is recorded as what it is, and a
+fresh-context or human pass remains the outstanding obligation. What it is no longer weak about is
+runtime evidence: A5 was found by running the suite, which is exactly the class of defect a
+self-review of the diff had already missed twice — the diff looked correct, and was.
 
 ## Design Notes
 
@@ -105,6 +136,23 @@ coincidence rather than a contract. The test that pinned the old behaviour
 (`"never paints when superseded — the claim begins and ends in the same synchronous tick"`) was
 rewritten rather than deleted, so the reversal is visible in the diff. **This is a user-owned
 design call and is flagged as such in the PR body.**
+
+**The sign-out copy collapses to one sentence, and the severity with it.** Three states carried
+three messages — a refusal, a navigation taking too long, one another caller superseded. That is
+the difference seen from the code; from the chair it is one event: they pressed Sign out and they
+are still here. `SUPERSEDED` also rendered `sr-only` and `polite`, so the only person who learned
+the sign-out had not happened was one using a screen reader — defensible while the report meant
+"someone else is leaving with the document", not once it arrives only when nobody left. The
+wording is built around one constraint: it must NOT claim they are still signed in. `logout()`
+revokes the server session first and swallows its own failures by contract, so the session may
+well be gone while the document stayed — "we couldn't sign you out" would be a guess stated as a
+fact. "Sign-out didn't finish. Please try again." is true either way, and safe either way, since a
+repeat sign-out on an already-revoked session is a no-op that still leaves. The three STATES are
+kept: their behaviour still differs (`superseded` must not release a departure it never won, nor
+raise a toast under the expiry curtain). Telemetry was considered for the lost distinction and
+declined — the scope vocabulary is a curated closed set (`realtime`, `error`, `api`), so it would
+mean widening a domain type for one diagnostic, and the distinction still survives where a
+developer reads it.
 
 **#787 closes the blind spots and the false positives with one fact.** A selector matches syntax
 and has no scope manager, so its receiver could only be an enumerated *name* — ambiguous in both

@@ -212,6 +212,22 @@ OWN pre-existing single-flight guard already let a second concurrent 401 skip cu
 suppression before this story; this adds a new way to reach the same class of gap, not the class
 itself. Recorded in `deferred-work.md`.
 
+**Superseded by #831, and the principle is restated rather than dropped.** The wording above is
+too wide, and the width is what made this defer look sound: read literally, "ownership wins over
+presentation" licenses a winner to silence a contract another module PUBLISHES — and two modules
+published this one as unconditional, so the code and the docs were left contradicting each other,
+which is worse than either resolution. The principle it was reaching for is narrower and still
+holds:
+
+> Ownership of the navigation wins over the LOSER'S OWN presentation of its own attempt — not
+> over a contract another module states unconditionally.
+
+Under the narrow reading, a losing sign-out does not get to keep announcing "Redirecting…" over
+somebody else's departure (still true, still the original call), while the expiry curtain — which
+`FetchHttpClient` and `SessionExpiryCurtain` both promise to every caller of the transport — is
+not the loser's presentation at all. #831 closes it by reporting `superseded` when the race is
+DECIDED rather than when it is joined, so nothing is silenced and nothing has to be reworded.
+
 Remaining round-3 findings (leaky `isSessionExpiring()` coupling, no full real-tree integration
 test, `rerender()`-masks-natural-cascade, timer-flakiness risk, `mockImplementationOnce`
 leak-on-failure risk, `SUPERSEDED`'s politeness not re-argued against the deferred RequireAuth
