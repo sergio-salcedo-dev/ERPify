@@ -351,15 +351,15 @@ php.lint.public-access: ## Firewall public-exemption classification gate
 # Fails CI when an artifact gate — a kernel-free test whose subject is a repository artifact rather than a
 # running behaviour — carries no line in api/.artifact-gate-placement, when a line names a file the sweep no
 # longer finds, when the placement a line declares is not the placement the file's own path has, or when a
-# file is added to api/tests/Unit/Shared/Architecture/Support/, the one directory still holding rule engines
+# file is added to api/tests/Unit/Gate/Support/, the one directory still holding rule engines
 # outside api/tests/Support/ and a set that may only shrink.
 #
 # It exists because the convention was load-bearing and unwritten. Every GATE target above selects its
-# classes by `--filter` on class name; all but one select out of api/tests/Unit/Shared/Architecture/, whose
+# classes by `--filter` on class name; all but one select out of api/tests/Unit/Gate/, whose
 # name is HISTORICAL — it names the folder's founding member and never tracked what landed on it. With no
 # rule stating which case a new gate is in, placement was settled by whichever neighbour got copied, and one
 # subject ended up in the home, mirrored on a module, and in a second one-file
-# tests/Functional/Shared/Architecture/. docs/rules/testing.md states the rule; this gate is what keeps it
+# tests/Functional/Gate/. docs/rules/testing.md states the rule; this gate is what keeps it
 # from being another paragraph.
 #
 # Three classes, each selected BY NAME in its own run, for the reason spelled out at the sibling targets: a

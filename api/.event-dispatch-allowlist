@@ -1,6 +1,6 @@
 # Application-layer framework-seam gate allowlist.
 #
-# The gate (tests/Unit/Shared/Architecture/EventDispatchGateTest.php) fails the build when a file
+# The gate (tests/Unit/Gate/EventDispatchGateTest.php) fails the build when a file
 # under */Application/ imports a framework type instead of the port that replaces it:
 #
 #   Symfony\Component\Messenger\MessageBusInterface

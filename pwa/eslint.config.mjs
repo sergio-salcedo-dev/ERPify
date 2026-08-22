@@ -7,6 +7,7 @@ import reactPlugin from "eslint-plugin-react";
 import hooksPlugin from "eslint-plugin-react-hooks";
 import nextPlugin from "@next/eslint-plugin-next";
 import jsxA11y from "eslint-plugin-jsx-a11y";
+import hardNavigation from "./eslint-rules/hardNavigation.mjs";
 
 const eslintConfig = [
   {
@@ -72,6 +73,7 @@ const eslintConfig = [
       react: fixupPluginRules(reactPlugin),
       "react-hooks": fixupPluginRules(hooksPlugin),
       "@next/next": fixupPluginRules(nextPlugin),
+      erpify: { rules: { "hard-navigation": hardNavigation } },
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
@@ -79,8 +81,8 @@ const eslintConfig = [
       ...hooksPlugin.configs.recommended.rules,
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs["core-web-vitals"].rules,
-      // Kept on, at the severity both presets give it. The selectors below report every shape
-      // it reports, plus three it structurally cannot: `location.replace()`, which it never
+      // Kept on, at the severity both presets give it. `erpify/hard-navigation` below reports
+      // every shape it reports, plus three it structurally cannot: `location.replace()`, which it never
       // inspects; a destination that does not fold to a literal, which is what our real call
       // sites pass (`Routes.HOME` is an imported binding); and a receiver it does not enumerate.
       // So it is not the control — it is `warn` under an `eslint .` carrying no --max-warnings
@@ -89,10 +91,11 @@ const eslintConfig = [
       // report 0, because both legitimate call sites spell the navigation `location.replace()`.
       // Zero reports means zero extra rule ids and zero extra eslint-disable directives, so
       // turning it off would buy none of the rule-wide-disable savings that argument suggests,
-      // and would give up a scope-aware second reader (`isGlobalReference`) that resolves the
-      // receiver instead of matching its name — something a syntactic selector cannot do. The
+      // and would give up a second reader of the same fact. Both resolve the receiver through
+      // scope analysis now, so the argument for keeping it is no longer that it reads
+      // differently in kind — it is that it costs nothing and fails independently. The
       // containment is asserted, not assumed: tests/eslint/hardNavigationGate.test.ts forces
-      // this rule to `error` and requires every line it reports to be one the selectors report
+      // this rule to `error` and requires every line it reports to be one this gate reports
       // too.
       "@next/next/no-location-assign-relative-destination": "warn",
       "prettier/prettier": "error",
@@ -102,32 +105,22 @@ const eslintConfig = [
       ],
       "@typescript-eslint/no-explicit-any": "error",
       "no-console": ["warn", { allow: ["warn", "error"] }],
+      // The hard-navigation gate. It was two `no-restricted-syntax` selectors until a real rule
+      // replaced them, and the reason is one fact rather than a wish list: a selector matches
+      // syntax, so its receiver could only ever be an enumerated NAME. That is ambiguous in both
+      // directions — it missed `const l = location; l.assign(u)` and it REPORTED
+      // `const { location } = warehouse; location.replace(/ /g, "-")`, whose disable is rule-wide
+      // and would take the maxLength and test-id bans on that line with it. A scope lookup answers
+      // the question both directions were guessing at, so the same change closes the blind spots
+      // and drops the domain false positives; `frames`/`opener` join the receiver set at no cost,
+      // and `location.reload()`, `open(u, "_self")` and `location = u` are claimed rather than
+      // declared out of scope. What remains needs TYPES, not a wider rule — see the rule file.
+      //
+      // It also stops being a rule-wide disable: the one sanctioned call site now silences
+      // `erpify/hard-navigation` alone, leaving every other ban on its line live.
+      "erpify/hard-navigation": "error",
       "no-restricted-syntax": [
         "error",
-        {
-          // Keyed on the receiver, not on the destination. The Next rule for this
-          // (@next/next/no-location-assign-relative-destination) folds the argument to a static
-          // string prefix and gives up on anything it cannot resolve, so how a destination is
-          // spelled decides whether it is seen; it also never looks at `replace()`. Enumerating
-          // the global receivers instead is what keeps a domain object's `location` field out:
-          // an ERP has `warehouse.location`, and a rule that fired on `warehouse.location.replace`
-          // would be silenced on lines that never navigate — and this disable is rule-wide, so
-          // each one also switches off the maxLength and test-id bans on its line.
-          //
-          // What a green run does NOT prove: an aliased receiver (`const l = location`) needs
-          // scope analysis and escapes; so do `location.reload()` and `window.open(u, "_self")`,
-          // which are navigations this rule does not claim. Blind spots are listed in pwa/CLAUDE.md.
-          selector:
-            "CallExpression:matches([callee.property.name=/^(assign|replace)$/], [callee.computed=true][callee.property.value=/^(assign|replace)$/]):matches([callee.object.object.name=/^(window|globalThis|self|document|top|parent)$/][callee.object.property.name='location'], [callee.object.object.name=/^(window|globalThis|self|document|top|parent)$/][callee.object.computed=true][callee.object.property.value='location'], [callee.object.name='location'])",
-          message:
-            "A full-document navigation (location.assign/replace) discards all in-memory client state; inside the app use router.push()/replace() from next/navigation. It is legitimate when leaving an authenticated area, or when no React context exists to reach a router from — disable this rule on the line and say which of the two it is.",
-        },
-        {
-          selector:
-            "AssignmentExpression:matches([left.property.name='href'][left.object.name='location'], [left.property.name='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.property.name='location'], [left.property.name='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.computed=true][left.object.property.value='location'], [left.computed=true][left.property.value='href'][left.object.name='location'], [left.computed=true][left.property.value='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.property.name='location'], [left.computed=true][left.property.value='href'][left.object.object.name=/^(window|globalThis|self|document|top|parent)$/][left.object.computed=true][left.object.property.value='location'], [left.property.name='location'][left.object.name=/^(window|globalThis|self|document|top|parent)$/], [left.computed=true][left.property.value='location'][left.object.name=/^(window|globalThis|self|document|top|parent)$/])",
-          message:
-            "Assigning location.href — or the whole location object — is a full-document navigation wearing a property assignment. Same rule as location.assign/replace: use router.push()/replace(), or disable this rule on the line with the reason.",
-        },
         {
           selector: "JSXAttribute[name.name='maxLength']",
           message:

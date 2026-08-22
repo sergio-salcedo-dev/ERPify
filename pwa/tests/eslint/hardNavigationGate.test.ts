@@ -3,22 +3,24 @@ import { Linter } from "eslint";
 import config from "../../eslint.config.mjs";
 
 /**
- * The hard-navigation selectors are a gate, and a gate nobody re-runs is a claim, not a
- * control: provoking its reds by hand proves it worked once, in a session whose notes are
- * deleted when the branch closes. This runs the real `eslint.config.mjs` — imported, never
- * transcribed, because a copied selector proves the copy works — and asserts both directions.
+ * The hard-navigation gate, and a gate nobody re-runs is a claim, not a control: provoking its
+ * reds by hand proves it worked once, in a session whose notes are deleted when the branch
+ * closes. This runs the real `eslint.config.mjs` — imported, never transcribed, because a copied
+ * rule proves the copy works — and asserts every direction.
  *
- * The negatives are the half that decays silently. An ERP has `warehouse.location`, and a
- * rule keyed on "any object with a `.location`" fires on a string field that never navigates;
- * the disable that follows is rule-wide, so it would also switch off the `maxLength` and
- * test-id contract bans on that line. Widening the selectors resurrects exactly that.
+ * The negatives are the half that decays silently. An ERP has `warehouse.location`, and a rule
+ * keyed on "any object with a `.location`" fires on a string field that never navigates. Under
+ * the selectors this file recorded four such reports as an accepted COST, because a syntactic
+ * matcher cannot tell a global from a binding that shadows it; the rule resolves the receiver
+ * through scope analysis, so they are ordinary negatives now and the cost is gone rather than
+ * documented.
  *
  * The third direction is containment. `eslint.config.mjs` keeps the upstream Next rule at the
- * presets' `warn`, which cannot gate on its own, and leans on these selectors instead — on the
- * claim that they report everything it reports. That claim decays the moment a selector is
- * narrowed, and no assertion over the shipped severity can make it, because a `warn` under an
- * `eslint .` with no --max-warnings is indistinguishable from silence. So the rule is forced to
- * `error` in a cloned config and the two are compared fixture by fixture.
+ * presets' `warn`, which cannot gate on its own, and leans on this one instead — on the claim
+ * that it reports everything the upstream rule reports. No assertion over the shipped severity
+ * can make that claim, because a `warn` under an `eslint .` with no --max-warnings is
+ * indistinguishable from silence. So the upstream rule is forced to `error` in a cloned config
+ * and the two are compared fixture by fixture.
  *
  * The fourth is that the comparison stays worth making. The upstream rule resolves a receiver
  * only through the global scope, so `languageOptions.globals` is what its half of the corpus
@@ -40,10 +42,12 @@ const configWithUpstreamRuleOn = (config as ConfigBlock[]).map((block) =>
 
 const linter = new Linter();
 
+const GATE_RULE = "erpify/hard-navigation";
+
 function navigationErrorsIn(code: string): number {
   return linter
     .verify(code, config as never, "src/probe.ts")
-    .filter((message) => message.ruleId === "no-restricted-syntax").length;
+    .filter((message) => message.ruleId === GATE_RULE).length;
 }
 
 function upstreamErrorsIn(code: string): number {
@@ -72,6 +76,22 @@ const POSITIVES: ReadonlyArray<readonly [string, string]> = [
   ["computed location member with href", 'globalThis["location"].href = "/x";'],
   ["computed on both halves", 'globalThis["location"]["assign"]("/x");'],
   ["computed whole-location assignment", 'document["location"] = "/x";'],
+  // Shapes the selectors declared out of scope, each closed by resolving the receiver instead of
+  // matching its name.
+  ["an aliased receiver", 'const l = globalThis.location; l.assign("/x");'],
+  ["an aliased bare receiver", 'const l = location; l.replace("/x");'],
+  ["an aliased receiver's href", 'const l = window.location; l.href = "/x";'],
+  ["an aliased global object", 'const w = window; w.location.assign("/x");'],
+  ["a chain of aliases", 'const a = location; const b = a; b.assign("/x");'],
+  ["a reload", "globalThis.location.reload();"],
+  ["a bare reload", "location.reload();"],
+  ["open into the current context", 'window.open("/x", "_self");'],
+  ["open into the top context", 'window.open("/x", "_top");'],
+  ["a bare open into the current context", 'open("/x", "_self");'],
+  ["assigning the global binding itself", 'location = "/x";'],
+  ["a template-literal computed key", 'globalThis[`location`].assign("/x");'],
+  ["a nested global receiver", 'window.top.location.assign("/x");'],
+  ["a receiver the selectors never enumerated", 'frames.location.assign("/x");'],
 ];
 
 const DOMAIN_NEGATIVES: ReadonlyArray<readonly [string, string]> = [
@@ -97,6 +117,33 @@ const DOMAIN_NEGATIVES: ReadonlyArray<readonly [string, string]> = [
     'const document = { href: "" }; document.href = "/x";',
   ],
   ["a plain anchor href", 'const anchor = { href: "" }; anchor.href = "/x";'],
+  // The four the selectors reported and this rule does not. Each is a LOCAL binding that merely
+  // shares a name with a global, which is exactly what a scope lookup can see and a name match
+  // cannot — and the last two are the likeliest domain shapes of the set.
+  [
+    "a local named parent carrying a domain location",
+    'const parent = { location: "a b" }; parent.location.replace(/ /g, "-");',
+  ],
+  [
+    "a local named self reached by computed access",
+    'const self = { location: { assign: (_: string) => {} } }; self["location"].assign("x");',
+  ],
+  ["a local named location", 'const location = "A 1"; location.replace(/ /g, "-");'],
+  [
+    "a location destructured out of a domain object",
+    'const warehouse = { location: "A 1" }; const { location } = warehouse; location.replace(/ /g, "-");',
+  ],
+  // An alias is followed only through `const` with a plain name — a destructuring pattern binds a
+  // FIELD, never the object it came from.
+  [
+    "an alias of a domain object",
+    'const warehouse = { location: { assign: (_: string) => {} } }; const w = warehouse; w.location.assign("/x");',
+  ],
+  // No target means a NEW browsing context, which leaves this document alone.
+  ["open with no target", 'window.open("/x");'],
+  ["open into a new context", 'window.open("/x", "_blank");'],
+  // Reads are not navigations.
+  ["reading the path", "const p = globalThis.location.pathname;"],
 ];
 
 describe("the hard-navigation gate", () => {
@@ -108,67 +155,43 @@ describe("the hard-navigation gate", () => {
     expect(navigationErrorsIn(code)).toBe(0);
   });
 
-  it("accepts a known cost: a local named like a global is swept in", () => {
-    // `parent`, `top`, `self` and `document` are enumerated because they are real cross-frame
-    // navigation receivers — and they are also ordinary local-variable names. So a domain object
-    // called one of them is a false positive, and this is the price of the enumeration rather
-    // than an oversight. Recorded as a passing test so narrowing the set later is a decision:
-    // dropping them would silence `top.location.assign(u)`, which is a genuine navigation.
-    expect(
-      navigationErrorsIn('const parent = { location: "a b" }; parent.location.replace(/ /g, "-");'),
-    ).toBe(1);
-    expect(
-      navigationErrorsIn(
-        'const self = { location: { assign: (_: string) => {} } }; self["location"].assign("x");',
-      ),
-    ).toBe(1);
-    // `location` itself is the largest class of the same cost, and the likeliest domain
-    // identifier of the seven: the bare-receiver arm cannot tell the global from a binding that
-    // shadows it, so an ERP field destructured out of `warehouse` is read as a navigation and its
-    // ordinary String#replace is reported. Recorded here rather than among the negatives because
-    // it is the price of covering `location.assign(u)` written without a receiver.
-    expect(navigationErrorsIn('const location = "A 1"; location.replace(/ /g, "-");')).toBe(1);
-    expect(
-      navigationErrorsIn(
-        'const warehouse = { location: "A 1" }; const { location } = warehouse; location.replace(/ /g, "-");',
-      ),
-    ).toBe(1);
-    // A receiver outside the set is what the enumeration actually buys.
+  it("still buys what the receiver enumeration bought: a receiver outside the set", () => {
+    // The negatives above prove locals are excluded; this proves the rule is not simply quiet.
+    // `site` is neither a global nor an alias of one, so its `.location` is a domain field.
     expect(
       navigationErrorsIn(
         'const site = { location: { assign: (_: string) => {} } }; site["location"].assign("x");',
       ),
     ).toBe(0);
+    // And a global receiver still reports, which is what makes the line above a real exclusion
+    // rather than a rule that stopped firing.
+    expect(navigationErrorsIn('globalThis.location.assign("x");')).toBe(1);
   });
 
-  it("does not claim the blind spots it cannot see", () => {
-    // Recorded as tests so the limits are as legible as the coverage, and so a future widening
-    // shows up here as a decision rather than as a silent behaviour change.
-    expect(navigationErrorsIn('const l = globalThis.location; l.assign("/x");')).toBe(0);
-    expect(navigationErrorsIn("globalThis.location.reload();")).toBe(0);
-    expect(navigationErrorsIn('window.open("/x", "_self");')).toBe(0);
-    // A template-literal key is one backtick away from the computed shape the selectors do match:
-    // `property.value` exists on a Literal, not on a TemplateLiteral.
-    expect(navigationErrorsIn('globalThis[`location`].assign("/x");')).toBe(0);
-    // And the receiver arms reach one level, so the canonical cross-frame spelling escapes while
-    // its bare form (`top.location.assign(u)`) is flagged — an asymmetry worth stating.
-    expect(navigationErrorsIn('window.top.location.assign("/x");')).toBe(0);
+  it("does not claim the blind spots that need types rather than scope", () => {
+    // Recorded as tests so the limits stay as legible as the coverage, and so a future widening
+    // shows up here as a decision rather than as a silent behaviour change. What is left is not a
+    // matter of matching harder: each needs a fact a scope manager does not hold.
+    //
+    // Whether `iframe` is an element is a TYPE question.
     expect(navigationErrorsIn('iframe.contentWindow.location.replace("/x");')).toBe(0);
-    // Assigning the global binding itself is a navigation in every browser, and no arm reaches
-    // it: both selectors require `left` to be a MemberExpression, and this `left` is an
-    // Identifier. TypeScript refuses it in .ts/.tsx (lib.dom declares `location` read-only), but
-    // this config block also matches .js/.jsx, where nothing does.
-    expect(navigationErrorsIn('location = "/x";')).toBe(0);
-    // A computed key that is not a string Literal escapes whatever its type — the template
-    // literal above is one member of that class, not the class.
-    expect(navigationErrorsIn('const k = "location"; globalThis[k].assign("/x");')).toBe(0);
-    // Reaching the member through a call or a branch rather than naming it.
-    expect(navigationErrorsIn('Object.assign(location, { href: "/x" });')).toBe(0);
+    // The call site names no receiver at all, so nothing at that node separates it from any other
+    // one-argument call.
     expect(navigationErrorsIn('const { assign } = location; assign("/x");')).toBe(0);
+    // Reflective reaches, and a receiver produced by a branch rather than named.
+    expect(navigationErrorsIn('Object.assign(location, { href: "/x" });')).toBe(0);
     expect(navigationErrorsIn('(true ? window : self).location.assign("/x");')).toBe(0);
+    // A computed key that is not statically readable. The template literal WITH substitutions is
+    // the same class; the one without is claimed above, because it is a string literal in
+    // backticks.
+    expect(navigationErrorsIn('const k = "location"; globalThis[k].assign("/x");')).toBe(0);
+    // An alias is read from its single `const` declaration, so a binding that acquires its meaning
+    // by later assignment is deliberately not chased — following that means a dataflow pass whose
+    // first job would be being right about branches.
+    expect(navigationErrorsIn('let l; l = location; l.assign("/x");')).toBe(0);
   });
 
-  it("reports everything the upstream rule would, so these selectors are the whole control", () => {
+  it("reports everything the upstream rule would, so this gate is the whole control", () => {
     // The corpus is generated, deliberately NOT drawn from POSITIVES. Filtering POSITIVES by
     // "the upstream rule sees it" would make the loop circular: every entry there is asserted
     // `toBe(1)` against the selectors two tests above, so a shape the upstream rule reports and
@@ -217,8 +240,8 @@ describe("the hard-navigation gate", () => {
 
   it("reports shapes the upstream rule structurally cannot", () => {
     // It never inspects replace(), and it gives up on a destination it cannot fold to a
-    // literal — which is what the two real call sites pass (`Routes.HOME`, an imported
-    // binding). Those two gaps are why the selectors exist rather than a severity bump.
+    // literal — which is what the real call site passes (`Routes.HOME`, an imported binding).
+    // Those two gaps are why this gate exists rather than a severity bump.
     expect(upstreamErrorsIn('globalThis.location.replace("/x");')).toBe(0);
     expect(navigationErrorsIn('globalThis.location.replace("/x");')).toBe(1);
 

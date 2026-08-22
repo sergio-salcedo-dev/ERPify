@@ -9,7 +9,7 @@ use Symfony\Component\Yaml\Yaml;
 
 /**
  * Derivation rules behind the schedule-consumption gate, kept out of the assertions so
- * {@see \Erpify\Tests\Unit\Shared\Architecture\ScheduleConsumptionRulesGateTest} can falsify them against
+ * {@see \Erpify\Tests\Unit\Gate\ScheduleConsumptionRulesGateTest} can falsify them against
  * fixtures while the gate itself runs against the real tree.
  *
  * @internal test support

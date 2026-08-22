@@ -17,7 +17,7 @@ import config from "../.dependency-cruiser.cjs";
  * careless `pathNot` away from the same fate.
  *
  * This mirrors the `assertNotEmpty` self-protection every gate under
- * `api/tests/Unit/Shared/Architecture/` carries, and it generalises: a rule added
+ * `api/tests/Unit/Gate/` carries, and it generalises: a rule added
  * later with a typo'd path fails here rather than shipping as decoration.
  *
  * `from.path` may be a single pattern or an array of them, and `from.pathNot`

@@ -56,9 +56,11 @@ function afterMs(ms: number): { elapsed: Promise<void>; cancel: () => void } {
 }
 
 /**
- * Where the sign-out interaction is. `leaving` is the in-flight window; the other two are the
- * ways it can end with the user still here, and they are distinguished because they are not
- * the same statement to make: a refusal is final, a navigation that never committed may yet.
+ * Where the sign-out interaction is. `leaving` is the in-flight window; the other three are the
+ * ways it can end with the user still here. They stay distinct because their BEHAVIOUR differs —
+ * `superseded` must not release a departure it never won, and must not raise a toast under the
+ * expiry curtain — not because they are different things to SAY. What the user is told is one
+ * message; see {@link SIGN_OUT_UNFINISHED}.
  */
 const SignOut = {
   IDLE: "idle",
@@ -70,21 +72,34 @@ const SignOut = {
 type SignOut = (typeof SignOut)[keyof typeof SignOut];
 
 /**
- * What the status region says in each state. Emptying a live region announces NOTHING — a
- * `role="status"` speaks on insertion — so every state that ends the window carries a
- * message of its own. Falling back to "" there is what made the recovery path silent: the
- * user heard "Signing out…", then nothing, while the visible affordance quietly reverted.
- * `SUPERSEDED` deliberately does not claim "you are signed out" — `logout()` swallows its own
- * failures by contract and can be pre-empted by `SIGN_OUT_BUDGET_MS`, so that isn't actually
- * guaranteed here — and does not name a destination, since a future third caller of
- * `hardNavigate` could supersede this one too.
+ * The one thing that is true in all three ways this window can end with the user still here, and
+ * the only one of them they can perceive.
+ *
+ * Three states used to carry three sentences — a refusal, a navigation taking too long, and a
+ * navigation another caller superseded. That is the difference seen from the code. From the chair
+ * it is one event: they pressed Sign out and they are still here. Naming the mechanism
+ * ("another redirect took over") explains our internals to someone who never asked, and the
+ * distinction it draws is one no user can act on differently.
+ *
+ * What it deliberately does NOT claim, and this is the constraint the wording is built around:
+ * that they are still signed IN. `logout()` revokes the server session before any of this and
+ * swallows its own failures by contract, so the session may well be gone while the document
+ * stayed — "we couldn't sign you out" would be a guess stated as a fact. "Didn't finish" is true
+ * either way, and "try again" is safe either way, because a repeat sign-out on an
+ * already-revoked session is a no-op that still leaves.
+ *
+ * Emptying a live region announces NOTHING — a `role="status"` speaks on insertion — so every
+ * state that ends the window carries a message. Falling back to "" is what made the recovery path
+ * silent once: the user heard "Signing out…", then nothing, while the affordance quietly reverted.
  */
+const SIGN_OUT_UNFINISHED = "Sign-out didn't finish. Please try again.";
+
 const SIGN_OUT_MESSAGE: Record<SignOut, string> = {
   [SignOut.IDLE]: "",
   [SignOut.LEAVING]: "Signing out…",
-  [SignOut.REFUSED]: "Sign-out did not complete. Please try again.",
-  [SignOut.STALLED]: "Sign-out is taking longer than expected. You can try again.",
-  [SignOut.SUPERSEDED]: "Redirecting…",
+  [SignOut.REFUSED]: SIGN_OUT_UNFINISHED,
+  [SignOut.STALLED]: SIGN_OUT_UNFINISHED,
+  [SignOut.SUPERSEDED]: SIGN_OUT_UNFINISHED,
 };
 
 export default function BackOfficeLayoutClient({
@@ -179,7 +194,12 @@ export default function BackOfficeLayoutClient({
   // but the expanded sidebar closes over that entry on activation, and on the sidebar a
   // silent revert cannot distinguish "failed" from "never started", so an sr-only-only
   // failure is the silent dismissal pwa/CLAUDE.md forbids.
-  const isSignOutFailure = signOut === SignOut.REFUSED || signOut === SignOut.STALLED;
+  // `SUPERSEDED` belongs here now, and its absence was a real gap rather than a nuance: it
+  // rendered `sr-only` and `polite`, so the only person who learned the sign-out had not happened
+  // was one using a screen reader. That was defensible while the report meant "someone else is
+  // leaving with the document" — it is not, now that it arrives only once nobody left.
+  const isSignOutFailure =
+    signOut === SignOut.REFUSED || signOut === SignOut.STALLED || signOut === SignOut.SUPERSEDED;
 
   const handleNavigation = (path: string, action?: NavAction) => {
     // Read before closing: this is the only signal, once the Sheet is shut, of whether it WAS
@@ -244,11 +264,15 @@ export default function BackOfficeLayoutClient({
           // dropped from then on, with an sr-only string as the only feedback.
           hardNavigate(Routes.HOME, (failure) => {
             if (failure === "superseded") {
-              // Another hard navigation already owned the document — sign-out itself did not
-              // fail, it just isn't the one leaving. Not a failure, so no REFUSED/STALLED
-              // styling — but still a real, non-empty live-region message: an adversarial pass
-              // caught the earlier silent-IDLE version of this branch reproducing the exact
-              // defect the comment above already closed for REFUSED/STALLED.
+              // Another hard navigation already owned the document, and it has now demonstrably
+              // stayed — sign-out itself did not fail, it just wasn't the one leaving, and the
+              // one that was is not leaving either. Reaching here at all means the window is
+              // over, which is why releasing the affordance below is no longer early: while the
+              // winner was still pending this callback had not been called yet. Not a failure of
+              // this interaction, so no REFUSED/STALLED styling — but still a real, non-empty
+              // live-region message: an adversarial pass caught the earlier silent-IDLE version
+              // of this branch reproducing the exact defect the comment above already closed for
+              // REFUSED/STALLED.
               setSignOut(SignOut.SUPERSEDED);
               // The toast is what REFUSED/STALLED lean on for the case their own subtree is
               // already unmounted — but the ONLY real caller that can supersede this one today
@@ -261,12 +285,15 @@ export default function BackOfficeLayoutClient({
               // toast raised now would enqueue and never paint. Skip it in exactly that case;
               // keep it for a hypothetical future caller that supersedes this one without ever
               // claiming a departure of its own.
+              // `error`, like the other two: one message at two severities is the same incoherence
+              // one event at three messages was. The skip below is the part that stays.
               if (currentDeparture() !== DepartureReason.SESSION_EXPIRED) {
-                toastNotifier.info(SIGN_OUT_MESSAGE[SignOut.SUPERSEDED]);
+                toastNotifier.error(SIGN_OUT_MESSAGE[SignOut.SUPERSEDED]);
               }
               // Only the winner releases. A `claimed` of false means this attempt never owned
               // the departure to begin with — the session-expiry bounce already does, and it
-              // is the one that will release it when ITS OWN navigation settles.
+              // is the one that will release it when ITS OWN navigation settles — which, by the
+              // time this runs, it has.
               if (claimed) releaseDeparture();
               return;
             }

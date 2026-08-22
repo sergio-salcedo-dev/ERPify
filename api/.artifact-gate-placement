@@ -4,14 +4,16 @@
 # An artifact gate is a kernel-free test whose subject is a repository artifact rather than a running
 # behaviour: it reads the tree, a registry, a compose file or a doc as data and asserts a rule over it. The
 # category is defined by that MECHANISM, never by subject. Its home is
-# `api/tests/Unit/Shared/Architecture/`, and that path is HISTORICAL — it names the folder's founding
-# member, a bounded-context isolation gate, and has never tracked what landed on it since.
+# `api/tests/Unit/Gate/`, whose leaf names the CATEGORY. It was `tests/Unit/Shared/Architecture`
+# until the name was wrong twice over: `Architecture` named the folder's founding member — a
+# bounded-context isolation gate — and never tracked what landed on it, while `Shared/` claimed a
+# bounded context for gates that sweep every one of them.
 #
 # WHY THIS FILE EXISTS. Thirteen `php.lint.*` targets select gate classes by `--filter` on class name;
 # twelve of them select out of the home and one selects a gate filed deliberately elsewhere. No rule
 # anywhere said which case a new gate was in, so the placement was settled by whichever neighbour got
 # copied — and one subject ended up in three places at once: the home, mirrored on a module, and a second
-# one-file `tests/Functional/Shared/Architecture/`. A convention that every build depends on and nothing
+# one-file `tests/Functional/Gate/`. A convention that every build depends on and nothing
 # states is not a convention, it is a habit.
 #
 # HOW TO DECIDE, for the line you are about to add: ask whose rule the gate enforces. A rule that belongs
@@ -80,14 +82,14 @@
 #     directory. Coverage credited through a docblock `@covers` is not read at all (the source is
 #     comment-stripped first); the tree carries none.
 #   - A gate that must boot a kernel is out of the category, because the category is kernel-free. Two
-#     exist (`tests/Functional/Shared/Architecture/SchedulerCheckpointDurabilityGateTest.php`,
+#     exist (`tests/Functional/Gate/SchedulerCheckpointDurabilityGateTest.php`,
 #     `tests/Functional/Shared/Monitoring/ApiClientErrorBufferCouplingGateTest.php`) and this file says
 #     nothing about where functional tests are filed.
 #   - The sweep does not descend into a SYMLINKED directory under `tests/`, so a gate placed behind one is
 #     invisible in both directions. Following links would open a loop hazard; nothing in the tree uses one.
 #   - It reads text, not an AST. A heredoc holding gate-shaped source reads as the gate itself, and an
 #     import aliased with `as` is resolved only for `TestCase`, not for a `#[CoversClass]` target.
-#   - The engine ratchet reads ONE directory (`tests/Unit/Shared/Architecture/Support/`). An engine filed
+#   - The engine ratchet reads ONE directory (`tests/Unit/Gate/Support/`). An engine filed
 #     under a third name elsewhere passes; a rename of that directory is caught only because emptying it is
 #     allowed solely when both engines are found in `api/tests/Support/`.
 #   - A `mirrored` subject under `tests/Unit/` has no expressible mirror — the derivation prefixes
@@ -109,68 +111,68 @@
 # engines move, which is the placement PhpSourceTest already has.
 # ---------------------------------------------------------------------------------------------------------
 
-tests/Unit/Shared/Architecture/AdministratorSetLockStatementGateTest.php :: home
-tests/Unit/Shared/Architecture/ArtifactGateDetectionRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/ArtifactGatePlacementGateTest.php :: home
-tests/Unit/Shared/Architecture/ArtifactGatePlacementRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/AuditEvidenceActionRegistryGateTest.php :: home
-tests/Unit/Shared/Architecture/AuditEvidenceActionRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/AuditPruneStatementGateTest.php :: home
-tests/Unit/Shared/Architecture/BehatStepVocabularyGateTest.php :: home
-tests/Unit/Shared/Architecture/BehatSuiteCoverageGateTest.php :: home
-tests/Unit/Shared/Architecture/BehatVocabularyReaderTest.php :: home
-tests/Unit/Shared/Architecture/BestEffortReportChannelGateTest.php :: home
-tests/Unit/Shared/Architecture/BoundedContainerLogRetentionGateTest.php :: home
-tests/Unit/Shared/Architecture/BoundedContextGateTest.php :: home
-tests/Unit/Shared/Architecture/BufferedChannelAmplificationGateTest.php :: home
-tests/Unit/Shared/Architecture/CaddyfileAccessLogRedactionGateTest.php :: home
-tests/Unit/Shared/Architecture/ComposerStabilityGateTest.php :: home
-tests/Unit/Shared/Architecture/ConsoleCommandCarrierGateTest.php :: home
-tests/Unit/Shared/Architecture/ConstraintMessageValueGateTest.php :: home
-tests/Unit/Shared/Architecture/ConstraintValidatorResolutionGateTest.php :: home
-tests/Unit/Shared/Architecture/DeptracSeamSyncGateTest.php :: home
-tests/Unit/Shared/Architecture/DomainPresentationSeparationGateTest.php :: home
-tests/Unit/Shared/Architecture/EnumWireContractGateTest.php :: home
-tests/Unit/Shared/Architecture/EventDispatchGateTest.php :: home
-tests/Unit/Shared/Architecture/FailedMessagePruneStatementGateTest.php :: home
-tests/Unit/Shared/Architecture/MailAssemblyBoundaryGateTest.php :: home
-tests/Unit/Shared/Architecture/MigrationColumnDefaultGateTest.php :: home
-tests/Unit/Shared/Architecture/MigrationColumnDefaultRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/MonologExclusionDeclarationGateTest.php :: home
-tests/Unit/Shared/Architecture/ObservabilityChannelGateTest.php :: home
-tests/Unit/Shared/Architecture/PersistentTransportPolicyGateTest.php :: home
-tests/Unit/Shared/Architecture/PersistentTransportRoutingShapeGateTest.php :: home
-tests/Unit/Shared/Architecture/PersonAddressParameterGateTest.php :: home
-tests/Unit/Shared/Architecture/PersonContainmentRuleGateTest.php :: home
-tests/Unit/Shared/Architecture/PersonDataCarrierEmitterGateTest.php :: home
-tests/Unit/Shared/Architecture/PersonReferenceGateTest.php :: home
-tests/Unit/Shared/Architecture/PersonReferenceRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/PersonReferenceSourceGateTest.php :: home
-tests/Unit/Shared/Architecture/PersonReferenceSourceRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/PersonResourceErasureGateTest.php :: home
-tests/Unit/Shared/Architecture/PersonResourceErasureRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/PersonResourceErasureWitnessGateTest.php :: home
-tests/Unit/Shared/Architecture/ProjectContextManifestRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/ProjectContextPageRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/ProjectContextRegistryRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/ProjectContextVersionGateTest.php :: home
-tests/Unit/Shared/Architecture/PublicAccessExemptionGateTest.php :: home
-tests/Unit/Shared/Architecture/PublicAccessExemptionRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/ReadSideProjectionGateTest.php :: home
-tests/Unit/Shared/Architecture/RedactionVocabularyParityTest.php :: home
-tests/Unit/Shared/Architecture/ScheduleConsumptionGateTest.php :: home
-tests/Unit/Shared/Architecture/ScheduleConsumptionRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/ScheduleDeclarationRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/ScheduleReplicaRulesGateTest.php :: home
-tests/Unit/Shared/Architecture/SearchOperatorSurfaceGateTest.php :: home
-tests/Unit/Shared/Architecture/SensitiveRecipientAddressGateTest.php :: home
-tests/Unit/Shared/Architecture/StepVocabularyRegistryTest.php :: home
-tests/Unit/Shared/Architecture/StrictRequestPayloadGateTest.php :: home
+tests/Unit/Gate/AdministratorSetLockStatementGateTest.php :: home
+tests/Unit/Gate/ArtifactGateDetectionRulesGateTest.php :: home
+tests/Unit/Gate/ArtifactGatePlacementGateTest.php :: home
+tests/Unit/Gate/ArtifactGatePlacementRulesGateTest.php :: home
+tests/Unit/Gate/AuditEvidenceActionRegistryGateTest.php :: home
+tests/Unit/Gate/AuditEvidenceActionRulesGateTest.php :: home
+tests/Unit/Gate/AuditPruneStatementGateTest.php :: home
+tests/Unit/Gate/BehatStepVocabularyGateTest.php :: home
+tests/Unit/Gate/BehatSuiteCoverageGateTest.php :: home
+tests/Unit/Gate/BehatVocabularyReaderTest.php :: home
+tests/Unit/Gate/BestEffortReportChannelGateTest.php :: home
+tests/Unit/Gate/BoundedContainerLogRetentionGateTest.php :: home
+tests/Unit/Gate/BoundedContextGateTest.php :: home
+tests/Unit/Gate/BufferedChannelAmplificationGateTest.php :: home
+tests/Unit/Gate/CaddyfileAccessLogRedactionGateTest.php :: home
+tests/Unit/Gate/ComposerStabilityGateTest.php :: home
+tests/Unit/Gate/ConsoleCommandCarrierGateTest.php :: home
+tests/Unit/Gate/ConstraintMessageValueGateTest.php :: home
+tests/Unit/Gate/ConstraintValidatorResolutionGateTest.php :: home
+tests/Unit/Gate/DeptracSeamSyncGateTest.php :: home
+tests/Unit/Gate/DomainPresentationSeparationGateTest.php :: home
+tests/Unit/Gate/EnumWireContractGateTest.php :: home
+tests/Unit/Gate/EventDispatchGateTest.php :: home
+tests/Unit/Gate/FailedMessagePruneStatementGateTest.php :: home
+tests/Unit/Gate/MailAssemblyBoundaryGateTest.php :: home
+tests/Unit/Gate/MigrationColumnDefaultGateTest.php :: home
+tests/Unit/Gate/MigrationColumnDefaultRulesGateTest.php :: home
+tests/Unit/Gate/MonologExclusionDeclarationGateTest.php :: home
+tests/Unit/Gate/ObservabilityChannelGateTest.php :: home
+tests/Unit/Gate/PersistentTransportPolicyGateTest.php :: home
+tests/Unit/Gate/PersistentTransportRoutingShapeGateTest.php :: home
+tests/Unit/Gate/PersonAddressParameterGateTest.php :: home
+tests/Unit/Gate/PersonContainmentRuleGateTest.php :: home
+tests/Unit/Gate/PersonDataCarrierEmitterGateTest.php :: home
+tests/Unit/Gate/PersonReferenceGateTest.php :: home
+tests/Unit/Gate/PersonReferenceRulesGateTest.php :: home
+tests/Unit/Gate/PersonReferenceSourceGateTest.php :: home
+tests/Unit/Gate/PersonReferenceSourceRulesGateTest.php :: home
+tests/Unit/Gate/PersonResourceErasureGateTest.php :: home
+tests/Unit/Gate/PersonResourceErasureRulesGateTest.php :: home
+tests/Unit/Gate/PersonResourceErasureWitnessGateTest.php :: home
+tests/Unit/Gate/ProjectContextManifestRulesGateTest.php :: home
+tests/Unit/Gate/ProjectContextPageRulesGateTest.php :: home
+tests/Unit/Gate/ProjectContextRegistryRulesGateTest.php :: home
+tests/Unit/Gate/ProjectContextVersionGateTest.php :: home
+tests/Unit/Gate/PublicAccessExemptionGateTest.php :: home
+tests/Unit/Gate/PublicAccessExemptionRulesGateTest.php :: home
+tests/Unit/Gate/ReadSideProjectionGateTest.php :: home
+tests/Unit/Gate/RedactionVocabularyParityTest.php :: home
+tests/Unit/Gate/ScheduleConsumptionGateTest.php :: home
+tests/Unit/Gate/ScheduleConsumptionRulesGateTest.php :: home
+tests/Unit/Gate/ScheduleDeclarationRulesGateTest.php :: home
+tests/Unit/Gate/ScheduleReplicaRulesGateTest.php :: home
+tests/Unit/Gate/SearchOperatorSurfaceGateTest.php :: home
+tests/Unit/Gate/SensitiveRecipientAddressGateTest.php :: home
+tests/Unit/Gate/StepVocabularyRegistryTest.php :: home
+tests/Unit/Gate/StrictRequestPayloadGateTest.php :: home
 
 # Reads no repository artifact: it puts candidate separators through `Assert\Iban` at runtime and requires
 # the canonical form to absorb whatever the validator accepts. Whether the category covers a contract test
 # against a dependency is open, and nothing is moved on an open question.
-tests/Unit/Shared/Architecture/IbanSeparatorContractGateTest.php :: undecided :: asks a validator at runtime rather than reading an artifact
+tests/Unit/Gate/IbanSeparatorContractGateTest.php :: undecided :: asks a validator at runtime rather than reading an artifact
 
 # Filed on the module whose contract they enforce.
 tests/Unit/Behat/Context/OutboxUnqualifiedStepsTest.php :: mirrored :: tests/Behat/Context

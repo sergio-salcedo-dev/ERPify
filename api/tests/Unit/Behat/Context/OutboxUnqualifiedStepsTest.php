@@ -9,7 +9,7 @@ use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Tests\Behat\Context\OutboxContext;
 use Erpify\Tests\Unit\Behat\Context\Fixtures\OutboxContextFactory;
-use Erpify\Tests\Unit\Shared\Architecture\Support\BehatVocabularyReader;
+use Erpify\Tests\Unit\Gate\Support\BehatVocabularyReader;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

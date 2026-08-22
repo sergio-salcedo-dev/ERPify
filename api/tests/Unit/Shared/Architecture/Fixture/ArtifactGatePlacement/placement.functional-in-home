@@ -1,4 +1,0 @@
-# A `functional` line on a file that sits in the category home. The token declares the file OUTSIDE the
-# category, so the home is the one place it cannot be.
-tests/Unit/Shared/Architecture/HomeGateProbe.txt :: functional :: needs a running stack
-tests/Unit/Alpha/MirroredGateProbe.txt :: mirrored :: src/Alpha

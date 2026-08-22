@@ -36,10 +36,14 @@ use SplFileInfo;
 final class ArtifactGateSweep
 {
     /**
-     * The category's home, api-relative. The path is HISTORICAL: it names the folder's founding member, a
-     * bounded-context isolation gate, and never tracked what landed on it afterwards.
+     * The category's home, api-relative, and the path now NAMES the category. It used to be
+     * `tests/Unit/Shared/Architecture`, which named the folder's founding member — a bounded-context
+     * isolation gate — and never tracked what landed on it afterwards: 52 classes homogeneous by mechanism
+     * and a bag by subject, under a `Shared/` that asserted an ownership contradicted by every sweep
+     * reaching `Backoffice/`, `Iam/`, `pwa/src` or `compose*.yaml`, inside the one part of the tree whose
+     * job is to encode ownership.
      */
-    public const string HOME = 'tests/Unit/Shared/Architecture';
+    public const string HOME = 'tests/Unit/Gate';
 
     /** Where a rule engine belongs. */
     public const string ENGINE_HOME = 'tests/Support';
@@ -57,7 +61,7 @@ final class ArtifactGateSweep
      */
     private const array ENGINE_NAMESPACES = [
         'Erpify\Tests\Support\\',
-        'Erpify\Tests\Unit\Shared\Architecture\Support\\',
+        'Erpify\Tests\Unit\Gate\Support\\',
     ];
 
     /**

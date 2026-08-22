@@ -55,7 +55,7 @@ default; event sourcing opt-in), presented to the user before modeling — see
 ## Enforcement
 
 Two of the five invariants are statically checkable and gated by
-`tests/Unit/Shared/Architecture/ReadSideProjectionGateTest.php`; the other three are review-only.
+`tests/Unit/Gate/ReadSideProjectionGateTest.php`; the other three are review-only.
 
 - **Invariant 1** — an aggregate carries at most one non-persisted derived attribute, counted by its
   read-time `assign<Name>()` mutators (the materialization seam, e.g. `Bank::assignAccountCount`).

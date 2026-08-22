@@ -78,7 +78,7 @@ the validator under a service id invents DI machinery for one class and still co
 The pair therefore stays co-located, exactly as `PasswordPolicy` / `PasswordPolicyValidator` already are.
 
 Enforced by `ConstraintValidatorResolutionGateTest`
-(`api/tests/Unit/Shared/Architecture/`), which resolves `validatedBy()` for every concrete `Constraint`
+(`api/tests/Unit/Gate/`), which resolves `validatedBy()` for every concrete `Constraint`
 subclass under `src` and fails when the target does not exist.
 
 #### Documented exception — `ExecutionContextInterface` as a callback signature

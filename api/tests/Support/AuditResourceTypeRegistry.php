@@ -54,7 +54,7 @@ final readonly class AuditResourceTypeRegistry
 
     public static function fromGateLocation(string $gateDirectory): self
     {
-        $apiRoot = \dirname($gateDirectory, 4);
+        $apiRoot = \dirname($gateDirectory, 3);
 
         return new self($apiRoot, $apiRoot . '/src', $apiRoot . '/.audit-resource-types');
     }

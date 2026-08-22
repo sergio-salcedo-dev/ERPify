@@ -221,7 +221,7 @@ describe("hardNavigate", () => {
   });
 
   describe("single-flight exclusivity", () => {
-    it("refuses a second concurrent call as superseded, and never lets it touch location", () => {
+    it("refuses a second concurrent call, and never lets it touch location", () => {
       const onFailureFirst = vi.fn();
       const onFailureSecond = vi.fn();
 
@@ -232,8 +232,198 @@ describe("hardNavigate", () => {
       // reaches `replace()` — not a lost race at the browser level, a race that never happens.
       expect(replace).toHaveBeenCalledTimes(1);
       expect(replace).toHaveBeenCalledWith(DESTINATION);
-      expect(onFailureSecond).toHaveBeenCalledWith("superseded");
       expect(onFailureFirst).not.toHaveBeenCalled();
+      // And it is not TOLD yet: the winner's navigation is still pending, so a report now would
+      // make the loser release whatever it latched during the unload window.
+      expect(onFailureSecond).not.toHaveBeenCalled();
+    });
+
+    it("tells a superseded caller once the winner is known to have stayed", () => {
+      const onFailureFirst = vi.fn();
+      const onFailureSecond = vi.fn();
+
+      hardNavigate(DESTINATION, onFailureFirst);
+      hardNavigate(OTHER_DESTINATION, onFailureSecond);
+
+      vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS);
+
+      expect(onFailureFirst).toHaveBeenCalledWith("not-committed");
+      expect(onFailureSecond).toHaveBeenCalledWith("superseded");
+      // One report each, ever — the loser is drained, not left on the claim.
+      expect(onFailureSecond).toHaveBeenCalledTimes(1);
+    });
+
+    it("never tells a superseded caller when the winner commits", () => {
+      const onFailureFirst = vi.fn();
+      const onFailureSecond = vi.fn();
+
+      hardNavigate(DESTINATION, onFailureFirst);
+      hardNavigate(OTHER_DESTINATION, onFailureSecond);
+
+      globalThis.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
+      vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS * 2);
+
+      // The document is going away and nothing in it runs again; a callback owed to a caller
+      // that is about to be discarded is a callback that must not fire and blank its own latch.
+      expect(onFailureSecond).not.toHaveBeenCalled();
+      expect(onFailureFirst).not.toHaveBeenCalled();
+    });
+
+    it("lets a later caller preempt a claim the document went hidden for", () => {
+      const hidden = vi.spyOn(document, "hidden", "get");
+      try {
+        // The regression exclusivity introduced: a bounce that starts while the tab is
+        // backgrounded pauses its budget, and before the sink was exclusive that wedged only its
+        // own caller. Holding the sink through the pause makes it wedge everybody — measured as
+        // a sign-out click that shows a message and never navigates.
+        hidden.mockReturnValue(true);
+        const onFailureBackgrounded = vi.fn();
+        hardNavigate(DESTINATION, onFailureBackgrounded);
+
+        hidden.mockReturnValue(false);
+        document.dispatchEvent(new Event("visibilitychange"));
+
+        const onFailureLater = vi.fn();
+        hardNavigate(OTHER_DESTINATION, onFailureLater);
+
+        expect(replace).toHaveBeenCalledTimes(2);
+        expect(replace).toHaveBeenLastCalledWith(OTHER_DESTINATION);
+        // The preempted caller is told the truth about its own navigation: the document is
+        // demonstrably still here, so its affordance goes back to usable.
+        expect(onFailureBackgrounded).toHaveBeenCalledWith("not-committed");
+        expect(onFailureLater).not.toHaveBeenCalled();
+      } finally {
+        hidden.mockRestore();
+      }
+    });
+
+    it("preempts a claim that went hidden after it started, too", () => {
+      const hidden = vi.spyOn(document, "hidden", "get");
+      try {
+        const onFailureFirst = vi.fn();
+        hardNavigate(DESTINATION, onFailureFirst);
+
+        hidden.mockReturnValue(true);
+        document.dispatchEvent(new Event("visibilitychange"));
+        hidden.mockReturnValue(false);
+        document.dispatchEvent(new Event("visibilitychange"));
+
+        const onFailureLater = vi.fn();
+        hardNavigate(OTHER_DESTINATION, onFailureLater);
+
+        expect(replace).toHaveBeenLastCalledWith(OTHER_DESTINATION);
+        expect(onFailureFirst).toHaveBeenCalledWith("not-committed");
+      } finally {
+        hidden.mockRestore();
+      }
+    });
+
+    it("does not preempt an ordinary in-flight claim, so the winner stays deterministic", () => {
+      const onFailureFirst = vi.fn();
+      hardNavigate(DESTINATION, onFailureFirst);
+
+      const onFailureSecond = vi.fn();
+      hardNavigate(OTHER_DESTINATION, onFailureSecond);
+
+      expect(replace).toHaveBeenCalledTimes(1);
+      expect(onFailureFirst).not.toHaveBeenCalled();
+    });
+
+    it("moves a preempted claim's losers onto the claim that took over", () => {
+      const hidden = vi.spyOn(document, "hidden", "get");
+      try {
+        // A loser can only be accumulated while the claim is still exclusive — the moment it
+        // becomes preemptible, a later caller takes the sink instead of queueing behind it. So
+        // the reachable order is: lose the race, THEN watch the winner get backgrounded.
+        const onFailureFirst = vi.fn();
+        hardNavigate(DESTINATION, onFailureFirst);
+
+        const onFailureLoser = vi.fn();
+        hardNavigate(OTHER_DESTINATION, onFailureLoser);
+        expect(onFailureLoser).not.toHaveBeenCalled();
+
+        hidden.mockReturnValue(true);
+        document.dispatchEvent(new Event("visibilitychange"));
+        hidden.mockReturnValue(false);
+        document.dispatchEvent(new Event("visibilitychange"));
+
+        const onFailureTakeover = vi.fn();
+        hardNavigate(DESTINATION, onFailureTakeover);
+        expect(onFailureFirst).toHaveBeenCalledWith("not-committed");
+        // The loser is still waiting on "nothing is pending", and something is: the takeover.
+        expect(onFailureLoser).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS);
+        expect(onFailureTakeover).toHaveBeenCalledWith("not-committed");
+        expect(onFailureLoser).toHaveBeenCalledWith("superseded");
+        expect(onFailureLoser).toHaveBeenCalledTimes(1);
+      } finally {
+        hidden.mockRestore();
+      }
+    });
+
+    it("arms the new claim before running the preempted caller's callback, so a throw cannot wedge the sink", () => {
+      const hidden = vi.spyOn(document, "hidden", "get");
+      try {
+        // `abandon()` is the only foreign code this module executes with the sink already claimed.
+        // Run before the timer and the listeners are installed, a callback that throws would leave
+        // the claim held for the life of the document with nothing left to release it — the exact
+        // wedge the module exists to remove, reintroduced by the preemption path.
+        hidden.mockReturnValue(true);
+        hardNavigate(DESTINATION, () => {
+          throw new Error("a caller's own recovery blew up");
+        });
+        hidden.mockReturnValue(false);
+        document.dispatchEvent(new Event("visibilitychange"));
+
+        const onFailureTakeover = vi.fn();
+        expect(() => hardNavigate(OTHER_DESTINATION, onFailureTakeover)).toThrow();
+
+        // The throw escaped, and the claim it left behind is still a live, self-releasing one.
+        vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS);
+        expect(onFailureTakeover).toHaveBeenCalledWith("not-committed");
+
+        const onFailureLater = vi.fn();
+        hardNavigate(DESTINATION, onFailureLater);
+        expect(replace).toHaveBeenLastCalledWith(DESTINATION);
+        expect(onFailureLater).not.toHaveBeenCalled();
+      } finally {
+        hidden.mockRestore();
+      }
+    });
+
+    it("keeps a preemptible claim's losers when the preempting call is refused by the browser", () => {
+      const hidden = vi.spyOn(document, "hidden", "get");
+      try {
+        const onFailureFirst = vi.fn();
+        hardNavigate(DESTINATION, onFailureFirst);
+
+        const onFailureLoser = vi.fn();
+        hardNavigate(OTHER_DESTINATION, onFailureLoser);
+
+        hidden.mockReturnValue(true);
+        document.dispatchEvent(new Event("visibilitychange"));
+        hidden.mockReturnValue(false);
+        document.dispatchEvent(new Event("visibilitychange"));
+
+        replace.mockImplementationOnce(() => {
+          throw new Error("refused");
+        });
+        const onFailureRefused = vi.fn();
+        hardNavigate(DESTINATION, onFailureRefused);
+
+        // A call that never reached the browser takes nothing: the claim it was about to preempt
+        // is still pending, still owns its losers, and still owes its own caller a report.
+        expect(onFailureRefused).toHaveBeenCalledWith("refused");
+        expect(onFailureFirst).not.toHaveBeenCalled();
+        expect(onFailureLoser).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS);
+        expect(onFailureFirst).toHaveBeenCalledWith("not-committed");
+        expect(onFailureLoser).toHaveBeenCalledWith("superseded");
+      } finally {
+        hidden.mockRestore();
+      }
     });
 
     it("releases the claim once the winner commits, so a later call is not superseded", () => {

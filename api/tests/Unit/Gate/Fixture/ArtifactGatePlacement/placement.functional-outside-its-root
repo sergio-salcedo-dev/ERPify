@@ -1,0 +1,5 @@
+# A `functional` line on a file that sits neither in the home nor under tests/Functional/. The token says
+# the placement is settled, so it has to be the placement the token names — otherwise it is a way out of
+# the mirror rules for any path at all.
+tests/Unit/Gate/HomeGateProbe.txt :: home
+tests/Unit/Alpha/MirroredGateProbe.txt :: functional :: needs a running stack

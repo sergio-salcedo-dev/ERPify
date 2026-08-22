@@ -32,7 +32,7 @@ final readonly class PublicAccessExemptions
 
     public static function fromGateLocation(string $gateDirectory): self
     {
-        return new self(\dirname($gateDirectory, 4));
+        return new self(\dirname($gateDirectory, 3));
     }
 
     /**
