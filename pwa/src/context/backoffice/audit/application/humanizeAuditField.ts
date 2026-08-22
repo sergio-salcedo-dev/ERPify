@@ -1,5 +1,5 @@
 /**
- * Humanises an audit diff `field` key into a readable Spanish label. The raw key is forensic evidence
+ * Humanises an audit diff `field` key into a readable English label. The raw key is forensic evidence
  * and is rendered verbatim **alongside** this label by the diff UI — this function only produces the
  * friendlier line and must never replace the key.
  *
@@ -8,15 +8,15 @@
  * so an unmapped or future field still reads cleanly without a code change.
  */
 const CURATED_LABELS: Readonly<Record<string, string>> = {
-  name: "Nombre",
-  shortName: "Código",
-  holderName: "Titular",
+  name: "Name",
+  shortName: "Short name",
+  holderName: "Holder",
   iban: "IBAN",
   bic: "BIC",
   alias: "Alias",
-  currency: "Moneda",
-  status: "Estado",
-  bankId: "Banco",
+  currency: "Currency",
+  status: "Status",
+  bankId: "Bank",
 };
 
 export function humanizeAuditField(field: string): string {

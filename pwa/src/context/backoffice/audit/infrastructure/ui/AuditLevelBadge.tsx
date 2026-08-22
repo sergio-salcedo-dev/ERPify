@@ -6,7 +6,7 @@ import { AuditLevel } from "@/context/backoffice/audit/domain/AuditEntry";
  * The audit classification badge. Dot-first like `<StatusBadge>` (the label is always neutral text;
  * the hue lives only in the 6px dot, so colour is never the sole channel), but the dot's two values
  * are audit-specific: `activity` rides the neutral subtle grey (high-volume baseline, calm read),
- * `security` rides `{color.security}` — a class of auditoría, NOT a severity, so never `{color.danger}`.
+ * `security` rides `{color.security}` — a class of audit record, NOT a severity, so never `{color.danger}`.
  *
  * Built here in the audit context (not promoted to `@/components/erpify`) because it consumes the
  * audit `level` vocabulary; the matching row also draws a 2px lateral accent for `security`/`change`
@@ -32,7 +32,7 @@ const dotVariants = cva("size-1.5 flex-none rounded-full", {
 const KNOWN_LABEL: Readonly<Record<string, string>> = {
   [AuditLevel.Activity]: "Activity",
   [AuditLevel.Security]: "Security",
-  [AuditLevel.Change]: "Cambio",
+  [AuditLevel.Change]: "Change",
 };
 
 function toneFor(level: string): "activity" | "security" | "change" {

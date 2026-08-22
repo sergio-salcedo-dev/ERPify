@@ -57,9 +57,14 @@ The PWA prod image additionally **requires** `NEXT_PUBLIC_SENTRY_DSN` (the
 is **not a secret** — a write-only, browser-embeddable identifier baked into the
 client bundle, with errors routed through the same-origin `/monitoring` tunnel
 (no CSP `connect-src` widening). Dev uses the `erpify-pwa-dev` DSN, set in
-`pwa/.env.local` (empty keeps the SDK inert). Source-map upload is **not** wired
-yet, so prod stack traces stay minified (the `SENTRY_AUTH_TOKEN` secret is
-deferred — see `_bmad-output/implementation-artifacts/deferred-work.md`).
+`pwa/.env.local` (empty keeps the SDK inert).
+
+Source-map upload is wired and **opt-in**: set `SENTRY_AUTH_TOKEN` (a real
+secret — scope it to `project:releases`) and `SENTRY_ORG` in `.env.prod.local`
+and the build uploads the maps, then deletes them from the output so they are
+never served to a browser. Leave either empty and the build still succeeds with
+upload off — prod traces simply stay minified. The token travels as a BuildKit
+secret rather than a build arg, because `docker history` prints build args.
 
 Secrets are delivered through a **gitignored root `.env.prod.local`** (copy from
 [`../.env.prod.example`](../.env.prod.example)), loaded via `--env-file` for

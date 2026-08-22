@@ -34,9 +34,9 @@ interface FieldRow {
 }
 
 const KIND_MARKER: Readonly<Record<ChangeKind, string>> = {
-  [ChangeKind.Added]: "Añadido",
-  [ChangeKind.Removed]: "Eliminado",
-  [ChangeKind.Changed]: "Modificado",
+  [ChangeKind.Added]: "Added",
+  [ChangeKind.Removed]: "Removed",
+  [ChangeKind.Changed]: "Changed",
 };
 
 const KIND_TEXT_TONE: Readonly<Record<ChangeKind, string>> = {
@@ -52,9 +52,9 @@ const KIND_ICON: Readonly<Record<ChangeKind, LucideIcon>> = {
 };
 
 const VALUE_TYPE_LABEL: Readonly<Record<string, string>> = {
-  string: "texto",
-  number: "número",
-  boolean: "booleano",
+  string: "text",
+  number: "number",
+  boolean: "boolean",
 };
 
 /**
@@ -84,7 +84,7 @@ export function AuditChangeDiff({ changes, className, testId }: Readonly<AuditCh
     const hasCapturedFields = Object.keys(changes).length > 0;
     return (
       <p className={cn("text-muted-foreground text-xs", className)} data-testid={testId}>
-        {hasCapturedFields ? "Registro sin campos con valor" : "Sin cambios registrados"}
+        {hasCapturedFields ? "Record with no populated fields" : "No changes recorded"}
       </p>
     );
   }
@@ -117,9 +117,9 @@ export function AuditChangeDiff({ changes, className, testId }: Readonly<AuditCh
           onClick={() => setExpanded((prev) => !prev)}
           className="text-foreground hover:text-accent-hover self-start text-xs font-medium underline-offset-2 hover:underline"
           data-testid={idOf(testId, "toggle")}
-          title={expanded ? "Ocultar campos" : `Ver ${hiddenCount} campos más`}
+          title={expanded ? "Hide fields" : `Show ${hiddenCount} more fields`}
         >
-          {expanded ? "Ver menos" : `Ver ${hiddenCount} campos más`}
+          {expanded ? "Show less" : `Show ${hiddenCount} more fields`}
         </button>
       ) : null}
     </div>
@@ -178,8 +178,8 @@ function ChangeValue({ change, kind }: Readonly<{ change: AuditFieldChange; kind
 }
 
 /**
- * One scalar, rendered as escaped React text. `null` reads as a sentinel «— (vacío)»; the empty
- * string reads as «(cadena vacía)» — the two are never collapsed. A long value wraps in
+ * One scalar, rendered as escaped React text. `null` reads as a sentinel «— (empty)»; the empty
+ * string reads as «(empty string)» — the two are never collapsed. A long value wraps in
  * `TruncatedText` (full string stays in the DOM) and offers a copy affordance.
  */
 function ScalarValue({ value }: Readonly<{ value: AuditFieldValue }>) {
@@ -187,15 +187,15 @@ function ScalarValue({ value }: Readonly<{ value: AuditFieldValue }>) {
     return (
       <span className="text-muted-foreground inline-flex items-center gap-1 italic">
         <Lock className="size-3" aria-hidden="true" />
-        cifrado (no disponible)
+        encrypted (not available)
       </span>
     );
   }
   if (value === null) {
-    return <span className="text-muted-foreground italic">— (vacío)</span>;
+    return <span className="text-muted-foreground italic">— (empty)</span>;
   }
   if (value === "") {
-    return <span className="text-muted-foreground italic">(cadena vacía)</span>;
+    return <span className="text-muted-foreground italic">(empty string)</span>;
   }
   const text = String(value);
   if (text.length > LONG_VALUE_LENGTH) {
@@ -212,8 +212,8 @@ function ScalarValue({ value }: Readonly<{ value: AuditFieldValue }>) {
           iconOnly
           size="sm"
           variant="ghost"
-          label="Copiar valor"
-          title="Copiar valor"
+          label="Copy value"
+          title="Copy value"
         />
       </span>
     );
@@ -221,11 +221,11 @@ function ScalarValue({ value }: Readonly<{ value: AuditFieldValue }>) {
   return <span className="break-words">{text}</span>;
 }
 
-/** «Estado inicial» when the row is a pure CREATE (all-added), «… antes del borrado» for a DELETE. */
+/** «Initial state» when the row is a pure CREATE (all-added), «… before deletion» for a DELETE. */
 function snapshotHeaderFor(rows: ReadonlyArray<FieldRow>): string | null {
-  if (rows.every((row) => row.kind === ChangeKind.Added)) return "Estado inicial";
+  if (rows.every((row) => row.kind === ChangeKind.Added)) return "Initial state";
   if (rows.every((row) => row.kind === ChangeKind.Removed)) {
-    return "Estado final antes del borrado";
+    return "Final state before deletion";
   }
   return null;
 }
@@ -234,7 +234,7 @@ function snapshotHeaderFor(rows: ReadonlyArray<FieldRow>): string | null {
 function typeHintFor(change: AuditFieldChange): string {
   const present = change.new ?? change.old;
   if (present === null) return "—";
-  if (isAuditSealedValue(present)) return "cifrado";
+  if (isAuditSealedValue(present)) return "encrypted";
   return VALUE_TYPE_LABEL[typeof present] ?? typeof present;
 }
 

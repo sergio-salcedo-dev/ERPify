@@ -1,6 +1,6 @@
 /**
  * One row of the audit investigation timeline — a read-only projection of an `audit_log` record
- * (the 4.1 read model). Backoffice consumes auditoría, never writes it, so this carries no behaviour.
+ * (the 4.1 read model). Backoffice consumes the audit trail, never writes it, so this carries no behaviour.
  *
  * `level` and `actorType` are kept as the raw stored strings (not narrowed unions) on purpose: a
  * forensic read must reflect faithfully whatever the table holds and never break on an unexpected

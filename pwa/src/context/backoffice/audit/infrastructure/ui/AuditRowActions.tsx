@@ -51,12 +51,12 @@ export function AuditRowActions({
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Más acciones"
-            title="Más acciones"
+            aria-label="More actions"
+            title="More actions"
             data-testid={`audit-row-actions__trigger-${entry.id}`}
           >
             <MoreHorizontal className="size-3.5" aria-hidden="true" />
-            <span className="sr-only">Más acciones</span>
+            <span className="sr-only">More actions</span>
           </Button>
         }
       />
@@ -67,7 +67,7 @@ export function AuditRowActions({
             data-testid={`audit-row-actions__follow-actor-${entry.id}`}
           >
             <Footprints aria-hidden="true" />
-            Seguir a este actor
+            Follow this actor
           </DropdownMenuItem>
         ) : null}
         {canFollowCorrelation ? (
@@ -76,7 +76,7 @@ export function AuditRowActions({
             data-testid={`audit-row-actions__follow-correlation-${entry.id}`}
           >
             <GitBranch aria-hidden="true" />
-            Ver esta correlación
+            Follow this correlation
           </DropdownMenuItem>
         ) : null}
         {canFollowResource ? (
@@ -85,7 +85,7 @@ export function AuditRowActions({
             data-testid={`audit-row-actions__follow-resource-${entry.id}`}
           >
             <Package aria-hidden="true" />
-            Ver actividad de este recurso
+            View this resource&apos;s activity
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>

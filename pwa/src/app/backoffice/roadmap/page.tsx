@@ -20,9 +20,9 @@ export const metadata: Metadata = {
 };
 
 const STATUS_LABEL: Record<RoadmapStatus, string> = {
-  done: "Hecho",
-  "in-progress": "En curso",
-  planned: "Pendiente",
+  done: "Done",
+  "in-progress": "In progress",
+  planned: "Planned",
 };
 
 const STATUS_VARIANT: Record<RoadmapStatus, StatusBadgeVariant> = {
@@ -38,16 +38,16 @@ const STATUS_DOT: Record<RoadmapStatus, string> = {
 };
 
 const PRIORITY_LABEL: Record<RoadmapPriority, string> = {
-  critical: "Crítica",
-  high: "Alta",
-  medium: "Media",
-  low: "Baja",
+  critical: "Critical",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
 };
 
 const COMPLEXITY_LABEL: Record<RoadmapComplexity, string> = {
-  low: "Baja",
-  medium: "Media",
-  high: "Alta",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
 };
 
 function Chip({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -205,40 +205,40 @@ export default function RoadmapPage() {
             Product Roadmap
           </h1>
           <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-            Backlog vivo de producto + ingeniería, por fases y módulos. El estado se marca tarea a
-            tarea, al cerrar y verificar cada pieza:
+            A living product + engineering backlog, by phase and module. Status is marked task by
+            task, as each piece is closed and verified:
           </p>
           <ul className="roadmap__status-legend text-muted-foreground max-w-3xl text-sm leading-relaxed">
             <li>
-              <span className="text-foreground font-medium">Hecho</span> = entregado y verificado
+              <span className="text-foreground font-medium">Done</span> = delivered and verified
             </li>
             <li>
-              <span className="text-foreground font-medium">En curso</span> = se está trabajando
+              <span className="text-foreground font-medium">In progress</span> = being worked on
             </li>
             <li>
-              <span className="text-foreground font-medium">Pendiente</span> = sin empezar
+              <span className="text-foreground font-medium">Planned</span> = not started
             </li>
           </ul>
           <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-            La complejidad mide la facilidad de implementación, no la importancia:
+            Complexity measures how easy something is to implement, not how important it is:
           </p>
           <ul className="roadmap__complexity-legend text-muted-foreground max-w-3xl text-sm leading-relaxed">
             <li>
-              <span className="text-foreground font-medium">Baja</span> = CRUD sin relaciones en DB
-              (calcar la plantilla Banks)
+              <span className="text-foreground font-medium">Low</span> = CRUD with no DB relations
+              (trace the Banks template)
             </li>
             <li>
-              <span className="text-foreground font-medium">Media</span> = relaciones en DB + reglas
-              de negocio
+              <span className="text-foreground font-medium">Medium</span> = DB relations + business
+              rules
             </li>
             <li>
-              <span className="text-foreground font-medium">Alta</span> = motores, integraciones o
-              UI interactiva
+              <span className="text-foreground font-medium">High</span> = engines, integrations or
+              interactive UI
             </li>
           </ul>
           <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-            Para elegir la siguiente tarea: prioridad alta + complejidad baja primero. Fuente de
-            verdad: <code className="text-foreground">roadmap.ts</code>.
+            To pick the next task: high priority + low complexity first. Source of truth:{" "}
+            <code className="text-foreground">roadmap.ts</code>.
           </p>
         </div>
 
@@ -247,16 +247,16 @@ export default function RoadmapPage() {
           data-testid="roadmap__overall"
         >
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-foreground text-sm font-semibold">Progreso global</span>
-            <StatusBadge variant="success" label={`${overall.done} hechos`} />
-            <StatusBadge variant="warning" label={`${overall.inProgress} en curso`} />
-            <StatusBadge variant="neutral" label={`${overall.planned} pendientes`} />
-            <span className="text-muted-foreground text-xs">de {overall.total} submódulos</span>
+            <span className="text-foreground text-sm font-semibold">Overall progress</span>
+            <StatusBadge variant="success" label={`${overall.done} done`} />
+            <StatusBadge variant="warning" label={`${overall.inProgress} in progress`} />
+            <StatusBadge variant="neutral" label={`${overall.planned} planned`} />
+            <span className="text-muted-foreground text-xs">of {overall.total} submodules</span>
           </div>
           <div className="flex items-center gap-3">
             <ProgressBar
               percent={overall.donePercent}
-              label="Progreso global"
+              label="Overall progress"
               testId="roadmap__overall-progress"
             />
             <span className="text-muted-foreground text-2xs font-medium whitespace-nowrap">

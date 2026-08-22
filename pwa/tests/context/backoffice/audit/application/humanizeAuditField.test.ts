@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import { humanizeAuditField } from "@/context/backoffice/audit/application/humanizeAuditField";
 
 describe("humanizeAuditField", () => {
-  it("uses the curated Spanish label for an audited Bank field", () => {
-    expect(humanizeAuditField("name")).toBe("Nombre");
-    expect(humanizeAuditField("shortName")).toBe("Código");
+  it("uses the curated label for an audited Bank field", () => {
+    expect(humanizeAuditField("name")).toBe("Name");
+    expect(humanizeAuditField("shortName")).toBe("Short name");
   });
 
-  it("uses the curated Spanish label for an audited BankAccount field", () => {
-    expect(humanizeAuditField("holderName")).toBe("Titular");
+  it("uses the curated label for an audited BankAccount field", () => {
+    expect(humanizeAuditField("holderName")).toBe("Holder");
     expect(humanizeAuditField("iban")).toBe("IBAN");
     expect(humanizeAuditField("bic")).toBe("BIC");
   });
