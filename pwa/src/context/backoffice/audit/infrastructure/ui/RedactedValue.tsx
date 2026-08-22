@@ -3,7 +3,7 @@ import { cn } from "@/components/cn";
 /**
  * The `[REDACTED]` sentinel for an `ip`/`user_agent` vaccated by GDPR erasure. An inert mono chip:
  * text at AA contrast (`{color.text-muted}`) over `{color.bg-subtle}`, no copy (there is nothing to
- * copy). It means «vaciado a propósito» — semantically distinct from a real null (rendered «—»);
+ * copy). It means «deliberately cleared» — semantically distinct from a real null (rendered «—»);
  * the two are never collapsed. The literal `[REDACTED]` is the datum itself, shown verbatim.
  */
 interface RedactedValueProps {

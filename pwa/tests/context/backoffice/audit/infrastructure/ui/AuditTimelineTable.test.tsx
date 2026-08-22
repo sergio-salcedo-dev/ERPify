@@ -61,7 +61,7 @@ describe("AuditTimelineTable", () => {
 
   it("renders the humanized action with its raw token preserved beneath", () => {
     renderTable();
-    expect(screen.getByText("Acceso denegado")).toBeInTheDocument();
+    expect(screen.getByText("Access denied")).toBeInTheDocument();
     expect(screen.getByText("ACCESS_DENIED")).toBeInTheDocument();
   });
 
@@ -90,14 +90,14 @@ describe("AuditTimelineTable", () => {
 
   it("does not activate the row when an in-row copy control is used", () => {
     const { onRowActivate } = renderTable();
-    fireEvent.click(screen.getByRole("button", { name: /copiar id de actor/i }));
+    fireEvent.click(screen.getByRole("button", { name: /copy actor id/i }));
     expect(onRowActivate).not.toHaveBeenCalled();
   });
 
   it("toggles the sort when the time header is pressed", () => {
     const onToggleSort = vi.fn();
     renderTable({ onToggleSort });
-    fireEvent.click(screen.getByRole("button", { name: /hora/i }));
+    fireEvent.click(screen.getByRole("button", { name: /time/i }));
     expect(onToggleSort).toHaveBeenCalledTimes(1);
   });
 
@@ -131,6 +131,6 @@ describe("AuditTimelineTable", () => {
     renderTable({ groups: groupsOf([{ ...SECURITY, resourceErased: true }]) });
     expect(screen.getByText("anonimizado (GDPR)")).toBeInTheDocument();
     expect(screen.queryByText(/019f0360/)).toBeNull();
-    expect(screen.queryByTitle("Copiar id de recurso")).toBeNull();
+    expect(screen.queryByTitle("Copy resource id")).toBeNull();
   });
 });

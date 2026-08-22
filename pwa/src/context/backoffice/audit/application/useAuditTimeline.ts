@@ -49,7 +49,7 @@ function genericProblem(detail: string): ProblemDetails {
  * `useResourceList`, stripped to what a forensic read needs: two load paths (first-page criteria
  * search vs verbatim link follow), a monotonic request guard so a slow response never overwrites a
  * newer one, cursor-reset on criteria change, empty-tail recovery, and a derived boundary state.
- * No selection, bulk, optimistic delete, or peek — Backoffice never mutates auditoría (D5), so a
+ * No selection, bulk, optimistic delete, or peek — Backoffice never mutates the audit trail (D5), so a
  * `CrudRepository` would be a wrong (ISP-violating) dependency here.
  */
 export function useAuditTimeline({

@@ -8,7 +8,7 @@ function localHourMinute(iso: string): string {
 }
 
 /**
- * The Jornada session-group header: the correlation (copyable chip), its local time window
+ * The Journey session-group header: the correlation (copyable chip), its local time window
  * `HH:MM`–`HH:MM`, and the entry count — the reconstructed session at a glance, without any session
  * table (D6). Rendered inside the table's `<th scope="rowgroup">`.
  */

@@ -29,14 +29,14 @@ const AREA_ICON: Record<ContextArea, LucideIcon> = {
 
 const REFERENCES: ReadonlyArray<{ label: string; href: string; description: string }> = [
   {
-    label: "Cómo funciona ERPify",
+    label: "How ERPify works",
     href: `${Routes.BACKOFFICE}/docs/flow`,
-    description: "Los flujos de trabajo paso a paso.",
+    description: "The workflows, step by step.",
   },
   {
     label: "Product Roadmap",
     href: `${Routes.BACKOFFICE}/roadmap`,
-    description: "El plan por fases y módulos, con su estado.",
+    description: "The plan by phase and module, with its status.",
   },
 ];
 
@@ -158,7 +158,7 @@ export default function AboutPage() {
           className="text-foreground text-2xl font-semibold tracking-tight"
           data-testid="about__title"
         >
-          Qué es ERPify
+          What ERPify is
         </h1>
         <p className="about__tagline text-foreground max-w-3xl text-base leading-relaxed">
           {erpifyOverview.tagline}
@@ -174,7 +174,7 @@ export default function AboutPage() {
       <section className="about__north bg-card border-border flex flex-col gap-2 rounded-xl border p-4 shadow-sm">
         <h2 className="text-foreground flex items-center gap-2 text-sm font-semibold">
           <Compass className="text-muted-foreground size-4" aria-hidden="true" />
-          Norte estratégico
+          Strategic north
         </h2>
         <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
           {erpifyOverview.strategicNorth}
@@ -182,7 +182,7 @@ export default function AboutPage() {
       </section>
 
       <section className="about__personas flex flex-col gap-4">
-        <h2 className="text-foreground text-lg font-semibold tracking-tight">Para quién es</h2>
+        <h2 className="text-foreground text-lg font-semibold tracking-tight">Who it is for</h2>
         <div className="about__personas-grid grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {erpifyOverview.personas.map((persona) => (
             <article
@@ -202,9 +202,9 @@ export default function AboutPage() {
         <div className="flex flex-col gap-1">
           <h2 className="text-foreground text-lg font-semibold tracking-tight">Bounded contexts</h2>
           <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-            Cada capacidad se modela como un contexto con lenguaje del dominio (no abstracciones
-            genéricas tipo &laquo;CRM&raquo;). Los contextos no comparten entidades: se integran por
-            eventos. Modelo completo en{" "}
+            Every capability is modelled as a context speaking the language of the domain (not
+            generic &laquo;CRM&raquo;-style abstractions). Contexts share no entities: they
+            integrate through events. Full model in{" "}
             <code className="text-foreground">docs/bounded-contexts.md</code>.
           </p>
         </div>
@@ -217,21 +217,21 @@ export default function AboutPage() {
         <div className="flex flex-col gap-1">
           <h2 className="text-foreground flex items-center gap-2 text-lg font-semibold tracking-tight">
             <Radio className="text-muted-foreground size-4.5" aria-hidden="true" />
-            Catálogo de eventos de integración
+            Integration event catalogue
           </h2>
           <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-            El contrato público por el que los contextos se hablan. Cada consumidor traduce el
-            evento ajeno a su propio modelo mediante un Anti-Corruption Layer.
+            The public contract through which contexts talk to each other. Every consumer translates
+            the foreign event into its own model via an Anti-Corruption Layer.
           </p>
         </div>
         <div className="about__event-table border-border overflow-x-auto rounded-xl border">
           <table className="w-full min-w-160 border-collapse text-left text-xs">
             <thead className="bg-muted/50 text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 font-semibold">Evento</th>
-                <th className="px-3 py-2 font-semibold">Emite</th>
-                <th className="px-3 py-2 font-semibold">Payload (clave)</th>
-                <th className="px-3 py-2 font-semibold">Consumidores</th>
+                <th className="px-3 py-2 font-semibold">Event</th>
+                <th className="px-3 py-2 font-semibold">Emitted by</th>
+                <th className="px-3 py-2 font-semibold">Payload (key)</th>
+                <th className="px-3 py-2 font-semibold">Consumers</th>
               </tr>
             </thead>
             <tbody>
@@ -247,8 +247,8 @@ export default function AboutPage() {
           </table>
         </div>
         <p className="text-muted-foreground text-2xs">
-          {domainContexts.length} bounded contexts · {integrationEvents.length} eventos de
-          integración en el catálogo.
+          {domainContexts.length} bounded contexts · {integrationEvents.length} integration events
+          in the catalogue.
         </p>
       </section>
 

@@ -10,13 +10,13 @@ describe("ActorChip", () => {
     expect(screen.getByText("user")).toBeInTheDocument();
     // Middle-truncated, but the full id is the copy value + title.
     expect(screen.getByText("019f04…7c29")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /copiar id de actor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /copy actor id/i })).toBeInTheDocument();
   });
 
   it("omits id and copy for actors that never carry one (anonymous, system)", () => {
     render(<ActorChip actorType="anonymous" actorId={null} />);
     expect(screen.getByText("anonymous")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /copiar id de actor/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /copy actor id/i })).toBeNull();
   });
 
   it("renders the anonymized GDPR variant as a distinct thing, never an id", () => {
@@ -25,6 +25,6 @@ describe("ActorChip", () => {
     expect(screen.getByText("· no identificable")).toBeInTheDocument();
     // The post-erasure UUID is NEVER shown as an id, and there is nothing to copy.
     expect(screen.queryByText(/019f04/)).toBeNull();
-    expect(screen.queryByRole("button", { name: /copiar id de actor/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /copy actor id/i })).toBeNull();
   });
 });

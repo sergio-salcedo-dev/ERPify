@@ -7,9 +7,9 @@
  * no React or framework imports, so the page can never drift from the model and
  * a future export (API seed, slide deck) can consume the same shape.
  *
- * Narrative fields are Spanish (matching `roadmap.ts` / `flows.ts`) until the
- * i18n module makes the surface translatable; context/aggregate/event
- * identifiers stay in the codebase's ubiquitous language.
+ * Narrative fields are English, matching the `lang` the root layout declares;
+ * context/aggregate/event identifiers stay in the codebase's ubiquitous
+ * language.
  *
  * Optional `flows` is a growth seam: the page can later render per-context step
  * flows without reshaping the data (today flows live at `/backoffice/docs/flow`).
@@ -68,43 +68,41 @@ export interface IntegrationEvent {
 }
 
 export const erpifyOverview: ErpifyOverview = {
-  tagline:
-    "El ERP del sector de la construcción — del lead a la certificación, todo guiado por eventos.",
+  tagline: "The ERP for the construction industry — from lead to certification, all event-driven.",
   whatItIs:
-    "ERPify es un ERP verticalizado para empresas de construcción (obra pública y privada) que cubre el ciclo de vida completo de una obra: prospección comercial → estudio económico → ejecución en campo → facturación → control de costes → cierre financiero.",
+    "ERPify is a vertical ERP for construction companies (public and private works) covering the full life cycle of a site: commercial prospecting → cost study → execution in the field → invoicing → cost control → financial close.",
   whatFor:
-    "Gestiona actores, proyectos, presupuestos, compras, stock, maquinaria, tesorería, certificaciones y reparto de costes en un único sistema que habla el lenguaje del sector, no la jerga genérica de un ERP horizontal.",
+    "It manages parties, projects, budgets, purchasing, stock, plant, treasury, certifications and cost allocation in a single system that speaks the language of the industry, not the generic jargon of a horizontal ERP.",
   strategicNorth:
-    "ERPify no compite como 'un conjunto de módulos' (CRM + facturación + obras) ni como un Odoo verticalizado, sino como un motor de ejecución de procesos de construcción: automatización basada en eventos + reglas + datos reales de obra. Todo emite eventos y todo es automatizable; la obra es la fuente de datos y el Automation Engine, el diferenciador.",
+    "ERPify does not compete as 'a set of modules' (CRM + invoicing + sites), nor as a verticalised Odoo, but as an execution engine for construction processes: automation built on events + rules + real site data. Everything emits events and everything is automatable; the site is the data source and the Automation Engine is the differentiator.",
   personas: [
     {
-      name: "Ingeniero de caminos",
+      name: "Civil engineer",
       focus:
-        "Herramientas técnicas: configurador de pavimentos, estudios económicos y la ejecución de obra (mediciones, certificaciones, calidad, PRL).",
+        "Technical tools: pavement configurator, cost studies and site execution (measurements, certifications, quality, health & safety).",
     },
     {
-      name: "Gestor comercial",
-      focus:
-        "Licitaciones públicas, propuestas a cliente, embudo de oportunidades y campañas de marketing.",
+      name: "Sales manager",
+      focus: "Public tenders, client proposals, the opportunity funnel and marketing campaigns.",
     },
     {
-      name: "Gestor financiero",
-      focus: "Tesorería, cashflow, reparto de costes directos e indirectos y facturación.",
+      name: "Finance manager",
+      focus: "Treasury, cashflow, direct and indirect cost allocation, and invoicing.",
     },
     {
-      name: "Desarrollador",
+      name: "Developer",
       focus:
-        "Mantiene y extiende el sistema sobre DDD + arquitectura hexagonal, contexto a contexto.",
+        "Maintains and extends the system on DDD + hexagonal architecture, context by context.",
     },
   ],
 };
 
 export const AREA_LABEL: Record<ContextArea, string> = {
-  commercial: "Comercial",
-  site: "Obra",
-  operations: "Operaciones",
-  finance: "Finanzas",
-  platform: "Plataforma",
+  commercial: "Commercial",
+  site: "Site",
+  operations: "Operations",
+  finance: "Finance",
+  platform: "Platform",
 };
 
 /** Display order of the areas on the page. */
@@ -122,12 +120,12 @@ export const domainContexts: DomainContext[] = [
     name: "Commercial",
     area: "commercial",
     responsibility:
-      "Prospección, embudo de venta privada e historial de relación con el cliente. Sustituye al 'CRM' genérico con lenguaje del dominio.",
+      "Prospecting, the private-sales funnel and the history of the client relationship. Replaces the generic 'CRM' with domain language.",
     ubiquitousLanguage: [
-      { term: "Lead", definition: "Contacto potencial sin cualificar todavía." },
-      { term: "Opportunity", definition: "Oportunidad de venta privada en el embudo (deal)." },
-      { term: "Campaign", definition: "Acción de marketing a la que se atribuyen leads." },
-      { term: "Account", definition: "Rol comercial de una Party (cliente)." },
+      { term: "Lead", definition: "A potential contact, not yet qualified." },
+      { term: "Opportunity", definition: "A private-sales opportunity in the funnel (deal)." },
+      { term: "Campaign", definition: "A marketing action leads are attributed to." },
+      { term: "Account", definition: "The commercial role of a Party (client)." },
     ],
     aggregates: ["Lead", "Opportunity", "Account", "Campaign", "Pipeline"],
     emits: ["opportunity.won", "lead.qualified", "campaign.launched"],
@@ -139,14 +137,14 @@ export const domainContexts: DomainContext[] = [
     name: "TenderManagement",
     area: "commercial",
     responsibility:
-      "Seguimiento de licitaciones públicas con su ciclo propio: convocatoria → estudio → propuesta → adjudicación, con plazos y documentación reglada.",
+      "Tracking of public tenders through their own cycle: call → study → proposal → award, with regulated deadlines and documentation.",
     ubiquitousLanguage: [
       {
         term: "PublicTender",
-        definition: "Licitación pública a la que la empresa puede presentarse.",
+        definition: "A public tender the company may bid for.",
       },
-      { term: "BidDecision", definition: "Decisión de presentarse o no (bid / no-bid)." },
-      { term: "AwardStatus", definition: "Resultado terminal: ganada, perdida o desierta." },
+      { term: "BidDecision", definition: "The decision to bid or not (bid / no-bid)." },
+      { term: "AwardStatus", definition: "Terminal outcome: won, lost or unawarded." },
     ],
     aggregates: ["PublicTender", "SubmissionDeadline", "TenderDocument", "BidDecision"],
     emits: ["tender.registered", "tender.awarded", "tender.lost"],
@@ -158,13 +156,13 @@ export const domainContexts: DomainContext[] = [
     name: "CommercialProposal",
     area: "commercial",
     responsibility:
-      "Generación de la oferta económica y técnica cara a cliente, con validez, distinta del presupuesto interno.",
+      "Generation of the client-facing technical and commercial offer, with a validity period, distinct from the internal budget.",
     ubiquitousLanguage: [
-      { term: "Proposal", definition: "Oferta enviada al cliente (técnica + económica)." },
-      { term: "ValidityPeriod", definition: "Plazo durante el que la oferta es válida." },
+      { term: "Proposal", definition: "The offer sent to the client (technical + commercial)." },
+      { term: "ValidityPeriod", definition: "The period during which the offer stands." },
       {
         term: "CostEstimate",
-        definition: "Resumen económico cara a cliente, derivado de un Budget.",
+        definition: "Client-facing cost summary, derived from a Budget.",
       },
     ],
     aggregates: ["Proposal", "ProposalLine", "CostEstimate"],
@@ -177,11 +175,11 @@ export const domainContexts: DomainContext[] = [
     name: "Projects",
     area: "site",
     responsibility:
-      "Gestión de la obra de principio a fin: estructura (fases, hitos, tareas) y avance. La ejecución física vive en SiteOperations.",
+      "Managing the site end to end: structure (phases, milestones, tasks) and progress. Physical execution lives in SiteOperations.",
     ubiquitousLanguage: [
-      { term: "Project", definition: "La obra, raíz del trabajo de construcción." },
-      { term: "Phase", definition: "Etapa de la obra que agrupa tareas." },
-      { term: "ProgressEntry", definition: "Registro de avance del que deriva el % de la obra." },
+      { term: "Project", definition: "The site — the root of the construction work." },
+      { term: "Phase", definition: "A stage of the site grouping tasks." },
+      { term: "ProgressEntry", definition: "A progress record the site's % is derived from." },
     ],
     aggregates: ["Project", "Phase", "Milestone", "Task"],
     emits: ["project.created", "phase.completed", "task.completed"],
@@ -193,15 +191,15 @@ export const domainContexts: DomainContext[] = [
     name: "SiteOperations",
     area: "site",
     responsibility:
-      "El día a día de la obra en campo: diario, mediciones, certificaciones (a origen), incidencias, calidad y seguridad (PRL). Núcleo del negocio.",
+      "The day to day of the site in the field: diary, measurements, certifications (to date), incidents, quality and safety. The core of the business.",
     ubiquitousLanguage: [
       {
         term: "Certification",
-        definition: "Certificación de avance que habilita la factura a origen.",
+        definition: "A progress certification that enables the to-date invoice.",
       },
-      { term: "Measurement", definition: "Medición de obra; aprobada, no se edita." },
-      { term: "SiteDiary", definition: "Parte diario de lo ejecutado en la obra." },
-      { term: "SafetyRecord", definition: "Registro de seguridad y salud (PRL)." },
+      { term: "Measurement", definition: "A site measurement; once approved it is not edited." },
+      { term: "SiteDiary", definition: "The daily report of what was executed on site." },
+      { term: "SafetyRecord", definition: "A health and safety record." },
     ],
     aggregates: ["SiteDiary", "Certification", "Measurement", "Incident", "QualityCheck"],
     emits: ["certification.approved", "incident.raised", "measurement.approved"],
@@ -213,14 +211,14 @@ export const domainContexts: DomainContext[] = [
     name: "Budgeting & Configurator",
     area: "operations",
     responsibility:
-      "Presupuestos por obra con versionado y márgenes, e incluye el configurador por capas (pavimentos) que calcula coste y genera partidas.",
+      "Per-site budgets with versioning and margins, including the layer-based configurator (pavements) that prices and generates line items.",
     ubiquitousLanguage: [
-      { term: "Budget", definition: "Presupuesto de una obra; aprobarlo congela una versión." },
+      { term: "Budget", definition: "A site budget; approving it freezes a version." },
       {
         term: "Configuration",
-        definition: "Estructura por capas que deriva su coste (configurador).",
+        definition: "A layered structure that derives its cost (configurator).",
       },
-      { term: "PreBidStudy", definition: "Estudio económico previo a presentar una licitación." },
+      { term: "PreBidStudy", definition: "The cost study made before bidding for a tender." },
     ],
     aggregates: ["Budget", "BudgetLine", "Configuration", "PreBidStudy"],
     emits: ["budget.approved", "study.completed", "configuration.priced"],
@@ -231,11 +229,11 @@ export const domainContexts: DomainContext[] = [
     key: "operations-procurement",
     name: "Procurement & Inventory",
     area: "operations",
-    responsibility: "Proveedores, compras y control de stock por obra.",
+    responsibility: "Suppliers, purchasing and per-site stock control.",
     ubiquitousLanguage: [
-      { term: "PurchaseOrder", definition: "Pedido a un proveedor." },
-      { term: "StockMovement", definition: "Entrada / salida / traspaso de material." },
-      { term: "Reservation", definition: "Material reservado para una obra concreta." },
+      { term: "PurchaseOrder", definition: "An order placed with a supplier." },
+      { term: "StockMovement", definition: "A material receipt / issue / transfer." },
+      { term: "Reservation", definition: "Material reserved for one specific site." },
     ],
     aggregates: ["Supplier", "PurchaseOrder", "Material", "StockMovement"],
     emits: ["goods.received", "delivery.scheduled", "stock.below-reorder-point"],
@@ -247,11 +245,11 @@ export const domainContexts: DomainContext[] = [
     name: "Resources (Plant & Equipment)",
     area: "operations",
     responsibility:
-      "Maquinaria y vehículos como activos: asignación a obra, coste interno y mantenimiento. Ni personas (Workforce) ni material fungible (Procurement).",
+      "Plant and vehicles as assets: assignment to a site, internal cost and maintenance. Neither people (Workforce) nor consumable material (Procurement).",
     ubiquitousLanguage: [
-      { term: "Machine", definition: "Activo de maquinaria de la empresa." },
-      { term: "Assignment", definition: "Asignación de un activo a una obra/tarea por periodo." },
-      { term: "InternalRate", definition: "Tarifa interna (coste por hora o día) del activo." },
+      { term: "Machine", definition: "A plant asset owned by the company." },
+      { term: "Assignment", definition: "An asset assigned to a site/task for a period." },
+      { term: "InternalRate", definition: "The asset's internal rate (cost per hour or day)." },
     ],
     aggregates: ["Machine", "Vehicle", "Assignment", "MaintenanceLog"],
     emits: ["resource.assigned", "resource.maintenance-due"],
@@ -262,10 +260,10 @@ export const domainContexts: DomainContext[] = [
     key: "operations-workforce",
     name: "Workforce & Time Tracking",
     area: "operations",
-    responsibility: "Personas, subcontratas y partes de trabajo con coste por hora.",
+    responsibility: "People, subcontractors and work logs with an hourly cost.",
     ubiquitousLanguage: [
-      { term: "WorkLog", definition: "Parte de trabajo de un empleado o subcontrata." },
-      { term: "LaborRate", definition: "Coste por hora de mano de obra." },
+      { term: "WorkLog", definition: "A work log for an employee or subcontractor." },
+      { term: "LaborRate", definition: "The hourly cost of labour." },
     ],
     aggregates: ["Employee", "Subcontractor", "WorkLog", "TimeEntry"],
     emits: ["time.logged", "worklog.submitted"],
@@ -277,14 +275,17 @@ export const domainContexts: DomainContext[] = [
     name: "Finance",
     area: "finance",
     responsibility:
-      "Núcleo financiero: facturación, cobros/pagos, tesorería y coste por proyecto. Banks/Treasury es la vertical de referencia ya entregada.",
+      "The financial core: invoicing, receipts/payments, treasury and per-project cost. Banks/Treasury is the reference vertical already delivered.",
     ubiquitousLanguage: [
       {
         term: "Invoice",
-        definition: "Factura de cliente o proveedor; emitida no se edita, se rectifica.",
+        definition: "A client or supplier invoice; once issued it is not edited but credited.",
       },
-      { term: "Payment", definition: "Cobro o pago; no supera el pendiente." },
-      { term: "CostEntry", definition: "Imputación de coste a una obra." },
+      {
+        term: "Payment",
+        definition: "A receipt or payment; never exceeds the outstanding amount.",
+      },
+      { term: "CostEntry", definition: "A cost charged to a site." },
     ],
     aggregates: ["Bank", "BankAccount", "Invoice", "Payment", "CostEntry"],
     emits: ["invoice.issued", "invoice.paid", "project.budget-exceeded"],
@@ -296,10 +297,10 @@ export const domainContexts: DomainContext[] = [
     name: "Cost Allocation",
     area: "finance",
     responsibility:
-      "Centros de coste y reglas de imputación auditables que reparten costes reales (horas, compras, indirectos) sobre obras.",
+      "Cost centres and auditable allocation rules that spread real costs (hours, purchases, overheads) across sites.",
     ubiquitousLanguage: [
-      { term: "CostCenter", definition: "Centro de coste jerárquico." },
-      { term: "AllocationRule", definition: "Regla driver + método que reparte un coste." },
+      { term: "CostCenter", definition: "A hierarchical cost centre." },
+      { term: "AllocationRule", definition: "A driver + method rule that spreads a cost." },
     ],
     aggregates: ["CostCenter", "AllocationRule", "AllocationRun", "AllocationEntry"],
     emits: ["cost.allocated", "allocation.run"],
@@ -310,10 +311,10 @@ export const domainContexts: DomainContext[] = [
     key: "commissions",
     name: "Commissions",
     area: "finance",
-    responsibility: "Planes de comisión por beneficiario con devengo por evento y liquidación.",
+    responsibility: "Per-beneficiary commission plans with event-driven accrual and settlement.",
     ubiquitousLanguage: [
-      { term: "CommissionPlan", definition: "Reglas de comisión (%, fijo o escalado)." },
-      { term: "CommissionAccrual", definition: "Devengo de comisión, idempotente por evento." },
+      { term: "CommissionPlan", definition: "Commission rules (%, fixed or tiered)." },
+      { term: "CommissionAccrual", definition: "A commission accrual, idempotent per event." },
     ],
     aggregates: ["CommissionPlan", "Beneficiary", "CommissionAccrual", "Settlement"],
     emits: ["commission.accrued", "commission.settled"],
@@ -325,13 +326,16 @@ export const domainContexts: DomainContext[] = [
     name: "Organization & Party",
     area: "platform",
     responsibility:
-      "Frontera multi-tenant (empresas, usuarios, equipos) y el directorio fino de actores (Party) referenciable por id, con roles por contexto.",
+      "The multi-tenant boundary (companies, users, teams) and the fine-grained directory of parties, referenceable by id, with per-context roles.",
     ubiquitousLanguage: [
-      { term: "Company", definition: "Empresa-tenant; frontera de aislamiento de datos." },
-      { term: "Party", definition: "Identidad legal mínima de un actor, con roles simultáneos." },
+      { term: "Company", definition: "A tenant company; the data-isolation boundary." },
+      {
+        term: "Party",
+        definition: "The minimal legal identity of an actor, holding simultaneous roles.",
+      },
       {
         term: "PartyRole",
-        definition: "Cliente / proveedor / subcontrata / empleado / autónomo sobre una Party.",
+        definition: "Client / supplier / subcontractor / employee / freelancer over a Party.",
       },
     ],
     aggregates: ["Company", "User", "Team", "Party", "PartyRole"],
@@ -344,12 +348,15 @@ export const domainContexts: DomainContext[] = [
     name: "External Portals",
     area: "platform",
     responsibility:
-      "Superficies self-service por tipo de actor externo (cliente, proveedor, subcontrata, empleado); exponen vía RBAC + ABAC datos de otros contextos.",
+      "Self-service surfaces per type of external actor (client, supplier, subcontractor, employee); they expose other contexts' data through RBAC + ABAC.",
     ubiquitousLanguage: [
-      { term: "PortalAccess", definition: "Vínculo actor ↔ alcance de datos visible." },
+      {
+        term: "PortalAccess",
+        definition: "The link between an actor and the data scope they see.",
+      },
       {
         term: "AccessScope",
-        definition: "Qué puede ver/hacer el actor, decidido por policy ABAC.",
+        definition: "What the actor may see/do, decided by an ABAC policy.",
       },
     ],
     aggregates: ["PortalAccess", "PortalInvitation", "ScopedSession"],
@@ -362,18 +369,18 @@ export const domainContexts: DomainContext[] = [
     name: "Platform services",
     area: "platform",
     responsibility:
-      "Servicios transversales suscritos al bus de eventos: notificaciones, feature flags, automatización, reporting, auditoría y documentos.",
+      "Cross-cutting services subscribed to the event bus: notifications, feature flags, automation, reporting, audit and documents.",
     ubiquitousLanguage: [
-      { term: "FeatureFlag", definition: "Activa funciones por tenant/usuario sin desplegar." },
+      { term: "FeatureFlag", definition: "Turns features on per tenant/user without a deploy." },
       {
         term: "AutomationRule",
-        definition: "Trigger + condición + acciones sobre eventos del dominio.",
+        definition: "Trigger + condition + actions over domain events.",
       },
-      { term: "Notification", definition: "Aviso in-app / email / push según preferencias." },
+      { term: "Notification", definition: "An in-app / email / push alert, per preferences." },
     ],
     aggregates: ["Notification", "FeatureFlag", "AutomationRule", "AuditEntry", "Document"],
     emits: ["notification.created", "feature-flag.toggled", "automation.rule-fired"],
-    consumes: ["* (cualquier evento del dominio)"],
+    consumes: ["* (any domain event)"],
     roadmap: "0.7 · 3.x · 4.x",
   },
 ];
@@ -383,7 +390,7 @@ export const integrationEvents: IntegrationEvent[] = [
     name: "organization.company.registered",
     emitter: "Organization",
     payload: "companyId, name, locale",
-    consumers: "todos (provisión tenant)",
+    consumers: "all (tenant provisioning)",
   },
   {
     name: "party.registered",
@@ -464,8 +471,8 @@ export const integrationEvents: IntegrationEvent[] = [
     consumers: "Notifications, Automation, Reporting",
   },
   {
-    name: "* (cualquiera)",
-    emitter: "todos",
+    name: "* (any)",
+    emitter: "all",
     payload: "—",
     consumers: "Audit, Reporting, Automation, Notifications",
   },

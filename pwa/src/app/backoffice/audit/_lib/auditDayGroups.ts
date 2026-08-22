@@ -10,7 +10,7 @@ export interface AuditDayGroup {
  * Groups already-day-ordered timeline rows into per-day buckets, preserving order. Entries on the
  * same local day are contiguous (the keyset orders by `occurred_on`), so a single linear pass
  * suffices — no sorting, no map. `labelOf` turns an ISO instant into its local day header. The flat
- * roving-focus index is assigned by the renderer, not here, so a regrouping (e.g. into Jornada mode)
+ * roving-focus index is assigned by the renderer, not here, so a regrouping (e.g. into Journey mode)
  * never has to re-thread indices.
  */
 export function groupEntriesByDay(

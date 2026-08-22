@@ -172,6 +172,18 @@ Two things are owed by every route in a title-gated tree, and neither is visible
 
 **`<output>` is a live region — never a badge.** HTML-AAM maps it to role `status`, so an `<output>` announces politely whenever its content changes. Right for the result of a user action, wrong for a badge rendered once per row: a table of N rows declares N polite regions announcing nothing and competing with the ones that do. `jsx-a11y` ships no rule for it, so the set wired in `eslint.config.mjs` looks green over exactly this defect. Registry + gate: [`tests/live-region-surfaces.test.ts`](tests/live-region-surfaces.test.ts) — per file, because a file arriving with its first `<output>` is when the decision is owed, and an entry has to state why that surface announces. Detection walks the TypeScript AST (a JSX `<output>`, or a `createElement("output", …)` call resolved through the file's own `import … from "react"`, alias included) rather than a text regex, so a comment or a string mentioning `<output` cannot compete with a live one, and a dynamically created element is still found under whatever local name its import binds; a tag whose name is itself a variable stays out of scope on purpose — that is the boundary of what a static read can answer, not a defect.
 
+## Rendered copy speaks the declared language
+
+`app/layout.tsx` fixes `lang="en"` and no i18n module exists yet (roadmap 0.6), so English is not a preference on this surface — it is the only locale the document claims, and a Spanish string is announced to a screen reader under an `en` context. That makes it an accessibility defect, not a matter of taste.
+
+Gate: [`tests/ui-copy-language.test.ts`](tests/ui-copy-language.test.ts). It reads the tree with the TypeScript AST, so a Spanish word in a **comment** never competes with a rendered one — which matters here, because the domain is Spanish construction and the prose explaining the model legitimately says `auditoría`. Two signals admit a string: a Spanish diacritic plus one function word, or **two** distinct function words with no diacritic.
+
+Every parameter was measured, not chosen. Single-letter function words (`y`, `o`, `e`) are excluded because they are also Tailwind's `space-y-4` — with them in, the scan reported 17 `className` values and the `es-ES` locale and not one real string. Style hooks are skipped by **attribute** (`className`, `data-testid`, `href`, …), never by pattern. Diacritic alone is not enough: `BankForm` correctly explains that `"GLÉ"` is stored as `"GLE"`. And the words-only threshold is two rather than three because at three, `"Progreso global de la obra"` — a realistic heading, plainly Spanish — passed; at two it is caught and `src/` still reports zero, so the tightening costs no exemption.
+
+The gate exists because the previous sweep of this defect was closed on the **chrome** only (a title here, a metadata description there) while three documentation pages and the whole audit surface stayed Spanish end to end. Nothing went red, because nothing was looking.
+
+A green proves no string literal or JSX text this walk reaches reads as Spanish. It proves nothing about a string built by concatenation, copy arriving from the API at runtime, a Spanish string too short to carry either signal (`"Guardar"` alone passes), or whether the English that replaced it is any good.
+
 ## Accessibility rules for action buttons
 
 Every interactive control that triggers an action (button, anchor styled as button, dialog trigger, pagination control, form submit/cancel) must carry **all** of:

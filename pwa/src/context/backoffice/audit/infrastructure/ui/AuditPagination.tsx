@@ -7,10 +7,10 @@ import {
 } from "@/app/backoffice/audit/_lib/auditPaginate";
 
 const LABELS: KeysetPaginationLabels = {
-  nav: "Paginación de auditoría",
-  pageSize: "Entradas por página",
-  prev: { text: "Anterior", label: "Página anterior" },
-  next: { text: "Siguiente", label: "Página siguiente" },
+  nav: "Audit pagination",
+  pageSize: "Entries per page",
+  prev: { text: "Anterior", label: "Previous page" },
+  next: { text: "Siguiente", label: "Next page" },
 };
 
 interface AuditPaginationProps {

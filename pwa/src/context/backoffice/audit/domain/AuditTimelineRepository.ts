@@ -26,7 +26,7 @@ export type AuditTimelinePage = { entries: AuditEntry[] } & PageEnvelope;
 
 /**
  * Read-only port over the 4.1 timeline read model. Deliberately NOT a `CrudRepository`: Backoffice
- * only consumes auditoría (D5), so there is no find/create/update/delete to honour — a read-only
+ * only consumes the audit trail (D5), so there is no find/create/update/delete to honour — a read-only
  * port keeps the contract honest (ISP) and never forces a throwing write stub.
  */
 export interface AuditTimelineRepository {

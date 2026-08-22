@@ -14,7 +14,7 @@ interface MetadataBlockProps {
 /**
  * Renders the audit `metadata` JSON. Every key and value is React-escaped text — **never**
  * `dangerouslySetInnerHTML`/`innerHTML` (the field is untrusted input). A size guard truncates a
- * pathological object so it cannot break the drawer layout, while «copiar» always yields the full
+ * pathological object so it cannot break the drawer layout, while «copy» always yields the full
  * raw JSON. `null` / an empty object reads as «Sin metadata», not an empty block.
  *
  * By invariant D4 the field carries no sensitive payload; if that ever changes the redaction policy
@@ -41,8 +41,8 @@ export function MetadataBlock({ value, className, testId }: Readonly<MetadataBlo
           iconOnly
           size="sm"
           variant="ghost"
-          label="Copiar metadata"
-          title="Copiar metadata JSON"
+          label="Copy metadata"
+          title="Copy metadata JSON"
           testId={testId ? `${testId}-copy` : undefined}
         />
       </div>
@@ -51,7 +51,7 @@ export function MetadataBlock({ value, className, testId }: Readonly<MetadataBlo
       </pre>
       {truncated ? (
         <p className="text-text-subtle text-2xs">
-          Metadata truncada — usa «copiar» para el JSON completo.
+          Metadata truncated — use «copy» for the full JSON.
         </p>
       ) : null}
     </div>

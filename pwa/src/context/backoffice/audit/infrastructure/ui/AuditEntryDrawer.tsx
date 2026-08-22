@@ -95,10 +95,10 @@ function AuditEntryDrawerBody({
             size="sm"
             onClick={() => onFollowActor?.(entry)}
             data-testid="audit-entry-drawer__follow-actor"
-            title="Seguir a este actor"
+            title="Follow this actor"
           >
             <Footprints className="size-3.5" aria-hidden="true" />
-            Seguir a este actor
+            Follow this actor
           </Button>
         ) : null}
         {onFollowCorrelation ? (
@@ -108,10 +108,10 @@ function AuditEntryDrawerBody({
             size="sm"
             onClick={() => onFollowCorrelation(entry)}
             data-testid="audit-entry-drawer__follow-correlation"
-            title="Ver esta correlación"
+            title="Follow this correlation"
           >
             <GitBranch className="size-3.5" aria-hidden="true" />
-            Ver esta correlación
+            Follow this correlation
           </Button>
         ) : null}
         {followResource ? (
@@ -121,16 +121,16 @@ function AuditEntryDrawerBody({
             size="sm"
             onClick={() => onFollowResource?.(entry)}
             data-testid="audit-entry-drawer__follow-resource"
-            title="Ver actividad de este recurso"
+            title="View this resource's activity"
           >
             <Package className="size-3.5" aria-hidden="true" />
-            Ver actividad de este recurso
+            View this resource&apos;s activity
           </Button>
         ) : null}
       </div>
 
-      <Section title="Qué">
-        <Field label="Acción">
+      <Section title="What">
+        <Field label="Action">
           <span className="flex flex-col gap-0.5">
             <span>{humanizeAuditAction(entry.action)}</span>
             <span className="inline-flex items-center gap-1">
@@ -138,7 +138,7 @@ function AuditEntryDrawerBody({
             </span>
           </span>
         </Field>
-        <Field label="Cuándo">
+        <Field label="When">
           <span className="flex flex-col gap-0.5">
             <span>
               {dateTimeProvider.formatIsoToLocalDateTime(entry.occurredOn)}
@@ -154,8 +154,8 @@ function AuditEntryDrawerBody({
                 iconOnly
                 size="sm"
                 variant="ghost"
-                label="Copiar instante ISO"
-                title="Copiar instante ISO"
+                label="Copy ISO instant"
+                title="Copy ISO instant"
               />
             </span>
           </span>
@@ -168,15 +168,15 @@ function AuditEntryDrawerBody({
               iconOnly
               size="sm"
               variant="ghost"
-              label="Copiar id de entrada"
-              title="Copiar id de entrada"
+              label="Copy entry id"
+              title="Copy entry id"
               testId="audit-entry-drawer__copy-id"
             />
           </span>
         </Field>
       </Section>
 
-      <Section title="Quién">
+      <Section title="Who">
         <Field label="Actor">
           <ActorChip
             actorType={entry.actorType}
@@ -192,14 +192,14 @@ function AuditEntryDrawerBody({
         </Field>
       </Section>
 
-      <Section title="Sobre qué">
-        <Field label="Recurso">
+      <Section title="On what">
+        <Field label="Resource">
           <ResourceValue entry={entry} />
         </Field>
       </Section>
 
-      <Section title="Correlación">
-        <Field label="Correlación">
+      <Section title="Correlation">
+        <Field label="Correlation">
           <CorrelationIdChip id={entry.correlationId} />
         </Field>
       </Section>
@@ -254,8 +254,8 @@ function ResourceValue({ entry }: Readonly<{ entry: AuditEntry }>) {
             iconOnly
             size="sm"
             variant="ghost"
-            label="Copiar id de recurso"
-            title="Copiar id de recurso"
+            label="Copy resource id"
+            title="Copy resource id"
           />
         </>
       ) : null}
@@ -270,7 +270,7 @@ function ResourceValue({ entry }: Readonly<{ entry: AuditEntry }>) {
 function DormantDetail() {
   return (
     <span className="text-text-subtle text-xs italic" data-testid="audit-entry-drawer__dormant">
-      Disponible en la vista de detalle
+      Available in the detail view
     </span>
   );
 }

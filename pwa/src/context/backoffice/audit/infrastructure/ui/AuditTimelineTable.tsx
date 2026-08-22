@@ -29,7 +29,7 @@ function isFromInteractiveControl(target: EventTarget | null, row: Element): boo
   return control != null && !control.contains(row);
 }
 
-/** A rendered group of rows under one header (a day divider, or a Jornada session). */
+/** A rendered group of rows under one header (a day divider, or a Journey session). */
 export interface AuditTimelineGroup {
   key: string;
   header: ReactNode;
@@ -40,7 +40,7 @@ interface AuditTimelineTableProps extends AuditPivotHandlers {
   groups: ReadonlyArray<AuditTimelineGroup>;
   density: ListDensity;
   direction: SortDirection;
-  /** When false (Jornada), the "Hora" header is a static label — the sort axis does not apply. */
+  /** When false (Journey), the "Time" header is a static label — the sort axis does not apply. */
   sortable?: boolean;
   onToggleSort: () => void;
   onRowActivate: (entry: AuditEntry) => void;
@@ -50,7 +50,7 @@ interface AuditTimelineTableProps extends AuditPivotHandlers {
 
 /**
  * The dense investigation timeline, driven by precomputed groups so the SAME table renders the
- * Timeline (per-day dividers) and the Jornada (per-correlation sessions) modes. A real `<table>`:
+ * Timeline (per-day dividers) and the Journey (per-correlation sessions) modes. A real `<table>`:
  * each group is a `<tbody>` (implicit `rowgroup`) labelled by a `<th scope="rowgroup">` header, so a
  * screen reader announces the day / session as group context. One roving tabindex spans the page (no
  * `div role=button` per row — a native table sidesteps the `jsx-a11y` S6847 antipattern): `↑`/`↓`
@@ -75,7 +75,7 @@ export function AuditTimelineTable({
   const [focusedRow, setFocusedRow] = useState(0);
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
 
-  // Assign the flat roving-focus index here, in render order, so regrouping (Timeline ↔ Jornada,
+  // Assign the flat roving-focus index here, in render order, so regrouping (Timeline ↔ Journey,
   // which reorders rows within a session) never has to re-thread indices upstream.
   const { renderGroups, rowCount } = useMemo(() => {
     let flat = 0;
@@ -88,7 +88,7 @@ export function AuditTimelineTable({
   }, [groups]);
 
   // The roving-focus index must always land on a real row: when the page shrinks (a shorter last
-  // page, a narrower filter, a Timeline↔Jornada regroup) a stale `focusedRow >= rowCount` would leave
+  // page, a narrower filter, a Timeline↔Journey regroup) a stale `focusedRow >= rowCount` would leave
   // every row at `tabIndex=-1`, making the table unreachable by keyboard. Fall back to the first row.
   const activeRow = focusedRow < rowCount ? focusedRow : 0;
 
@@ -133,7 +133,7 @@ export function AuditTimelineTable({
       data-testid={testId}
     >
       <table className="w-full table-fixed border-collapse text-sm" data-density={density}>
-        <caption className="sr-only">Timeline de auditoría</caption>
+        <caption className="sr-only">Audit timeline</caption>
         <colgroup>
           <col className="w-28" />
           <col className="w-24" />
@@ -157,7 +157,7 @@ export function AuditTimelineTable({
                   className="hover:text-foreground inline-flex items-center gap-1 transition-colors"
                   title="Ordenar por hora"
                 >
-                  Hora
+                  Time
                   {direction === SortDirection.ASC ? (
                     <ArrowUp className="size-3" aria-hidden="true" />
                   ) : (
@@ -165,26 +165,26 @@ export function AuditTimelineTable({
                   )}
                 </button>
               ) : (
-                <span>Hora</span>
+                <span>Time</span>
               )}
             </th>
             <th scope="col" className="px-3 text-left text-xs font-medium">
-              Nivel
+              Level
             </th>
             <th scope="col" className="px-3 text-left text-xs font-medium">
-              Acción
+              Action
             </th>
             <th scope="col" className="px-3 text-left text-xs font-medium">
               Actor
             </th>
             <th scope="col" className="px-3 text-left text-xs font-medium">
-              Recurso
+              Resource
             </th>
             <th scope="col" className="px-3 text-left text-xs font-medium">
-              Correlación
+              Correlation
             </th>
             <th scope="col" className="px-3 text-right text-xs font-medium">
-              <span className="sr-only">Acciones</span>
+              <span className="sr-only">Actions</span>
             </th>
           </tr>
         </thead>
@@ -307,8 +307,8 @@ function ResourceCell({
             iconOnly
             size="sm"
             variant="ghost"
-            label="Copiar id de recurso"
-            title="Copiar id de recurso"
+            label="Copy resource id"
+            title="Copy resource id"
           />
         </span>
       ) : null}

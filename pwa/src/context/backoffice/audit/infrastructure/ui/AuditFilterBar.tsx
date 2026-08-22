@@ -116,14 +116,10 @@ export function AuditFilterBar({
   };
 
   const canReset = hasActiveAuditFilter(filter);
-  const toggleLabel = panelCount > 0 ? `Filtros, ${panelCount} activos` : "Filtros";
+  const toggleLabel = panelCount > 0 ? `Filters, ${panelCount} active` : "Filters";
 
   return (
-    <section
-      className="audit-filter-bar"
-      aria-label="Filtros de auditoría"
-      data-testid="audit-filter-bar"
-    >
+    <section className="audit-filter-bar" aria-label="Audit filters" data-testid="audit-filter-bar">
       <div className="audit-filter-bar__toolbar flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         {leading ? (
           <div className="audit-filter-bar__leading flex items-center">{leading}</div>
@@ -131,7 +127,7 @@ export function AuditFilterBar({
 
         <div
           role="radiogroup"
-          aria-label="Nivel"
+          aria-label="Level"
           className="audit-filter-bar__level border-border inline-flex rounded-md border p-0.5"
           data-testid="audit-filter-bar__level"
         >
@@ -161,7 +157,7 @@ export function AuditFilterBar({
         <div className="audit-filter-bar__dates flex items-end gap-2">
           <DateField
             name="audit-filter-from"
-            label="Desde"
+            label="From"
             value={draft.from}
             onChange={(next) => setText("from", next)}
             testId="audit-filter-bar__from"
@@ -169,7 +165,7 @@ export function AuditFilterBar({
           />
           <DateField
             name="audit-filter-to"
-            label="Hasta"
+            label="To"
             value={draft.to}
             onChange={(next) => setText("to", next)}
             testId="audit-filter-bar__to"
@@ -190,7 +186,7 @@ export function AuditFilterBar({
           data-testid="audit-filter-bar__toggle"
         >
           <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-          <span>Filtros</span>
+          <span>Filters</span>
           {panelCount > 0 ? (
             <span
               className="bg-primary text-primary-foreground ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium"
@@ -210,16 +206,16 @@ export function AuditFilterBar({
             onClick={handleReset}
             className="audit-filter-bar__reset"
             data-testid="audit-filter-bar__reset"
-            title="Limpiar filtros"
+            title="Clear filters"
           >
-            Limpiar filtros
+            Clear filters
           </Button>
         ) : null}
       </div>
 
       <section
         id={panelId}
-        aria-label="Filtros avanzados de auditoría"
+        aria-label="Advanced audit filters"
         aria-hidden={!open}
         inert={open ? undefined : true}
         className="audit-filter-bar__panel grid transition-[grid-template-rows] duration-200 ease-out"
@@ -228,12 +224,12 @@ export function AuditFilterBar({
       >
         <div className="overflow-hidden">
           <div className="border-border bg-muted/20 mt-3 grid grid-cols-1 gap-3 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-3">
-            <FormField name="audit-filter-actor-type" label="Tipo de actor">
+            <FormField name="audit-filter-actor-type" label="Actor type">
               <select
                 className={SELECT_CLASS}
                 value={filter.actorType}
                 onChange={(event) => onPatch({ actorType: event.target.value })}
-                aria-label="Tipo de actor"
+                aria-label="Actor type"
                 data-testid="audit-filter-bar__actor-type"
               >
                 {ACTOR_TYPE_OPTIONS.map((option) => (
@@ -243,39 +239,39 @@ export function AuditFilterBar({
                 ))}
               </select>
             </FormField>
-            <FormField name="audit-filter-actor-id" label="Id de actor">
+            <FormField name="audit-filter-actor-id" label="Actor id">
               <Input
                 type="text"
                 value={draft.actorId}
                 onChange={(event) => setText("actorId", event.target.value)}
-                placeholder="UUID del actor"
+                placeholder="Actor UUID"
                 data-testid="audit-filter-bar__actor-id"
               />
             </FormField>
-            <FormField name="audit-filter-action" label="Acción">
+            <FormField name="audit-filter-action" label="Action">
               <Input
                 type="text"
                 value={draft.action}
                 onChange={(event) => setText("action", event.target.value)}
-                placeholder="p. ej. ACCESS_DENIED"
+                placeholder="e.g. ACCESS_DENIED"
                 data-testid="audit-filter-bar__action"
               />
             </FormField>
-            <FormField name="audit-filter-resource-type" label="Tipo de recurso">
+            <FormField name="audit-filter-resource-type" label="Resource type">
               <Input
                 type="text"
                 value={draft.resourceType}
                 onChange={(event) => setText("resourceType", event.target.value)}
-                placeholder="p. ej. BankAccount"
+                placeholder="e.g. BankAccount"
                 data-testid="audit-filter-bar__resource-type"
               />
             </FormField>
-            <FormField name="audit-filter-resource-id" label="Id de recurso">
+            <FormField name="audit-filter-resource-id" label="Resource id">
               <Input
                 type="text"
                 value={draft.resourceId}
                 onChange={(event) => setText("resourceId", event.target.value)}
-                placeholder="UUID del recurso"
+                placeholder="Resource UUID"
                 data-testid="audit-filter-bar__resource-id"
               />
             </FormField>

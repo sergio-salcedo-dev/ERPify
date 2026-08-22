@@ -32,7 +32,7 @@ import { groupEntriesByCorrelation } from "../_lib/auditJourneyGroups";
 import { AUDIT_PAGE_SIZE_DEFAULT, type AuditPageSize } from "../_lib/auditPaginate";
 import { useAuditUrlState } from "../_lib/auditUrlState";
 
-/** Day-divider groups (Timeline) or correlation sessions (Jornada) for the grouped timeline table. */
+/** Day-divider groups (Timeline) or correlation sessions (Journey) for the grouped timeline table. */
 function buildGroups(entries: ReadonlyArray<AuditEntry>, view: AuditView): AuditTimelineGroup[] {
   if (view === AuditView.Journey) {
     return groupEntriesByCorrelation(entries).map((session) => ({
@@ -66,14 +66,14 @@ export function AuditInvestigationScreen() {
   // A reloaded link therefore reopens page 1 of the same query, the predictable forensic behaviour.
   const [pageSize, setPageSize] = useState<AuditPageSize>(AUDIT_PAGE_SIZE_DEFAULT);
 
-  // Jornada is reachable only with a fixed actor; a stale `view=journey` URL with no actor falls back
+  // Journey is reachable only with a fixed actor; a stale `view=journey` URL with no actor falls back
   // to Timeline so the toggle and the rendered grouping never disagree.
   const journeyEnabled = hasFixedActor(url.filter);
   const journeyMode = journeyEnabled && url.view === AuditView.Journey;
   const effectiveView = journeyMode ? AuditView.Journey : AuditView.Timeline;
 
-  // The "Hora" sort axis does not apply to Jornada: a session is intrinsically ordered and the
-  // sessions themselves always read newest-first. So Jornada fetches DESC regardless of the URL `dir`
+  // The "Hora" sort axis does not apply to Journey: a session is intrinsically ordered and the
+  // sessions themselves always read newest-first. So Journey fetches DESC regardless of the URL `dir`
   // and the column header drops its toggle (see `sortable` below).
   const sortDirection = journeyMode ? SortDirection.DESC : url.direction;
 
@@ -109,9 +109,9 @@ export function AuditInvestigationScreen() {
   return (
     <div className="audit-investigation flex flex-col gap-4">
       <header className="audit-investigation__header flex flex-col gap-1">
-        <h1 className="text-foreground text-2xl font-semibold tracking-tight">Auditoría</h1>
+        <h1 className="text-foreground text-2xl font-semibold tracking-tight">Audit</h1>
         <p className="text-muted-foreground text-sm">
-          Investiga la actividad y la seguridad registradas.
+          Investigate the recorded activity and security events.
         </p>
       </header>
 
@@ -138,11 +138,11 @@ export function AuditInvestigationScreen() {
           <AuditTimelineSkeleton rows={Math.min(pageSize, 8)} testId="audit-timeline-skeleton" />
         }
         emptyVariant="first-run"
-        emptyHeading="Sin actividad registrada"
-        emptyDescription="Aún no hay entradas en el registro de auditoría."
+        emptyHeading="No activity recorded"
+        emptyDescription="There are no entries in the audit trail yet."
         errorAction={
           <Button type="button" variant="outline" size="sm" onClick={() => reload()}>
-            Reintentar
+            Retry
           </Button>
         }
       >
@@ -150,11 +150,11 @@ export function AuditInvestigationScreen() {
           rows.length === 0 ? (
             <EmptyState
               variant="filtered-to-zero"
-              heading="Ningún resultado"
-              description="Ninguna entrada coincide con estos filtros."
+              heading="No results"
+              description="No entry matches these filters."
               action={
                 <Button type="button" variant="outline" size="sm" onClick={url.reset}>
-                  Limpiar filtros
+                  Clear filters
                 </Button>
               }
             />
