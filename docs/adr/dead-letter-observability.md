@@ -95,7 +95,8 @@ row. The prune keeps the *what* and discards the *why*.
 
 **The honest limit of the safety argument.** "The alarm will have fired for twenty-nine days first" is only as
 good as the alarm's reach, and by D3 that reach is one line on container stderr: the Monolog→Sentry bridge is
-unwired, no compose file declares a logging driver, and nothing scrapes `messenger:failed:status`. So the
+unwired, the compose `logging:` blocks bound the driver by size alone (no TTL), and nothing scrapes
+`messenger:failed:status`. So the
 margin protects against the pruner *masking* a backlog; it does not deliver the backlog to anyone. Wiring an
 alerting sink is D3's debt, not this decision's, and this decision does not pretend to have paid it.
 

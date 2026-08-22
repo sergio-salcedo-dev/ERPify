@@ -49,9 +49,9 @@ use Throwable;
  * Close that gap from either side — raise the 4xx branch of `resolveLogLevel()`, or lower `action_level` —
  * and every API client error dumps the buffer into `php://stderr`, among it the `debug` record Symfony's
  * `ContextListener` writes on every authenticated request, whose `username` is this application's user
- * identifier and therefore the person's email address. That sink has no rotation, no TTL and no owner of
- * erasure. `FingersCrossedActivationIntegrityTest` and `MonologExclusionDeclarationGateTest` both stay green
- * through either change, which is the reason this file exists.
+ * identifier and therefore the person's email address. That sink is bounded by size alone, still with no
+ * TTL and no owner of erasure. `FingersCrossedActivationIntegrityTest` and `MonologExclusionDeclarationGateTest`
+ * both stay green through either change, which is the reason this file exists.
  *
  * **The level compared is the one the listener LOGS, not the one a helper returns.** The responder is built
  * from the container's own collaborators with a capturing handler in place of its logger and driven through

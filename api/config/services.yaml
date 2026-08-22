@@ -111,3 +111,6 @@ services:
 
     Erpify\Shared\Monitoring\Infrastructure\Monolog\PersonDataRedactionProcessor:
         tags: ['monolog.processor']
+
+    Erpify\Shared\Monitoring\Infrastructure\Monolog\ConsoleCommandRedactionProcessor:
+        tags: ['monolog.processor']

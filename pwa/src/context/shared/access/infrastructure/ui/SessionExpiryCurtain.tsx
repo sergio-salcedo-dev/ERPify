@@ -8,7 +8,10 @@ import { Routes } from "@/context/shared/routing/domain/Routes";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 
 const HEADING = "Your session expired";
-const LEAVING_MESSAGE = "Taking you to the sign-in screen…";
+// States a fact rather than an action in progress, on purpose: the transport stops re-claiming
+// after its bounce budget is spent and never announces that here, so a message promising an
+// automatic redirect would go stale exactly when only the link below still does anything.
+const LEAVING_MESSAGE = "Sign in again to continue.";
 
 /**
  * Replaces the application while a session-expiry bounce is in flight.

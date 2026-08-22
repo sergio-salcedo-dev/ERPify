@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  hardNavigate,
-  NAVIGATION_COMMIT_BUDGET_MS,
-} from "@/context/shared/navigation/infrastructure/hardNavigate";
+import type { hardNavigate as HardNavigateFn } from "@/context/shared/navigation/infrastructure/hardNavigate";
 
 const DESTINATION = "/somewhere";
+const OTHER_DESTINATION = "/somewhere-else";
+const MODULE_PATH = "@/context/shared/navigation/infrastructure/hardNavigate";
 
 describe("hardNavigate", () => {
   let replace: ReturnType<typeof vi.fn>;
+  let hardNavigate: typeof HardNavigateFn;
+  let NAVIGATION_COMMIT_BUDGET_MS: number;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // The default `toFake` list fakes `performance.now()` in lockstep with `setTimeout`, which
     // is what lets the pause/resume assertions below advance the module's own elapsed-time
     // math via `vi.advanceTimersByTime` — a narrower list here would desync the two silently.
@@ -18,6 +19,15 @@ describe("hardNavigate", () => {
     // jsdom's `location` is unforgeable — its own methods are neither writable nor
     // configurable — so the global is replaced wholesale.
     vi.stubGlobal("location", { pathname: "/here", search: "", replace });
+    // The single-flight claim is module state, so a fresh module per test is what isolates
+    // one test's in-flight navigation from the next — the same pattern already used for the
+    // expiry-bounce budget's guard in FetchHttpClient.test.ts. A stale claim held past a test
+    // that deliberately never disarms (the backgrounded-tab cases below) would otherwise make
+    // the next test's own call spuriously "superseded".
+    vi.resetModules();
+    const mod = await import(MODULE_PATH);
+    hardNavigate = mod.hardNavigate;
+    NAVIGATION_COMMIT_BUDGET_MS = mod.NAVIGATION_COMMIT_BUDGET_MS;
   });
 
   afterEach(() => {
@@ -38,6 +48,26 @@ describe("hardNavigate", () => {
     // for a budget to be the deadline of.
     vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS * 2);
     expect(onFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not claim the sink when replace() throws, so a later call is not superseded", () => {
+    // The claim check above is exercised by the destination-validation refusal in a separate
+    // test below; this covers the OTHER refusal path — a valid destination that `replace()`
+    // itself rejects — an adversarial pass flagged as untested for the same regression: hoisting
+    // `claimedBy = ownClaim` above the try/catch would wedge the sink after the very first
+    // refused navigation.
+    replace.mockImplementationOnce(() => {
+      throw new Error("refused");
+    });
+    const onFailureThrown = vi.fn();
+    hardNavigate(DESTINATION, onFailureThrown);
+    expect(onFailureThrown).toHaveBeenCalledWith("refused");
+
+    const onFailureLater = vi.fn();
+    hardNavigate(DESTINATION, onFailureLater);
+
+    expect(replace).toHaveBeenCalledTimes(2);
+    expect(onFailureLater).not.toHaveBeenCalled();
   });
 
   it("reports a navigation that neither raised nor committed", () => {
@@ -188,5 +218,76 @@ describe("hardNavigate", () => {
     } finally {
       hidden.mockRestore();
     }
+  });
+
+  describe("single-flight exclusivity", () => {
+    it("refuses a second concurrent call as superseded, and never lets it touch location", () => {
+      const onFailureFirst = vi.fn();
+      const onFailureSecond = vi.fn();
+
+      hardNavigate(DESTINATION, onFailureFirst);
+      hardNavigate(OTHER_DESTINATION, onFailureSecond);
+
+      // Whichever call executed first keeps the sink; the second is refused before it ever
+      // reaches `replace()` — not a lost race at the browser level, a race that never happens.
+      expect(replace).toHaveBeenCalledTimes(1);
+      expect(replace).toHaveBeenCalledWith(DESTINATION);
+      expect(onFailureSecond).toHaveBeenCalledWith("superseded");
+      expect(onFailureFirst).not.toHaveBeenCalled();
+    });
+
+    it("releases the claim once the winner commits, so a later call is not superseded", () => {
+      const onFailureFirst = vi.fn();
+      hardNavigate(DESTINATION, onFailureFirst);
+      globalThis.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
+
+      const onFailureLater = vi.fn();
+      hardNavigate(OTHER_DESTINATION, onFailureLater);
+
+      expect(replace).toHaveBeenCalledTimes(2);
+      expect(replace).toHaveBeenLastCalledWith(OTHER_DESTINATION);
+      expect(onFailureLater).not.toHaveBeenCalled();
+    });
+
+    it("releases the claim once the winner times out, so a later call is not superseded", () => {
+      const onFailureFirst = vi.fn();
+      hardNavigate(DESTINATION, onFailureFirst);
+      vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS);
+      expect(onFailureFirst).toHaveBeenCalledWith("not-committed");
+
+      const onFailureLater = vi.fn();
+      hardNavigate(OTHER_DESTINATION, onFailureLater);
+
+      expect(replace).toHaveBeenCalledTimes(2);
+      expect(replace).toHaveBeenLastCalledWith(OTHER_DESTINATION);
+      expect(onFailureLater).not.toHaveBeenCalled();
+    });
+
+    it("never claims the sink for a refused destination, so it does not block a real call", () => {
+      const onFailureBad = vi.fn();
+      hardNavigate("https://evil.com/", onFailureBad);
+      expect(onFailureBad).toHaveBeenCalledWith("refused");
+
+      const onFailureReal = vi.fn();
+      hardNavigate(DESTINATION, onFailureReal);
+
+      expect(replace).toHaveBeenCalledTimes(1);
+      expect(replace).toHaveBeenCalledWith(DESTINATION);
+      expect(onFailureReal).not.toHaveBeenCalled();
+    });
+
+    it("reports a bad destination as refused, not superseded, even while the sink is already claimed", () => {
+      // Ordering matters: destination validity is checked before the claim, so a caller's own
+      // mistake is never misreported as "you lost a race" — an adversarial pass flagged this
+      // exact combination as untested.
+      const onFailureFirst = vi.fn();
+      hardNavigate(DESTINATION, onFailureFirst);
+
+      const onFailureBad = vi.fn();
+      hardNavigate("https://evil.com/", onFailureBad);
+
+      expect(onFailureBad).toHaveBeenCalledWith("refused");
+      expect(replace).toHaveBeenCalledTimes(1);
+    });
   });
 });

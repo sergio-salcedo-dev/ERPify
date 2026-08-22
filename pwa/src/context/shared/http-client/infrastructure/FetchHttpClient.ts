@@ -51,6 +51,13 @@ function trimBase(url: string): string {
 // since it leaves through the same dropped mechanism. So the last attempt KEEPS the claim: the
 // curtain stays up, its `Link` still routes client-side, and no further bounce is ever attempted,
 // which is what stops the flapping without spending the affordance.
+//
+// Kept, not merely bounded: once this cap is reached the claim stays SESSION_EXPIRED for the
+// rest of the document's life, and with it RequireAuth's own redirect effect (gated on the same
+// claim) never fires again either — the curtain's `Link` is the only route out from that point
+// on. Accepted, since the alternative was flapping the whole app blank/usable; a document reaching
+// the cap is rare enough (two DEMONSTRABLY failed navigations in a navigable that drops them) that
+// the manual link is a reasonable floor rather than a dead end.
 const MAX_EXPIRY_BOUNCES = 2;
 
 // Per document, like the claim it guards: a committed navigation discards this module with the

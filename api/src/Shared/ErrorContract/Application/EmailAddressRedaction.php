@@ -13,7 +13,7 @@ use SensitiveParameter;
  * `resource_id` and never touch a log line, and `RedactionDenylist` matches KEY names of a context map and
  * never looks inside a value. An address that reaches a log therefore outlives the erasure the application
  * confirmed to its subject, on a sink — `php://stderr` under Docker's json-file driver — that no compose file
- * gives a rotation, a TTL or an owner.
+ * bounds by size alone, with no TTL and no owner.
  *
  * **This is the second line of defence, not the first.** The failure this application raises for a mail
  * delivery composes its own message out of a class name, an SMTP code, an enhanced status code and an origin,

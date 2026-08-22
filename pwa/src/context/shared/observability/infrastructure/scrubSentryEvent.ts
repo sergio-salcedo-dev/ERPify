@@ -15,7 +15,7 @@ import {
  * shared {@link scrubDeep} denylist so the browser/Next scrub stays in parity
  * with the back-end's RFC 9457 + Sentry redaction.
  *
- * Scrubs `extra`, `contexts`, `user`, `breadcrumbs`, `spans`, and the
+ * Scrubs `extra`, `contexts`, `user`, `breadcrumbs`, `spans`, `tags`, and the
  * caller-controlled `request` sub-objects (`data` / `headers` / `cookies`), plus
  * the raw `query_string` and the `url`'s query (both strings, so they bypass
  * key-based filtering and are parsed param-by-param — where the identity axes
@@ -46,6 +46,9 @@ export function scrubSentryEvent<E extends Event>(event: E): E {
   }
   if (event.spans) {
     event.spans = scrubStructured(event.spans) as E["spans"];
+  }
+  if (event.tags) {
+    event.tags = scrubStructured(event.tags) as E["tags"];
   }
 
   if (event.request) {
@@ -127,7 +130,9 @@ function scrubUrlLikeValues(value: unknown, depth: number): unknown {
 
 /**
  * Scrubs the caller-controlled `request` sub-objects in place: the structured
- * `data` / `headers` / `cookies` via the recursive denylist, and the raw
+ * `data` / `headers` / `cookies` via both the denylist and the URL-shape pass
+ * (a captured body/header/cookie is exactly as caller-controlled as `extra` or
+ * `contexts`, so a URL-shaped value hides here the same way), and the raw
  * `query_string` + `url` query (strings that bypass key-based filtering, so they
  * are parsed param-by-param).
  */
@@ -136,18 +141,18 @@ function scrubRequest(request: NonNullable<Event["request"]>): void {
 
   if (data) {
     if (typeof data === "object") {
-      request.data = scrubDeep(data);
+      request.data = scrubStructured(data);
     } else if (typeof data === "string" && data.startsWith("{")) {
       request.data = tryScrubJson(data);
     }
   }
 
   if (headers) {
-    request.headers = redactRefererIn(scrubDeep(headers) as Record<string, string>);
+    request.headers = redactRefererIn(scrubStructured(headers) as Record<string, string>);
   }
 
   if (cookies) {
-    request.cookies = scrubDeep(cookies) as Record<string, string>;
+    request.cookies = scrubStructured(cookies) as Record<string, string>;
   }
 
   if (typeof qs === "string" && qs !== "") {
@@ -178,7 +183,7 @@ function redactRefererIn(headers: Record<string, string>): Record<string, string
 function tryScrubJson(data: string): string {
   try {
     const parsed = JSON.parse(data);
-    return JSON.stringify(scrubDeep(parsed));
+    return JSON.stringify(scrubStructured(parsed));
   } catch {
     // Fall back to original if not valid JSON; we do not log here to avoid
     // noise on every non-JSON POST body (e.g. form-data).

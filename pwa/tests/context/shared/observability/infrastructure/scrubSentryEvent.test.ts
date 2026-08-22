@@ -343,4 +343,44 @@ describe("scrubSentryEvent", () => {
 
     expect(args[0]).toBe(value);
   });
+
+  it("redacts a URL-shaped value inside request.data, not just a denylisted key", () => {
+    const event = {
+      request: {
+        data: { returnUrl: "https://app.example/backoffice/audit?actorId=8f14e45f", ok: true },
+      },
+    } as unknown as ErrorEvent;
+
+    const data = scrubSentryEvent(event).request?.data as Record<string, unknown>;
+
+    expect(data.returnUrl).toBe("https://app.example/backoffice/audit?actorId=REDACTED");
+    expect(data.ok).toBe(true);
+  });
+
+  it("redacts a URL-shaped value inside a stringified request.data JSON body", () => {
+    const event = {
+      request: {
+        data: JSON.stringify({ returnUrl: "/backoffice/audit?actorId=8f14e45f", ok: true }),
+      },
+    } as unknown as ErrorEvent;
+
+    const data = JSON.parse(scrubSentryEvent(event).request?.data as string) as {
+      returnUrl: string;
+      ok: boolean;
+    };
+
+    expect(data.returnUrl).toBe("/backoffice/audit?actorId=REDACTED");
+    expect(data.ok).toBe(true);
+  });
+
+  it("redacts a URL-shaped value inside tags, a surface no key-based scrub reaches", () => {
+    const event = {
+      tags: { "telemetry.scope": "api:transport", referer: "/audit?actorId=8f14e45f" },
+    } as unknown as ErrorEvent;
+
+    const tags = scrubSentryEvent(event).tags as Record<string, string>;
+
+    expect(tags.referer).toBe("/audit?actorId=REDACTED");
+    expect(tags["telemetry.scope"]).toBe("api:transport");
+  });
 });

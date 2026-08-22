@@ -11,6 +11,8 @@ import {
   resetExpiryBounceBudget,
 } from "@/context/shared/http-client/infrastructure/FetchHttpClient";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
+import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNavigate";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 
 const { dismissAll } = vi.hoisted(() => ({ dismissAll: vi.fn() }));
 
@@ -27,10 +29,16 @@ describe("SessionExpiryCurtain", () => {
     dismissAll.mockClear();
   });
 
-  // The claim is reset in beforeEach, never here: Testing Library unmounts in its own
-  // afterEach, and releasing the claim while the tree is still mounted updates a component
-  // outside act().
+  // The departure claim is reset in beforeEach, never here: Testing Library unmounts in its
+  // own afterEach, and releasing the claim while the tree is still mounted updates a component
+  // outside act(). hardNavigate's SEPARATE single-flight claim is a different piece of module
+  // state that `releaseDeparture()` never touches, so it needs its own release — a
+  // `pagehide`/`persisted: false` dispatch is a no-op when nothing is in flight, and disarms
+  // whatever is otherwise, the same way an actual navigation commit would (lighter than
+  // hardNavigate.test.ts's module reset for the same reason noted there: this file never holds
+  // a claim across a simulated pause).
   afterEach(() => {
+    globalThis.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
     vi.unstubAllGlobals();
   });
 
@@ -144,13 +152,34 @@ describe("SessionExpiryCurtain", () => {
     expect(raised).toMatchObject({ problem: { status: HttpStatus.UNAUTHORIZED } });
     expect(screen.queryByTestId(CHILD)).toBeNull();
     expect(screen.getByTestId("session-expiry__curtain")).toBeInTheDocument();
+  });
 
-    // This case runs on real timers, so without releasing here the file ends holding the claim,
-    // a live navigation budget and a `pagehide` listener — and any test appended after it would
-    // inherit them, silently, as an ordering dependency.
+  it("never paints when superseded — the claim begins and ends in the same synchronous tick", () => {
+    // Something else (sign-out, in the real race this closes) already owns hardNavigate's one
+    // sanctioned sink when the session-expiry bounce is attempted.
+    vi.stubGlobal("location", { pathname: "/backoffice/banks", search: "", replace: vi.fn() });
+    hardNavigate(Routes.HOME, vi.fn());
+
+    render(
+      <SessionExpiryCurtain>
+        <p data-testid={CHILD}>Section content</p>
+      </SessionExpiryCurtain>,
+    );
+
     act(() => {
-      releaseDeparture();
+      claimDeparture(DepartureReason.SESSION_EXPIRED);
+      // Refused as "superseded": nothing raises, nothing unloads, and releasing the claim (the
+      // real onFailure this call site uses in production, short of the bounce budget) runs
+      // synchronously, in the same tick.
+      hardNavigate(`${Routes.LOGIN}?reason=session-expired`, releaseDeparture);
     });
+
+    // React never renders the intermediate SESSION_EXPIRED reason a plain claimDeparture() alone
+    // would have produced: the curtain — and the toast-clearing it would otherwise trigger —
+    // never appears, because by the time this effect could run, the claim is already released.
+    expect(screen.getByTestId(CHILD)).toBeInTheDocument();
+    expect(screen.queryByTestId("session-expiry__curtain")).toBeNull();
+    expect(dismissAll).not.toHaveBeenCalled();
   });
 
   // A sign-out is a departure too, and it must not raise this: the user asked to leave, the

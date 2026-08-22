@@ -32,6 +32,7 @@ import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNav
 import {
   claimDeparture,
   releaseDeparture,
+  currentDeparture,
   DepartureReason,
 } from "@/context/shared/navigation/application/departure";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
@@ -64,6 +65,7 @@ const SignOut = {
   LEAVING: "leaving",
   REFUSED: "refused",
   STALLED: "stalled",
+  SUPERSEDED: "superseded",
 } as const;
 type SignOut = (typeof SignOut)[keyof typeof SignOut];
 
@@ -72,12 +74,17 @@ type SignOut = (typeof SignOut)[keyof typeof SignOut];
  * `role="status"` speaks on insertion — so every state that ends the window carries a
  * message of its own. Falling back to "" there is what made the recovery path silent: the
  * user heard "Signing out…", then nothing, while the visible affordance quietly reverted.
+ * `SUPERSEDED` deliberately does not claim "you are signed out" — `logout()` swallows its own
+ * failures by contract and can be pre-empted by `SIGN_OUT_BUDGET_MS`, so that isn't actually
+ * guaranteed here — and does not name a destination, since a future third caller of
+ * `hardNavigate` could supersede this one too.
  */
 const SIGN_OUT_MESSAGE: Record<SignOut, string> = {
   [SignOut.IDLE]: "",
   [SignOut.LEAVING]: "Signing out…",
   [SignOut.REFUSED]: "Sign-out did not complete. Please try again.",
   [SignOut.STALLED]: "Sign-out is taking longer than expected. You can try again.",
+  [SignOut.SUPERSEDED]: "Redirecting…",
 };
 
 export default function BackOfficeLayoutClient({
@@ -236,11 +243,33 @@ export default function BackOfficeLayoutClient({
           // left `isLeaving` latched for the life of the document — every menu-driven navigation
           // dropped from then on, with an sr-only string as the only feedback.
           hardNavigate(Routes.HOME, (failure) => {
-            // Only the winner releases. Losing the claim means an expiry bounce is already
-            // leaving, and releasing it here would hand the next 401 a fresh one. Releasing is
-            // also what re-enables RequireAuth's own redirect, which reads the same claim: the
-            // sign-out navigation did not commit, so the ordinary route guard takes back over.
-            if (claimed) releaseDeparture();
+            if (failure === "superseded") {
+              // Another hard navigation already owned the document — sign-out itself did not
+              // fail, it just isn't the one leaving. Not a failure, so no REFUSED/STALLED
+              // styling — but still a real, non-empty live-region message: an adversarial pass
+              // caught the earlier silent-IDLE version of this branch reproducing the exact
+              // defect the comment above already closed for REFUSED/STALLED.
+              setSignOut(SignOut.SUPERSEDED);
+              // The toast is what REFUSED/STALLED lean on for the case their own subtree is
+              // already unmounted — but the ONLY real caller that can supersede this one today
+              // is the session-expiry bounce, which claims the departure below before it ever
+              // reaches `hardNavigate`. So `claimed` is false here exactly when the reason
+              // currently held is SESSION_EXPIRED, and winning that claim is what mounts
+              // <SessionExpiryCurtain> over this entire subtree in the first place — by the
+              // time this callback runs, the curtain's role="alert" already announced the
+              // leaving state, and Sonner's viewport sits BELOW the curtain's z-index, so a
+              // toast raised now would enqueue and never paint. Skip it in exactly that case;
+              // keep it for a hypothetical future caller that supersedes this one without ever
+              // claiming a departure of its own.
+              if (currentDeparture() !== DepartureReason.SESSION_EXPIRED) {
+                toastNotifier.info(SIGN_OUT_MESSAGE[SignOut.SUPERSEDED]);
+              }
+              // Only the winner releases. A `claimed` of false means this attempt never owned
+              // the departure to begin with — the session-expiry bounce already does, and it
+              // is the one that will release it when ITS OWN navigation settles.
+              if (claimed) releaseDeparture();
+              return;
+            }
             const outcome = failure === "refused" ? SignOut.REFUSED : SignOut.STALLED;
             setSignOut(outcome);
             // The status region is no longer guaranteed to still be mounted by the time an
@@ -248,6 +277,10 @@ export default function BackOfficeLayoutClient({
             // itself is announced here instead — reaching the user regardless of what the
             // guarded subtree is doing.
             toastNotifier.error(SIGN_OUT_MESSAGE[outcome]);
+            // Re-enables RequireAuth's own redirect: the sign-out navigation did not commit,
+            // so the ordinary unauthenticated-route guard takes back over. Only the winner
+            // releases — see the superseded branch above.
+            if (claimed) releaseDeparture();
           });
         });
       return;

@@ -10,7 +10,7 @@ const { push, logout, override, nav, auth } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/context/shared/access/application/useSession", () => ({
-  useSession: () => ({ ...auth, login: vi.fn(), logout, override, setIsSigningOut: vi.fn() }),
+  useSession: () => ({ ...auth, login: vi.fn(), logout, override }),
 }));
 
 vi.mock("next/navigation", () => {
@@ -25,6 +25,7 @@ import { AccessContext } from "@/context/shared/access/domain/AccessContext";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import type { Session } from "@/context/shared/access/domain/Session";
+import { releaseDeparture } from "@/context/shared/navigation/application/departure";
 
 function required<T>(value: T | undefined, what: string): T {
   if (value === undefined) throw new Error(`The navigation model no longer declares ${what}.`);
@@ -69,10 +70,15 @@ describe("BackOfficeLayoutClient route focus", () => {
     nav.pathname = Routes.BACKOFFICE;
     auth.session = SESSION;
     auth.status = "authenticated";
+    releaseDeparture();
   });
 
   afterEach(() => {
+    // The mobile-sheet sign-out cases below drive the real sign-out branch, which claims the
+    // real departure module — a claim left standing here would silence the next test's own.
+    globalThis.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
     vi.unstubAllGlobals();
+    releaseDeparture();
   });
 
   it("exposes <main> as a focus target so the skip link and the route focus can land", () => {

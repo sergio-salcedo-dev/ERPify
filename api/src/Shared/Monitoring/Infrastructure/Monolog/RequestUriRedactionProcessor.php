@@ -17,9 +17,9 @@ use Stringable;
  * The framework has its own: Symfony's `RouterListener` logs `Matched route` at INFO with
  * `request_uri => $request->getUri()`, query string included, on the `request` channel — and in prod that
  * channel sits behind the `fingers_crossed` handler, so any 5xx flushes the preceding buffer, INFO lines and
- * all, to `php://stderr`. That is the Docker json-file driver no compose file gives a rotation, a TTL or an
- * owner of erasure, so a person id that lands there outlives the erasure the application confirmed to the
- * subject.
+ * all, to `php://stderr`. That is the Docker json-file driver the compose files bound by size alone, with no
+ * TTL and no owner of erasure, so a person id that lands there outlives the erasure the application confirmed
+ * to the subject.
  *
  * A processor rather than a fix at that listener, because the leak is a property of the FIELD, not of the
  * emitter: `request_uri` is a conventional key any library may write, and the one that shipped it here lives

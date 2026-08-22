@@ -18,7 +18,7 @@ use Override;
  * login `AuthenticatorManager` logs the token OBJECT, whose `__toString()` spells the same address out again.
  * In prod both channels sit behind the `fingers_crossed` handler at `level: debug`, so any 5xx flushes them —
  * about seven records into a fifty-record buffer — to `php://stderr`, the Docker json-file driver no compose
- * file gives a rotation, a TTL or an owner of erasure. That address outlives the erasure the application
+ * files bound by size alone, with no TTL and no owner of erasure. That address outlives the erasure the application
  * confirmed to the subject.
  *
  * A processor rather than a fix at the emitters, for the same reason {@see RequestUriRedactionProcessor} is
@@ -60,7 +60,9 @@ use Override;
  *    one that cannot (a route comes to carry a person-valued placeholder whose decoded and encoded forms
  *    differ, at which point `route_parameters` is the only spelling and nothing reds).
  *  - `command`, the console `ErrorListener`'s full argv of a failing process — a distinct disclosure with a
- *    distinct fix, tracked on its own. A key here would half-close it and retire the issue.
+ *    distinct fix, and it HAS one now: {@see ConsoleCommandRedactionProcessor} keeps the command name and
+ *    drops the rest. A key here would have half-closed it, redacting the address in that argv and leaving
+ *    the plaintext password beside it.
  *  - `given`, which `UrlGenerator` logs at ERROR on the `router` channel when a generated parameter fails its
  *    route requirement. No route that can carry a person's id declares one — the two that declare
  *    `requirements` at all are in `config/routes/dev.yaml` and `config/routes/test.yaml`, over a profiler
@@ -71,8 +73,9 @@ use Override;
  * **What a green does not cover.** The record's MESSAGE, which this never reads, and the message is NOT
  * quiet — reading it as "no `{carrier}` placeholder exists" is the mistake to avoid. MonologBundle pushes
  * `PsrLogMessageProcessor` onto a non-wrapping HANDLER (prod's `nested`, not the `fingers_crossed` `main`),
- * so it interpolates DOWNSTREAM of every logger processor, and what it interpolates today is `{command}` —
- * a failing console process's argv, two of whose commands take a person's email. Other identifiers are
+ * so it interpolates DOWNSTREAM of every logger processor. What it interpolates today is `{command}`, and
+ * that slot is no longer a leak: {@see ConsoleCommandRedactionProcessor} is logger-scoped, so the value is
+ * already reduced to the command name by the time this runs. Other identifiers are
  * `sprintf`-composed into a message before Monolog exists at all: HttpKernel's `ErrorListener` writes
  * `Uncaught PHP Exception …: "<message>"`, and `CurlHttpClient` writes `Request: "%s %s"` on the buffered
  * `http_client` channel. That first one does not fire on `/api/*` — `ExceptionResponder` sets a response at
@@ -84,8 +87,8 @@ use Override;
  * `previous`. No live path carries an identifier there — this application's `UserNotFoundException` is thrown
  * message-less and its user repository converts a unique-violation without chaining the driver exception —
  * but that is discipline, not a gate. Nor does this reach a carrier NESTED inside another value, or one riding
- * in `extra` — the compiled prod container holds three processors in the whole logging graph, this one, its
- * sibling and `PsrLogMessageProcessor`, and none writes `extra`. The class that would is Symfony's
+ * in `extra` — the compiled prod container holds four processors in the whole logging graph, this one, its
+ * two siblings and `PsrLogMessageProcessor`, and none writes `extra`. The class that would is Symfony's
  * `AbstractTokenProcessor`, which puts `user_identifier` under `extra.token`; enrolling it reopens this on a
  * key nothing here reads.
  *
@@ -114,7 +117,7 @@ final readonly class PersonDataRedactionProcessor implements ProcessorInterface
      * A CONSTANT, and not a stable pseudonym or the person's id, which would keep records of one subject
      * correlatable. A pseudonym derived from the address is a person datum unless it is keyed and the key is
      * erasable, which is a keystore this sink has no claim on; the id is worse, because writing it here mints
-     * a new person reference in a sink with no rotation, no TTL and no owner of erasure — the exact shape
+     * a new person reference in a sink with a size bound but no TTL and no owner of erasure — the exact shape
      * `api/.person-reference-policy` exists to refuse. Correlation is served by `audit_log`, which carries
      * actor ids and HAS an erasure owner, so the diagnostic is not lost, only moved to the sink that can
      * answer for it.

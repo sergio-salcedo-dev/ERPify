@@ -86,8 +86,9 @@ final class AccessLogQueryContainmentGateTest extends TestCase
 
         $this->assertStringNotContainsString($sentinel, $written, \sprintf(
             "A query value reached the access log in clear.\nSpelling: %s\nThe log has no owner of erasure "
-                . '(no compose file declares a `logging:` driver, so it is the default json-file driver with '
-                . 'neither rotation nor TTL), so whatever lands there outlives the erasure the application '
+                . '(the compose `logging:` blocks bound the json-file driver by size, which is eviction by '
+                . 'volume and not an expiry — there is still no TTL), so whatever lands there outlives the '
+                . 'erasure the application '
                 . 'confirmed to the subject.',
             \str_replace('{sentinel}', '<value>', $path . '?' . $queryTemplate),
         ));

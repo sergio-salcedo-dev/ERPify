@@ -18,7 +18,7 @@ use Throwable;
  *
  * The subject id is deliberately absent from the log context. This report goes to the always-on
  * `observability` channel, so it is emitted on every occurrence rather than discarded — and a log line is a
- * sink no erasure path reaches, with no rotation and no declared owner of its deletion. The request's
+ * sink no erasure path reaches, with a size bound but no TTL and no declared owner of its deletion. The request's
  * correlation id already ties the entry to the caller for as long as the request trail exists, which is the
  * same trade {@see \Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort} states.
  */

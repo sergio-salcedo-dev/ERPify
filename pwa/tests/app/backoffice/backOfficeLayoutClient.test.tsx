@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
-const { push, logout, override, nav, auth, assign, replace, routerReplace, toastError } =
+const { push, logout, override, nav, auth, assign, replace, routerReplace, toastError, toastInfo } =
   vi.hoisted(() => ({
     push: vi.fn(),
     logout: vi.fn(() => Promise.resolve()),
@@ -13,6 +13,7 @@ const { push, logout, override, nav, auth, assign, replace, routerReplace, toast
     // without the other's calls polluting the count.
     routerReplace: vi.fn(),
     toastError: vi.fn(),
+    toastInfo: vi.fn(),
     nav: { pathname: "/backoffice" },
     // `status` is the literal the guard compares against rather than `AuthStatus.AUTHENTICATED`:
     // a mock factory is hoisted above the imports, so it cannot read a value imported here.
@@ -49,12 +50,13 @@ vi.mock("next/navigation", () => {
 });
 
 vi.mock("@/context/shared/notification/infrastructure/Toast", () => ({
-  toastNotifier: { error: toastError, success: vi.fn(), info: vi.fn(), warning: vi.fn() },
+  toastNotifier: { error: toastError, success: vi.fn(), info: toastInfo, warning: vi.fn() },
 }));
 
 import BackOfficeLayoutClient from "@/app/backoffice/BackOfficeLayoutClient";
 import { accountMenuItem, type NavSubItem } from "@/app/backoffice/_lib/backofficeMenu";
 import { Routes } from "@/context/shared/routing/domain/Routes";
+import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNavigate";
 import { AccessContext } from "@/context/shared/access/domain/AccessContext";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
@@ -206,6 +208,7 @@ const NAVIGATION_COMMIT_BUDGET_MS = 10_000;
 /** What the status region says once the document turns out not to be leaving after all. */
 const REFUSED_MESSAGE = "Sign-out did not complete. Please try again.";
 const STALLED_MESSAGE = "Sign-out is taking longer than expected. You can try again.";
+const SUPERSEDED_MESSAGE = "Redirecting…";
 
 function renderLayout() {
   return render(
@@ -238,6 +241,17 @@ describe("BackOfficeLayoutClient", () => {
   });
 
   afterEach(() => {
+    // hardNavigate's single-flight claim is module state that outlives this test's own
+    // stubs/timers, and several cases above leave one held (no pagehide fired, no budget
+    // elapsed within the test body) — an unreleased claim would make the NEXT test's own
+    // sign-out spuriously "superseded". A `pagehide`/`persisted: false` dispatch is a no-op
+    // when nothing is in flight, and disarms whatever is otherwise — mirroring what an
+    // actual navigation commit does, not a test-only shortcut. Lighter than
+    // hardNavigate.test.ts's `vi.resetModules()` + dynamic re-import on purpose: that file's own
+    // tests deliberately hold a claim across a simulated backgrounded-tab pause, which a plain
+    // dispatch can't safely interrupt mid-test — this file never does that, so a dispatch here
+    // is enough and a fresh module per test would be unnecessary overhead.
+    globalThis.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
     vi.unstubAllGlobals();
     releaseDeparture();
   });
@@ -472,6 +486,105 @@ describe("BackOfficeLayoutClient", () => {
     // is known.
     expect(screen.queryByTestId("bo-layout__leaving-status")).toBeNull();
     await waitFor(() => expect(toastError).toHaveBeenCalledWith(REFUSED_MESSAGE));
+  });
+
+  it("announces a real message and an info toast when superseded by a caller with no announcement of its own", async () => {
+    // Not today's realistic trigger (see the session-expiry case below for that) — this
+    // covers a hypothetical future third hardNavigate caller that supersedes sign-out without
+    // ever claiming a departure of its own. Sign-out itself did not fail — it just is not the
+    // navigation that gets to leave — so this must not read as "refused", and (an adversarial
+    // pass on this fix caught this) must not go silent either: a live region that goes from
+    // "Signing out…" to "" announces nothing at all.
+    hardNavigate("/somewhere-with-no-announcement-of-its-own", vi.fn());
+    replace.mockClear();
+
+    renderLayout();
+    await openAccountMenu();
+
+    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+    await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+
+    // Sign-out won its own departure claim (nothing else claims one here), so the release below
+    // is unconditional and the guard suppression lifts regardless of the OTHER navigation's fate.
+    await waitFor(() => expect(currentDeparture()).toBeNull());
+    // Sign-out's own navigation never reached location: the other call already owned it.
+    expect(replace).not.toHaveBeenCalledWith(Routes.HOME);
+    expect(toastError).not.toHaveBeenCalled();
+    await waitFor(() => expect(toastInfo).toHaveBeenCalledWith(SUPERSEDED_MESSAGE));
+    expect(screen.getByTestId("bo-layout__leaving-status")).toHaveTextContent(SUPERSEDED_MESSAGE);
+  });
+
+  it("skips the toast when superseded by the session-expiry bounce, since its curtain already announced something", async () => {
+    // Today's ONLY realistic trigger for "superseded": winning the departure claim with
+    // SESSION_EXPIRED is what mounts <SessionExpiryCurtain> over this entire subtree — a toast
+    // raised after that would enqueue behind the curtain's higher z-index and never paint.
+    claimDeparture(DepartureReason.SESSION_EXPIRED);
+    hardNavigate(`${Routes.LOGIN}?reason=session-expired`, vi.fn());
+    replace.mockClear();
+
+    renderLayout();
+    await openAccountMenu();
+
+    fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+    await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+
+    // Sign-out never won this departure — the bounce already held it — so it must not release
+    // what it does not own.
+    expect(currentDeparture()).toBe(DepartureReason.SESSION_EXPIRED);
+    expect(replace).not.toHaveBeenCalledWith(Routes.HOME);
+    expect(toastInfo).not.toHaveBeenCalled();
+    expect(toastError).not.toHaveBeenCalled();
+    // The live-region message still gets set — harmless whether or not this particular tree is
+    // still mounted to show it, and correct if it is.
+    expect(screen.getByTestId("bo-layout__leaving-status")).toHaveTextContent(SUPERSEDED_MESSAGE);
+  });
+
+  it("still lets RequireAuth redirect after a superseded sign-out, even once the winning navigation itself later resolves as not-committed", async () => {
+    // The combination an adversarial pass flagged as untested: logout() actually flips the
+    // session to unauthenticated (as it does in production, in its own `finally`, regardless
+    // of which hard navigation wins) while sign-out won its own departure claim but its
+    // hardNavigate call lost to an in-flight one. The superseded branch must release that claim
+    // immediately — not wait to see whether the OTHER navigation ever commits — or this safety
+    // net stays permanently suppressed whenever it doesn't.
+    const onWinnerFailure = vi.fn();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      hardNavigate(`${Routes.LOGIN}?reason=session-expired`, onWinnerFailure);
+      replace.mockClear();
+      logout.mockImplementationOnce(() => {
+        auth.session = null;
+        auth.status = "unauthenticated";
+        return Promise.resolve();
+      });
+      const { rerender } = renderLayout();
+      await openAccountMenu();
+
+      fireEvent.click(screen.getByTestId(menuTestId(ACCOUNT_LOGOUT)));
+      await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(currentDeparture()).toBeNull());
+      rerender(
+        <BackOfficeLayoutClient>
+          <p data-testid="bo-layout-test__child">Section content</p>
+        </BackOfficeLayoutClient>,
+      );
+
+      // RequireAuth's own guard already took back over — before the winning navigation's own
+      // budget has even elapsed.
+      await waitFor(() =>
+        expect(routerReplace).toHaveBeenCalledWith(
+          expect.stringContaining(`${Routes.LOGIN}?next=`),
+        ),
+      );
+      expect(onWinnerFailure).not.toHaveBeenCalled();
+
+      // Now let the winner's own budget actually elapse: it never committed either. The
+      // redirect above did not depend on this, and does not undo it.
+      await vi.advanceTimersByTimeAsync(NAVIGATION_COMMIT_BUDGET_MS);
+      expect(onWinnerFailure).toHaveBeenCalledWith("not-committed");
+      expect(routerReplace).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("lets RequireAuth redirect once the departure is released, even though session is already unauthenticated", async () => {

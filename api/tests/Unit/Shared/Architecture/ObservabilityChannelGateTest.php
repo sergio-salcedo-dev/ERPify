@@ -78,7 +78,7 @@ final class ObservabilityChannelGateTest extends TestCase
         // same silent discard the channel exists to escape, moved one level down.
         //
         // `info` rather than `debug` deliberately: `debug` is where framework noise lives, and this stream
-        // has no rotation and no declared owner of its erasure.
+        // has a size bound but no TTL and no declared owner of its erasure.
         $handler = $this->handlers($environment)[self::CHANNEL] ?? null;
         $this->assertIsArray($handler);
 

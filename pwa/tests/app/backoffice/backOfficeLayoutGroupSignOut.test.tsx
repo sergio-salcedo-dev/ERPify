@@ -13,7 +13,7 @@ const { push, logout, replace, auth, override, GROUP_LOGOUT_TEST_ID, GROUP_PAREN
   }));
 
 vi.mock("@/context/shared/access/application/useSession", () => ({
-  useSession: () => ({ ...auth, login: vi.fn(), logout, override, setIsSigningOut: vi.fn() }),
+  useSession: () => ({ ...auth, login: vi.fn(), logout, override }),
 }));
 
 vi.mock("next/navigation", () => {

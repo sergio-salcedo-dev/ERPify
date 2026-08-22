@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
  * **The reason is positional and no amount of care replaces it.** `Mime\Address` refuses a non-compliant value
  * with a message quoting it, and that throw happens while a message is being assembled — upstream of any
  * transport decorator, where the best-effort wrapper around every mail path logs the throwable raw onto a sink
- * with no rotation, no TTL and no owner of erasure. A sender that assembles its own `Email` therefore leaks the
+ * with a size bound but no TTL and no owner of erasure. A sender that assembles its own `Email` therefore leaks the
  * address it was handed, and it does so with every other gate in this repository green.
  *
  * **So the property gated here is a source fact, not a behaviour.** `RedactingMailerTest` proves the

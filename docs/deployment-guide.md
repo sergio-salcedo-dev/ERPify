@@ -172,6 +172,16 @@ container that the web `php` container recompiled out from under it — see
   readability fix, not an alert: nothing here pages anyone or sets a ceiling on the crash-loop —
   it only makes the state legible to whoever is reading `docker compose logs` at the time. (Dev
   overrides `restart` for `pwa` only — see `compose.dev.yaml`.)
+- Every service caps its container log: `logging.driver: json-file` with `max-size: "10m"` and
+  `max-file: "5"` (~50 MiB each). Declared in the **merged** config — the four services in
+  `compose.yaml` carry it there and this overlay spells it only for `scheduler_worker`, the one
+  service it introduces, so grepping this file alone shows one. Without the block Docker's default
+  is UNBOUNDED, and that sink is where Monolog's prod handler flushes its `fingers_crossed` buffer
+  (`php://stderr`), so a record reaching it outlived every other retention control the application
+  has. The values are literals rather than `${...}` knobs: a bound an env file can widen is not a
+  bound. **It caps size, not age** — rotation evicts by volume, so an idle deployment keeps its
+  oldest line indefinitely; there is still no TTL and no erasure path, carried as an open residual
+  in §7 of the security checklist. Gate: `make php.lint.log-retention`.
 - Postgres is on an `internal` `backend` network with **no published host port**.
 - `pwa` runs with a read-only root filesystem.
 - `php` and `messenger_worker` disable core dumps (`ulimits.core: 0` in the base
