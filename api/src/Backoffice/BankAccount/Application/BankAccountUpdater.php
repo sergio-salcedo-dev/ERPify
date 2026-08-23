@@ -12,7 +12,6 @@ use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Validation\Application\Validator;
-use Symfony\Component\Validator\Exception\ValidationFailedException;
 
 final readonly class BankAccountUpdater
 {
@@ -28,7 +27,6 @@ final readonly class BankAccountUpdater
     /**
      * @throws InvalidUuidException         when $id is not a well-formed UUID (400 invalid-input)
      * @throws BankAccountNotFoundException
-     * @throws ValidationFailedException    when the updated account fails validation (422)
      */
     public function update(string $id, UpdateBankAccountCommand $command): BankAccount
     {
