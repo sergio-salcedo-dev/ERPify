@@ -37,19 +37,45 @@ describe("AuditChangeDiff", () => {
     expect(screen.getByText("Changed")).toBeInTheDocument();
   });
 
-  it("hides a no-op field (both sides null) while keeping an empty-string value visible", () => {
+  it("renders a never-populated field in the neutral state, distinct from an empty-string value", () => {
     renderDiff({
       cleared: { old: null, new: null },
       blank: { old: "", new: "x" },
     });
 
-    expect(screen.queryByTestId("diff__field-cleared")).not.toBeInTheDocument();
-    expect(screen.queryByText("— (empty)")).not.toBeInTheDocument();
+    expect(screen.getByTestId("diff__field-cleared")).toHaveAttribute("data-kind", "empty");
+    expect(screen.getByText("Not set")).toBeInTheDocument();
+    expect(screen.getByText("— (empty)")).toBeInTheDocument();
     expect(screen.getByText("(empty string)")).toBeInTheDocument();
     expect(screen.getByText("x")).toBeInTheDocument();
   });
 
-  it("hides a no-op field among real changes and renders the rest", () => {
+  it("never labels a never-populated field as a modification", () => {
+    renderDiff({ bic: { old: null, new: null } });
+
+    expect(screen.queryByText("Changed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Added")).not.toBeInTheDocument();
+    expect(screen.queryByText("Removed")).not.toBeInTheDocument();
+    expect(screen.getByText("Not set")).toBeInTheDocument();
+  });
+
+  it("renders a never-populated field as a single sentinel, never as old → new", () => {
+    renderDiff({ bic: { old: null, new: null } });
+
+    expect(screen.getAllByText("— (empty)")).toHaveLength(1);
+  });
+
+  it("omits the type hint for a field that never carried a value", () => {
+    renderDiff({
+      bic: { old: null, new: null },
+      name: { old: "BBVA", new: "BBVA S.A." },
+    });
+
+    expect(screen.getByTestId("diff__field-name")).toHaveTextContent("text");
+    expect(screen.getByTestId("diff__field-bic")).not.toHaveTextContent("·");
+  });
+
+  it("renders a never-populated field alongside real changes instead of dropping it", () => {
     renderDiff({
       name: { old: "BBVA", new: "BBVA S.A." },
       bic: { old: null, new: null },
@@ -57,49 +83,58 @@ describe("AuditChangeDiff", () => {
 
     expect(screen.getByText("BBVA S.A.")).toBeInTheDocument();
     expect(screen.getByText("Changed")).toBeInTheDocument();
-    expect(screen.queryByTestId("diff__field-bic")).not.toBeInTheDocument();
+    expect(screen.getByTestId("diff__field-bic")).toBeInTheDocument();
   });
 
-  it("keeps the DELETE snapshot header when a no-op field sits among removed fields", () => {
-    renderDiff({
-      name: { old: "BBVA", new: null },
-      bic: { old: null, new: null },
-    });
-
-    expect(screen.getByText("Final state before deletion")).toBeInTheDocument();
-    expect(screen.queryByTestId("diff__field-bic")).not.toBeInTheDocument();
-  });
-
-  it("keeps the CREATE snapshot header when a no-op field sits among added fields", () => {
-    renderDiff({
-      name: { old: null, new: "BBVA" },
-      bic: { old: null, new: null },
-    });
-
-    expect(screen.getByText("Initial state")).toBeInTheDocument();
-    expect(screen.queryByTestId("diff__field-bic")).not.toBeInTheDocument();
-  });
-
-  it("reads an all-empty snapshot as «Record with no populated fields», not «No changes recorded»", () => {
+  it("renders an all-empty record as its captured fields, not as a single summary line", () => {
     renderDiff({
       bic: { old: null, new: null },
       alias: { old: null, new: null },
     });
 
-    expect(screen.getByText("Record with no populated fields")).toBeInTheDocument();
+    expect(screen.getByTestId("diff__field-bic")).toBeInTheDocument();
+    expect(screen.getByTestId("diff__field-alias")).toBeInTheDocument();
     expect(screen.queryByText("No changes recorded")).not.toBeInTheDocument();
   });
 
-  it("names a CREATE snapshot (all added) and a DELETE snapshot (all removed)", () => {
-    const created = renderDiff({
-      name: { old: null, new: "BBVA" },
+  it("claims no write direction: an all-added diff is never labelled a CREATE snapshot", () => {
+    renderDiff({
       swift: { old: null, new: "BBVAESMM" },
+      logo: { old: null, new: "media-1" },
     });
-    expect(screen.getByText("Initial state")).toBeInTheDocument();
-    created.unmount();
 
+    expect(screen.queryByText("Initial state")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("diff__snapshot")).not.toBeInTheDocument();
+  });
+
+  it("claims no write direction: an all-removed diff is never labelled a DELETE snapshot", () => {
     renderDiff({ name: { old: "BBVA", new: null } });
-    expect(screen.getByText("Final state before deletion")).toBeInTheDocument();
+
+    expect(screen.queryByText("Final state before deletion")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("diff__snapshot")).not.toBeInTheDocument();
+  });
+
+  it("keeps never-populated fields out of the collapsed window so populated ones stay visible", () => {
+    const changes: AuditChanges = {
+      bic: { old: null, new: null },
+      alias: { old: null, new: null },
+      ...Object.fromEntries(
+        Array.from({ length: 8 }, (_unused, index) => [
+          `field${index}`,
+          { old: `before${index}`, new: `after${index}` },
+        ]),
+      ),
+    };
+
+    renderDiff(changes);
+
+    // Ten rows collapse to six. Declared first, the two empty fields would take two of those slots
+    // and push `after4`/`after5` out of sight — the regression this ordering exists to prevent.
+    for (let index = 0; index < 6; index += 1) {
+      expect(screen.getByText(`after${index}`)).toBeInTheDocument();
+    }
+    expect(screen.queryByTestId("diff__field-bic")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("diff__field-alias")).not.toBeInTheDocument();
   });
 
   it("shows a sealed sentinel for a crypto-shredded value and never the ciphertext", () => {

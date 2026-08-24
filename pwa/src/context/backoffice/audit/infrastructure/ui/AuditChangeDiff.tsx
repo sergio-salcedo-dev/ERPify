@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Lock, Minus, Plus, type LucideIcon } from "lucide-react";
+import { ArrowRight, CircleDashed, Lock, Minus, Plus, type LucideIcon } from "lucide-react";
 import { cn } from "@/components/cn";
 import { CopyButton, TruncatedText } from "@/components/erpify";
 import {
   ChangeKind,
   changeKind,
   isAuditSealedValue,
-  isNoOpChange,
   type AuditChanges,
   type AuditFieldChange,
   type AuditFieldValue,
@@ -37,18 +36,21 @@ const KIND_MARKER: Readonly<Record<ChangeKind, string>> = {
   [ChangeKind.Added]: "Added",
   [ChangeKind.Removed]: "Removed",
   [ChangeKind.Changed]: "Changed",
+  [ChangeKind.Empty]: "Not set",
 };
 
 const KIND_TEXT_TONE: Readonly<Record<ChangeKind, string>> = {
   [ChangeKind.Added]: "text-success-strong",
   [ChangeKind.Removed]: "text-danger-strong",
   [ChangeKind.Changed]: "text-muted-foreground",
+  [ChangeKind.Empty]: "text-muted-foreground",
 };
 
 const KIND_ICON: Readonly<Record<ChangeKind, LucideIcon>> = {
   [ChangeKind.Added]: Plus,
   [ChangeKind.Removed]: Minus,
   [ChangeKind.Changed]: ArrowRight,
+  [ChangeKind.Empty]: CircleDashed,
 };
 
 const VALUE_TYPE_LABEL: Readonly<Record<string, string>> = {
@@ -58,53 +60,41 @@ const VALUE_TYPE_LABEL: Readonly<Record<string, string>> = {
 };
 
 /**
- * Field-by-field write diff for a `change` audit row, fed the decoded `metadata.changes`. Three states
+ * Field-by-field write diff for a `change` audit row, fed the decoded `metadata.changes`. Four states
  * carried on a **non-colour** channel (WCAG 1.4.1): a text marker + glyph for added / removed /
- * changed, with colour only reinforcing. A CREATE (all-added) or DELETE (all-removed) reads as a full
- * snapshot under a naming header. Large diffs collapse so the drawer layout holds.
+ * changed / not-set, with colour only reinforcing. Every captured field is rendered, empty ones
+ * included — a field that was present and unpopulated is evidence, and this view is the only place
+ * it surfaces. Large diffs collapse so the drawer layout holds; empty fields sort last so collapsing
+ * never hides a populated one behind them.
+ *
+ * It deliberately makes **no claim about the write's direction**. Naming a diff «Initial state» or
+ * «Final state before deletion» requires knowing the operation, and the operation is not carried by
+ * the event: inferring it from the rows asserts CREATE over any update that only fills previously
+ * empty fields. Until the trail transports the operation, this view shows the evidence and names
+ * nothing.
  *
  * SECURITY (load-bearing): every value is untrusted input (an editable bank name) rendered as a React
  * text child (auto-escaped). NEVER `dangerouslySetInnerHTML`/`innerHTML`; no value feeds `href`/`src`.
  * Mirror of `MetadataBlock`'s escaping stance.
  */
 export function AuditChangeDiff({ changes, className, testId }: Readonly<AuditChangeDiffProps>) {
-  const rows: FieldRow[] = Object.entries(changes)
-    .filter(([, change]) => !isNoOpChange(change))
-    .map(([field, change]) => ({
-      field,
-      change,
-      kind: changeKind(change),
-    }));
+  const rows: FieldRow[] = orderedRows(changes);
   const [expanded, setExpanded] = useState(false);
 
   if (rows.length === 0) {
-    // Every captured field was empty (null on both sides): still a real snapshot, but its direction
-    // (create vs delete) is not derivable from the diff alone — so it reads as a faithful empty record
-    // rather than mislabelling a real write as "no changes". A genuinely empty map keeps the plain copy.
-    const hasCapturedFields = Object.keys(changes).length > 0;
     return (
       <p className={cn("text-muted-foreground text-xs", className)} data-testid={testId}>
-        {hasCapturedFields ? "Record with no populated fields" : "No changes recorded"}
+        No changes recorded
       </p>
     );
   }
 
-  const snapshotHeader = snapshotHeaderFor(rows);
   const collapsible = rows.length > COLLAPSE_THRESHOLD;
   const visibleRows = collapsible && !expanded ? rows.slice(0, COLLAPSE_VISIBLE) : rows;
   const hiddenCount = rows.length - visibleRows.length;
 
   return (
     <div className={cn("audit-change-diff flex flex-col gap-2", className)} data-testid={testId}>
-      {snapshotHeader ? (
-        <p
-          className="text-muted-foreground text-xs font-medium"
-          data-testid={idOf(testId, "snapshot")}
-        >
-          {snapshotHeader}
-        </p>
-      ) : null}
-
       <dl className="flex flex-col gap-2.5">
         {visibleRows.map((row) => (
           <DiffField key={row.field} row={row} testId={idOf(testId, `field-${row.field}`)} />
@@ -128,6 +118,7 @@ export function AuditChangeDiff({ changes, className, testId }: Readonly<AuditCh
 
 function DiffField({ row, testId }: Readonly<{ row: FieldRow; testId?: string }>) {
   const { field, change, kind } = row;
+  const typeHint = typeHintFor(change);
   return (
     <div
       className="grid grid-cols-[10rem_1fr] items-start gap-2"
@@ -140,8 +131,12 @@ function DiffField({ row, testId }: Readonly<{ row: FieldRow; testId?: string }>
         </span>
         <span className="text-muted-foreground inline-flex flex-wrap items-center gap-1 text-2xs">
           <code className="font-mono break-all">{field}</code>
-          <span aria-hidden="true">·</span>
-          <span>{typeHintFor(change)}</span>
+          {typeHint === null ? null : (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>{typeHint}</span>
+            </>
+          )}
         </span>
         <KindMarker kind={kind} />
       </dt>
@@ -164,17 +159,28 @@ function KindMarker({ kind }: Readonly<{ kind: ChangeKind }>) {
   );
 }
 
-/** Renders the before/after for a field: a single value for add/remove, `old → new` for a change. */
+/**
+ * Renders the before/after for a field: a single value for add/remove, `old → new` for a change, and
+ * a single sentinel for a field that never held one — never `old → new` over two empties, which
+ * would read as a modification that did not happen. Exhaustive on {@link ChangeKind} so a fifth
+ * state is a compile error here rather than a silent fall-through to the change arm.
+ */
 function ChangeValue({ change, kind }: Readonly<{ change: AuditFieldChange; kind: ChangeKind }>) {
-  if (kind === ChangeKind.Added) return <ScalarValue value={change.new} />;
-  if (kind === ChangeKind.Removed) return <ScalarValue value={change.old} />;
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      <ScalarValue value={change.old} />
-      <ArrowRight className="text-muted-foreground size-3.5 flex-none" aria-hidden="true" />
-      <ScalarValue value={change.new} />
-    </span>
-  );
+  switch (kind) {
+    case ChangeKind.Added:
+      return <ScalarValue value={change.new} />;
+    case ChangeKind.Removed:
+    case ChangeKind.Empty:
+      return <ScalarValue value={change.old} />;
+    case ChangeKind.Changed:
+      return (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <ScalarValue value={change.old} />
+          <ArrowRight className="text-muted-foreground size-3.5 flex-none" aria-hidden="true" />
+          <ScalarValue value={change.new} />
+        </span>
+      );
+  }
 }
 
 /**
@@ -221,19 +227,30 @@ function ScalarValue({ value }: Readonly<{ value: AuditFieldValue }>) {
   return <span className="break-words">{text}</span>;
 }
 
-/** «Initial state» when the row is a pure CREATE (all-added), «… before deletion» for a DELETE. */
-function snapshotHeaderFor(rows: ReadonlyArray<FieldRow>): string | null {
-  if (rows.every((row) => row.kind === ChangeKind.Added)) return "Initial state";
-  if (rows.every((row) => row.kind === ChangeKind.Removed)) {
-    return "Final state before deletion";
-  }
-  return null;
+/**
+ * Every captured field, with the empty ones last. The wire order is Doctrine's field-metadata order,
+ * not a business order, so nothing forensic is lost by re-sorting — while keeping empty fields ahead
+ * of populated ones would let them fill the collapsed window and hide real values behind a toggle.
+ * The sort is stable, so fields keep their relative order inside each group.
+ */
+function orderedRows(changes: AuditChanges): FieldRow[] {
+  const rows = Object.entries(changes).map(([field, change]) => ({
+    field,
+    change,
+    kind: changeKind(change),
+  }));
+  const isEmpty = (row: FieldRow) => row.kind === ChangeKind.Empty;
+  return [...rows.filter((row) => !isEmpty(row)), ...rows.filter(isEmpty)];
 }
 
-/** The field-type hint shown next to the label, derived from whichever side carries a value. */
-function typeHintFor(change: AuditFieldChange): string {
+/**
+ * The field-type hint shown next to the label, derived from whichever side carries a value. A field
+ * that never held one has no derivable type — the diff carries no schema — so it reports `null` and
+ * the caller omits the segment rather than printing a placeholder that asserts nothing.
+ */
+function typeHintFor(change: AuditFieldChange): string | null {
   const present = change.new ?? change.old;
-  if (present === null) return "—";
+  if (present === null) return null;
   if (isAuditSealedValue(present)) return "encrypted";
   return VALUE_TYPE_LABEL[typeof present] ?? typeof present;
 }
