@@ -66,7 +66,7 @@ final readonly class PiiDiffSealer
                 : $change;
         }
 
-        return new SealedDiff(['changes' => $sealedChanges], $scope->toString());
+        return new SealedDiff([...$diff, 'changes' => $sealedChanges], $scope->toString());
     }
 
     /**
