@@ -65,6 +65,88 @@ breakdown):**
    pipeline de procesamiento, (2) storage + frontera de persistencia/outbox + seguridad de transporte,
    (3) ruta de lectura canonical-only + caching HTTP.
 
+## Adversarial pass
+
+Dos lecturas hostiles sobre el breakdown completo, aportadas por Sergio desde fuera de esta sesión —
+**no autocertificación**: la primera (2026-08-23) sobre el requirements inventory de step-01; la
+segunda (2026-08-24) sobre las tres historias ya redactadas de step-03. Además, BMAD Advanced
+Elicitation (autoadministrada por esta sesión: Boundary & Edge Case Sweep, Security Audit Personas,
+Cascading Failure Simulation, Failure Mode Analysis) sobre el mismo contenido, con al menos un hallazgo
+corregido por Sergio antes de aceptarlo (ver GRAVE-2). Un tercer control, no adversarial pero real:
+step-04 (validación final) encontró dos FRs sin cobertura de AC que ninguna de las dos lecturas había
+señalado.
+
+**GRAVE-1 — contradicción interna entre NFR4 y NFR7.** El requirements inventory decía en NFR4 que el
+borrado de bytes "no es un efecto lateral síncrono... se publica tras commit" (outbox, ya decidido) y
+simultáneamente en NFR7 que "síncrono vs. outbox" era una decisión abierta para la historia del puerto —
+dos afirmaciones incompatibles sobre el mismo mecanismo. Una story escrita contra NFR7 literal podría
+haber reintroducido un borrado síncrono que NFR4 ya prohibía. Corregido: NFR7 solo deja abierta la
+semántica de `delete()` como operación (idempotencia, comportamiento ante fallo); el mecanismo outbox
+queda fijado en NFR4, sin margen de reinterpretación.
+
+**GRAVE-2 — orden de borrado entre bytes de storage y fila `Image` sin especificar.** Ninguna AC decía
+en qué orden desaparecen la fila `Image` y los bytes cuando se procesa la señal de lifecycle. Sin
+fijarlo, una implementación podía borrar la fila primero (dejando bytes huérfanos sin ninguna referencia
+que los reintente, exactamente el bookkeeping que NFR3 prohíbe construir) o los bytes primero (dejando
+una fila viva y retryable durante la ventana). La propuesta inicial de esta sesión no distinguía las dos
+direcciones; **Sergio la corrigió** con el argumento de retryability (storage→fila, nunca al revés,
+porque un fallo a medio camino en esa dirección deja siempre algo con lo que reintentar). Incorporado
+literalmente en la Story 1.2.
+
+**GRAVE-3 (encontrado en step-04, no en las lecturas externas) — FR3 y FR7 sin cobertura de AC.** El
+inventario de requisitos declaraba "no promoción entre contratos" (FR3) y "`ImageProcessor` como seam
+reutilizable" (FR7), y el mapa de cobertura los daba por cubiertos por la Épica 1 — pero ninguna
+historia tenía una AC que los verificara. Un mapa de cobertura que apunta a una épica sin que ninguna
+story lo pruebe es cobertura de nombre, no de hecho. Cerrado con dos ACs nuevas en la Story 1.1.
+
+**MEDIA-1 — el contrato de `ImageStorage` se dejaba más abierto de lo que el ADR permite.** La
+formulación original delegaba "síncrono vs. outbox, idempotencia, comportamiento ante fallo" enteros a
+la historia del puerto, cuando D6 del ADR ya fija la mitad (escritura aceptada⇒recuperable, borrado
+completado⇒no recuperable). Tratar como abierto lo que ya está cerrado invita a que una story lo
+renegocie. Corregido en NFR7.
+
+**MEDIA-2 — ambigüedad sobre si `Image` se persiste.** Una redacción confusa ("la primera historia que
+persiste un ImageId... solo internamente al módulo") sonaba a que `Image` podía no tener persistencia
+propia. El ADR es inequívoco (frontmatter: *"the first slice does add schema — the `Image` table"*; D6:
+*"the `Image` aggregate it produces"* como entregable). Corregido con la tabla de responsabilidades
+(Shared/Images posee identidad/estado/storage; el consumidor posee significado/ownership/erasure).
+
+**MEDIA-3 — defensa anti-polyglot implícita, no verificada.** El pipeline siempre re-encoda (D1), lo que
+de hecho neutraliza un polyglot (cabecera de imagen válida + payload malicioso anexado), pero ninguna AC
+lo afirmaba como propiedad — dependía de que la implementación lo hiciera "por casualidad". Añadida AC
+explícita: solo los bytes canónicos re-encodados alcanzan `ImageStorage` o la respuesta HTTP.
+
+**MEDIA-4 — orden auth-vs-existencia sin fijar.** Sin especificar, un no autenticado podía recibir
+códigos distintos según si el `ImageId` solicitado existía o no, filtrando esa información sin
+necesidad de autenticarse. Fijado: auth → validación de formato → lookup → 404, siempre en ese orden.
+
+**MEDIA-5 — respuesta truncada si el storage falla a mitad de stream.** Ninguna AC impedía comprometer
+`200` + `Content-Length` antes de confirmar que la lectura completa era correcta — un fallo de storage
+a mitad de la respuesta habría dejado al cliente con un fichero truncado sin ningún error visible.
+Añadida AC: lectura verificada antes de comprometer cabeceras.
+
+**RECHAZADO-1 — "`Image` no debería persistirse como agregado propio; el consumidor persiste
+`ImageId`".** Propuesto en la segunda lectura como P0. Contradice el ADR literalmente en dos sitios (ver
+MEDIA-2); rechazado citando el texto exacto del ADR en vez de deferir a la autoridad del revisor.
+
+**RECHAZADO-2 — rescatar `ContentHashUrlGenerator`.** Se descartó por completo (no solo renombrado como
+`ContentAddressedHttpCache`) — el riesgo de que el hash reabra semántica de identidad (`/Image/{hash}`)
+supera el ahorro de líneas frente al invariante 2 del ADR.
+
+**RESIDUAL-1 — `ImageId` (UUIDv7, convención del repo) + lectura autenticada-cualquiera habilita una
+enumeración de rango temporal más barata que sobre un UUIDv4 puro.** No cambia la decisión de
+autenticación de esta épica; documentado como riesgo aceptado, candidato a rate-limiting en la épica del
+consumidor. `ImageId` no se considera nunca un mecanismo de autorización ni un secreto.
+
+**RESIDUAL-2 — un mensaje `ImageDeleted` perdido deja bytes y fila vivos indefinidamente**, sin
+monitorización en esta rebanada — coherente con "sin GC" (NFR3), pero desde el ángulo de pérdida de
+mensaje, no de bookkeeping de huérfanos.
+
+**RESIDUAL-3 — sin refcounting (NFR3 lo prohíbe), un futuro consumidor que duplique una referencia a
+`ImageId` (bug del lado consumidor, viola NFR4) no tiene ningún safety net en esta capa** — un
+`delete()` legítimo de un poseedor borra bytes que el otro todavía cree tener. No se arregla aquí;
+documentado para que la épica del consumidor no lo redescubra por accidente.
+
 ## Requirements Inventory
 
 ### Functional Requirements
