@@ -648,8 +648,11 @@ nunca al revés
 haber borrado ya la fila, el objeto de storage quedaría huérfano sin ninguna fila que lo referencie —
 exactamente el bookkeeping/GC que NFR3 prohíbe construir
 **And** durante la ventana intermedia (bytes ya borrados, fila `Image` todavía presente), una lectura
-concurrente encuentra la fila pero el storage lookup falla — la ruta de lectura (Story 1.3) ya trata esa
-ausencia como "no recuperable", nunca como un crash (misma AC que gobierna el `304` optimista)
+concurrente encuentra la fila pero el storage lookup falla — esto **no es una dependencia hacia
+adelante**: Story 1.2 es completable y testable de forma aislada (repositorio + storage, sin HTTP)
+verificando solo el orden de borrado; el requisito que impone sobre la Story 1.3 es que, cuando esa
+historia se construya, su ruta de lectura debe tratar esa ausencia como "no recuperable", nunca como un
+crash (mismo requisito que fija su AC del `304` optimista)
 **And** no se promete atomicidad entre el borrado de la fila y el de los bytes (no hay transacción
 cruzando Postgres y filesystem) — se promete un **orden** que garantiza que cualquier fallo a medio
 camino deja un estado retryable, nunca un huérfano permanente sin referencia
