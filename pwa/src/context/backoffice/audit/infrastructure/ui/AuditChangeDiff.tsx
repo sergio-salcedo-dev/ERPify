@@ -97,30 +97,24 @@ export function AuditChangeDiff({
 }: Readonly<AuditChangeDiffProps>) {
   const rows: FieldRow[] = orderedRows(changes);
   const [expanded, setExpanded] = useState(false);
+  const snapshotHeader = operation ? (SNAPSHOT_HEADER[operation] ?? null) : null;
 
   if (rows.length === 0) {
     return (
-      <p className={cn("text-muted-foreground text-xs", className)} data-testid={testId}>
-        No changes recorded
-      </p>
+      <div className={cn("flex flex-col gap-2", className)} data-testid={testId}>
+        <SnapshotHeader header={snapshotHeader} testId={testId} />
+        <p className="text-muted-foreground text-xs">No changes recorded</p>
+      </div>
     );
   }
 
   const collapsible = rows.length > COLLAPSE_THRESHOLD;
   const visibleRows = collapsible && !expanded ? rows.slice(0, COLLAPSE_VISIBLE) : rows;
   const hiddenCount = rows.length - visibleRows.length;
-  const snapshotHeader = operation ? (SNAPSHOT_HEADER[operation] ?? null) : null;
 
   return (
     <div className={cn("audit-change-diff flex flex-col gap-2", className)} data-testid={testId}>
-      {snapshotHeader ? (
-        <p
-          className="text-muted-foreground text-xs font-medium"
-          data-testid={idOf(testId, "snapshot")}
-        >
-          {snapshotHeader}
-        </p>
-      ) : null}
+      <SnapshotHeader header={snapshotHeader} testId={testId} />
 
       <dl className="flex flex-col gap-2.5">
         {visibleRows.map((row) => (
@@ -140,6 +134,15 @@ export function AuditChangeDiff({
         </button>
       ) : null}
     </div>
+  );
+}
+
+function SnapshotHeader({ header, testId }: Readonly<{ header: string | null; testId?: string }>) {
+  if (!header) return null;
+  return (
+    <p className="text-muted-foreground text-xs font-medium" data-testid={idOf(testId, "snapshot")}>
+      {header}
+    </p>
   );
 }
 

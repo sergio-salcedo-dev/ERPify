@@ -150,10 +150,17 @@ describe("AuditChangeDiff", () => {
   });
 
   it("never labels an UPDATE that only fills previously-empty fields as a CREATE", () => {
-    // The exact #413 defect: every row here looks all-added, and the real operation says otherwise.
+    // Every row here looks all-added, and the real operation says otherwise.
     renderDiff({ alias: { old: null, new: "Main account" } }, AuditWriteOperation.Updated);
 
     expect(screen.queryByText("Initial state")).not.toBeInTheDocument();
+  });
+
+  it("still renders the snapshot header for a known operation when the changes map is empty", () => {
+    renderDiff({}, AuditWriteOperation.Created);
+
+    expect(screen.getByText("Initial state")).toBeInTheDocument();
+    expect(screen.getByText("No changes recorded")).toBeInTheDocument();
   });
 
   it("keeps never-populated fields out of the collapsed window so populated ones stay visible", () => {

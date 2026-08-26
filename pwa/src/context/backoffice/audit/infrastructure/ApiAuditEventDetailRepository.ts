@@ -2,6 +2,7 @@ import { inject, injectable } from "inversify";
 import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
 import {
+  AuditWriteOperation,
   type AuditChanges,
   type AuditEventDetail,
   type AuditFieldChange,
@@ -42,16 +43,23 @@ function isAuditChanges(value: unknown): value is AuditChanges {
   return isObjectRecord(value) && Object.values(value).every(isAuditFieldChange);
 }
 
+const AUDIT_WRITE_OPERATIONS: ReadonlySet<string> = new Set(Object.values(AuditWriteOperation));
+
+function isAuditWriteOperation(value: unknown): value is AuditWriteOperation {
+  return typeof value === "string" && AUDIT_WRITE_OPERATIONS.has(value);
+}
+
 /**
- * `metadata` must be an object; when it carries `changes` that map must be a well-formed diff. A row
- * with no diff (an access-log read) carries `{}`/other keys and still validates — the diff is
- * optional, the object is not.
+ * `metadata` must be an object; when it carries `changes` that map must be a well-formed diff, and when
+ * it carries `operation` that value must be one of the backend's closed set. A row with no diff (an
+ * access-log read) carries `{}`/other keys and still validates — both are optional, the object is not.
  */
 function isAuditEventMetadata(
   value: unknown,
-): value is { changes?: AuditChanges } & Record<string, unknown> {
+): value is { changes?: AuditChanges; operation?: AuditWriteOperation } & Record<string, unknown> {
   if (!isObjectRecord(value)) return false;
-  return !("changes" in value) || isAuditChanges(value.changes);
+  if ("changes" in value && !isAuditChanges(value.changes)) return false;
+  return !("operation" in value) || isAuditWriteOperation(value.operation);
 }
 
 /**
@@ -110,7 +118,7 @@ function normalizeFieldValue(value: AuditFieldValue): AuditFieldValue {
 
 /** Carries `metadata` through verbatim (forensic fidelity) but normalises `changes` when present. */
 function toMetadata(
-  metadata: { changes?: AuditChanges } & Record<string, unknown>,
+  metadata: { changes?: AuditChanges; operation?: AuditWriteOperation } & Record<string, unknown>,
 ): AuditEventDetail["metadata"] {
   if (!isAuditChanges(metadata.changes)) return { ...metadata };
   return { ...metadata, changes: toAuditChanges(metadata.changes) };

@@ -34,7 +34,7 @@ async function createBankAccount(
 }
 
 /**
- * Real-API E2E coverage for the audit diff surface (#413) and its snapshot-header restoration. Every
+ * Real-API E2E coverage for the audit diff surface and its snapshot-header restoration. Every
  * other audit test in this suite renders from a hand-built `detail` prop; this one instead creates a
  * genuine BankAccount against the live Symfony backend (with `bic`/`alias` left unset) and reads its
  * audit trail back through the real `GET /audit/events/{id}` endpoint — the one leg of the
@@ -102,8 +102,8 @@ test.describe("BackOffice - Audit trail diff (real API)", () => {
     const drawer = page.getByTestId("audit-entry-drawer__diff");
     await expect(drawer).toBeVisible();
 
-    // The real operation (CREATED), not an inference over the rows — the #413 fix this pipeline
-    // exercises end to end.
+    // The real operation (CREATED), not an inference over the rows, exercised end to end against
+    // the real backend.
     await expect(page.getByTestId("audit-entry-drawer__diff__snapshot")).toHaveText(
       "Initial state",
     );

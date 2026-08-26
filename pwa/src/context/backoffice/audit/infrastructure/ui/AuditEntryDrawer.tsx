@@ -226,7 +226,7 @@ function AuditEntryDrawerBody({
 }
 
 /**
- * The metadata minus `changes` and `operation` — the Cambios section already renders the diff (and its
+ * The metadata minus `changes` and `operation` — the Changes section already renders the diff (and its
  * snapshot header, sourced from `operation`) in full.
  */
 function nonDiffMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
