@@ -130,3 +130,64 @@ Todos en corrida fresca desde el worktree, exit code impreso:
 - La palanca de desbloqueo administrativo de #602 — PR hermana, otro worktree.
 - #718 (retención de IP/user-agent) — decisión ya diferida, ajena a este cambio.
 - La condición de carrera de `LoginAttemptRegistrar::recordFailure()` — conocida, diferida deliberadamente.
+
+### Review Findings
+
+Revisión adversarial de `bmad-code-review` sobre la PR #857 (2026-08-27), tres capas en paralelo (Blind
+Hunter, Edge Case Hunter, Acceptance Auditor contra este spec) más triage con lectura directa del código en
+cada hallazgo. 15 hallazgos brutos → 2 `decision-needed`, 3 `patch`, 5 `defer`, 5 descartados como ruido o ya
+resueltos (uno de ellos — el «cinco llamadores» de `.audit-resource-types» — coincide exactamente con lo que
+este mismo pase adversarial ya había marcado como «nota cosmética, no accionada» arriba; otro — la
+nulabilidad de `lockedUntil()` — también ya razonado y aceptado arriba).
+
+- [ ] [Review][Decision] **Carrera con el borrado GDPR: `notifyOwner()` puede escribir el id real de un
+  sujeto ya borrado.** `User` no lleva `#[ORM\Version]`. Si una identidad se borra (vía
+  `FulfilIdentityErasure`) entre el `findById()` y el `save()` de este método, Doctrine no detecta el
+  `UPDATE` de 0 filas afectadas sin locking optimista — `save()` no lanza, y
+  `RecordLockoutNoticeAuditBestEffort::record()` se ejecuta igualmente, escribiendo una fila `audit_log`
+  nueva con el id real del sujeto ya anonimizado. Ventana estrecha (milisegundos, no los 5 minutos del tick)
+  pero real; no cubierto por los doce ángulos del pase adversarial de esta PR. `NotifyLockedIdentities.php`
+  (método `notifyOwner`), `Doctrine/DoctrineUserRepository.php`, `Domain/Entity/User.php`.
+- [ ] [Review][Decision] **Cobertura Behat — dejada explícitamente al criterio del revisor por el propio plan
+  de pruebas de la PR.** No es un hallazgo nuevo, es una decisión abierta que la propia PR marcó sin
+  resolver.
+
+- [ ] [Review][Patch] **Falta un test de llegada funcional para el nuevo binding de canal.**
+  `LockoutAuditWriteFailureArrivalTest` (preexistente, sin tocar por esta PR) prueba el binding de canal de
+  `RecordLockoutAuditBestEffort` vía una petición HTTP real — el propio docblock de ese test explica por qué
+  un doble o una inspección de `debug:container` no bastan («exactamente igual de cierto cuando el registro
+  se descarta que cuando sobrevive»). `RecordLockoutNoticeAuditBestEffort` afirma el mismo binding «por la
+  misma razón» pero el pase adversarial de esta PR solo lo verificó con `debug:container` — la misma prueba
+  que el test hermano ya declara insuficiente. `api/src/Iam/Identity/Application/RecordLockoutNoticeAuditBestEffort.php`.
+- [ ] [Review][Patch] **Docblock de `record()` afirma algo falso sobre el correo.** «`$lockedUntil` … mirrors
+  the expiry the mail itself quoted» — verificado falso contra `SymfonyAccountLockedEmailSender`, cuyo propio
+  docblock dice explícitamente que el cuerpo «carries no IP, device, timestamp or attempt count». El dato
+  puede seguir siendo defendible (ya vive en el payload de `UserLocked` en `event_store`), pero la
+  justificación escrita es incorrecta. `RecordLockoutNoticeAuditBestEffort.php:51`.
+- [ ] [Review][Patch] **`api/config/reference.php` tocado sin relación con el alcance.** Un hunk cosmético
+  (reordena un comentario `// Default: null` entre `url`/`public_url` de Mercure) ajeno a esta PR, en un
+  fichero que el `CLAUDE.md` raíz marca explícitamente como «Do not touch — auto-generated».
+
+- [x] [Review][Defer] **`AuditLevel::SECURITY` + `catch` a mano duplica el swallow-and-report que
+  `SymfonyAuditLogger::writeActivity()` ya trae para `AuditLevel::ACTIVITY` sobre el mismo canal
+  `observability`.** Patrón preexistente en todo el repo (`RecordLockoutAuditBestEffort` ya lo hace igual);
+  no introducido por esta PR. El propio pase adversarial de la PR ya lo señaló como «nota no bloqueante».
+  Candidato a una revisión de alcance-repo, no bloqueante aquí — deferred, pre-existing.
+- [x] [Review][Defer] **`$this->logger->error(...)` dentro del `catch` no está envuelto en su propio
+  try/catch**, a diferencia de `SymfonyAuditLogger::report()` (que sí se protege, con el argumento explícito
+  de que «a catch whose entire purpose is that nothing escapes may not throw»). Si el sink de observabilidad
+  falla, la excepción escapa y aborta el tick completo del scheduler para el resto de identidades bloqueadas
+  en esa corrida. Gap idéntico y preexistente en `RecordLockoutAuditBestEffort` — no introducido por esta PR.
+  Autosanable (el siguiente tick recoge las mismas candidatas 5 minutos después) — deferred, pre-existing.
+- [x] [Review][Defer] **Carrera entre réplicas del scheduler puede duplicar la fila `ACCOUNT_LOCKOUT_NOTIFIED`.**
+  Mismo mecanismo que `CLAUDE.md` ya documenta por nombre para `NotifyLockedIdentitiesMessage` (el
+  `Checkpoint::acquire()` sin `->lock()` deja la ventana abierta durante el intercambio SMTP) — hoy ya
+  duplica el correo; esta PR simplemente hereda esa misma exposición para la fila de auditoría. No es
+  superficie nueva — deferred, pre-existing.
+- [x] [Review][Defer] **`AuditResource::of()` puede lanzar por un UUID malformado**, indistinguible en el
+  `catch (Throwable)` genérico de un fallo de escritura de infraestructura. Teórico en la práctica: `$userId`
+  siempre viene de `identity_user.id` (PK), nunca de input externo — mismo patrón preexistente en
+  `RecordLockoutAuditBestEffort` — deferred, pre-existing.
+- [x] [Review][Defer] **Acoplamiento a `FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE` desde un tercer
+  consumidor ajeno a la erasure.** Consistente con el precedente ya establecido, no novedad de esta PR —
+  candidato a plantearse si un cuarto consumidor apareciera — deferred, pre-existing.
