@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-08-18
+last_updated: 2026-08-26
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -398,6 +398,23 @@ development_status:
   # política de deep-check). `done` marca que el code review de la tarea completa ocurrió, no que la
   # rama haya entrado: el marcador va por delante del merge por diseño — para eso está git.
   br-9-contrato-endpoints-salud: done
+
+  # Epic images: primera rebanada del módulo Shared/Images (subida y lectura de representaciones
+  # fungibles — logos, avatares, imágenes de producto, miniaturas), sin cablear ningún consumidor real
+  # (Bank.logoImageId / User.avatarImageId no existen todavía) y sin auditar la ruta de lectura — ambas
+  # decisiones confirmadas con Sergio, quedan para una épica de consumidor aparte.
+  # docs/adr/images-vs-documents-conservation-contract.md (D1-D7) +
+  # _bmad-output/planning-artifacts/epics-images.md (PR #850). Revisada adversarialmente TRES veces
+  # (2026-08-23 requirements, 2026-08-24 stories, 2026-08-26 sobre la épica ya cerrada) — la tercera
+  # pasada folded sus hallazgos en las propias stories en vez de diferirlos (CLAUDE.md → "bmad working
+  # artifacts" → "An epic does not grow its own deferred pile", añadida a raíz de esa misma corrección).
+  # Ninguna story tiene fichero individual todavía: las tres siguen en `backlog` por definición del
+  # estado ("Story only exists in epic file"), y por tanto la épica también.
+  epic-images: backlog
+  img-1-1-subir-imagen-obtener-representacion-canonica: backlog
+  img-1-2-persistir-imagen-borrado-fiable-de-bytes: backlog
+  img-1-3-leer-representacion-canonica-de-forma-segura: backlog
+  epic-images-retrospective: optional
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.
