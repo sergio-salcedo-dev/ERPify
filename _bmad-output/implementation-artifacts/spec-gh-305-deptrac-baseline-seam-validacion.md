@@ -116,23 +116,7 @@ comprobación), asignación masiva, codificación de salida, secretos, CORS/CSRF
 Messenger. No hay superficie `pwa/`. El comportamiento en tiempo de ejecución es idéntico: los cuatro `use`
 eliminados no se resolvían en ninguna ruta de ejecución.
 
-## Actualización — el seam de validación, resuelto (rama `chore/shared-validator-port-s1al`)
-
-El primer punto de la lista de abajo está cerrado. El bless se hizo con el mecanismo que **sí** funciona (baseline
-generado, nunca `skip_violations` — exactamente lo que el Hallazgo 3 exigía) y quedó documentado como
-`docs/adr/external-dependencies-in-domain.md` D5, más un puntero desde `api/CLAUDE.md`. Correcciones sobre lo
-escrito arriba: el conteo real del baseline es **6** símbolos para `Validator`, no 7 — `GroupSequence` nunca fue
-violación (ya la cubre `Vendor.PassiveMetadata`); comprobado leyendo `tools/deptrac/deptrac.baseline.yaml`
-directamente, no de memoria. El Hallazgo 4 (mover `rebindEmptyPropertyPath()` al borde HTTP, 3 de los 6 símbolos)
-sigue sin tocarse, por la misma razón que entonces: propuesta separada, no requisito de esta decisión.
-
-También corrige el ítem 3 de más abajo: no es un ítem abierto. `docs/adr/external-dependencies-in-domain.md` ya
-documentaba, antes de esta rama, que mover `EnumType` a `Domain/` se probó y se descartó — `Constraint::validatedBy()`
-ata constraint y validador por nombre, y separar el par revienta en runtime con todos los gates en verde
-(`ConstraintValidatorResolutionGateTest` cierra sólo una de las tres salidas). `EnumType` se queda donde está de
-forma permanente, no es trabajo pendiente de #305.
-
-## Segunda pasada adversarial — confirmación de D5 (rama `chore/shared-validator-port-s1al`)
+### Tercera lectura — confirmación de D5 (rama `chore/shared-validator-port-s1al`)
 
 Tercera lectura hostil, independiente de las dos anteriores (agente fresco, sin ver el razonamiento de arriba ni el
 de la ADR), centrada específicamente en las afirmaciones de D5. Método: releyó `Validator.php`, `deptrac.yaml`,
@@ -169,6 +153,22 @@ después). ADR D5 y el bullet de `api/CLAUDE.md` coinciden en cada cifra y cita,
 **Veredicto global (agente fresco):** la conclusión de D5 sobrevive la lectura hostil. Cada afirmación con peso
 factual se sostiene contra el código y la puerta está verde. El único fallo real (verificación 3) queda corregido en
 la misma rama.
+
+## Actualización — el seam de validación, resuelto (rama `chore/shared-validator-port-s1al`)
+
+El primer punto de la lista de abajo está cerrado. El bless se hizo con el mecanismo que **sí** funciona (baseline
+generado, nunca `skip_violations` — exactamente lo que el Hallazgo 3 exigía) y quedó documentado como
+`docs/adr/external-dependencies-in-domain.md` D5, más un puntero desde `api/CLAUDE.md`. Correcciones sobre lo
+escrito arriba: el conteo real del baseline es **6** símbolos para `Validator`, no 7 — `GroupSequence` nunca fue
+violación (ya la cubre `Vendor.PassiveMetadata`); comprobado leyendo `tools/deptrac/deptrac.baseline.yaml`
+directamente, no de memoria. El Hallazgo 4 (mover `rebindEmptyPropertyPath()` al borde HTTP, 3 de los 6 símbolos)
+sigue sin tocarse, por la misma razón que entonces: propuesta separada, no requisito de esta decisión.
+
+También corrige el ítem 3 de más abajo: no es un ítem abierto. `docs/adr/external-dependencies-in-domain.md` ya
+documentaba, antes de esta rama, que mover `EnumType` a `Domain/` se probó y se descartó — `Constraint::validatedBy()`
+ata constraint y validador por nombre, y separar el par revienta en runtime con todos los gates en verde
+(`ConstraintValidatorResolutionGateTest` cierra sólo una de las tres salidas). `EnumType` se queda donde está de
+forma permanente, no es trabajo pendiente de #305.
 
 ## Lo que queda abierto en #305
 
