@@ -43,6 +43,7 @@ final class AuditWriteCaptureListenerFunctionalTest extends KernelTestCase
             $this->assertNull($this->changedValue($row, 'name', 'old'), 'an insert has no prior value');
             $this->assertSame($bank->getName(), $this->changedValue($row, 'name', 'new'));
             $this->assertSame($bank->getShortName(), $this->changedValue($row, 'shortName', 'new'));
+            $this->assertSame('CREATED', $this->operationOf($row));
         });
     }
 
@@ -62,6 +63,7 @@ final class AuditWriteCaptureListenerFunctionalTest extends KernelTestCase
             $row = $this->changeRow($connection, $id, 'BANK_UPDATED');
             $this->assertSame($originalName, $this->changedValue($row, 'name', 'old'));
             $this->assertSame('Audited Renamed Bank', $this->changedValue($row, 'name', 'new'));
+            $this->assertSame('UPDATED', $this->operationOf($row));
         });
     }
 
@@ -90,6 +92,7 @@ final class AuditWriteCaptureListenerFunctionalTest extends KernelTestCase
             );
             $this->assertNull($this->changedValue($row, 'name', 'new'), 'with nothing after — the row is gone');
             $this->assertSame($finalShortName, $this->changedValue($row, 'shortName', 'old'));
+            $this->assertSame('DELETED', $this->operationOf($row));
         });
     }
 
@@ -253,6 +256,21 @@ final class AuditWriteCaptureListenerFunctionalTest extends KernelTestCase
         $this->assertIsArray($change);
 
         return $change[$side] ?? null;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function operationOf(array $row): mixed
+    {
+        $metadata = $row['metadata'] ?? null;
+        $this->assertIsString($metadata);
+
+        $decoded = \json_decode($metadata, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($decoded);
+        $this->assertArrayHasKey('operation', $decoded);
+
+        return $decoded['operation'];
     }
 
     private function countChangeRows(Connection $connection, string $resourceId): int

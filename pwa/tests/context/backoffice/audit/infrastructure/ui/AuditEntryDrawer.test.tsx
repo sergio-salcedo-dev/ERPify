@@ -55,6 +55,34 @@ describe("AuditEntryDrawer", () => {
     expect(screen.getByText("BBVA S.A.")).toBeInTheDocument();
   });
 
+  it("wires metadata.operation into the diff's snapshot header and excludes it from Metadata", () => {
+    const changeEntry: AuditEntry = {
+      ...ENTRY,
+      level: "change",
+      action: "BANK_CREATED",
+      resourceType: "Bank",
+    };
+    render(
+      <AuditEntryDrawer
+        entry={changeEntry}
+        open
+        onClose={vi.fn()}
+        detail={{
+          ...changeEntry,
+          metadata: {
+            changes: { name: { old: null, new: "BBVA" } },
+            operation: "CREATED",
+            correlationSource: "onFlush",
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Initial state")).toBeInTheDocument();
+    expect(screen.queryByText(/"operation"/)).not.toBeInTheDocument();
+    expect(screen.getByText(/"correlationSource"/)).toBeInTheDocument();
+  });
+
   it("exposes query pivots that fire their callbacks (the keyboard-complete path)", () => {
     const onFollowActor = vi.fn();
     const onFollowCorrelation = vi.fn();

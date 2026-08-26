@@ -32,7 +32,7 @@ function httpClientReturning(response: unknown): HttpClient {
 
 describe("ApiAuditEventDetailRepository.findById", () => {
   it("requests the event-detail resource for the id and maps the decoded diff", async () => {
-    const httpClient = httpClientReturning(DETAIL);
+    const httpClient = httpClientReturning({ data: DETAIL });
     const detail = await new ApiAuditEventDetailRepository(httpClient).findById(DETAIL.id);
 
     expect(vi.mocked(httpClient.get).mock.calls[0][0]).toBe(
@@ -42,11 +42,22 @@ describe("ApiAuditEventDetailRepository.findById", () => {
     expect(detail.metadata.changes).toEqual({ name: { old: "BBVA", new: "BBVA España" } });
   });
 
+  it("maps a well-formed operation through to the domain shape", async () => {
+    const httpClient = httpClientReturning({
+      data: { ...DETAIL, metadata: { ...DETAIL.metadata, operation: "UPDATED" } },
+    });
+    const detail = await new ApiAuditEventDetailRepository(httpClient).findById(DETAIL.id);
+
+    expect(detail.metadata.operation).toBe("UPDATED");
+  });
+
   it("reconstructs the exact shape, dropping a stray field on the row and inside a change", async () => {
     const httpClient = httpClientReturning({
-      ...DETAIL,
-      stray: "drop me",
-      metadata: { changes: { name: { old: "BBVA", new: "BBVA España", note: "drop me too" } } },
+      data: {
+        ...DETAIL,
+        stray: "drop me",
+        metadata: { changes: { name: { old: "BBVA", new: "BBVA España", note: "drop me too" } } },
+      },
     });
     const detail = await new ApiAuditEventDetailRepository(httpClient).findById(DETAIL.id);
 
@@ -58,49 +69,90 @@ describe("ApiAuditEventDetailRepository.findById", () => {
 
 describe("ApiAuditEventDetailRepository response guard", () => {
   it("accepts a well-formed detail and rejects drift", () => {
-    expect(isAuditEventDetailResponse(DETAIL)).toBe(true);
+    expect(isAuditEventDetailResponse({ data: DETAIL })).toBe(true);
 
     // A non-change row carries an empty/diff-less metadata object — still valid (the diff is optional).
-    expect(isAuditEventDetailResponse({ ...DETAIL, level: "activity", metadata: {} })).toBe(true);
+    expect(
+      isAuditEventDetailResponse({ data: { ...DETAIL, level: "activity", metadata: {} } }),
+    ).toBe(true);
     // Added/removed sides are real nulls (a CREATE/DELETE snapshot).
     expect(
       isAuditEventDetailResponse({
-        ...DETAIL,
-        metadata: { changes: { name: { old: null, new: "BBVA" } } },
+        data: { ...DETAIL, metadata: { changes: { name: { old: null, new: "BBVA" } } } },
       }),
     ).toBe(true);
     // Scalar diff values: number/boolean are accepted.
     expect(
       isAuditEventDetailResponse({
-        ...DETAIL,
-        metadata: {
-          changes: { accountCount: { old: 1, new: 2 }, active: { old: false, new: true } },
+        data: {
+          ...DETAIL,
+          metadata: {
+            changes: { accountCount: { old: 1, new: 2 }, active: { old: false, new: true } },
+          },
         },
       }),
     ).toBe(true);
     // An unknown level/actorType token still passes — the read model never narrows them.
-    expect(isAuditEventDetailResponse({ ...DETAIL, level: "wat", actorType: "robot" })).toBe(true);
+    expect(
+      isAuditEventDetailResponse({ data: { ...DETAIL, level: "wat", actorType: "robot" } }),
+    ).toBe(true);
+    // A well-formed operation, sibling to changes, is accepted.
+    expect(
+      isAuditEventDetailResponse({
+        data: { ...DETAIL, metadata: { ...DETAIL.metadata, operation: "UPDATED" } },
+      }),
+    ).toBe(true);
+    // A row with no diff still validates a legitimate operation on its own.
+    expect(
+      isAuditEventDetailResponse({ data: { ...DETAIL, metadata: { operation: "CREATED" } } }),
+    ).toBe(true);
+
+    // The bare row — every real response is wrapped in `data` — must be rejected, not just accepted
+    // as an accidental synonym: this is the exact shape `GET /audit/events/{id}` never sends and the
+    // one this guard used to accept, which left `detail` silently null against the real API.
+    expect(isAuditEventDetailResponse(DETAIL)).toBe(false);
 
     // Drift: metadata missing / not an object.
     const { metadata: _m, ...withoutMetadata } = DETAIL;
     void _m;
-    expect(isAuditEventDetailResponse(withoutMetadata)).toBe(false);
-    expect(isAuditEventDetailResponse({ ...DETAIL, metadata: "nope" })).toBe(false);
+    expect(isAuditEventDetailResponse({ data: withoutMetadata })).toBe(false);
+    expect(isAuditEventDetailResponse({ data: { ...DETAIL, metadata: "nope" } })).toBe(false);
     // Drift: a change side is an object, not a scalar/null.
     expect(
       isAuditEventDetailResponse({
-        ...DETAIL,
-        metadata: { changes: { name: { old: "BBVA", new: { nested: true } } } },
+        data: {
+          ...DETAIL,
+          metadata: { changes: { name: { old: "BBVA", new: { nested: true } } } },
+        },
       }),
     ).toBe(false);
     // Drift: a change is missing a side.
     expect(
-      isAuditEventDetailResponse({ ...DETAIL, metadata: { changes: { name: { old: "BBVA" } } } }),
+      isAuditEventDetailResponse({
+        data: { ...DETAIL, metadata: { changes: { name: { old: "BBVA" } } } },
+      }),
     ).toBe(false);
+    // Drift: an operation outside the backend's closed set (schema drift, corrupted JSONB).
+    expect(
+      isAuditEventDetailResponse({
+        data: { ...DETAIL, metadata: { ...DETAIL.metadata, operation: "RESTORED" } },
+      }),
+    ).toBe(false);
+    // Drift: operation present but not a string.
+    expect(isAuditEventDetailResponse({ data: { ...DETAIL, metadata: { operation: 1 } } })).toBe(
+      false,
+    );
     // Drift: slim-field type mismatches.
-    expect(isAuditEventDetailResponse({ ...DETAIL, id: 1 })).toBe(false);
-    expect(isAuditEventDetailResponse({ ...DETAIL, actorErased: "false" })).toBe(false);
-    expect(isAuditEventDetailResponse({ ...DETAIL, resourceErased: "false" })).toBe(false);
+    expect(isAuditEventDetailResponse({ data: { ...DETAIL, id: 1 } })).toBe(false);
+    expect(isAuditEventDetailResponse({ data: { ...DETAIL, actorErased: "false" } })).toBe(false);
+    expect(isAuditEventDetailResponse({ data: { ...DETAIL, resourceErased: "false" } })).toBe(
+      false,
+    );
+    expect(isAuditEventDetailResponse({ data: null })).toBe(false);
+    // Drift: the envelope key itself is missing or misnamed — the shape most likely to appear if the
+    // backend's envelope contract shifts again.
+    expect(isAuditEventDetailResponse({})).toBe(false);
+    expect(isAuditEventDetailResponse({ result: DETAIL })).toBe(false);
     expect(isAuditEventDetailResponse(null)).toBe(false);
     expect(isAuditEventDetailResponse(undefined)).toBe(false);
   });

@@ -97,6 +97,49 @@ Cada afirmación de las lentes se comprobó contra el árbol antes de aceptarla 
 
 Código restaurado y verde tras ambas mutaciones.
 
+### Pase de seguimiento post-merge (`fix/shared-audit-849-followups`, 2026-08-26)
+
+**La #849 ya estaba mergeada; este pase la revisó igual, hostil y con contexto fresco, antes de que
+esta rama de seguimiento abriera su propia PR.** Tres lentes en paralelo, ninguna con el historial de la
+conversación que produjo la #849: un Blind Hunter (`bmad-review-adversarial-general`) sobre el diff
+completo, un Edge Case Hunter recorriendo cada rama/límite del mismo diff, y un Acceptance Auditor
+comprobando el código mergeado contra el Intent congelado de este spec. Cada uno leyó el árbol —no se
+fió del propio relato del spec— y el Acceptance Auditor concluyó sin violaciones de AC; los otros dos sí
+encontraron defectos reales, verificados contra el código antes de aceptarlos:
+
+- **La propia tabla de Gates de este spec afirmaba una falsedad** («`api/` no se toca en este PR»)
+  para justificar saltarse los gates de backend, cuando el diff sí modifica
+  `api/src/Shared/Audit/Infrastructure/Persistence/PiiDiffSealer.php` y su test. Ese fichero de
+  producción —que decide qué campos se sellan como PII— se mergeó sin que corriera una sola vez
+  `php.stan`/`php.quality`/PHPUnit, por el mismo motivo real (`composer install` sin poder autenticar
+  contra GitHub en este entorno). Corregido en la tabla de Gates arriba.
+- **`PiiDiffSealerTest::itPreservesASiblingKeyBesideChangesWhenPersonalFieldsArePresent`** solo
+  afirmaba que la clave hermana sobrevivía, nunca —en la misma prueba— que el campo PII seguía sellado:
+  "sibling key preservado Y sellado correcto" nunca se comprobaba junto, solo por separado. Reforzado.
+- **Dos aserciones vacías** en `AuditChangeDiff.test.tsx` (`queryByTestId("diff__snapshot")`) pasan por
+  construcción, porque ningún camino de código emite ya ese testid — no detectarían una cabecera
+  reintroducida bajo una implementación distinta. Sustituidas por una comprobación estructural
+  (`container.querySelectorAll("p")` a cero) que sí lo haría.
+- **El estado `Empty`/"Not set" no tenía ninguna aserción de accesibilidad**, pese a que el docblock del
+  componente invoca WCAG 1.4.1 explícitamente para las cuatro variantes. Añadida una que fija que el
+  icono decorativo lleva `aria-hidden`.
+- **`PiiDiffSealer::seal()` no valida ni redacta ninguna clave hermana de `changes`** — el fix de la
+  #849 (`[...$diff, 'changes' => $sealedChanges]`) hace sobrevivir cualquier hermana sin sellar. Hoy es
+  inocuo (la única hermana real, `operation` en la PR #853, es un enum cerrado no-PII), pero una futura
+  hermana con datos personales se filtraría en claro sin que ningún test lo note. Reportado como
+  comentario en la PR #853 (que ya toca ese mismo método) en vez de parcheado aquí, para no chocar con
+  su propio diff en vuelo.
+- **El alcance genérico del render incondicional de `Empty`** se argumentó solo sobre
+  `BankAccount.alias`; se aplica a cualquier `#[PersonalData]` nullable de cualquier entidad auditada.
+  Registrado como trabajo diferido con disparador explícito, no como defecto de esta PR.
+
+Verificado contra el árbol, no solo registrado: `git worktree list` mostró la PR #853 ya abierta
+tocando `PiiDiffSealer.php` y `AuditWriteCaptureListener.php` con la operación real, lo que descartó dos
+hallazgos del Blind Hunter (código muerto / docblock desfasado) como ya resueltos por esa PR en vuelo —
+evitando duplicar el parche y chocar con ella. Los cuatro parches de esta rama corren verdes:
+`php.stan` limpio, `PiiDiffSealerTest` 6/6, `vitest` 28/28 sobre los ficheros tocados, y `php.quality` /
+`pwa.quality` ambos exit 0 sobre el worktree completo.
+
 ## Gates
 
 Ejecutados individualmente porque este contenedor no tiene demonio Docker (`make pwa.quality` no puede
@@ -110,8 +153,14 @@ orquestarlos). Cada uno con su código de salida, de una ejecución fresca:
 | `dependency-cruiser` | exit 0 — 507 módulos, 1974 dependencias |
 | `vitest run` (suite completa) | exit 0 — 247 ficheros, 1540 tests |
 
-`api/` no se toca en este PR, y no podría verificarse aquí aunque se tocara: `composer install` falla con
-«Could not authenticate against github.com», así que `api/vendor/` está vacío.
+**Corrección post-merge (code review de la #849):** la afirmación de arriba era falsa —
+`PiiDiffSealer.php` y su test SÍ se tocan en este PR (el fix del hermano de `changes`, ver "Lo que
+derribó" más arriba) — y esa falsedad es la que justificaba saltarse los gates de backend en la tabla.
+El fichero de producción se mergeó sin `php.stan`/`php.quality`/PHPUnit corriendo ni una vez, por el
+mismo motivo real: `composer install` falla aquí con «Could not authenticate against github.com», así
+que `api/vendor/` está vacío y ningún gate de PHP puede ejecutarse en este entorno. La PR #853 (abierta)
+vuelve a tocar `PiiDiffSealer.php`; sus propios gates de PHP, obligatorios antes de su merge, son lo que
+cierra retroactivamente esta ventana para este fichero.
 
 ## Seguimiento
 
