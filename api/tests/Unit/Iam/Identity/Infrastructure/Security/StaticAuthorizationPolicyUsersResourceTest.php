@@ -41,6 +41,7 @@ final class StaticAuthorizationPolicyUsersResourceTest extends TestCase
         yield 'changeRoles' => ['users.changeRoles'];
         yield 'grantAdmin' => ['users.grantAdmin'];
         yield 'erase' => ['users.erase'];
+        yield 'unlock' => ['users.unlock'];
     }
 
     public function testTheAdminGrantIsNotEmptyBecauseNothingElseCouldMintASecondAdministrator(): void

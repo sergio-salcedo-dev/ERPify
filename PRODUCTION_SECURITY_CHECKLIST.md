@@ -640,6 +640,19 @@ you change anything here.
       tolerable during a DB incident); a store fault while **clearing** on a successful login re-maps to a
       retryable **503 `service-unavailable`**. An attempt the aggregate ignores (a locked or non-`ACTIVE`
       resolved identity) opens no transaction, so a sustained attack on a locked account costs no per-attempt write.
+- [ ] **A third recovery edge for the persisted lockout above: `POST /backoffice/users/{id}/unlock`**
+      (`ADMIN`-only, `#[IsGranted('users.unlock')]`, `users` opts out of tier auto-grant). #602 named the two
+      existing recovery edges — a successful login, a completed password reset — as both attacker-cuttable by
+      anyone who merely knows the target's email, with no lever an administrator could reach for instead. Wraps
+      the already-idempotent `User::clearLockout()`; the response's `unlocked` field surfaces its own mutation
+      signal rather than always claiming a recovery happened, and the call is audited (`SECURITY`,
+      `ACCOUNT_UNLOCKED_BY_ADMIN`) whether or not it mutated anything — the lever being invoked is itself the
+      fact worth keeping. **An administrator may never unlock their own identity** (409
+      `self-unlock-forbidden`, refused before any row is touched): granting that would make `users.unlock` a
+      second, credential-independent path into one's own account, defeating the lockout it exists to recover
+      from. **Residual, explicitly out of scope here:** an installation with a single administrator has nobody
+      to invoke this lever if that administrator is themselves locked out — #602 stays open on that gap and on
+      the detection/notification half (`NotifyLockedIdentities`), tracked separately.
 - [ ] **Server-side session registry & admission gate (`iam_session`):** login mints a `Session` aggregate and the
       **Session Admission Gate** re-reads it on every authenticated `/api` request, so "authenticated" means "has a
       **live, revocable** session", not merely "holds a cookie". The gate is **fail-closed**: a revoked or

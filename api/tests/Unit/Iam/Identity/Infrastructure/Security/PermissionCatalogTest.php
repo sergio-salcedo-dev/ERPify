@@ -42,6 +42,7 @@ final class PermissionCatalogTest extends TestCase
         'users.changeRoles',
         'users.grantAdmin',
         'users.erase',
+        'users.unlock',
     ];
 
     public function testItPublishesTheWholeKnownPermissionVocabulary(): void
