@@ -101,8 +101,17 @@ set -uo pipefail
 # every verdict then collapsed to "undetermined" and the gate was silently dead.
 # Both wired call sites use a bare relative path, which is the vulnerable form.
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+
+# The default, and every mode's answer except --hook: this script's own
+# location on disk. Correct whenever the process's cwd already matches the
+# checkout being asked about -- true of every manual invocation (`make
+# bmad.adversarial.check`, --self-test, the CI workflow's own checkout out
+# of its runner). NOT readonly: --hook overrides this once it has read its
+# payload, because that assumption is exactly what fails for a hook process
+# gating a tool call in a linked worktree -- see
+# hook_repo_root_from_payload.
 REPO_ROOT="$(CDPATH='' cd -- "${SCRIPT_DIR}/.." && pwd)"
-readonly SCRIPT_DIR REPO_ROOT
 
 # `git -C` is NOT authoritative against these: a hook inherits its parent's
 # environment, and anything run from a git hook or `git rebase --exec` carries
@@ -327,8 +336,22 @@ split_segments() {
 			for (i = 1; i <= n; i++) {
 				c = substr(line, i, 1)
 				if (c == "\\" && !sq) {
+					if (i == n) {
+						# A trailing backslash outside quotes, or inside
+						# double quotes, is a shell LINE CONTINUATION: the
+						# backslash and the newline it precedes are both
+						# elided, joining the next physical line into THIS
+						# segment rather than ending it here. Without this,
+						# an ADVERSARIAL_PASS_ACK=... prefix written on its
+						# own line (wrapped with a trailing backslash, the
+						# shape usage() recommends for a long command)
+						# landed in a segment that never reaches
+						# gh pr create, and the acknowledgement was
+						# silently dropped.
+						next
+					}
 					seg = seg c
-					if (i < n) { i++; seg = seg substr(line, i, 1) }
+					i++; seg = seg substr(line, i, 1)
 					continue
 				}
 				if (c == SQ && !dq) { sq = !sq; seg = seg c; continue }
@@ -589,6 +612,88 @@ extract_ack_body() {
 	value="$(printf '%s' "$1" | sed -n 's/^ADVERSARIAL_PASS_ACK=["'"'"']\{0,1\}\([^"'"'"']*\).*/\1/p' | head -1)"
 	is_ack_placeholder "${value}" && return
 	printf '%s' "${value}"
+}
+
+# --- Where the gated tool call is actually running ---------------------------
+
+# The worktree root the hook's own PAYLOAD says the gated tool call is
+# actually running in, or nothing when it cannot be trusted as one of THIS
+# repository's own checkouts.
+#
+# REPO_ROOT's default is this script's own location on disk, resolved
+# through BASH_SOURCE -- correct only when the hook PROCESS's own cwd
+# matches the tool call it is gating. Measured, from three worktrees the
+# same day, it does not: the harness runs the hook with its own cwd landing
+# on the PRIMARY checkout regardless of which worktree the gated `gh pr
+# create` is about to run in, so a hook trusting BASH_SOURCE's answer reads
+# the primary's branch and denies a PR whose own branch carries the record.
+# Claude Code's own hooks reference names the fix: the payload's `cwd`
+# field "follows Claude" into a worktree and past a `cd`, where
+# ${CLAUDE_PROJECT_DIR} does not move, and no environment variable carries
+# this at all.
+#
+# Never trusted blindly, and a shared git COMMON directory is NOT enough on
+# its own -- an adversarial pass measured why. A directory holding nothing
+# but a hand-written `.git` file (`gitdir: <repo>/.git/worktrees/<name>`,
+# the internal per-worktree path git itself uses, readable by anyone with
+# an existing checkout) reports the SAME common directory as the real
+# worktree it points at and the same branch/HEAD to `git status`, without
+# ever having been created by `git worktree add`. The candidate is
+# therefore required to appear, verbatim, as a `worktree <path>` entry in
+# THIS checkout's own `git worktree list --porcelain` -- the registry git
+# itself maintains under the common directory's `worktrees/` entries, which
+# a loose pointer file in an unrelated directory never joins.
+#
+# Registration alone is still not enough: `git worktree add --no-checkout`
+# is a genuinely registered worktree with nothing on disk but its own
+# `.git` file, and decide() reads the artifact directory straight off the
+# filesystem -- an empty one reports "undetermined", this gate's own
+# designed fail-open, which would turn "a real worktree with nothing
+# checked out" into a free pass for an unrecorded PR. A candidate must
+# therefore hold some real content beyond the pointer.
+#
+# What this does NOT close: `cwd` names the command's STARTING directory,
+# not where its own execution ends up. A command embedding its own `cd
+# <other-worktree> && gh pr create` changes directory only once it runs,
+# after this hook has already answered -- no PreToolUse hook can simulate
+# that. Closing it by refusing the payload's cwd whenever an earlier
+# segment changes directory was considered and rejected: the ordinary shape
+# of the bug this whole mechanism exists to fix is exactly `cd
+# <worktree-path> && gh pr create` on one line (a natural way to make sure
+# the right directory is current before opening the PR, including how this
+# fix's own PR is likely to be opened), so refusing it there would silently
+# reinstate the bug for the common case to guard a narrower, deliberate
+# one. Measured, this is not a new hole: the OLD (BASH_SOURCE-only)
+# resolution already read the primary's state for every worktree-originated
+# call regardless of any `cd`, and a primary sitting clean on its own base
+# branch (the ordinary case) already answered "undetermined -- nothing to
+# review" and stayed silent, independent of the real target's record. This
+# mechanism narrows that gap for the case that matches how the bug it fixes
+# actually presented; it does not claim to close the general one, which
+# belongs to the same accepted category as every other invocation this
+# script cannot simulate the execution of (see the header above).
+hook_repo_root_from_payload() {
+	local payload="$1" candidate_cwd candidate_root line path registered=1
+	candidate_cwd="$(jq -r '.cwd // empty' <<<"${payload}" 2>/dev/null || true)"
+	[[ -n "${candidate_cwd}" ]] || return 1
+	[[ -d "${candidate_cwd}" ]] || return 1
+
+	candidate_root="$(git -C "${candidate_cwd}" rev-parse --show-toplevel 2>/dev/null || true)"
+	[[ -n "${candidate_root}" ]] || return 1
+
+	while IFS= read -r line; do
+		case "${line}" in
+			"worktree "*)
+				path="${line#worktree }"
+				[[ "${path}" == "${candidate_root}" ]] && { registered=0; break; }
+				;;
+		esac
+	done < <(git -C "${SCRIPT_DIR}" worktree list --porcelain 2>/dev/null)
+	(( registered == 0 )) || return 1
+
+	[[ -n "$(find "${candidate_root}" -mindepth 1 -maxdepth 1 ! -name .git -print -quit 2>/dev/null)" ]] || return 1
+
+	printf '%s' "${candidate_root}"
 }
 
 # --- The payload -------------------------------------------------------------
@@ -865,6 +970,16 @@ case "${MODE}" in
 		if [[ ! -t 0 ]]; then
 			payload="$(timeout 5 cat 2>/dev/null || true)"
 		fi
+
+		# See hook_repo_root_from_payload: the hook process's own cwd is not
+		# authoritative for which checkout is being gated. Re-resolve
+		# REPO_ROOT from the payload before hook_applies or decide reads
+		# any git state; leaves the BASH_SOURCE default in place when the
+		# payload names nothing trustworthy (jq missing, no `cwd` field, a
+		# directory that is not one of this repository's own worktrees).
+		hook_cwd_root="$(hook_repo_root_from_payload "${payload}" 2>/dev/null || true)"
+		[[ -n "${hook_cwd_root}" ]] && REPO_ROOT="${hook_cwd_root}"
+
 		hook_applies "${payload}" || exit 0
 
 		decide
@@ -990,6 +1105,7 @@ applies() {
 }
 
 bash_payload() { printf '{"tool_name":"Bash","tool_input":{"command":%s}}' "$(printf '%s' "$1" | jq -Rs .)"; }
+bash_payload_cwd() { printf '{"tool_name":"Bash","tool_input":{"command":%s},"cwd":%s}' "$(printf '%s' "$1" | jq -Rs .)" "$(printf '%s' "$2" | jq -Rs .)"; }
 
 P="gh pr create"
 # The repository this checkout is, resolved the same way the gate resolves it.
@@ -1104,6 +1220,53 @@ ack_is "the tool's own placeholder, as a real prefix" "" "$(bash_payload "ADVERS
 ack_is "MCP body, own line"            "release train"   '{"tool_name":"mcp__github__create_pull_request","tool_input":{"body":"## What\nstuff\nADVERSARIAL_PASS_ACK=release train\n"}}'
 ack_is "MCP body, the tool's own placeholder" ""          '{"tool_name":"mcp__github__create_pull_request","tool_input":{"body":"ADVERSARIAL_PASS_ACK=<why this PR needs no pass>\n"}}'
 ack_is "MCP body, described in prose"  ""                '{"tool_name":"mcp__github__create_pull_request","tool_input":{"body":"The gate yields to ADVERSARIAL_PASS_ACK=<reason> in the body."}}'
+
+# A `\` at the end of a physical line is a shell line continuation: the
+# command is still ONE segment, so the ACK prefix still has to reach the
+# segment split_segments hands to extract_ack_prefix. Before the fix, the
+# trailing backslash flushed a segment right there — the ACK and
+# `gh pr create` landed in two different segments, and the acknowledgement
+# was silently dropped. A plain newline with no backslash is NOT a
+# continuation and must keep failing the same way it always did.
+ack_is "backslash-continued prefix, bare value" "deps-only" "$(bash_payload "ADVERSARIAL_PASS_ACK=deps-only \\
+${P}")"
+ack_is "backslash-continued prefix, quoted multi-word value" "deps only batch" "$(bash_payload "ADVERSARIAL_PASS_ACK=\"deps only batch\" \\
+${P}")"
+ack_is "backslash-continued prefix, single-quoted value" "deps only" "$(bash_payload "ADVERSARIAL_PASS_ACK='deps only' \\
+${P}")"
+ack_is "a plain newline is still not a continuation" ""    "$(bash_payload "ADVERSARIAL_PASS_ACK=nope
+${P}")"
+
+hook_repo_root_is() {
+	local name="$1" expect="$2" payload="$3" got
+	got="$(hook_repo_root_from_payload "${payload}" 2>/dev/null || true)"
+	case "${expect}" in
+		empty)
+			if [[ -z "${got}" ]]; then pass_row "${name}"; else fail_row "${name}: got [${got}], expected nothing (fall back to the default)"; fi ;;
+		self)
+			if [[ "${got}" == "${REPO_ROOT}" ]]; then pass_row "${name}"; else fail_row "${name}: got [${got}], expected this checkout [${REPO_ROOT}]"; fi ;;
+	esac
+}
+
+# hook_repo_root_from_payload is the fix for the actual bug: the hook
+# PROCESS's own cwd is not the tool call's, so a hook process spawned with
+# its cwd on the primary checkout (measured, from three worktrees the same
+# day) must resolve against the payload's `cwd` instead — but never
+# blindly, since that field is just a string on an untrusted Bash tool
+# call.
+echo
+echo "hook cwd resolution (never trust a payload cwd that is not one of THIS repository's own worktrees)"
+hook_repo_root_is "no cwd field at all"                empty "$(bash_payload "${P}")"
+hook_repo_root_is "cwd naming this very checkout"      self  "$(bash_payload_cwd "${P}" "${REPO_ROOT}")"
+hook_repo_root_is "cwd naming a subdirectory of it"    self  "$(bash_payload_cwd "${P}" "${REPO_ROOT}/scripts")"
+hook_repo_root_is "cwd that does not exist"            empty "$(bash_payload_cwd "${P}" "/no/such/path/at/all/$$")"
+hook_repo_root_is "cwd naming a plain (non-git) dir"   empty "$(bash_payload_cwd "${P}" "$(mktemp -d)")"
+if UNRELATED_REPO="$(mktemp -d)" && git -c commit.gpgsign=false -c core.hooksPath=/dev/null -C "${UNRELATED_REPO}" init -q -b main >/dev/null 2>&1; then
+	hook_repo_root_is "cwd naming an unrelated git repository" empty "$(bash_payload_cwd "${P}" "${UNRELATED_REPO}")"
+	rm -rf -- "${UNRELATED_REPO}"
+else
+	fail_row "cwd naming an unrelated git repository (could not create the fixture repo)"
+fi
 
 # --- The verdict, over a real repository -------------------------------------
 #
@@ -1265,6 +1428,65 @@ else
 					pass_row "an MCP call judged from inside a linked worktree"
 				else
 					fail_row "an MCP call judged from inside a linked worktree: stayed silent (the repository name read as the worktree slug?)"
+				fi
+
+				# The actual bug three subagents hit the same day: a hook
+				# PROCESS spawned with its own cwd on the primary checkout,
+				# gating a `gh pr create` about to run in a linked
+				# worktree. FIXTURE (this fixture's own root) plays the
+				# primary: it carries no adversarial-pass record, so a hook
+				# resolving REPO_ROOT from BASH_SOURCE alone denies. The
+				# worktree DOES carry one. A hook that reads the payload's
+				# own `cwd` must find it there and stay silent instead.
+				wt_git commit -q --allow-empty -m "$(printf 'fix: y\n\nAdversarial-pass: a hostile read found nothing to flag; two edge cases checked and confirmed already covered by existing gates.')" >/dev/null 2>&1
+				cwd_out="$(
+					printf '{"tool_name":"Bash","tool_input":{"command":"gh pr create --title x"},"cwd":%s}' \
+						"$(printf '%s' "${FIXTURE}/wt" | jq -Rs .)" \
+					| ( cd "${FIXTURE}" && ./scripts/adversarial-pass-check.sh --hook ) 2>/dev/null
+				)"
+				if [[ -z "${cwd_out}" ]]; then
+					pass_row "hook resolves REPO_ROOT from the payload cwd, not the invocation cwd"
+				else
+					fail_row "hook resolves REPO_ROOT from the payload cwd, not the invocation cwd: ${cwd_out}"
+				fi
+
+				# Two PoCs an adversarial pass measured against an earlier
+				# version of hook_repo_root_from_payload, which trusted a
+				# shared git COMMON directory alone: a directory holding
+				# nothing but a hand-written `.git` file pointing at the
+				# real worktree's internal gitdir reports that SAME common
+				# directory without ever being created by `git worktree
+				# add`, and a genuinely registered `--no-checkout` worktree
+				# has real git identity but nothing on disk to review.
+				fake_git_dir="${FIXTURE}/fake-git"
+				mkdir -p "${fake_git_dir}"
+				cp -- "${FIXTURE}/wt/.git" "${fake_git_dir}/.git" 2>/dev/null
+				fake_out="$(
+					printf '{"tool_name":"Bash","tool_input":{"command":"gh pr create --title x"},"cwd":%s}' \
+						"$(printf '%s' "${fake_git_dir}" | jq -Rs .)" \
+					| ( cd "${FIXTURE}" && ./scripts/adversarial-pass-check.sh --hook ) 2>/dev/null
+				)"
+				if [[ "${fake_out}" == *'"permissionDecision":"deny"'* ]]; then
+					pass_row "a hand-written .git file aliasing the worktree is refused as REPO_ROOT"
+				else
+					fail_row "a hand-written .git file aliasing the worktree is refused as REPO_ROOT: stayed silent"
+				fi
+				rm -rf -- "${fake_git_dir}"
+
+				if fixture_git worktree add -q --no-checkout -b feat/poc-sparse "${FIXTURE}/wt-sparse" main >/dev/null 2>&1; then
+					sparse_out="$(
+						printf '{"tool_name":"Bash","tool_input":{"command":"gh pr create --title x"},"cwd":%s}' \
+							"$(printf '%s' "${FIXTURE}/wt-sparse" | jq -Rs .)" \
+						| ( cd "${FIXTURE}" && ./scripts/adversarial-pass-check.sh --hook ) 2>/dev/null
+					)"
+					if [[ "${sparse_out}" == *'"permissionDecision":"deny"'* ]]; then
+						pass_row "a registered --no-checkout worktree with nothing on disk is refused as REPO_ROOT"
+					else
+						fail_row "a registered --no-checkout worktree with nothing on disk is refused as REPO_ROOT: stayed silent"
+					fi
+					fixture_git worktree remove --force "${FIXTURE}/wt-sparse" >/dev/null 2>&1
+				else
+					fail_row "a registered --no-checkout worktree with nothing on disk (could not create the fixture worktree)"
 				fi
 			fi
 			fixture_git worktree remove --force "${FIXTURE}/wt" >/dev/null 2>&1
