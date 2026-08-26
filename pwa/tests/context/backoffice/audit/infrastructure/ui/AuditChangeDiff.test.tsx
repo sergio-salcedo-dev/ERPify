@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { AuditChangeDiff } from "@/context/backoffice/audit/infrastructure/ui/AuditChangeDiff";
-import type { AuditChanges } from "@/context/backoffice/audit/domain/AuditChange";
+import {
+  AuditWriteOperation,
+  type AuditChanges,
+} from "@/context/backoffice/audit/domain/AuditChange";
 
-function renderDiff(changes: AuditChanges) {
-  return render(<AuditChangeDiff changes={changes} testId="diff" />);
+function renderDiff(changes: AuditChanges, operation?: AuditWriteOperation) {
+  return render(<AuditChangeDiff changes={changes} operation={operation} testId="diff" />);
 }
 
 describe("AuditChangeDiff", () => {
@@ -97,7 +100,7 @@ describe("AuditChangeDiff", () => {
     expect(screen.queryByText("No changes recorded")).not.toBeInTheDocument();
   });
 
-  it("claims no write direction: an all-added diff is never labelled a CREATE snapshot", () => {
+  it("renders no snapshot header for an all-added diff when the entry carries no operation", () => {
     const { container } = renderDiff({
       swift: { old: null, new: "BBVAESMM" },
       logo: { old: null, new: "media-1" },
@@ -110,7 +113,7 @@ describe("AuditChangeDiff", () => {
     expect(container.querySelectorAll("p")).toHaveLength(0);
   });
 
-  it("claims no write direction: an all-removed diff is never labelled a DELETE snapshot", () => {
+  it("renders no snapshot header for an all-removed diff when the entry carries no operation", () => {
     const { container } = renderDiff({ name: { old: "BBVA", new: null } });
 
     expect(screen.queryByText("Final state before deletion")).not.toBeInTheDocument();
@@ -124,6 +127,33 @@ describe("AuditChangeDiff", () => {
     const marker = screen.getByText("Not set");
     const icon = marker.parentElement?.querySelector("svg");
     expect(icon).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("renders «Initial state» when the entry's own operation is CREATED", () => {
+    renderDiff({ name: { old: null, new: "BBVA" } }, AuditWriteOperation.Created);
+
+    expect(screen.getByText("Initial state")).toBeInTheDocument();
+  });
+
+  it("renders «Final state before deletion» when the entry's own operation is DELETED", () => {
+    renderDiff({ name: { old: "BBVA", new: null } }, AuditWriteOperation.Deleted);
+
+    expect(screen.getByText("Final state before deletion")).toBeInTheDocument();
+  });
+
+  it("renders no snapshot header when the entry's own operation is UPDATED", () => {
+    renderDiff({ name: { old: "BBVA", new: "BBVA S.A." } }, AuditWriteOperation.Updated);
+
+    expect(screen.queryByText("Initial state")).not.toBeInTheDocument();
+    expect(screen.queryByText("Final state before deletion")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("diff__snapshot")).not.toBeInTheDocument();
+  });
+
+  it("never labels an UPDATE that only fills previously-empty fields as a CREATE", () => {
+    // The exact #413 defect: every row here looks all-added, and the real operation says otherwise.
+    renderDiff({ alias: { old: null, new: "Main account" } }, AuditWriteOperation.Updated);
+
+    expect(screen.queryByText("Initial state")).not.toBeInTheDocument();
   });
 
   it("keeps never-populated fields out of the collapsed window so populated ones stay visible", () => {

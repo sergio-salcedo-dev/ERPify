@@ -5,6 +5,7 @@ import { ArrowRight, CircleDashed, Lock, Minus, Plus, type LucideIcon } from "lu
 import { cn } from "@/components/cn";
 import { CopyButton, TruncatedText } from "@/components/erpify";
 import {
+  AuditWriteOperation,
   ChangeKind,
   changeKind,
   isAuditSealedValue,
@@ -22,6 +23,7 @@ const LONG_VALUE_LENGTH = 40;
 
 interface AuditChangeDiffProps {
   changes: AuditChanges;
+  operation?: AuditWriteOperation;
   className?: string;
   testId?: string;
 }
@@ -60,6 +62,17 @@ const VALUE_TYPE_LABEL: Readonly<Record<string, string>> = {
 };
 
 /**
+ * The snapshot header for a CREATE or DELETE write, sourced from the entry's own `operation` rather
+ * than inferred from the rows — an update that only fills previously-empty fields must never read as
+ * a CREATE. No entry for `Updated`: an in-place write is not a snapshot of either end of the record's
+ * life, so it carries no header at all.
+ */
+const SNAPSHOT_HEADER: Readonly<Partial<Record<AuditWriteOperation, string>>> = {
+  [AuditWriteOperation.Created]: "Initial state",
+  [AuditWriteOperation.Deleted]: "Final state before deletion",
+};
+
+/**
  * Field-by-field write diff for a `change` audit row, fed the decoded `metadata.changes`. Four states
  * carried on a **non-colour** channel (WCAG 1.4.1): a text marker + glyph for added / removed /
  * changed / not-set, with colour only reinforcing. Every captured field is rendered, empty ones
@@ -67,17 +80,21 @@ const VALUE_TYPE_LABEL: Readonly<Record<string, string>> = {
  * it surfaces. Large diffs collapse so the drawer layout holds; empty fields sort last so collapsing
  * never hides a populated one behind them.
  *
- * It deliberately makes **no claim about the write's direction**. Naming a diff «Initial state» or
- * «Final state before deletion» requires knowing the operation, and the operation is not carried by
- * the event: inferring it from the rows asserts CREATE over any update that only fills previously
- * empty fields. Until the trail transports the operation, this view shows the evidence and names
- * nothing.
+ * The optional snapshot header («Initial state» / «Final state before deletion») is sourced from the
+ * entry's own `operation`, never inferred from the rows: an update that only fills previously-empty
+ * fields must read as a change, not a CREATE. An entry with no `operation` (an older row, or a write
+ * path that does not stamp one) renders no header — silence over a guess.
  *
  * SECURITY (load-bearing): every value is untrusted input (an editable bank name) rendered as a React
  * text child (auto-escaped). NEVER `dangerouslySetInnerHTML`/`innerHTML`; no value feeds `href`/`src`.
  * Mirror of `MetadataBlock`'s escaping stance.
  */
-export function AuditChangeDiff({ changes, className, testId }: Readonly<AuditChangeDiffProps>) {
+export function AuditChangeDiff({
+  changes,
+  operation,
+  className,
+  testId,
+}: Readonly<AuditChangeDiffProps>) {
   const rows: FieldRow[] = orderedRows(changes);
   const [expanded, setExpanded] = useState(false);
 
@@ -92,9 +109,19 @@ export function AuditChangeDiff({ changes, className, testId }: Readonly<AuditCh
   const collapsible = rows.length > COLLAPSE_THRESHOLD;
   const visibleRows = collapsible && !expanded ? rows.slice(0, COLLAPSE_VISIBLE) : rows;
   const hiddenCount = rows.length - visibleRows.length;
+  const snapshotHeader = operation ? (SNAPSHOT_HEADER[operation] ?? null) : null;
 
   return (
     <div className={cn("audit-change-diff flex flex-col gap-2", className)} data-testid={testId}>
+      {snapshotHeader ? (
+        <p
+          className="text-muted-foreground text-xs font-medium"
+          data-testid={idOf(testId, "snapshot")}
+        >
+          {snapshotHeader}
+        </p>
+      ) : null}
+
       <dl className="flex flex-col gap-2.5">
         {visibleRows.map((row) => (
           <DiffField key={row.field} row={row} testId={idOf(testId, `field-${row.field}`)} />

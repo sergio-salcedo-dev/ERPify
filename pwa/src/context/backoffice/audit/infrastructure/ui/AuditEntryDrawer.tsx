@@ -209,6 +209,7 @@ function AuditEntryDrawerBody({
           {detail ? (
             <AuditChangeDiff
               changes={detail.metadata.changes ?? {}}
+              operation={detail.metadata.operation}
               testId="audit-entry-drawer__diff"
             />
           ) : (
@@ -224,11 +225,14 @@ function AuditEntryDrawerBody({
   );
 }
 
-/** The metadata minus the `changes` diff — the Cambios section already renders the diff in full. */
+/**
+ * The metadata minus `changes` and `operation` — the Cambios section already renders the diff (and its
+ * snapshot header, sourced from `operation`) in full.
+ */
 function nonDiffMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
   const rest: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata)) {
-    if (key !== "changes") rest[key] = value;
+    if (key !== "changes" && key !== "operation") rest[key] = value;
   }
   return rest;
 }

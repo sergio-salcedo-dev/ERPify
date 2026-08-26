@@ -41,7 +41,9 @@ final readonly class PiiDiffSealer
      * `$auditLogId` is the id of the row this diff will be stored on; it is bound into each sealed value's
      * AAD so a ciphertext cannot be moved to another row of the same subject without failing authentication.
      *
-     * @param array{changes: array<string, array{old: scalar|null, new: scalar|null}>} $diff
+     * A sibling key beside `changes` (e.g. the write operation) survives sealing untouched.
+     *
+     * @param array{changes: array<string, array{old: scalar|null, new: scalar|null}>, ...} $diff
      */
     public function seal(AuditedEntity $entity, array $diff, string $auditLogId): SealedDiff
     {

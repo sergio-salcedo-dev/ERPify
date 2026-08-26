@@ -34,15 +34,12 @@ async function createBankAccount(
 }
 
 /**
- * Real-API E2E coverage for the audit diff surface (#413). Every other audit test in this suite
- * renders from a hand-built `detail` prop; this one instead creates a genuine BankAccount against the
- * live Symfony backend (with `bic`/`alias` left unset) and reads its audit trail back through the real
- * `GET /audit/events/{id}` endpoint — the one leg of the write→capture→seal→serialize→render pipeline
- * that a unit or functional test cannot see, because it stops at the JSON the backend emits and never
- * confirms the PWA decodes it the same way. That gap is exactly what this suite found: the endpoint's
- * response is wrapped in a `data` envelope, like every other resource here, and the detail repository's
- * guard was checking the bare row — so the drawer's Changes/Metadata sections never populated against
- * the real API, always falling back to their dormant placeholder.
+ * Real-API E2E coverage for the audit diff surface (#413) and its snapshot-header restoration. Every
+ * other audit test in this suite renders from a hand-built `detail` prop; this one instead creates a
+ * genuine BankAccount against the live Symfony backend (with `bic`/`alias` left unset) and reads its
+ * audit trail back through the real `GET /audit/events/{id}` endpoint — the one leg of the
+ * write→capture→seal→serialize→render pipeline that a unit or functional test cannot see, because it
+ * stops at the JSON the backend emits and never confirms the PWA decodes it the same way.
  */
 test.describe("BackOffice - Audit trail diff (real API)", () => {
   test.use({ viewport: VIEWPORT_DESKTOP });
@@ -87,7 +84,7 @@ test.describe("BackOffice - Audit trail diff (real API)", () => {
     await api.dispose();
   });
 
-  test("renders the never-populated bic/alias fields from a real audit event detail", async ({
+  test("renders the never-populated bic/alias fields and an honest CREATE header", async ({
     page,
   }) => {
     await page.goto(`/backoffice/audit?resourceType=BankAccount&resourceId=${accountId}`);
@@ -105,6 +102,12 @@ test.describe("BackOffice - Audit trail diff (real API)", () => {
     const drawer = page.getByTestId("audit-entry-drawer__diff");
     await expect(drawer).toBeVisible();
 
+    // The real operation (CREATED), not an inference over the rows — the #413 fix this pipeline
+    // exercises end to end.
+    await expect(page.getByTestId("audit-entry-drawer__diff__snapshot")).toHaveText(
+      "Initial state",
+    );
+
     // BankAccount has 10 mapped fields (> COLLAPSE_THRESHOLD), and the two empty ones sort last, so
     // they sit behind the reveal toggle.
     await page.getByTestId("audit-entry-drawer__diff__toggle").click();
@@ -119,5 +122,8 @@ test.describe("BackOffice - Audit trail diff (real API)", () => {
       "data-kind",
       "empty",
     );
+
+    // The operation key that sources the header is excluded from the raw Metadata block.
+    await expect(page.getByText(/"operation"/)).not.toBeVisible();
   });
 });
