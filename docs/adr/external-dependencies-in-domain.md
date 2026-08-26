@@ -78,3 +78,61 @@ clase y sigue acoplando por cadena mágica. Queda como deuda documentada, con
 Las otras dos siguen invisibles a los gates — un `validatedBy()` que devuelva el FQCN como **cadena literal**
 pasa el test nuevo (`class_exists()` es cierto) y pasa deptrac (que no tiene nodo para literales de cadena),
 y un service id igual. Ahí sólo llega la revisión humana.
+
+### D5 — Declined: porting `Erpify\Shared\Validation\Application\Validator` behind a domain interface (issue #305)
+
+The remaining baseline entry for `Validator` is **6 symbols** — `Constraint`, `ConstraintViolation`,
+`ConstraintViolationList`, `ConstraintViolationListInterface`, `Exception\ValidationFailedException`,
+`Validator\ValidatorInterface` — not 7: `Validator.php` also imports `Constraints\GroupSequence` for its
+`$groups` parameter, but that class already matches the `Symfony\Component\Validator\Constraints\*` regex
+`Vendor.PassiveMetadata` blesses inward (`deptrac.yaml:165`), so it was never a violation to begin with. Get the
+count from the baseline file, not from memory of the issue — this ADR itself repeated the wrong number once.
+
+The 6-symbol shape looks like the one already paid down for `EventBus` (D2 table) and `TransactionManager` — an
+`Application`-layer class touching a Symfony runtime type directly. It is not: `EventBus`/`TransactionManager`
+port a **service call** (publish an event, commit a transaction) whose Symfony-ness is incidental to the
+contract Application actually needs. `Validator::ensure()` is different in kind — `Constraint` and its siblings
+are the **value types callers pass in**, and that is not an assumption, it is what a call-site survey of every
+production use shows. Eight callers (`BankCreator`, `BankUpdater`, `BankAccountCreator`,
+`BankAccountStatusChanger`, `BankAccountUpdater`, `CreateUser`, `InviteUser`, `ProvisionOrganization`) call
+`ensure($entity)` with no explicit constraint, relying on the entity's own `#[Assert]`/`#[UniqueEntity]` class
+metadata — validation rules that are themselves already blessed inward as passive metadata, so the native
+vocabulary is unavoidable at the value-object end regardless of what `Validator::ensure()` does. The ninth,
+`PasswordPolicyCheck::violationsFor()`, validates a raw `string $plainPassword` — a value with no class to carry
+metadata — and hands `ensure()` an explicit `[new Assert\NotBlank(...), new PasswordPolicy()]`, this repo's own
+custom constraint included. That is exactly the "other inputs (uploads, non-id scalars) go through the shared
+`Validator::ensure()`" path the root `CLAUDE.md` security checklist mandates, so the explicit-`Constraint`
+capability is part of the contract, not a corner case a redesign could shed. `ValidationFailedException` is
+equally unavoidable one layer up: `Shared/Http/Infrastructure/UnknownPayloadMemberListener.php:61` constructs
+one by hand to answer a body carrying undeclared members, so it is already this app's native wire-level
+vocabulary for "validation failed" — a port that swapped it for a domain-shaped exception would leave the HTTP
+mapping layer speaking a second, parallel one.
+
+Five of the six symbols are therefore inherent to "validate a value against Symfony constraints, structured for
+the RFC 9457 pipeline" as a contract; only `ValidatorInterface` is a pure service dependency of the
+`EventBus`/`TransactionManager` shape. Porting only that one removes 1 of 6 symbols from the violation for the
+cost of a new interface, adapter and DI wiring — a half-measure, and the worse of the two options (more code,
+same debt). The other path — inventing this app's own parallel constraint/violation vocabulary so the port's
+signature never names a Symfony type — is rejected the same way D2 rejects a pass-through wrapper: there is one
+validation engine here and no second one planned, so the vocabulary would exist solely to satisfy deptrac, and
+`ProblemDetailsFactory` would need a second `match` arm minting the same `type: 'validation-failed'` from two
+sources — the two-minters-no-owner shape the root `CLAUDE.md` names and refuses under "Minting a
+`ProblemDetails.type`".
+
+**Considered and declined separately: moving `rebindEmptyPropertyPath()` to the HTTP boundary.** Three of the
+six symbols (`ConstraintViolation`, `ConstraintViolationList`, `ConstraintViolationListInterface`) serve only
+that private method, which repairs the wire's `field` name on a scalar-root violation — wire formatting, not
+validation policy — and `ProblemDetailsFactory` already carries an equivalent last-resort fallback
+(`VIOLATION_FIELD_FALLBACK`). Moving it would shrink the entry to 3 symbols before any decision on the
+remaining ones, but it is a real behavioural move (a different class assembles the violation list, no caller
+today exercises the `propertyPath:` argument to notice a regression) and is out of scope for a "leave it,
+argued" change — a candidate for its own PR, not folded in here.
+
+**Stays as a documented baseline entry**, the same mechanism as `BankAccount → EnumType` above — and provably
+the only mechanism available, not merely the precedent: the obvious alternative, hand-adding the 6 entries to
+`deptrac.yaml`'s own `skip_violations`, fails `DeptracSeamSyncGateTest` on the next run. That gate `assertSame()`s
+every `skip_violations` entry in `deptrac.yaml` (not the imported baseline, which it explicitly excludes)
+against `api/.bounded-context-allowlist`, with no filter for vendor vs. cross-context targets — a vendor entry
+there has no allowlist counterpart, so it reds immediately. `skip_violations` stays reserved for published
+cross-context seams; vendor debt regenerates into `tools/deptrac/deptrac.baseline.yaml` via
+`make php.deptrac.baseline` instead, which is exactly where it already sat before this decision was written down.

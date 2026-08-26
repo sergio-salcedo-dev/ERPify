@@ -24,11 +24,11 @@ final readonly class Validator
      * are produced. No-op on empty violations.
      *
      * `$propertyPath` rebinds violations whose own `getPropertyPath()` is empty
-     * (the default for scalar-root validations such as a route id) to the supplied
-     * name, so the wire `violations[].field` is never blank for callers like
-     * `BankFinder::find($id, …, propertyPath: 'id')`. Violations that already
-     * carry a property path (e.g. nested object validation) are passed through
-     * untouched.
+     * (the default for scalar-root validations, such as a raw value validated
+     * without a wrapping object) to the supplied name, so the wire
+     * `violations[].field` is never blank for a caller that supplies one.
+     * Violations that already carry a property path (e.g. nested object
+     * validation) are passed through untouched.
      *
      * @param Constraint|array<Constraint>|null                            $constraints
      * @param string|GroupSequence|array<string>|array<GroupSequence>|null $groups
