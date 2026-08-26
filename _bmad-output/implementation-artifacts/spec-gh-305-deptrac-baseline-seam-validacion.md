@@ -1,7 +1,7 @@
 ---
 story: gh-305
 title: Ratchet del baseline de deptrac — el seam de validación
-status: in-review
+status: done
 ---
 
 # #305 — bajar el baseline de deptrac: la parte que no depende de una decisión abierta
@@ -116,12 +116,65 @@ comprobación), asignación masiva, codificación de salida, secretos, CORS/CSRF
 Messenger. No hay superficie `pwa/`. El comportamiento en tiempo de ejecución es idéntico: los cuatro `use`
 eliminados no se resolvían en ninguna ruta de ejecución.
 
+## Actualización — el seam de validación, resuelto (rama `chore/shared-validator-port-s1al`)
+
+El primer punto de la lista de abajo está cerrado. El bless se hizo con el mecanismo que **sí** funciona (baseline
+generado, nunca `skip_violations` — exactamente lo que el Hallazgo 3 exigía) y quedó documentado como
+`docs/adr/external-dependencies-in-domain.md` D5, más un puntero desde `api/CLAUDE.md`. Correcciones sobre lo
+escrito arriba: el conteo real del baseline es **6** símbolos para `Validator`, no 7 — `GroupSequence` nunca fue
+violación (ya la cubre `Vendor.PassiveMetadata`); comprobado leyendo `tools/deptrac/deptrac.baseline.yaml`
+directamente, no de memoria. El Hallazgo 4 (mover `rebindEmptyPropertyPath()` al borde HTTP, 3 de los 6 símbolos)
+sigue sin tocarse, por la misma razón que entonces: propuesta separada, no requisito de esta decisión.
+
+También corrige el ítem 3 de más abajo: no es un ítem abierto. `docs/adr/external-dependencies-in-domain.md` ya
+documentaba, antes de esta rama, que mover `EnumType` a `Domain/` se probó y se descartó — `Constraint::validatedBy()`
+ata constraint y validador por nombre, y separar el par revienta en runtime con todos los gates en verde
+(`ConstraintValidatorResolutionGateTest` cierra sólo una de las tres salidas). `EnumType` se queda donde está de
+forma permanente, no es trabajo pendiente de #305.
+
+## Segunda pasada adversarial — confirmación de D5 (rama `chore/shared-validator-port-s1al`)
+
+Tercera lectura hostil, independiente de las dos anteriores (agente fresco, sin ver el razonamiento de arriba ni el
+de la ADR), centrada específicamente en las afirmaciones de D5. Método: releyó `Validator.php`, `deptrac.yaml`,
+`deptrac.baseline.yaml`, `.bounded-context-allowlist`, `DeptracSeamSyncGateTest.php`,
+`UnknownPayloadMemberListener.php`, `ProblemDetailsFactory.php`, `BankFinder.php`, `ValidatorTest.php`; corrió
+`grep` sobre todos los call sites, un diff contra `origin/main`, y `make php.deptrac`.
+
+**Verificación 1 (conteo).** Confirmado: 6 entradas exactas en el baseline, `GroupSequence` nunca contó.
+
+**Verificación 2 (call sites).** Confirmado exhaustivamente: los 9 hits de `grep -rn "validator->ensure(" api/src`
+coinciden uno a uno con la lista de D5. Ningún otro punto de inyección de `Validator` en el árbol.
+
+**Verificación 3 — MODERADO, accionado.** El agente encontró que el ejemplo del propio docblock de `Validator.php`
+(`BankFinder::find($id, …, propertyPath: 'id')`) era **ficticio**: `BankFinder::find()` no toma `propertyPath` y ni
+siquiera llama a `Validator::ensure()` — valida vía `Uuid::ensure($id)`. Cero llamadas de producción usan
+`propertyPath:` hoy. Esto no invalida la decisión de no mover `rebindEmptyPropertyPath()` en este cambio (el propio
+hallazgo la califica de "defendible bajo la regla de higiene de alcance de este repo"), pero sí es un defecto real y
+verificable en el fichero que arrastraba el propio D5 al citarlo como ejemplo. **Corregido en esta misma rama**: el
+docblock ya no cita el ejemplo inexistente, describe el mecanismo sin nombrar un caller concreto. `make php.stan` y
+`ValidatorTest` (37/37) en verde tras el cambio.
+
+**Verificación 4 (`DeptracSeamSyncGateTest`).** Confirmado, y mejor argumentado de lo escrito: la cabecera del propio
+`.bounded-context-allowlist` restringe sus entradas a seams de módulo de negocio — mover ahí las 6 líneas de
+`Validator` no es solo "el test fallaría", es un error de categoría contra el propósito declarado del fichero, no un
+accidente de mecanismo.
+
+**Verificación 5 (`ValidationFailedException` ya nativa vía `UnknownPayloadMemberListener.php:61`).** Confirmado,
+cita exacta verificada.
+
+**Verificación 6 (mecanismo y consistencia).** `make php.deptrac`: `Violations 0, Uncovered 0, Errors 0`. El diff
+contra `origin/main` era, en el momento de esta pasada, puramente de documentación (más el fix de la verificación 3
+después). ADR D5 y el bullet de `api/CLAUDE.md` coinciden en cada cifra y cita, sin deriva entre ellos.
+
+**Veredicto global (agente fresco):** la conclusión de D5 sobrevive la lectura hostil. Cada afirmación con peso
+factual se sostiene contra el código y la puerta está verde. El único fallo real (verificación 3) queda corregido en
+la misma rama.
+
 ## Lo que queda abierto en #305
 
-14 entradas en 3 clases, en dos decisiones separadas:
+14 entradas en 3 clases:
 
-1. **El seam de validación** (6) — bless con un mecanismo que no rompa `DeptracSeamSyncGateTest`, o puerto (descartado
-   por las dos lecturas de arriba).
+1. ~~**El seam de validación** (6)~~ — resuelto arriba: bless documentado, se queda en el baseline.
 2. **`ProblemDetailsFactory`** (7) — mover a `Infrastructure/Http/`. Sólo lo consume `Infrastructure/`
    (`ExceptionResponder`), así que es un movimiento sin ripple hacia dentro, pero necesita gates para confirmarlo.
-3. **`EnumType`** (1) — el `Constraint` a `Validation/Domain/`, dejando `EnumTypeValidator` en `Infrastructure/`.
+3. ~~**`EnumType`** (1)~~ — no es un ítem abierto; ver la corrección arriba.
