@@ -14,16 +14,8 @@
 # targets a vendor or Erpify\Shared\*, so any other Erpify\* target is a sibling module.
 deptrac:
   skip_violations:
-    Erpify\Backoffice\BankAccount\Application\BankAccountCreator:
-      - Symfony\Component\Validator\Exception\ValidationFailedException
-    Erpify\Backoffice\BankAccount\Application\BankAccountStatusChanger:
-      - Symfony\Component\Validator\Exception\ValidationFailedException
-    Erpify\Backoffice\BankAccount\Application\BankAccountUpdater:
-      - Symfony\Component\Validator\Exception\ValidationFailedException
     Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
       - Erpify\Shared\Validation\Infrastructure\EnumType
-    Erpify\Backoffice\Bank\Application\BankUpdater:
-      - Symfony\Component\Validator\Exception\ValidationFailedException
     Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory:
       - Symfony\Component\DependencyInjection\Attribute\Autowire
       - Symfony\Component\HttpFoundation\Response

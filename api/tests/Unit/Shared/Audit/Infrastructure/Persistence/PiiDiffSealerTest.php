@@ -81,6 +81,22 @@ final class PiiDiffSealerTest extends TestCase
     }
 
     #[Test]
+    public function itPreservesASiblingKeyBesideChangesWhenPersonalFieldsArePresent(): void
+    {
+        $sealed = $this->sealer()->seal(new AuditedSubjectFake(Uuid::generate()), [
+            'changes' => ['secret' => ['old' => 'BBVA', 'new' => 'BBVA S.A.']],
+            'operation' => 'update',
+        ], Uuid::generate());
+
+        $this->assertArrayHasKey(
+            'operation',
+            $sealed->metadata,
+            'a sibling key must survive sealing, not just the changes key',
+        );
+        $this->assertSame('update', $sealed->metadata['operation']);
+    }
+
+    #[Test]
     public function itLeavesANonPiiDiffUntouchedWithNoScope(): void
     {
         $diff = ['changes' => ['name' => ['old' => 'BBVA', 'new' => 'BBVA S.A.']]];

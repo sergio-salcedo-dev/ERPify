@@ -13,7 +13,6 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
-use Symfony\Component\Validator\Exception\ValidationFailedException;
 
 final readonly class BankAccountCreator
 {
@@ -32,8 +31,7 @@ final readonly class BankAccountCreator
      * INSERT touches the FK). The server mints the account id (UUID v7); IBAN uniqueness is enforced by
      * the entity's #[UniqueEntity] via Validator::ensure() (422).
      *
-     * @throws InvalidUuidException      when the bank id is not a well-formed UUID
-     * @throws ValidationFailedException when the new account fails validation (422, e.g. duplicate IBAN)
+     * @throws InvalidUuidException when the bank id is not a well-formed UUID
      */
     public function create(CreateBankAccountCommand $command): BankAccount
     {
