@@ -110,8 +110,14 @@ orquestarlos). Cada uno con su código de salida, de una ejecución fresca:
 | `dependency-cruiser` | exit 0 — 507 módulos, 1974 dependencias |
 | `vitest run` (suite completa) | exit 0 — 247 ficheros, 1540 tests |
 
-`api/` no se toca en este PR, y no podría verificarse aquí aunque se tocara: `composer install` falla con
-«Could not authenticate against github.com», así que `api/vendor/` está vacío.
+**Corrección post-merge (code review de la #849):** la afirmación de arriba era falsa —
+`PiiDiffSealer.php` y su test SÍ se tocan en este PR (el fix del hermano de `changes`, ver "Lo que
+derribó" más arriba) — y esa falsedad es la que justificaba saltarse los gates de backend en la tabla.
+El fichero de producción se mergeó sin `php.stan`/`php.quality`/PHPUnit corriendo ni una vez, por el
+mismo motivo real: `composer install` falla aquí con «Could not authenticate against github.com», así
+que `api/vendor/` está vacío y ningún gate de PHP puede ejecutarse en este entorno. La PR #853 (abierta)
+vuelve a tocar `PiiDiffSealer.php`; sus propios gates de PHP, obligatorios antes de su merge, son lo que
+cierra retroactivamente esta ventana para este fichero.
 
 ## Seguimiento
 

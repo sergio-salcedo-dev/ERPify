@@ -98,20 +98,32 @@ describe("AuditChangeDiff", () => {
   });
 
   it("claims no write direction: an all-added diff is never labelled a CREATE snapshot", () => {
-    renderDiff({
+    const { container } = renderDiff({
       swift: { old: null, new: "BBVAESMM" },
       logo: { old: null, new: "media-1" },
     });
 
     expect(screen.queryByText("Initial state")).not.toBeInTheDocument();
     expect(screen.queryByTestId("diff__snapshot")).not.toBeInTheDocument();
+    // Structural, not testid-keyed: any header line re-added under a different id would still be a
+    // <p> sibling of the field list, which this catches regardless of how it is implemented.
+    expect(container.querySelectorAll("p")).toHaveLength(0);
   });
 
   it("claims no write direction: an all-removed diff is never labelled a DELETE snapshot", () => {
-    renderDiff({ name: { old: "BBVA", new: null } });
+    const { container } = renderDiff({ name: { old: "BBVA", new: null } });
 
     expect(screen.queryByText("Final state before deletion")).not.toBeInTheDocument();
     expect(screen.queryByTestId("diff__snapshot")).not.toBeInTheDocument();
+    expect(container.querySelectorAll("p")).toHaveLength(0);
+  });
+
+  it("marks the Empty-state icon as decorative so only the text marker is announced (WCAG 1.4.1)", () => {
+    renderDiff({ bic: { old: null, new: null } });
+
+    const marker = screen.getByText("Not set");
+    const icon = marker.parentElement?.querySelector("svg");
+    expect(icon).toHaveAttribute("aria-hidden", "true");
   });
 
   it("keeps never-populated fields out of the collapsed window so populated ones stay visible", () => {
