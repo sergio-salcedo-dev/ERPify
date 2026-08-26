@@ -147,10 +147,14 @@ nulabilidad de `lockedUntil()` — también ya razonado y aceptado arriba).
   `RecordLockoutNoticeAuditBestEffort::record()` se ejecuta igualmente, escribiendo una fila `audit_log`
   nueva con el id real del sujeto ya anonimizado. Ventana estrecha (milisegundos, no los 5 minutos del tick)
   pero real; no cubierto por los doce ángulos del pase adversarial de esta PR. `NotifyLockedIdentities.php`
-  (método `notifyOwner`), `Doctrine/DoctrineUserRepository.php`, `Domain/Entity/User.php`.
-- [ ] [Review][Decision] **Cobertura Behat — dejada explícitamente al criterio del revisor por el propio plan
-  de pruebas de la PR.** No es un hallazgo nuevo, es una decisión abierta que la propia PR marcó sin
-  resolver.
+  (método `notifyOwner`), `Doctrine/DoctrineUserRepository.php`, `Domain/Entity/User.php`. **Pendiente —
+  Sergio está consultando una IA externa antes de decidir**
+  (`tmp/bmad-md/consult-gdpr-erasure-race-notify-locked-identities-20260827-000633.md`).
+
+- [ ] [Review][Patch] **Cobertura Behat — decisión resuelta (2026-08-27): añadir un escenario.** El plan de
+  pruebas de la propia PR dejaba esto abierto a criterio del revisor; Sergio decidió añadir cobertura Behat
+  para el flujo de auditoría de la notificación de bloqueo (fila `security` `ACCOUNT_LOCKOUT_NOTIFIED`,
+  disparada desde el barrido programado, no desde HTTP).
 
 - [ ] [Review][Patch] **Falta un test de llegada funcional para el nuevo binding de canal.**
   `LockoutAuditWriteFailureArrivalTest` (preexistente, sin tocar por esta PR) prueba el binding de canal de
