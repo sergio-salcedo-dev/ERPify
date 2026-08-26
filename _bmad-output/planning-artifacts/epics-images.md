@@ -67,9 +67,10 @@ breakdown):**
 
 ## Adversarial pass
 
-Dos lecturas hostiles sobre el breakdown completo, aportadas por Sergio desde fuera de esta sesión —
+Tres lecturas hostiles sobre el breakdown completo, aportadas por Sergio desde fuera de esta sesión —
 **no autocertificación**: la primera (2026-08-23) sobre el requirements inventory de step-01; la
-segunda (2026-08-24) sobre las tres historias ya redactadas de step-03. Además, BMAD Advanced
+segunda (2026-08-24) sobre las tres historias ya redactadas de step-03; la tercera (2026-08-26), con la
+épica ya cerrada y en PR, sobre el documento íntegro. Además, BMAD Advanced
 Elicitation (autoadministrada por esta sesión: Boundary & Edge Case Sweep, Security Audit Personas,
 Cascading Failure Simulation, Failure Mode Analysis) sobre el mismo contenido, con al menos un hallazgo
 corregido por Sergio antes de aceptarlo (ver GRAVE-2). Un tercer control, no adversarial pero real:
@@ -146,6 +147,29 @@ mensaje, no de bookkeeping de huérfanos.
 `ImageId` (bug del lado consumidor, viola NFR4) no tiene ningún safety net en esta capa** — un
 `delete()` legítimo de un poseedor borra bytes que el otro todavía cree tener. No se arregla aquí;
 documentado para que la épica del consumidor no lo redescubra por accidente.
+
+**MEDIA-6 (tercera lectura hostil, 2026-08-26, aportada por Sergio desde fuera de esta sesión sobre el
+breakdown ya cerrado) — ausencia de contrato de observabilidad privacy-safe.** Ninguna AC decía qué se
+loguea o metriza cuando falla el pipeline, el storage o la lectura, ni qué campos están prohibidos en esas
+señales. Dado el historial del repo con fugas de dato personal en sumideros de log (`docs/rules/security.md`,
+la cadena de gates `php.lint.log-carriers`/`log-retention`), dejarlo implícito es exactamente el patrón que
+ya ha fallado antes en otros módulos. Añadido NFR9 y una AC por historia (1.1, 1.2, 1.3).
+
+**MEDIA-7 (misma lectura) — contrato HTTP de la Story 1.3 incompleto: `Range` y `Cache-Control` sin
+decidir.** La historia cierra cada otro borde de la ruta de lectura (orden auth, EOF, lectura verificada a
+mitad de stream) pero no decía qué ocurre si el cliente envía `Range`, ni qué directiva de cache acompaña
+al `ETag` ya decidido. Añadidas dos ACs a la Story 1.3.
+
+**MEDIA-8 (misma lectura) — versionado del contrato de canonicalización sin resolver.** El digest se
+calcula sobre los bytes canónicos que produce la implementación actual de `ImageProcessor`; si el
+encoder, sus parámetros de compresión o el manejo de metadata cambian más adelante, la misma imagen
+fuente produce un digest distinto sin que nada lo hubiera declarado como cambio de contrato. D6 ya
+señala que el digest "se vuelve irreversible el día que entra en una URL" — la misma lógica aplica a la
+propia función de canonicalización. Resuelto sin nuevo campo persistido — reabrir el schema mínimo del
+decision firewall no está justificado con un único productor y ninguna necesidad de negocio (YAGNI): la
+canonicalización de esta rebanada es **v1 implícito** por ser la única implementación existente; el
+disparador para versionarla explícitamente es la primera vez que el algoritmo cambia en código mergeado,
+no antes. AC añadida a la Story 1.1.
 
 ## Requirements Inventory
 
@@ -262,6 +286,17 @@ historia del pipeline establece explícitamente qué controla el decoder y qué 
 frente a: tamaño máximo de request, píxeles decodificados máximos, dimensiones máximas, número de
 frames, timeouts — sin que ningún límite se confunda con la clasificación fungible/evidencia. No se
 exige implementar cada control en esta rebanada, pero sí declarar cuáles quedan cubiertos y cuáles no.
+
+NFR9 (Observabilidad privacy-safe — tercera lectura hostil, 2026-08-26): toda señal de fallo del
+pipeline, del storage o de la ruta de lectura se metriza/loguea sin exponer bytes de imagen, filename
+original, `ImageId`, `digest` ni identificador de persona. Dimensiones permitidas: `format`, `operation`,
+`failure_category`. Nunca como dimensión ni como valor de log: `imageId`, `digest`, identificador de
+persona, filename, storage key cruda, bytes. Nombres de métrica de referencia (no exhaustivos — la
+historia que los implemente ajusta el namespace al del repo): `images.upload.rejected`,
+`images.processing.failure`, `images.storage.write.failure`, `images.storage.delete.failure`,
+`images.storage.integrity_failure`, `images.read.miss`. No se exige aquí la infraestructura de métricas —
+solo el invariante y qué no puede aparecer en ninguna señal, para que la historia que la implemente no
+tenga que redescubrirlo.
 
 ### Additional Requirements
 
@@ -436,8 +471,8 @@ FR6: Epic 1 - primera rebanada completa: `UploadImage`, `Image`, pipeline, stora
 lectura (D6)
 FR7: Epic 1 - `ImageProcessor` como seam reutilizable por un futuro segundo productor (D6)
 
-NFR1-NFR8: Epic 1 - transversales a las tres stories (invariantes 1-6 del ADR + contrato del puerto +
-límites de recursos)
+NFR1-NFR9: Epic 1 - transversales a las tres stories (invariantes 1-6 del ADR + contrato del puerto +
+límites de recursos + observabilidad privacy-safe)
 
 ## Epic List
 
@@ -452,7 +487,7 @@ todavía: entrega la capacidad de plataforma, completa y verificable por sí mis
 Behat contra el propio seam), que la épica del primer consumidor real consumirá directamente sin tener
 que rediseñar nada de lo aquí decidido (ver el guardrail al final de Additional Requirements).
 
-**FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6, FR7 (NFR1-NFR8 transversales)
+**FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6, FR7 (NFR1-NFR9 transversales)
 
 **Historias candidatas** (confirmadas informalmente en el cierre de step-01, a formalizar en step-03):
 
@@ -472,7 +507,7 @@ que rediseñar nada de lo aquí decidido (ver el guardrail al final de Additiona
 Los futuros consumidores del backoffice disponen de un seam de plataforma estable para subir una imagen
 fungible, obtener su `ImageId` y representación canónica, y leerla de vuelta autenticados — sin
 resolver ellos mismos decodificación, límites de seguridad del decoder, direccionamiento de storage ni
-el borrado fiable de bytes. **FRs covered:** FR1-FR7. **NFRs:** NFR1-NFR8, transversales a las tres
+el borrado fiable de bytes. **FRs covered:** FR1-FR7. **NFRs:** NFR1-NFR9, transversales a las tres
 historias. El decision firewall de Additional Requirements aplica a las tres sin excepción.
 
 ### Story 1.1: Subir una imagen y obtener su representación canónica
@@ -579,6 +614,20 @@ documenta explícitamente la propiedad anti-polyglot del pipeline (un payload ma
 cabecera de imagen válida no sobrevive al re-encode) en vez de dejarla como efecto colateral accidental
 de la implementación (elicitación: Security Audit Personas)
 
+**Given** un fallo de decoder, de normalización, de encoding, o un rechazo por límite de recursos o MIME
+fuera de allowlist
+**When** se emite la señal de observabilidad correspondiente (tercera lectura hostil, 2026-08-26; NFR9)
+**Then** la señal incluye `format` y `failure_category` pero nunca los bytes de la imagen, el filename
+original, ni ningún dato capaz de identificar a la persona que subió el contenido
+
+**Given** que la canonicalización de esta rebanada tiene una única implementación de `ImageProcessor`
+**When** se documenta el contrato del digest (tercera lectura hostil, 2026-08-26; MEDIA-8)
+**Then** queda declarado que la canonicalización es **v1 implícito** — no se persiste ningún campo de
+versión en esta rebanada — y que el disparador para introducir un versionado explícito es la primera vez
+que el algoritmo de canonicalización cambia en código mergeado, momento en el que el mismo contenido
+fuente puede producir un digest distinto para nuevas subidas sin que ello reprocese ni invalide los
+`Image` ya persistidos
+
 ### Story 1.2: Persistir la imagen y garantizar el borrado fiable de sus bytes
 
 As a bounded context consumidor,
@@ -601,6 +650,13 @@ parcial o corrupta en disco que el filesystem considera terminada correctamente 
 **Then** la operación retorna éxito — idempotente respecto a "ya ausente"
 **And Given** un fallo real de infraestructura al borrar, **When** se invoca `delete()`, **Then** la
 operación retorna fallo — nunca se convierte en éxito silencioso (NFR7)
+
+**Given** un fallo de `ImageStorage::store()` o `ImageStorage::delete()`
+**When** se emite la señal de observabilidad correspondiente (tercera lectura hostil, 2026-08-26; NFR9)
+**Then** la señal distingue `store`/`delete` como `operation` y nunca incluye `ImageId`, `digest` ni la
+storage key derivada — la distinción entre "objeto ya ausente" (éxito idempotente) y "fallo real de
+infraestructura" (fallo) es observable sin que la señal misma se convierta en el vector de fuga que NFR9
+prohíbe
 
 **Nota de diseño documentada (elicitación: Cascading Failure Simulation, no es una AC nueva sino una
 advertencia explícita)**: `ImageStorage::delete()` no lleva refcounting (NFR3) — si un futuro consumidor
@@ -729,6 +785,24 @@ hubiera comprometido `200` + `Content-Length`
 **Then** la implementación completa una lectura **verificada** (bytes íntegros, coincidentes con
 `Image.digest`) **antes** de comprometer cabeceras o status — nunca empieza a responder `200` sobre una
 lectura todavía no confirmada, para no dejar al cliente con un fichero truncado sin ningún error visible
+
+**Given** un fallo de storage al leer, o una lectura cuyo contenido no coincide con `Image.digest`
+**When** se emite la señal de observabilidad correspondiente (tercera lectura hostil, 2026-08-26; NFR9)
+**Then** la señal distingue `404` (ausencia confirmada), `5xx` (fallo transitorio) e "integridad"
+(digest no coincide) como `failure_category` distintos, sin incluir `ImageId`, `digest` ni bytes
+
+**Given** una petición a `GET /images/{imageId}` que incluye la cabecera `Range`
+**When** se resuelve la respuesta (tercera lectura hostil, 2026-08-26; MEDIA-7)
+**Then** la ruta ignora `Range` y devuelve siempre el cuerpo completo con `200` — Range requests no está
+soportado en esta rebanada; no se responde `206` ni `416`, para no comprometer una implementación parcial
+de un contrato HTTP que nadie ha pedido todavía (declarado, no un olvido)
+
+**Given** una respuesta exitosa de `GET /images/{imageId}`
+**When** se construyen sus cabeceras de cache (misma lectura; MEDIA-7)
+**Then** incluye `Cache-Control: private, max-age=31536000, immutable` junto al `ETag` ya decidido —
+`private` porque la ruta exige autenticación y una caché compartida no debe servir la respuesta entre
+usuarios distintos; `immutable` porque esta rebanada no expone ninguna operación que reemplace los bytes
+de un `ImageId` ya creado (solo `UploadImage` y `delete`, nunca un update in-place)
 
 **Given** la implementación del controlador
 **When** resuelve la respuesta
