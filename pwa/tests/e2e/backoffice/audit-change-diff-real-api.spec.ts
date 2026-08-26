@@ -44,8 +44,6 @@ async function createBankAccount(
  * guard was checking the bare row — so the drawer's Changes/Metadata sections never populated against
  * the real API, always falling back to their dormant placeholder.
  */
-test.describe.configure({ mode: "serial" });
-
 test.describe("BackOffice - Audit trail diff (real API)", () => {
   test.use({ viewport: VIEWPORT_DESKTOP });
 
@@ -68,15 +66,24 @@ test.describe("BackOffice - Audit trail diff (real API)", () => {
   });
 
   test.afterAll(async () => {
+    // Best-effort cleanup, mirroring `deleteBanksSafely`: log a failure to stderr for triage rather
+    // than swallowing it outright, so an unexpected cleanup failure doesn't silently leak the row.
+    // Each step is caught independently — a PATCH failure must not skip the DELETE attempt that follows.
     // A bank account only hard-deletes from CLOSED (409 otherwise) — close it first.
     await api
       .patch(`${BANK_ACCOUNTS_PATH}/${accountId}/status`, {
         data: { status: "CLOSED" },
         headers: { "Content-Type": "application/json" },
       })
-      .catch(() => undefined);
-    await api.delete(`${BANK_ACCOUNTS_PATH}/${accountId}`).catch(() => undefined);
-    await deleteBank(api, bankId).catch(() => undefined);
+      .catch((err: unknown) => {
+        console.warn(`[audit-change-diff-real-api] close failed for account ${accountId}:`, err);
+      });
+    await api.delete(`${BANK_ACCOUNTS_PATH}/${accountId}`).catch((err: unknown) => {
+      console.warn(`[audit-change-diff-real-api] delete failed for account ${accountId}:`, err);
+    });
+    await deleteBank(api, bankId).catch((err: unknown) => {
+      console.warn(`[audit-change-diff-real-api] delete failed for bank ${bankId}:`, err);
+    });
     await api.dispose();
   });
 

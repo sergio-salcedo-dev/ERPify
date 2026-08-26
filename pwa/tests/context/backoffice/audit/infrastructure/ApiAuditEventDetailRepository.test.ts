@@ -120,6 +120,10 @@ describe("ApiAuditEventDetailRepository response guard", () => {
       false,
     );
     expect(isAuditEventDetailResponse({ data: null })).toBe(false);
+    // Drift: the envelope key itself is missing or misnamed — the shape most likely to appear if the
+    // backend's envelope contract shifts again.
+    expect(isAuditEventDetailResponse({})).toBe(false);
+    expect(isAuditEventDetailResponse({ result: DETAIL })).toBe(false);
     expect(isAuditEventDetailResponse(null)).toBe(false);
     expect(isAuditEventDetailResponse(undefined)).toBe(false);
   });

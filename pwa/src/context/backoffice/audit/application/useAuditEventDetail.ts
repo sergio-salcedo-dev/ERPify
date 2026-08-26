@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
+import { telemetry } from "@/context/shared/observability/infrastructure";
+import { apiScope } from "@/context/shared/observability/domain/TelemetryScope";
 import type { AuditEventDetail } from "../domain/AuditChange";
 import type { AuditEventDetailRepository } from "../domain/AuditEventDetailRepository";
 
@@ -50,8 +52,12 @@ export function useAuditEventDetail(id: string | null): AuditEventDetailState {
       const result = await repository.findById(entryId);
       if (!mountedRef.current || seq !== seqRef.current) return;
       setDetail(result);
-    } catch {
+    } catch (error) {
       if (!mountedRef.current || seq !== seqRef.current) return;
+      telemetry.error("failed to load audit event detail", {
+        scope: apiScope("audit-event-detail"),
+        cause: error,
+      });
       setDetail(null);
     } finally {
       if (mountedRef.current && seq === seqRef.current) setLoading(false);

@@ -55,10 +55,11 @@ function isAuditEventMetadata(
 }
 
 /**
- * The slim fields exactly as the timeline guard checks them (`level`/`actorType` accepted as any
- * string — the read model is forensic and never narrows them) plus the `metadata`/diff shape.
+ * Validates the un-enveloped row: the slim fields as the timeline guard checks them
+ * (`level`/`actorType` accepted as any string — the read model is forensic and never narrows them)
+ * plus the full `metadata`/diff shape.
  */
-function isAuditEventDetailPrimitives(value: unknown): value is AuditEventDetail {
+function isAuditEventDetailRow(value: unknown): value is AuditEventDetail {
   return (
     isObjectRecord(value) &&
     typeof value.id === "string" &&
@@ -87,7 +88,7 @@ interface AuditEventDetailResponse {
  * than a silent mismap.
  */
 export function isAuditEventDetailResponse(value: unknown): value is AuditEventDetailResponse {
-  return isObjectRecord(value) && isAuditEventDetailPrimitives(value.data);
+  return isObjectRecord(value) && isAuditEventDetailRow(value.data);
 }
 
 /** Rebuilds each `{ old, new }` pair to drop any stray field a tampered/extended payload might carry. */
