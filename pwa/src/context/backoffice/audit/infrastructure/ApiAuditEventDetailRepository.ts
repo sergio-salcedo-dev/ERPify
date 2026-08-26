@@ -55,12 +55,11 @@ function isAuditEventMetadata(
 }
 
 /**
- * The adapter's trust boundary for the detail resource. Validates the slim fields exactly as the
- * timeline guard does (`level`/`actorType` accepted as any string — the read model is forensic and
- * never narrows them) plus the `metadata`/diff shape, so a contract drift surfaces as a typed
- * failure (MALFORMED_RESPONSE_ENVELOPE) rather than a silent mismap.
+ * Validates the un-enveloped row: the slim fields as the timeline guard checks them
+ * (`level`/`actorType` accepted as any string — the read model is forensic and never narrows them)
+ * plus the full `metadata`/diff shape.
  */
-export function isAuditEventDetailResponse(value: unknown): value is AuditEventDetail {
+function isAuditEventDetailRow(value: unknown): value is AuditEventDetail {
   return (
     isObjectRecord(value) &&
     typeof value.id === "string" &&
@@ -76,6 +75,20 @@ export function isAuditEventDetailResponse(value: unknown): value is AuditEventD
     typeof value.resourceErased === "boolean" &&
     isAuditEventMetadata(value.metadata)
   );
+}
+
+interface AuditEventDetailResponse {
+  data: AuditEventDetail;
+}
+
+/**
+ * The adapter's trust boundary for the detail resource — `GET /audit/events/{id}` wraps the row in a
+ * `data` envelope, like every other resource endpoint here, so a contract drift (including the bare
+ * row this guard used to expect) surfaces as a typed failure (MALFORMED_RESPONSE_ENVELOPE) rather
+ * than a silent mismap.
+ */
+export function isAuditEventDetailResponse(value: unknown): value is AuditEventDetailResponse {
+  return isObjectRecord(value) && isAuditEventDetailRow(value.data);
 }
 
 /** Rebuilds each `{ old, new }` pair to drop any stray field a tampered/extended payload might carry. */
@@ -131,10 +144,10 @@ export class ApiAuditEventDetailRepository implements AuditEventDetailRepository
   constructor(@inject("HttpClient") private readonly httpClient: HttpClient) {}
 
   async findById(id: string): Promise<AuditEventDetail> {
-    const detail = await this.httpClient.get(
+    const response = await this.httpClient.get(
       API_ENDPOINTS.BACKOFFICE.AUDIT.EVENT_DETAIL(id),
       isAuditEventDetailResponse,
     );
-    return toAuditEventDetail(detail);
+    return toAuditEventDetail(response.data);
   }
 }
