@@ -42,6 +42,15 @@ describe("ApiAuditEventDetailRepository.findById", () => {
     expect(detail.metadata.changes).toEqual({ name: { old: "BBVA", new: "BBVA España" } });
   });
 
+  it("maps a well-formed operation through to the domain shape", async () => {
+    const httpClient = httpClientReturning({
+      data: { ...DETAIL, metadata: { ...DETAIL.metadata, operation: "UPDATED" } },
+    });
+    const detail = await new ApiAuditEventDetailRepository(httpClient).findById(DETAIL.id);
+
+    expect(detail.metadata.operation).toBe("UPDATED");
+  });
+
   it("reconstructs the exact shape, dropping a stray field on the row and inside a change", async () => {
     const httpClient = httpClientReturning({
       data: {
@@ -87,6 +96,16 @@ describe("ApiAuditEventDetailRepository response guard", () => {
     expect(
       isAuditEventDetailResponse({ data: { ...DETAIL, level: "wat", actorType: "robot" } }),
     ).toBe(true);
+    // A well-formed operation, sibling to changes, is accepted.
+    expect(
+      isAuditEventDetailResponse({
+        data: { ...DETAIL, metadata: { ...DETAIL.metadata, operation: "UPDATED" } },
+      }),
+    ).toBe(true);
+    // A row with no diff still validates a legitimate operation on its own.
+    expect(
+      isAuditEventDetailResponse({ data: { ...DETAIL, metadata: { operation: "CREATED" } } }),
+    ).toBe(true);
 
     // The bare row — every real response is wrapped in `data` — must be rejected, not just accepted
     // as an accidental synonym: this is the exact shape `GET /audit/events/{id}` never sends and the
@@ -113,6 +132,16 @@ describe("ApiAuditEventDetailRepository response guard", () => {
         data: { ...DETAIL, metadata: { changes: { name: { old: "BBVA" } } } },
       }),
     ).toBe(false);
+    // Drift: an operation outside the backend's closed set (schema drift, corrupted JSONB).
+    expect(
+      isAuditEventDetailResponse({
+        data: { ...DETAIL, metadata: { ...DETAIL.metadata, operation: "RESTORED" } },
+      }),
+    ).toBe(false);
+    // Drift: operation present but not a string.
+    expect(isAuditEventDetailResponse({ data: { ...DETAIL, metadata: { operation: 1 } } })).toBe(
+      false,
+    );
     // Drift: slim-field type mismatches.
     expect(isAuditEventDetailResponse({ data: { ...DETAIL, id: 1 } })).toBe(false);
     expect(isAuditEventDetailResponse({ data: { ...DETAIL, actorErased: "false" } })).toBe(false);

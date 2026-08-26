@@ -40,13 +40,28 @@ export interface AuditFieldChange {
 export type AuditChanges = Record<string, AuditFieldChange>;
 
 /**
+ * Mirrors the backend's closed set of write kinds (`Erpify\Shared\Audit\Domain\AuditWriteOperation`),
+ * carried as `metadata.operation` on a `change` row. Optional: only present once the write path that
+ * captured the row started stamping it, so an older row (or one from a write path that skips capture)
+ * has no operation and the read side must treat its absence as "unknown", never as a fourth kind.
+ */
+export const AuditWriteOperation = {
+  Created: "CREATED",
+  Updated: "UPDATED",
+  Deleted: "DELETED",
+} as const;
+
+export type AuditWriteOperation = (typeof AuditWriteOperation)[keyof typeof AuditWriteOperation];
+
+/**
  * The full audit event read model behind `GET /audit/events/{id}`: the same slim fields as a timeline
  * {@link AuditEntry} plus the decoded `metadata`. For a `change` row `metadata.changes` carries the
- * field-by-field diff; the rest of `metadata` stays an open record (forensic fidelity — an unknown
- * key still reaches the UI). `ip`/`user_agent` are deliberately absent: the E1 payload is diff-only.
+ * field-by-field diff and `metadata.operation` the write kind that produced it; the rest of `metadata`
+ * stays an open record (forensic fidelity — an unknown key still reaches the UI). `ip`/`user_agent` are
+ * deliberately absent: the E1 payload is diff-only.
  */
 export interface AuditEventDetail extends AuditEntry {
-  metadata: { changes?: AuditChanges } & Record<string, unknown>;
+  metadata: { changes?: AuditChanges; operation?: AuditWriteOperation } & Record<string, unknown>;
 }
 
 /** The four shapes a field change can take, derived from which side is `null`. */
