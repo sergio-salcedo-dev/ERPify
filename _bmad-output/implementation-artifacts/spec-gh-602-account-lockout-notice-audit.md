@@ -140,16 +140,22 @@ resueltos (uno de ellos — el «cinco llamadores» de `.audit-resource-types» 
 este mismo pase adversarial ya había marcado como «nota cosmética, no accionada» arriba; otro — la
 nulabilidad de `lockedUntil()` — también ya razonado y aceptado arriba).
 
-- [ ] [Review][Decision] **Carrera con el borrado GDPR: `notifyOwner()` puede escribir el id real de un
-  sujeto ya borrado.** `User` no lleva `#[ORM\Version]`. Si una identidad se borra (vía
-  `FulfilIdentityErasure`) entre el `findById()` y el `save()` de este método, Doctrine no detecta el
-  `UPDATE` de 0 filas afectadas sin locking optimista — `save()` no lanza, y
-  `RecordLockoutNoticeAuditBestEffort::record()` se ejecuta igualmente, escribiendo una fila `audit_log`
-  nueva con el id real del sujeto ya anonimizado. Ventana estrecha (milisegundos, no los 5 minutos del tick)
-  pero real; no cubierto por los doce ángulos del pase adversarial de esta PR. `NotifyLockedIdentities.php`
-  (método `notifyOwner`), `Doctrine/DoctrineUserRepository.php`, `Domain/Entity/User.php`. **Pendiente —
-  Sergio está consultando una IA externa antes de decidir**
-  (`tmp/bmad-md/consult-gdpr-erasure-race-notify-locked-identities-20260827-000633.md`).
+- [x] [Review][Defer] **Carrera con el borrado GDPR — aceptada como residual, compensada por un control
+  detective existente, con predicado observable y dos triggers de escalado.** No es "improbable, no merece
+  arreglarse" — es que la consecuencia que de verdad importa (un id de persona sobreviviendo indetectado a su
+  propia erasure) no se produce: `DbalPersonResourceReferences` ya escanea `audit_log.resource_id` con
+  `resource_erased = FALSE`, y `identity:gdpr:reconcile-subject-references` ya cruza ese conjunto contra
+  identidades vivas — verificado leyendo el código de la fuente detective, no asumido. Una fila que esta
+  carrera produzca no resuelve a ninguna identidad viva y sale como divergencia reportada en la siguiente
+  corrida del reconciliador: `erasure → race → fila de auditoría obsoleta → reconcile → divergencia
+  detectada`, no `→ nadie lo sabe`. Se descarta explícitamente el "(b) ligero" (re-check justo antes de
+  escribir la auditoría) por dar una falsa sensación de prevención sin serlo — solo desplaza la ventana unos
+  milisegundos — y se descarta `#[ORM\Version]` en `User` por no haber evidencia de un patrón sistémico, solo
+  de esta única carrera. Decisión completa, argumentada en cuatro partes (riesgo/por qué es aceptable/
+  predicado de detección/triggers de escalado), documentada como docblock en el propio código —
+  `NotifyLockedIdentities::notifyOwner()` — no en `deferred-work.md`, porque ya no es trabajo pendiente, es
+  una aceptación cerrada y vigilada, siguiendo el mismo patrón que #718 en este repo. Consulta externa
+  (ChatGPT) + contraste final: `tmp/bmad-md/consult-gdpr-erasure-race-notify-locked-identities-20260827-000633.md`.
 
 - [ ] [Review][Patch] **Cobertura Behat — decisión resuelta (2026-08-27): añadir un escenario.** El plan de
   pruebas de la propia PR dejaba esto abierto a criterio del revisor; Sergio decidió añadir cobertura Behat

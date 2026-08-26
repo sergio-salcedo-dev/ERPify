@@ -84,6 +84,35 @@ final readonly class NotifyLockedIdentities
      *
      * The one failure that genuinely is per-row is the send, and it never reaches here — the mailer sits
      * behind {@see SendAccountLockedEmailBestEffort}, which swallows it and reports `false`.
+     *
+     * **Accepted residual, not fixed: a GDPR erasure racing this method can leave a post-erasure audit row
+     * naming the erased subject.** `User` carries no `#[ORM\Version]`, so if `FulfilIdentityErasure` deletes
+     * this same identity between the `findById()` above and `save()` below, Doctrine's plain `UPDATE` affects
+     * zero rows without raising — `save()` returns as if it succeeded — and {@see RecordLockoutNoticeAuditBestEffort}
+     * then writes a fresh `audit_log` row carrying the just-erased subject's real id. Window is the span of
+     * one `findById()`-to-`save()` pair (milliseconds), not the five-minute tick.
+     *
+     * Accepted rather than closed with a lock or a re-check, because the consequence this repo actually cares
+     * about — a person's id surviving its own erasure **undetected** — does not follow from the race:
+     * {@see \Erpify\Shared\Audit\Infrastructure\Persistence\DbalPersonResourceReferences} already scans
+     * `audit_log.resource_id` where `resource_erased = FALSE`, and `identity:gdpr:reconcile-subject-references`
+     * already cross-checks that set against live identities. A row this race produces resolves to no live
+     * subject and surfaces as a reported divergence on the reconciler's next run — `erasure → race → stale
+     * audit row → reconcile → divergence detected`, not `→ nobody knows it exists`. A method-scoped re-check
+     * immediately before the audit write would still leave a (smaller) window unless it shared one
+     * transaction and a compatible lock with the erasure path — at which point it stops being a narrow patch
+     * and becomes exactly the aggregate-wide concurrency policy this residual does not yet justify (`User`
+     * has one demonstrated stale-write race, not a pattern).
+     *
+     * **Detection predicate** (compatible-with, not proof-of, absent stronger correlation): a divergence over
+     * `audit_log.resource_id` naming a `User` that no longer resolves to a live identity, reported by
+     * `identity:gdpr:reconcile-subject-references` temporally close to a `notifyLockedOwners()` tick.
+     *
+     * **Reopen this decision if either:** (1) a second scheduled job implements the same
+     * read → work → save → audit shape against `User` — two independent races sharing one root cause is the
+     * trigger for a shared concurrency mechanism on the aggregate, one is not; or (2) the detective control
+     * above actually surfaces a real instance of this race that cannot be resolved within its normal
+     * operating cycle.
      */
     private function notifyOwner(string $userId, DateTimeImmutable $now, DateTimeImmutable $staleFrom): void
     {
