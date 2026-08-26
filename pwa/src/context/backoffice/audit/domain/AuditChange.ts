@@ -49,31 +49,38 @@ export interface AuditEventDetail extends AuditEntry {
   metadata: { changes?: AuditChanges } & Record<string, unknown>;
 }
 
-/** The three shapes a field change can take, derived from which side is `null`. */
+/** The four shapes a field change can take, derived from which side is `null`. */
 export const ChangeKind = {
   Added: "added",
   Removed: "removed",
   Changed: "changed",
+  Empty: "empty",
 } as const;
 
 export type ChangeKind = (typeof ChangeKind)[keyof typeof ChangeKind];
 
 /**
- * Classifies a real field change by which side is present: a `null` `old` reads as **added**, a
- * `null` `new` as **removed**, both sides present as **changed**. This is the non-colour signal the
- * diff renders as text/marker — colour only reinforces it. Precondition: the field is a genuine
- * change; a no-op (both sides `null`) is filtered by {@link isNoOpChange} before it reaches here.
+ * Classifies a field change by which side is present: a `null` `old` reads as **added**, a `null`
+ * `new` as **removed**, both sides present as **changed**, and both sides `null` as **empty** — a
+ * field carried by the record that never held a value. This is the non-colour signal the diff
+ * renders as text/marker; colour only reinforces it.
+ *
+ * The function is total over the 2×2 of (null, non-null) sides on purpose: an empty field is a
+ * classification, not a precondition violation, so no caller has to guard the input to make the
+ * result meaningful.
  */
 export function changeKind(change: AuditFieldChange): ChangeKind {
-  if (change.old === null && change.new !== null) return ChangeKind.Added;
-  if (change.new === null && change.old !== null) return ChangeKind.Removed;
+  if (isNoOpChange(change)) return ChangeKind.Empty;
+  if (change.old === null) return ChangeKind.Added;
+  if (change.new === null) return ChangeKind.Removed;
   return ChangeKind.Changed;
 }
 
 /**
- * A no-op field: `old` and `new` both `null`, carrying no diff information — a nullable field left
- * empty in a full-record snapshot (a CREATE that never set it, a DELETE of an already-empty field).
- * The diff drops these before rendering so an empty, unchanged field never shows as a modification.
+ * A field whose `old` and `new` are both `null`: present in the record, never populated. It carries
+ * no *transition*, but its presence is itself evidence on a forensic trail — "this optional field
+ * was empty at this instant" is a fact a reader may need, and it is recoverable nowhere else in the
+ * UI, so the diff renders it in a neutral state rather than dropping it.
  */
 export function isNoOpChange(change: AuditFieldChange): boolean {
   return change.old === null && change.new === null;
