@@ -84,11 +84,10 @@ final readonly class AuditWriteCaptureListener
             // from it, and the AAD's id must equal the row it lands on or a reader could never reconstruct it.
             $auditLogId = $this->entryFactory->mintId();
 
-            $sealed = $this->piiDiffSealer->seal(
-                $entity,
-                $this->changeDiff->of($this->changesOf($entityManager, $unitOfWork, $entity, $operation)),
-                $auditLogId,
-            );
+            $diff = $this->changeDiff->of($this->changesOf($entityManager, $unitOfWork, $entity, $operation));
+            $diff['operation'] = $operation->name;
+
+            $sealed = $this->piiDiffSealer->seal($entity, $diff, $auditLogId);
 
             $entries[] = $this->entryFactory->create(
                 $entity->auditAction($operation),
