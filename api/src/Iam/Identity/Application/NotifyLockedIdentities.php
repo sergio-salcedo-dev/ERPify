@@ -23,6 +23,15 @@ use Erpify\Shared\Clock\Domain\Clock;
  *
  * The notice is detective: it reports the lock and grants nothing. See {@see AccountLockedEmailSender} for
  * why its channel forbids it from carrying anything exercisable.
+ *
+ * The DELIVERY is projected onto the `security` audit surface by {@see RecordLockoutNoticeAuditBestEffort},
+ * alongside but distinct from {@see RecordLockoutAuditBestEffort}'s row for the TRIP: that row answers "the
+ * lock was set", this one answers "the owner was actually told" — a mailer outage or a suppressed retry
+ * inside the window leaves the first true and the second silent, which is exactly the gap an operator
+ * investigating a live lockout needs to see. Kept as its own collaborator rather than inlined here for the
+ * same reason {@see RecordLockoutAuditBestEffort} is split from {@see LoginAttemptRegistrar}: the sweep's own
+ * orchestration and its audit projection are separate concerns with separate failure shapes, and folding both
+ * into one class pushed it past the object-coupling threshold.
  */
 final readonly class NotifyLockedIdentities
 {
@@ -38,6 +47,7 @@ final readonly class NotifyLockedIdentities
         private UserRepository $users,
         private SendAccountLockedEmailBestEffort $sender,
         private Clock $clock,
+        private RecordLockoutNoticeAuditBestEffort $noticeAudit,
     ) {
     }
 
@@ -95,5 +105,9 @@ final readonly class NotifyLockedIdentities
         $user->markLockoutNotified($now);
 
         $this->users->save($user);
+
+        // Reported AFTER the stamp already committed, so a lost audit projection can never look like the
+        // notification itself failed — the mail already sent, and the suppression window already stands.
+        $this->noticeAudit->record($userId, $user->lockedUntil());
     }
 }
