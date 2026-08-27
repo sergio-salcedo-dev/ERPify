@@ -78,7 +78,7 @@ describe("BankAccountIbanLookup", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("shows the mutation-error surface on a genuine failure (non-404)", async () => {
+  it("shows the mutation-error surface on a genuine failure (non-404), dismissible", async () => {
     run.mockRejectedValue(new HttpError(problemOf(500, "about:blank", "Internal Server Error")));
     render(<BankAccountIbanLookup />);
 
@@ -86,6 +86,9 @@ describe("BankAccountIbanLookup", () => {
 
     expect(await screen.findByTestId("bank-accounts-iban-lookup__error")).toBeInTheDocument();
     expect(screen.queryByTestId("bank-accounts-iban-lookup__not-found")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /dismiss/i }));
+    expect(screen.queryByTestId("bank-accounts-iban-lookup__error")).not.toBeInTheDocument();
   });
 
   it("applies only the latest request's outcome when a stale response resolves after a newer one", async () => {
