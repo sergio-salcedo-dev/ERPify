@@ -117,6 +117,81 @@ final class EraseIdentitySubjectCommandTest extends TestCase
         $this->assertFalse($users->removeCalled);
     }
 
+    /**
+     * The operator was asked and never answered, so success would be a lie a compliance job cannot see
+     * through: it reads `$?`, and a `0` from an erasure that did nothing is indistinguishable from a `0`
+     * from one that erased everything.
+     */
+    public function testAnUnattendedRunWithoutForceRefusesInsteadOfReportingSuccess(): void
+    {
+        $users = new InMemoryUserRepository(UserMother::create());
+        $tester = $this->tester($users);
+
+        $exitCode = $tester->execute(['user-id' => UserMother::DEFAULT_ID], ['interactive' => false]);
+
+        $this->assertSame(Command::INVALID, $exitCode);
+        // Single tokens: the refusal is rendered as a SymfonyStyle error block, which word-wraps to the
+        // terminal width, so any multi-word phrase can straddle a line break the assertion cannot see.
+        $this->assertStringContainsString('Refusing', $tester->getDisplay());
+        $this->assertStringContainsString('--force', $tester->getDisplay());
+        $this->assertFalse($users->removeCalled);
+    }
+
+    /**
+     * A separate path from --no-interaction: the input is still interactive when the question is put, and
+     * the question helper answers it with the default rather than raising. Left unread, that default is the
+     * abort branch above — the same silent `0` over an erasure nobody declined.
+     */
+    public function testAConfirmationNobodyCanAnswerRefusesInsteadOfReportingSuccess(): void
+    {
+        $users = new InMemoryUserRepository(UserMother::create());
+        $tester = $this->tester($users);
+        $tester->setInputs([]);
+
+        $exitCode = $tester->execute(['user-id' => UserMother::DEFAULT_ID]);
+
+        $this->assertSame(Command::INVALID, $exitCode);
+        // Single tokens: the refusal is rendered as a SymfonyStyle error block, which word-wraps to the
+        // terminal width, so any multi-word phrase can straddle a line break the assertion cannot see.
+        $this->assertStringContainsString('Refusing', $tester->getDisplay());
+        $this->assertStringContainsString('--force', $tester->getDisplay());
+        $this->assertFalse($users->removeCalled);
+    }
+
+    public function testAnUnattendedRunErasesWithForce(): void
+    {
+        $users = new InMemoryUserRepository(UserMother::create());
+        $tester = $this->tester($users);
+
+        $exitCode = $tester->execute(
+            ['user-id' => UserMother::DEFAULT_ID, '--force' => true],
+            ['interactive' => false],
+        );
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringContainsString('Erased subject ' . UserMother::DEFAULT_ID, $tester->getDisplay());
+        $this->assertTrue($users->removeCalled);
+    }
+
+    /**
+     * The dry run is the one no-op the operator did express, so it keeps its exit code even where no
+     * confirmation could be asked for — it is checked before the unattended refusal for exactly that reason.
+     */
+    public function testAnUnattendedDryRunStaysSuccessful(): void
+    {
+        $users = new InMemoryUserRepository(UserMother::create());
+        $tester = $this->tester($users);
+
+        $exitCode = $tester->execute(
+            ['user-id' => UserMother::DEFAULT_ID, '--dry-run' => true],
+            ['interactive' => false],
+        );
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringContainsString('Dry run: nothing was erased.', $tester->getDisplay());
+        $this->assertFalse($users->removeCalled);
+    }
+
     private function tester(
         InMemoryUserRepository $users,
         ?InMemoryActiveAdministratorDirectory $directory = null,
