@@ -52,9 +52,14 @@ use Throwable;
  * {@see \Erpify\Tests\Functional\Iam\Identity\LockoutAuditWriteFailureArrivalTest} is what holds both
  * halves: the binding is a position in a YAML file that a reorder can silently revert, and no static check
  * can see that.
+ *
+ * The report itself is wrapped, via {@see ReportsAuditFailureSafely}: a catch whose entire purpose is that
+ * nothing escapes may not throw, and the report call is real I/O.
  */
 final readonly class RecordLockoutAuditBestEffort
 {
+    use ReportsAuditFailureSafely;
+
     private const string LOCKED_ACTION = 'USER_LOCKED';
 
     public function __construct(
@@ -78,10 +83,10 @@ final readonly class RecordLockoutAuditBestEffort
                 AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
             );
         } catch (Throwable $throwable) {
-            $this->logger->error(
+            $this->reportSafely(fn () => $this->logger->error(
                 'Lockout committed; security audit projection skipped (write failed).',
                 ['exception' => $throwable],
-            );
+            ));
         }
     }
 }

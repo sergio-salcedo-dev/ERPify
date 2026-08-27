@@ -258,6 +258,7 @@ the last run output should contain :text => used
 the last run output should not contain :text => used
 the last run should fail => used
 the last run should succeed => used
+the locked-identity notification sweep runs => used
 the logger did not log a log entry as :level with message :message => idle
 the logger logged a log entry as :level with message :message => used
 the logger logged a log entry as :level with message :message and context contains: => used

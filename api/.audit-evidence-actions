@@ -63,6 +63,7 @@
 # ---------------------------------------------------------------------------------------------------------
 
 ACCESS_DENIED                  => ordinary
+ACCOUNT_LOCKOUT_NOTIFIED       => ordinary
 AUDIT_TRAIL_READ               => ordinary
 BANK_ACCOUNTS_SEARCHED         => ordinary
 BANK_ACCOUNTS_VIEWED           => ordinary

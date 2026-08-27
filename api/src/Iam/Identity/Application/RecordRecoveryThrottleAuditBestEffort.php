@@ -68,9 +68,14 @@ use Throwable;
  * pairing is what matters — raising the level without moving the channel would ACTIVATE the buffer and flush
  * whatever the request had accumulated, which is the opposite of what a class this careful about the address
  * should cause.
+ *
+ * The report itself is wrapped, via {@see ReportsAuditFailureSafely}: a catch whose entire purpose is that
+ * nothing escapes may not throw, and the report call is real I/O.
  */
 final readonly class RecordRecoveryThrottleAuditBestEffort
 {
+    use ReportsAuditFailureSafely;
+
     private const string THROTTLED_ACTION = 'PASSWORD_RECOVERY_THROTTLED';
 
     public function __construct(
@@ -94,10 +99,10 @@ final readonly class RecordRecoveryThrottleAuditBestEffort
             // address stays silent for the rest of the window. No id and no address in the line — this runs
             // once per address per window on an anonymous path the erasure chain does not reach. The channel
             // is what makes the signal reachable at all; see the class docblock.
-            $this->logger->error(
+            $this->reportSafely(fn () => $this->logger->error(
                 'Recovery throttle exhausted; security audit projection skipped (write failed).',
                 ['exception' => $throwable],
-            );
+            ));
         }
     }
 
