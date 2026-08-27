@@ -6,18 +6,24 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\NotifyLockedIdentities;
+use Erpify\Iam\Identity\Application\RecordLockoutNoticeAuditBestEffort;
 use Erpify\Iam\Identity\Application\SendAccountLockedEmailBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Psr\Log\NullLogger;
 
 /**
  * Assembles a {@see NotifyLockedIdentities} around in-memory fakes, mirroring {@see BuildsLockoutRegistrar}.
  *
- * The assembly lives in a trait for the same reason as its sibling: the sweep takes five collaborators and
+ * The assembly lives in a trait for the same reason as its sibling: the sweep takes several collaborators and
  * seeds locked aggregates, and counting all of them against a test class that merely wants one built is what
- * pushes it past the object-coupling threshold. What the class is left coupled to is what it *asserts*.
+ * pushes it past the object-coupling threshold. What the class is left coupled to is what it *asserts* — the
+ * audit collaborator defaults to a fresh {@see RecordingAuditLogger} wrapped in
+ * {@see RecordLockoutNoticeAuditBestEffort} so every existing caller stays untouched, and a test that cares
+ * about the audit projection passes its own {@see AuditLogger} double explicitly.
  *
  * @internal
  */
@@ -51,12 +57,14 @@ trait BuildsLockoutNotifier
         RecordingAccountLockedEmailSender $sender,
         Clock $clock,
         InMemoryLockedIdentityDirectory $directory,
+        ?AuditLogger $auditLogger = null,
     ): NotifyLockedIdentities {
         return new NotifyLockedIdentities(
             $directory,
             $repository,
             new SendAccountLockedEmailBestEffort($sender, new NullLogger()),
             $clock,
+            new RecordLockoutNoticeAuditBestEffort($auditLogger ?? new RecordingAuditLogger(), new NullLogger()),
         );
     }
 
