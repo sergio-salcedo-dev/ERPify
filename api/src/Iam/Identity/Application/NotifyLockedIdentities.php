@@ -88,7 +88,7 @@ final readonly class NotifyLockedIdentities
      * **Accepted residual, not fixed — tracked in issue #860, not only here.** A closed decision still needs
      * an open, searchable place a future reader finds *before* writing a second racing job, not a docblock
      * that only speaks to whoever already opened this file. This paragraph is the code-facing summary;
-     * issue #860 is the record — reopen the decision there, not by editing this comment.
+     * issue #860 is the record — reopen the decision there, not by editing this comment. @accepted-risk #860
      *
      * A GDPR erasure racing this method can leave a post-erasure audit row naming the erased subject.
      * `User` carries no `#[ORM\Version]`, so if `FulfilIdentityErasure` deletes
