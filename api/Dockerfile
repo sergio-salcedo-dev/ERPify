@@ -30,6 +30,7 @@ RUN <<-EOF
 		@composer \
 		apcu \
 		bcmath \
+		exif \
 		gd \
 		intl \
 		opcache \
