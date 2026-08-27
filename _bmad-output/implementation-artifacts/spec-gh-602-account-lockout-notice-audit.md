@@ -152,10 +152,13 @@ nulabilidad de `lockedUntil()` — también ya razonado y aceptado arriba).
   escribir la auditoría) por dar una falsa sensación de prevención sin serlo — solo desplaza la ventana unos
   milisegundos — y se descarta `#[ORM\Version]` en `User` por no haber evidencia de un patrón sistémico, solo
   de esta única carrera. Decisión completa, argumentada en cuatro partes (riesgo/por qué es aceptable/
-  predicado de detección/triggers de escalado), documentada como docblock en el propio código —
-  `NotifyLockedIdentities::notifyOwner()` — no en `deferred-work.md`, porque ya no es trabajo pendiente, es
-  una aceptación cerrada y vigilada, siguiendo el mismo patrón que #718 en este repo. Consulta externa
-  (ChatGPT) + contraste final: `tmp/bmad-md/consult-gdpr-erasure-race-notify-locked-identities-20260827-000633.md`.
+  predicado de detección/triggers de escalado). **Corregido tras aviso de Sergio**: un docblock por sí solo
+  no da trazabilidad — nada lo escanea, nadie vuelve a leerlo antes de escribir un segundo job con el mismo
+  patrón. El registro vive en **issue #860 (abierta)**, siguiendo el patrón real de #718 — no en
+  `deferred-work.md` (eso sigue sin encajar, no es "pendiente" sino "vigilado"), y tampoco solo en el código:
+  el docblock de `NotifyLockedIdentities::notifyOwner()` es el resumen de cara al lector del código, la issue
+  es el registro que se reabre. Consulta externa (ChatGPT) + contraste final:
+  `tmp/bmad-md/consult-gdpr-erasure-race-notify-locked-identities-20260827-000633.md`.
 
 - [x] [Review][Patch] **Cobertura Behat — aplicado.** Nuevo feature `features/backoffice/identity/lockout_notification.feature`
   + contexto `IdentityMaintenanceContext` (invoca `NotifyLockedIdentitiesHandler` directamente — ninguna

@@ -85,8 +85,13 @@ final readonly class NotifyLockedIdentities
      * The one failure that genuinely is per-row is the send, and it never reaches here — the mailer sits
      * behind {@see SendAccountLockedEmailBestEffort}, which swallows it and reports `false`.
      *
-     * **Accepted residual, not fixed: a GDPR erasure racing this method can leave a post-erasure audit row
-     * naming the erased subject.** `User` carries no `#[ORM\Version]`, so if `FulfilIdentityErasure` deletes
+     * **Accepted residual, not fixed — tracked in issue #860, not only here.** A closed decision still needs
+     * an open, searchable place a future reader finds *before* writing a second racing job, not a docblock
+     * that only speaks to whoever already opened this file. This paragraph is the code-facing summary;
+     * issue #860 is the record — reopen the decision there, not by editing this comment.
+     *
+     * A GDPR erasure racing this method can leave a post-erasure audit row naming the erased subject.
+     * `User` carries no `#[ORM\Version]`, so if `FulfilIdentityErasure` deletes
      * this same identity between the `findById()` above and `save()` below, Doctrine's plain `UPDATE` affects
      * zero rows without raising — `save()` returns as if it succeeded — and {@see RecordLockoutNoticeAuditBestEffort}
      * then writes a fresh `audit_log` row carrying the just-erased subject's real id. Window is the span of
