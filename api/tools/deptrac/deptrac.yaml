@@ -204,6 +204,11 @@ deptrac:
           collectors: [{ type: classLike, value: ^Twig\\.* }]
         - name: Vendor.Sentry
           collectors: [{ type: classLike, value: ^Sentry\\.* }]
+        # `intervention/image` (+ its `intervention/gif` companion), the Shared/Images
+        # canonicalization pipeline's decoder library — Infrastructure-only, per
+        # docs/rules/architecture.md (this module's Domain/ImageProcessor is a pure-PHP port).
+        - name: Vendor.Intervention
+          collectors: [{ type: classLike, value: ^Intervention\\.* }]
 
     ruleset:
         # Domain rule is identical for every module: only the shared-kernel Domain
@@ -459,6 +464,7 @@ deptrac:
             - Vendor.ApiPlatform
             - Vendor.Guzzle
             - Vendor.Sentry
+            - Vendor.Intervention
 
     # Published cross-context seams — the exact (importer => imported) pairs blessed
     # in api/.bounded-context-allowlist. Keep the two lists in sync.

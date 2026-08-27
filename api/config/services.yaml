@@ -9,6 +9,17 @@
 parameters:
     api.name: erpify
 
+    # Shared/Images canonicalization pipeline (Story 1.1) — deployment defaults, not domain
+    # requirements. Starting points only: not yet validated against a memory/CPU benchmark of the
+    # real worker (see the story's Task 5 for the reasoning: pixel count alone does not fix the
+    # memory cost, which also depends on bytes-per-pixel and the decoder's own intermediate
+    # buffers).
+    erpify.images.max_input_bytes: 20971520 # ~20 MB, strlen($bytes) received by ImageProcessor
+    erpify.images.max_decoded_pixels: 40000000 # ~40 megapixels (e.g. 8000x5000), declared width*height
+    erpify.images.max_input_dimension: 10000 # px, either declared side
+    erpify.images.max_output_dimension: 4096 # px, either side of the canonical output
+    erpify.images.encoding_quality: 85 # 0-100, jpeg/webp encoders only
+
 services:
     _defaults:
         autowire: true
