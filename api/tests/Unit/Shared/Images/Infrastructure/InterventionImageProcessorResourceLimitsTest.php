@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Images\Infrastructure;
 use Erpify\Shared\Images\Domain\Exception\EmptyImageInput;
 use Erpify\Shared\Images\Domain\Exception\FailureCategory;
 use Erpify\Shared\Images\Domain\Exception\ImageResourceLimitExceeded;
+use Erpify\Shared\Images\Infrastructure\ImagePreflightGuard;
 use Erpify\Shared\Images\Infrastructure\InterventionImageProcessor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -17,6 +18,9 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(InterventionImageProcessor::class)]
+#[CoversClass(ImagePreflightGuard::class)]
+#[CoversClass(EmptyImageInput::class)]
+#[CoversClass(ImageResourceLimitExceeded::class)]
 final class InterventionImageProcessorResourceLimitsTest extends TestCase
 {
     use InterventionImageProcessorTestHelpers;
@@ -63,6 +67,22 @@ final class InterventionImageProcessorResourceLimitsTest extends TestCase
 
         try {
             $processor->process($this->fixture('valid.png'));
+            $this->fail('Expected ImageResourceLimitExceeded to be thrown.');
+        } catch (ImageResourceLimitExceeded $imageResourceLimitExceeded) {
+            $this->assertSame(FailureCategory::ResourceLimitExceeded, $imageResourceLimitExceeded->failureCategory());
+        }
+    }
+
+    public function testRejectsAnAllowlistedInputWhoseHeaderCannotBeParsedForDeclaredDimensions(): void
+    {
+        // A real JPEG SOI marker plus enough header bytes for finfo to detect image/jpeg, but too
+        // short for getimagesizefromstring() to read a declared size — fails closed (does not fall
+        // through to an unbounded full decode).
+        $fixture = $this->fixture('valid.jpg');
+        $unparseableHeader = \substr($fixture, 0, (int) (\strlen($fixture) * 0.1));
+
+        try {
+            $this->processor()->process($unparseableHeader);
             $this->fail('Expected ImageResourceLimitExceeded to be thrown.');
         } catch (ImageResourceLimitExceeded $imageResourceLimitExceeded) {
             $this->assertSame(FailureCategory::ResourceLimitExceeded, $imageResourceLimitExceeded->failureCategory());

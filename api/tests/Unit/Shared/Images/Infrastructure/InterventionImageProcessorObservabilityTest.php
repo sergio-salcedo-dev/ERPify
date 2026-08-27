@@ -73,4 +73,15 @@ final class InterventionImageProcessorObservabilityTest extends TestCase
 
         $this->assertCount(0, $this->logger->records);
     }
+
+    public function testTheOriginalDomainExceptionStillPropagatesWhenLoggingItselfFails(): void
+    {
+        // Observability is never load-bearing for the rejection (Task 6) — a failing logger must
+        // not swallow or replace the original domain exception.
+        $processor = new InterventionImageProcessor(20_971_520, 40_000_000, 10_000, 4096, 85, new ThrowingLogger());
+
+        $this->expectException(EmptyImageInput::class);
+
+        $processor->process('');
+    }
 }

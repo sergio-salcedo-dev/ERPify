@@ -8,6 +8,7 @@ use Erpify\Shared\Images\Domain\Exception\FailureCategory;
 use Erpify\Shared\Images\Domain\Exception\ImageDecodingFailed;
 use Erpify\Shared\Images\Domain\Exception\ImageProcessingFailed;
 use Erpify\Shared\Images\Domain\Exception\UnsupportedImageFormat;
+use Erpify\Shared\Images\Infrastructure\ImagePreflightGuard;
 use Erpify\Shared\Images\Infrastructure\InterventionImageProcessor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -21,6 +22,10 @@ use Throwable;
  * @internal
  */
 #[CoversClass(InterventionImageProcessor::class)]
+#[CoversClass(ImagePreflightGuard::class)]
+#[CoversClass(UnsupportedImageFormat::class)]
+#[CoversClass(ImageDecodingFailed::class)]
+#[CoversClass(ImageProcessingFailed::class)]
 final class InterventionImageProcessorMimeHandlingTest extends TestCase
 {
     use InterventionImageProcessorTestHelpers;

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Infrastructure;
 
+use Erpify\Shared\Images\Domain\CanonicalImage;
 use Erpify\Shared\Images\Infrastructure\InterventionImageProcessor;
+use Erpify\Shared\Images\Infrastructure\MediaTypeEncoderFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -18,6 +20,8 @@ use ReflectionParameter;
  * @internal
  */
 #[CoversClass(InterventionImageProcessor::class)]
+#[CoversClass(CanonicalImage::class)]
+#[CoversClass(MediaTypeEncoderFactory::class)]
 final class InterventionImageProcessorDeterminismTest extends TestCase
 {
     use InterventionImageProcessorTestHelpers;
