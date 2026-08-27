@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
-use Erpify\Iam\Identity\Application\RecordLockoutAuditBestEffort;
+use Erpify\Iam\Identity\Application\RecordLockoutNoticeAuditBestEffort;
 use Erpify\Iam\Identity\Application\ReportsAuditFailureSafely;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
@@ -20,36 +21,51 @@ use Psr\Log\LogLevel;
 use RuntimeException;
 
 /**
- * The swallow-and-log contract of the lockout projection, pinned on its own. {@see LoginAttemptRegistrarAuditTest}
- * exercises the class through the use case but only asserts the row and the commit boundary, so deleting the
- * `logger->error` call and leaving a bare `catch` left the whole suite green — the failure mode of a
- * best-effort projection is silence, and nothing else in the suite could see it.
+ * The swallow-and-log contract of the notice projection, pinned on its own — mirroring
+ * {@see RecordLockoutAuditBestEffortTest} for the trip's own row. {@see NotifyLockedIdentitiesTest} exercises
+ * this class through the sweep but only asserts the row and that a failure here does not undo the already-
+ * sent mail or the already-committed stamp, so deleting the `logger->error` call and leaving a bare `catch`
+ * would leave that suite green — the failure mode of a best-effort projection is silence, and nothing else in
+ * the suite could see it.
  *
  * @internal
  */
-#[CoversClass(RecordLockoutAuditBestEffort::class)]
+#[CoversClass(RecordLockoutNoticeAuditBestEffort::class)]
 #[CoversTrait(ReportsAuditFailureSafely::class)]
-final class RecordLockoutAuditBestEffortTest extends TestCase
+final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
 {
-    public function testPassesTheLockoutThroughToTheAuditLogger(): void
+    public function testPassesTheNoticeThroughToTheAuditLoggerWithTheExpiryAsMetadata(): void
     {
         $subjectId = Uuid::generate();
+        $lockedUntil = new DateTimeImmutable('2026-08-11T12:15:00+00:00');
         $auditLogger = new RecordingAuditLogger();
         $logger = new RecordingLogger();
 
-        (new RecordLockoutAuditBestEffort($auditLogger, $logger))->record($subjectId);
+        (new RecordLockoutNoticeAuditBestEffort($auditLogger, $logger))->record($subjectId, $lockedUntil);
 
         $this->assertCount(1, $auditLogger->records);
         $record = $auditLogger->records[0];
-        $this->assertSame('USER_LOCKED', $record['action']);
+        $this->assertSame('ACCOUNT_LOCKOUT_NOTIFIED', $record['action']);
         $this->assertSame(AuditLevel::SECURITY, $record['level']);
 
         $resource = $record['resource'];
         $this->assertInstanceOf(AuditResource::class, $resource);
         $this->assertSame(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $resource->type);
         $this->assertSame($subjectId, $resource->id);
-        $this->assertSame([], $record['metadata'], 'Metadata would reach json_encode on a path that cannot throw.');
+        $this->assertSame(['lockedUntil' => '2026-08-11T12:15:00+00:00'], $record['metadata']);
         $this->assertSame([], $logger->records, 'A successful projection must not log.');
+    }
+
+    public function testANullExpiryCarriesNoMetadata(): void
+    {
+        $auditLogger = new RecordingAuditLogger();
+
+        (new RecordLockoutNoticeAuditBestEffort($auditLogger, new RecordingLogger()))
+            ->record(Uuid::generate(), null)
+        ;
+
+        $this->assertCount(1, $auditLogger->records);
+        $this->assertSame([], $auditLogger->records[0]['metadata']);
     }
 
     public function testSwallowsAFailedAuditWriteAndLogsItAtError(): void
@@ -57,7 +73,9 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
         $failure = new RuntimeException('audit_log is unavailable');
         $logger = new RecordingLogger();
 
-        (new RecordLockoutAuditBestEffort(new FailingAuditLogger($failure), $logger))->record(Uuid::generate());
+        (new RecordLockoutNoticeAuditBestEffort(new FailingAuditLogger($failure), $logger))
+            ->record(Uuid::generate(), null)
+        ;
 
         $this->assertCount(
             1,
@@ -70,13 +88,13 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
 
     public function testTheLogLineNamesNoSubject(): void
     {
-        // The id is the personal datum this control handles. A brute-force run drives this path once per
-        // lockout window, so naming the subject here would write a stream of person ids into the log the
-        // erasure chain does not reach. (The swallowed exception's own message is outside this class's control.)
+        // The id is the personal datum this control handles. The sweep drives this path once per lockout
+        // window, so naming the subject here would write a stream of person ids into the log the erasure
+        // chain does not reach. (The swallowed exception's own message is outside this class's control.)
         $subjectId = Uuid::generate();
         $logger = new RecordingLogger();
 
-        (new RecordLockoutAuditBestEffort(new FailingAuditLogger(), $logger))->record($subjectId);
+        (new RecordLockoutNoticeAuditBestEffort(new FailingAuditLogger(), $logger))->record($subjectId, null);
 
         $this->assertCount(1, $logger->records);
         $record = $logger->records[0];
@@ -86,15 +104,16 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
 
     public function testALoggerFailureWhileReportingDoesNotEscape(): void
     {
-        // The outer catch protects the audit write; nothing protected the report of that failure. A stream
-        // handler failing its own I/O (a closed stderr pipe, an unwritable log dir) used to escape from
-        // INSIDE the catch and abort whatever called record() — the scheduled tick, for the sibling
-        // {@see RecordLockoutNoticeAuditBestEffortTest}, or the login-failure handler here.
+        // The outer catch protects the audit write; nothing protected the report of that failure. A failing
+        // sink used to escape from INSIDE the catch and abort NotifyLockedIdentities::notifyLockedOwners()'s
+        // whole tick — every remaining locked identity in that run would go unreported, not just this one.
         $this->expectNotToPerformAssertions();
 
         $logger = $this->createStub(LoggerInterface::class);
         $logger->method('error')->willThrowException(new RuntimeException('stderr pipe closed'));
 
-        (new RecordLockoutAuditBestEffort(new FailingAuditLogger(), $logger))->record(Uuid::generate());
+        (new RecordLockoutNoticeAuditBestEffort(new FailingAuditLogger(), $logger))
+            ->record(Uuid::generate(), null)
+        ;
     }
 }

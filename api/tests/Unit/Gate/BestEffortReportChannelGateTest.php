@@ -95,6 +95,7 @@ final class BestEffortReportChannelGateTest extends TestCase
         'ReconcilePersonReferencesHandler.php',
         'ReconcileSubjectErasuresHandler.php',
         'RecordLockoutAuditBestEffort.php',
+        'RecordLockoutNoticeAuditBestEffort.php',
         'RecordRecoveryThrottleAuditBestEffort.php',
         'ReportDeadLetterBacklogHandler.php',
         'RevokeCurrentSessionController.php',
