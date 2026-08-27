@@ -41,8 +41,7 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
     #[Test]
     public function aDryRunMutatesNothing(): void
     {
-        // An inert eraser would break if the erasure ran, so a green dry-run proves it did not.
-        $tester = $this->tester($this->inertEraser());
+        $tester = $this->tester($this->refusingEraser());
 
         $tester->execute(['bank-account-id' => self::ACCOUNT_ID, '--dry-run' => true]);
 
@@ -112,7 +111,7 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
     #[Test]
     public function anUnattendedRunWithoutForceRefusesInsteadOfReportingSuccess(): void
     {
-        $tester = $this->tester($this->inertEraser());
+        $tester = $this->tester($this->refusingEraser());
 
         $tester->execute(['bank-account-id' => self::ACCOUNT_ID], ['interactive' => false]);
 
@@ -130,7 +129,7 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
     #[Test]
     public function aConfirmationNobodyCanAnswerRefusesInsteadOfReportingSuccess(): void
     {
-        $tester = $this->tester($this->inertEraser());
+        $tester = $this->tester($this->refusingEraser());
         $tester->setInputs([]);
 
         $tester->execute(['bank-account-id' => self::ACCOUNT_ID]);
@@ -141,13 +140,15 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
     }
 
     /**
-     * The dry run is the one no-op the operator did express, so it keeps its exit code even where no
-     * confirmation could be asked for — it is checked before the unattended refusal for exactly that reason.
+     * An ORDERING pin, not a regression pin: this passes with or without the unattended refusal, because the
+     * dry run short-circuits before the confirmation either way. What it fixes in place is that order — the
+     * dry run is the one no-op the operator did express, so it must keep its exit code where a run that was
+     * never asked does not.
      */
     #[Test]
     public function anUnattendedDryRunStaysSuccessful(): void
     {
-        $tester = $this->tester($this->inertEraser());
+        $tester = $this->tester($this->refusingEraser());
 
         $tester->execute(
             ['bank-account-id' => self::ACCOUNT_ID, '--dry-run' => true],
@@ -169,6 +170,26 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
             $this->createStub(BankAccountRepository::class),
             $this->createStub(EnvelopeEncryptor::class),
         );
+    }
+
+    /**
+     * An eraser whose two irreversible calls are refused outright, so a test asserting "nothing was erased"
+     * fails on the mutation itself instead of on an exit code that happens to agree with it.
+     *
+     * {@see inertEraser()} cannot do this job and reading it as if it could is the trap: its stubs answer
+     * `findById(): null` and `destroyScope(): false`, so the use case runs to completion and reports
+     * "nothing to erase" — a green that says the subject had no record, never that the command declined to
+     * look. Refusing the calls is what separates the two.
+     */
+    private function refusingEraser(): EraseBankAccountSubject
+    {
+        $repository = $this->createMock(BankAccountRepository::class);
+        $repository->expects($this->never())->method('remove');
+
+        $encryptor = $this->createMock(EnvelopeEncryptor::class);
+        $encryptor->expects($this->never())->method('destroyScope');
+
+        return $this->eraser($repository, $encryptor);
     }
 
     private function eraser(BankAccountRepository $repository, EnvelopeEncryptor $encryptor): EraseBankAccountSubject

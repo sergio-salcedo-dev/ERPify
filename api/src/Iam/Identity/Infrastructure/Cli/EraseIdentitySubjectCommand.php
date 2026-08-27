@@ -150,7 +150,13 @@ final class EraseIdentitySubjectCommand extends Command
         // it demoted: the question helper answers with the default it was handed and turns the input
         // non-interactive instead of raising. Reading the flag a second time is therefore what separates a
         // typed "no" from a question nobody was there to hear, and without it the confirmation's own
-        // false-by-default is the operator's answer as far as this method can tell.
+        // false-by-default is the operator's answer as far as this method can tell. It reaches a stdin that
+        // yields NOTHING, not one that yields not-yes: a pipe carrying a blank line is an answer, and
+        // accepts the default.
+        //
+        // This is load-bearing rather than belt-and-braces. The console decides interactivity from the flags
+        // alone and never asks whether it is attached to a terminal, so an unattended run that omits
+        // `--no-interaction` arrives here still interactive and this read is the only thing in front of it.
         if (!$input->isInteractive()) {
             return $this->refuseUnattended($io);
         }

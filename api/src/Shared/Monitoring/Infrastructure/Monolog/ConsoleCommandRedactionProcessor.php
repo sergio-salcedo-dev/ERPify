@@ -23,9 +23,14 @@ use Stringable;
  *
  * **Which invocations actually reach the CRITICAL path is narrower than "a command that fails", and getting
  * this wrong is what an adversarial pass caught.** Every `#[AsCommand]` in this application that takes person
- * data catches `Throwable` and returns `Command::FAILURE` — `EraseIdentitySubjectCommand`,
- * `CreateInitialAdministratorCommand` and `CreateInvitationCommand` all do — so none of them can raise a
- * `ConsoleErrorEvent`, and their own failures reach only `:67` at DEBUG. A DEBUG record buffers without
+ * data on its command line catches `Throwable` and returns `Command::FAILURE` — the two GDPR subject
+ * erasures, the actor-trail erasure, the administrator bootstrap and the three invitation commands, plus the
+ * organization provisioner — so none of them can raise a `ConsoleErrorEvent`, and their own failures reach
+ * only `:67` at DEBUG. **That membership is a list, and nothing checks it**, which is the same shape this
+ * class's own "by structure, never by enumeration" argument refuses one paragraph down: a later command that
+ * takes an email or a subject id and lets a throwable escape rejoins the CRITICAL path silently, and an
+ * earlier reading of this paragraph named three of the eight without anything going red. The redaction below
+ * is what holds regardless; this paragraph only bounds how often it is reached. A DEBUG record buffers without
  * activating, and `FingersCrossedHandler::flushBuffer()` DISCARDS the buffer when no `passthru_level` is
  * configured, which is this deployment. The live producer of `:46` is an invocation the console cannot BIND —
  * an unknown option, a wrong arity, a mistyped command name — because that raises outside the command's own

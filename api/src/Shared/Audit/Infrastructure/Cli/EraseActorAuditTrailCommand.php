@@ -30,12 +30,13 @@ use Throwable;
  *
  * **Exit codes are this command's contract with an unattended caller**, which reads `$?` and never the screen:
  * `SUCCESS` means the trail is anonymised, or that the no-op the operator asked for (no matching rows,
- * `--dry-run`, or a confirmation answered "no") happened; `FAILURE` means the anonymisation ran and its
- * compliance self-audit did not — read that as "an erasure half-ran", never as "nothing happened", because
- * the `UPDATE` is already committed and irreversible by then; `INVALID` means nothing was attempted and the
- * command line is what needs repairing — a malformed id, or a confirmation this run could not put. `INVALID`
- * is the one code a caller must not retry on. `--quiet` and `--silent` imply `--no-interaction` AND suppress
- * the refusal's own message, so an unattended run that means to erase passes `--force`.
+ * `--dry-run`, or a confirmation answered "no") happened; `FAILURE` means the erasure did not complete, and
+ * **the message says whether it started** — the `UPDATE` failing changed nothing and is safe to repeat, while
+ * the `UPDATE` succeeding and its compliance self-audit failing leaves an erasure that is done, irreversible,
+ * and unrecorded; `INVALID` means nothing was attempted and the command line is what needs repairing — a
+ * malformed id, or a confirmation this run could not put. `INVALID` is the one code a caller must not retry
+ * on. `--quiet` and `--silent` imply `--no-interaction` AND suppress the refusal's own message, so an
+ * unattended run that means to erase passes `--force`.
  */
 #[AsCommand(
     name: 'audit:gdpr:erase',
@@ -72,8 +73,8 @@ final class EraseActorAuditTrailCommand extends Command
                 it erases both axes in one transaction.
 
                 Exit codes: <comment>0</comment> anonymised, or the no-op you asked for;
-                <comment>1</comment> the anonymisation committed but its compliance self-audit failed — an
-                erasure that half-ran, not a no-op; <comment>2</comment> nothing was attempted and the command
+                <comment>1</comment> the erasure did not complete — read the message, which says whether it
+                started; <comment>2</comment> nothing was attempted and the command
                 line needs fixing — a malformed id, or a confirmation this run could not put. Do not retry on
                 <comment>2</comment>. A run that cannot be asked (<comment>--no-interaction</comment>, a closed
                 stdin, <comment>--quiet</comment>, <comment>--silent</comment>) needs <comment>--force</comment>
@@ -145,7 +146,12 @@ final class EraseActorAuditTrailCommand extends Command
         // A stdin nothing can be read from — EOF, an empty pipe — enters the question interactive and leaves
         // it demoted: the question helper answers with the default it was handed and turns the input
         // non-interactive instead of raising. Reading the flag a second time is therefore what separates a
-        // typed "no" from a question nobody was there to hear.
+        // typed "no" from a question nobody was there to hear. It reaches a stdin that yields NOTHING, not
+        // one that yields not-yes: a pipe carrying a blank line is an answer, and accepts the default.
+        //
+        // This is load-bearing rather than belt-and-braces. The console decides interactivity from the flags
+        // alone and never asks whether it is attached to a terminal, so an unattended run that omits
+        // `--no-interaction` arrives here still interactive and this read is the only thing in front of it.
         if (!$input->isInteractive()) {
             return $this->refuseUnattended($io);
         }
@@ -170,9 +176,30 @@ final class EraseActorAuditTrailCommand extends Command
         return Command::INVALID;
     }
 
+    /**
+     * The two failures here are not the same failure, and both answer `FAILURE` because the exit code alone
+     * cannot separate them — the message must. If the `UPDATE` itself fails nothing was changed and the run
+     * is safe to repeat with the original id; if it succeeded and only the compliance self-audit failed, the
+     * erasure is done and irreversible and repeating it with the original id would report "nothing to erase"
+     * over a subject that was in fact erased.
+     *
+     * The anonymisation therefore carries its own `catch`. Leaving it outside one does not merely lose the
+     * distinction: the throwable escapes `execute()`, and the console derives the process exit code from
+     * `Throwable::getCode()` — so a DBAL driver code surfaces as that number, or as 255 once it exceeds the
+     * byte, and a caller reading `$?` sees neither `1` nor anything it can map.
+     */
     private function eraseAndReport(SymfonyStyle $io, string $actorId): int
     {
-        $result = $this->anonymiser->anonymise($actorId);
+        try {
+            $result = $this->anonymiser->anonymise($actorId);
+        } catch (Throwable $throwable) {
+            $io->error(\sprintf(
+                'Anonymisation failed: %s. No rows were changed — this run is safe to repeat with the same id.',
+                $throwable->getMessage(),
+            ));
+
+            return Command::FAILURE;
+        }
 
         try {
             $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [

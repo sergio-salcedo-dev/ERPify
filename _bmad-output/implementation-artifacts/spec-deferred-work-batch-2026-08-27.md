@@ -118,18 +118,73 @@ output carries PII.
 The three commands do **not** share a branch structure — the actor command calls `countFor()` and
 returns early on zero matches before any confirmation — so the pass was aimed specifically at
 whether a copied guard sits in the right place in each, which is where this kind of mirror goes
-wrong.
+wrong. It measured **144 `CommandTester` combinations** and **20 real subprocess runs** through a
+real `Application` with real stdin redirection, against a `symfony/console` install left in a
+scratch directory. The exit-code/mutation matrix came back clean: no combination mutates and
+reports non-zero, and none reports zero for a mutation that did not happen outside the four
+intended no-ops.
+
+### It found a GRAVE, and it was in this branch's own new prose
+
+`EraseActorAuditTrailCommand::eraseAndReport()` ran the anonymising `UPDATE` **outside** its
+`try`; only the compliance self-audit was inside it. So a failing `UPDATE` — a deadlock, a
+connection drop, a statement timeout — escaped `execute()` entirely, and the console derives the
+process exit code from `Throwable::getCode()`: **measured at 7 for a DBAL driver code and at 189
+for `1213`**, never `1`. On top of that structural defect, the docblock this branch had just
+added asserted that a non-zero there means "an erasure half-ran, never nothing happened". An
+operator following it on a mid-failover Postgres would record a person as erased whose `actor_id`
+is still in `audit_log` in clear — the same defect class the branch exists to close, one command
+over, introduced by the documentation rather than by the code.
+
+Fixed by giving the anonymisation its own `catch` returning `FAILURE` with a message stating that
+nothing changed, and by rewriting the contract in both the docblock and the help: `FAILURE` now
+means "the erasure did not complete, and the message says whether it started".
+
+### The rest
+
+- **Moderate — `ConsoleCommandRedactionProcessor` asserted something this command falsified.** Its
+  docblock states that no `#[AsCommand]` taking person data can raise a `ConsoleErrorEvent`,
+  because they all catch `Throwable` — the CRITICAL path that flushes the whole prod log buffer to
+  stderr. This command did not, so the claim was false. Fixing the GRAVE closes the hole; the
+  enumeration was also corrected, since it named three of eight, and the paragraph now says
+  plainly that the membership is a list nothing checks — which is the shape that class's own
+  "by structure, never by enumeration" argument refuses.
+- **Moderate — the new bank tests could not detect a mutation.** `inertEraser()`'s stubs answer
+  `findById(): null` and `destroyScope(): false`, so the use case runs to completion and reports
+  "nothing to erase"; the comment claiming "an inert eraser would break if the erasure ran" was
+  false, and the tests asserted only exit code and display text. Move the refusal after the
+  erasure and they stay green while a real DEK is shredded. They now use a `refusingEraser()`
+  whose `remove` and `destroyScope` are `expects($this->never())`.
+- **Minor — three of the seven new tests pass with or without the fix.** The dry-run and
+  zero-match cases short-circuit before the confirmation either way. They are legitimate ordering
+  pins, and their docblocks now say so instead of implying they catch the original defect.
+- **Minor — "a closed stdin" over-stated the reach**, and the re-read is load-bearing rather than
+  belt-and-braces. Measured: a pipe carrying a **blank line** is an answer and accepts the default
+  (exit 0), so `echo | bin/console …` still erases nothing and reports success. More importantly,
+  `Application::configureIO()` in Console 8.1.1 contains **no `posix_isatty` check** — an
+  unattended run that omits `--no-interaction` stays interactive, so the post-`confirm()` re-read
+  is the only thing in front of it. Both facts are now in all three commands' comments, because
+  the second is an assumption a Symfony upgrade could quietly change.
+- **Minor — `docs/architecture-api.md` scoped the contract to one command** while three now share
+  it. Generalised, including the way `audit:gdpr:erase` reads `FAILURE` differently.
+- **Nit, recorded not fixed — the actor command's exit code is an existence oracle.** `countFor()`
+  runs before the guards, so an unattended run answers `2` for an actor with rows and `0` for one
+  without. No new exposure (`--dry-run` prints the count to the same caller) and no mutation can
+  precede the refusal, but the exit code is a contract now, so it is written down.
 
 ### Duplication, argued rather than assumed
 
-The guard pair now exists in three commands across three bounded contexts, which is exactly the
-Rule of Three. It was **not** extracted into `Shared/` in this branch: the repository's operating
-mode is propose-first, and an extraction is a larger change than the fix the owner asked for.
-The argument for extracting is real and is recorded here rather than lost — the mechanism's
-subtle half is the post-`confirm()` re-read, and a mechanism a future fourth command has to
-remember to copy is one it will get wrong. The argument against is that these are three
-Infrastructure/Cli classes in three contexts, and a shared console helper is a new seam in
-`Shared/` for three callers that are already correct.
+The guard pair now exists in all three commands that call `SymfonyStyle::confirm()`, which is
+exactly the Rule of Three. It was **not** extracted into `Shared/`, and the pass's own reasoning
+is why the answer is not a helper at all: what varies between the three is not the guard body but
+its **placement** — the actor command interposes a `countFor()` and a zero-match branch before it
+— so a shared helper would centralise the half that is already correct in all three while leaving
+the ordering untouched at each call site. The ordering is where this pass's GRAVE and one of its
+MODERATEs both lived. A gate in `api/tests/Unit/Gate/` asserting that every `#[AsCommand]`
+reaching `confirm()` re-reads `isInteractive()` afterwards costs nothing at the call sites and
+catches the fourth erasure command, which will be written by copying whichever of the three its
+author finds first. Recorded in `deferred-work.md` rather than built here, since it is a new gate
+rather than the fix that was asked for.
 
 ### What this pass could not do
 

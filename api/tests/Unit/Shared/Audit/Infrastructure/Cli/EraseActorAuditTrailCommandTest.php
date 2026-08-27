@@ -120,8 +120,10 @@ final class EraseActorAuditTrailCommandTest extends TestCase
     }
 
     /**
-     * Both no-ops the operator did express keep their exit code even where no confirmation could be asked
-     * for: they are checked before the unattended refusal for exactly that reason.
+     * An ORDERING pin, not a regression pin: this and the zero-match case below pass with or without the
+     * unattended refusal, because both short-circuit before the confirmation either way. What they fix in
+     * place is that order — a no-op the operator did express, and a report that found nothing to do, must
+     * keep their exit code where a run that was never asked does not.
      */
     public function testAnUnattendedDryRunStaysSuccessful(): void
     {
