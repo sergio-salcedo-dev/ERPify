@@ -417,6 +417,16 @@ final class User extends AggregateRoot
     }
 
     /**
+     * The instant the current lockout expires, or `null` when the identity is not locked. Read by
+     * {@see \Erpify\Iam\Identity\Application\NotifyLockedIdentities} once {@see awaitsLockoutNoticeAt()} has
+     * already confirmed the identity is locked, to record what expiry the notified owner was told about.
+     */
+    public function lockedUntil(): ?DateTimeImmutable
+    {
+        return $this->lockedUntil;
+    }
+
+    /**
      * @return non-empty-string the canonical email; never blank because {@see Email::from()} rejects blanks
      */
     public function email(): string
