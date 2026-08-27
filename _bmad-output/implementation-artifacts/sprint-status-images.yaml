@@ -69,8 +69,11 @@ development_status:
   # Story 1.1 ya tiene fichero propio
   # (img-1-1-subir-imagen-obtener-representacion-canonica.md: bmad-create-story, una vuelta de
   # revisión externa y las decisiones de canonicalización cerradas con Sergio el 2026-08-27) —
-  # por eso pasa a ready-for-dev y la épica a in-progress. Stories 1.2 y 1.3 siguen en backlog
-  # (solo cortadas dentro de epics-images.md, sin fichero propio todavía).
+  # por eso pasa a ready-for-dev y la épica a in-progress.
+  # img-1-2: fichero de historia creado 2026-08-27 (PR #869) y pase adversarial externo
+  # (bmad-code-review) registrado en su sección `## Adversarial pass` el 2026-08-28 — 16 patches
+  # aplicados, entre ellos el enrutado outbox de la señal de borrado. Story 1.3 sigue en backlog
+  # (solo cortada dentro de epics-images.md, sin fichero propio todavía).
   # img-1-1: code review (bmad-code-review, PR #862) completo 2026-08-27 — 1 decision-needed
   # resuelto (fail-closed) y 6 patch aplicados, make php.stan/php.quality/php.unit en verde.
   epic-images: in-progress
