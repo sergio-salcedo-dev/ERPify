@@ -31,6 +31,7 @@ import { BankAccountsTable } from "./_components/BankAccountsTable";
 import { BankAccountsCards } from "./_components/BankAccountsCards";
 import { BankAccountsStackedList } from "./_components/BankAccountsStackedList";
 import { BankAccountsFilters } from "./_components/BankAccountsFilters";
+import { BankAccountIbanLookup } from "./_components/BankAccountIbanLookup";
 import { BankAccountsPagination } from "../banks/[id]/accounts/_components/BankAccountsPagination";
 import { BankAccountsColumnPicker } from "./_components/BankAccountsColumnPicker";
 import {
@@ -261,6 +262,7 @@ export default function BankAccountsListPage() {
             Every bank account across all banks in the back office.
           </p>
         </div>
+        <BankAccountIbanLookup />
       </header>
 
       {showFiltersToolbar ? (
