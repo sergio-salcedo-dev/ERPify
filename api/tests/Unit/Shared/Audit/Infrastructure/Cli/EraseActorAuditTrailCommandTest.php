@@ -78,6 +78,78 @@ final class EraseActorAuditTrailCommandTest extends TestCase
         $this->assertCount(0, $logger->records);
     }
 
+    /**
+     * The operator was asked and never answered, so success would be a lie a compliance job cannot see
+     * through: it reads `$?`, and a `0` from a trail nobody anonymised is indistinguishable from a `0` from
+     * one that was.
+     */
+    public function testAnUnattendedRunWithoutForceRefusesInsteadOfReportingSuccess(): void
+    {
+        $anonymiser = new RecordingAuditActorAnonymiser(5);
+        $logger = new RecordingAuditLogger();
+        $tester = $this->testerFor($anonymiser, $logger);
+
+        $exitCode = $tester->execute(['actor-id' => self::ACTOR_ID], ['interactive' => false]);
+
+        $this->assertSame(Command::INVALID, $exitCode);
+        // Single tokens: the refusal renders as a SymfonyStyle error block, which word-wraps to the terminal
+        // width, so any multi-word phrase can straddle a line break the assertion cannot see.
+        $this->assertStringContainsString('Refusing', $tester->getDisplay());
+        $this->assertStringContainsString('--force', $tester->getDisplay());
+        $this->assertCount(0, $anonymiser->anonymisedActorIds);
+        $this->assertCount(0, $logger->records);
+    }
+
+    /**
+     * A separate path from --no-interaction: the input is still interactive when the question is put, and the
+     * question helper answers it with the default rather than raising.
+     */
+    public function testAConfirmationNobodyCanAnswerRefusesInsteadOfReportingSuccess(): void
+    {
+        $anonymiser = new RecordingAuditActorAnonymiser(5);
+        $logger = new RecordingAuditLogger();
+        $tester = $this->testerFor($anonymiser, $logger);
+        $tester->setInputs([]);
+
+        $exitCode = $tester->execute(['actor-id' => self::ACTOR_ID]);
+
+        $this->assertSame(Command::INVALID, $exitCode);
+        $this->assertStringContainsString('Refusing', $tester->getDisplay());
+        $this->assertCount(0, $anonymiser->anonymisedActorIds);
+        $this->assertCount(0, $logger->records);
+    }
+
+    /**
+     * Both no-ops the operator did express keep their exit code even where no confirmation could be asked
+     * for: they are checked before the unattended refusal for exactly that reason.
+     */
+    public function testAnUnattendedDryRunStaysSuccessful(): void
+    {
+        $anonymiser = new RecordingAuditActorAnonymiser(5);
+        $logger = new RecordingAuditLogger();
+        $tester = $this->testerFor($anonymiser, $logger);
+
+        $exitCode = $tester->execute(
+            ['actor-id' => self::ACTOR_ID, '--dry-run' => true],
+            ['interactive' => false],
+        );
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertCount(0, $anonymiser->anonymisedActorIds);
+    }
+
+    public function testAnUnattendedRunWithNoMatchingRowsStaysSuccessful(): void
+    {
+        $anonymiser = new RecordingAuditActorAnonymiser(0);
+        $logger = new RecordingAuditLogger();
+        $tester = $this->testerFor($anonymiser, $logger);
+
+        $exitCode = $tester->execute(['actor-id' => self::ACTOR_ID], ['interactive' => false]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertCount(0, $anonymiser->anonymisedActorIds);
+    }
+
     public function testItErasesAndAuditsTheErasureWithThePseudonymNeverTheOriginalId(): void
     {
         $anonymiser = new RecordingAuditActorAnonymiser(2);

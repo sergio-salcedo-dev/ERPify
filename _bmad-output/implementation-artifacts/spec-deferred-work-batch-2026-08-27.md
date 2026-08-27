@@ -23,7 +23,11 @@ pending-only, so every resolved item loses its bullet rather than gaining a note
 3. **`ResetSystemClockExtension` resets the ambient clock before each test**, not only after.
 4. **Documentation drift**: the audit ADR's `metadata.operation` key, the dead
    `api/phpunit.xml.dist` path, and `docs/architecture-pwa.md`'s PascalCase module names.
-5. **Registry sweep**: 20 bullets removed from 117 — 8 resolved by this branch, 12 already
+5. **The same silent-zero defect in both sibling GDPR commands.** `bank-account:gdpr:erase-subject`
+   (which destroys a DEK — an irreversible crypto-shred) and `audit:gdpr:erase` carried the
+   identical shape. Fixed with the same guard pair, so `$?` now means one thing across all
+   three commands rather than two.
+6. **Registry sweep**: 20 bullets removed from 117 — 8 resolved by this branch, 12 already
    closed in the tree with nobody having removed the bullet. Four rotted references repaired,
    one false premise restated.
 
@@ -93,17 +97,39 @@ routes through that same helper on the same input object.
 
 Five went to `deferred-work.md` under this pass's own heading, the first two deliberately:
 
-- **P-1 — the same silent-zero defect is live in both sibling GDPR commands**
-  (`bank-account:gdpr:erase-subject`, which destroys a DEK, and `audit:gdpr:erase`). The
-  registry bullet this branch removed named only the identity command, so closing it would
-  otherwise have deleted the only written record of the class. Recording it is the minimum;
-  whether to fix both here is a scope decision for the repository owner, not one to take
-  unilaterally on a GDPR path.
 - **P-2 — `audit:gdpr:erase` has a genuine erases-but-reports-non-zero path.** Deliberate and
-  commented, but a live instance of the hazard this branch's own docblock warns about.
+  commented. Narrowed rather than closed: that command's class docblock now states that its
+  `FAILURE` means "an erasure half-ran", so the contract is no longer ambiguous; what remains
+  is the product decision of what a compliance job should do on reading it.
 - **P-3** an API-first fourth `operation` value hard-fails the PWA detail read; **B-2** the
   spared session id is compared with `===` where Postgres compares as `uuid`; **A-5** a stream
   already at `feof()` defeats both new guards, with no reachable instance today.
+
+## Second adversarial pass — the sibling commands
+
+**P-1 was escalated into scope on the repository owner's instruction** rather than left recorded,
+so `bank-account:gdpr:erase-subject` and `audit:gdpr:erase` now carry the same guard pair as the
+identity command. That is new GDPR code the first pass never saw, so it received its own hostile
+read in a fresh context before the pull request was opened, over the same axes: the full
+invocation matrix per command, the post-`confirm()` re-read verified against real
+`symfony/console` v8.1.1 source, whether each new test fails without the fix, and whether any new
+output carries PII.
+
+The three commands do **not** share a branch structure — the actor command calls `countFor()` and
+returns early on zero matches before any confirmation — so the pass was aimed specifically at
+whether a copied guard sits in the right place in each, which is where this kind of mirror goes
+wrong.
+
+### Duplication, argued rather than assumed
+
+The guard pair now exists in three commands across three bounded contexts, which is exactly the
+Rule of Three. It was **not** extracted into `Shared/` in this branch: the repository's operating
+mode is propose-first, and an extraction is a larger change than the fix the owner asked for.
+The argument for extracting is real and is recorded here rather than lost — the mechanism's
+subtle half is the post-`confirm()` re-read, and a mechanism a future fourth command has to
+remember to copy is one it will get wrong. The argument against is that these are three
+Infrastructure/Cli classes in three contexts, and a shared console helper is a new seam in
+`Shared/` for three callers that are already correct.
 
 ### What this pass could not do
 

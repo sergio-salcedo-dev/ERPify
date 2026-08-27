@@ -27,6 +27,15 @@ use Throwable;
  *
  * The erasure is itself recorded as a `security` audit entry carrying the resulting pseudonym (never the
  * original id), so the act of forgetting is provable for compliance without re-identifying the person.
+ *
+ * **Exit codes are this command's contract with an unattended caller**, which reads `$?` and never the screen:
+ * `SUCCESS` means the trail is anonymised, or that the no-op the operator asked for (no matching rows,
+ * `--dry-run`, or a confirmation answered "no") happened; `FAILURE` means the anonymisation ran and its
+ * compliance self-audit did not — read that as "an erasure half-ran", never as "nothing happened", because
+ * the `UPDATE` is already committed and irreversible by then; `INVALID` means nothing was attempted and the
+ * command line is what needs repairing — a malformed id, or a confirmation this run could not put. `INVALID`
+ * is the one code a caller must not retry on. `--quiet` and `--silent` imply `--no-interaction` AND suppress
+ * the refusal's own message, so an unattended run that means to erase passes `--force`.
  */
 #[AsCommand(
     name: 'audit:gdpr:erase',
@@ -62,8 +71,17 @@ final class EraseActorAuditTrailCommand extends Command
                 beside the fresh pseudonym. Use <info>identity:gdpr:erase-subject</info> for an identity —
                 it erases both axes in one transaction.
 
+                Exit codes: <comment>0</comment> anonymised, or the no-op you asked for;
+                <comment>1</comment> the anonymisation committed but its compliance self-audit failed — an
+                erasure that half-ran, not a no-op; <comment>2</comment> nothing was attempted and the command
+                line needs fixing — a malformed id, or a confirmation this run could not put. Do not retry on
+                <comment>2</comment>. A run that cannot be asked (<comment>--no-interaction</comment>, a closed
+                stdin, <comment>--quiet</comment>, <comment>--silent</comment>) needs <comment>--force</comment>
+                to erase.
+
                   <info>php %command.full_name% <actor-id> --dry-run</info>
                   <info>php %command.full_name% <actor-id></info>
+                  <info>php %command.full_name% <actor-id> --force</info>
                 HELP)
         ;
     }
@@ -96,16 +114,60 @@ final class EraseActorAuditTrailCommand extends Command
             return Command::SUCCESS;
         }
 
-        if (
-            true !== $input->getOption('force')
-            && !$io->confirm(\sprintf('Irreversibly anonymise %d row(s)?', $matched), false)
-        ) {
+        $preflight = $this->confirmUnlessForced($io, $input, $matched);
+
+        if (null !== $preflight) {
+            return $preflight;
+        }
+
+        return $this->eraseAndReport($io, $actorId);
+    }
+
+    /**
+     * The confirmation and the two ways it can go unanswered. A "no" the operator typed is a rejection they
+     * expressed, so it succeeds; a question this run could never put is a rejection nobody expressed, and
+     * reporting success there is indistinguishable from a completed erasure to a caller reading `$?`.
+     *
+     * @return int|null the exit code to stop on, or null to proceed with the anonymisation
+     */
+    private function confirmUnlessForced(SymfonyStyle $io, InputInterface $input, int $matched): ?int
+    {
+        if (true === $input->getOption('force')) {
+            return null;
+        }
+
+        if (!$input->isInteractive()) {
+            return $this->refuseUnattended($io);
+        }
+
+        $confirmed = $io->confirm(\sprintf('Irreversibly anonymise %d row(s)?', $matched), false);
+
+        // A stdin nothing can be read from — EOF, an empty pipe — enters the question interactive and leaves
+        // it demoted: the question helper answers with the default it was handed and turns the input
+        // non-interactive instead of raising. Reading the flag a second time is therefore what separates a
+        // typed "no" from a question nobody was there to hear.
+        if (!$input->isInteractive()) {
+            return $this->refuseUnattended($io);
+        }
+
+        if (!$confirmed) {
             $io->warning('Aborted — no rows were changed.');
 
             return Command::SUCCESS;
         }
 
-        return $this->eraseAndReport($io, $actorId);
+        return null;
+    }
+
+    private function refuseUnattended(SymfonyStyle $io): int
+    {
+        $io->error(
+            'Refusing to anonymise: this run cannot ask for a confirmation (--no-interaction, or stdin '
+            . 'closed) and no confirmation was given. Pass --force to erase unattended, or --dry-run to '
+            . 'report the matching row count without touching it. No rows were changed.',
+        );
+
+        return Command::INVALID;
     }
 
     private function eraseAndReport(SymfonyStyle $io, string $actorId): int

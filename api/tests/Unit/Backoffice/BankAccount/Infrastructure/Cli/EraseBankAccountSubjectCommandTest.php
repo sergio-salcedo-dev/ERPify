@@ -104,6 +104,60 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
         $this->assertStringContainsString('Erasure failed', $tester->getDisplay());
     }
 
+    /**
+     * The operator was asked and never answered, so success would be a lie a compliance job cannot see
+     * through: it reads `$?`, and a `0` from an erasure that shredded nothing is indistinguishable from a `0`
+     * from one that destroyed the key.
+     */
+    #[Test]
+    public function anUnattendedRunWithoutForceRefusesInsteadOfReportingSuccess(): void
+    {
+        $tester = $this->tester($this->inertEraser());
+
+        $tester->execute(['bank-account-id' => self::ACCOUNT_ID], ['interactive' => false]);
+
+        $this->assertSame(Command::INVALID, $tester->getStatusCode());
+        // Single tokens: the refusal renders as a SymfonyStyle error block, which word-wraps to the terminal
+        // width, so any multi-word phrase can straddle a line break the assertion cannot see.
+        $this->assertStringContainsString('Refusing', $tester->getDisplay());
+        $this->assertStringContainsString('--force', $tester->getDisplay());
+    }
+
+    /**
+     * A separate path from --no-interaction: the input is still interactive when the question is put, and the
+     * question helper answers it with the default rather than raising.
+     */
+    #[Test]
+    public function aConfirmationNobodyCanAnswerRefusesInsteadOfReportingSuccess(): void
+    {
+        $tester = $this->tester($this->inertEraser());
+        $tester->setInputs([]);
+
+        $tester->execute(['bank-account-id' => self::ACCOUNT_ID]);
+
+        $this->assertSame(Command::INVALID, $tester->getStatusCode());
+        $this->assertStringContainsString('Refusing', $tester->getDisplay());
+        $this->assertStringContainsString('--force', $tester->getDisplay());
+    }
+
+    /**
+     * The dry run is the one no-op the operator did express, so it keeps its exit code even where no
+     * confirmation could be asked for — it is checked before the unattended refusal for exactly that reason.
+     */
+    #[Test]
+    public function anUnattendedDryRunStaysSuccessful(): void
+    {
+        $tester = $this->tester($this->inertEraser());
+
+        $tester->execute(
+            ['bank-account-id' => self::ACCOUNT_ID, '--dry-run' => true],
+            ['interactive' => false],
+        );
+
+        $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
+        $this->assertStringContainsString('Dry run', $tester->getDisplay());
+    }
+
     private function tester(EraseBankAccountSubject $eraser): CommandTester
     {
         return new CommandTester(new EraseBankAccountSubjectCommand($eraser));
