@@ -162,12 +162,6 @@ Feature: Search the cross-bank account collection
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "unsupported-search-operator"
 
-  Scenario: Filtering accounts by a list of IBANs is refused
-    When I send a "GET" request to "/backoffice/bank-accounts?filters[0][field]=iban&filters[0][operator]=in&filters[0][value][]=DE89370400440532013000"
-    Then the response status code should be 422
-    And the header "Content-Type" should be equal to "application/problem+json"
-    And the JSON node "type" should be equal to "unsupported-search-operator"
-
   # A malformed uuid bound against the bankId UUID column surfaces as input error (the field map marks
   # bankId requiresUuidValues), never a Postgres 22P02 turned 500.
   Scenario: A bankId filter with a malformed uuid returns 422 invalid-search-value
@@ -184,17 +178,20 @@ Feature: Search the cross-bank account collection
     And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
-  # iban is canonicalized on write (upper-case, spaces stripped); the field normalizer applies the same
-  # rule, so a human-grouped, lower-case fragment still matches the stored compact form (not a silent
-  # empty page). Only Globex's German IBAN contains "DE893704".
-  Scenario: A space-formatted lower-case IBAN fragment still matches via the canonicalizing normalizer
-    When I send a "GET" request to "/backoffice/bank-accounts?filters[0][field]=iban&filters[0][operator]=contains&filters[0][value]=de89%203704"
-    Then the response status code should be 200
-    And the JSON node "data" should have 1 elements
-    And the JSON node "data[0].holderName" should be equal to "Globex Corporation"
-    And the JSON node "data[0].iban" should be equal to "DE89370400440532013000"
-    And the JSON node "data[0].bankName" should be equal to "JPMorgan Chase"
-    And 2 request got executed only for doctrine connection "default"
+  # iban is deliberately NOT part of the GET filters[] vocabulary: the value is classified PII, and a
+  # query-string parameter can reach an access log or an intermediary cache keyed on the URL regardless
+  # of any single deployment's redaction config. An exact lookup by IBAN goes through the dedicated POST
+  # endpoint instead — see iban_lookup.feature. This is the same "outside the allow-list" shape as the
+  # status/currency refusal above, pinned separately because the field used to be filterable here and a
+  # regression that quietly re-admits it would otherwise go unnoticed.
+  Scenario: Filtering accounts by iban through the generic GET filters is refused
+    When I send a "GET" request to "/backoffice/bank-accounts?filters[0][field]=iban&filters[0][operator]=eq&filters[0][value]=DE89370400440532013000"
+    Then the response status code should be 422
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the header "Cache-Control" should contain "no-store"
+    And the JSON node "type" should be equal to "unknown-search-field"
+    And the JSON node "field" should be equal to "iban"
+    And 0 requests got executed across all doctrine connections
 
   # Pagination mode is validated at DTO mapping time (shape), inherited from the shared SearchQuery — an
   # unknown token is a 422 validation-failed before any SQL runs.

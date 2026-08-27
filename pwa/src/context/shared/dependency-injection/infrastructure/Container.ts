@@ -28,6 +28,7 @@ import { BankAccountCrudRepository } from "../../../backoffice/bankaccount/infra
 import { BankAccountResourceNavigator } from "../../../backoffice/bankaccount/infrastructure/BankAccountResourceNavigator";
 import { SearchBankAccounts } from "../../../backoffice/bankaccount/application/SearchBankAccounts";
 import { FindBankAccount } from "../../../backoffice/bankaccount/application/FindBankAccount";
+import { LookupBankAccountByIban } from "../../../backoffice/bankaccount/application/LookupBankAccountByIban";
 import { CreateBankAccount } from "../../../backoffice/bankaccount/application/CreateBankAccount";
 import { UpdateBankAccount } from "../../../backoffice/bankaccount/application/UpdateBankAccount";
 import { ChangeBankAccountStatus } from "../../../backoffice/bankaccount/application/ChangeBankAccountStatus";
@@ -175,6 +176,9 @@ container
 
 container.bind<SearchBankAccounts>("BackOfficeSearchBankAccounts").to(SearchBankAccounts);
 container.bind<FindBankAccount>("BackOfficeFindBankAccount").to(FindBankAccount);
+container
+  .bind<LookupBankAccountByIban>("BackOfficeLookupBankAccountByIban")
+  .to(LookupBankAccountByIban);
 container.bind<CreateBankAccount>("BackOfficeCreateBankAccount").to(CreateBankAccount);
 container.bind<UpdateBankAccount>("BackOfficeUpdateBankAccount").to(UpdateBankAccount);
 container

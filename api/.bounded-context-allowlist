@@ -63,6 +63,11 @@ src/Backoffice/BankAccount/Application/BankAccountCreator.php => Erpify\Backoffi
 # docs/adr/bank-bankaccount-modeling.md (D3).
 src/Backoffice/BankAccount/Infrastructure/Persistence/Doctrine/DoctrineBankAccountCollectionSearchRepository.php => Erpify\Backoffice\Bank\Domain\Entity\Bank
 
+# BankAccount → Bank read-composition JOIN (ADR D3), exact-match sibling. DoctrineBankAccountIbanLookupRepository
+# (BankAccount/Infrastructure) is the same read-composition pattern as the collection search repository above —
+# an equality lookup instead of a keyset search — so it joins the same Bank entity for the same reason (see #426).
+src/Backoffice/BankAccount/Infrastructure/Persistence/Doctrine/DoctrineBankAccountIbanLookupRepository.php => Erpify\Backoffice\Bank\Domain\Entity\Bank
+
 # Membership → Organization single-org resolution. GrantMembership (Membership/Application) reads the
 # installation's organization through the published OrganizationRepository port to resolve the org a new
 # member belongs to — same intra-`Organization/` cross-module seam family as Bank ↔ BankAccount above.

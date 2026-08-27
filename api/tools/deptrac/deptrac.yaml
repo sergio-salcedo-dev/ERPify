@@ -480,6 +480,8 @@ deptrac:
             - Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker
         Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountCollectionSearchRepository:
             - Erpify\Backoffice\Bank\Domain\Entity\Bank
+        Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountIbanLookupRepository:
+            - Erpify\Backoffice\Bank\Domain\Entity\Bank
         Erpify\Organization\Membership\Application\GrantMembership:
             - Erpify\Organization\Organization\Domain\Repository\OrganizationRepository
         Erpify\Iam\Identity\Infrastructure\Cli\CreateInitialAdministratorCommand:

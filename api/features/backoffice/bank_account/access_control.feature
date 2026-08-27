@@ -40,6 +40,17 @@ Feature: Restrict the bank-account routes to the bank-account permission
     And the JSON node "type" should be equal to "unauthenticated"
 
   @anonymous
+  Scenario: An unauthenticated IBAN lookup is a 401
+    When I send a POST request to "/backoffice/bank-accounts/iban-lookup" with body:
+    """
+    {
+      "iban": "DE89370400440532013000"
+    }
+    """
+    Then the response status code should be 401
+    And the JSON node "type" should be equal to "unauthenticated"
+
+  @anonymous
   Scenario: An unauthenticated realtime-authorize request is a 401
     When I send a "GET" request to "/backoffice/bank-accounts/realtime/authorize"
     Then the response status code should be 401
@@ -108,6 +119,18 @@ Feature: Restrict the bank-account routes to the bank-account permission
     Then the response status code should be 403
     And the JSON node "type" should be equal to "forbidden"
 
+  Scenario: A role-less authenticated user is refused an IBAN lookup with 403 — the permission gate, not validation
+    Given I am logged in as a user without the audit-reader role
+    When I send a POST request to "/backoffice/bank-accounts/iban-lookup" with body:
+    """
+    {
+      "iban": "nonsense"
+    }
+    """
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "forbidden"
+    And the response should not contain "violations"
+
   Scenario: A role-less authenticated user is refused a realtime-authorize request with 403
     Given I am logged in as a user without the audit-reader role
     When I send a "GET" request to "/backoffice/bank-accounts/realtime/authorize"
@@ -166,6 +189,16 @@ Feature: Restrict the bank-account routes to the bank-account permission
   Scenario: A viewer reads a bank's nested accounts — the same read permission guards the nested route
     Given I am logged in as a viewer
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000001/accounts"
+    Then the response status code should be 200
+
+  Scenario: A viewer looks up an account by IBAN — read is granted at the VIEWER tier
+    Given I am logged in as a viewer
+    When I send a POST request to "/backoffice/bank-accounts/iban-lookup" with body:
+    """
+    {
+      "iban": "DE89370400440532013000"
+    }
+    """
     Then the response status code should be 200
 
   Scenario: A viewer is refused a create with 403 — write is above the read tier

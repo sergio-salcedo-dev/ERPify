@@ -50,6 +50,63 @@ Feature: Audit the access to a bank's accounts
     ]
     """
 
+  # Matching #426's non-logging IBAN lookup records which account was found, exactly like the
+  # by-id read above — but over the dedicated POST endpoint, never the GET filters[] vocabulary.
+  Scenario: Finding an account by IBAN records which account was accessed
+    Given I add "Content-Type" header equal to "application/json"
+    And I add "Accept" header equal to "application/json"
+    And I add "X-Correlation-Id" header equal to "01914e2a-7b3c-7def-8a2b-000000000002"
+    When I send a POST request to "/backoffice/bank-accounts/iban-lookup" with body:
+    """
+    {
+      "iban": "DE89370400440532013000"
+    }
+    """
+    And I execute the SQL query "SELECT action, level, resource_type, resource_id, correlation_id, metadata FROM audit_log WHERE action = 'BANK_ACCOUNT_LOOKED_UP_BY_IBAN' AND correlation_id = '01914e2a-7b3c-7def-8a2b-000000000002'"
+    Then the response status code should be 200
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "BANK_ACCOUNT_LOOKED_UP_BY_IBAN",
+        "level": "activity",
+        "resource_type": "BankAccount",
+        "resource_id": "33333333-3333-7000-8000-000000000001",
+        "correlation_id": "01914e2a-7b3c-7def-8a2b-000000000002",
+        "metadata": "[]"
+      }
+    ]
+    """
+
+  # A miss is itself an auditable access — otherwise a caller holding only `bankAccount.read` could
+  # probe arbitrary IBANs with no forensic trace of the misses. No resource (there is no account to
+  # key it by) and, like every row here, no trace of the IBAN itself anywhere in the row.
+  Scenario: Failing to find an account by IBAN still records the attempt, with no resource and no IBAN
+    Given I add "Content-Type" header equal to "application/json"
+    And I add "Accept" header equal to "application/json"
+    And I add "X-Correlation-Id" header equal to "01914e2a-7b3c-7def-8a2b-000000000003"
+    When I send a POST request to "/backoffice/bank-accounts/iban-lookup" with body:
+    """
+    {
+      "iban": "ES9121000418450200051332"
+    }
+    """
+    And I execute the SQL query "SELECT action, level, resource_type, resource_id, correlation_id, metadata FROM audit_log WHERE action = 'BANK_ACCOUNT_IBAN_LOOKUP_MISSED' AND correlation_id = '01914e2a-7b3c-7def-8a2b-000000000003'"
+    Then the response status code should be 404
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "BANK_ACCOUNT_IBAN_LOOKUP_MISSED",
+        "level": "activity",
+        "resource_type": null,
+        "resource_id": null,
+        "correlation_id": "01914e2a-7b3c-7def-8a2b-000000000003",
+        "metadata": "[]"
+      }
+    ]
+    """
+
   # E2: a write of a BankAccount is captured as a crypto-shredded `change` row. Its personal-data fields
   # (holderName/iban) travel encrypted under a per-subject key, so `jsonb_typeof` sees the sealed
   # `{"__enc__": …}` marker (an object), never a plaintext string; non-PII (bic) stays in clear and the row

@@ -37,6 +37,10 @@ interface BankAccountSingleResponse {
   data: BankAccountPrimitives;
 }
 
+interface BankAccountCollectionRowResponse {
+  data: BankAccountCollectionRow;
+}
+
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -151,6 +155,17 @@ function isBankAccountCollectionRow(value: unknown): value is BankAccountCollect
     typeof value.status === "string" &&
     STATUSES.has(value.status as BankAccountStatus)
   );
+}
+
+/**
+ * Trust boundary for the IBAN-lookup single-resource response — the same row shape as
+ * the collection view (owning bank identity included), but one object under `data`,
+ * never a paginated envelope: `bank_account.iban` is unique, so at most one match exists.
+ */
+export function isBankAccountCollectionRowResponse(
+  value: unknown,
+): value is BankAccountCollectionRowResponse {
+  return isObjectRecord(value) && isBankAccountCollectionRow(value.data);
 }
 
 /**
@@ -271,6 +286,17 @@ export class ApiBankAccountRepository implements BankAccountRepository {
       isBankAccountSingleResponse,
     );
     return BankAccount.fromPrimitives(response.data);
+  }
+
+  async findByIban(iban: string): Promise<BankAccountCollectionRow> {
+    // POST body, never a query-string parameter — the value is financial PII and must
+    // never reach an access log or an intermediary cache keyed on the URL.
+    const response = await this.httpClient.post(
+      API_ENDPOINTS.BACKOFFICE.BANK_ACCOUNTS.IBAN_LOOKUP,
+      { iban },
+      isBankAccountCollectionRowResponse,
+    );
+    return response.data;
   }
 
   async create(input: CreateBankAccountInput): Promise<BankAccount> {

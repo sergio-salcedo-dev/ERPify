@@ -78,6 +78,9 @@ export const API_ENDPOINTS = {
       DELETE: bankAccountPath,
       CHANGE_STATUS: (id: string): string => `${bankAccountPath(id)}/status`,
       REALTIME_AUTHORIZE: `${BACKOFFICE_PREFIX}/bank-accounts/realtime/authorize`,
+      // Exact-match lookup by IBAN — POST body, never a query-string parameter, so the
+      // value (financial PII) is never written to an access log. See issue #426.
+      IBAN_LOOKUP: `${BACKOFFICE_PREFIX}/bank-accounts/iban-lookup`,
     },
     USERS: {
       LIST: `${BACKOFFICE_PREFIX}/users`,

@@ -224,6 +224,21 @@ you change anything here.
       before production**, requiring authentication when the API firewall lands (a
       pre-prod follow-up under the same auth rollout,
       [#240](https://github.com/sergio-salcedo-dev/ERPify/issues/240) / #222).
+- [x] **IBAN search moved off the GET query string (#426).** `iban` was a filterable
+      field on `GET /api/v1/backoffice/bank-accounts` (`eq`/`contains`, unreachable from
+      the PWA UI but reachable directly), so the integral IBAN could be sent as a
+      query-string value — a parameter can reach a proxy/CDN access log or be cached by
+      an intermediary keyed on the URL regardless of any single deployment's Caddy
+      redaction config (see the whole-query-string strip discussed in root `CLAUDE.md` →
+      "Putting a value in a query string"). `iban` is now **removed entirely** from the
+      collection's `searchFieldMap()` (a filter naming it is 422 `unknown-search-field`,
+      like `status`/`currency`). Exact lookup by IBAN goes through a dedicated
+      `POST /api/v1/backoffice/bank-accounts/iban-lookup` instead: same `bankAccount.read`
+      permission gate, the IBAN travels only in the body (never logged by Caddy, which
+      does not log request bodies), the malformed-IBAN 422 never echoes the rejected
+      value (mirrors `ConstraintMessageValueGateTest`'s rule for constraint messages), and
+      the not-found 404 (`bank-account-not-found`) carries no `iban` context key — unlike
+      the by-id 404, which does echo the (non-sensitive) id.
 - [ ] `audit_log` (raw-DBAL append-only table) **contains live PII**: `actor_id`,
       `ip`, `user_agent`. Capture is now wired: generic `/api` navigation on
       `kernel.terminate` (→ `activity`) and permission denials on `kernel.exception`

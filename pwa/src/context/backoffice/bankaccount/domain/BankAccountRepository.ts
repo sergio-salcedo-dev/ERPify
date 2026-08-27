@@ -1,7 +1,10 @@
 import type { Filter, PageEnvelope } from "@/context/shared/search/domain";
 import type { SortDirection } from "@/context/shared/search/domain/SortDirection";
 import type { BankAccount, BankAccountCurrency, BankAccountStatus } from "./BankAccount";
-import type { BankAccountCollectionPage } from "./BankAccountCollectionRow";
+import type {
+  BankAccountCollectionPage,
+  BankAccountCollectionRow,
+} from "./BankAccountCollectionRow";
 
 /**
  * Editable core of a bank account, shared by create and update — mirroring the
@@ -76,6 +79,13 @@ export interface BankAccountRepository {
   search(bankId: string, criteria: BankAccountSearchCriteria): Promise<BankAccountSearchPage>;
   searchAll(criteria: BankAccountSearchCriteria): Promise<BankAccountCollectionPage>;
   find(id: string): Promise<BankAccount>;
+  /**
+   * Exact-match lookup by IBAN — the non-logging counterpart to `searchAll`'s GET
+   * `filters[]` vocabulary, which does not carry `iban` (the value is financial PII
+   * and must never reach a query string). Rejects the same way `find` does: a 404
+   * `bank-account-not-found` surfaces as a thrown `HttpError`, never a `null` return.
+   */
+  findByIban(iban: string): Promise<BankAccountCollectionRow>;
   create(input: CreateBankAccountInput): Promise<BankAccount>;
   update(id: string, input: UpdateBankAccountInput): Promise<BankAccount>;
   changeStatus(id: string, status: BankAccountStatus): Promise<BankAccount>;

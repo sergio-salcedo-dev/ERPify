@@ -49,6 +49,39 @@ test.describe("BackOffice - Bank Accounts (standalone, mocked API)", () => {
     );
   });
 
+  test("finds an account by its exact IBAN and navigates to its detail page", async ({ page }) => {
+    await mockBankAccountsListApi(page);
+    await page.goto("/backoffice/bank-accounts");
+    await expect(page.getByTestId("bank-accounts-list")).toHaveAttribute("data-state", "ready");
+
+    // A human-grouped, lower-case IBAN still matches (client-side canonicalization).
+    await page
+      .getByTestId("bank-accounts-iban-lookup__input")
+      .fill("es91 2100 0418 4502 0005 1332");
+    await page.getByTestId("bank-accounts-iban-lookup__submit").click();
+
+    await expect(page).toHaveURL(`/backoffice/bank-accounts/${ACME_CHECKING.id}`);
+    await expect(page.getByTestId("bank-accounts-detail__holder")).toHaveText(
+      ACME_CHECKING.holderName,
+    );
+  });
+
+  test("shows an inline not-found result for a well-formed IBAN with no match", async ({
+    page,
+  }) => {
+    await mockBankAccountsListApi(page);
+    await page.goto("/backoffice/bank-accounts");
+    await expect(page.getByTestId("bank-accounts-list")).toHaveAttribute("data-state", "ready");
+
+    await page.getByTestId("bank-accounts-iban-lookup__input").fill("GB29NWBK60161331926819");
+    await page.getByTestId("bank-accounts-iban-lookup__submit").click();
+
+    await expect(page.getByTestId("bank-accounts-iban-lookup__not-found")).toHaveText(
+      "No account found for that IBAN.",
+    );
+    await expect(page).toHaveURL("/backoffice/bank-accounts");
+  });
+
   test("reflects a realtime update live over the global collection topic", async ({ page }) => {
     await installFakeMercure(page);
     const api = await mockBankAccountsListApi(page);

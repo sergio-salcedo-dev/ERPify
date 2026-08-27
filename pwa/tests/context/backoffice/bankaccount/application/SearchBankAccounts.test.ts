@@ -31,6 +31,7 @@ describe("SearchBankAccounts", () => {
       search: vi.fn().mockResolvedValue(PAGE),
       searchAll: vi.fn(),
       find: vi.fn(),
+      findByIban: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       changeStatus: vi.fn(),
