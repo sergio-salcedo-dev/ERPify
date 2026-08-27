@@ -42,6 +42,25 @@ describe("ApiAuditEventDetailRepository.findById", () => {
     expect(detail.metadata.changes).toEqual({ name: { old: "BBVA", new: "BBVA España" } });
   });
 
+  it("drops an operation this client cannot place from the mapped metadata", async () => {
+    // The domain prescribes "unknown, never a fourth kind" for an operation this side cannot place, and
+    // the snapshot header already renders silence for a row that carries none. A fourth kind therefore
+    // has to reach that same silence.
+    //
+    // This pins the MAPPING half only. `httpClientReturning` stubs `get` without running the validator it
+    // is handed, so nothing here exercises the envelope guard; that the guard no longer REJECTS such a row
+    // is pinned by the `isAuditEventDetailResponse` assertions below, and both halves are needed — dropping
+    // the value without admitting the row would still lose the whole event.
+    const httpClient = httpClientReturning({
+      data: { ...DETAIL, metadata: { ...DETAIL.metadata, operation: "RESTORED" } },
+    });
+
+    const detail = await new ApiAuditEventDetailRepository(httpClient).findById(DETAIL.id);
+
+    expect(detail.metadata.operation).toBeUndefined();
+    expect(detail.metadata.changes).toEqual({ name: { old: "BBVA", new: "BBVA España" } });
+  });
+
   it("maps a well-formed operation through to the domain shape", async () => {
     const httpClient = httpClientReturning({
       data: { ...DETAIL, metadata: { ...DETAIL.metadata, operation: "UPDATED" } },
@@ -132,15 +151,17 @@ describe("ApiAuditEventDetailRepository response guard", () => {
         data: { ...DETAIL, metadata: { changes: { name: { old: "BBVA" } } } },
       }),
     ).toBe(false);
-    // Drift: an operation outside the backend's closed set (schema drift, corrupted JSONB).
+    // NOT drift: `operation` is an enum the API owns, so a release adding a fourth kind reaches this
+    // client before the client knows its name. Rejecting the envelope would lose the whole event — diff
+    // included — over a value the UI does not need, so an unplaceable operation validates and is dropped
+    // downstream instead. Both shapes it can arrive in are admitted.
     expect(
       isAuditEventDetailResponse({
         data: { ...DETAIL, metadata: { ...DETAIL.metadata, operation: "RESTORED" } },
       }),
-    ).toBe(false);
-    // Drift: operation present but not a string.
+    ).toBe(true);
     expect(isAuditEventDetailResponse({ data: { ...DETAIL, metadata: { operation: 1 } } })).toBe(
-      false,
+      true,
     );
     // Drift: slim-field type mismatches.
     expect(isAuditEventDetailResponse({ data: { ...DETAIL, id: 1 } })).toBe(false);

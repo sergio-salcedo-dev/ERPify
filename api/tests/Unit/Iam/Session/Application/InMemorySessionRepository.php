@@ -250,11 +250,20 @@ final class InMemorySessionRepository implements SessionRepository
         $spared = $except?->toString();
 
         foreach ($this->byId as $id => $session) {
-            if ($session->userId() !== $userId || SessionStatus::ACTIVE !== $session->status()) {
+            // Both comparisons are case-insensitive because the adapter's are: `user_id` and `id` are
+            // `Types::GUID`, which in PostgreSQL is the native `uuid` type, and `uuid` equality normalises
+            // hex case. A `===` here would diverge from production in both directions at once — an
+            // upper-case `$userId` would make this double revoke NOTHING where the adapter revokes
+            // everything, and an upper-case spared id would make it revoke the very session the caller
+            // asked to keep. Unreachable while `Uuid::generate()` emits lower case and ids are
+            // server-written, and mirrored anyway: a double that is stricter than what it stands in for
+            // lets a use-case test assert behaviour production cannot produce, which is the one thing
+            // this class exists not to do.
+            if (0 !== \strcasecmp($session->userId(), $userId) || SessionStatus::ACTIVE !== $session->status()) {
                 continue;
             }
 
-            if ($id === $spared) {
+            if (null !== $spared && 0 === \strcasecmp($id, $spared)) {
                 continue;
             }
 

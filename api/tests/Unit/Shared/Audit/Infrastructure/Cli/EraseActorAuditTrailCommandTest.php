@@ -15,6 +15,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\ThrowingAuditActorAnony
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -99,7 +100,19 @@ final class EraseActorAuditTrailCommandTest extends TestCase
 
         $exitCode = $tester->execute(['actor-id' => self::ACTOR_ID, '--force' => true]);
 
-        $this->assertSame(Command::FAILURE, $exitCode, 'a failed self-audit after a real erasure is not a success');
+        $this->assertSame(
+            EraseActorAuditTrailCommand::ERASED_UNRECORDED,
+            $exitCode,
+            'an erasure that committed without its compliance entry is neither a success nor an ordinary failure',
+        );
+        // Comparing two literal constants is a tautology PHPStan rejects outright, so the claim that matters
+        // — the code sits OUTSIDE the vocabulary a caller already knows — is derived from `Command` instead
+        // of restated. Setting `ERASED_UNRECORDED` to any of the three reds this line.
+        $this->assertNotContains(
+            EraseActorAuditTrailCommand::ERASED_UNRECORDED,
+            (new ReflectionClass(Command::class))->getConstants(),
+            'the erased-but-unrecorded outcome must not collide with a code a caller already reads',
+        );
         $this->assertSame([self::ACTOR_ID], $anonymiser->anonymisedActorIds, 'the rows were still anonymised');
 
         $display = $tester->getDisplay();

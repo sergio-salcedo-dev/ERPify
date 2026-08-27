@@ -8,6 +8,7 @@ use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Console\Infrastructure\UnattendedRunPolicy;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -15,7 +16,6 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Input\StreamableInputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Throwable;
@@ -31,14 +31,14 @@ use Throwable;
  *
  * **Exit codes are this command's contract with an unattended caller**, which reads `$?` and never the screen.
  * `SUCCESS` means the trail is anonymised, or that a no-op happened — no matching rows, `--dry-run`, or a
- * confirmation answered "no". `FAILURE` means the erasure did not complete, and **the message says how far it
- * got**: the count failing means nothing was attempted at all; the `UPDATE` failing means the rows may or may
- * not have changed, because a connection lost mid-statement can commit without acknowledging; the `UPDATE`
- * succeeding and its compliance self-audit failing leaves an erasure that is done, irreversible and
- * unrecorded. Only the first of those three is unconditionally safe to repeat, which is why the message and
- * not the code is what a caller reads to decide. `INVALID` means nothing was attempted and the command line
- * is what needs repairing — a malformed id, or a confirmation this run could not put — and it is the one code
- * a caller must not retry on.
+ * confirmation answered "no". `FAILURE` means the erasure did not complete: either the count failed, so
+ * nothing was attempted, or the `UPDATE` failed, so the rows may or may not have changed — a connection lost
+ * mid-statement can commit without acknowledging — which is why the message says how far it got and only the
+ * first is unconditionally safe to repeat. {@see ERASED_UNRECORDED} is the opposite outcome and carries its
+ * own code because no message can reach a caller reading `$?`: the erasure IS done, irreversibly, and
+ * nothing attests it. `INVALID` means nothing was attempted and the command line is what needs repairing —
+ * a malformed id, or a confirmation this run could not put — and it is the one code a caller must not retry
+ * on.
  *
  * Three spellings suppress the refusal's own message while still refusing: `--quiet`, `--silent`, and a
  * negative `SHELL_VERBOSITY` inherited from a parent process. An unattended run that means to erase passes
@@ -53,6 +53,19 @@ use Throwable;
 final class EraseActorAuditTrailCommand extends Command
 {
     private const string ERASURE_ACTION = AuditErasureEvidence::ACTOR_TRAIL_ERASED;
+
+    /**
+     * The erasure committed and its compliance self-audit did not. It earns a code of its own because it is
+     * the one outcome a caller must treat differently from every other failure and cannot tell apart by
+     * reading `$?` alone: the rows ARE anonymised, irreversibly, and no `GDPR_ERASURE_EXECUTED` row attests
+     * it — so retrying with the original id matches nothing and reports "nothing to erase" over a subject
+     * that was in fact erased. What it asks for is not a retry but a hand-written compliance record.
+     *
+     * Outside `Command`'s own vocabulary on purpose: `FAILURE` already means "the erasure did not complete",
+     * and this is its opposite. A job that does not know the code sees a non-zero and stops, which is the
+     * safe reading.
+     */
+    public const int ERASED_UNRECORDED = 3;
 
     public function __construct(
         private readonly AuditActorAnonymiser $anonymiser,
@@ -83,7 +96,9 @@ final class EraseActorAuditTrailCommand extends Command
                 Exit codes: <comment>0</comment> anonymised, or the no-op you asked for (including an
                 actor with no matching rows); <comment>1</comment> the erasure did not complete — read the
                 message, which says how far it got, since only a failed row count is unconditionally safe to
-                repeat; <comment>2</comment> nothing was attempted and the command line needs fixing — a
+                repeat; <comment>3</comment> the rows WERE anonymised and the compliance entry recording it
+                was not — do not retry, record the erasure by hand; <comment>2</comment> nothing was
+                attempted and the command line needs fixing — a
                 malformed id, or a confirmation this run could not put. Do not retry on <comment>2</comment>.
                 A run that cannot be asked (<comment>--no-interaction</comment>, a closed or already-exhausted
                 stdin, <comment>--quiet</comment>, <comment>--silent</comment>, or a negative
@@ -145,8 +160,8 @@ final class EraseActorAuditTrailCommand extends Command
             return null;
         }
 
-        if ($this->cannotBeAsked($input)) {
-            return $this->refuseUnattended($io);
+        if (UnattendedRunPolicy::cannotAnswer($input)) {
+            return UnattendedRunPolicy::refuse($io, 'anonymise', 'the matching row count', 'No rows were changed.');
         }
 
         return $this->confirmMatchedRows($io, $input, $actorId);
@@ -191,17 +206,13 @@ final class EraseActorAuditTrailCommand extends Command
 
         $confirmed = $io->confirm(\sprintf('Irreversibly anonymise %d row(s)?', $matched), false);
 
-        // A stdin nothing can be read from — EOF, an empty pipe — enters the question interactive and leaves
-        // it demoted: the question helper answers with the default it was handed and turns the input
-        // non-interactive instead of raising. Reading the flag a second time is therefore what separates a
-        // typed "no" from a question nobody was there to hear. It reaches a stdin that yields NOTHING, not
-        // one that yields not-yes: a pipe carrying a blank line is an answer, and accepts the default.
-        //
-        // This is load-bearing rather than belt-and-braces. The console decides interactivity from the flags
-        // alone and never asks whether it is attached to a terminal, so an unattended run that omits
-        // `--no-interaction` arrives here still interactive and this read is the only thing in front of it.
+        // A stdin nothing can be read from enters the question interactive and leaves it demoted: the helper
+        // answers with the default it was handed rather than raising, so reading the flag a second time is
+        // what separates a typed "no" from a question nobody was there to hear. This is the one of the three
+        // unanswerable shapes that only a re-read can see — {@see UnattendedRunPolicy::cannotAnswer()} covers
+        // the other two and says why it cannot cover this one.
         if (!$input->isInteractive()) {
-            return $this->refuseUnattended($io);
+            return UnattendedRunPolicy::refuse($io, 'anonymise', 'the matching row count', 'No rows were changed.');
         }
 
         if (!$confirmed) {
@@ -244,46 +255,6 @@ final class EraseActorAuditTrailCommand extends Command
         $io->warning('No audit rows for that actor — nothing to erase.');
 
         return Command::SUCCESS;
-    }
-
-    /**
-     * Whether this run can put a question at all — the half of "unattended" the interactivity flag does not
-     * cover. A stream a previous read already exhausted answers with nothing and the helper takes that for
-     * the operator's answer: `QuestionHelper::doReadInput()` loops `while (!feof($inputStream))`, so a stream
-     * arriving already at EOF never enters the loop, returns `''` rather than `false`, and never raises the
-     * `MissingInputException` that both other guards rely on to demote the input.
-     *
-     * The reachable producer is the console's own single-alternative prompt: a mistyped command name with
-     * exactly one near match makes `Application::doRun()` ask a confirmation of its own, and a pipe whose
-     * last byte is not a newline is exhausted by it. `feof()` is true only after a read has hit the end, so
-     * this refuses the already-drained stream and leaves an unread empty pipe to the guard below, which
-     * handles it.
-     *
-     * The stream is resolved exactly as `QuestionHelper::ask()` resolves it — the input's own, falling back
-     * to `STDIN` — because a guard reading a different stream from the one that will be asked is not a guard.
-     */
-    private function cannotBeAsked(InputInterface $input): bool
-    {
-        if (!$input->isInteractive()) {
-            return true;
-        }
-
-        $stream = $input instanceof StreamableInputInterface ? $input->getStream() : null;
-        $stream ??= STDIN;
-
-        return \is_resource($stream) && \feof($stream);
-    }
-
-    private function refuseUnattended(SymfonyStyle $io): int
-    {
-        $io->error(
-            'Refusing to anonymise: this run cannot ask for a confirmation (--no-interaction, a closed or '
-            . 'already-exhausted stdin, or a suppressed verbosity) and no confirmation was given. Pass '
-            . '--force to erase unattended, or --dry-run to report the matching row count without touching '
-            . 'it. No rows were changed.',
-        );
-
-        return Command::INVALID;
     }
 
     /**
@@ -341,7 +312,7 @@ final class EraseActorAuditTrailCommand extends Command
                 . 'Record this erasure manually for compliance.',
             ]);
 
-            return Command::FAILURE;
+            return self::ERASED_UNRECORDED;
         }
 
         $io->success(\sprintf(

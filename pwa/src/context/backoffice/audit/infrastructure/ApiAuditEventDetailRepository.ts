@@ -50,16 +50,22 @@ function isAuditWriteOperation(value: unknown): value is AuditWriteOperation {
 }
 
 /**
- * `metadata` must be an object; when it carries `changes` that map must be a well-formed diff, and when
- * it carries `operation` that value must be one of the backend's closed set. A row with no diff (an
- * access-log read) carries `{}`/other keys and still validates — both are optional, the object is not.
+ * `metadata` must be an object, and when it carries `changes` that map must be a well-formed diff. A row
+ * with no diff (an access-log read) carries `{}`/other keys and still validates — both are optional, the
+ * object is not.
+ *
+ * **`operation` is deliberately NOT validated here.** It is an enum the API owns, so a release that adds a
+ * fourth kind reaches this client before the client knows the name; rejecting the row would turn a value the
+ * UI does not need into a `MALFORMED_RESPONSE_ENVELOPE` over the whole event, diff included. The domain
+ * already prescribes the answer for a value this side cannot place — treat it as unknown, never as a fourth
+ * kind — and {@link toMetadata} applies it by dropping the unrecognised value from the typed slot, so the
+ * header renders as silence exactly as it does for a row that carries no operation at all.
  */
 function isAuditEventMetadata(
   value: unknown,
-): value is { changes?: AuditChanges; operation?: AuditWriteOperation } & Record<string, unknown> {
+): value is { changes?: AuditChanges; operation?: unknown } & Record<string, unknown> {
   if (!isObjectRecord(value)) return false;
-  if ("changes" in value && !isAuditChanges(value.changes)) return false;
-  return !("operation" in value) || isAuditWriteOperation(value.operation);
+  return !("changes" in value) || isAuditChanges(value.changes);
 }
 
 /**
@@ -116,12 +122,21 @@ function normalizeFieldValue(value: AuditFieldValue): AuditFieldValue {
   return isAuditSealedValue(value) ? { __enc__: value.__enc__ } : value;
 }
 
-/** Carries `metadata` through verbatim (forensic fidelity) but normalises `changes` when present. */
+/**
+ * Carries `metadata` through verbatim (forensic fidelity) but normalises `changes` when present, and drops
+ * an `operation` this client cannot place. The cost is stated rather than hidden: the raw value of a fourth
+ * kind does not reach the UI. The alternative is worse in both directions — typing the slot as a plain
+ * string pushes the unknown into every consumer that indexes it, and keeping it typed while it holds a
+ * value the type does not admit is the lie the type exists to prevent.
+ */
 function toMetadata(
-  metadata: { changes?: AuditChanges; operation?: AuditWriteOperation } & Record<string, unknown>,
+  metadata: { changes?: AuditChanges; operation?: unknown } & Record<string, unknown>,
 ): AuditEventDetail["metadata"] {
-  if (!isAuditChanges(metadata.changes)) return { ...metadata };
-  return { ...metadata, changes: toAuditChanges(metadata.changes) };
+  const { operation, ...rest } = metadata;
+  const placed = isAuditWriteOperation(operation) ? { ...rest, operation } : rest;
+
+  if (!isAuditChanges(placed.changes)) return { ...placed };
+  return { ...placed, changes: toAuditChanges(placed.changes) };
 }
 
 function toAuditEventDetail(detail: AuditEventDetail): AuditEventDetail {

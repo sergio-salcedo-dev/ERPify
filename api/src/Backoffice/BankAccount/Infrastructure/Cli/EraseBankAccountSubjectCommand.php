@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\BankAccount\Infrastructure\Cli;
 
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
+use Erpify\Shared\Console\Infrastructure\UnattendedRunPolicy;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -12,7 +13,6 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Input\StreamableInputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Throwable;
@@ -34,6 +34,8 @@ use Throwable;
  * a confirmation this run could not put. `INVALID` is the one code a caller must not retry on. What makes the
  * distinction matter more here than in a reversible command: the key destruction is a crypto-shred, so a run
  * that reports success without performing it leaves the subject's PII readable while the compliance record
+ * says otherwise.
+ *
  * Three spellings suppress the refusal's own message while still refusing: `--quiet`, `--silent`, and a
  * negative `SHELL_VERBOSITY` inherited from a parent process. An unattended run that means to erase passes
  * `--force`. What no exit code here can cover is a command line the console cannot **bind** — an unknown
@@ -123,8 +125,8 @@ final class EraseBankAccountSubjectCommand extends Command
             return null;
         }
 
-        if ($this->cannotBeAsked($input)) {
-            return $this->refuseUnattended($io);
+        if (UnattendedRunPolicy::cannotAnswer($input)) {
+            return UnattendedRunPolicy::refuse($io, 'erase', 'the target', 'Nothing was erased.');
         }
 
         $confirmed = $io->confirm(
@@ -132,17 +134,13 @@ final class EraseBankAccountSubjectCommand extends Command
             false,
         );
 
-        // A stdin nothing can be read from — EOF, an empty pipe — enters the question interactive and leaves
-        // it demoted: the question helper answers with the default it was handed and turns the input
-        // non-interactive instead of raising. Reading the flag a second time is therefore what separates a
-        // typed "no" from a question nobody was there to hear. It reaches a stdin that yields NOTHING, not
-        // one that yields not-yes: a pipe carrying a blank line is an answer, and accepts the default.
-        //
-        // This is load-bearing rather than belt-and-braces. The console decides interactivity from the flags
-        // alone and never asks whether it is attached to a terminal, so an unattended run that omits
-        // `--no-interaction` arrives here still interactive and this read is the only thing in front of it.
+        // A stdin nothing can be read from enters the question interactive and leaves it demoted: the helper
+        // answers with the default it was handed rather than raising, so reading the flag a second time is
+        // what separates a typed "no" from a question nobody was there to hear. This is the one of the three
+        // unanswerable shapes that only a re-read can see — {@see UnattendedRunPolicy::cannotAnswer()} covers
+        // the other two and says why it cannot cover this one.
         if (!$input->isInteractive()) {
-            return $this->refuseUnattended($io);
+            return UnattendedRunPolicy::refuse($io, 'erase', 'the target', 'Nothing was erased.');
         }
 
         if (!$confirmed) {
@@ -152,45 +150,6 @@ final class EraseBankAccountSubjectCommand extends Command
         }
 
         return null;
-    }
-
-    /**
-     * Whether this run can put a question at all — the half of "unattended" the interactivity flag does not
-     * cover. A stream a previous read already exhausted answers with nothing and the helper takes that for
-     * the operator's answer: `QuestionHelper::doReadInput()` loops `while (!feof($inputStream))`, so a stream
-     * arriving already at EOF never enters the loop, returns `''` rather than `false`, and never raises the
-     * `MissingInputException` that both other guards rely on to demote the input.
-     *
-     * The reachable producer is the console's own single-alternative prompt: a mistyped command name with
-     * exactly one near match makes `Application::doRun()` ask a confirmation of its own, and a pipe whose
-     * last byte is not a newline is exhausted by it. `feof()` is true only after a read has hit the end, so
-     * this refuses the already-drained stream and leaves an unread empty pipe to the post-`confirm()` guard,
-     * which handles it.
-     *
-     * The stream is resolved exactly as `QuestionHelper::ask()` resolves it — the input's own, falling back
-     * to `STDIN` — because a guard reading a different stream from the one that will be asked is not a guard.
-     */
-    private function cannotBeAsked(InputInterface $input): bool
-    {
-        if (!$input->isInteractive()) {
-            return true;
-        }
-
-        $stream = $input instanceof StreamableInputInterface ? $input->getStream() : null;
-        $stream ??= STDIN;
-
-        return \is_resource($stream) && \feof($stream);
-    }
-
-    private function refuseUnattended(SymfonyStyle $io): int
-    {
-        $io->error(
-            'Refusing to erase: this run cannot ask for a confirmation (--no-interaction, or stdin closed) '
-            . 'and no confirmation was given. Pass --force to erase unattended, or --dry-run to report the '
-            . 'target without touching it. Nothing was erased.',
-        );
-
-        return Command::INVALID;
     }
 
     private function eraseAndReport(SymfonyStyle $io, string $bankAccountId): int

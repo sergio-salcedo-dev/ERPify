@@ -297,3 +297,44 @@ The guards close the exit code as an existence oracle. They do **not** close the
 `--dry-run` still prints it to the same caller, and whoever can invoke the CLI can pass `--dry-run`. Sold as a
 structural invariant — no query on a path already going to refuse — and never as a confidentiality gain, so
 that nobody rediscovers `--dry-run` in three months and reopens it as a regression.
+
+## Deferred items closed in review (2026-08-27, second round)
+
+The branch's deferred section is **removed entirely**: `deferred-work.md` goes from `main`'s 117 bullets to
+97, and this branch adds none. Each was closed rather than reworded.
+
+- **The gate.** `ConfirmationGuardAdjacencyGateTest` sweeps every `#[AsCommand]` that puts a confirmation and
+  asserts two things: it refuses before asking, and it re-reads `isInteractive()` within one statement of
+  `confirm()`. **Adjacency is the invariant, not presence** — a re-read three methods away would have been
+  green over this branch's own GRAVE. It reads the **token stream** with comments dropped, which was not a
+  stylistic choice: the first version matched source text and a `{@see UnattendedRunPolicy::cannotAnswer()}`
+  cross-reference in a comment satisfied the guard check, so deleting the guard left the gate green —
+  measured. All three mutations (guard removed, re-read removed, a statement interposed) were re-measured red
+  against the final code.
+- **P-2, the product decision.** What a compliance job needed was to tell "nothing happened" from "the
+  erasure is done and nothing attests it" **by reading `$?` alone**, which no message can deliver.
+  `EraseActorAuditTrailCommand::ERASED_UNRECORDED` (`3`) says it, deliberately outside `Command`'s vocabulary
+  because it is the opposite of `FAILURE`'s "did not complete"; a caller that does not know the code reads a
+  non-zero and stops. Pinned by deriving `Command`'s own constants rather than comparing two literals, which
+  PHPStan rejects as the tautology it is.
+- **The PWA fourth `operation`.** The envelope guard no longer validates `operation` at all: it is an enum
+  the API owns, so a release adding a kind reaches this client before the client knows its name, and
+  rejecting cost the reader the whole event — diff included — over a value the UI does not need. The
+  unplaceable value is dropped at mapping, so the snapshot header renders the same silence it already renders
+  for a row carrying no operation. Stated cost: the raw value of a fourth kind does not reach the UI.
+- **B-2.** The session double now compares both ids the way Postgres compares `uuid`. The registry named only
+  the spared id; the `userId` filter is the sharper direction, where an upper-case value makes the double
+  revoke **nothing** while the adapter revokes everything.
+
+### The duplication this review introduced, and removed
+
+Fixing CI unblocked a gate nobody had seen: `SonarCloud` had been **skipped** on the head, because it needs
+the coverage artifact from the job that was failing. It then reported 8.0% duplication on new code against a
+3% threshold — one block of ~64 lines between the two sibling commands, about half of it the guard pair the
+branch had already triplicated and about half the third guard this review added beside it.
+
+`Shared/Console/Infrastructure/UnattendedRunPolicy` now owns the predicate and the refusal. **What is shared
+is only what does not vary**: the policy, never the placement. Nothing in it calls anything — each command
+asks at its own call site — because every defect in this family has been an ordering defect, and a helper
+that centralised the ordering would centralise the half that is already correct while hiding the half that
+breaks.

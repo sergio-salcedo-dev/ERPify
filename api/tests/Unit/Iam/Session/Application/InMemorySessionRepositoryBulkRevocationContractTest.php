@@ -74,6 +74,29 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
         $this->assertSame(SessionStatus::REVOKED, $other->status());
     }
 
+    /**
+     * Postgres compares `uuid` without regard to hex case, so the double must too — in both directions, and
+     * they fail opposite ways. A `===` on the user id makes a bulk revocation reach nothing where the adapter
+     * reaches everything; a `===` on the spared id revokes the one session the caller asked to keep.
+     */
+    public function testABulkRevocationComparesIdsTheWayPostgresCompares(): void
+    {
+        $now = new DateTimeImmutable(self::NOW);
+        SystemClock::set(new FixedClock($now));
+
+        $current = SessionMother::active(expiresAt: $now->modify('+1 hour'));
+        $other = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
+        $sessions = new InMemorySessionRepository($current, $other);
+
+        $sessions->revokeOthersForUser(
+            \strtoupper(SessionMother::DEFAULT_USER_ID),
+            SessionId::fromString(\strtoupper(SessionMother::DEFAULT_ID)),
+        );
+
+        $this->assertSame(SessionStatus::ACTIVE, $current->status(), 'the spared session is spared');
+        $this->assertSame(SessionStatus::REVOKED, $other->status(), 'every other session is still reached');
+    }
+
     public function testABulkRevocationLeavesAnotherUsersSessionAlone(): void
     {
         $now = new DateTimeImmutable(self::NOW);
