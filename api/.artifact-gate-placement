@@ -111,6 +111,8 @@
 # engines move, which is the placement PhpSourceTest already has.
 # ---------------------------------------------------------------------------------------------------------
 
+tests/Unit/Gate/AcceptedRiskTagGateTest.php :: home
+tests/Unit/Gate/AcceptedRiskTagRulesGateTest.php :: home
 tests/Unit/Gate/AdministratorSetLockStatementGateTest.php :: home
 tests/Unit/Gate/ArtifactGateDetectionRulesGateTest.php :: home
 tests/Unit/Gate/ArtifactGatePlacementGateTest.php :: home
