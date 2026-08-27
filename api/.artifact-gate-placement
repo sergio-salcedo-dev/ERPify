@@ -129,6 +129,7 @@ tests/Unit/Gate/BoundedContextGateTest.php :: home
 tests/Unit/Gate/BufferedChannelAmplificationGateTest.php :: home
 tests/Unit/Gate/CaddyfileAccessLogRedactionGateTest.php :: home
 tests/Unit/Gate/ComposerStabilityGateTest.php :: home
+tests/Unit/Gate/ConfirmationGuardAdjacencyGateTest.php :: home
 tests/Unit/Gate/ConsoleCommandCarrierGateTest.php :: home
 tests/Unit/Gate/ConstraintMessageValueGateTest.php :: home
 tests/Unit/Gate/ConstraintValidatorResolutionGateTest.php :: home

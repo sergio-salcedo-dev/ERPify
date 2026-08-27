@@ -169,7 +169,7 @@ make php.unit c='--filter SomeTest'        # filter
 make php.behat                             # Behat, --strict (config: api/behat.dist.php)
 ```
 
-- **PHPUnit config**: `api/phpunit.xml.dist`.
+- **PHPUnit config**: `api/tools/phpunit/phpunit.dist.xml` (resolved by `api/bin/phpunit` unless `-c` overrides it).
 - **Behat config**: `api/behat.dist.php` (Behat 4 dropped YAML config).
 - Integration tests touching Doctrine use **real Postgres** (Compose), not SQLite.
 

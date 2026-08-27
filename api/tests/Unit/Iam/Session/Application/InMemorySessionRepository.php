@@ -12,6 +12,7 @@ use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Override;
+use ReflectionProperty;
 use RuntimeException;
 
 /**
@@ -32,6 +33,37 @@ use RuntimeException;
  * The instant comes from {@see SystemClock} rather than an injected {@see \Erpify\Shared\Clock\Domain\Clock}:
  * the constructor is variadic, so a clock parameter would have to precede the presets, and no consumer has yet
  * needed to freeze one here. A test that does freezes it exactly as it already freezes the aggregate's own.
+ *
+ * **The bulk revocations mutate, and what they mirror is the adapter's directed UPDATE — not the aggregate's
+ * own {@see Session::revoke()}.** The two write different things and only one of them is what a consumer of
+ * this port can observe in production. Three points fix the shape:
+ *
+ *   - **Selection is `status = ACTIVE` alone, never {@see Session::isActive()}.** The UPDATE carries the
+ *     lifecycle half of admissibility and not the temporal one, so an expired-but-still-`ACTIVE` row IS
+ *     flipped. Reusing the reads' predicate here would flip a strictly narrower set than production and leave
+ *     a lapsed row still reporting `ACTIVE` — visible to {@see deleteRetired()}, which reads the status.
+ *   - **No domain event is recorded.** The UPDATE runs without hydrating the aggregates, so a bulk revocation
+ *     produces none. A double calling `revoke()` per row would leave a `SessionRevoked` in the aggregate's
+ *     pending list for whoever pulls next, letting a use-case test assert an event production cannot produce
+ *     — the same defect as a looser read predicate, one direction over. Draining the aggregate afterwards is
+ *     not an answer either: {@see Session::pullDomainEvents()} empties the whole list, including a
+ *     `SessionStarted` its owner has not published yet.
+ *   - **The flip is written into the entity, because the entity IS this double's storage.** A set of revoked
+ *     ids beside it would be two sources of truth for one column, and every reader would have to remember to
+ *     consult both — {@see deleteRetired()} included, which asks the entity for `status()` and `revokedAt()`
+ *     and would otherwise go on seeing an `ACTIVE` row with no `revokedAt`, leaving the retention branch a
+ *     revocation exists to arm unfired.
+ *     **The accepted cost is stated rather than argued away:** this makes the double MORE observable than
+ *     production on one axis. Doctrine does not refresh its identity map from a bulk UPDATE, so a caller
+ *     holding an already-hydrated `Session` still reads `ACTIVE` off it after the real statement runs, while
+ *     here it reads `REVOKED`. Assert through the port's reads, never off a held aggregate — an assertion on
+ *     a held object is the one shape this double answers differently from the adapter it mirrors.
+ *
+ * Writing those two columns takes reflection, because the aggregate publishes exactly one guarded transition
+ * and no seam for anything else — deliberately. That is the faithful mirror rather than a shortcut: the
+ * adapter reaches past the aggregate too, and the alternative is widening the domain's write surface for a
+ * double's convenience. `now` is read once per call, mirroring the single `:now` the UPDATE binds to
+ * `revoked_at` and `updated_at` alike.
  *
  * @internal
  */
@@ -125,6 +157,8 @@ final class InMemorySessionRepository implements SessionRepository
     {
         $this->revokeOthersCalls[] = $userId;
         $this->lastRevokeOthersexcept = $currentSessionId;
+
+        $this->bulkRevokeActive($userId, $currentSessionId);
     }
 
     #[Override]
@@ -132,6 +166,10 @@ final class InMemorySessionRepository implements SessionRepository
     {
         $this->revokeAllCalls[] = $userId;
 
+        $this->bulkRevokeActive($userId, null);
+
+        // Fired after the flip so the hook observes the store the revocation left behind, which is the state
+        // a caller reasoning about "the sessions are gone by now" would read.
         if ($this->onRevokeAll instanceof Closure) {
             ($this->onRevokeAll)();
         }
@@ -199,6 +237,52 @@ final class InMemorySessionRepository implements SessionRepository
         }
 
         return $session->expiresAt() < $expiredBefore;
+    }
+
+    /**
+     * Flips every currently-`ACTIVE` session of the user, optionally sparing the one in hand. The `$except`
+     * comparison is on the id string rather than {@see SessionId::equals()} because what is indexed is the
+     * entity's own nullable id, and a session that never got one is not addressable by the adapter either.
+     */
+    private function bulkRevokeActive(string $userId, ?SessionId $except): void
+    {
+        $now = SystemClock::now();
+        $spared = $except?->toString();
+
+        foreach ($this->byId as $id => $session) {
+            // Both comparisons are case-insensitive because the adapter's are: `user_id` and `id` are
+            // `Types::GUID`, which in PostgreSQL is the native `uuid` type, and `uuid` equality normalises
+            // hex case. A `===` here would diverge from production in both directions at once — an
+            // upper-case `$userId` would make this double revoke NOTHING where the adapter revokes
+            // everything, and an upper-case spared id would make it revoke the very session the caller
+            // asked to keep. Unreachable while `Uuid::generate()` emits lower case and ids are
+            // server-written, and mirrored anyway: a double that is stricter than what it stands in for
+            // lets a use-case test assert behaviour production cannot produce, which is the one thing
+            // this class exists not to do.
+            if (0 !== \strcasecmp($session->userId(), $userId) || SessionStatus::ACTIVE !== $session->status()) {
+                continue;
+            }
+
+            if (null !== $spared && 0 === \strcasecmp($id, $spared)) {
+                continue;
+            }
+
+            $this->flipToRevoked($session, $now);
+        }
+    }
+
+    /**
+     * Writes the three columns the UPDATE sets, and nothing else — no guard, because the statement has none
+     * beyond the `status = ACTIVE` filter that already selected this row, and no event, because nothing was
+     * hydrated to record one.
+     */
+    private function flipToRevoked(Session $session, DateTimeImmutable $now): void
+    {
+        // Parenthesised rather than PHP 8.4's bare `new X()->…`: PDepend, which PHPMD parses with, cannot
+        // read that form, and the repo spells it this way everywhere for the same reason.
+        (new ReflectionProperty(Session::class, 'status'))->setValue($session, SessionStatus::REVOKED);
+        (new ReflectionProperty(Session::class, 'revokedAt'))->setValue($session, $now);
+        $session->setUpdatedAt($now);
     }
 
     private function index(Session $session): void

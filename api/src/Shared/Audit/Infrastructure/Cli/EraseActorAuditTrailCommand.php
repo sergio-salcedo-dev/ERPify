@@ -8,6 +8,7 @@ use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Console\Infrastructure\UnattendedRunPolicy;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -27,6 +28,23 @@ use Throwable;
  *
  * The erasure is itself recorded as a `security` audit entry carrying the resulting pseudonym (never the
  * original id), so the act of forgetting is provable for compliance without re-identifying the person.
+ *
+ * **Exit codes are this command's contract with an unattended caller**, which reads `$?` and never the screen.
+ * `SUCCESS` means the trail is anonymised, or that a no-op happened — no matching rows, `--dry-run`, or a
+ * confirmation answered "no". `FAILURE` means the erasure did not complete: either the count failed, so
+ * nothing was attempted, or the `UPDATE` failed, so the rows may or may not have changed — a connection lost
+ * mid-statement can commit without acknowledging — which is why the message says how far it got and only the
+ * first is unconditionally safe to repeat. {@see ERASED_UNRECORDED} is the opposite outcome and carries its
+ * own code because no message can reach a caller reading `$?`: the erasure IS done, irreversibly, and
+ * nothing attests it. `INVALID` means nothing was attempted and the command line is what needs repairing —
+ * a malformed id, or a confirmation this run could not put — and it is the one code a caller must not retry
+ * on.
+ *
+ * Three spellings suppress the refusal's own message while still refusing: `--quiet`, `--silent`, and a
+ * negative `SHELL_VERBOSITY` inherited from a parent process. An unattended run that means to erase passes
+ * `--force`. What no exit code here can cover is a command line the console cannot **bind** — an unknown
+ * option, a wrong arity, a mistyped name — which raises before `execute()` and exits `1`, so "never retry on
+ * `INVALID`" is a floor on retries rather than a partition of them.
  */
 #[AsCommand(
     name: 'audit:gdpr:erase',
@@ -35,6 +53,19 @@ use Throwable;
 final class EraseActorAuditTrailCommand extends Command
 {
     private const string ERASURE_ACTION = AuditErasureEvidence::ACTOR_TRAIL_ERASED;
+
+    /**
+     * The erasure committed and its compliance self-audit did not. It earns a code of its own because it is
+     * the one outcome a caller must treat differently from every other failure and cannot tell apart by
+     * reading `$?` alone: the rows ARE anonymised, irreversibly, and no `GDPR_ERASURE_EXECUTED` row attests
+     * it — so retrying with the original id matches nothing and reports "nothing to erase" over a subject
+     * that was in fact erased. What it asks for is not a retry but a hand-written compliance record.
+     *
+     * Outside `Command`'s own vocabulary on purpose: `FAILURE` already means "the erasure did not complete",
+     * and this is its opposite. A job that does not know the code sees a non-zero and stops, which is the
+     * safe reading.
+     */
+    public const int ERASED_UNRECORDED = 3;
 
     public function __construct(
         private readonly AuditActorAnonymiser $anonymiser,
@@ -62,8 +93,21 @@ final class EraseActorAuditTrailCommand extends Command
                 beside the fresh pseudonym. Use <info>identity:gdpr:erase-subject</info> for an identity —
                 it erases both axes in one transaction.
 
+                Exit codes: <comment>0</comment> anonymised, or the no-op you asked for (including an
+                actor with no matching rows); <comment>1</comment> the erasure did not complete — read the
+                message, which says how far it got, since only a failed row count is unconditionally safe to
+                repeat; <comment>3</comment> the rows WERE anonymised and the compliance entry recording it
+                was not — do not retry, record the erasure by hand; <comment>2</comment> nothing was
+                attempted and the command line needs fixing — a
+                malformed id, or a confirmation this run could not put. Do not retry on <comment>2</comment>.
+                A run that cannot be asked (<comment>--no-interaction</comment>, a closed or already-exhausted
+                stdin, <comment>--quiet</comment>, <comment>--silent</comment>, or a negative
+                <comment>SHELL_VERBOSITY</comment>) needs <comment>--force</comment> to erase.
+                <comment>--dry-run</comment> answers <comment>1</comment> too when the count itself fails.
+
                   <info>php %command.full_name% <actor-id> --dry-run</info>
                   <info>php %command.full_name% <actor-id></info>
+                  <info>php %command.full_name% <actor-id> --force</info>
                 HELP)
         ;
     }
@@ -80,37 +124,172 @@ final class EraseActorAuditTrailCommand extends Command
             return Command::INVALID;
         }
 
-        $matched = $this->anonymiser->countFor($actorId);
         $io->writeln(\sprintf('Actor:        %s', $actorId));
-        $io->writeln(\sprintf('Rows matched: %d', $matched));
 
-        if (0 === $matched) {
-            $io->warning('No audit rows for that actor — nothing to erase.');
+        $preflight = $this->preflight($io, $input, $actorId);
 
-            return Command::SUCCESS;
-        }
-
-        if (true === $input->getOption('dry-run')) {
-            $io->note('Dry run: no rows were changed.');
-
-            return Command::SUCCESS;
-        }
-
-        if (
-            true !== $input->getOption('force')
-            && !$io->confirm(\sprintf('Irreversibly anonymise %d row(s)?', $matched), false)
-        ) {
-            $io->warning('Aborted — no rows were changed.');
-
-            return Command::SUCCESS;
+        if (null !== $preflight) {
+            return $preflight;
         }
 
         return $this->eraseAndReport($io, $actorId);
     }
 
+    /**
+     * Everything that decides whether the anonymisation runs at all, in the order the two sibling erasure
+     * commands use: the no-op the operator asked for, then the run that says up front it needs no answer,
+     * then the run that cannot be asked, then the question itself.
+     *
+     * **The row count is read only on the paths that consume it.** It feeds the confirmation's magnitude and
+     * it is the whole point of `--dry-run`; a `--force` run does not need it (the erasure's own
+     * `affectedRows` is the authoritative figure) and a run about to be refused would compute it and throw it
+     * away — which is what made the exit code an existence oracle over an actor id, answering `2` for an
+     * actor with rows and `0` for one without. Reading it later would cost more than it buys: the prompt
+     * would lose its magnitude, which is the only defect an operator can catch before an irreversible
+     * `UPDATE`, and a subject with nothing left to erase would be asked to confirm erasing it.
+     *
+     * @return int|null the exit code to stop on, or null to proceed with the anonymisation
+     */
+    private function preflight(SymfonyStyle $io, InputInterface $input, string $actorId): ?int
+    {
+        if (true === $input->getOption('dry-run')) {
+            return $this->reportDryRun($io, $actorId);
+        }
+
+        if (true === $input->getOption('force')) {
+            return null;
+        }
+
+        if (UnattendedRunPolicy::cannotAnswer($input)) {
+            return UnattendedRunPolicy::refuse($io, 'anonymise', 'the matching row count', 'No rows were changed.');
+        }
+
+        return $this->confirmMatchedRows($io, $input, $actorId);
+    }
+
+    /** The one no-op the operator expressed, and the only path that reads the trail without meaning to change it. */
+    private function reportDryRun(SymfonyStyle $io, string $actorId): int
+    {
+        $matched = $this->reportMatches($io, $actorId);
+
+        if (null === $matched) {
+            return Command::FAILURE;
+        }
+
+        if (0 === $matched) {
+            return $this->reportNothingToErase($io);
+        }
+
+        $io->note('Dry run: no rows were changed.');
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * The question, and the two ways it can go unanswered. A "no" the operator typed is a rejection they
+     * expressed, so it succeeds; a question this run could never put is a rejection nobody expressed, and
+     * reporting success there is indistinguishable from a completed erasure to a caller reading `$?`.
+     *
+     * @return int|null the exit code to stop on, or null to proceed with the anonymisation
+     */
+    private function confirmMatchedRows(SymfonyStyle $io, InputInterface $input, string $actorId): ?int
+    {
+        $matched = $this->reportMatches($io, $actorId);
+
+        if (null === $matched) {
+            return Command::FAILURE;
+        }
+
+        if (0 === $matched) {
+            return $this->reportNothingToErase($io);
+        }
+
+        $confirmed = $io->confirm(\sprintf('Irreversibly anonymise %d row(s)?', $matched), false);
+
+        // A stdin nothing can be read from enters the question interactive and leaves it demoted: the helper
+        // answers with the default it was handed rather than raising, so reading the flag a second time is
+        // what separates a typed "no" from a question nobody was there to hear. This is the one of the three
+        // unanswerable shapes that only a re-read can see — {@see UnattendedRunPolicy::cannotAnswer()} covers
+        // the other two and says why it cannot cover this one.
+        if (!$input->isInteractive()) {
+            return UnattendedRunPolicy::refuse($io, 'anonymise', 'the matching row count', 'No rows were changed.');
+        }
+
+        if (!$confirmed) {
+            $io->warning('Aborted — no rows were changed.');
+
+            return Command::SUCCESS;
+        }
+
+        return null;
+    }
+
+    /**
+     * The row count, or null when the trail could not be read. A failure here is `FAILURE` and not `INVALID`:
+     * a database that cannot answer is exactly what a caller should retry, and `INVALID` is the one code this
+     * command's contract tells it never to retry on.
+     *
+     * @return int|null the matching row count, or null when the count could not be taken
+     */
+    private function reportMatches(SymfonyStyle $io, string $actorId): ?int
+    {
+        try {
+            $matched = $this->anonymiser->countFor($actorId);
+        } catch (Throwable $throwable) {
+            $io->error(\sprintf(
+                'Could not read the trail: %s. Nothing was attempted — this run is safe to repeat with the '
+                . 'same id.',
+                $throwable->getMessage(),
+            ));
+
+            return null;
+        }
+
+        $io->writeln(\sprintf('Rows matched: %d', $matched));
+
+        return $matched;
+    }
+
+    private function reportNothingToErase(SymfonyStyle $io): int
+    {
+        $io->warning('No audit rows for that actor — nothing to erase.');
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * The two failures here are not the same failure, and both answer `FAILURE` because the exit code alone
+     * cannot separate them — the message must. If the `UPDATE` itself fails nothing was changed and the run
+     * is safe to repeat with the original id; if it succeeded and only the compliance self-audit failed, the
+     * erasure is done and irreversible and repeating it with the original id would report "nothing to erase"
+     * over a subject that was in fact erased.
+     *
+     * The anonymisation therefore carries its own `catch`. Leaving it outside one does not merely lose the
+     * distinction: the throwable escapes `execute()`, and the console derives the process exit code from
+     * `Throwable::getCode()` — so a DBAL driver code surfaces as that number, or as 255 once it exceeds the
+     * byte, and a caller reading `$?` sees neither `1` nor anything it can map.
+     */
     private function eraseAndReport(SymfonyStyle $io, string $actorId): int
     {
-        $result = $this->anonymiser->anonymise($actorId);
+        try {
+            $result = $this->anonymiser->anonymise($actorId);
+        } catch (Throwable $throwable) {
+            $io->error(\sprintf(
+                'Anonymisation failed: %s. The rows may or may not have been changed — a lost connection '
+                . 'can commit without acknowledging — so verify with --dry-run before repeating this run.',
+                $throwable->getMessage(),
+            ));
+
+            return Command::FAILURE;
+        }
+
+        // An UPDATE that matched nothing is not an erasure, and saying so before the self-audit is what
+        // keeps the evidence honest: `AuditErasureEvidence` exempts this action from the retention prune
+        // for ever, so a row written here for a subject that was already anonymised is an immortal claim
+        // that an erasure happened. Reachable only from `--force`, which skips the preview by design.
+        if (0 === $result->affectedRows) {
+            return $this->reportNothingToErase($io);
+        }
 
         try {
             $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
@@ -133,7 +312,7 @@ final class EraseActorAuditTrailCommand extends Command
                 . 'Record this erasure manually for compliance.',
             ]);
 
-            return Command::FAILURE;
+            return self::ERASED_UNRECORDED;
         }
 
         $io->success(\sprintf(

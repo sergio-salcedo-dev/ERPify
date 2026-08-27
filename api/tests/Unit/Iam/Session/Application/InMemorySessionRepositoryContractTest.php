@@ -15,9 +15,11 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * The double stands in for the Doctrine adapter across the use-case unit tests, so the reads it answers have
- * to mean what the port promises. These cases pin the three ways it can drift from the adapter without any
+ * to mean what the port promises. These cases pin the three ways a READ can drift from the adapter without any
  * consumer noticing: the temporal predicate it applies, the order it lists in, and whether a write is visible
- * to a later read.
+ * to a later read. The fourth axis — which rows a bulk WRITE reaches and what it leaves on them — is pinned
+ * in {@see InMemorySessionRepositoryBulkRevocationContractTest}, whose cases assert on held aggregates and so
+ * carry a caveat these do not.
  *
  * @internal
  */

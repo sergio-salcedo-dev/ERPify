@@ -104,16 +104,44 @@ final class EraseIdentitySubjectCommandTest extends TestCase
         $this->assertFalse($users->removeCalled);
     }
 
-    public function testDecliningTheConfirmationErasesNothing(): void
+    /**
+     * An ORDERING pin, not a regression pin: this passes with or without the unattended refusal, because
+     * `--force` short-circuits before the confirmation either way. What it fixes in place is that order — the
+     * refusal exists to stop a run nobody could answer, never a run that said up front it needed no answer.
+     */
+    public function testAnUnattendedRunErasesWithForce(): void
     {
         $users = new InMemoryUserRepository(UserMother::create());
         $tester = $this->tester($users);
-        $tester->setInputs(['no']);
 
-        $exitCode = $tester->execute(['user-id' => UserMother::DEFAULT_ID]);
+        $exitCode = $tester->execute(
+            ['user-id' => UserMother::DEFAULT_ID, '--force' => true],
+            ['interactive' => false],
+        );
 
         $this->assertSame(Command::SUCCESS, $exitCode);
-        $this->assertStringContainsString('Aborted', $tester->getDisplay());
+        $this->assertStringContainsString('Erased subject ' . UserMother::DEFAULT_ID, $tester->getDisplay());
+        $this->assertTrue($users->removeCalled);
+    }
+
+    /**
+     * An ORDERING pin, not a regression pin: this passes with or without the unattended refusal, because the
+     * dry run short-circuits before the confirmation either way. What it fixes in place is that order — the
+     * dry run is the one no-op the operator did express, so it keeps its exit code even where no confirmation
+     * could be asked for.
+     */
+    public function testAnUnattendedDryRunStaysSuccessful(): void
+    {
+        $users = new InMemoryUserRepository(UserMother::create());
+        $tester = $this->tester($users);
+
+        $exitCode = $tester->execute(
+            ['user-id' => UserMother::DEFAULT_ID, '--dry-run' => true],
+            ['interactive' => false],
+        );
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringContainsString('Dry run: nothing was erased.', $tester->getDisplay());
         $this->assertFalse($users->removeCalled);
     }
 
@@ -121,9 +149,16 @@ final class EraseIdentitySubjectCommandTest extends TestCase
         InMemoryUserRepository $users,
         ?InMemoryActiveAdministratorDirectory $directory = null,
     ): CommandTester {
+        return new CommandTester($this->commandFor($users, $directory));
+    }
+
+    private function commandFor(
+        InMemoryUserRepository $users,
+        ?InMemoryActiveAdministratorDirectory $directory = null,
+    ): EraseIdentitySubjectCommand {
         $audit = new RecordingAuditLogger();
 
-        return new CommandTester(new EraseIdentitySubjectCommand(new FulfilIdentityErasure(
+        return new EraseIdentitySubjectCommand(new FulfilIdentityErasure(
             new EraseIdentitySubject(
                 $users,
                 new InMemoryPasswordResetTokenRepository(),
@@ -142,6 +177,6 @@ final class EraseIdentitySubjectCommandTest extends TestCase
             $audit,
             new FixedActorContextFactory(ActorContext::system()),
             new InlineTransactionManager(),
-        )));
+        ));
     }
 }

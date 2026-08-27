@@ -71,7 +71,8 @@ final class ReconcileErasedSubjectReferencesCommandTest extends TestCase
         $this->assertStringContainsString(self::MEMBERSHIP_AXIS, $display);
         $this->assertStringContainsString(self::DANGLING_ID, $display);
         $this->assertStringContainsString(self::OTHER_DANGLING_ID, $display);
-        // `--force` included: without it the repair prompts, and a non-interactive run declines silently.
+        // `--force` included: without it the repair asks for a confirmation, and a run that cannot be asked is
+        // refused rather than answered for.
         $this->assertStringContainsString('identity:gdpr:erase-subject <id> --force', $display);
     }
 

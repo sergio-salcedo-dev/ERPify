@@ -27,8 +27,16 @@ final class RecordingAuditActorAnonymiser implements AuditActorAnonymiser
     /** @var list<string> */
     public array $anonymisedActorIds = [];
 
+    /**
+     * `$affectedRows` defaults to the match count because that is what the adapter answers when nothing
+     * changes between the preview and the `UPDATE`. It is separable because the interesting case is the one
+     * where they differ: `--force` takes no preview at all, and a row can vanish between the two, so a
+     * double wiring them together makes "the UPDATE matched nothing" untestable — and that is the branch
+     * standing between a re-run and an immortal evidence row claiming an erasure that did not happen.
+     */
     public function __construct(
         private readonly int $matchCount,
+        private readonly ?int $affectedRows = null,
     ) {
     }
 
@@ -45,6 +53,6 @@ final class RecordingAuditActorAnonymiser implements AuditActorAnonymiser
     {
         $this->anonymisedActorIds[] = $actorId;
 
-        return new ActorAnonymisationResult($this->pseudonym, $this->matchCount);
+        return new ActorAnonymisationResult($this->pseudonym, $this->affectedRows ?? $this->matchCount);
     }
 }

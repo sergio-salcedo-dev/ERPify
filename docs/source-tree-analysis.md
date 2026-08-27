@@ -59,7 +59,7 @@ ERPify/
 │   ├── frankenphp/                 # Caddyfile + worker entry
 │   ├── docs/                       # API-specific docs (upstream symfony-docker + local additions)
 │   ├── composer.json
-│   ├── phpunit.xml.dist
+│   ├── tools/phpunit/phpunit.dist.xml  # PHPUnit 13 config + bootstrap
 │   ├── tools/phpstan/phpstan.neon  # PHPStan (level: max) — sole type-checking gate
 │   ├── rector.php
 │   ├── .php-cs-fixer.php

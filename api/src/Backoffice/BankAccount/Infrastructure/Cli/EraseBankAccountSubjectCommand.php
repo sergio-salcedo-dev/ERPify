@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\BankAccount\Infrastructure\Cli;
 
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
+use Erpify\Shared\Console\Infrastructure\UnattendedRunPolicy;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -23,6 +24,23 @@ use Throwable;
  *
  * A console command rather than an HTTP route because there is no authentication yet — an unauthenticated
  * erasure endpoint would be a footgun. Synchronous: the scope is one subject, not a sweep.
+ *
+ * **Exit codes are this command's contract with an unattended caller**, which reads `$?` and never the screen:
+ * `SUCCESS` means the subject is erased, that the no-op the operator asked for (`--dry-run`, or a
+ * confirmation answered "no") happened, or that there was nothing left to erase — a valid id naming no live
+ * subject, which is where a typo'd-but-well-formed id lands; `FAILURE` means the erasure was attempted and
+ * did not complete;
+ * `INVALID` means no erasure was attempted and the command line is what needs repairing — a malformed id, or
+ * a confirmation this run could not put. `INVALID` is the one code a caller must not retry on. What makes the
+ * distinction matter more here than in a reversible command: the key destruction is a crypto-shred, so a run
+ * that reports success without performing it leaves the subject's PII readable while the compliance record
+ * says otherwise.
+ *
+ * Three spellings suppress the refusal's own message while still refusing: `--quiet`, `--silent`, and a
+ * negative `SHELL_VERBOSITY` inherited from a parent process. An unattended run that means to erase passes
+ * `--force`. What no exit code here can cover is a command line the console cannot **bind** — an unknown
+ * option, a wrong arity, a mistyped name — which raises before `execute()` and exits `1`, so "never retry on
+ * `INVALID`" is a floor on retries rather than a partition of them.
  */
 #[AsCommand(
     name: 'bank-account:gdpr:erase-subject',
@@ -49,8 +67,17 @@ final class EraseBankAccountSubjectCommand extends Command
                 the append-only <comment>audit_log</comment> becomes permanently unreadable. Audit rows are
                 never deleted — the trail survives, its PII just becomes unrecoverable.
 
+                Exit codes: <comment>0</comment> erased, the no-op you asked for, or nothing left to
+                erase; <comment>1</comment> the erasure was attempted and failed; <comment>2</comment> nothing
+                was attempted and the command line needs fixing — a malformed id, or a confirmation this run
+                could not put. Do not retry on <comment>2</comment>. A run that cannot be asked
+                (<comment>--no-interaction</comment>, a closed or already-exhausted stdin,
+                <comment>--quiet</comment>, <comment>--silent</comment>, or a negative
+                <comment>SHELL_VERBOSITY</comment>) needs <comment>--force</comment> to erase.
+
                   <info>php %command.full_name% <bank-account-id> --dry-run</info>
                   <info>php %command.full_name% <bank-account-id></info>
+                  <info>php %command.full_name% <bank-account-id> --force</info>
                 HELP)
         ;
     }
@@ -69,35 +96,60 @@ final class EraseBankAccountSubjectCommand extends Command
 
         $io->writeln(\sprintf('Bank account: %s', $bankAccountId));
 
-        if (!$this->shouldProceed($io, $input)) {
-            return Command::SUCCESS;
+        $preflight = $this->preflight($io, $input);
+
+        if (null !== $preflight) {
+            return $preflight;
         }
 
         return $this->eraseAndReport($io, $bankAccountId);
     }
 
     /**
-     * Pre-flight guards that stop before any mutation: a dry run reports the target only, and a real run
-     * needs an explicit confirmation (or --force). Either short-circuit leaves the subject untouched.
+     * Pre-flight guards that stop before any mutation, each carrying the exit code its own outcome earns.
+     * Three outcomes, and they are not one: a dry run is the no-op the operator asked for; a confirmation
+     * answered "no" is a rejection the operator expressed; and a run that could never put the question is a
+     * rejection nobody expressed, which is the only one that must not report success.
+     *
+     * @return int|null the exit code to stop on, or null to proceed with the erasure
      */
-    private function shouldProceed(SymfonyStyle $io, InputInterface $input): bool
+    private function preflight(SymfonyStyle $io, InputInterface $input): ?int
     {
         if (true === $input->getOption('dry-run')) {
             $io->note('Dry run: nothing was erased.');
 
-            return false;
+            return Command::SUCCESS;
         }
 
-        if (
-            true !== $input->getOption('force')
-            && !$io->confirm('Irreversibly erase this subject (removes the account, shreds its audit PII)?', false)
-        ) {
+        if (true === $input->getOption('force')) {
+            return null;
+        }
+
+        if (UnattendedRunPolicy::cannotAnswer($input)) {
+            return UnattendedRunPolicy::refuse($io, 'erase', 'the target', 'Nothing was erased.');
+        }
+
+        $confirmed = $io->confirm(
+            'Irreversibly erase this subject (removes the account, shreds its audit PII)?',
+            false,
+        );
+
+        // A stdin nothing can be read from enters the question interactive and leaves it demoted: the helper
+        // answers with the default it was handed rather than raising, so reading the flag a second time is
+        // what separates a typed "no" from a question nobody was there to hear. This is the one of the three
+        // unanswerable shapes that only a re-read can see — {@see UnattendedRunPolicy::cannotAnswer()} covers
+        // the other two and says why it cannot cover this one.
+        if (!$input->isInteractive()) {
+            return UnattendedRunPolicy::refuse($io, 'erase', 'the target', 'Nothing was erased.');
+        }
+
+        if (!$confirmed) {
             $io->warning('Aborted — nothing was erased.');
 
-            return false;
+            return Command::SUCCESS;
         }
 
-        return true;
+        return null;
     }
 
     private function eraseAndReport(SymfonyStyle $io, string $bankAccountId): int

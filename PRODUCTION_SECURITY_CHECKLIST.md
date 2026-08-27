@@ -861,6 +861,21 @@ mitigated state. Accepting one means recording who accepted it and against which
       fires** if #555 lands a second mutation statement, or the day a non-CLI trigger appears:
       route it through `TransactionManager`, never a raw DBAL transaction nested under
       `wrapInTransaction` (no `nest_transactions_with_savepoints` is configured).
+- [ ] **A GDPR erasure CLI never answers its own confirmation.** All three (`identity:gdpr:erase-subject`,
+      `bank-account:gdpr:erase-subject`, `audit:gdpr:erase`) call `SymfonyStyle::confirm()`, whose default a
+      run that cannot be asked would otherwise take for an operator's answer — reporting `0` for an erasure
+      it never performed, which a compliance job reading `$?` cannot distinguish from a completed one. Three
+      guards, in the same order in each: refuse before asking when the run cannot be asked; re-read
+      `isInteractive()` **immediately after** `confirm()`, because the question helper demotes the input
+      rather than raising; and refuse a stdin a previous read already exhausted, which
+      `QuestionHelper::doReadInput()` (`while (!feof(...))`) answers with the default without raising at all
+      — reachable through the console's own single-alternative prompt for a mistyped command name, which
+      drains a pipe whose last byte is not a newline. `--force` is the unattended path. **Residuals, none
+      gated:** a command line the console cannot *bind* raises before `execute()` and exits `1`, which no
+      guard here can reach; the guards are three copies with no gate holding them equal, and the deferred
+      registry states why an AST gate on the re-read alone would not have caught the defect that produced
+      them; and `--dry-run` still prints the matching row count to the same caller, so what the guards close
+      is the exit code as an existence oracle, never the count as information.
 - [ ] **The sole active administrator cannot be erased.** Demotion is refused by the ≥1-admin
       invariant, self-erasure by its own guard, and no peer exists to erase them — so their right to
       erasure requires onboarding a second administrator first. Pre-existing and named in
