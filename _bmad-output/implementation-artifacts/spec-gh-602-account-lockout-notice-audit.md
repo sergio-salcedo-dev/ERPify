@@ -2,8 +2,8 @@
 title: 'La entrega del aviso de bloqueo de cuenta no dejaba traza de seguridad — #602'
 type: 'security'
 created: '2026-08-26'
-status: 'in-review'
-review_loop_iteration: 0
+status: 'done'
+review_loop_iteration: 1
 context: ['#602']
 baseline_commit: '0d80cac879ac6fcdc0ece7a5258b67030f7b5890'
 ---
@@ -157,26 +157,22 @@ nulabilidad de `lockedUntil()` — también ya razonado y aceptado arriba).
   una aceptación cerrada y vigilada, siguiendo el mismo patrón que #718 en este repo. Consulta externa
   (ChatGPT) + contraste final: `tmp/bmad-md/consult-gdpr-erasure-race-notify-locked-identities-20260827-000633.md`.
 
-- [ ] [Review][Patch] **Cobertura Behat — decisión resuelta (2026-08-27): añadir un escenario.** El plan de
-  pruebas de la propia PR dejaba esto abierto a criterio del revisor; Sergio decidió añadir cobertura Behat
-  para el flujo de auditoría de la notificación de bloqueo (fila `security` `ACCOUNT_LOCKOUT_NOTIFIED`,
-  disparada desde el barrido programado, no desde HTTP).
+- [x] [Review][Patch] **Cobertura Behat — aplicado.** Nuevo feature `features/backoffice/identity/lockout_notification.feature`
+  + contexto `IdentityMaintenanceContext` (invoca `NotifyLockedIdentitiesHandler` directamente — ninguna
+  vocabulario existente cubría un job programado, todo `login.feature` está pensado en forma de request HTTP).
+  Falsificado: vaciar el cuerpo de `record()` → escenario rojo; restaurado → verde. Commit `a3456b7e`.
 
-- [ ] [Review][Patch] **Falta un test de llegada funcional para el nuevo binding de canal.**
-  `LockoutAuditWriteFailureArrivalTest` (preexistente, sin tocar por esta PR) prueba el binding de canal de
-  `RecordLockoutAuditBestEffort` vía una petición HTTP real — el propio docblock de ese test explica por qué
-  un doble o una inspección de `debug:container` no bastan («exactamente igual de cierto cuando el registro
-  se descarta que cuando sobrevive»). `RecordLockoutNoticeAuditBestEffort` afirma el mismo binding «por la
-  misma razón» pero el pase adversarial de esta PR solo lo verificó con `debug:container` — la misma prueba
-  que el test hermano ya declara insuficiente. `api/src/Iam/Identity/Application/RecordLockoutNoticeAuditBestEffort.php`.
-- [ ] [Review][Patch] **Docblock de `record()` afirma algo falso sobre el correo.** «`$lockedUntil` … mirrors
-  the expiry the mail itself quoted» — verificado falso contra `SymfonyAccountLockedEmailSender`, cuyo propio
-  docblock dice explícitamente que el cuerpo «carries no IP, device, timestamp or attempt count». El dato
-  puede seguir siendo defendible (ya vive en el payload de `UserLocked` en `event_store`), pero la
-  justificación escrita es incorrecta. `RecordLockoutNoticeAuditBestEffort.php:51`.
-- [ ] [Review][Patch] **`api/config/reference.php` tocado sin relación con el alcance.** Un hunk cosmético
-  (reordena un comentario `// Default: null` entre `url`/`public_url` de Mercure) ajeno a esta PR, en un
-  fichero que el `CLAUDE.md` raíz marca explícitamente como «Do not touch — auto-generated».
+- [x] [Review][Patch] **Test de llegada funcional — aplicado.** Nuevo
+  `api/tests/Functional/Iam/Identity/LockoutNoticeAuditWriteFailureArrivalTest.php` (espejo de
+  `LockoutAuditWriteFailureArrivalTest`, disparado vía `NotifyLockedIdentitiesHandler` en vez de HTTP, ya que
+  esta fila no tiene request que la dispare). Falsificado: quitar el binding de canal en `services.yaml` →
+  test rojo (`27216 no es mayor que 27216` — nada se añadió al log); restaurado → verde. Commit `a3456b7e`.
+- [x] [Review][Patch] **Docblock de `record()` — corregido.** Sustituida la afirmación falsa por la
+  justificación real (`lockedUntil` ya vive en el payload de `UserLocked` en `event_store`; el correo no
+  revela ningún timestamp, verificado contra `SymfonyAccountLockedEmailSender`). `php.stan` limpio. Commit
+  `c909a699`.
+- [x] [Review][Patch] **`api/config/reference.php` — resuelto sin acción.** El merge de `main` a la rama
+  (`818ce015`) absorbió el hunk ajeno; el fichero ya es idéntico a `main` en esta rama. Nada que revertir.
 
 - [x] [Review][Defer] **`AuditLevel::SECURITY` + `catch` a mano duplica el swallow-and-report que
   `SymfonyAuditLogger::writeActivity()` ya trae para `AuditLevel::ACTIVITY` sobre el mismo canal
