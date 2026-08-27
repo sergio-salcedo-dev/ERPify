@@ -447,8 +447,9 @@ propuesta de una mutación adicional sobre cualquiera de las dos tablas es cuand
   porque no es derivable del diff: un update que sólo rellena campos vacíos es indistinguible de un alta
   mirando los pares `old`/`new`. Las filas escritas antes de que el capturador la estampe no la llevan, así
   que el lector lee su ausencia como «desconocido» y nunca como una cuarta clase de escritura. No mueve la
-  cuenta de «una novena clave libre» de más arriba: aquélla cuenta las claves de `GDPR_ERASURE_EXECUTED`,
-  no las del JSON en general.
+  cuenta de «una novena clave libre» de más arriba: aquélla cuenta las ocho claves de la fila
+  `GDPR_ERASURE_EXECUTED` **que escribe `FulfilIdentityErasure`**, no las del JSON en general — y nombrar el
+  camino importa porque esa acción tiene dos escritores, y el del CLI de actor escribe sólo dos claves.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
 `X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando

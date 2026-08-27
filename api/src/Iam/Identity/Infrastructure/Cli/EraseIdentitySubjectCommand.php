@@ -27,6 +27,14 @@ use Throwable;
  * the last active admin fails). The `system` actor it runs as carries no id, so the self-erasure refusal never
  * applies. The additive `audit:gdpr:erase` command remains for anonymising an actor's trail without erasing the
  * identity.
+ *
+ * **Exit codes are this command's contract with an unattended caller**, which reads `$?` and never the screen:
+ * `SUCCESS` means the subject is erased, or that the no-op the operator asked for (`--dry-run`, or a
+ * confirmation answered "no") happened; `FAILURE` means the erasure was attempted and did not complete;
+ * `INVALID` means no erasure was attempted and the command line is what needs repairing — a malformed id, or
+ * a confirmation this run could not put. `INVALID` is therefore the one code a caller must not retry on.
+ * `--quiet` and `--silent` imply `--no-interaction` AND suppress the refusal's own message, so an unattended
+ * run that means to erase passes `--force`.
  */
 #[AsCommand(
     name: 'identity:gdpr:erase-subject',
@@ -58,8 +66,16 @@ final class EraseIdentitySubjectCommand extends Command
                 <comment>GDPR_SUBJECT_ERASED</comment> and <comment>GDPR_ERASURE_EXECUTED</comment> security
                 entries, and is refused if the subject is the last active administrator.
 
+                Exit codes: <comment>0</comment> erased, or the no-op you asked for; <comment>1</comment> the
+                erasure was attempted and failed; <comment>2</comment> nothing was attempted and the command
+                line needs fixing — a malformed id, or a confirmation this run could not put. Do not retry on
+                <comment>2</comment>. A run that cannot be asked (<comment>--no-interaction</comment>, a closed
+                stdin, <comment>--quiet</comment>, <comment>--silent</comment>) needs <comment>--force</comment>
+                to erase.
+
                   <info>php %command.full_name% <user-id> --dry-run</info>
                   <info>php %command.full_name% <user-id></info>
+                  <info>php %command.full_name% <user-id> --force</info>
                 HELP)
         ;
     }
@@ -99,9 +115,11 @@ final class EraseIdentitySubjectCommand extends Command
      *   indistinguishable from a completed erasure to every caller that is not a human reading the screen.
      *
      * That last one refuses with `INVALID` rather than `FAILURE`, the same reading the malformed user-id
-     * above gives it and the one {@see ReconcileErasedSubjectReferencesCommand} gives it: nothing was
-     * attempted and nothing about the system is broken, so the repair belongs on the command line.
-     * `FAILURE` would send whoever reads `$?` looking for an erasure that half-ran.
+     * above gives it and the one {@see ReconcileErasedSubjectReferencesCommand} gives it: no erasure was
+     * attempted, so there is no half-run state to reason about and the repair belongs on the command line.
+     * `FAILURE` would send whoever reads `$?` looking for an erasure that half-ran. The shared reading is
+     * "no verdict was reached, do not act on it" rather than "nothing is broken" — the reconciler answers
+     * `INVALID` for a failed probe too, which is a fault.
      *
      * @return int|null the exit code to stop on, or null to proceed with the erasure
      */

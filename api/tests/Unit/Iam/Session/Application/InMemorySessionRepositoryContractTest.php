@@ -27,6 +27,13 @@ use PHPUnit\Framework\TestCase;
  * the adapter's `status = ACTIVE` filter does flip. Both directions are pinned below, along with the absence
  * of a domain event the un-hydrated UPDATE cannot produce.
  *
+ * **The bulk cases assert on held aggregates, and that is the one place this class is not a template.** They
+ * do it to reach state no read exposes — a lapsed row's `status`, a `revokedAt` only `deleteRetired()` looks
+ * at. It is safe here because the subject under test IS the double. It is not safe to copy into a use-case
+ * test: Doctrine does not refresh its identity map from a bulk UPDATE, so an aggregate a caller already holds
+ * still reads `ACTIVE` in production after the real statement runs. `assertFalse($held->isActive($now))` is
+ * therefore green here and false against the adapter. Use-case tests assert through the port's reads.
+ *
  * @internal
  */
 #[CoversClass(InMemorySessionRepository::class)]

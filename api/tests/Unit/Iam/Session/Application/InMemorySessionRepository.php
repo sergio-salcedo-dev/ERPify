@@ -48,12 +48,16 @@ use RuntimeException;
  *     — the same defect as a looser read predicate, one direction over. Draining the aggregate afterwards is
  *     not an answer either: {@see Session::pullDomainEvents()} empties the whole list, including a
  *     `SessionStarted` its owner has not published yet.
- *   - **The flip is written into the entity, not tracked in a set beside it.** A set of revoked ids consulted
- *     by the two reads would repair exactly those two reads: {@see deleteRetired()} asks the entity for
- *     `status()` and `revokedAt()`, so it would go on seeing an `ACTIVE` row with no `revokedAt` and the
- *     retention branch a revocation exists to arm would never fire — and any test holding the preset object
- *     would read `ACTIVE` straight off it. Two sources of truth for one column is how a double drifts from
- *     its adapter while every consumer still looks right.
+ *   - **The flip is written into the entity, because the entity IS this double's storage.** A set of revoked
+ *     ids beside it would be two sources of truth for one column, and every reader would have to remember to
+ *     consult both — {@see deleteRetired()} included, which asks the entity for `status()` and `revokedAt()`
+ *     and would otherwise go on seeing an `ACTIVE` row with no `revokedAt`, leaving the retention branch a
+ *     revocation exists to arm unfired.
+ *     **The accepted cost is stated rather than argued away:** this makes the double MORE observable than
+ *     production on one axis. Doctrine does not refresh its identity map from a bulk UPDATE, so a caller
+ *     holding an already-hydrated `Session` still reads `ACTIVE` off it after the real statement runs, while
+ *     here it reads `REVOKED`. Assert through the port's reads, never off a held aggregate — an assertion on
+ *     a held object is the one shape this double answers differently from the adapter it mirrors.
  *
  * Writing those two columns takes reflection, because the aggregate publishes exactly one guarded transition
  * and no seam for anything else — deliberately. That is the faithful mirror rather than a shortcut: the

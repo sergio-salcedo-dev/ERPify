@@ -20,13 +20,17 @@ use PHPUnit\TextUI\Configuration\Configuration;
  * The per-test `tearDown()` reset that freezing tests already do becomes a belt-and-braces; this extension is
  * the suite-wide net that does not depend on every future test author remembering it.
  *
- * **Both edges are subscribed, because a trailing reset alone is not a net.** `Finished` is emitted for a test
- * the runner prepared and ran to its end; a test that errors inside `setUp()`, or that skips there, never
- * reaches it. Those are exactly the tests that leave a frozen clock behind — the failure hands the process to
- * the next test with the previous one's instant still installed, and the one guard that could have caught it
- * is the one its own failure skipped. So the reset the following test can rely on has to be its own
- * precondition rather than a debt owed by the test before it: `PreparationStarted` is the first per-test
- * event and precedes `setUp()`, which puts the reset ahead of the code most likely to read the clock.
+ * **Both edges are subscribed, because a trailing reset alone is not a net.** The runner guards that emit on
+ * `TestCase::wasPrepared()`, which a test skipping in `setUp()` never sets, and which an unexpected throwable
+ * there does not set either — so neither reaches `Finished`. (A failed *assertion* in `setUp()` is the one
+ * exception: the runner forces the flag before reporting it, so that branch does emit.)
+ *
+ * A skip and a throwable in `setUp()` are exactly the cases that leave a frozen clock behind: the failure
+ * hands the process to the next test with the previous one's instant still installed, and the one guard that
+ * could have caught it is the one its own failure skipped. So the reset the following test relies on has to
+ * be its own precondition rather than a debt owed by the test before it. `PreparationStarted` is the first
+ * per-test event and precedes `setUp()`, which puts the reset ahead of the code most likely to read the
+ * clock; `Prepared` fires after that hook and would be too late.
  *
  * The trailing reset stays for the interval the leading one cannot cover — whatever runs between the end of
  * one test and the start of the next, which is where a leaked instant would otherwise sit unattributed.
