@@ -34,6 +34,14 @@ use PHPUnit\TextUI\Configuration\Configuration;
  *
  * The trailing reset stays for the interval the leading one cannot cover — whatever runs between the end of
  * one test and the start of the next, which is where a leaked instant would otherwise sit unattributed.
+ *
+ * **What the leading reset is deliberately upstream of, and therefore wipes: the class-level hooks.**
+ * `setUpBeforeClass()` / `#[BeforeClass]` run once before the suite's first `PreparationStarted`, and a data
+ * provider resolves earlier still, so a clock installed in either is reset before every test of the class
+ * including the first — where a trailing-only reset would have left it alive for one test. Under
+ * `inIsolation` the ordering inverts, so the behaviour would differ by isolation mode. Freeze the clock per
+ * test (`setUp()` or the test body, both of which run after this reset); nothing in the suite freezes it at
+ * class level today, and nothing gates that.
  */
 final class ResetSystemClockExtension implements Extension
 {

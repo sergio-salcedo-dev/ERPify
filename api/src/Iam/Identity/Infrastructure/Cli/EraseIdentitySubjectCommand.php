@@ -12,6 +12,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Input\StreamableInputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Throwable;
@@ -29,12 +30,17 @@ use Throwable;
  * identity.
  *
  * **Exit codes are this command's contract with an unattended caller**, which reads `$?` and never the screen:
- * `SUCCESS` means the subject is erased, or that the no-op the operator asked for (`--dry-run`, or a
- * confirmation answered "no") happened; `FAILURE` means the erasure was attempted and did not complete;
+ * `SUCCESS` means the subject is erased, that the no-op the operator asked for (`--dry-run`, or a
+ * confirmation answered "no") happened, or that there was nothing left to erase — a valid id naming no live
+ * subject, which is where a typo'd-but-well-formed id lands; `FAILURE` means the erasure was attempted and
+ * did not complete;
  * `INVALID` means no erasure was attempted and the command line is what needs repairing — a malformed id, or
  * a confirmation this run could not put. `INVALID` is therefore the one code a caller must not retry on.
- * `--quiet` and `--silent` imply `--no-interaction` AND suppress the refusal's own message, so an unattended
- * run that means to erase passes `--force`.
+ * Three spellings suppress the refusal's own message while still refusing: `--quiet`, `--silent`, and a
+ * negative `SHELL_VERBOSITY` inherited from a parent process. An unattended run that means to erase passes
+ * `--force`. What no exit code here can cover is a command line the console cannot **bind** — an unknown
+ * option, a wrong arity, a mistyped name — which raises before `execute()` and exits `1`, so "never retry on
+ * `INVALID`" is a floor on retries rather than a partition of them.
  */
 #[AsCommand(
     name: 'identity:gdpr:erase-subject',
@@ -66,12 +72,13 @@ final class EraseIdentitySubjectCommand extends Command
                 <comment>GDPR_SUBJECT_ERASED</comment> and <comment>GDPR_ERASURE_EXECUTED</comment> security
                 entries, and is refused if the subject is the last active administrator.
 
-                Exit codes: <comment>0</comment> erased, or the no-op you asked for; <comment>1</comment> the
-                erasure was attempted and failed; <comment>2</comment> nothing was attempted and the command
-                line needs fixing — a malformed id, or a confirmation this run could not put. Do not retry on
-                <comment>2</comment>. A run that cannot be asked (<comment>--no-interaction</comment>, a closed
-                stdin, <comment>--quiet</comment>, <comment>--silent</comment>) needs <comment>--force</comment>
-                to erase.
+                Exit codes: <comment>0</comment> erased, the no-op you asked for, or nothing left to
+                erase; <comment>1</comment> the erasure was attempted and failed; <comment>2</comment> nothing
+                was attempted and the command line needs fixing — a malformed id, or a confirmation this run
+                could not put. Do not retry on <comment>2</comment>. A run that cannot be asked
+                (<comment>--no-interaction</comment>, a closed or already-exhausted stdin,
+                <comment>--quiet</comment>, <comment>--silent</comment>, or a negative
+                <comment>SHELL_VERBOSITY</comment>) needs <comment>--force</comment> to erase.
 
                   <info>php %command.full_name% <user-id> --dry-run</info>
                   <info>php %command.full_name% <user-id></info>
@@ -135,7 +142,7 @@ final class EraseIdentitySubjectCommand extends Command
             return null;
         }
 
-        if (!$input->isInteractive()) {
+        if ($this->cannotBeAsked($input)) {
             return $this->refuseUnattended($io);
         }
 
@@ -168,6 +175,34 @@ final class EraseIdentitySubjectCommand extends Command
         }
 
         return null;
+    }
+
+    /**
+     * Whether this run can put a question at all — the half of "unattended" the interactivity flag does not
+     * cover. A stream a previous read already exhausted answers with nothing and the helper takes that for
+     * the operator's answer: `QuestionHelper::doReadInput()` loops `while (!feof($inputStream))`, so a stream
+     * arriving already at EOF never enters the loop, returns `''` rather than `false`, and never raises the
+     * `MissingInputException` that both other guards rely on to demote the input.
+     *
+     * The reachable producer is the console's own single-alternative prompt: a mistyped command name with
+     * exactly one near match makes `Application::doRun()` ask a confirmation of its own, and a pipe whose
+     * last byte is not a newline is exhausted by it. `feof()` is true only after a read has hit the end, so
+     * this refuses the already-drained stream and leaves an unread empty pipe to the post-`confirm()` guard,
+     * which handles it.
+     *
+     * The stream is resolved exactly as `QuestionHelper::ask()` resolves it — the input's own, falling back
+     * to `STDIN` — because a guard reading a different stream from the one that will be asked is not a guard.
+     */
+    private function cannotBeAsked(InputInterface $input): bool
+    {
+        if (!$input->isInteractive()) {
+            return true;
+        }
+
+        $stream = $input instanceof StreamableInputInterface ? $input->getStream() : null;
+        $stream ??= STDIN;
+
+        return \is_resource($stream) && \feof($stream);
     }
 
     private function refuseUnattended(SymfonyStyle $io): int

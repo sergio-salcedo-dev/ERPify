@@ -21,24 +21,24 @@ use Stringable;
  * `deprecation` and `observability`) and CRITICAL is above its `action_level: error`, so that record does not
  * merely sit in the buffer, it FLUSHES it to `php://stderr`.
  *
- * **Which invocations actually reach the CRITICAL path is narrower than "a command that fails", and getting
- * this wrong is what an adversarial pass caught.** Every `#[AsCommand]` in this application that takes person
- * data on its command line catches `Throwable` and returns `Command::FAILURE` — the two GDPR subject
- * erasures, the actor-trail erasure, the administrator bootstrap and the three invitation commands, plus the
- * organization provisioner — so none of them can raise a `ConsoleErrorEvent`, and their own failures reach
- * only `:67` at DEBUG. **That membership is a list, and nothing checks it**, which is the same shape this
- * class's own "by structure, never by enumeration" argument refuses one paragraph down: a later command that
- * takes an email or a subject id and lets a throwable escape rejoins the CRITICAL path silently, and an
- * earlier reading of this paragraph named three of the eight without anything going red. The redaction below
- * is what holds regardless; this paragraph only bounds how often it is reached. A DEBUG record buffers without
- * activating, and `FingersCrossedHandler::flushBuffer()` DISCARDS the buffer when no `passthru_level` is
- * configured, which is this deployment. The live producer of `:46` is an invocation the console cannot BIND —
- * an unknown option, a wrong arity, a mistyped command name — because that raises outside the command's own
- * `try`. Its argv is the operator's, and it carries whatever they typed: `identity:gdpr:erase-subject <uuid>
- * --typo` puts a person's identifier into the record of the erasure the command exists to perform, and
- * `organization:administrator:create <email> <password> --typo` puts a password IN CLEAR beside the address
- * it belongs to. The DEBUG path is the second producer and needs no error at all — it reaches the sink
- * whenever something else in the same process activates the buffer.
+ * **Which invocations actually reach the CRITICAL path is narrower than "a command that fails" — and the
+ * bound cannot be stated as a roster.** A command whose `execute()` catches `Throwable` and returns
+ * `Command::FAILURE` reaches only `:67` at DEBUG; anything that escapes `execute()` reaches `:46` at
+ * CRITICAL. That is a property of each call path, not of a command, and it is not stable per command: a
+ * single collaborator invoked outside the `try` — a repository read taken before the guards, say — puts a
+ * command that visibly catches `Throwable` back on the CRITICAL path. Any roster of "the safe commands" is
+ * therefore a claim about code nobody re-reads when that code moves, which is the shape this class's own
+ * "by structure, never by enumeration" argument refuses one paragraph down. The roster kept for the record
+ * lives in `PRODUCTION_SECURITY_CHECKLIST.md` §7, where it is explicitly non-normative; nothing here depends
+ * on it, and the redaction below is what holds regardless. A DEBUG record buffers without activating, and
+ * `FingersCrossedHandler::flushBuffer()` DISCARDS the buffer when no `passthru_level` is configured, which is
+ * this deployment. The producer of `:46` that needs no defect at all is an invocation the console cannot
+ * BIND — an unknown option, a wrong arity, a mistyped command name — because that raises before the
+ * command's own `try` exists to be entered. Its argv is the operator's, and it carries whatever they typed:
+ * `identity:gdpr:erase-subject <uuid> --typo` puts a person's identifier into the record of the erasure the
+ * command exists to perform, and `organization:administrator:create <email> <password> --typo` puts a
+ * password IN CLEAR beside the address it belongs to. The DEBUG path is the second producer and needs no
+ * error at all — it reaches the sink whenever something else in the same process activates the buffer.
  *
  * A processor rather than a fix at the listener, for the same reason its two siblings are one: the emitter
  * lives in `vendor/`, where a sweep of `api/src` cannot see it and a patch cannot reach it. Logger-scoped, so

@@ -16,6 +16,8 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
@@ -52,7 +54,7 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
     #[Test]
     public function aDeclinedConfirmationAbortsWithoutErasing(): void
     {
-        $tester = $this->tester($this->inertEraser());
+        $tester = $this->tester($this->refusingEraser());
         $tester->setInputs(['no']);
 
         $tester->execute(['bank-account-id' => self::ACCOUNT_ID]);
@@ -159,6 +161,33 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
         $this->assertStringContainsString('Dry run', $tester->getDisplay());
     }
 
+    /**
+     * The stdin case neither other guard reaches. `QuestionHelper::doReadInput()` loops
+     * `while (!feof($inputStream))`, so a stream a previous read already exhausted never enters the loop and
+     * never raises the `MissingInputException` the post-`confirm()` re-read depends on — the default is taken
+     * as an operator's answer and the run exits `0` having erased nothing. Reachable through the console's
+     * own single-alternative prompt, which drains a pipe whose last byte is not a newline.
+     *
+     * Driven through `Command::run()` rather than `CommandTester`, because the tester always mints a fresh
+     * stream and there is no way to hand it a drained one.
+     */
+    #[Test]
+    public function aConfirmationOnAnAlreadyDrainedStreamRefusesInsteadOfReportingSuccess(): void
+    {
+        $command = new EraseBankAccountSubjectCommand($this->refusingEraser());
+
+        $input = new ArrayInput(['bank-account-id' => self::ACCOUNT_ID], $command->getDefinition());
+        $input->setInteractive(true);
+        $input->setStream($this->drainedStream());
+
+        $output = new BufferedOutput();
+
+        $exitCode = $command->run($input, $output);
+
+        $this->assertSame(Command::INVALID, $exitCode);
+        $this->assertStringContainsString('Refusing', $output->fetch());
+    }
+
     private function tester(EraseBankAccountSubject $eraser): CommandTester
     {
         return new CommandTester(new EraseBankAccountSubjectCommand($eraser));
@@ -200,5 +229,21 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
             $this->createStub(AuditLogger::class),
             new ImmediateTransactionManager(),
         );
+    }
+
+    /**
+     * @return resource a stream a read has already taken to EOF, so `feof()` is true before the question
+     */
+    private function drainedStream()
+    {
+        $stream = \fopen('php://memory', 'r+');
+        \assert(\is_resource($stream));
+        \fwrite($stream, 'y');
+        \rewind($stream);
+        \fread($stream, 1);
+        \fread($stream, 1);
+        \assert(\feof($stream));
+
+        return $stream;
     }
 }

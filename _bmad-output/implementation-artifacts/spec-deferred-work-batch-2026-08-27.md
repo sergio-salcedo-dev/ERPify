@@ -19,7 +19,7 @@ pending-only, so every resolved item loses its bullet rather than gaining a note
    paths are separate mechanisms and both are guarded.
 2. **`InMemorySessionRepository`'s bulk revocations mirror the adapter's directed UPDATE**
    instead of recording the call and mutating nothing. Closes two registry bullets written
-   five weeks apart about one defect.
+   eighteen days apart about one defect.
 3. **`ResetSystemClockExtension` resets the ambient clock before each test**, not only after.
 4. **Documentation drift**: the audit ADR's `metadata.operation` key, the dead
    `api/phpunit.xml.dist` path, and `docs/architecture-pwa.md`'s PascalCase module names.
@@ -27,9 +27,11 @@ pending-only, so every resolved item loses its bullet rather than gaining a note
    (which destroys a DEK — an irreversible crypto-shred) and `audit:gdpr:erase` carried the
    identical shape. Fixed with the same guard pair, so `$?` now means one thing across all
    three commands rather than two.
-6. **Registry sweep**: 20 bullets removed from 117 — 8 resolved by this branch, 12 already
+6. **Registry sweep**: 20 bullets removed from 117 — 7 resolved by this branch, 13 already
    closed in the tree with nobody having removed the bullet. Four rotted references repaired,
-   one false premise restated.
+   one false premise restated. The split was recounted during the code review; the totals
+   (20 removed, 117 → 103) were exact and every one of the thirteen was verified genuinely
+   closed on `main`, so no obligation was dropped.
 
 ## Verification, and its limits
 
@@ -95,7 +97,9 @@ routes through that same helper on the same input object.
 
 ### Findings recorded rather than fixed
 
-Five went to `deferred-work.md` under this pass's own heading, the first two deliberately:
+Four are enumerated below, and they sit under this pass's own heading in `deferred-work.md`
+alongside P-1 (later escalated into scope) and the second pass's existence-oracle nit — six
+bullets in total. The first two are deliberate:
 
 - **P-2 — `audit:gdpr:erase` has a genuine erases-but-reports-non-zero path.** Deliberate and
   commented. Narrowed rather than closed: that command's class docblock now states that its
@@ -129,8 +133,10 @@ intended no-ops.
 `EraseActorAuditTrailCommand::eraseAndReport()` ran the anonymising `UPDATE` **outside** its
 `try`; only the compliance self-audit was inside it. So a failing `UPDATE` — a deadlock, a
 connection drop, a statement timeout — escaped `execute()` entirely, and the console derives the
-process exit code from `Throwable::getCode()`: **measured at 7 for a DBAL driver code and at 189
-for `1213`**, never `1`. On top of that structural defect, the docblock this branch had just
+process exit code from `Throwable::getCode()`: **measured at 7 for a DBAL driver code and at 255
+for `1213`**, never `1`. (`Application::run()` clamps anything above 255 before `exit()`, so the
+byte-wrapped 189 an earlier measurement reported is what a harness with `setAutoExit(false)`
+produces, not the production path.) On top of that structural defect, the docblock this branch had just
 added asserted that a non-zero there means "an erasure half-ran, never nothing happened". An
 operator following it on a mid-failover Postgres would record a person as erased whose `actor_id`
 is still in `audit_log` in clear — the same defect class the branch exists to close, one command
@@ -191,3 +197,103 @@ rather than the fix that was asked for.
 Nothing was executed — no `vendor/`, no docker — so every behavioural conclusion above is
 derived from reading source, including the invocation matrix. A reviewer with a working stack
 should run the unexecuted tests before merging.
+
+## Review findings — code review of PR #866 (2026-08-27)
+
+Three parallel layers in fresh contexts (adversarial, edge-case, acceptance), read-only, against the
+committed head `200dca79`. Unlike the branch's own two passes, this one had the **installed `api/vendor`
+tree and a running stack**, so the conclusions below are measured rather than read. **This review is also the
+adversarial pass covering `200dca79` itself** — the head commit that fixed the second pass's GRAVE and which
+no pass had read, which the acceptance layer raised as a gap in its own right.
+
+### Decisions taken
+
+- [x] **A stream already at `feof()` defeats both guards, and it is reachable.** `QuestionHelper::doReadInput()`
+  loops `while (!feof($inputStream))`, so a stream arriving already at EOF never enters the loop, returns `''`
+  rather than `false`, never raises the `MissingInputException` that demotes the input — and the default is
+  taken for an operator's answer. `A-5` deferred this as unreachable; measured false. The producer is the
+  console's own single-alternative prompt (`Application::doRun()`), which asks a confirmation of its own for a
+  mistyped name with exactly one near match and drains a pipe whose last byte is not a newline: **38 single-
+  character typos of the three command names yield exactly one alternative**, and `printf 'y' | bin/console
+  bank-account:gdprerase-subject <uuid>` exits `0` having erased nothing, against `2` for the same pipe with a
+  trailing newline. **Resolved:** a third guard, `cannotBeAsked()`, in all three commands, resolving the stream
+  exactly as `QuestionHelper::ask()` does. The `A-5` bullet is removed from the registry.
+- [x] **`countFor()` ran outside every `try` and ahead of the guards — one defect wearing two hats.** Both were
+  put to the architect and the developer personas, who converged on a shape neither of the two options offered:
+  the row count is not *moved*, it stops being *computed* on the paths that discard it. It still feeds the
+  confirmation's magnitude — the only defect an operator can catch before an irreversible `UPDATE` — and still
+  answers `--dry-run`; `--force` no longer takes a preview it does not need, and a run about to be refused no
+  longer takes one at all. That closes the existence oracle in every spelling, including the ones where stdout
+  is suppressed (`--quiet`, `--silent`, a negative `SHELL_VERBOSITY`, a plain `>/dev/null`) and the exit code is
+  the only channel. The oracle bullet is removed from the registry — it was added by this branch, so the net
+  diff for it is empty.
+  - **Contract change, approved deliberately:** an unattended run without `--force` against an actor with **no
+    rows** now exits `2` where it exited `0`. That `0` answered for an operator who was never asked and was
+    right only because the answer did not matter.
+  - **A GRAVE the restructure would have opened, and did not:** with `--force` taking no preview, an already
+    erased actor reaches the `UPDATE`, matches nothing, and would have minted a `GDPR_ERASURE_EXECUTED` row.
+    `AuditErasureEvidence` exempts that action from the retention prune **for ever**, so every retry of a
+    compliance job would mine an immortal row claiming an erasure that did not happen. Guarded on
+    `affectedRows`, and pinned.
+
+### Patches applied
+
+- [x] `countFor()` gains its own failure path — `FAILURE`, never `INVALID`, because a database that cannot
+  answer is exactly what a caller should retry [EraseActorAuditTrailCommand::reportMatches()]
+- [x] The anonymisation failure message no longer asserts a post-condition it cannot know: a connection lost
+  mid-statement can commit without acknowledging, so it now tells the operator to verify with `--dry-run`
+  instead of promising the run is safe to repeat [EraseActorAuditTrailCommand::eraseAndReport()]
+- [x] "Nothing to erase" is named as a `SUCCESS` cause in all three docblocks, both help texts and
+  `docs/architecture-api.md`
+- [x] Bind-time failures (unknown option, wrong arity, mistyped name) exit `1` and no guard can reach them;
+  stated in all three contracts, so "never retry on `INVALID`" reads as a floor on retries rather than a
+  partition of them
+- [x] `SHELL_VERBOSITY` below zero is named beside `--quiet` and `--silent` as a third silent-refusal spelling
+- [x] `aDeclinedConfirmationAbortsWithoutErasing` uses `refusingEraser()` — the test named `…WithoutErasing`
+  could not detect an erasure, using the double this branch's own docblock calls "the trap"
+- [x] The change-relative comment is gone from `api/src`, and the paragraph that carried it no longer asserts a
+  roster: a command's reachability of the CRITICAL path is a property of each call path, not of a command, and
+  `countFor()` was the counter-example [ConsoleCommandRedactionProcessor]
+- [x] The `P-2` and `B-2` registry bullets: rotted line references repaired, `P-2`'s premise restated against
+  the head's actual contract, and `B-2` now names the `userId` comparison as well — the sharper direction, where
+  an upper-case id makes the double revoke nothing while production revokes everything
+- [x] The gate bullet's invariant was mis-stated and would have been **green over this branch's own GRAVE**;
+  it now asks for adjacency plus a behavioural gate, with the binding-failure blind spot stated
+- [x] The `1213` figure is `255`, not `189` — `Application::run()` clamps before `exit()`; the identity command's
+  two ordering pins carry the docblock its siblings got; the sweep split is 7/13, not 8/12; "five weeks" is
+  eighteen days; the stray blank line splitting the new registry section is closed
+- [x] `ResetSystemClockExtension` documents what its leading reset is upstream of — class-level hooks and data
+  providers — and that the ordering inverts under `inIsolation`
+- [x] `PRODUCTION_SECURITY_CHECKLIST.md` carries the guard pattern and its three ungated residuals
+- [x] **CI was red on the head and is green now.** `php.cs-fixer.dry-run` (`assertEquals` → `assertSame`),
+  `php.rector.dry-run` (`assertNull` → `assertNotInstanceOf`, plus a blank line before an assignment) and
+  `php.md` (11 public methods against a limit of 10) all failed — the branch was written with no docker and no
+  `api/vendor`, so no linter had ever run over it. The third was answered by splitting the bulk-revocation cases
+  into `InMemorySessionRepositoryBulkRevocationContractTest`, along the seam the class docblock already drew.
+
+### Tests added, each falsified by mutating the code and watching its row go red
+
+- `cannotBeAsked()` removed → the drained-stream pin fails `0 is identical to 2`, in all three commands
+- The `affectedRows` guard removed → the forced-run-over-an-erased-actor pin fails `actual size 1 matches
+  expected size 0`, catching the immortal evidence row
+- The count's `catch` removed → both counting paths error
+- The anonymisation's `catch` removed → errors. **That `catch` shipped in this branch with no test at all**,
+  while its bank-account sibling received one in the same commit
+- The guards moved back behind the count → four failures, including the oracle reappearing
+- `RecordingAuditActorAnonymiser` gained a separable `affectedRows` (additive; seven files construct it),
+  because a double wiring it to the match count makes the immortal-evidence branch untestable
+
+### Deferred
+
+- [x] [Review][Defer] The double's bulk revocation is not undone by a rolled-back transaction, so a test can
+  stay green over a rollback that production would have restored — consistent with the pre-existing
+  `deleteAllForUser()`, but the new three-point docblock invites the double to be trusted as a mirror and
+  never mentions transactionality
+  [api/tests/Unit/Iam/Session/Application/InMemorySessionRepository.php:161, :169] — deferred, pre-existing
+
+### What this review does not close
+
+The guards close the exit code as an existence oracle. They do **not** close the count as information:
+`--dry-run` still prints it to the same caller, and whoever can invoke the CLI can pass `--dry-run`. Sold as a
+structural invariant — no query on a path already going to refuse — and never as a confidentiality gain, so
+that nobody rediscovers `--dry-run` in three months and reopens it as a regression.
