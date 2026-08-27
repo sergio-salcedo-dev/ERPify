@@ -48,9 +48,13 @@ final readonly class RecordLockoutNoticeAuditBestEffort
     }
 
     /**
-     * `$lockedUntil` is the only metadata: it mirrors the expiry the mail itself quoted, and nothing else
-     * about the notice belongs on this row (the recipient address is the resource's own email, already
-     * governed by the person-reference the resource type carries).
+     * `$lockedUntil` is the only metadata, and nothing else about the notice belongs on this row (the
+     * recipient address is the resource's own email, already governed by the person-reference the resource
+     * type carries). It does NOT mirror anything the mail itself discloses — {@see SymfonyAccountLockedEmailSender}
+     * deliberately carries no IP, device, timestamp or attempt count, so an attacker reading the mailbox
+     * learns nothing an owner's next action needs. `lockedUntil` is safe on this operator-facing row for an
+     * unrelated reason: it already lives, durably, in the `UserLocked` event's payload in `event_store` from
+     * the trip that locked this identity — this row adds no new disclosure, only a query-friendly duplicate.
      */
     public function record(string $userId, ?DateTimeImmutable $lockedUntil): void
     {
