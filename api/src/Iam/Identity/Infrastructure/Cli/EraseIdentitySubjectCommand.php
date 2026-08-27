@@ -78,40 +78,83 @@ final class EraseIdentitySubjectCommand extends Command
 
         $io->writeln(\sprintf('Identity subject: %s', $userId));
 
-        if (!$this->shouldProceed($io, $input)) {
-            return Command::SUCCESS;
+        $preflight = $this->preflight($io, $input);
+
+        if (null !== $preflight) {
+            return $preflight;
         }
 
         return $this->eraseAndReport($io, $userId);
     }
 
     /**
-     * Pre-flight guards that stop before any mutation: a dry run reports the target only, and a real run
-     * needs an explicit confirmation (or --force). Either short-circuit leaves the subject untouched.
+     * Pre-flight guards that stop before any mutation, each carrying the exit code its own outcome earns —
+     * the contract of an erasure command is its exit code, because a compliance job reads `$?` and nothing
+     * else. Three outcomes, and they are not one:
+     *
+     * - a dry run is the no-op the operator asked for, so it succeeds;
+     * - a confirmation answered "no" is a rejection the operator expressed — they were asked, they replied,
+     *   and the command did exactly what they said, so it succeeds too;
+     * - a run that could never put the question is a rejection nobody expressed. Reporting success there is
+     *   indistinguishable from a completed erasure to every caller that is not a human reading the screen.
+     *
+     * That last one refuses with `INVALID` rather than `FAILURE`, the same reading the malformed user-id
+     * above gives it and the one {@see ReconcileErasedSubjectReferencesCommand} gives it: nothing was
+     * attempted and nothing about the system is broken, so the repair belongs on the command line.
+     * `FAILURE` would send whoever reads `$?` looking for an erasure that half-ran.
+     *
+     * @return int|null the exit code to stop on, or null to proceed with the erasure
      */
-    private function shouldProceed(SymfonyStyle $io, InputInterface $input): bool
+    private function preflight(SymfonyStyle $io, InputInterface $input): ?int
     {
         if (true === $input->getOption('dry-run')) {
             $io->note('Dry run: nothing was erased.');
 
-            return false;
+            return Command::SUCCESS;
         }
 
-        if (
-            true !== $input->getOption('force')
-            && !$io->confirm(
-                'Irreversibly erase this identity (removes the user and its reset tokens, anonymises its audit '
-                . 'trail, rewrites its identifier out of the business event log, and drops its sessions, its '
-                . 'organization membership and every invitation addressed to it)?',
-                false,
-            )
-        ) {
+        if (true === $input->getOption('force')) {
+            return null;
+        }
+
+        if (!$input->isInteractive()) {
+            return $this->refuseUnattended($io);
+        }
+
+        $confirmed = $io->confirm(
+            'Irreversibly erase this identity (removes the user and its reset tokens, anonymises its audit '
+            . 'trail, rewrites its identifier out of the business event log, and drops its sessions, its '
+            . 'organization membership and every invitation addressed to it)?',
+            false,
+        );
+
+        // A stdin nothing can be read from — EOF, an empty pipe — enters the question interactive and leaves
+        // it demoted: the question helper answers with the default it was handed and turns the input
+        // non-interactive instead of raising. Reading the flag a second time is therefore what separates a
+        // typed "no" from a question nobody was there to hear, and without it the confirmation's own
+        // false-by-default is the operator's answer as far as this method can tell.
+        if (!$input->isInteractive()) {
+            return $this->refuseUnattended($io);
+        }
+
+        if (!$confirmed) {
             $io->warning('Aborted — nothing was erased.');
 
-            return false;
+            return Command::SUCCESS;
         }
 
-        return true;
+        return null;
+    }
+
+    private function refuseUnattended(SymfonyStyle $io): int
+    {
+        $io->error(
+            'Refusing to erase: this run cannot ask for a confirmation (--no-interaction, or stdin closed) '
+            . 'and no confirmation was given. Pass --force to erase unattended, or --dry-run to report the '
+            . 'target without touching it. Nothing was erased.',
+        );
+
+        return Command::INVALID;
     }
 
     private function eraseAndReport(SymfonyStyle $io, string $userId): int

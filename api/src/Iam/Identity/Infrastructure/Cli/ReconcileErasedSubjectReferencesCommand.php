@@ -47,8 +47,8 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * A finding means some erasure path completed partially, leaving the subject's real id behind. The repair is
  * `identity:gdpr:erase-subject <id> --force` for every place alike: it is idempotent, so it runs against an
  * identity that is already gone and discharges the links that were skipped. `--force` is not optional in an
- * unattended repair — without it the command prompts, and a non-interactive run declines and erases nothing
- * while still exiting zero. Its outcome on the audit trail depends on how the divergence arose, and both
+ * unattended repair — without it the command asks for a confirmation, and a run that cannot be asked is
+ * refused rather than answered for. Its outcome on the audit trail depends on how the divergence arose, and both
  * outcomes are correct:
  *
  *   - The identity was hard-deleted by a path that left the actor axis intact (a legacy identity-only
@@ -182,8 +182,8 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
         $io->note([
             'Repair with `identity:gdpr:erase-subject <id> --force`, which discharges every reference of '
             . 'the subject and anonymises both audit axes. It is idempotent, so it runs against an identity '
-            . 'that is already gone; without `--force` it prompts, and a non-interactive run then declines '
-            . 'and erases nothing while still exiting zero.',
+            . 'that is already gone; without `--force` it asks for a confirmation, and an unattended run '
+            . 'is refused rather than answered for.',
             'If the actor axis was already erased on its own via `audit:gdpr:erase`, the resource axis is '
             . 'completed under a separate pseudonym — the original one is irreversible and cannot be reused. '
             . 'Neither reverts to the person, so this still completes the erasure.',
