@@ -1,0 +1,149 @@
+name: Accepted-risk live state
+
+# Structural validity (grammar, paragraph co-location, the content floor) is checked offline by
+# `make php.lint.accepted-risk` (api/tests/Unit/Gate/AcceptedRiskTagGateTest.php), wired into `php.quality`,
+# with zero network access. This job checks the one thing that gate cannot: whether the issue a tag
+# references is STILL OPEN. A syntactically valid `@accepted-risk #<issue>` tag pointing at a
+# silently-closed issue is exactly the failure #863 exists to catch.
+#
+# Deliberately NOT scoped to the pull request's own diff: an issue can close well after the pull request
+# that introduced its tag has already merged, and the count is tiny (2 known references at introduction) --
+# the whole tree is scanned on every run instead. Deliberately NOT a clone of
+# scripts/adversarial-pass-check.sh: that script intercepts a `gh pr create` invocation, which has nothing
+# to do with this job's question, and this is the first workflow in this repo to call the GitHub API for
+# live state -- no existing workflow calls `gh issue`/`gh api`/`gh pr`/Octokit/github-script.
+#
+# Also runs on a daily `schedule`, not `pull_request` alone: an issue can close with no new pull request
+# ever touching the tree again, which `pull_request`-only would never notice -- the exact failure mode
+# #863 exists to catch. Cheap at today's count (2 known tags); revisit the cadence if that count grows
+# enough for `gh issue view` to matter for rate limits.
+#
+# v1 does not discriminate GitHub's shared issue/PR number namespace: a tag referencing a PR number is
+# resolved by `gh issue view` as-is, and whatever that command does with a PR number (accept it, or refuse
+# it) is treated as this job's answer -- a refusal surfaces as a GATE ERROR below, never a silent pass.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  schedule:
+    - cron: '17 6 * * *'
+
+concurrency:
+  group: accepted-risk-live-state-${{ github.event.pull_request.number || 'scheduled' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  live-state:
+    name: Accepted-risk issue state
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Check every referenced issue is still open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+
+          # Extraction mirrors the exclusions AcceptedRiskTags.php enforces so a documentation example
+          # quoting the grammar -- exactly what this feature's own spec file does -- is never mistaken for
+          # a live declaration, and so the two scanners agree on WHERE a tag may live, not only on its
+          # grammar. A `.php` file is restricted to `/** ... */` blocks, the same scope AcceptedRiskTagGateTest
+          # enforces offline -- a tag in a plain `//` or non-doc `/* */` comment is invisible to that gate,
+          # so this job must not treat it as tracked either, or the two would silently disagree about which
+          # tags are even in scope. A `.md` file keeps the fence/table/inline-code exclusions: fence state
+          # only closes on the SAME delimiter (``` or ~~~) that opened it -- a stray marker of the other
+          # kind is ordinary fenced content, not a boundary, matching AcceptedRiskTags::markdownParagraphs().
+          extract() {
+            case "$1" in
+              *.php)
+                awk '
+                  /\/\*\*/ { indoc = 1 }
+                  indoc { print }
+                  /\*\// { indoc = 0 }
+                ' "$1" \
+                  | sed -E 's/`[^`]*`//g' \
+                  | grep -oE '@accepted-risk[[:space:]]+#[1-9][0-9]*'
+                ;;
+              *)
+                awk '
+                  {
+                    if (fence != "") {
+                      if ($0 ~ "^[[:space:]]*" fence) { fence = "" }
+                      next
+                    }
+                    if ($0 ~ /^[[:space:]]*(```|~~~)/) {
+                      match($0, /```|~~~/)
+                      fence = substr($0, RSTART, RLENGTH)
+                      next
+                    }
+                    if ($0 ~ /^[[:space:]]*\|/) { next }
+                    print
+                  }
+                ' "$1" \
+                  | sed -E 's/`[^`]*`//g' \
+                  | grep -oE '@accepted-risk[[:space:]]+#[1-9][0-9]*'
+                ;;
+            esac
+          }
+
+          for root in api/src _bmad-output/implementation-artifacts; do
+            if [ ! -d "$root" ]; then
+              echo "::error::GATE ERROR -- expected directory '$root' is missing from this checkout; a scan that quietly skipped it would report the same green as a real pass."
+              exit 1
+            fi
+          done
+
+          issues=""
+          while IFS= read -r -d '' file; do
+            found="$(extract "$file" | grep -oE '#[1-9][0-9]*' | tr -d '#')" || true
+            issues="${issues}${found}"$'\n'
+          done < <(find api/src _bmad-output/implementation-artifacts -type f \
+            \( -name '*.php' -o -name 'spec-*.md' \) -print0)
+
+          unique_issues="$(printf '%s\n' "$issues" | grep -E '^[0-9]+$' | sort -un)" || true
+
+          if [ -z "$unique_issues" ]; then
+            echo "No @accepted-risk tags found in the tree -- nothing to check."
+            exit 0
+          fi
+
+          failures=0
+          for n in $unique_issues; do
+            if state_json="$(gh issue view "$n" --repo "$REPO" --json state 2>/tmp/gh-err.log)"; then
+              state="$(printf '%s' "$state_json" | jq -r '.state // empty')"
+
+              if [ "$state" = "CLOSED" ]; then
+                echo "::error::Accepted-risk tag references issue #$n, which is CLOSED -- resolve the tag or reopen the issue."
+                failures=$((failures + 1))
+              elif [ "$state" != "OPEN" ]; then
+                echo "::error::GATE ERROR -- issue #$n returned an unrecognised state ('$state')."
+                failures=$((failures + 1))
+              else
+                echo "issue #$n: OPEN"
+              fi
+            else
+              echo "::error::GATE ERROR -- issue #$n could not be resolved ($(cat /tmp/gh-err.log 2>/dev/null))."
+              failures=$((failures + 1))
+            fi
+          done
+
+          # A raw failure count as the exit code wraps at 256 (a hypothetical 256th failure would read as
+          # exit 0, a false green) -- exit is boolean, never a magnitude.
+          if [ "$failures" -gt 0 ]; then
+            exit 1
+          fi
+
+          exit 0
