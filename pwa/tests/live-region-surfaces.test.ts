@@ -44,6 +44,10 @@ const LIVE_REGION_SURFACES: Readonly<Record<string, string>> = {
   "app/backoffice/BackOfficeLayoutClient.tsx":
     "the sign-out window: both menus close over the relabelled entry, so this region is the " +
     "only signal that survives the click",
+  "app/backoffice/bank-accounts/_components/BankAccountIbanLookup.tsx":
+    "the result of a user action — a well-formed IBAN with no matching account, replacing " +
+    "the just-submitted search, distinct from the mutation-error surface reserved for a " +
+    "genuine failure",
   "app/backoffice/profile/_components/ChangePasswordForm.tsx":
     "the result of a user action — the success confirmation replacing the submitted form",
 };

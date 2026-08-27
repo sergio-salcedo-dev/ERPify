@@ -69,6 +69,7 @@ function toDetail(row: AccountRow): Record<string, unknown> {
 
 const AUTHORIZE_PATH = /\/backoffice\/bank-accounts\/realtime\/authorize$/;
 const LIST_PATH = /\/api\/v1\/backoffice\/bank-accounts(\?.*)?$/;
+const IBAN_LOOKUP_PATH = /\/api\/v1\/backoffice\/bank-accounts\/iban-lookup$/;
 const ITEM_PATH = /\/api\/v1\/backoffice\/bank-accounts\/[^/?#]+$/;
 
 async function fulfillJson(route: Route, status: number, body: unknown): Promise<void> {
@@ -118,6 +119,29 @@ export async function mockBankAccountsListApi(
     const itemId = new URL(route.request().url()).pathname.split("/").pop() ?? "";
     const row = rows.find((candidate) => candidate.id === itemId) ?? initialRows[0];
     await fulfillJson(route, 200, { data: toDetail({ ...row, id: itemId }) });
+  });
+
+  // Registered AFTER `ITEM_PATH` — Playwright tries routes in reverse
+  // registration order, and `/bank-accounts/iban-lookup` also matches
+  // `ITEM_PATH`'s generic `{id}` shape, so this one must win.
+  await page.route(IBAN_LOOKUP_PATH, async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    const { iban } = JSON.parse(route.request().postData() ?? "{}") as { iban?: string };
+    const row = rows.find((candidate) => candidate.iban === iban);
+    if (!row) {
+      await fulfillJson(route, 404, {
+        type: "bank-account-not-found",
+        title: "Bank account with the given IBAN not found.",
+        status: 404,
+        instance: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5c",
+        "correlation-id": "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5d",
+      });
+      return;
+    }
+    await fulfillJson(route, 200, { data: row });
   });
 
   return {

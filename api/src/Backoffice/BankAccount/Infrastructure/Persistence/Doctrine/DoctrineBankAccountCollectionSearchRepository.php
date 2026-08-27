@@ -47,7 +47,6 @@ final readonly class DoctrineBankAccountCollectionSearchRepository implements Ba
     public function __construct(
         private EntityManagerInterface $entityManager,
         private DoctrineSearchEngine $searchEngine,
-        private IbanFieldNormalizer $ibanNormalizer,
     ) {
     }
 
@@ -91,10 +90,11 @@ final readonly class DoctrineBankAccountCollectionSearchRepository implements Ba
     {
         return new SearchFieldMap([
             'holderName' => new FieldMapping('ba.holderName'),
-            // iban is stored canonicalized (upper-case, spaces stripped), so its normalizer applies the
-            // same rule to the search value — a human-grouped "DE89 3704" still matches. Default
-            // operators: eq/contains — `In` is opt-in and this field does not ask for it.
-            'iban' => new FieldMapping('ba.iban', $this->ibanNormalizer),
+            // iban is deliberately absent from the GET filters[] vocabulary: the value is classified
+            // PII, and a query-string parameter can reach an access log or an intermediary cache keyed
+            // on the URL regardless of any single deployment's redaction config. Exact lookup by IBAN
+            // goes through the dedicated POST endpoint (BankAccountIbanLookupController), never here.
+            // See the IBAN wire contract in adding-endpoints.md and issue #426.
             'alias' => new FieldMapping('ba.alias'),
             // Human bank search: one CONTAINS over the joined bank's name AND its short code, so a
             // single query box matches either. The applier wraps the CONCAT in LOWER(...) LIKE, so the

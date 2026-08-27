@@ -12,7 +12,6 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Backoffice\BankAccount\Domain\Projection\BankAccountCollectionRow;
 use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountCollectionSearchRepository;
-use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\IbanFieldNormalizer;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
 use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\Filters;
@@ -62,7 +61,7 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
 
     /**
      * The gate proves the engine + JOIN projection against real Postgres, so it builds the repository
-     * from its REAL collaborators — the shared keyset engine and the IBAN field normalizer — never a fake.
+     * from its REAL collaborator — the shared keyset engine — never a fake.
      */
     #[Override]
     protected function setUp(): void
@@ -77,13 +76,9 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
         $searchEngine = self::getContainer()->get(DoctrineSearchEngine::class);
         $this->assertInstanceOf(DoctrineSearchEngine::class, $searchEngine);
 
-        $ibanNormalizer = self::getContainer()->get(IbanFieldNormalizer::class);
-        $this->assertInstanceOf(IbanFieldNormalizer::class, $ibanNormalizer);
-
         $this->repository = new DoctrineBankAccountCollectionSearchRepository(
             $entityManager,
             $searchEngine,
-            $ibanNormalizer,
         );
     }
 

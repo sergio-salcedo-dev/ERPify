@@ -3,6 +3,7 @@ import { BankAccount } from "@/context/backoffice/bankaccount/domain/BankAccount
 import {
   ApiBankAccountRepository,
   isBankAccountCollectionResponse,
+  isBankAccountCollectionRowResponse,
   isBankAccountSingleResponse,
 } from "@/context/backoffice/bankaccount/infrastructure/ApiBankAccountRepository";
 import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
@@ -374,6 +375,54 @@ describe("ApiBankAccountRepository.searchAll", () => {
     expect(page.hasNext).toBe(true);
     expect(page.count).toBe(42);
     expect(page.links).toEqual(collectionPagination.links);
+  });
+});
+
+describe("ApiBankAccountRepository.findByIban", () => {
+  it("POSTs the dedicated lookup endpoint with the IBAN in the body — never a query string", async () => {
+    const httpClient: HttpClient = {
+      get: vi.fn(),
+      post: vi.fn().mockResolvedValue({ data: collectionRow }),
+      put: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+    };
+
+    const row = await new ApiBankAccountRepository(httpClient).findByIban(
+      "ES9121000418450200051332",
+    );
+
+    const [url, body] = vi.mocked(httpClient.post).mock.calls[0];
+    expect(url).toBe("/api/v1/backoffice/bank-accounts/iban-lookup");
+    expect(body).toEqual({ iban: "ES9121000418450200051332" });
+    expect(row.id).toBe(ACCOUNT_ID);
+    expect(row.bankName).toBe("Acme Savings");
+  });
+
+  it("propagates a rejection (404/422) rather than swallowing it", async () => {
+    const failure = new Error("boom");
+    const httpClient: HttpClient = {
+      get: vi.fn(),
+      post: vi.fn().mockRejectedValue(failure),
+      put: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+    };
+
+    await expect(
+      new ApiBankAccountRepository(httpClient).findByIban("ES9121000418450200051332"),
+    ).rejects.toBe(failure);
+  });
+});
+
+describe("isBankAccountCollectionRowResponse", () => {
+  it("accepts a single collection row under data, never a list", () => {
+    expect(isBankAccountCollectionRowResponse({ data: collectionRow })).toBe(true);
+    expect(isBankAccountCollectionRowResponse({ data: [collectionRow] })).toBe(false);
+    expect(isBankAccountCollectionRowResponse({ data: { ...collectionRow, bankName: 42 } })).toBe(
+      false,
+    );
+    expect(isBankAccountCollectionRowResponse(undefined)).toBe(false);
   });
 });
 
