@@ -60,4 +60,17 @@ final class InterventionImageProcessorCanonicalizationTest extends TestCase
 
         $this->assertSame($a->digest, $b->digest);
     }
+
+    public function testDifferingNonSemanticMetadataProducesTheSameDigestForIdenticalPixelsInPng(): void
+    {
+        // Contract point 6 is a property of the pipeline for every allowlisted format, not just
+        // Jpeg (whose encoder gets an explicit `strip: true`) — PngEncoder carries no such option,
+        // so this pins that GD's PNG re-encode path drops ancillary tEXt chunks on its own.
+        $processor = $this->processor();
+
+        $a = $processor->process($this->fixture('metadata-a.png'));
+        $b = $processor->process($this->fixture('metadata-b.png'));
+
+        $this->assertSame($a->digest, $b->digest);
+    }
 }

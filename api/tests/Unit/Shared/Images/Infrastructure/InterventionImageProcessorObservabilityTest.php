@@ -43,7 +43,10 @@ final class InterventionImageProcessorObservabilityTest extends TestCase
 
     public function testEmitsAFailureObservabilityLineWithTheDetectedFormatForADecodeFailure(): void
     {
-        $undecodable = "\xFF\xD8\xFF\x00garbage-not-a-real-jpeg-body";
+        // Truncated to half its length: the SOF0 segment survives (a real, in-budget declared size
+        // passes preflight), but the entropy-coded scan data does not, so the full decode fails.
+        $fixture = $this->fixture('valid.jpg');
+        $undecodable = \substr($fixture, 0, (int) (\strlen($fixture) / 2));
 
         try {
             $this->processor()->process($undecodable);

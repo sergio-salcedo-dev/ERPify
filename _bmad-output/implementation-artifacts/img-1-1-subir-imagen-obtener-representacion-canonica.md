@@ -4,7 +4,7 @@ baseline_commit: 2bbcddde7c0fe4245b27ae7c51cd59ed1483a36d
 
 # Story 1.1: Subir una imagen y obtener su representación canónica
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -116,6 +116,12 @@ orientación EXIF, metadata no semántica) que la primera corrección había dej
 Nada se rechazó de la lectura externa; las únicas discrepancias fueron de matiz (p. ej. qué opción entre
 dos alternativas propuestas se adoptaba, y no fabricar valores numéricos de límite sin benchmark),
 razonadas en el propio documento en cada punto.
+
+**Nota de proceso (2026-08-27):** todo lo anterior es una pasada sobre el **borrador de la historia**
+(AC/tareas), previa a implementar. La PR #862 se abrió sin una pasada adversarial registrada sobre el
+**código ya implementado** — el propio cuerpo de la PR lo admite explícitamente. La ejecutada vía
+`bmad-code-review` sobre el diff de esa PR es esa primera pasada de código; sus hallazgos están en
+"### Review Findings" al final de la sección de Tasks/Subtasks, más abajo.
 
 ## Acceptance Criteria
 
@@ -396,6 +402,106 @@ razonadas en el propio documento en cada punto.
   - [x] Behat **no aplica** a esta historia — no existe todavía ningún endpoint HTTP que ejercitar
     (llega con la Story 1.3).
   - [x] `make php.stan` sobre cada fichero nuevo/tocado; `make php.quality` al terminar.
+
+### Review Findings
+
+_Revisión adversarial de código (`bmad-code-review`) sobre el diff de la PR #862, 2026-08-27 — tres
+capas en paralelo (Blind Hunter, Edge Case Hunter, Acceptance Auditor) más una verificación manual,
+línea a línea, de cada hallazgo contra el código real de la rama antes de puntuar severidad (varios
+hallazgos de las capas automáticas no sobrevivieron esa verificación — ver el bloque de descartados al
+final)._
+
+- [x] [Review][Patch] Guarda de recursos con fail-open sobre cabeceras no parseables — **resuelto
+  como fail-closed (decisión de Sergio, 2026-08-27), aplicado.**
+  `ImagePreflightGuard::guardDeclaredDimensions()` retornaba en silencio cuando
+  `getimagesizefromstring()` no podía leer las dimensiones declaradas, cayendo a un decode completo
+  sin ningún límite de píxeles/dimensión aplicado — el propio comentario del test lo llamaba
+  "silent no-op" — exactamente el escenario "el decoder es superficie de ataque" que las propias Dev
+  Notes señalan (AC 7/AC 12, NFR8). Aplicado: `getimagesizefromstring()` devolviendo `false` ahora
+  rechaza (`ImageResourceLimitExceeded::inputDimensionExceeded()`) en vez de caer al decode completo
+  — coste aceptado: puede rechazar alguna imagen legítima (más probable en WebP) cuya cabecera este
+  parser no sepa leer pero que GD sí sabría decodificar. `make php.stan`/`make php.unit` en verde tras
+  el cambio. [api/src/Shared/Images/Infrastructure/ImagePreflightGuard.php:88-97]
+
+- [x] [Review][Patch] Traducción de excepciones incompleta más allá de `ImageException` — **resuelto
+  con documentación, no ampliando el catch (aplicado).** Verificado empíricamente en el propio
+  contenedor: `finfo::buffer()` nunca lanza/avisa para ningún byte malformado probado (siempre
+  degrada a un MIME genérico), así que ese punto concreto no era alcanzable en la práctica.
+  Reconsiderado el catch de `Intervention\Image\Exceptions\ImageException` en `process()`
+  (decode/normalize/encode): ampliarlo a `\Throwable` contradiría la propia Task 4 de la historia, que
+  pide explícitamente **no** hacer un catch amplio (un `\TypeError`/`\ArgumentCountError`/OOM debe
+  propagarse como el error de programación/entorno que es, no disfrazarse de "imagen inválida") y en
+  su lugar documentar la decisión cuando la jerarquía de la librería se considera suficiente — eso es
+  lo que se ha añadido como docblock en la clase. [api/src/Shared/Images/Infrastructure/InterventionImageProcessor.php]
+
+- [x] [Review][Patch] `MediaTypeEncoderFactory::for()` sin brazo explícito para `image/png` —
+  **aplicado.** Añadido el brazo explícito `'image/png' => new PngEncoder()` y cambiado el `default`
+  a `throw new \LogicException(...)` — un formato del allowlist sin encoder mapeado es ahora un fallo
+  ruidoso (defecto de mantenimiento) en vez de una re-codificación silenciosa a PNG con `mediaType`
+  divergente. [api/src/Shared/Images/Infrastructure/MediaTypeEncoderFactory.php:27-34]
+
+- [x] [Review][Patch] Contrato de canonicalización punto 6 (metadata no semántica) solo verificado en
+  JPEG — **aplicado.** Verificado empíricamente en el contenedor real: dos PNG con píxeles idénticos
+  pero chunks `tEXt` distintos (`metadata-a.png`/`metadata-b.png`, nuevos fixtures) producen el mismo
+  digest a través del pipeline real — GD descarta los chunks ancilares al re-codificar PNG aunque
+  `PngEncoder` no reciba ninguna opción `strip` explícita, confirmando que el contrato SÍ se sostiene
+  para PNG. Añadido `testDifferingNonSemanticMetadataProducesTheSameDigestForIdenticalPixelsInPng`.
+  [api/tests/Fixtures/Images/metadata-{a,b}.png,
+  InterventionImageProcessorCanonicalizationTest.php]
+
+- [x] [Review][Patch] AC 9 solo testeado en el paso de `decode` — **aplicado.** Añadidos
+  `testTranslatesANormalizeFailureIntoADomainException` (`maxOutputDimension: 0` fuerza el
+  `InvalidArgumentException` real de `scaleDown(0, 0)`) y `testTranslatesAnEncodeFailureIntoADomainException`
+  (`encodingQuality: 500` fuerza el `InvalidArgumentException` real del encoder) — ambos fallos de
+  librería reales, verificados empíricamente, no contrivados.
+  [api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorMimeHandlingTest.php]
+
+- [x] [Review][Patch] Comparación MIME declarado-vs-detectado sensible a mayúsculas — **aplicado.**
+  `ImagePreflightGuard::check()` ahora compara `\strtolower(\trim($declaredMediaType))` contra el
+  detectado. [api/src/Shared/Images/Infrastructure/ImagePreflightGuard.php:66]
+
+**Nota:** al reescribir el fixture de "decode falla" para que sobreviva al nuevo fail-closed (una
+cabecera JPEG real truncada al 50%, en vez de bytes basura sin cabecera parseable — verificado
+empíricamente: `getimagesizefromstring` lee 32×32 pero el decode completo falla), también hubo que
+actualizar `InterventionImageProcessorObservabilityTest::testEmitsAFailureObservabilityLineWithTheDetectedFormatForADecodeFailure`,
+que usaba el mismo payload y dejó de alcanzar `decode` bajo el nuevo comportamiento fail-closed.
+
+- [x] [Review][Defer] Los tres límites de recursos en `services.yaml` (20 MB / 40 MP / 4096 px) son,
+  por texto de la propia historia, puntos de partida sin validar contra un benchmark real del worker
+  — deferred a Story 1.3 (cuando exista un endpoint HTTP real que exponer a benchmarking); no hay
+  todavía ningún item de seguimiento abierto para forzarlo.
+
+- [x] [Review][Defer] `intervention/gif` (v5.0.1) es una dependencia transitiva nueva (vía
+  `intervention/image`) que decodifica bytes GIF no confiables, sin mención propia en la sección de
+  seguridad de la PR — deferred a Story 1.3, junto con el resto del vetting de dependencias de cara al
+  endpoint HTTP real.
+
+- [x] [Review][Defer] `Image::createdAt` se estampa siempre con `SystemClock::now()` en el
+  constructor, sin vía para pasar un timestamp existente — Story 1.2 (persistencia) necesitará un
+  camino de hidratación desde fila de BD que no re-estampe `createdAt` — deferred a Story 1.2 (su
+  propio alcance ya la cubre).
+
+- [x] [Review][Defer] `CanonicalImage` no valida sus propios invariantes (width/height/mediaType) y
+  `UploadImage::upload()` no traduce un `InvalidArgumentException` hipotético del constructor de
+  `Image` — solo relevante si un futuro segundo `ImageProcessor` (FR7) se comporta mal; no existe
+  todavía y la propia historia pide no anticipar esa abstracción — deferred a cuando exista un segundo
+  productor real.
+
+**Descartados tras verificación contra el código real (7):** agrupación de `FailureCategory` bajo un
+mismo `ResourceLimitExceeded` (coincide exactamente con el vocabulario cerrado de la Task 4, y el
+propio docblock de la clase explica que es intencional) · `ImageId::equals()` con `===` en vez de
+`strcasecmp` (coincide con la plantilla `SessionId` exacta que la propia historia manda seguir — el
+guardrail de comparación case-insensitive de memoria aplica a comparaciones de seguridad con un id
+externo/atacante-controlado, que no existen en este módulo) · doble llamada a `orient()` en
+`normalize()` (ya cubierta por un test de regresión end-to-end —
+`testExifOrientedPixelsMatchAnAlreadyCorrectlyOrientedEquivalent` — que pasa) · alcance de
+`Vendor.Intervention` en `deptrac.yaml` a nivel de la capa agregada `Shared.Infrastructure` (coincide
+con la granularidad ya existente de cada otra dependencia vendor en `Shared/`, no es una desviación de
+esta PR) · parámetro de salida por referencia en `ImagePreflightGuard::check()` (idioma documentado
+con `@param-out`, un único call site) · sugerencia de test de exhaustividad de
+`FailureCategory::cases()` (mejora opcional, no defecto) · ausencia de un payload
+"decompression-bomb" dedicado (ya cubierto, como riesgo residual, por el hallazgo de fail-open de
+arriba).
 
 ## Dev Notes
 

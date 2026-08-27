@@ -36,6 +36,18 @@ use Throwable;
  * the `decodeAnimation: false` driver option below), which is what makes AC 7's frame limit and
  * the canonicalization contract's "exactly one frame" property a real, tested claim rather than a
  * vacuous one.
+ *
+ * Exception translation (AC 9, Task 4) catches ONLY `Intervention\Image\Exceptions\ImageException`
+ * at each stage — deliberately, not `\Throwable`. A `\TypeError`/`\ArgumentCountError`/OOM `\Error`
+ * is a programming or environment defect, not a business rejection of untrusted image content, and
+ * disguising it as one would hide exactly the failure NFR8 wants surfaced loudly rather than
+ * silently absorbed as "just a bad image" (this is the documented decision Task 4 requires when the
+ * library's exception hierarchy is trusted: the narrowest catch, not the widest). The residual risk
+ * this accepts is that a decode-library-internal failure Intervention itself does not wrap in
+ * `ImageException` would propagate uncaught rather than being translated/logged here — verified
+ * empirically as reachable only for genuinely malformed library usage (a misconfigured
+ * `encoding_quality`/`max_output_dimension`, both covered by dedicated tests), never observed from
+ * malicious-but-well-formed input across the fixtures this module tests against.
  */
 final readonly class InterventionImageProcessor implements ImageProcessor
 {

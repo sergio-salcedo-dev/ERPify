@@ -62,8 +62,10 @@ final readonly class ImagePreflightGuard
         }
 
         // A mismatch is rejected even when both the declared and the detected format are
-        // individually allowlisted (decoder-confusion defense, AC 13).
-        if (null !== $declaredMediaType && $declaredMediaType !== $detected) {
+        // individually allowlisted (decoder-confusion defense, AC 13). MIME type/subtype tokens are
+        // case-insensitive (RFC 2045), so the comparison normalizes case on both sides — the
+        // detected side is compared as-is too, since finfo already returns canonical lowercase.
+        if (null !== $declaredMediaType && \strtolower(\trim($declaredMediaType)) !== $detected) {
             throw UnsupportedImageFormat::mimeMismatch();
         }
 
@@ -80,8 +82,9 @@ final readonly class ImagePreflightGuard
     /**
      * Reads only the declared header (never the full raster) so the resource guards run before the
      * decoder allocates anything proportional to the content (AC 7, 12). `getimagesizefromstring()`
-     * warns on content it cannot parse — a deliberate, narrow suppression: that outcome is handled
-     * explicitly below (fall through to the full decode, which will surface whatever is wrong).
+     * warns on content it cannot parse — a deliberate, narrow suppression: the warning is discarded,
+     * but the `false` outcome itself is NOT — it fails closed (below) rather than falling through to
+     * an unbounded full decode, which would defeat the point of running this guard before one.
      *
      * @SuppressWarnings("PHPMD.ErrorControlOperator")
      */
@@ -90,9 +93,11 @@ final readonly class ImagePreflightGuard
         $size = @\getimagesizefromstring($bytes);
 
         if (false === $size) {
-            // Cannot read a declared size from the header — the full decode below will surface
-            // whatever is wrong with the content; there is nothing further to bound here.
-            return;
+            // A format in the allowlist whose header this parser cannot read is treated as a
+            // resource-limit rejection rather than let through to a decode this guard cannot bound —
+            // "the decoder is itself an attack surface" (Dev Notes) applies here too: an unreadable
+            // declared size is not evidence the decoded raster is small.
+            throw ImageResourceLimitExceeded::inputDimensionExceeded();
         }
 
         [$declaredWidth, $declaredHeight] = $size;
