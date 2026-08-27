@@ -16,6 +16,7 @@ use Erpify\Tests\Behat\Context\EventStoreContext;
 use Erpify\Tests\Behat\Context\FixturesContext;
 use Erpify\Tests\Behat\Context\HttpRequestContext;
 use Erpify\Tests\Behat\Context\HttpResponseContext;
+use Erpify\Tests\Behat\Context\IdentityMaintenanceContext;
 use Erpify\Tests\Behat\Context\Json\JsonErrorContext;
 use Erpify\Tests\Behat\Context\Json\JsonNodeContext;
 use Erpify\Tests\Behat\Context\Json\JsonPathContext;
@@ -103,6 +104,7 @@ return (new Config())->withProfile(
                     OutboxContext::class,
                     EventStoreContext::class,
                     MessengerConsumerContext::class,
+                    IdentityMaintenanceContext::class,
                     SymfonyCommandContext::class,
                     RunOutcomeContext::class,
                     NotificationContext::class,
