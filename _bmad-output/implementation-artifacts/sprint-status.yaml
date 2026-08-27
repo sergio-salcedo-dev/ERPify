@@ -365,6 +365,14 @@ development_status:
   # razón que la de arriba, y además porque #602 sigue OPEN: un `done` en la clave del lockout leería como si
   # el issue estuviera cerrado.
   br-4c-602-observabilidad-throttle-recuperacion: done
+  # Tercera arista de #602 — la palanca de recuperación: `users.unlock`, un desbloqueo administrativo
+  # autorizado sobre `User::clearLockout()` (ya existente e idempotente), con guarda de auto-desbloqueo,
+  # atribución de actor y fila de auditoría `ACCOUNT_UNLOCKED_BY_ADMIN`. Clave propia por la misma razón que
+  # br-4b/br-4c: #602 sigue OPEN — esta rama es una de dos mitades de una sesión de diseño de dos PRs (la otra,
+  # la detección/notificación, corre en paralelo en `fix/iam-lockout-observability-6w1p`) y el hueco de
+  # administrador único (sin un segundo ADMIN, nadie puede invocar esta palanca) queda deliberadamente fuera,
+  # registrado en el propio issue.
+  br-4d-602-desbloqueo-administrativo: done
   br-5-ciclo-de-vida-iam-session: done
   # Medido el 2026-08-12 contra 781c75a2: TRES de los cinco issues no son código. #589 lo resolvió el arco
   # #596-#601 (el mismo de BR-1) y el gate NFR26 corre hoy con 9 tests y cero skips; #250 quedó obsoleto por

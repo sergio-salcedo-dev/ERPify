@@ -83,6 +83,7 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
         'users.changeRoles' => [Role::ADMIN->value],
         'users.grantAdmin' => [Role::ADMIN->value],
         'users.erase' => [Role::ADMIN->value],
+        'users.unlock' => [Role::ADMIN->value],
     ];
 
     /**

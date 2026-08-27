@@ -56,6 +56,7 @@ final readonly class PermissionCatalog
         'users.changeRoles',
         'users.grantAdmin',
         'users.erase',
+        'users.unlock',
     ];
 
     /**

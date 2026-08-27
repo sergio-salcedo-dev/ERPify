@@ -64,6 +64,7 @@
 
 ACCESS_DENIED                  => ordinary
 ACCOUNT_LOCKOUT_NOTIFIED       => ordinary
+ACCOUNT_UNLOCKED_BY_ADMIN      => ordinary
 AUDIT_TRAIL_READ               => ordinary
 BANK_ACCOUNTS_SEARCHED         => ordinary
 BANK_ACCOUNTS_VIEWED           => ordinary
