@@ -94,6 +94,14 @@ final class PiiDiffSealerTest extends TestCase
             'a sibling key must survive sealing, not just the changes key',
         );
         $this->assertSame('update', $sealed->metadata['operation']);
+
+        $json = \json_encode($sealed->metadata, JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString(
+            'BBVA',
+            $json,
+            'preserving a sibling key must not come at the cost of leaving the personal field unsealed',
+        );
+        $this->assertStringContainsString(PiiDiffSealer::ENCRYPTED_MARKER, $json);
     }
 
     #[Test]
