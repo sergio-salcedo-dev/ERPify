@@ -91,6 +91,7 @@ final class BestEffortReportChannelGateTest extends TestCase
         'DbalFailedMessagePruner.php',
         'DoctrineDatabaseHealthChecker.php',
         'InspectStoredIdentityHandler.php',
+        'InterventionImageProcessor.php',
         'ReauthenticateDeviceBestEffort.php',
         'ReconcilePersonReferencesHandler.php',
         'ReconcileSubjectErasuresHandler.php',

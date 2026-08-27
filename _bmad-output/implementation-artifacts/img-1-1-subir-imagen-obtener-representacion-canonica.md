@@ -1,6 +1,10 @@
+---
+baseline_commit: 2bbcddde7c0fe4245b27ae7c51cd59ed1483a36d
+---
+
 # Story 1.1: Subir una imagen y obtener su representación canónica
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -113,6 +117,12 @@ Nada se rechazó de la lectura externa; las únicas discrepancias fueron de mati
 dos alternativas propuestas se adoptaba, y no fabricar valores numéricos de límite sin benchmark),
 razonadas en el propio documento en cada punto.
 
+**Nota de proceso (2026-08-27):** todo lo anterior es una pasada sobre el **borrador de la historia**
+(AC/tareas), previa a implementar. La PR #862 se abrió sin una pasada adversarial registrada sobre el
+**código ya implementado** — el propio cuerpo de la PR lo admite explícitamente. La ejecutada vía
+`bmad-code-review` sobre el diff de esa PR es esa primera pasada de código; sus hallazgos están en
+"### Review Findings" al final de la sección de Tasks/Subtasks, más abajo.
+
 ## Acceptance Criteria
 
 1. **Orden y digest determinista (NFR2).** Dados bytes de imagen válidos y soportados, al invocar
@@ -174,8 +184,8 @@ razonadas en el propio documento en cada punto.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 0 — Vocabulario de nombrado** (referencial, ADR D2 / `docs/rules/cqrs-naming.md`)
-  - [ ] `docs/rules/cqrs-naming.md` no tiene categoría "Upload" (lo dice el propio ADR — ver
+- [x] **Task 0 — Vocabulario de nombrado** (referencial, ADR D2 / `docs/rules/cqrs-naming.md`)
+  - [x] `docs/rules/cqrs-naming.md` no tiene categoría "Upload" (lo dice el propio ADR — ver
     References). `UploadImage` no encaja en `<Noun>{Creator|Updater|Deleter}` (no es create/update/
     delete, y "upload" no es un sinónimo razonable de ninguno de los tres) ni es un handler de bus.
     Propuesta concreta de partida (a razonar/ajustar en el PR, no un mandato): una sexta categoría
@@ -183,51 +193,51 @@ razonadas en el propio documento en cada punto.
     ingesta invocado por llamada directa — ejemplo de referencia `UploadImage`. Documentar la decisión
     final con su argumento (principio + objetivo + coste), igual que cualquier otra propuesta de
     nombrado nueva. Es un entregable de esta historia, no limpieza opcional.
-- [ ] **Task 1 — `ImageId`** (AC 2) — `api/src/Shared/Images/Domain/ImageId.php`
-  - [ ] `final readonly class ImageId` extendiendo el patrón de `Erpify\Shared\Uuid\Domain\Uuid` — ver
+- [x] **Task 1 — `ImageId`** (AC 2) — `api/src/Shared/Images/Domain/ImageId.php`
+  - [x] `final readonly class ImageId` extendiendo el patrón de `Erpify\Shared\Uuid\Domain\Uuid` — ver
     `SessionId` como plantilla exacta (ctor privado, `generate()` vía `Uuid::generate()`,
     `fromString()` vía `Uuid::ensure()`, `toString()`, `equals()`). Ningún método público acepta un
     valor de `ImageId` para "crear una nueva" — solo `generate()` mina.
-- [ ] **Task 2 — Agregado `Image`** (AC 4, 16) — `api/src/Shared/Images/Domain/Image.php`
-  - [ ] Estado mínimo: `ImageId`, `digest` (string, hex SHA-256), `mediaType` (string), `width` (int),
+- [x] **Task 2 — Agregado `Image`** (AC 4, 16) — `api/src/Shared/Images/Domain/Image.php`
+  - [x] Estado mínimo: `ImageId`, `digest` (string, hex SHA-256), `mediaType` (string), `width` (int),
     `height` (int), `byteSize` (int), `createdAt` (`DateTimeImmutable`, vía
     `Erpify\Shared\Clock\Domain\SystemClock::now()` en el constructor — mismo patrón que `Bank`). Sin
     ORM todavía (Story 1.2). Sin `ownerId`, `filename`, `storagePath`, `url`, `variant`.
-  - [ ] `final readonly class` con **solo** constructor + accesores — ningún setter, ningún método de
+  - [x] `final readonly class` con **solo** constructor + accesores — ningún setter, ningún método de
     transición de estado. Esto es lo que hace **AC 4 verdadera por construcción**: no hay superficie
     que reclasificar porque la clase no tiene ninguna operación de mutación, ni siquiera interna. No
     escribir un test de reflexión que busque "un método `reclassify` no existe" (frágil y de bajo
     valor); el test de AC 4 verifica el modelo observable — el constructor no acepta ni expone ningún
     campo de contrato de conservación/clasificación, y la clase es `final readonly`.
-  - [ ] Invariantes estructurales que el constructor SÍ debe guardar (guarda en construcción, lanza
+  - [x] Invariantes estructurales que el constructor SÍ debe guardar (guarda en construcción, lanza
     excepción si no se cumplen): `digest` tiene exactamente 64 caracteres hexadecimales (longitud de
     SHA-256 en hex), `width > 0`, `height > 0`, `byteSize > 0`, `mediaType` no vacío. **No** re-verificar
     que `digest` corresponde a ningún byte — `Image` no lleva bytes, esa garantía es responsabilidad de
     `ImageProcessor` (Task 3/5), no algo que el agregado pueda comprobar por sí mismo.
-- [ ] **Task 3 — Puerto `ImageProcessor`** (AC 1, 5, 6, 13) —
+- [x] **Task 3 — Puerto `ImageProcessor`** (AC 1, 5, 6, 13) —
   `api/src/Shared/Images/Domain/ImageProcessor.php`
-  - [ ] Interfaz de capacidad (convención `docs/rules/testing.md` — nombrar por capacidad, no
+  - [x] Interfaz de capacidad (convención `docs/rules/testing.md` — nombrar por capacidad, no
     `ImageProcessorInterface`). Firma:
     `process(string $bytes, ?string $declaredMediaType = null): CanonicalImage` — el parámetro
     opcional es lo que hace verificable AC 13 (ver "Resolución de una contradicción real" en Frontera);
     no es un tipo de transporte ni un path, así que no viola NFR6. Sin parámetro de contrato de
     conservación (ver la nota de diseño en "Frontera de esta historia" — decisión a razonar, no cerrada
     por este documento). Sin dependencia de ningún tipo de transporte/DTO de `UploadImage`.
-  - [ ] `CanonicalImage` (DTO/VO de salida, `final readonly`) lleva exactamente lo que `ImageProcessor`
+  - [x] `CanonicalImage` (DTO/VO de salida, `final readonly`) lleva exactamente lo que `ImageProcessor`
     produce: bytes canónicos, `digest`, `mediaType`, `width`, `height`, `byteSize` — sin `ImageId` (lo
     genera `UploadImage`). `byteSize` se deriva de `strlen($bytes canónicos)` **dentro** del propio
     VO/constructor (nunca un valor pasado por separado que pueda divergir de los bytes reales).
     `mediaType` es el MIME de los **bytes canónicos de salida** (el que decide la fase `re-encode`),
     no el MIME de entrada — ver "Terminología" en Dev Notes.
-- [ ] **Task 4 — Excepciones de dominio distinguibles** (AC 7, 8, 9, 11, 13) —
+- [x] **Task 4 — Excepciones de dominio distinguibles** (AC 7, 8, 9, 11, 13) —
   `api/src/Shared/Images/Domain/Exception/`
-  - [ ] Al menos: input inválido / vacío (AC 11), formato no soportado o MIME fuera de allowlist o
+  - [x] Al menos: input inválido / vacío (AC 11), formato no soportado o MIME fuera de allowlist o
     confusión MIME-vs-magic-bytes (AC 8, 13 — pueden compartir clase con una razón distinguible o ser
     clases separadas; deben poder distinguirse en un test), fallo del decoder, fallo de
     normalización/encoding (AC 9), límite de recursos excedido (AC 7, 12). Nombres sugeridos —
     ajustables con argumento: `EmptyImageInput`, `UnsupportedImageFormat`, `ImageDecodingFailed`,
     `ImageProcessingFailed`, `ImageResourceLimitExceeded`.
-  - [ ] Ninguna excepción de Intervention (o de la librería decodificadora que se elija) cruza a
+  - [x] Ninguna excepción de Intervention (o de la librería decodificadora que se elija) cruza a
     `Application/` sin traducir (AC 9) — **capturar los tipos de excepción específicos** que la
     librería documenta para fallos de decodificación/encoding (p. ej. su jerarquía propia de
     excepciones, no `\Throwable` en bloque). Un `catch (\Throwable)` amplio traduciría también un
@@ -236,28 +246,28 @@ razonadas en el propio documento en cada punto.
     o de entorno que realmente son — precisamente el escenario que NFR8 quiere que no ocurra en
     silencio. Si la librería elegida no ofrece una jerarquía de excepciones suficientemente fiable,
     documentarlo explícitamente y decidir el catch más estrecho posible con esa limitación.
-  - [ ] Categorías estables de `failure_category` para NFR9 (Task 6) — fijar un conjunto cerrado, no
+  - [x] Categorías estables de `failure_category` para NFR9 (Task 6) — fijar un conjunto cerrado, no
     strings inventados en el momento: `empty_input`, `input_too_large`, `unsupported_format`,
     `mime_mismatch`, `resource_limit_exceeded`, `decode_failure`, `processing_failure` (normalización/
     encoding). Cada excepción de este Task se mapea a exactamente una categoría.
-  - [ ] No es obligatorio ya cablear el marcador RFC 9457 (`docs/api-error-contract.md`) — esta
+  - [x] No es obligatorio ya cablear el marcador RFC 9457 (`docs/api-error-contract.md`) — esta
     historia no tiene controlador HTTP que las traduzca a una respuesta. Dejarlas como excepciones de
     dominio/aplicación puras; el mapeo a marcador llega con la historia que introduzca el endpoint de
     subida.
-- [ ] **Task 5 — Adaptador `InterventionImageProcessor`** (AC 1, 3, 7, 8, 9, 10, 12, 13, 14, 16) —
+- [x] **Task 5 — Adaptador `InterventionImageProcessor`** (AC 1, 3, 7, 8, 9, 10, 12, 13, 14, 16) —
   `api/src/Shared/Images/Infrastructure/InterventionImageProcessor.php`
-  - [ ] `composer require "intervention/image:^4.3"` (ver Latest Tech Information — v4.x, no v3; API
+  - [x] `composer require "intervention/image:^4.3"` (ver Latest Tech Information — v4.x, no v3; API
     distinta del código rescatado de referencia). **No** instalar `intervention/image-laravel` (paquete
     de integración con Laravel, irrelevante en Symfony — composer podría sugerirlo, no es necesario).
     Construir `ImageManager` explícitamente con el driver **GD** (único disponible — ver más abajo) en
     el propio adaptador de Infrastructure, no en un bundle/servicio nuevo.
-  - [ ] **Fase 0 — input vacío y tamaño del payload** (AC 7, 11): rechazar `'' === $bytes` antes de
+  - [x] **Fase 0 — input vacío y tamaño del payload** (AC 7, 11): rechazar `'' === $bytes` antes de
     cualquier otra cosa. Después, rechazar si `\strlen($bytes) > erpify.images.max_input_bytes` —
     **esto es el límite de bytes que esta historia controla** (sobre el `string` que ya recibe
     `ImageProcessor`); el límite de tamaño del **cuerpo HTTP** de una futura subida es un control de
     perímetro/transporte distinto, fuera de esta historia (no hay HTTP todavía), y no debe confundirse
     con este.
-  - [ ] **Fase 1 — inspección estructural antes de decodificar completo** (AC 7, 12, 13): usar
+  - [x] **Fase 1 — inspección estructural antes de decodificar completo** (AC 7, 12, 13): usar
     `getimagesizefromstring()` para leer dimensiones declaradas y `finfo` (`ext-fileinfo`, ya requerido)
     sobre los bytes crudos para el MIME real detectado — ninguna de las dos decodifica el raster
     completo, pero tampoco son una garantía general de seguridad por sí mismas (siguen siendo parsers
@@ -278,38 +288,38 @@ razonadas en el propio documento en cada punto.
       declarado-vs-allowlist, así que un declarado `image/png` sobre bytes reales `image/jpeg` se
       rechaza aunque ambos formatos sean soportados. Con `$declaredMediaType === null` (único caso
       ejercitable en esta historia sin un caller HTTP real) el paso (3) no aplica.
-  - [ ] **Límite de frames / animación** (AC 7; contrato cerrado en Dev Notes → "Canonicalización",
+  - [x] **Límite de frames / animación** (AC 7; contrato cerrado en Dev Notes → "Canonicalización",
     punto 4): la salida canónica contiene **exactamente un frame**, sea cual sea el número de frames
     del origen — decisión ya tomada, no un eje abierto. El requisito observable es ese; el nombre
     concreto de la opción de Intervention/GD que lo consigue se verifica contra la versión instalada
     (no asumir el nombre de este documento).
-  - [ ] **Timeout** (AC 7): PHP no tiene un timeout de decodificación nativo sin `pcntl` (no está entre
+  - [x] **Timeout** (AC 7): PHP no tiene un timeout de decodificación nativo sin `pcntl` (no está entre
     las extensiones requeridas del proyecto). Esta historia **no** implementa un timeout a nivel de
     aplicación — la protección de perímetro (límite de request del servidor/worker) es lo que cubre
     este eje. Ver la matriz de controles en Dev Notes.
-  - [ ] **Decode completo + validate semántico + normalize + re-encode + digest** (AC 1, 3): tras la
+  - [x] **Decode completo + validate semántico + normalize + re-encode + digest** (AC 1, 3): tras la
     Fase 0/1, invocar el decode completo; validar lo que solo es observable tras decodificar (si algo
     lo es); `normalize` implementa las 8 propiedades cerradas en Dev Notes → "Canonicalización" (mismo
     formato de familia que la entrada, aplicar orientación EXIF a los píxeles, descartar animación a 1
     frame, descartar metadata no semántica, redimensionar preservando aspect ratio si excede
     `erpify.images.max_output_dimension`); re-encodear; `digest = SHA-256(bytes canónicos
     post-encoding)`.
-  - [ ] **Anti-polyglot** (AC 14): el método solo devuelve los bytes re-encodados; nunca los bytes de
+  - [x] **Anti-polyglot** (AC 14): el método solo devuelve los bytes re-encodados; nunca los bytes de
     entrada originales. Esta historia solo puede probar esta propiedad **localmente** (el processor
     nunca expone/retorna el input) — que "nunca alcanzan storage ni una respuesta HTTP" es una garantía
     que se completa cuando existan la Story 1.2 (storage) y 1.3 (lectura HTTP); no reformular el test
     de esta historia como si probara el camino completo.
-  - [ ] Filename transitorio (AC 10): si la firma de entrada en algún punto lleva un nombre de archivo
+  - [x] Filename transitorio (AC 10): si la firma de entrada en algún punto lleva un nombre de archivo
     (no debería si `ImageProcessor` recibe solo `string $bytes` + `?string $declaredMediaType`), no
     persistirlo ni usarlo como key.
-  - [ ] Comentario/doc explícito de versionado v1 implícito (AC 16) junto a la implementación del
+  - [x] Comentario/doc explícito de versionado v1 implícito (AC 16) junto a la implementación del
     digest — sin campo persistido.
-  - [ ] **Implementar el contrato de canonicalización ya cerrado** — ver Dev Notes, "Canonicalización
+  - [x] **Implementar el contrato de canonicalización ya cerrado** — ver Dev Notes, "Canonicalización
     — contrato cerrado" (8 propiedades: fuente del formato de entrada, MIME mismatch, formato de
     salida = misma familia, un solo frame, orientación EXIF aplicada a píxeles, metadata no semántica
     descartada, aspect ratio preservado, caveat de determinismo). Reflejarlo con un comentario junto al
     pipeline — ya no es una decisión abierta, así que documentarlo es dejar constancia, no decidir.
-  - [ ] Nuevos parámetros de configuración bajo `erpify.images.*` en `api/config/services.yaml`
+  - [x] Nuevos parámetros de configuración bajo `erpify.images.*` en `api/config/services.yaml`
     (`parameters:` — mismo patrón que el `erpify.media.*` retirado, con namespace nuevo, no revivido):
     `max_input_bytes`, `max_decoded_pixels`, `max_input_dimension`, `max_output_dimension`, calidad de
     encoding. **Ninguno de estos valores numéricos es un requisito de dominio** — son **defaults de
@@ -324,40 +334,40 @@ razonadas en el propio documento en cada punto.
     el worker real** antes de considerarse límites de seguridad calibrados — hasta entonces son un
     punto de partida razonable, no una cifra defendible por sí misma.
     Inyectarlos con `#[Autowire('%erpify.images.max_…%')]` en el constructor del adaptador.
-- [ ] **Task 6 — Observabilidad privacy-safe** (AC 15) —
+- [x] **Task 6 — Observabilidad privacy-safe** (AC 15) —
   **reutilizar** el canal Monolog `observability` ya existente (`api/config/packages/monolog.yaml`,
   siempre activo, no sujeto a buffering `fingers_crossed`) — **no crear un mecanismo de métricas
   nuevo**. Inyectar `Psr\Log\LoggerInterface` con
   `#[Autowire(service: 'monolog.logger.observability')]` (mismo patrón que
   `SearchObservabilityListener`).
-  - [ ] **Ownership — quien emite, para no duplicar la línea**: `InterventionImageProcessor`
+  - [x] **Ownership — quien emite, para no duplicar la línea**: `InterventionImageProcessor`
     (Infrastructure) emite la señal para cualquier fallo que él mismo detecta o traduce (Fase 0/1,
     decode, normalize, encode). `UploadImage` (Application) **no** vuelve a loguear el mismo fallo — si
     en el futuro `UploadImage` llega a detectar algo por sí mismo antes de invocar al processor, eso sí
     lo logueará él, pero no hay ningún caso así en esta historia (`ImageProcessor` es quien recibe los
     bytes primero).
-  - [ ] Línea estructurada por fallo con discriminador `event` estable (p. ej.
+  - [x] Línea estructurada por fallo con discriminador `event` estable (p. ej.
     `images.processing.rejected`, `images.processing.failure`) y contexto limitado a `format` +
     `operation` + `failure_category` — nunca `imageId`, `digest`, bytes, filename ni dato de persona.
     `format` es el MIME **detectado** cuando se pudo determinar; si el rechazo ocurre antes de poder
     determinarlo (p. ej. input vacío, o bytes demasiado cortos para `finfo`), el valor es el literal
     `"unknown"` — nunca se omite la clave. `operation` toma uno de: `preflight`, `decode`, `normalize`,
     `encode`. `failure_category` es una de las constantes fijadas en Task 4.
-- [ ] **Task 7 — Caso de uso `UploadImage`** (AC 2, 6, 13) —
+- [x] **Task 7 — Caso de uso `UploadImage`** (AC 2, 6, 13) —
   `api/src/Shared/Images/Application/UploadImage.php` (o el nombre que resulte de Task 0)
-  - [ ] Firma pública: acepta `string $bytes, ?string $declaredMediaType = null` (nunca
+  - [x] Firma pública: acepta `string $bytes, ?string $declaredMediaType = null` (nunca
     `UploadedFile`/`File`/`SplFileInfo`/`SplFileObject` ni un path/filename/URL de caller — el
     invariante NFR6 ya aplica aquí aunque su scan+test de regresión formal se escriba en la Story 1.3;
     un `?string` no es un tipo de transporte ni una localización, así que no lo viola). En esta historia
     ningún caller real pasa un valor no nulo todavía (no hay HTTP) — el parámetro existe para que AC 13
     sea demostrable con un test directo.
-  - [ ] Orquestación: genera `ImageId::generate()` → invoca
+  - [x] Orquestación: genera `ImageId::generate()` → invoca
     `ImageProcessor::process($bytes, $declaredMediaType)` → ensambla `Image` con el id generado + la
     salida del processor → devuelve el agregado (sin storage ni persistencia todavía — eso lo añade la
     Story 1.2 sobre esta misma clase, sin cambiar esta firma).
-  - [ ] No expone ningún parámetro de contrato de conservación (AC 6).
-- [ ] **Task 8 — Tests** (ver matriz AC→test en Dev Notes)
-  - [ ] Unit, `ImageProcessor` en aislado (sin contenedor, sin DB): AC 1, 3, 7, 8, 9, 10, 12, 13, 14, 16
+  - [x] No expone ningún parámetro de contrato de conservación (AC 6).
+- [x] **Task 8 — Tests** (ver matriz AC→test en Dev Notes)
+  - [x] Unit, `ImageProcessor` en aislado (sin contenedor, sin DB): AC 1, 3, 7, 8, 9, 10, 12, 13, 14, 16
     — incluye el test de regresión de determinismo explícito en NFR2 (mismos bytes → mismo digest,
     bytes canónicos idénticos) y un fixture de imagen válida mínima bajo `api/tests/Fixtures/Images/`
     (no `DataFixtures/Fixtures/`, que es para Alice/YAML) — más fixtures deliberadamente rotos:
@@ -368,30 +378,130 @@ razonadas en el propio documento en cada punto.
     existente; incluir el caso del contrato cerrado con Sergio: declarado y detectado son formatos
     **ambos soportados** pero distintos entre sí (p. ej. declarado `image/png` sobre bytes reales
     `image/jpeg`) — debe rechazarse igual, no solo el caso de un declarado no soportado.
-  - [ ] Tests del contrato de canonicalización cerrado (Dev Notes → "Canonicalización"): (a) una
+  - [x] Tests del contrato de canonicalización cerrado (Dev Notes → "Canonicalización"): (a) una
     fixture JPEG con orientación EXIF no-normal produce los mismos píxeles/canonical bytes que su
     equivalente ya rotado sin EXIF de orientación; (b) una fixture GIF/WebP animada produce una salida
     canónica de un solo frame; (c) dos fixtures con contenido visual idéntico pero metadata no semántica
     distinta (EXIF/comentarios/ICC distintos) producen el mismo digest; (d) el `mediaType` de salida es
     siempre de la misma familia que el detectado en la entrada, nunca el `declaredMediaType`.
-  - [ ] Unit, `Image`: AC 4 se prueba sobre el **modelo observable** — el constructor no acepta ni
+  - [x] Unit, `Image`: AC 4 se prueba sobre el **modelo observable** — el constructor no acepta ni
     expone ningún campo de contrato de conservación/clasificación y la clase es `final readonly` (no
     escribir un test de reflexión buscando la ausencia de un método concreto). Además, los invariantes
     estructurales del constructor (digest hex-64, dimensiones/tamaño > 0, mediaType no vacío).
-  - [ ] Unit, `UploadImage` con un doble de `ImageProcessor` (nombrarlo según
+  - [x] Unit, `UploadImage` con un doble de `ImageProcessor` (nombrarlo según
     `docs/rules/testing.md` — `InMemoryImageProcessor` si es una implementación alternativa utilizable,
     `StubImageProcessor` si solo responde con un valor fijo): AC 2, 6, y verificación de que el
     `ImageId` generado no se pasa como argumento a `ImageProcessor`, y de que `$declaredMediaType` se
     reenvía tal cual (incluido el caso `null`).
-  - [ ] Unit/log-capturing, NFR9 (AC 15): capturar el logger `observability` inyectado y aserta las
+  - [x] Unit/log-capturing, NFR9 (AC 15): capturar el logger `observability` inyectado y aserta las
     claves permitidas/prohibidas explícitamente, incluido el caso `format = "unknown"` cuando el
     rechazo ocurre antes de poder detectar un formato — no basta con "no lanzó excepción". Aplica
     "Assert the seed before asserting the absence" (`docs/rules/testing.md`): primero afirmar que **sí
     se emitió** una línea de log, luego afirmar que esa línea no contiene las claves prohibidas — si el
     logger nunca llegó a invocarse, "no contiene `digest`" es una verdad vacía que no prueba nada.
-  - [ ] Behat **no aplica** a esta historia — no existe todavía ningún endpoint HTTP que ejercitar
+  - [x] Behat **no aplica** a esta historia — no existe todavía ningún endpoint HTTP que ejercitar
     (llega con la Story 1.3).
-  - [ ] `make php.stan` sobre cada fichero nuevo/tocado; `make php.quality` al terminar.
+  - [x] `make php.stan` sobre cada fichero nuevo/tocado; `make php.quality` al terminar.
+
+### Review Findings
+
+_Revisión adversarial de código (`bmad-code-review`) sobre el diff de la PR #862, 2026-08-27 — tres
+capas en paralelo (Blind Hunter, Edge Case Hunter, Acceptance Auditor) más una verificación manual,
+línea a línea, de cada hallazgo contra el código real de la rama antes de puntuar severidad (varios
+hallazgos de las capas automáticas no sobrevivieron esa verificación — ver el bloque de descartados al
+final)._
+
+- [x] [Review][Patch] Guarda de recursos con fail-open sobre cabeceras no parseables — **resuelto
+  como fail-closed (decisión de Sergio, 2026-08-27), aplicado.**
+  `ImagePreflightGuard::guardDeclaredDimensions()` retornaba en silencio cuando
+  `getimagesizefromstring()` no podía leer las dimensiones declaradas, cayendo a un decode completo
+  sin ningún límite de píxeles/dimensión aplicado — el propio comentario del test lo llamaba
+  "silent no-op" — exactamente el escenario "el decoder es superficie de ataque" que las propias Dev
+  Notes señalan (AC 7/AC 12, NFR8). Aplicado: `getimagesizefromstring()` devolviendo `false` ahora
+  rechaza (`ImageResourceLimitExceeded::inputDimensionExceeded()`) en vez de caer al decode completo
+  — coste aceptado: puede rechazar alguna imagen legítima (más probable en WebP) cuya cabecera este
+  parser no sepa leer pero que GD sí sabría decodificar. `make php.stan`/`make php.unit` en verde tras
+  el cambio. [api/src/Shared/Images/Infrastructure/ImagePreflightGuard.php:88-97]
+
+- [x] [Review][Patch] Traducción de excepciones incompleta más allá de `ImageException` — **resuelto
+  con documentación, no ampliando el catch (aplicado).** Verificado empíricamente en el propio
+  contenedor: `finfo::buffer()` nunca lanza/avisa para ningún byte malformado probado (siempre
+  degrada a un MIME genérico), así que ese punto concreto no era alcanzable en la práctica.
+  Reconsiderado el catch de `Intervention\Image\Exceptions\ImageException` en `process()`
+  (decode/normalize/encode): ampliarlo a `\Throwable` contradiría la propia Task 4 de la historia, que
+  pide explícitamente **no** hacer un catch amplio (un `\TypeError`/`\ArgumentCountError`/OOM debe
+  propagarse como el error de programación/entorno que es, no disfrazarse de "imagen inválida") y en
+  su lugar documentar la decisión cuando la jerarquía de la librería se considera suficiente — eso es
+  lo que se ha añadido como docblock en la clase. [api/src/Shared/Images/Infrastructure/InterventionImageProcessor.php]
+
+- [x] [Review][Patch] `MediaTypeEncoderFactory::for()` sin brazo explícito para `image/png` —
+  **aplicado.** Añadido el brazo explícito `'image/png' => new PngEncoder()` y cambiado el `default`
+  a `throw new \LogicException(...)` — un formato del allowlist sin encoder mapeado es ahora un fallo
+  ruidoso (defecto de mantenimiento) en vez de una re-codificación silenciosa a PNG con `mediaType`
+  divergente. [api/src/Shared/Images/Infrastructure/MediaTypeEncoderFactory.php:27-34]
+
+- [x] [Review][Patch] Contrato de canonicalización punto 6 (metadata no semántica) solo verificado en
+  JPEG — **aplicado.** Verificado empíricamente en el contenedor real: dos PNG con píxeles idénticos
+  pero chunks `tEXt` distintos (`metadata-a.png`/`metadata-b.png`, nuevos fixtures) producen el mismo
+  digest a través del pipeline real — GD descarta los chunks ancilares al re-codificar PNG aunque
+  `PngEncoder` no reciba ninguna opción `strip` explícita, confirmando que el contrato SÍ se sostiene
+  para PNG. Añadido `testDifferingNonSemanticMetadataProducesTheSameDigestForIdenticalPixelsInPng`.
+  [api/tests/Fixtures/Images/metadata-{a,b}.png,
+  InterventionImageProcessorCanonicalizationTest.php]
+
+- [x] [Review][Patch] AC 9 solo testeado en el paso de `decode` — **aplicado.** Añadidos
+  `testTranslatesANormalizeFailureIntoADomainException` (`maxOutputDimension: 0` fuerza el
+  `InvalidArgumentException` real de `scaleDown(0, 0)`) y `testTranslatesAnEncodeFailureIntoADomainException`
+  (`encodingQuality: 500` fuerza el `InvalidArgumentException` real del encoder) — ambos fallos de
+  librería reales, verificados empíricamente, no contrivados.
+  [api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorMimeHandlingTest.php]
+
+- [x] [Review][Patch] Comparación MIME declarado-vs-detectado sensible a mayúsculas — **aplicado.**
+  `ImagePreflightGuard::check()` ahora compara `\strtolower(\trim($declaredMediaType))` contra el
+  detectado. [api/src/Shared/Images/Infrastructure/ImagePreflightGuard.php:66]
+
+**Nota:** al reescribir el fixture de "decode falla" para que sobreviva al nuevo fail-closed (una
+cabecera JPEG real truncada al 50%, en vez de bytes basura sin cabecera parseable — verificado
+empíricamente: `getimagesizefromstring` lee 32×32 pero el decode completo falla), también hubo que
+actualizar `InterventionImageProcessorObservabilityTest::testEmitsAFailureObservabilityLineWithTheDetectedFormatForADecodeFailure`,
+que usaba el mismo payload y dejó de alcanzar `decode` bajo el nuevo comportamiento fail-closed.
+
+- [x] [Review][Defer] Los tres límites de recursos en `services.yaml` (20 MB / 40 MP / 4096 px) son,
+  por texto de la propia historia, puntos de partida sin validar contra un benchmark real del worker
+  — deferred a Story 1.3 (cuando exista un endpoint HTTP real que exponer a benchmarking); no hay
+  todavía ningún item de seguimiento abierto para forzarlo.
+
+- [x] [Review][Defer] `intervention/gif` (v5.0.1) es una dependencia transitiva nueva (vía
+  `intervention/image`) que decodifica bytes GIF no confiables, sin mención propia en la sección de
+  seguridad de la PR — deferred a Story 1.3, junto con el resto del vetting de dependencias de cara al
+  endpoint HTTP real.
+
+- [x] [Review][Defer] `Image::createdAt` se estampa siempre con `SystemClock::now()` en el
+  constructor, sin vía para pasar un timestamp existente — Story 1.2 (persistencia) necesitará un
+  camino de hidratación desde fila de BD que no re-estampe `createdAt` — deferred a Story 1.2 (su
+  propio alcance ya la cubre).
+
+- [x] [Review][Defer] `CanonicalImage` no valida sus propios invariantes (width/height/mediaType) y
+  `UploadImage::upload()` no traduce un `InvalidArgumentException` hipotético del constructor de
+  `Image` — solo relevante si un futuro segundo `ImageProcessor` (FR7) se comporta mal; no existe
+  todavía y la propia historia pide no anticipar esa abstracción — deferred a cuando exista un segundo
+  productor real.
+
+**Descartados tras verificación contra el código real (7):** agrupación de `FailureCategory` bajo un
+mismo `ResourceLimitExceeded` (coincide exactamente con el vocabulario cerrado de la Task 4, y el
+propio docblock de la clase explica que es intencional) · `ImageId::equals()` con `===` en vez de
+`strcasecmp` (coincide con la plantilla `SessionId` exacta que la propia historia manda seguir — el
+guardrail de comparación case-insensitive de memoria aplica a comparaciones de seguridad con un id
+externo/atacante-controlado, que no existen en este módulo) · doble llamada a `orient()` en
+`normalize()` (ya cubierta por un test de regresión end-to-end —
+`testExifOrientedPixelsMatchAnAlreadyCorrectlyOrientedEquivalent` — que pasa) · alcance de
+`Vendor.Intervention` en `deptrac.yaml` a nivel de la capa agregada `Shared.Infrastructure` (coincide
+con la granularidad ya existente de cada otra dependencia vendor en `Shared/`, no es una desviación de
+esta PR) · parámetro de salida por referencia en `ImagePreflightGuard::check()` (idioma documentado
+con `@param-out`, un único call site) · sugerencia de test de exhaustividad de
+`FailureCategory::cases()` (mejora opcional, no defecto) · ausencia de un payload
+"decompression-bomb" dedicado (ya cubierto, como riesgo residual, por el hallazgo de fail-open de
+arriba).
 
 ## Dev Notes
 
@@ -650,14 +760,136 @@ Story 1.2/1.3 — ver `epics-images.md` → "Explícitamente fuera de alcance" y
   web para "v4" — **no citar ningún nombre de método de esa página como definitivo**; ver "Librería de
   imagen" arriba.
 
+## Change Log
+
+- 2026-08-27: Implementada la Story 1.1 completa (Tasks 0-8) — módulo `Shared/Images` (Domain +
+  Application + Infrastructure), adaptador `InterventionImageProcessor` sobre `intervention/image`
+  v4.3, tests unitarios nuevos (65 casos) y fixtures binarias en `api/tests/Fixtures/Images/`.
+  Añadido `ext-exif` al Dockerfile/composer.json (hallazgo: sin él, la corrección de orientación
+  EXIF era un no-op silencioso). Extraídos `ImagePreflightGuard` y `MediaTypeEncoderFactory` para
+  resolver un coupling-between-objects excesivo (PHPMD). Documentada la categoría de nombrado 6
+  "Upload" en `docs/rules/cqrs-naming.md` (Task 0).
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Sonnet 5 (claude-sonnet-5)
 
 ### Debug Log References
 
+- `testExifOrientedPixelsMatchAnAlreadyCorrectlyOrientedEquivalent` falló en el primer run: la
+  corrección EXIF nunca se aplicaba porque `ext-exif` no estaba instalado —
+  `Intervention\Image\Drivers\AbstractDecoder::extractExifData()` devuelve una `Collection` vacía en
+  silencio cuando `function_exists('exif_read_data')` es `false`. Corregido añadiendo `exif` a
+  `install-php-extensions` en `api/Dockerfile` (stage `frankenphp_base`, cubre dev y prod) y
+  `ext-exif` a `api/composer.json`; reconstruida la imagen (`make docker.down && make app.dev`).
+- `make php.quality`: PHPMD reportó `InterventionImageProcessor` con coupling-between-objects = 19
+  (límite 13) y la clase de test con 20 métodos públicos (límite 10). Resuelto extrayendo
+  `ImagePreflightGuard` y `MediaTypeEncoderFactory` (Infrastructure) y dividiendo el test en 5 clases
+  por concern (`InterventionImageProcessor{Determinism,MimeHandling,ResourceLimits,
+  Canonicalization,Observability}Test`) compartiendo helpers vía el trait
+  `InterventionImageProcessorTestHelpers`.
+- `make php.unit` completo: `BestEffortReportChannelGateTest::theDerivationStillFindsEveryClass...`
+  falló porque el registro `REPORTERS` no incluía la nueva clase que loguea en el canal
+  `observability`; añadido `InterventionImageProcessor.php` al registro.
+
 ### Completion Notes List
 
+- Módulo nuevo `Shared/Images` (Domain + Application + Infrastructure), vertical-slice sin ORM, sin
+  controlador HTTP, sin storage — exactamente el alcance de la Story 1.1 (ver "Frontera de esta
+  historia").
+- Task 0: categoría de nombrado "Upload" (6ª categoría) documentada y argumentada en
+  `docs/rules/cqrs-naming.md` (principio: `UploadImage` no es ni Creator/Finder ni Command/Query
+  dispatchado por bus; objetivo: legibilidad — un lector busca "ingesta de bytes externos" y
+  encuentra un nombre honesto en vez de un `Creator` que aún no persiste; coste: una fila más en la
+  taxonomía).
+- Decisión de diseño no fijada por la historia, tomada y documentada en el propio adaptador: el
+  allowlist de formatos se extiende a GIF además de jpeg/png/webp. Verificado contra el código
+  fuente instalado de `intervention/image`: bajo el driver GD, la ruta de decode no-GIF siempre usa
+  `imagecreatefromstring()`, que solo decodifica el primer frame de un WebP animado
+  independientemente de cualquier configuración de la aplicación — GIF es el único formato del
+  allowlist cuya animación se decodifica realmente completa (vía el paquete `intervention/gif`,
+  acotado por `decodeAnimation: false`), así que es el único que permite probar de verdad la
+  propiedad "se reduce a un frame" del contrato de canonicalización (punto 4) en vez de dejarla
+  vacuamente cierta.
+- Hallazgo de despliegue corregido en la misma historia (no diferido): `ext-exif` no estaba entre
+  las extensiones PHP instaladas, lo que dejaba la corrección de orientación EXIF (contrato de
+  canonicalización punto 5, parte de NFR2) como un no-op silencioso en todos los entornos — ningún
+  gate existente lo detectaba porque nada probaba esa propiedad antes de esta historia.
+- Refactor de coupling extraído dentro del propio `InterventionImageProcessor.php` bajo la regla
+  boy-scout/argued-improvement: `ImagePreflightGuard` (Fase 0/1) y `MediaTypeEncoderFactory`
+  (selección de encoder) — motivado por una medición concreta de PHPMD (CBO 19 > 13), no por
+  preferencia estética.
+- `make php.stan`, `make php.deptrac` y `make php.quality` en verde (evidencia fresca, exit 0) tras
+  cada cambio relevante. `make php.unit` completo: 3199 tests, 0 fallos (2 skips preexistentes, no
+  relacionados con esta historia).
+- Revisión de seguridad (checklist del `CLAUDE.md` raíz): la mayoría de puntos son N/A explícito en
+  esta historia (sin controlador HTTP, sin ORM/migraciones, sin eventos de dominio, sin secretos) —
+  el pipeline sí implementa las defensas que motivan la propia historia (límites de recursos antes
+  de decodificar, allowlist de MIME, defensa de confusión de decoder, anti-polyglot, ninguna
+  excepción de librería sin traducir, observabilidad sin PII). **No se ha abierto PR en esta
+  sesión** — el proceso del repo exige una pasada adversarial previa a abrir PR para trabajo de
+  seguridad, y esa pasada aún no se ha realizado.
+- Fuera de alcance (según el propio documento, diferido a las Stories 1.2/1.3): storage,
+  persistencia/ORM de `Image`, controlador HTTP, Behat, auditoría.
+
 ### File List
+
+**Nuevo — `Shared/Images`:**
+
+- `api/src/Shared/Images/Domain/ImageId.php`
+- `api/src/Shared/Images/Domain/Image.php`
+- `api/src/Shared/Images/Domain/CanonicalImage.php`
+- `api/src/Shared/Images/Domain/ImageProcessor.php`
+- `api/src/Shared/Images/Domain/Exception/ImageProcessingException.php`
+- `api/src/Shared/Images/Domain/Exception/FailureCategory.php`
+- `api/src/Shared/Images/Domain/Exception/EmptyImageInput.php`
+- `api/src/Shared/Images/Domain/Exception/UnsupportedImageFormat.php`
+- `api/src/Shared/Images/Domain/Exception/ImageResourceLimitExceeded.php`
+- `api/src/Shared/Images/Domain/Exception/ImageDecodingFailed.php`
+- `api/src/Shared/Images/Domain/Exception/ImageProcessingFailed.php`
+- `api/src/Shared/Images/Application/UploadImage.php`
+- `api/src/Shared/Images/Infrastructure/InterventionImageProcessor.php`
+- `api/src/Shared/Images/Infrastructure/ImagePreflightGuard.php`
+- `api/src/Shared/Images/Infrastructure/MediaTypeEncoderFactory.php`
+
+**Nuevo — tests:**
+
+- `api/tests/Unit/Shared/Images/Domain/ImageIdTest.php`
+- `api/tests/Unit/Shared/Images/Domain/ImageTest.php`
+- `api/tests/Unit/Shared/Images/Application/StubImageProcessor.php`
+- `api/tests/Unit/Shared/Images/Application/UploadImageTest.php`
+- `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorTestHelpers.php`
+- `api/tests/Unit/Shared/Images/Infrastructure/RecordingLogger.php`
+- `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorDeterminismTest.php`
+- `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorMimeHandlingTest.php`
+- `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorResourceLimitsTest.php`
+- `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorCanonicalizationTest.php`
+- `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorObservabilityTest.php`
+
+**Nuevo — fixtures binarias:**
+
+- `api/tests/Fixtures/Images/valid.jpg`
+- `api/tests/Fixtures/Images/valid.png`
+- `api/tests/Fixtures/Images/valid.webp`
+- `api/tests/Fixtures/Images/valid.gif`
+- `api/tests/Fixtures/Images/oversized-header.png`
+- `api/tests/Fixtures/Images/polyglot.png`
+- `api/tests/Fixtures/Images/orientation-normal.jpg`
+- `api/tests/Fixtures/Images/orientation-tag6.jpg`
+- `api/tests/Fixtures/Images/metadata-a.jpg`
+- `api/tests/Fixtures/Images/metadata-b.jpg`
+- `api/tests/Fixtures/Images/animated.gif`
+
+**Modificado:**
+
+- `api/composer.json` (+ `intervention/image:^4.3`, + `ext-exif`)
+- `api/composer.lock`
+- `api/Dockerfile` (+ extensión `exif`)
+- `api/config/services.yaml` (parámetros `erpify.images.*`)
+- `api/tools/deptrac/deptrac.yaml` (+ `Vendor.Intervention`, permitido solo en `Shared.Infrastructure`)
+- `api/tests/Unit/Gate/BestEffortReportChannelGateTest.php` (registro `REPORTERS` +
+  `InterventionImageProcessor.php`)
+- `docs/rules/cqrs-naming.md` (Task 0 — 6ª categoría "Upload")
+- `_bmad-output/implementation-artifacts/sprint-status-images.yaml` (status de la historia)

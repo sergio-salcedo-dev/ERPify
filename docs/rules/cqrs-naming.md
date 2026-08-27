@@ -14,7 +14,7 @@ boundary it builds on is enforced by `make php.lint.event-bus`.
   ahead of it**. A `*CommandHandler` with no `CommandBus` is scenery (*atrezo*): a name promising a
   dispatch the system cannot perform. CQRS is separation of *execution*, not of *names*.
 
-## The five message categories
+## The six message categories
 
 | # | Category | Name shape | Lives in | Dispatched by a bus/transport today? | Example |
 |---|----------|-----------|----------|--------------------------------------|---------|
@@ -23,6 +23,7 @@ boundary it builds on is enforced by `make php.lint.event-bus`.
 | 3 | **Domain-event subscriber** | `<Effect>On<Event>` | `*/Infrastructure/Messenger/` | **Yes** — `#[AsMessageHandler]`, transport-routed (N:M) | `RefreshRealtimeOnBankChanged`, `SendEmailOnBankChanged` |
 | 4 | **Audit / observability subscriber** | `<Effect>On<X>` | `*/Infrastructure/Audit/` | **Yes** — `#[AsMessageHandler]`; message is **not** a `DomainEvent` | _none currently — see note below_ |
 | 5 | **Scheduled / maintenance handler** | `<Verb><Noun>Handler` | `Shared/Infrastructure/Messenger/Maintenance/` | **Yes** — reacts to a Scheduler tick / command-style message (1:1) | `PruneHandledDomainEventsHandler` |
+| 6 | **Upload** (ingestion of untrusted external bytes) | `<Verb><Noun>` | `*/Application/` | No — direct call, same execution plane as a `Creator`/`Finder` | `UploadImage` |
 
 - Category 3's `On<Event>` may name a concrete event or the change umbrella a subscriber covers —
   `OnBankChanged` is honest because one class carries an `#[AsMessageHandler]` method per lifecycle event
@@ -38,6 +39,21 @@ boundary it builds on is enforced by `make php.lint.event-bus`.
   signal (e.g. `RecordAuditLogOnInvoiceViewed`) would land here.
 - Category 5 keeps `*Handler` because the suffix is *true* there — a transport-routed message with
   exactly one handler (1:1). It is the only `*Handler` that is honest pre-bus.
+- **Category 6 is a distinct shape from `Creator`, not a synonym.** `docs/rules/cqrs-naming.md` had no
+  category for a use case whose input is untrusted external bytes rather than a validated
+  `<Noun>{Creator|Updater|Deleter}` intent — the first such case is `UploadImage`
+  (`api/src/Shared/Images/Application/UploadImage.php`). **Principle**: reusing `Creator` would conflate
+  two responsibilities this module's own boundary keeps apart — decoding/canonicalizing untrusted input
+  (this story) and persisting a validated aggregate (Story 1.2, a later step over the same class) — and
+  `UploadImage` does not fit `Command`/`Query` either, since those name a *data envelope* a separate use
+  case consumes, while `UploadImage` **is** the use case, invoked directly (same execution plane as
+  `Creator`/`Finder`: no bus, see "Direct-execution use cases" below). **Objective**: a reader scanning
+  `Application/` for "where does raw external input become a domain object" finds a distinct, honest
+  name instead of a `Creator` that quietly does not persist. **Cost**: one more row in an already-wide
+  taxonomy, accepted because the alternative (misnaming `UploadImage` as `ImageCreator` before it
+  persists anything) is the naming-ahead-of-runtime failure this document exists to prevent (see "Two
+  planes" above) — `UploadImage` predates the persistence it will eventually add in Story 1.2 the same
+  way a `*CommandHandler` would predate a bus that does not exist yet.
 
 ## Direct-execution use cases — not a message category
 
@@ -47,6 +63,12 @@ bus. They keep verb-noun names — `BankCreator`, `BankUpdater`, `BankDeleter`, 
 Renaming them to `*CommandHandler`/`*QueryHandler` now is the scenery anti-pattern: it asserts bus
 dispatch that does not exist. They convert to handlers only when the bus lands (#263) — name and runtime
 migrating *together*, so the `wrapInTransaction` boundary moves to the bus middleware in the same step.
+
+An **ingestion** use case (category 6, e.g. `UploadImage`) sits on the same direct-call execution plane
+but keeps its own `<Verb><Noun>` shape rather than joining the `Creator`/`Finder` verb-noun-suffix set,
+because it has no CRUD verb counterpart — "upload" is not create/update/delete/find/search, and forcing
+one of those suffixes onto it would claim a lifecycle operation it does not perform (it may not persist
+at all, as in this story).
 
 ## Banned
 
@@ -68,6 +90,8 @@ migrating *together*, so the `wrapInTransaction` boundary moves to the bus middl
   idempotent, or claims via `DomainEventHandlerDeduplicator` for a non-idempotent external effect
 - an audit / observability trail → record it through the `Shared/Audit` `AuditLogger` port (no
   per-aggregate class to name; the synchronous `AuditLogWriter` → `audit_log` backbone is shared)
+- ingestion of untrusted external bytes into a canonical domain representation → `Application/<Verb><Noun>`
+  — direct call, no CRUD verb (category 6, e.g. `UploadImage`)
 
 Persistence strategy (state-oriented default vs event-sourced) is a separate per-aggregate decision,
 presented to the user before modeling: [`../adr/bank-bankaccount-modeling.md`](../adr/bank-bankaccount-modeling.md).
