@@ -7,13 +7,16 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Application\RecordLockoutNoticeAuditBestEffort;
+use Erpify\Iam\Identity\Application\ReportsAuditFailureSafely;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FailingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use RuntimeException;
 
@@ -28,6 +31,7 @@ use RuntimeException;
  * @internal
  */
 #[CoversClass(RecordLockoutNoticeAuditBestEffort::class)]
+#[CoversTrait(ReportsAuditFailureSafely::class)]
 final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
 {
     public function testPassesTheNoticeThroughToTheAuditLoggerWithTheExpiryAsMetadata(): void
@@ -96,5 +100,20 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         $record = $logger->records[0];
         $this->assertStringNotContainsString($subjectId, $record['message']);
         $this->assertSame(['exception'], \array_keys($record['context']));
+    }
+
+    public function testALoggerFailureWhileReportingDoesNotEscape(): void
+    {
+        // The outer catch protects the audit write; nothing protected the report of that failure. A failing
+        // sink used to escape from INSIDE the catch and abort NotifyLockedIdentities::notifyLockedOwners()'s
+        // whole tick — every remaining locked identity in that run would go unreported, not just this one.
+        $this->expectNotToPerformAssertions();
+
+        $logger = $this->createStub(LoggerInterface::class);
+        $logger->method('error')->willThrowException(new RuntimeException('stderr pipe closed'));
+
+        (new RecordLockoutNoticeAuditBestEffort(new FailingAuditLogger(), $logger))
+            ->record(Uuid::generate(), null)
+        ;
     }
 }

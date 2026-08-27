@@ -36,9 +36,16 @@ use Throwable;
  * does: this runs from a scheduled tick with no response to protect, but the buffered default channel would
  * still either discard the report below `error` or flush unrelated records at it, so the always-on stream is
  * the only channel that reports a lost row without amplifying the outage that caused it.
+ *
+ * The report itself is wrapped, via {@see ReportsAuditFailureSafely}: a catch whose entire purpose is that
+ * nothing escapes may not throw, and the report call is real I/O. Left unguarded, a failing sink would abort
+ * {@see NotifyLockedIdentities::notifyLockedOwners()}'s whole tick — every remaining locked identity in that
+ * run goes unreported, not just this one.
  */
 final readonly class RecordLockoutNoticeAuditBestEffort
 {
+    use ReportsAuditFailureSafely;
+
     private const string NOTICE_ACTION = 'ACCOUNT_LOCKOUT_NOTIFIED';
 
     public function __construct(
@@ -68,10 +75,10 @@ final readonly class RecordLockoutNoticeAuditBestEffort
                     : [],
             );
         } catch (Throwable $throwable) {
-            $this->logger->error(
+            $this->reportSafely(fn () => $this->logger->error(
                 'Lockout notice sent; security audit projection skipped (write failed).',
                 ['exception' => $throwable],
-            );
+            ));
         }
     }
 }

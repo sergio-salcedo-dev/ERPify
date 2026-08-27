@@ -6,13 +6,16 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Application\RecordRecoveryThrottleAuditBestEffort;
+use Erpify\Iam\Identity\Application\ReportsAuditFailureSafely;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FailingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use RuntimeException;
 
@@ -29,6 +32,7 @@ use RuntimeException;
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(RecordRecoveryThrottleAuditBestEffort::class)]
+#[CoversTrait(ReportsAuditFailureSafely::class)]
 final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
 {
     public function testAResolvableAddressIsRecordedAgainstItsSubject(): void
@@ -160,6 +164,24 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
         $this->assertStringNotContainsStringIgnoringCase(UserMother::DEFAULT_EMAIL, $record['message']);
         $this->assertStringNotContainsString(UserMother::DEFAULT_ID, $record['message']);
         $this->assertSame(['exception'], \array_keys($record['context']));
+    }
+
+    public function testALoggerFailureWhileReportingDoesNotEscape(): void
+    {
+        // The outer catch protects the write and the budget claim; nothing protected the report of a
+        // failure. A failing sink used to escape from INSIDE the catch and abort
+        // ProblemDetailsAuthenticationFailureHandler's neutral response, which catches only DbalException.
+        $this->expectNotToPerformAssertions();
+
+        $logger = $this->createStub(LoggerInterface::class);
+        $logger->method('error')->willThrowException(new RuntimeException('stderr pipe closed'));
+
+        (new RecordRecoveryThrottleAuditBestEffort(
+            new FixedRecoveryThrottleAuditBudget(granted: true),
+            new InMemoryUserRepository(UserMother::create()),
+            new FailingAuditLogger(),
+            $logger,
+        ))->record(UserMother::DEFAULT_EMAIL);
     }
 
     private function recorder(
