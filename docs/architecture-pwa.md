@@ -35,15 +35,15 @@ The `pwa/` deployable is a Next.js 16.2 (App Router) + React 19.2 + TypeScript 6
 ```text
 pwa/src/context/
 ├── backoffice/
-│   └── health/{application,domain,infrastructure}
+│   └── audit/ bank/ bankaccount/ health/ user/   # each {application,domain,infrastructure}
 ├── frontoffice/
 │   └── health/{application,domain,infrastructure}
-└── shared/                        # capability modules (each {domain,…,infrastructure}) + kernel — adr/shared-module-organization.md
-    ├── access/ error/ resource/ dev-tools/                       # IAM, error, CRUD, dev tooling
-    ├── DateTimeProvider/ Notification/ Observability/ RealTime/  # ports + adapters
-    ├── RateLimit/ Search/ Validation/ DebugToken/
-    ├── domain/                    # kernel: types/, ProblemDetails, ValueObject
-    └── infrastructure/            # kernel: api/, DependencyInjection/ (Inversify), HttpClient/
+└── shared/                        # capability modules (each {domain,…,infrastructure}) — adr/shared-module-organization.md
+    ├── access/ error/ resource/ dev-tools/                          # IAM, error, CRUD, dev tooling
+    ├── date-time-provider/ notification/ observability/ real-time/  # ports + adapters
+    ├── rate-limit/ search/ validation/ debug-token/ storage/
+    ├── http-client/ dependency-injection/                           # kernel: fetch transport + Inversify container
+    └── connectivity/ environment/ keyboard/ navigation/ routing/ system-status/ theme/ uuid/ view-state/
 ```
 
 `src/components/` holds presentational components only:
@@ -64,7 +64,7 @@ The first consumer is the **User module** (`context/backoffice/user/` + `app/bac
 
 ### Audit investigation (Backoffice)
 
-`context/backoffice/audit/` + `app/backoffice/audit/` is the read-only investigation UI over the 4.1 `audit_log` timeline read model (`GET /api/v1/backoffice/audit/timeline`). It deliberately does **not** reuse the `shared/resource` CRUD toolkit: Backoffice consumes auditoría and never writes it (D5), so the ports are read-only (`AuditTimelineRepository.search` + `AuditTimelineNavigator.follow`) and the list hook is a lean, dedicated `useAuditTimeline` (keyset load + monotonic request guard + empty-tail recovery + derived boundary state, no selection/bulk/delete) — depending on the fat `CrudRepository` here would be an ISP violation with throwing write stubs.
+`context/backoffice/audit/` + `app/backoffice/audit/` is the read-only investigation UI over the 4.1 `audit_log` timeline read model (`GET /api/v1/backoffice/audit/timeline`). It deliberately does **not** reuse the `shared/resource` CRUD toolkit: Backoffice consumes the audit trail and never writes it (D5), so the ports are read-only (`AuditTimelineRepository.search` + `AuditTimelineNavigator.follow`) and the list hook is a lean, dedicated `useAuditTimeline` (keyset load + monotonic request guard + empty-tail recovery + derived boundary state, no selection/bulk/delete) — depending on the fat `CrudRepository` here would be an ISP violation with throwing write stubs.
 
 - **DI bindings** (`shared/dependency-injection/infrastructure/Container.ts`): `BackOfficeAuditTimelineRepository` → `ApiAuditTimelineRepository`, `BackOfficeAuditTimelineNavigator` → `ApiAuditTimelineNavigator` (both singletons). The endpoint is registered once in `ApiEndpoints` (`BACKOFFICE.AUDIT.TIMELINE`).
 - **State lives entirely in URL params** (`useAuditUrlState`), never `localStorage` — an `actor_id`/`resource_id`/`ip` is PII, and the URL keeps an investigation shareable for a ticket. The serialized filter has a stable memo identity so the keyset cursor never thrashes; `?entry=<id>` deep-links the drawer.
@@ -79,7 +79,7 @@ Cross-cutting code has several homes; pick by **purpose**, not just "is it reuse
 
 | Put it in…                                                                                 | When it is…                                                                                                                                                     | Examples                                                                                                                             |
 | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `context/shared/<Module>/infrastructure/` (kernel infra: `context/shared/infrastructure/`) | backed by a **domain port** / swappable adapter, or part of a port-backed module                                                                                | `Notification`, `DateTimeProvider`, `Validation`, `Observability` (capability modules); `HttpClient`, `DependencyInjection` (kernel) |
+| `context/shared/<module>/infrastructure/`                                                  | backed by a **domain port** / swappable adapter, or part of a port-backed module                                                                                | `notification/`, `date-time-provider/`, `validation/`, `observability/`; `http-client/`, `dependency-injection/` (kernel)            |
 | `app/_components/` (or a route's own `_components/`)                                       | a **landing/marketing** presentational component (its own raw-palette + `tw-animate-css` / CSS language) used only by its `app/` route — co-located, not shared | `Navbar`, `Footer`, `FeatureCard`                                                                                                    |
 | `components/erpify/`                                                                       | an **entity-agnostic backoffice / app-shell design-system primitive**, reused across surfaces, barrel-exported from `@/components/erpify`                       | `DataTable`, `AsyncBoundary`, `EmptyState`, `StatusBadge`, `Spinner`, `Logo`, `SidebarItem`, `StatCard`                              |
 | `components/ui/`                                                                           | a raw **Shadcn** primitive                                                                                                                                      | `button`, `dialog`, `input`                                                                                                          |
@@ -88,16 +88,16 @@ Cross-cutting code has several homes; pick by **purpose**, not just "is it reuse
 
 The back-office (token-driven Shadcn + `@/components/erpify`) and the landing/marketing surface (raw-palette + `tw-animate-css` / CSS, under `app/_components/`) are two deliberate design languages — use the one matching the surface; don't cross-import. App-shell primitives reused by both (e.g. `Logo`) live in `@/components/erpify`. The former `context/shared/infrastructure/ui/components/` folder (atomic-design `atoms`/`molecules`/`organisms`) was retired: app-shell primitives → `@/components/erpify`, marketing components → `app/_components/`.
 
-The `Notification` module (`context/shared/{domain,infrastructure}/Notification/`) provides transient user feedback. Its first channel is **Toast**: the `ToastNotifier` port with a Sonner adapter (`SonnerToastNotifier` + `SonnerToaster`, mounted once in the root layout) and the `toastNotifier` singleton. The naming leaves room for additional channels (`Banner`, `Push`) and alternative adapters without renaming the port.
+The `notification` module (`context/shared/notification/{domain,infrastructure}/`) provides transient user feedback. Its first channel is **Toast**: the `ToastNotifier` port with a Sonner adapter (`SonnerToastNotifier` + `SonnerToaster`, mounted once in the root layout) and the `toastNotifier` singleton. The naming leaves room for additional channels (`Banner`, `Push`) and alternative adapters without renaming the port.
 
 ### Observability — Telemetry seam
 
-The `Observability` module provides a non-user-facing diagnostic channel for infrastructure failures (network errors, malformed payloads, authorization retries) that should never surface as UI toasts.
+The `observability` module provides a non-user-facing diagnostic channel for infrastructure failures (network errors, malformed payloads, authorization retries) that should never surface as UI toasts.
 
-- **Port** — [`Telemetry.ts`](../pwa/src/context/shared/observability/domain/Telemetry.ts) declares `warn(message, ctx?)` / `error(message, ctx?)` with an optional `TelemetryContext { scope?, cause? }`. `Domain/` depends only on this interface. The `cause` contract is adapter-dependent: a _local_ adapter (console) may forward it as-is, but any _external/network_ adapter (Sentry/Datadog) MUST serialize + scrub it before transmission.
+- **Port** — [`Telemetry.ts`](../pwa/src/context/shared/observability/domain/Telemetry.ts) declares `warn(message, ctx?)` / `error(message, ctx?)` with an optional `TelemetryContext { scope?, cause? }`. `domain/` depends only on this interface. The `cause` contract is adapter-dependent: a _local_ adapter (console) may forward it as-is, but any _external/network_ adapter (Sentry/Datadog) MUST serialize + scrub it before transmission.
 - **Adapter** — [`ConsoleTelemetry.ts`](../pwa/src/context/shared/observability/infrastructure/ConsoleTelemetry.ts) implements the port; it emits to `console.warn` / `console.error` when `NEXT_PUBLIC_APP_ENV` is `dev` or `staging`, and is a no-op in `prod` (or unknown). `NODE_ENV` alone cannot distinguish staging from prod — both build images run in `production` mode — so `NEXT_PUBLIC_APP_ENV` is the correct gate.
 - **Decorator** — [`ThrottledTelemetry.ts`](../pwa/src/context/shared/observability/infrastructure/ThrottledTelemetry.ts) wraps any `Telemetry` and coalesces a flood of identical diagnostics (same level + scope + message) into one emit per window (10s default), surfacing the suppressed count as a `(+N suppressed)` suffix on the next emit. It protects the console today and a metered Sentry/Datadog sink tomorrow. The backing key map is bounded (size cap + TTL sweep, defaults 1000 keys / 1h) so a future dynamic-keyed call site can't grow it without limit in a long-lived tab.
-- **Singleton** — `telemetry` exported from `@/context/shared/Observability/infrastructure` (`index.ts`) is the only instance: `ThrottledTelemetry` wrapping `ConsoleTelemetry`. A future Sentry/Datadog adapter (or a `CompositeTelemetry` fan-out) replaces the _wrapped_ adapter behind this singleton — the throttle and every call site stay put. Adapter-selection-by-env, the `cause` scrub helper, and CSP `connect-src` widening are tracked in `_bmad-output/implementation-artifacts/deferred-work.md` for when the sink lands.
+- **Singleton** — `telemetry` exported from `@/context/shared/observability/infrastructure` (`index.ts`) is the only instance: `ThrottledTelemetry` wrapping a `CompositeTelemetry` fan-out, so the coalescing happens once, before **any** sink. `ConsoleTelemetry` is always a sink; `SentryTelemetry` joins it only when `NEXT_PUBLIC_SENTRY_DSN` holds an `https://` DSN, so tests and bare checkouts never emit. Datadog slots in as one more composite entry behind the same kind of gate — the throttle and every call site stay put. Events are scrubbed on the way out by `scrubSentryEvent` (`beforeSend` / `beforeSendTransaction`, mirroring the API's denylist) and routed through a same-origin `/monitoring` tunnel, so the locked-down CSP `connect-src` needed no widening.
 - **Realtime integration** — [`useMercureRealtime.ts`](../pwa/src/context/shared/real-time/infrastructure/useMercureRealtime.ts) is a generic hook centralising Mercure authorize / subscribe / reconnect-reauth for all entity-specific realtime hooks. Entity hooks (e.g. [`bankRealtime.ts`](../pwa/src/context/backoffice/bank/infrastructure/bankRealtime.ts)) delegate to it by supplying `{ topics, authorizePath, parse, onEvent, scope }`. Failures — subscription skipped, cookie refresh failed, malformed payload — route through `telemetry.warn` with the hook's `scope` for traceability, never to the UI. The authorize goes through the injected `HttpClient` port, so a refusal arrives as a typed `HttpError`: **a 401 or 403 is a terminal denial** (expired session, revoked permission) and closes the subscription, because the transport reconnects on its own and would otherwise re-authorize forever against a gate that keeps refusing. Any other failure keeps the stream and the debounced retry. An abandoned feed reports `realtime authorization revoked` and stays stale until the surface remounts.
 
 ## Layer responsibilities
@@ -128,7 +128,7 @@ The `Observability` module provides a non-user-facing diagnostic channel for inf
 - Server-side fetches use `SYMFONY_INTERNAL_URL` (Compose-internal); client-side fetches use the public URL.
 - Mercure SSE consumed at `/.well-known/mercure` (same origin, JWT subscribed).
 
-Every `/api/*` response is read once in `FetchHttpClient`, which publishes the Symfony profiler token from the `X-Debug-Token` / `X-Debug-Token-Link` headers through the `DebugTokenObserver` domain port (`context/shared/DebugToken/domain/`). A dev-only `<SymfonyDebugToolbar>`, mounted in `app/layout.tsx` behind `isDevToolsAvailable()`, subscribes to that port and on each new token fetches Symfony's `/_dev/wdt-loader/{token}` loader to mount the real interactive toolbar inside the PWA. In production the container binds an inert `NoopDebugTokenObserver` and the component is never mounted (dead-code-eliminated), and the prod API emits no debug-token headers. Under automated e2e the live-stack runs the PWA in dev mode, so the toolbar would mount and its profiler DOM (the AJAX panel grows a `<tbody><tr>` per `/api/*` call) would inflate document-wide Playwright locators such as `tbody tr`; Playwright therefore sends an `x-erpify-e2e` request header and the layout suppresses the toolbar for those runs via `isAutomatedTestRequest()`. Design record: `docs/superpowers/specs/2026-06-14-pwa-symfony-debug-toolbar-design.md`, removed from the tree and readable in git history.
+Every `/api/*` response is read once in `FetchHttpClient`, which publishes the Symfony profiler token from the `X-Debug-Token` / `X-Debug-Token-Link` headers through the `DebugTokenObserver` domain port (`context/shared/debug-token/domain/`). A dev-only `<SymfonyDebugToolbar>`, mounted in `app/layout.tsx` behind `isDevToolsAvailable()`, subscribes to that port and on each new token fetches Symfony's `/_dev/wdt-loader/{token}` loader to mount the real interactive toolbar inside the PWA. In production the container binds an inert `NoopDebugTokenObserver` and the component is never mounted (dead-code-eliminated), and the prod API emits no debug-token headers. Under automated e2e the live-stack runs the PWA in dev mode, so the toolbar would mount and its profiler DOM (the AJAX panel grows a `<tbody><tr>` per `/api/*` call) would inflate document-wide Playwright locators such as `tbody tr`; Playwright therefore sends an `x-erpify-e2e` request header and the layout suppresses the toolbar for those runs via `isAutomatedTestRequest()`. Design record: `docs/superpowers/specs/2026-06-14-pwa-symfony-debug-toolbar-design.md`, removed from the tree and readable in git history.
 
 ### Leaving the document: the request budget and the session-expiry claim
 
@@ -144,14 +144,14 @@ Both the bounce and the sign-out navigation go through `navigation/infrastructur
 
 Filterable lists are **server-driven**: filtering, sorting, and keyset pagination are resolved by the API, not in the browser. The shared vocabulary mirrors the API's generic `filters[]` contract:
 
-- `context/shared/Search/domain/` — `Filter` (discriminated union by `FilterOperator`:
+- `context/shared/search/domain/` — `Filter` (discriminated union by `FilterOperator`:
   `eq | in | contains | gte | lte`) is the typed, framework-free vocabulary.
-- `context/shared/Search/infrastructure/buildSearchParams.ts` — serializes a `Filter[]` into the exact wire
+- `context/shared/search/infrastructure/buildSearchParams.ts` — serializes a `Filter[]` into the exact wire
   grammar (`filters[N][field|operator|value]`; `filters[N][value][]` for `in`), returning a composable
   `URLSearchParams`. **Filters-only** since PR3 — it never emits `after`/`before` (W11): a cursor only ever
   reaches the API via a server link replayed verbatim, never one the client builds.
 - **Cursor-only consumer (PR3, W11).** The API wire is cursor-only: the `pagination` envelope is
-  `{ hasNext, hasPrev, count, links: { next, prev } }` (`context/shared/Search/domain/PageEnvelope.ts` +
+  `{ hasNext, hasPrev, count, links: { next, prev } }` (`context/shared/search/domain/PageEnvelope.ts` +
   `PaginationLinks.ts`; `next`/`prev` are `string | null`, always present). There are **no** page numbers and
   **no** exposed cursor scalar — the opaque cursor lives inside `links.next`/`links.prev`. Two seams keep the
   client from ever decoding or reconstructing it:

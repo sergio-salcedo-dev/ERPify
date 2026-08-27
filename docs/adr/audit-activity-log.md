@@ -440,6 +440,15 @@ propuesta de una mutación adicional sobre cualquiera de las dos tablas es cuand
   segundo» se habría negado a dispararse ante la primera regresión — que es exactamente recrear la fuga que
   esta decisión cerró. Lo que la Regla de Tres protege es el **registro declarativo de claves**, y para eso
   la cuenta que importa es cuántos caminos existen a la vez, no cuántos han existido.
+  **Las dos claves de una fila `change`, y por qué ambas caben en la invariante:** `changes` —el diff campo
+  a campo, con los valores clasificados `#[PersonalData]` sellados por `PiiDiffSealer`— y su hermana
+  `operation`, el nombre del caso de `AuditWriteOperation` (`CREATED`/`UPDATED`/`DELETED`), que el sellado
+  deja intacta. `operation` es un discriminante de la clase de escritura, no un cuerpo de entidad, y existe
+  porque no es derivable del diff: un update que sólo rellena campos vacíos es indistinguible de un alta
+  mirando los pares `old`/`new`. Las filas escritas antes de que el capturador la estampe no la llevan, así
+  que el lector lee su ausencia como «desconocido» y nunca como una cuarta clase de escritura. No mueve la
+  cuenta de «una novena clave libre» de más arriba: aquélla cuenta las claves de `GDPR_ERASURE_EXECUTED`,
+  no las del JSON en general.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
 `X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando
@@ -613,7 +622,7 @@ frágil y se rompe en cuanto entra `api_key`. Descartado: enum más rico (`cron`
 
 ```text
 id              uuid v7      PK (Shared/Domain/Entity/Identifiable, id app-assigned)
-level           enum         activity | security
+level           enum         activity | security | change
 action          string       p.ej. BANK_ACCOUNTS_VIEWED, UNAUTHORIZED_UPDATE_ATTEMPT
 actor_type      enum         anonymous|system|api_key|user — obligatorio (D7)
 actor_id        uuid         NULL salvo api_key/user (D7)
