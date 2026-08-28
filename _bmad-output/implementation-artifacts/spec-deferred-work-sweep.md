@@ -2,7 +2,7 @@
 title: 'Barrido de deferred-work.md: 98 balas a 53 en una PR'
 type: 'chore'
 created: '2026-08-27'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'f86b2662'
 review_loop_iteration: 0
 context:
@@ -83,7 +83,7 @@ context:
 
 **Ola B — auditoría**
 - [x] `api/tests/Unit/Gate/AuditWriteOperationParityTest.php` (2) — el enum PHP y sus tres literales espejo del PWA no pueden derivar.
-- [x] `api/tests/Functional/.../AuditLogEntryFieldLengthContractTest.php` (44) — `MAX_FIELD_LENGTH` contra `information_schema`, no contra un comentario.
+- [x] `api/tests/Functional/Shared/Audit/AuditLogFieldWidthContractTest.php` (44) — `MAX_FIELD_LENGTH` contra `information_schema`, no contra un comentario.
 - [x] `AuditLogWriterIdempotencyTest.php` (45) — resolver `AuditLogWriter` del contenedor; corregir el docblock que aún dice «sin consumidor de producción» (ya hay dos).
 - [x] `TestDebugDataHolder.php` (47) — marcar `FixturesChangeTracker` también en escrituras raw-DBAL. **«Estrictamente aditivo» debe ser comprobable en el diff**: la forma es `contabilidad existente + contabilidad raw-DBAL`, nunca `contabilidad existente → contabilidad rediseñada`, porque `DoctrineContext` depende de ella. Falsador en dos direcciones: una escritura raw-DBAL **incrementa** el tracker, y una escritura ORM **conserva su semántica actual sin cambio** (un `SELECT` no marca nada).
 - [x] `AuditResourceTypeRegistry.php` (75) — memoizar el corpus. **Antes de aceptar la optimización hay que responder a su pregunta de scope:** ¿es el corpus de `api/src` constante durante toda la ejecución de `php.quality`? Si algún test crea o modifica ficheros bajo `api/src`, una segunda invocación leería estado obsoleto y la caché convertiría un gate en estado compartido incorrecto. Verificarlo primero; si no se puede garantizar, la memoización **no entra** y la bala se queda.
@@ -393,6 +393,120 @@ borrar `^\s*` pone rojo 1 de 10) · predicado `table_schema` ausente en la lectu
 de `information_schema` · fichero de sonda `tempnam()` sin borrar · afirmación de
 tiempos de Behat, que citaba una muestra única (tres ejecuciones dieron 45s, 40s y
 36,22s, dispersión mayor que el efecto afirmado).
+
+### Segunda ronda (Blind Hunter + Edge Case Hunter, paso 4 del workflow)
+
+Dos revisores más, en contexto fresco y solo-lectura, sobre el diff completo
+(86 ficheros) y con la primera ronda ya aplicada. Encontraron **ocho** cosas que
+tres pases anteriores y el autor no vieron, y la primera es contra el arreglo de
+la primera ronda.
+
+**B1 — el escenario que cerraba el GRAVE A1 no falsaba nada, y lo demuestra una
+mutación.** El escenario hacía **una** petición: la del rechazo. Sobre ella la
+correlación todavía existe, así que el gate refusa igual — en la base y en HEAD.
+La afirmación corregida de A1 es sobre la petición **siguiente**, la que lleva la
+cookie regenerada. Medido: con `refuse()` limpiando el token (un cambio que sí
+des-autentica) el escenario seguía **verde, 19/19**. Escribí un test, lo vi verde
+y le atribuí una propiedad que no puede ver — la misma clase de defecto que esta
+PR existe para erradicar, cometida dentro de ella.
+*Cerrado:* reescrito a **dos** peticiones — `/me` (el rechazo, que invalida y
+regenera) y luego `/health` sobre la cookie nueva. Con la mutación de
+des-autenticación: `Response status code is 200, expected was 401`, rojo en
+exactamente 1 escenario. Ahora sí es falsador.
+
+**B2 — el copy del ITEM 64 es falso en un camino alcanzable.** `ResetPasswordForm`
+pinta esa misma pared cuando la URL **no trae token**, y su propio docblock lo dice
+(«A missing or dead token collapses to the neutral invalid-link wall»). A alguien
+que no envió nada se le decía primero que su contraseña nueva está activa. Es una
+regresión que introduce esta rama, y el test de la rama no podía verla porque
+renderiza la variante directamente. *Cerrado:* la condición pasa a ser sobre lo
+que hizo **la persona** («si ya estableciste una contraseña nueva con este
+enlace»), que es evaluable en los dos caminos.
+
+**B3 — `accountMenuItem` esquivaba el filtro de permisos nuevo.** `NavPermission`
+está declarado también en `NavSubItem`, y el menú del avatar renderiza desde
+`accountMenuItem`, que no pasa por `permittedMenuGroups`: un `permission` en
+«Active sessions» compilaba, pasaba lint y tests, y se pintaba para toda sesión.
+*Cerrado:* `permittedAccountEntries` + su cableado, más un caso que refusa un
+`permission` a nivel del item padre, que ninguna superficie honraría.
+**Y el falsador del cableado costó dos intentos**: los dos primeros casos llamaban
+al helper directamente y la mutación (volver a `accountMenuItem.subItems` en
+crudo) los dejaba verdes — medido. Nada conductual puede verlo tampoco, porque hoy
+ninguna entrada declara permiso y las dos listas son iguales. El cableado se lee
+del fuente, que es el único instrumento que se pone rojo ahí: 1 de 9 rojo con la
+mutación, 9 de 9 restaurado. Un verde ahí prueba que la llamada existe, nunca que
+el filtro sea correcto — eso lo prueban los dos casos anteriores.
+
+**B4 — una misma caída del store daba dos respuestas en una petición.**
+`convertingStoreFailure` envolvía las dos lecturas y no el `UPDATE` masivo, y
+`POST /sessions/revoke-others` alcanza las dos: qué código recibía el llamante
+dependía de en qué sentencia moría la conexión — 503 en la lectura, 500 crudo en
+la escritura. *Cerrado:* toda sentencia del adaptador pasa por la conversión.
+
+**B5 — el pareo de las dos mitades de la edición permitida era por cardinalidad,
+no por identidad.** Es el agujero de S1 un nivel más abajo: borra el ITEM 41 junto
+a otras 44 y reescribe un superviviente con el ancla, y todo cuadra. *Cerrado:* la
+mitad de cabeza debe **empezar por** la de base, que es la forma exacta del cambio
+sancionado (añadir una línea) y refusa cualquier reescritura. Falsificado con el
+estado que B5 describe.
+
+**B6 — el doble in-memory tenía un tercer miembro sensible a mayúsculas.** La
+primera ronda arregló dos de tres; `holdsAdministratorRoleForUpdate` se quedó.
+*Cerrado.*
+
+**B7 — la limpieza del fichero de sonda solo corría en el camino verde**, que es
+justo el escenario que se repite ahora que CI ejecuta la suite dos veces.
+*Cerrado con `finally`.*
+
+**B8 — dos derivas documentales y un sobre-enunciado.** El spec nombraba un
+fichero de test inexistente; el comentario de `bank/access_control.feature` decía
+que los 2xx concedidos corren como MANAGER cuando esta rama le añadió los de
+EDITOR; y los dos tests de opacidad decían comparar «whole responses» comparando
+cuerpo + `Content-Type`. Los tres corregidos — el último enunciando qué queda
+fuera y por qué ampliarlo sería una decisión, no una omisión.
+
+### Registrado y no arreglado en esta segunda ronda
+
+- **`permittedItem` tiene dos bordes latentes** (`menuAccess.ts:31,35`): un
+  `permission` a nivel de padre se lleva por delante sus hojas no gateadas, y un
+  `subItems: []` declarado hace desaparecer la entrada para cualquier sesión. Ni
+  una forma ni la otra existen hoy en el modelo, y `permittedMenuGroups` está
+  exportado, así que son alcanzables desde fuera. No se tocan: cambiar la
+  semántica del filtro sin un consumidor que la pida es el código especulativo que
+  esta PR rechaza en 27 balas.
+- **El test de opacidad de invitaciones se queda en el estándar débil** (afirma
+  `type`/`title`/`status` por caso) mientras sus dos hermanos comparan cuerpo
+  entero. La rama lo tocó para bajar una afirmación falsa, no para subirlo. Queda
+  registrado como decisión, no como olvido.
+- **`MessengerTransports::receiver()` lanza antes** para un nombre de transporte
+  desconocido, así que el mensaje de la aserción de cero receivers nombra un caso
+  al que no llega — el resultado sigue siendo rojo, pero por otra razón.
+
+### La Ola G ya no es el último commit, y esto es por qué
+
+La regla dice «el ÚLTIMO commit de la rama, sin excepción», y la segunda ronda de
+revisión llegó después de aplicarla. Hay tres salidas y solo una es honesta.
+
+Fundir los arreglos dentro del commit de la Ola G haría que un commit titulado
+«borrar las viñetas cerradas» llevara cambios en el TCB de autenticación, en el
+adaptador de sesiones y en el PWA — ilegible para quien revise. Reordenar la
+historia exige reescribir una rama ya pusheada, que es justo el gesto del que
+CLAUDE.md advierte cuando otra sesión puede estar apuntando a ella. Queda la
+tercera: commitear aparte y decirlo.
+
+**Lo que la regla protege sigue intacto, y es comprobable.** Su propósito es que
+el registro no corra por delante del trabajo: ninguna viñeta puede borrarse antes
+de que su implementación, su falsador y su independencia estén verificados. Eso se
+cumple — los arreglos de la segunda ronda **endurecen** trabajo cuyas viñetas ya
+estaban verificadas cuando se borraron, y **ninguno reabre una bala ni añade,
+quita o reescribe una viñeta**. El gate del registro se ejecuta después de ellos y
+sigue en verde con los mismos números (98 base, 45 borradas, 0 añadidas, 53
+supervivientes, 1 edición permitida), que es la evidencia y no la promesa.
+
+Lo que sí se pierde es la propiedad *«el head del registro es lo último que tocó
+esta rama»*, que hacía la lectura del historial trivial. Se paga a cambio de un
+historial legible y de no reescribir una rama publicada, y se registra aquí en vez
+de dejar que quien revise lo descubra.
 
 ### Lo que un verde aquí NO prueba
 

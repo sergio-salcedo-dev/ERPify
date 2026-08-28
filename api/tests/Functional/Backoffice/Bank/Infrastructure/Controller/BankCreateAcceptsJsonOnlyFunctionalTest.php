@@ -59,17 +59,20 @@ final class BankCreateAcceptsJsonOnlyFunctionalTest extends WebTestCase
             ['HTTP_ACCEPT' => 'application/json'],
         );
 
-        $this->assertSame(
-            Response::HTTP_UNSUPPORTED_MEDIA_TYPE,
-            $this->client->getResponse()->getStatusCode(),
-            (string) $this->client->getResponse()->getContent(),
-        );
-        $this->assertSame(0, $this->countBanks(), 'the refused request creates nothing');
-
-        // The probe outlives the assertion otherwise: `UploadedFile` in test mode neither moves nor removes
-        // it, and a functional suite that leaves a file per run in the system temp directory is a leak whose
-        // only symptom is elsewhere.
-        \unlink($file);
+        // `finally`, because a cleanup that only runs on the green path leaks on exactly the runs that
+        // repeat — and CI now runs this suite twice. `UploadedFile` in test mode neither moves nor removes
+        // the probe, so without this the suite leaves a file per failed run in the system temp directory,
+        // a leak whose only symptom is elsewhere.
+        try {
+            $this->assertSame(
+                Response::HTTP_UNSUPPORTED_MEDIA_TYPE,
+                $this->client->getResponse()->getStatusCode(),
+                (string) $this->client->getResponse()->getContent(),
+            );
+            $this->assertSame(0, $this->countBanks(), 'the refused request creates nothing');
+        } finally {
+            \unlink($file);
+        }
     }
 
     public function testAFormEncodedBodyIsRefusedEvenWithoutAFilePart(): void

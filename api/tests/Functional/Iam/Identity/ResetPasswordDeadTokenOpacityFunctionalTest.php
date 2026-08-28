@@ -30,7 +30,9 @@ use Symfony\Component\HttpFoundation\Response;
  * must be ONE answer on the wire, since a caller able to tell them apart could probe which selectors exist.
  *
  * The acceptance scenario walks the same four but asserts only the status and the `type` of each, so a member
- * outside those two could diverge with it still green. This compares whole responses instead.
+ * outside those two could diverge with it still green. This compares the whole BODY plus `Content-Type` as
+ * one value instead — narrower than "whole responses", since every other header stays outside the
+ * comparison and a path that came to touch the session would add three of them.
  *
  * Two members are set aside, and only two. `instance` is minted per error occurrence, so it MUST differ (that
  * it differs is asserted). The `debug` extension exists to name the cause and is emitted under `dev`/`test`

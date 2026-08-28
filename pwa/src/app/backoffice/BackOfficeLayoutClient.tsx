@@ -24,7 +24,7 @@ import {
   type NavSubItem,
   type NavAction,
 } from "./_lib/backofficeMenu";
-import { permittedMenuGroups } from "./_lib/menuAccess";
+import { permittedAccountEntries, permittedMenuGroups } from "./_lib/menuAccess";
 import { RequireAuth, DevSessionSwitcher } from "@/context/shared/access/infrastructure/ui";
 import { useSession } from "@/context/shared/access/application/useSession";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
@@ -332,7 +332,7 @@ export default function BackOfficeLayoutClient({
   // The top-bar menu mirrors the sidebar's Account group rather than declaring its own
   // entries, so the two can never drift. Logout is split out: it is the only entry whose
   // target leaves the back office, and it reads as destructive.
-  const accountEntries = accountMenuItem.subItems ?? [];
+  const accountEntries = permittedAccountEntries(session, accountMenuItem.subItems ?? []);
   const accountLinks = accountEntries.filter((entry) => entry.action !== "sign-out");
   const accountLogout = accountEntries.find((entry) => entry.action === "sign-out");
 

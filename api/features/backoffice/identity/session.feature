@@ -108,14 +108,22 @@ Feature: Server-side session registry and admission gate
 
   # The refusal drops the session but does NOT de-authenticate: the token survives in storage and
   # `ContextListener` re-serialises it into the regenerated session on the way out, so the caller stays
-  # full-fledged and is refused by the gate again rather than falling through to `access_control`. This pins
-  # the consequence at the one route where the two readings differ — `/health` is `PUBLIC_ACCESS`, so an
-  # anonymous caller is served it with no query at all, and a bearer of a dead session is not. Asserting the
-  # 401 here is what stops the narrower claim drifting back into the wider one; a change that really did
-  # de-authenticate would red this scenario, which is the point.
-  Scenario: A refused session keeps its identity, so even a public route stays refused
+  # full-fledged and is refused by the gate again rather than falling through to `access_control`.
+  #
+  # TWO requests, and the count is the whole assertion. The first is the refusal itself, and on it the
+  # correlation is still present — every gate that has ever existed here answers it 401, so a scenario ending
+  # there pins a property the base already had and no change to `refuse()` can move. Only the SECOND request,
+  # carrying the cookie the refusal regenerated, can tell the two readings apart, and `/health` is the route
+  # where they differ: it is `PUBLIC_ACCESS`, so a genuinely anonymous caller is served 200 with no query at
+  # all, while a caller who merely lost their session row is still full-fledged and refused. Clear the token
+  # in `refuse()` and this scenario reds on the second request; that is what makes it a falsifier rather than
+  # a restatement.
+  Scenario: A refusal does not de-authenticate, so the next request is refused again even on a public route
     Given I reload the fixtures
     And I execute the SQL query "UPDATE iam_session SET status = 'REVOKED' WHERE id = '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d01'"
+    And I send a "GET" request to "/me"
+    And the response status code should be 401
+    And the JSON node "type" should be equal to "session-expired"
     When I send a "GET" request to "/health"
     Then the response status code should be 401
     And the JSON node "type" should be equal to "session-expired"

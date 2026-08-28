@@ -51,6 +51,24 @@ function permittedItem(session: Session | null, item: NavItem): NavItem | null {
  * would leave the other painting doors the role cannot open. It is navigation UX and never a control:
  * the page behind each route enforces its own gate, and must, because the URL can be typed.
  */
+/**
+ * The account entries this session may be offered. The avatar menu renders from `accountMenuItem`
+ * rather than from the groups, so it does not pass through {@link permittedMenuGroups} — and
+ * `NavPermission` is declared on `NavSubItem` as well as `NavItem`, so a `permission` on "Active
+ * sessions" or "Notifications" would be a field the type advertises and this surface never honours.
+ * Filtering here is what makes the declaration mean the same thing on both menus.
+ *
+ * Only the ENTRIES are filtered, never the account item itself: it is the chrome's own affordance
+ * and is always offered, so a `permission` on the parent would have nowhere to be honoured. That is
+ * not left to a reader to notice — `backOfficeMenuPermissions.test.tsx` refuses one at the parent.
+ */
+export function permittedAccountEntries(
+  session: Session | null,
+  entries: readonly NavSubItem[],
+): NavSubItem[] {
+  return entries.filter((entry) => allows(session, entry));
+}
+
 export function permittedMenuGroups(
   groups: readonly NavGroup[],
   session: Session | null,

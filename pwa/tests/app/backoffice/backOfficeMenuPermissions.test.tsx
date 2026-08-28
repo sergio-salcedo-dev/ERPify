@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
@@ -19,8 +22,12 @@ vi.mock("next/navigation", () => {
 });
 
 import BackOfficeLayoutClient from "@/app/backoffice/BackOfficeLayoutClient";
-import { backofficeMenuGroups, type NavItem } from "@/app/backoffice/_lib/backofficeMenu";
-import { permittedMenuGroups } from "@/app/backoffice/_lib/menuAccess";
+import {
+  accountMenuItem,
+  backofficeMenuGroups,
+  type NavItem,
+} from "@/app/backoffice/_lib/backofficeMenu";
+import { permittedAccountEntries, permittedMenuGroups } from "@/app/backoffice/_lib/menuAccess";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { AccessContext } from "@/context/shared/access/domain/AccessContext";
 import { Permission } from "@/context/shared/access/domain/Permission";
@@ -50,6 +57,9 @@ function sessionHolding(permissions: Session["permissions"], role: Role): Sessio
 
 const ADMIN = sessionHolding([Permission.USERS_READ], Role.ADMIN);
 const MANAGER = sessionHolding([], Role.MANAGER);
+
+// The same permission the sidebar cases gate on, so both surfaces are read against one fact.
+const GATED_PERMISSION = Permission.USERS_READ;
 
 /**
  * Expands the sidebar group that owns the gated entry and returns it. The desktop sidebar keeps a
@@ -125,6 +135,66 @@ describe("the back-office sidebar and the permission each entry declares", () =>
     expect(admin).toEqual(backofficeMenuGroups);
     expect(leafNames(manager).map((sub) => sub.name)).not.toContain(GATED_ENTRY);
     expect(leafNames(manager).length).toBe(leafNames(admin).length - 1);
+  });
+
+  // The avatar menu renders from `accountMenuItem` and not from the groups, so it is a second surface
+  // the permission model has to reach. `NavPermission` is declared on `NavSubItem` too, so the field is
+  // offerable here; these two cases are what make it mean the same thing on both menus.
+  it("withholds a gated account entry from a session that does not hold its permission", () => {
+    auth.session = MANAGER;
+
+    expect(
+      permittedAccountEntries(auth.session, [
+        { name: "Ungated", path: "/a", icon: accountMenuItem.icon, testId: "t-a" },
+        {
+          name: "Gated",
+          path: "/b",
+          icon: accountMenuItem.icon,
+          testId: "t-b",
+          permission: GATED_PERMISSION,
+        },
+      ]).map((entry) => entry.name),
+    ).toEqual(["Ungated"]);
+  });
+
+  it("offers a gated account entry to a session that holds its permission", () => {
+    auth.session = ADMIN;
+
+    expect(
+      permittedAccountEntries(auth.session, [
+        { name: "Ungated", path: "/a", icon: accountMenuItem.icon, testId: "t-a" },
+        {
+          name: "Gated",
+          path: "/b",
+          icon: accountMenuItem.icon,
+          testId: "t-b",
+          permission: GATED_PERMISSION,
+        },
+      ]).map((entry) => entry.name),
+    ).toEqual(["Ungated", "Gated"]);
+  });
+
+  // The account item itself is the chrome's own affordance and is always rendered, so a `permission`
+  // declared at that level would be honoured by nothing. Refusing it here is what keeps the filtering
+  // above from reading as complete coverage of a type that also allows the parent shape.
+  it("refuses a permission declared on the account item itself, which no surface honours", () => {
+    expect(accountMenuItem.permission).toBeUndefined();
+  });
+
+  // The two cases above exercise the FUNCTION, and a green on them says nothing about whether the
+  // layout calls it — measured: reverting `accountEntries` to the raw `accountMenuItem.subItems`
+  // leaves both of them passing. Nothing behavioural can see the difference either, because no
+  // account entry declares a permission today, so the filtered and unfiltered lists are equal. The
+  // wiring is therefore read from the source, which is the only instrument that reds on that revert.
+  // A green here proves the call site exists, never that the filter is correct — that is the two
+  // cases above.
+  it("derives the rendered account entries through the permission filter", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/app/backoffice/BackOfficeLayoutClient.tsx"),
+      "utf8",
+    );
+
+    expect(source).toMatch(/const accountEntries = permittedAccountEntries\(\s*session,/);
   });
 
   it("offers nothing gated to a session that has not resolved yet", () => {

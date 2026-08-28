@@ -135,6 +135,6 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
     {
         $this->lockOrderJournal?->locked(LockOrderJournal::IDENTITY_USER);
 
-        return \array_key_exists($userId, $this->adminUserIsActive);
+        return null !== $this->activeEntryFor($userId);
     }
 }

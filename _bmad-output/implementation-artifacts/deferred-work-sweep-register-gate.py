@@ -158,6 +158,17 @@ def main() -> int:
             f"the allowed survivor edit is half-present: {len(removed_allowed)} base half(ves), "
             f"{len(allowed_edits)} head half(ves) — an edit must show both, and ITEM 41 must survive"
         )
+    # Counting one anchor-bearing bullet on each side does not make them the SAME bullet. Delete ITEM 41
+    # along with 44 others and rewrite one survivor to carry the anchor, and every count balances while
+    # the acceptance criterion "ITEM 41 permanece" is violated: 1 base half, 1 head half, 45 deleted, 53
+    # surviving. Identity is restored by the shape of the permitted change itself — the sanctioned edit
+    # APPENDS a line, so the head half must begin with the base half verbatim. That admits the one edit
+    # the spec allows and refuses every rewrite, including a rewrite of a different bullet.
+    elif 1 == len(allowed_edits) and not allowed_edits[0].startswith(removed_allowed[0]):
+        failures.append(
+            "the allowed survivor edit is not an append to its own base text — its head half does not "
+            "begin with the bullet it claims to edit, so the two halves are different bullets"
+        )
 
     report = {
         "base_commit": args.base,

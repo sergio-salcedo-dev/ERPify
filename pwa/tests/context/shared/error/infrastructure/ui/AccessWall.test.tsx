@@ -101,7 +101,7 @@ describe("AccessWall", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(invitationTitle ?? "");
     expect(
       screen.getByText(
-        "If this link was already used, your new password is active — sign in with it. Otherwise, you can request a new link to reset your password.",
+        "If you already set a new password with this link, it is active — sign in with it. Otherwise, request a new link to reset your password.",
       ),
     ).toBeInTheDocument();
 
@@ -125,7 +125,11 @@ describe("AccessWall", () => {
     render(<AccessWall variant={AccessWallVariant.INVALID_RESET_LINK} />);
 
     const body = screen.getByTestId("access-wall--invalid-reset-link").textContent ?? "";
-    expect(body).toContain("your new password is active");
+    // The condition is on what the VISITOR did, never on what happened to the link: `ResetPasswordForm`
+    // renders this same wall when the URL carries no `?token=` at all, so someone who submitted nothing
+    // reaches it. "If this link was already used" leaves that person reading a claim about a password
+    // they never set; this phrasing is a question they can answer on every path that lands here.
+    expect(body).toContain("If you already set a new password with this link");
     expect(body).toContain("sign in with it");
     // Guidance is only guidance while the exit it names is reachable from this same wall.
     expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
@@ -138,7 +142,7 @@ describe("AccessWall", () => {
     render(<AccessWall variant={AccessWallVariant.INVALID_LINK} />);
 
     expect(screen.getByTestId("access-wall--invalid-link").textContent ?? "").not.toContain(
-      "your new password is active",
+      "If you already set a new password with this link",
     );
   });
 

@@ -11,7 +11,9 @@ Feature: Restrict the bank routes to the bank permission
   # row. mallory (role-less) is denied every route; a VIEWER (read only) and an EDITOR (read+write, no delete)
   # pin that each route demands its exact permission — a write route weakened to bank.read would let the VIEWER
   # through and a delete route weakened to bank.write would let the EDITOR through, so those refusals must stay
-  # 403. Granted 2xx write/delete paths run as MANAGER in the create/update/delete features. The permission gate
+  # 403. The granted side is pinned in two places: the create/update/delete features run it as MANAGER, and
+  # this file carries the EDITOR write scenarios — the granted half of the very refusals above, without
+  # which a route weakened to demand nothing at all would still look correct here. The permission gate
   # dispatches ahead of payload mapping — #[IsGranted] rides ControllerAttributesListener at -10000 on
   # kernel.controller_arguments, RequestPayloadValueResolver maps at -10100 — so the permission verdict wins
   # even over a body that would fail validation; the invalid-body scenario pins that ordering.

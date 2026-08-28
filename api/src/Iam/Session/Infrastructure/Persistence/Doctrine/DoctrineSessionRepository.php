@@ -26,12 +26,14 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  *     expired session is never returned and caducity needs no persisted state. Caducity is decided per query;
  *     the retention sweep is a separate concern that only bounds how long a row which has already stopped
  *     being admissible keeps its `ip`/`device`;
- *   - any DBAL failure on either read (a lost connection, a statement timeout, an exhausted pool — all
+ *   - any DBAL failure on any statement (a lost connection, a statement timeout, an exhausted pool — all
  *     {@see DbalException}) is converted to the domain {@see SessionStoreUnavailable} (→ 503) by
  *     {@see convertingStoreFailure()}, so a store outage lets the gate fail closed instead of leaking a raw
- *     500. Both reads are fixed SELECTs with no user-supplied DQL, so a DBAL exception here is always
- *     infrastructural — a 503 (which still reaches Sentry) is the honest outcome, never masking an application
- *     bug. The bulk revocations are directed DQL UPDATEs (no aggregate hydration, no per-row event).
+ *     500. Both reads and the bulk revoke go through it: revoke-others runs a read and then an UPDATE in one
+ *     request, so guarding only the reads would answer one outage with two different statuses. Every statement
+ *     is fixed DQL with no user-supplied fragment, so a DBAL exception here is always infrastructural — a 503
+ *     (which still reaches Sentry) is the honest outcome, never masking an application bug. The bulk
+ *     revocations are directed DQL UPDATEs (no aggregate hydration, no per-row event).
  */
 #[AsAlias(SessionRepository::class)]
 final readonly class DoctrineSessionRepository implements SessionRepository
@@ -204,16 +206,20 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             $queryBuilder->andWhere('s.id != :current')->setParameter('current', $except->toString());
         }
 
-        $queryBuilder->getQuery()->execute();
+        $this->convertingStoreFailure(static fn (): mixed => $queryBuilder->getQuery()->execute());
     }
 
     /**
-     * Runs a read against the store and converts any DBAL failure — a lost connection, a statement timeout, an
-     * exhausted pool, all {@see DbalException} — into the domain {@see SessionStoreUnavailable} (→ 503).
+     * Runs a statement against the store and converts any DBAL failure — a lost connection, a statement
+     * timeout, an exhausted pool, all {@see DbalException} — into the domain {@see SessionStoreUnavailable}
+     * (→ 503).
      *
-     * Both reads go through it so neither can answer a store outage differently from the other: the gate's
-     * admission read and the "my sessions" listing state one contract, and a conversion written per method is
-     * one somebody can add to a second read and forget on a third.
+     * EVERY statement in this adapter goes through it, reads and the bulk revoke alike, so one outage cannot
+     * produce two answers. `POST /sessions/revoke-others` reaches the listing read and then the UPDATE in the
+     * same request: with the write unguarded, which status the caller receives for a single outage would
+     * depend on which statement the connection happened to die on — 503 from the read, a raw 500 from the
+     * write. A conversion written per method is exactly the shape somebody adds to a second statement and
+     * forgets on a third.
      *
      * **It takes the whole read as a callable rather than guarding a body from outside, because what must be
      * guarded is the EXECUTION and nothing places it there but the caller.**

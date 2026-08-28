@@ -30,7 +30,13 @@ use Symfony\Component\HttpFoundation\Response;
  * Each of the three is already asserted apart, on the members someone thought to name (`status`, `type`,
  * `title`). Nothing compared the three answers to EACH OTHER, so a member outside that list — a `detail`, an
  * extension, a differing header, a reordered payload — could diverge with every one of those assertions still
- * green. This drives all three through the real firewall against real Postgres and compares whole responses.
+ * green. This drives all three through the real firewall against real Postgres and compares the whole BODY
+ * plus `Content-Type` as one value, which is narrower than "whole responses" and the difference is worth
+ * naming: every other response header is outside the comparison. That is not hypothetical here — merely
+ * touching the session adds `Set-Cookie`, `Cache-Control` and `Expires`, as `SessionAdmissionGate::refuse()`
+ * records, so a failure path that came to touch the session while its siblings did not would be a
+ * pre-identity oracle this test stays green over. Widening it means naming a free list (`Date`, the
+ * profiler headers, the correlation id), which is a decision rather than an omission.
  *
  * Two members are set aside, and only two. `instance` is minted per error occurrence, so it MUST differ (that
  * it differs is asserted). The `debug` extension exists to name the cause and is emitted under `dev`/`test`
