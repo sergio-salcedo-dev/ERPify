@@ -163,6 +163,7 @@ tests/Unit/Gate/ProjectContextRegistryRulesGateTest.php :: home
 tests/Unit/Gate/ProjectContextVersionGateTest.php :: home
 tests/Unit/Gate/PublicAccessExemptionGateTest.php :: home
 tests/Unit/Gate/PublicAccessExemptionRulesGateTest.php :: home
+tests/Unit/Gate/QueryBudgetExclusionMarkerGateTest.php :: home
 tests/Unit/Gate/ReadSideProjectionGateTest.php :: home
 tests/Unit/Gate/RedactionVocabularyParityTest.php :: home
 tests/Unit/Gate/ScheduleConsumptionGateTest.php :: home
