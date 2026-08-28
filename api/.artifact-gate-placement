@@ -169,6 +169,7 @@ tests/Unit/Gate/ScheduleDeclarationRulesGateTest.php :: home
 tests/Unit/Gate/ScheduleReplicaRulesGateTest.php :: home
 tests/Unit/Gate/SearchOperatorSurfaceGateTest.php :: home
 tests/Unit/Gate/SensitiveRecipientAddressGateTest.php :: home
+tests/Unit/Gate/StatelessCsrfTokenIdGateTest.php :: home
 tests/Unit/Gate/StepVocabularyRegistryTest.php :: home
 tests/Unit/Gate/StrictRequestPayloadGateTest.php :: home
 

@@ -29,7 +29,7 @@ use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
  * identity's prior sessions were revoked inside the use case, so the freshly minted one
  * is the only live session (reset everywhere, then sign in here). Answers **204** with the session cookie.
  *
- * CSRF is defence in depth, not the primary control: same-origin is enforced by {@see PasswordResetOriginListener}
+ * CSRF is defence in depth, not the primary control: same-origin is enforced by {@see RecoveryOriginListener}
  * (403), and the reset token itself is single-use and opaque. The native stateless CSRF token
  * (`#[IsCsrfTokenValid]`, session-free) is the second layer, sharing the invitation-accept flow's
  * `check_header`-off config and its header-carried token. What it proves is narrow: the manager
