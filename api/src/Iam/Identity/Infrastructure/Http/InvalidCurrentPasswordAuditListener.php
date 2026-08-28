@@ -37,7 +37,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * The throwable is matched directly rather than walked down the `previous` chain: unlike the firewall's
  * `AccessDeniedException`, nothing wraps this one — it travels from the use case to the responder untouched.
  *
- * The write is only meaningful behind {@see \Erpify\Iam\Identity\Infrastructure\Security\PasswordChangeThrottle}:
+ * The write is only meaningful behind {@see \Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle}:
  * a synchronous, per-attempt row on an unbudgeted endpoint is a write amplifier handed to the attacker it is
  * meant to record.
  */

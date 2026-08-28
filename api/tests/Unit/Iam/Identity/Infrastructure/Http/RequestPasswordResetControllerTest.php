@@ -84,7 +84,7 @@ final class RequestPasswordResetControllerTest extends TestCase
 
     public function testNoRateLimitHeaderEverDescribesThePerTargetBudget(): void
     {
-        // The sibling PasswordChangeThrottle stamps a RateLimitSnapshot so its 429 can carry RateLimit-*
+        // The sibling CurrentPasswordProofThrottle stamps a RateLimitSnapshot so its 429 can carry RateLimit-*
         // describing the budget that refused. Doing the same here would turn the uniform 202 into a
         // per-account existence oracle — the response would answer what the status deliberately does not.
         $floor = new CountingPreIdentityTimingFloor();

@@ -12,6 +12,7 @@ use Erpify\Iam\Identity\Domain\Exception\InvalidRecoverySecret;
 use Erpify\Iam\Identity\Domain\Repository\RecoverySecretRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Clock\Domain\Clock;
+use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use SensitiveParameter;
 
@@ -72,6 +73,7 @@ final readonly class RedeemRecoverySecret
         private UserRepository $users,
         private RecoverySecretRepository $secrets,
         private RecordRecoverySecretAuditBestEffort $audit,
+        private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,
     ) {
@@ -122,8 +124,15 @@ final readonly class RedeemRecoverySecret
             }
 
             $user->clearLockout();
+            $liveSecret->redeem();
 
             $this->users->save($user);
+            // The event is published INSIDE this transaction, so `DbalEventStore` appends it in the same
+            // unit of work as the delete below: the record of the redemption cannot exist without the
+            // consumption, and the consumption cannot commit without the record. That is what makes
+            // "emitted only once the consumption is persisted" a property rather than an ordering habit —
+            // the audit projection after the commit is best-effort and prunable, and could not carry it.
+            $this->eventBus->publish(...$liveSecret->pullDomainEvents());
             $this->secrets->remove($liveSecret);
         });
 

@@ -76,7 +76,7 @@ final class RateLimitContext extends AbstractContext implements Context
     }
 
     /**
-     * Key derivation mirrors {@see \Erpify\Iam\Identity\Infrastructure\Security\PasswordChangeThrottle}: the
+     * Key derivation mirrors {@see \Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle}: the
      * bucket is keyed by the signed-in identity's id, which the controller reads off the security token.
      */
     #[Given('the password-change budget is exhausted for identity :identityId')]

@@ -9,6 +9,8 @@ use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Iam\Identity\Domain\Event\RecoverySecretMinted;
+use Erpify\Iam\Identity\Domain\Event\RecoverySecretRedeemed;
+use Erpify\Iam\Identity\Domain\Event\RecoverySecretRevoked;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Erpify\Shared\Token\Domain\SingleUseToken;
@@ -125,6 +127,31 @@ final class RecoverySecret extends AggregateRoot
     public function verify(#[SensitiveParameter] string $presentedSecret, DateTimeImmutable $now): bool
     {
         return SingleUseToken::fromHash($this->secretHash, $this->expiresAt)->verify($presentedSecret, $now);
+    }
+
+    /**
+     * Records that this secret was spent — the holder proved possession and a session was established for
+     * its owner.
+     *
+     * It mutates nothing, and that is the aggregate being honest rather than a method with no body's worth
+     * of work: the state change IS the row's disappearance. A consumed secret is deleted instead of flagged,
+     * because retaining it would keep a live reference to a person alive for the sake of a status nobody
+     * reads, and single use comes from the `FOR UPDATE` re-read the caller decides on rather than from a
+     * column. What the aggregate owns here is the FACT, and it has to be recorded before the repository
+     * removes the row, because after that there is nothing left to pull the events from.
+     */
+    public function redeem(): void
+    {
+        $this->record(new RecoverySecretRedeemed($this->userId));
+    }
+
+    /**
+     * Records that the owner destroyed this secret deliberately. Same shape and same reason as
+     * {@see redeem()}: the transition is the row's removal, the aggregate owns the fact.
+     */
+    public function revoke(): void
+    {
+        $this->record(new RecoverySecretRevoked($this->userId));
     }
 
     public function userId(): string

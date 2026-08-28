@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Repository\RecoverySecretRepository;
+use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 
 /**
@@ -36,6 +37,7 @@ final readonly class RevokeRecoverySecret
     public function __construct(
         private RecoverySecretRepository $secrets,
         private RecordRecoverySecretAuditBestEffort $audit,
+        private EventBus $eventBus,
         private TransactionManager $transactionManager,
     ) {
     }
@@ -49,6 +51,11 @@ final readonly class RevokeRecoverySecret
                 return false;
             }
 
+            $secret->revoke();
+
+            // Inside the transaction, for the reason redemption publishes there: the durable record of the
+            // revocation lands with the delete or not at all.
+            $this->eventBus->publish(...$secret->pullDomainEvents());
             $this->secrets->remove($secret);
 
             return true;

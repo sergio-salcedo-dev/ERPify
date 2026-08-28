@@ -10,7 +10,6 @@ use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidCurrentPassword;
-use Erpify\Iam\Identity\Domain\Exception\InvalidHashedPassword;
 use Erpify\Iam\Identity\Domain\Exception\RecoverySecretAlreadyExists;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\HashedPassword;
@@ -25,10 +24,11 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * currently holds. Any `ACTIVE` identity may mint one — there is no role gate, because the sole administrator
  * this channel exists for is not distinguishable by role from anyone else who could one day be locked out.
  *
- * The credential comparison arrives as a closure the HTTP adapter builds, exactly as in
- * {@see ChangeMyPassword}: hashing and verifying are algorithm knowledge belonging to Infrastructure, so the
- * submitted password is never a value this layer holds, logs or can leak into an exception context. The
- * domain only ever learns "matches" / "does not match".
+ * The credential comparison arrives as a closure the HTTP adapter builds and is decided by
+ * {@see ProveCurrentPassword}, the collaborator this shares with {@see ChangeMyPassword}: hashing and
+ * verifying are algorithm knowledge belonging to Infrastructure, so the submitted password is never a value
+ * this layer holds, logs or can leak into an exception context, and the policy that answers an unreadable
+ * stored credential as a wrong one is stated in one place instead of two.
  *
  * The ordering inside the transaction is the contract:
  *   1. Load the identity under a pessimistic lock. It is the FIRST of the two locks this flow takes, and that
@@ -46,14 +46,15 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * also why the audit projection can record THAT a secret was minted and nothing about WHICH — the selector is
  * the row's key, and a key that appears in the trail is a capability to close the channel in silence.
  *
- * Its object coupling sits two above the default threshold. Two thirds of that number is not collaborators —
- * it is the six outcomes this endpoint declares, which are its published failure vocabulary rather than
- * hidden dependencies, and hiding them behind a coarser exception would trade a readable contract for a
- * metric. The genuine excess is the four lines of credential proof, which are a verbatim twin of
- * {@see ChangeMyPassword}'s: extracting that pair into one collaborator would take this class under the
- * threshold AND delete the duplicate, and it is left undone here only because the second half of it edits a
- * file this change has no other business in. Naming it beats silently carrying two copies of a
- * security-sensitive block.
+ * Its object coupling sits two above the default threshold, and extracting {@see ProveCurrentPassword} did
+ * not move it — measured, 15 before and 15 after, because the extraction trades one caught exception for one
+ * collaborator while the closure's parameter type and the refusal it can still raise both stay in the
+ * signature. That extraction was worth doing for the duplication it deleted, and it is not what this
+ * suppression is about. What the number actually counts here is mostly the SIX OUTCOMES this endpoint
+ * declares — its published failure vocabulary, which is the opposite of a hidden dependency — plus two
+ * repository ports, an audit projection, an event bus, a transaction manager, a clock and the aggregate.
+ * Every one of those is inherent to a single atomic act, and collapsing the exceptions behind a coarser one
+ * would trade a readable contract for a metric.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
@@ -62,6 +63,7 @@ final readonly class MintRecoverySecret
     public function __construct(
         private UserRepository $users,
         private RecoverySecretRepository $secrets,
+        private ProveCurrentPassword $proveCurrentPassword,
         private RecordRecoverySecretAuditBestEffort $audit,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
@@ -88,18 +90,7 @@ final readonly class MintRecoverySecret
                 $user = $this->users->findByIdForUpdate($userId) ?? throw UserNotFound::withId($userId);
                 $user->ensureActive();
 
-                // A corrupt stored credential cannot be re-proved, and is answered as a wrong one rather than
-                // as a 500: the two are indistinguishable to whoever is typing, and the specific failure is
-                // for the integrity probe to report, not for this endpoint to disclose.
-                try {
-                    $current = $user->passwordHash() ?? throw new InvalidCurrentPassword();
-                } catch (InvalidHashedPassword) {
-                    throw new InvalidCurrentPassword();
-                }
-
-                if (!$verifyCurrent($current)) {
-                    throw new InvalidCurrentPassword();
-                }
+                $this->proveCurrentPassword->ensure($user, $verifyCurrent);
 
                 if ($this->secrets->findByUserIdForUpdate($userId) instanceof RecoverySecret) {
                     throw new RecoverySecretAlreadyExists();
