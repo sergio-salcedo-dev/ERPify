@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 return [
     Symfony\Bundle\FrameworkBundle\FrameworkBundle::class => ['all' => true],
     Doctrine\Bundle\DoctrineBundle\DoctrineBundle::class => ['all' => true],
@@ -15,11 +13,9 @@ return [
     Symfony\Bundle\MonologBundle\MonologBundle::class => ['all' => true],
     Sentry\SentryBundle\SentryBundle::class => ['dev' => true, 'prod' => true],
     Symfony\Bundle\SecurityBundle\SecurityBundle::class => ['all' => true],
-    // Twig and the profiler are also enabled under `test` so the Behat `print the web profiler
-    // link` debug step can collect a profile and resolve the `_profiler` URL (WebProfilerBundle
-    // pulls in Twig for its templates). Collection stays opt-in per scenario — see web_profiler.yaml.
     Symfony\Bundle\TwigBundle\TwigBundle::class => ['dev' => true, 'test' => true],
     Symfony\Bundle\WebProfilerBundle\WebProfilerBundle::class => ['dev' => true, 'test' => true],
     Symfony\Bundle\DebugBundle\DebugBundle::class => ['dev' => true],
     FriendsOfBehat\SymfonyExtension\Bundle\FriendsOfBehatSymfonyExtensionBundle::class => ['test' => true],
+    League\FlysystemBundle\FlysystemBundle::class => ['all' => true],
 ];

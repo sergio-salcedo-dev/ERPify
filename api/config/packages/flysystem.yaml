@@ -1,0 +1,18 @@
+# Read the documentation at https://github.com/thephpleague/flysystem-bundle/blob/master/docs/1-getting-started.md
+parameters:
+    # Outside the source tree on purpose: the bytes must survive a container being recreated, which is what
+    # the declared volume provides, and they must never be reachable as static files nor land in `git status`.
+    env(STORAGE_LOCAL_PATH): '%kernel.project_dir%/var/storage'
+
+flysystem:
+    storages:
+        images.storage:
+            adapter: 'local'
+            options:
+                directory: '%env(STORAGE_LOCAL_PATH)%/images'
+                # The adapter creates its root in the constructor unless this is set, so an unmounted volume
+                # would be silently replaced by a fresh empty directory inside the container's writable layer.
+                # Measured: with the root absent, `delete()` then answers success for every key — a confirmed
+                # erasure of bytes nobody removed. Failing to reach a root that should exist must be an error,
+                # not a directory this application invents.
+                lazy_root_creation: true
