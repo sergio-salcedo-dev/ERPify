@@ -2,7 +2,7 @@
 title: 'Barrido de deferred-work.md: 98 balas a 53 en una PR'
 type: 'chore'
 created: '2026-08-27'
-status: 'draft'
+status: 'in-progress'
 review_loop_iteration: 0
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/deferred-work.md'
