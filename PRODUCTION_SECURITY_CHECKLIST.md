@@ -447,7 +447,7 @@ you change anything here.
       whose affected-row count is the single-use guard, so a concurrent replay collapses to `invalid-token`), sets
       the credential, clears the lockout, and **revokes every session** (best-effort teardown; a store outage is
       swallowed because the credential change de-authenticates natively). A non-`ACTIVE` identity hits the
-      post-identity wall (403). Same-origin is guarded by `PasswordResetOriginListener` (mirror of the login
+      post-identity wall (403). Same-origin is guarded by `RecoveryOriginListener` (mirror of the login
       guard); session mint (auto-login + `migrate(true)` regeneration) and the stateless CSRF token id share the
       invitation wiring. The user row is re-read **under a pessimistic lock** inside the completing transaction:
       concurrent forgots serialise their supersede (only the latest token lives) and an admin suspension committed
@@ -618,7 +618,7 @@ you change anything here.
       wired** (its first consumer is the invitation accept POST above), configured session-free via
       `framework.csrf_protection.stateless_token_ids`. CORS / Mercure are **not** broadened. **Access-control baseline:** `access_control` is **default-deny** — every `/api`
       route requires an authenticated session except an explicit allowlist (login, the two public recovery routes
-      `forgot-password` / `reset-password` — same-origin-guarded by `PasswordResetOriginListener`, a mirror of
+      `forgot-password` / `reset-password` / `recovery/redeem` — same-origin-guarded by `RecoveryOriginListener`, a mirror of
       `LoginOriginListener` keyed on the reset route names — health probes, dev hot-reload). An
       unauthenticated request to a protected route is a **401 `unauthenticated`** through the pipeline:
       `UnauthenticatedAccessListener` rewrites the firewall's `AccessDeniedException` to an `AuthenticationException` for
@@ -653,8 +653,14 @@ you change anything here.
       A store fault while **recording** a failed attempt is absorbed best-effort, so the failure path stays the
       uniform 401 — never a leaked **500** nor a resolved-vs-unknown status-code oracle (the increment is lost,
       tolerable during a DB incident); a store fault while **clearing** on a successful login re-maps to a
-      retryable **503 `service-unavailable`**. An attempt the aggregate ignores (a locked or non-`ACTIVE`
-      resolved identity) opens no transaction, so a sustained attack on a locked account costs no per-attempt write.
+      retryable **503 `service-unavailable`**. The identity is resolved by address under `SELECT … FOR UPDATE`
+      and the aggregate decides on THAT row: reading it unlocked let the increment be computed against state
+      another transaction had already replaced — a recovery-secret redemption or an administrative unlock
+      clearing the lock, and this path restoring `locked_until` from a snapshot taken before it, with the
+      attacker retrying continuously inside the window. An attempt the aggregate ignores still costs no write
+      and emits nothing; what it now costs is the BEGIN/COMMIT, which is bounded by an attempt that already
+      ran a credential verification. **An unknown address is the one path that opens no transaction at all** —
+      leaving no trace is what keeps it indistinguishable from a real one.
 - [ ] **A third recovery edge for the persisted lockout above: `POST /backoffice/users/{id}/unlock`**
       (`ADMIN`-only, `#[IsGranted('users.unlock')]`, `users` opts out of tier auto-grant). #602 named the two
       existing recovery edges — a successful login, a completed password reset — as both attacker-cuttable by
@@ -665,9 +671,44 @@ you change anything here.
       fact worth keeping. **An administrator may never unlock their own identity** (409
       `self-unlock-forbidden`, refused before any row is touched): granting that would make `users.unlock` a
       second, credential-independent path into one's own account, defeating the lockout it exists to recover
-      from. **Residual, explicitly out of scope here:** an installation with a single administrator has nobody
-      to invoke this lever if that administrator is themselves locked out — #602 stays open on that gap and on
+      from. **The residual this left — an installation with a single administrator has nobody to invoke the lever —
+      is closed by the recovery secret below**, which is the edge that depends on no peer. #602 stays open on
       the detection/notification half (`NotifyLockedIdentities`), tracked separately.
+- [ ] **The recovery secret (`identity_recovery_secret`): the lockout edge that depends on no peer.** A
+      `<selector>.<secret>` credential in its own aggregate, one row per identity (UNIQUE on `user_id`).
+      **Minted** from a live session against a re-proof of the current password and shown in clear exactly
+      once, in the minting response — only the digest is persisted, so nothing can display it again.
+      **Redeemed** anonymously at `POST /backoffice/recovery/redeem`: it establishes a session and clears the
+      lockout, and that session survives every later re-locking because the admission gate reads the session
+      row and never `locked_until`. Never delivered by email or printed by a CLI (that is what keeps it out of
+      the vendor's reach), and never in a query string. The redemption spends
+      `token_action_per_selector` and **nothing keyed by an address or an identity** — keying it either way
+      would put the recovery channel in the namespace the attack already occupies. Every death case
+      (malformed, unknown, lapsed, wrong, already consumed, budget exhausted) answers one byte-identical
+      400 `invalid-token`; a valid secret over a non-`ACTIVE` identity is the one identified 403, and the row
+      is not consumed. Minting shares the per-identity credential-proof budget with `POST /me/password`
+      (`CurrentPasswordProofThrottle`) — a bucket of its own would hand a stolen session twice the guesses
+      against the same password, since neither route feeds the persisted lockout. Full record:
+      [`docs/adr/administrative-recovery-channel.md`](docs/adr/administrative-recovery-channel.md) D7.
+      **Four residuals, each accepted rather than closed:**
+      **(a)** the secret is valid for **ten years** — `SingleUseToken` makes "no expiry" unrepresentable and a
+      short window would silently destroy the channel of somebody with no shell to notice; tracked as an
+      accepted risk with an open issue ([#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870)).
+      **(b)** possessing it equals possessing a recovery credential until redemption, revocation, expiry or
+      subject erasure — it survives a password rotation by design, and the profile screen listing it with both
+      instants and an explicit revoke is the whole of what makes that governable.
+      **(c)** the **selector is a denial capability**: whoever learns one can spend that selector's budget and
+      hold the channel shut in silence without authenticating. It is contained by construction (it is the row's
+      key, so events name the user, and it reaches no audit row, DTO, log or URL) and bounded by the threat
+      model — that denial is dominated by the cheaper email-keyed attack #602 opens with, not by the
+      selector's entropy, which is a UUID v7 and therefore not a per-id CSPRNG draw.
+      **(d)** the secret, the lockout and the session are **three state machines no transaction spans**, so
+      single use means *at most one persisted consumption*, never *at most one authentication*. The session is
+      established BEFORE the row is retired — inverted, a failed session mint would leave the secret spent and
+      the administrator with nothing to present — so a partial failure is retryable and the endpoint does not
+      promise 204 through it.
+      **Mislaying it is permanent loss of the channel**, which is the cost B1 was chosen with; what follows
+      contractually (vendor rescue by writing to the database, or reinstallation) is not settled here.
 - [ ] **Server-side session registry & admission gate (`iam_session`):** login mints a `Session` aggregate and the
       **Session Admission Gate** re-reads it on every authenticated `/api` request, so "authenticated" means "has a
       **live, revocable** session", not merely "holds a cookie". The gate is **fail-closed**: a revoked or

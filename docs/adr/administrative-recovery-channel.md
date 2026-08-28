@@ -207,6 +207,43 @@ carries the address, and it never carries any recovery-channel identifier — th
 path. An observation keyed by the same address the attacker already consumes cannot become a channel, because
 nothing exercisable travels on it.
 
+## D7 — The mechanism built, and the four things it costs
+
+*Amendment (2026-08-28, on delivering the channel.)* B1 is what shipped, as an aggregate of its own
+(`identity_recovery_secret`, one row per identity): minted from a live session against a re-proof of the
+current password, shown in clear exactly once in the minting response, redeemed anonymously to establish a
+session and clear the lockout. **This does not promote B1 from mechanism to invariant** — D3 still stands,
+and anything satisfying I-1 and I-2 replaces it without changing a line above.
+
+How it meets the two invariants, concretely: the redemption path spends `token_action_per_selector` and
+nothing else, so no budget on it is keyed by an address or an identity (I-1); and minting is reachable only
+through an authenticated session that proves the current password, never by email and never from a terminal,
+so no vendor-held knowledge reconstructs it (I-2). The corollary is enforced by construction rather than by
+care — the selector is the row's primary key, so every event names the **user**, and it appears in no audit
+row, DTO, log line or URL.
+
+What it costs, none of which D1–D6 anticipated:
+
+- **The secret is valid for ten years, and that is a decision rather than a consequence.** `SingleUseToken`
+  makes "no expiry" unrepresentable, so `RECOVERY_SECRET_TTL = P10Y` is the honest spelling. A short window
+  would reintroduce by the back door the silent destruction rejected when deciding a password change leaves a
+  live secret standing — the holder is by construction someone with no shell to notice it went. Tracked as an
+  accepted risk with an open issue ([#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870)), not as
+  a note here.
+- **Possessing it equals possessing a recovery credential until one of four events.** It survives a password
+  rotation, it is not rotated when spent, and it dies only by redemption, revocation, expiry or subject
+  erasure. The profile surface that lists it — minted at, expires at, with an explicit revoke — is the whole
+  of what makes that governable.
+- **The selector is a denial capability, which is why the corollary is not merely hygiene.** Whoever learns
+  one can spend that selector's redemption budget and hold the channel shut in silence, without ever
+  authenticating. That denial is dominated by the cheaper email-keyed attack this ADR opens with, which is
+  what bounds it — not the selector's entropy, which is a UUID v7 and therefore not a per-id CSPRNG draw.
+- **Three state machines, no transaction spanning them.** The secret, the lockout and the session commit
+  separately, so "single use" means *at most one persisted consumption*, never *at most one authentication*.
+  The session is established BEFORE the row is retired — inverted, a failed session mint would leave the
+  secret spent and the administrator with nothing to present — so a partial failure is retryable rather than
+  terminal, and the endpoint does not promise 204 through it.
+
 ## Falsification
 
 **I-1 is falsified statically, not by a scenario — and this is the correction the adversarial pass
@@ -227,3 +264,6 @@ persistent transports.
   `SELECT … AND locked_until > NOW()` so a failed seed cannot pass vacuously, then assert the surviving
   transition answers `2xx` and goes red when it is removed. That scenario proves the edge exists; only
   the static checks above prove it is keyed correctly. Both, or neither is a control.
+- **D7 dies** if any of its four costs stops being true and stops being recorded: the TTL constant moving
+  without the issue moving with it, the profile surface losing the expiry it displays, the selector reaching
+  a surface, or the session being minted after the row is retired rather than before.
