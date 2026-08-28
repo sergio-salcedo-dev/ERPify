@@ -49,6 +49,19 @@ every other row's falsifier green. Sharing a file is not sharing a mutation.
 | 85 | `LastRun::record()` overwrote an unread run with no signal | Track whether the run was read; refuse a second record over an unread one | `LastRunTest::testRecordingOverARunNothingReadIsRefused` | Drop the `$read` field and the guard | Reverted: 85 red, 83 green | CLOSED |
 | 86 | Verbosity resolved by last matching flag, so `-vvv --verbose` degraded to VERY_VERBOSE | `verbosityFrom()` takes the maximum | `MessengerVerbosityResolutionTest::testTheStrongestVerbosityFlagWinsOverTheLastOneDeclared` | `\max($verbosity, $level)` → `$level` | Re-measured after the class split: 86 red (exit 2), 82/84 green (exit 0) | CLOSED |
 
+| 2 | Nothing pinned that the persisted `operation` equals `AuditWriteOperation::name`, nor that the three PWA literals match the enum | New `AuditWriteOperationParityTest` comparing the enum's case names against the values parsed out of the PWA object literal, plus a pin that the payload guard is still derived from it | `theWriteOperationVocabularyIsTheSameOnBothDeployables` | Renamed a case PHP-side; renamed the literal PWA-side; replaced the derived guard with a hand-written set. Negative control: a commented-out value stays green | Own file | CLOSED |
+| 17 | The gate loaded the admitted `Session`, discarded it, and both controllers re-ran the identical query | The gate publishes the row on the **Request** (never a singleton or static — FrankenPHP worker mode); controllers read it, falling back to a fresh lookup | `SessionAdmissionGateTest::testItPublishesTheAdmittedSessionOnTheRequest` | Collapse the gate back to the discarded `instanceof` and restore both controllers | Reverted: 17 red, 27 and 19 green | CLOSED |
+| 18 | No scenario proved an expired session leaves `GET /sessions`; covered only at adapter level | Scenario seeding an `ACTIVE` row with `expires_at` in the past, with a row-count assertion so the seed cannot be vacuous | The scenario | Behat, verified in the serial run: 470 scenarios green | Own file | CLOSED |
+| 19 | No unit test admitted, so inverting the gate's condition reddened nothing | `testItAdmitsALiveSession` + the publication test | `SessionAdmissionGateTest::testItAdmitsALiveSession` | Make the gate refuse every session. **Baseline measured first: the same mutation on the original gate passed the original suite — 6 tests, exit 0** | Reverted: 19 red, 17 and 27 green | CLOSED |
+| 27 | Rejecting a session left the native cookie alive, so a revoked-cookie bearer cost a DB round-trip on every request while an anonymous caller cost none | Both refusal branches route through `refuse()`, which invalidates the native session before throwing — mirroring `RevokeCurrentSessionController` | `testItDropsTheNativeSessionWhenTheSessionIsNoLongerActive` and `…WhenThereIsNoCorrelation`, one per branch | Replace both `refuse()` calls with the bare throw | Reverted: 27 red (2 failures), 17 and 19 green | CLOSED |
+| 44 | `MAX_FIELD_LENGTH = 100` mirrored a `VARCHAR(100)` width with nothing comparing them | Functional test asking `information_schema.columns` for both columns | `AuditLogFieldWidthContractTest::eachGuardedColumnIsAsWideAsTheEntryGuard` | `MAX_FIELD_LENGTH` 100 → 101 | Own file | CLOSED |
+| 45 | The port's alias had no consumer, so the test built the writer by hand and the wiring was unpinned | A method resolving `AuditLogWriter` from the container; the stale docblock corrected | `AuditLogWriterIdempotencyTest::testThePortResolvesToTheDbalWriter` | **Removing `#[AsAlias]` is a NON-falsifier (exit 0)** — the binding comes from `registerAliasesForSinglyImplementedInterfaces()`. The working mutation adds a second implementer that redirects the port | Own file | CLOSED |
+| 47 | Raw-DBAL writes raise no ORM flush, so `FixturesChangeTracker` stayed clean and rows leaked across features | `TestDebugDataHolder::addQuery()` marks the tracker when the leading keyword is INSERT/UPDATE/DELETE/TRUNCATE, before the existing filter and touching none of its accounting | `testRawWriteMarksTheFixturesTrackerEvenWhenTheQueryIsFilteredOut` and `testPlainSelectLeavesTheFixturesTrackerClean` | Delete the marking (write test reds); mark unconditionally (read test reds) | Own file | CLOSED |
+| 75 | The registry re-swept all of `api/src` on every call, inside a gate CI runs per PR | Four lazily-computed **instance** memos; the class stops being `readonly` because PHPStan refuses a lazy write to a readonly property | `PersonResourceErasureRulesGateTest::theSourceCorpusIsOneSnapshotPerInstanceAndNeverOutlivesIt` | Revert the memos (1 failure); make the snapshot `static` (**6 failures across neighbouring gates — the shared-state hazard, demonstrated**) | Own file | CLOSED |
+| 91 | The PWA's `[REDACTED]` copy had no parity gate, while the three PHP/Gherkin spellings are deliberate falsifiers | New sibling gate `AuditRedactionSentinelParityTest` | `theRedactionSentinelIsTheSameOnBothDeployables` | Changed the sentinel PHP-side; changed the rendered node PWA-side while leaving both docblock occurrences intact — still red, so the comment strip is load-bearing | Own file | CLOSED |
+| 92 | `findByUserId()` had no DBAL-failure conversion, so a store outage on `GET /sessions` surfaced as a raw 500 against a contracted 503 | Both reads run through one `convertingStoreFailure()` owning the single `try`/`catch` | `testConvertsADbalFailureOnTheSessionListingToSessionStoreUnavailable` | Invoke the read closure directly instead of through the converter | Reverted: 92 red, 93 green | CLOSED |
+| 93 | The 503 was pinned by a mock of `createQueryBuilder()`, which is `return new QueryBuilder($this)` and cannot throw | The stub returns a real `QueryBuilder` and throws from `createQuery()`, so the failure arises inside the real `try` | `testConvertsADbalFailureOnTheGatesReadToSessionStoreUnavailable` | Move the execution outside the `try`. **Decisive: the OLD test stays GREEN under it (exit 0), the new one reds** | Reverted: 93 red, 92 green | CLOSED |
+
 ### Declared shared mutations
 
 | ITEMs | Why they share | Mutation |
@@ -85,6 +98,27 @@ projection replays the persistent `event_store` — a green for a reason the sce
 **A falsifier for vacuous assertions contained a vacuous assertion.** `assertTrue(true, …)` in
 `RunOutputAbsenceTest`, caught by PHPStan (`method.alreadyNarrowedType`), not by review. Removed: the
 step performs its own two assertions, so the count is real without adding one.
+
+**Two bullets described their own mechanism wrongly, and the mutations proved it.** ITEM 45 said
+`#[AsAlias]` was "pruned at compile time"; removing the attribute leaves the alias in the compiled
+container and the test green, because `FileLoader::registerAliasesForSinglyImplementedInterfaces()`
+binds any interface with exactly one implementer regardless. The attribute is redundant today and
+becomes load-bearing only when a second implementer appears. ITEM 47 said `audit.feature` was the sole
+reader and writer of `audit_log` and ran as one scenario; there is no such file, 18 features touch that
+table, six write to it, and two independent hand-rolled workarounds for this very defect already exist
+in the tree (a `TRUNCATE` in a Background, and two features that rename the table away and isolate by
+correlation id).
+
+**A pre-existing suite passed a gate that refused every request.** Measured before writing ITEM 19's
+test: the mutation "refuse every session" left `SessionAdmissionGateTest` at 6 tests, exit 0.
+
+**Measured, not estimated:** ITEM 47 makes more scenarios dirty the fixtures tracker and pay a restore.
+The full Behat suite went from 45s to 40s across the wave — no cost materialised.
+
+**Unverified and recorded as such:** invalidating the native session (ITEM 27) regenerates the session
+id, so the 401 response is expected to carry a `Set-Cookie` — the same one `RevokeCurrentSessionController`
+already emits on logout. Body and status are unchanged and the full suite is green, but the header was
+not observed live. It belongs in this branch's adversarial pass.
 
 ## C. ITEM 21 — the eleven endpoints
 

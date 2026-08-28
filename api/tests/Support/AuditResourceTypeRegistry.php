@@ -26,7 +26,7 @@ use RuntimeException;
  *
  * @internal test support
  */
-final readonly class AuditResourceTypeRegistry
+final class AuditResourceTypeRegistry
 {
     public const string NON_PERSON = 'non-person';
 
@@ -45,10 +45,33 @@ final readonly class AuditResourceTypeRegistry
         'AuditSubjectTrailErasure' => 'completeForSubject',
     ];
 
+    /**
+     * One snapshot of the source corpus per instance, taken on first use.
+     *
+     * Every sweep below reads the same `api/src`, and the gates drive them from loops — one call per
+     * classified type — so re-reading and re-tokenising 600-odd files is work repeated for an answer that
+     * cannot have changed: no test writes under `src`, the fixture trees are committed directories, and the
+     * fixers that do rewrite `src` are separate processes in the sweep that runs this gate. The snapshot is
+     * per INSTANCE and never static, so it dies with the instance that took it and cannot become state one
+     * test hands to the next.
+     *
+     * @var array<string, string>|null path relative to `api/` => file contents
+     */
+    private ?array $sources = null;
+
+    /** @var array<string, string>|null `<ShortClassName>::<CONSTANT>` => the literal it holds */
+    private ?array $constants = null;
+
+    /** @var array<string, string>|null path relative to `api/` => that file's code with comments removed */
+    private ?array $strippedSources = null;
+
+    /** @var array<string, list<string>>|null path relative to `api/` => the audit resource types it names */
+    private ?array $derivedTypes = null;
+
     public function __construct(
-        private string $apiRoot,
-        private string $sourceRoot,
-        private string $registryPath,
+        private readonly string $apiRoot,
+        private readonly string $sourceRoot,
+        private readonly string $registryPath,
     ) {
     }
 
@@ -104,17 +127,10 @@ final readonly class AuditResourceTypeRegistry
      */
     public function resourceTypesInSource(): array
     {
-        $sources = [];
-
-        foreach ($this->sourceFiles() as $file) {
-            $sources[$file] = (string) \file_get_contents($this->apiRoot . '/' . $file);
-        }
-
-        $constants = AuditResourceConstants::literalsIn($sources);
         $types = [];
 
-        foreach ($sources as $source) {
-            $types = [...$types, ...$this->typesDerivedFrom($source, $constants)];
+        foreach ($this->derivedTypes() as $derived) {
+            $types = [...$types, ...$derived];
         }
 
         $types = \array_values(\array_unique($types));
@@ -134,17 +150,10 @@ final readonly class AuditResourceTypeRegistry
      */
     public function filesDerivingType(string $type): array
     {
-        $sources = [];
-
-        foreach ($this->sourceFiles() as $file) {
-            $sources[$file] = (string) \file_get_contents($this->apiRoot . '/' . $file);
-        }
-
-        $constants = AuditResourceConstants::literalsIn($sources);
         $files = [];
 
-        foreach ($sources as $file => $source) {
-            if (\in_array($type, $this->typesDerivedFrom($source, $constants), true)) {
+        foreach ($this->derivedTypes() as $file => $types) {
+            if (\in_array($type, $types, true)) {
                 $files[] = $file;
             }
         }
@@ -157,17 +166,16 @@ final readonly class AuditResourceTypeRegistry
     /**
      * The audit resource types ONE file names, by any of the three forms the sweep understands.
      *
+     * Takes the file's CODE, like its two siblings — {@see strippedSources()} is what removes the comments.
+     * A docblock citing the call it used to make would otherwise satisfy "the declared owner builds this
+     * type" with prose, which is the one thing this sweep must not accept as a writer.
+     *
      * @param array<string, string> $constants
      *
      * @return list<string>
      */
-    private function typesDerivedFrom(string $source, array $constants): array
+    private function typesDerivedFrom(string $code, array $constants): array
     {
-        // Over the code alone, like its two siblings. A docblock citing the call it used to make would
-        // otherwise satisfy "the declared owner builds this type" with prose, which is the one thing this
-        // sweep must not accept as a writer.
-        $code = $this->codeWithoutComments($source);
-
         \preg_match_all("/AuditResource::of\\(\\s*'([^']+)'/", $code, $constructed);
         \preg_match_all("/'_audit_resource_type'\\s*=>\\s*'([^']+)'/", $code, $routed);
 
@@ -213,9 +221,7 @@ final readonly class AuditResourceTypeRegistry
     {
         $carriers = [];
 
-        foreach ($this->sourceFiles() as $file) {
-            $code = $this->codeWithoutComments((string) \file_get_contents($this->apiRoot . '/' . $file));
-
+        foreach ($this->strippedSources() as $file => $code) {
             if (\str_contains($code, $this->literal($type))) {
                 $carriers[] = $file;
             }
@@ -294,6 +300,72 @@ final readonly class AuditResourceTypeRegistry
     public function witness(): AuditWitnessScenario
     {
         return new AuditWitnessScenario($this->apiRoot);
+    }
+
+    /**
+     * Contents of every file under the source root, keyed by its path relative to `api/`.
+     *
+     * @return array<string, string>
+     */
+    private function sources(): array
+    {
+        return $this->sources ??= $this->readSources();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function readSources(): array
+    {
+        $sources = [];
+
+        foreach ($this->sourceFiles() as $file) {
+            $sources[$file] = (string) \file_get_contents($this->apiRoot . '/' . $file);
+        }
+
+        return $sources;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function constants(): array
+    {
+        return $this->constants ??= AuditResourceConstants::literalsIn($this->sources());
+    }
+
+    /**
+     * The corpus with comments stripped — what every derivation below reads, so an intention written in a
+     * docblock can never stand in for the code that would carry it.
+     *
+     * @return array<string, string>
+     */
+    private function strippedSources(): array
+    {
+        return $this->strippedSources ??= \array_map($this->codeWithoutComments(...), $this->sources());
+    }
+
+    /**
+     * The audit resource types each file names, keyed by its path relative to `api/`.
+     *
+     * @return array<string, list<string>>
+     */
+    private function derivedTypes(): array
+    {
+        return $this->derivedTypes ??= $this->deriveTypes();
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function deriveTypes(): array
+    {
+        $constants = $this->constants();
+
+        return \array_map(
+            fn (string $code): array => $this->typesDerivedFrom($code, $constants),
+            $this->strippedSources(),
+        );
     }
 
     /**

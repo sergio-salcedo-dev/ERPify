@@ -47,6 +47,22 @@ Feature: Server-side session registry and admission gate
     And the JSON node "data[0].current" should be true
     And the JSON node "data[0].device" should be equal to "Behat test client"
 
+  # Caducity is decided per query rather than by a persisted transition, so nothing ever writes an expired
+  # session out of `ACTIVE` — the row stays there and only the read predicate keeps it out of the listing. That
+  # makes listing a dead session as live an INFORMATION defect the gate cannot catch: it refuses the request
+  # carrying that session, while "my sessions" would still show it as a place the account is signed in. The
+  # seeded SELECT is what stops the scenario passing vacuously, since an INSERT that matched nothing would
+  # leave the count at 1 for the wrong reason.
+  Scenario: A session past its expiry is absent from my sessions though its row still reads ACTIVE
+    Given I execute the SQL query "INSERT INTO iam_session (id, user_id, organization_id, status, expires_at, device, created_at, updated_at) VALUES ('0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5dfe', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', 'ACTIVE', NOW() - INTERVAL '1 hour', 'A lapsed device', NOW(), NOW())"
+    And I execute the SQL query "SELECT id FROM iam_session WHERE id = '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5dfe' AND status = 'ACTIVE' AND expires_at < NOW()"
+    And there should have 1 records in SQL result
+    When I send a "GET" request to "/sessions"
+    Then the response status code should be 200
+    And the JSON node "data" should have 1 elements
+    And the JSON node "data[0].current" should be true
+    And the JSON node "data[0].device" should be equal to "Behat test client"
+
   Scenario: Signing out other devices revokes them but never the current session
     Given I execute the SQL query "INSERT INTO iam_session (id, user_id, organization_id, status, expires_at, device, created_at, updated_at) VALUES ('0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5dff', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', 'ACTIVE', NOW() + INTERVAL '1 day', 'A second device', NOW(), NOW())"
     And I send a "GET" request to "/sessions"

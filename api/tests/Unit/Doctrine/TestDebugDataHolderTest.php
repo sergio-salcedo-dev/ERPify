@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Doctrine;
 
+use Erpify\Tests\Behat\State\FixturesChangeTracker;
 use Erpify\Tests\Doctrine\TestDebugDataHolder;
 use Erpify\Tests\Unit\Doctrine\Stubs\Controller\FakeAction;
 use Erpify\Tests\Unit\Doctrine\Stubs\FakeCommand;
@@ -31,6 +32,15 @@ final class TestDebugDataHolderTest extends TestCase
     {
         $this->testDebugDataHolder = new TestDebugDataHolder();
         $this->testDebugDataHolder->resetScenario();
+    }
+
+    /**
+     * A false flag would skip a fixture restore, so the tracker goes back to its fail-safe state.
+     */
+    #[Override]
+    protected function tearDown(): void
+    {
+        FixturesChangeTracker::markChanged();
     }
 
     public function testForceFlagBypassesFilter(): void
@@ -108,6 +118,29 @@ final class TestDebugDataHolderTest extends TestCase
     {
         (new FakeAction())->record($this->testDebugDataHolder, $this->makeQuery('SELECT namespace'));
 
+        $this->assertCount(1, $this->testDebugDataHolder->getData()['default'] ?? []);
+    }
+
+    public function testRawWriteMarksTheFixturesTrackerEvenWhenTheQueryIsFilteredOut(): void
+    {
+        FixturesChangeTracker::reset();
+
+        $this->testDebugDataHolder->addQuery('default', $this->makeQuery('INSERT INTO audit_log (id) VALUES (1)'));
+
+        $this->assertTrue(FixturesChangeTracker::hasChanged());
+        // The query accounting is untouched: this frame is PHPUnit's, so shouldSkip() still drops it.
+        $this->assertSame([], $this->testDebugDataHolder->getData());
+    }
+
+    public function testPlainSelectLeavesTheFixturesTrackerClean(): void
+    {
+        FixturesChangeTracker::reset();
+
+        $sql = "SELECT id FROM audit_log WHERE action = 'INSERT_BANK'";
+        (new FakeController())->record($this->testDebugDataHolder, $this->makeQuery($sql));
+
+        $this->assertFalse(FixturesChangeTracker::hasChanged());
+        // A read still counts for the per-connection budgets, so the accounting must have kept it.
         $this->assertCount(1, $this->testDebugDataHolder->getData()['default'] ?? []);
     }
 
