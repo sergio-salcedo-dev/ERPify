@@ -23,6 +23,12 @@ use Symfony\Component\Validator\Constraints\GroupSequence;
  * subclass is picked up exactly like the parent — no decoration of the resolver, which is `@final` and does its
  * mapping from an event subscriber rather than from the resolver method.
  *
+ * `acceptFormat` defaults to `['json']` because the resolver only runs its format check when the list is
+ * non-empty: with the permissive `null` the parent allows, an omitted argument would read as "accept
+ * form-encoded and multipart as well", which is the opposite of what this type exists for and would be chosen
+ * by silence rather than by a call site. Every body this API maps is JSON; a call site that needs another
+ * format still passes its own list.
+ *
  * Query strings are deliberately NOT covered: `#[MapQueryString]` is a separate attribute and stays permissive,
  * because unknown query parameters are ambient (analytics, cache-busting, a pasted campaign URL) rather than
  * instructions, and failing a read because of one would be self-inflicted.
@@ -41,7 +47,7 @@ final class StrictRequestPayload extends MapRequestPayload
      * @param class-string|string|null                $type                 the element type for array deserialization
      */
     public function __construct(
-        array|string|null $acceptFormat = null,
+        array|string|null $acceptFormat = ['json'],
         array $serializationContext = [],
         array|GroupSequence|string|null $validationGroups = null,
         ?string $type = null,

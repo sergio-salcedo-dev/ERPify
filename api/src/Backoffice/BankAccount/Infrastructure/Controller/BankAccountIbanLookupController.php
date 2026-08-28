@@ -35,7 +35,7 @@ final readonly class BankAccountIbanLookupController
     }
 
     public function __invoke(
-        #[StrictRequestPayload(acceptFormat: ['json'])]
+        #[StrictRequestPayload]
         LookupBankAccountByIbanQuery $query,
     ): Response {
         $row = $this->bankAccountIbanLookup->lookup($query->canonicalIban());

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Menu, Bell, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { Logo, MonogramAvatar, SidebarItem, ThemeToggle } from "@/components/erpify";
@@ -24,6 +24,7 @@ import {
   type NavSubItem,
   type NavAction,
 } from "./_lib/backofficeMenu";
+import { permittedAccountEntries, permittedMenuGroups } from "./_lib/menuAccess";
 import { RequireAuth, DevSessionSwitcher } from "@/context/shared/access/infrastructure/ui";
 import { useSession } from "@/context/shared/access/application/useSession";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
@@ -183,7 +184,11 @@ export default function BackOfficeLayoutClient({
   // still closes the mobile Sheet without navigating anywhere, and must not claim otherwise.
   const closingSheetViaNavigationRef = useRef(false);
 
-  const menuGroups = backofficeMenuGroups;
+  // Filtered once, here, because the desktop sidebar and the mobile drawer render the same model
+  // through different JSX: filtering at either render site would leave the other painting an entry
+  // the role cannot open. Hiding is an affordance decision only — every route keeps its own gate,
+  // since the URL can be typed.
+  const menuGroups = useMemo(() => permittedMenuGroups(session, backofficeMenuGroups), [session]);
 
   // Sign-out is in flight. State rather than a ref because the click closes the menu, so a
   // second attempt needs it reopened — an asynchronous gap a re-render always wins.
@@ -327,7 +332,11 @@ export default function BackOfficeLayoutClient({
   // The top-bar menu mirrors the sidebar's Account group rather than declaring its own
   // entries, so the two can never drift. Logout is split out: it is the only entry whose
   // target leaves the back office, and it reads as destructive.
-  const accountEntries = accountMenuItem.subItems ?? [];
+  // Filtered ONCE into an item, never per render site: the account entries are painted by three
+  // surfaces (top-bar dropdown, sidebar footer, mobile drawer) through three different JSX blocks,
+  // so a list filtered for one of them leaves the other two offering doors the role cannot open.
+  const accountEntries = permittedAccountEntries(session, accountMenuItem.subItems ?? []);
+  const permittedAccountItem: NavItem = { ...accountMenuItem, subItems: accountEntries };
   const accountLinks = accountEntries.filter((entry) => entry.action !== "sign-out");
   const accountLogout = accountEntries.find((entry) => entry.action === "sign-out");
 
@@ -454,8 +463,8 @@ export default function BackOfficeLayoutClient({
                 </p>
               )}
               <SidebarItem
-                {...withEntryState(accountMenuItem)}
-                isActive={isItemActive(accountMenuItem)}
+                {...withEntryState(permittedAccountItem)}
+                isActive={isItemActive(permittedAccountItem)}
                 onClick={handleNavigation}
                 isCompact={isCompact}
               />
@@ -583,7 +592,7 @@ export default function BackOfficeLayoutClient({
                           <span className="text-sm">{accountMenuItem.name}</span>
                         </button>
                         <div className="ml-8 mt-1 space-y-1">
-                          {accountMenuItem.subItems?.map((subItem) => (
+                          {permittedAccountItem.subItems?.map((subItem) => (
                             <button
                               type="button"
                               // Identity, never the label: this site relabels the entry it is

@@ -48,9 +48,19 @@ namespace Erpify\Tests\Support;
  *  - A column definition is taken to end at the next comma, which is what separates two `ADD` clauses in
  *    one statement. A type carrying a comma (`NUMERIC(10, 2)`) would truncate its own definition and read
  *    as nullable; the tree has none.
- *  - It never judges whether dropping the default was RIGHT. `identity_user.status` drops its own for a
- *    valid and different reason (the aggregate always sets the value, and a latent default would mask a
- *    write that forgot to) — which is why the exemptions are a closed list and not a suppression comment.
+ *  - It never judges whether dropping the default was RIGHT. Both `identity_user` columns drop their own for
+ *    a valid and different reason — which is why the exemptions are a closed list and not a suppression
+ *    comment. `status` is a promoted constructor parameter carrying no default, so the aggregate always sets
+ *    the value and a latent DB default would mask a write that forgot to. `failed_attempts` reaches the same
+ *    guarantee one notch tighter: it is a property initialiser (`private int $failedAttempts = 0`), so the
+ *    value is present whether the constructor ran or Doctrine hydrated the object around it, the ORM names
+ *    every mapped column in its `INSERT`, and no writer under `src` reaches `identity_user` by raw SQL at
+ *    all. Keeping `DEFAULT 0` would therefore change nothing for a correct write while silently supplying a
+ *    zero to an incorrect one — and this column is the per-identity half of the credential-stuffing defence,
+ *    so a writer that omits it must fail loudly rather than be handed a fresh lockout budget. The cost is
+ *    paid knowingly and is the one this rule names: an image predating either column inserts without it and
+ *    is refused, so a rollback window cannot create identities. That is bounded and loud, which is the trade
+ *    both migrations state at their own `DROP DEFAULT`.
  */
 final class MigrationColumnDefaults
 {

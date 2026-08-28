@@ -178,3 +178,51 @@ describe("ApiAuditEventDetailRepository response guard", () => {
     expect(isAuditEventDetailResponse(undefined)).toBe(false);
   });
 });
+
+/**
+ * The detail guard mirrors the timeline's tolerance on the one presentational field: `resourceErased`
+ * may be absent, because losing the whole event — diff included — over a badge is the wrong failure.
+ * Four states, separated: missing is valid and reads as `true` — the safe direction, mirroring the
+ * timeline — `false`/`true` are valid, anything else is drift and still rejects.
+ */
+describe("ApiAuditEventDetailRepository resourceErased tolerance", () => {
+  /** The row as an API that does not publish the flag would send it: the key is absent, not null. */
+  function rowWithoutTheFlag(): Record<string, unknown> {
+    const row: Record<string, unknown> = { ...DETAIL };
+    delete row.resourceErased;
+    return row;
+  }
+
+  it("admits a row that omits the flag", () => {
+    expect(isAuditEventDetailResponse({ data: rowWithoutTheFlag() })).toBe(true);
+  });
+
+  it("reads an omitted flag as erased, the safe direction, rather than as absent", async () => {
+    // The direction is the assertion. `false` would answer the privacy question with the permissive
+    // value and offer the follow-resource pivot on a pseudonym; the sibling `actorErased` on this
+    // same payload rejects an absent value outright.
+    const httpClient = httpClientReturning({ data: rowWithoutTheFlag() });
+
+    const detail = await new ApiAuditEventDetailRepository(httpClient).findById(DETAIL.id);
+
+    expect(detail.resourceErased).toBe(true);
+  });
+
+  it.each([false, true])("admits and carries through the flag when present (%s)", async (flag) => {
+    expect(isAuditEventDetailResponse({ data: { ...DETAIL, resourceErased: flag } })).toBe(true);
+
+    const httpClient = httpClientReturning({ data: { ...DETAIL, resourceErased: flag } });
+    const detail = await new ApiAuditEventDetailRepository(httpClient).findById(DETAIL.id);
+
+    expect(detail.resourceErased).toBe(flag);
+  });
+
+  // Absence is tolerated; corruption is not. A present non-boolean would be READ as a state.
+  it.each([
+    { label: 'the string "false"', flag: "false" as unknown },
+    { label: "null", flag: null as unknown },
+    { label: "a number", flag: 42 as unknown },
+  ])("rejects the envelope when the flag is $label", ({ flag }) => {
+    expect(isAuditEventDetailResponse({ data: { ...DETAIL, resourceErased: flag } })).toBe(false);
+  });
+});

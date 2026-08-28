@@ -140,6 +140,13 @@ final readonly class ProblemDetailsFactory
      * is uniform whether the error originated from a marker `DomainException`, a Security Core
      * exception, or a Symfony `HttpExceptionInterface`. The alignment is pinned by
      * `testHttpStatusTypeMapValuesMirrorMarkerDefaultTypeMapValues`.
+     *
+     * 415 is the one entry no marker backs, and it needs one for the same reason the others do. No
+     * domain code raises it: the refusal happens in Symfony's argument resolver, so an endpoint mapping
+     * a {@see \Erpify\Shared\Http\Infrastructure\StrictRequestPayload} answers a form-encoded or multipart
+     * body before any handler runs. Left out of this map that refusal reaches the wire as `http-error`,
+     * indistinguishable from every other unmapped status, and a client routing on `type` cannot tell
+     * "resend this as JSON" from a failure it can do nothing about.
      */
     private const array HTTP_STATUS_TYPE_MAP = [
         Response::HTTP_BAD_REQUEST => 'invalid-input',
@@ -147,6 +154,7 @@ final readonly class ProblemDetailsFactory
         Response::HTTP_FORBIDDEN => 'forbidden',
         Response::HTTP_NOT_FOUND => 'not-found',
         Response::HTTP_CONFLICT => 'conflict',
+        Response::HTTP_UNSUPPORTED_MEDIA_TYPE => 'unsupported-media-type',
         Response::HTTP_UNPROCESSABLE_ENTITY => 'invariant-violation',
         Response::HTTP_TOO_MANY_REQUESTS => 'rate-limited',
         Response::HTTP_SERVICE_UNAVAILABLE => 'service-unavailable',

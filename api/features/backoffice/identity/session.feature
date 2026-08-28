@@ -40,7 +40,29 @@ Feature: Server-side session registry and admission gate
     Then the response status code should be 200
     And 1 requests got executed only for doctrine connection "default"
 
-  Scenario: My sessions lists the current device, distinguished
+  # The query count is the pin for the OTHER half of the admitted-session publication: the gate already loaded
+  # this row at `kernel.request`, so the controller reads it off the Request attribute instead of running the
+  # identical lookup a second time. Nothing else in the suite can see that — the responses are byte-identical
+  # with and without it, so only the cost distinguishes them, and without this assertion both controllers could
+  # be reverted to their own lookup with every test green.
+  Scenario: My sessions lists the current device, distinguished, without re-reading the admitted session
+    When I send a "GET" request to "/sessions"
+    Then the response status code should be 200
+    And 2 requests got executed only for doctrine connection "default"
+    And the JSON node "data" should have 1 elements
+    And the JSON node "data[0].current" should be true
+    And the JSON node "data[0].device" should be equal to "Behat test client"
+
+  # Caducity is decided per query rather than by a persisted transition, so nothing ever writes an expired
+  # session out of `ACTIVE` — the row stays there and only the read predicate keeps it out of the listing. That
+  # makes listing a dead session as live an INFORMATION defect the gate cannot catch: it refuses the request
+  # carrying that session, while "my sessions" would still show it as a place the account is signed in. The
+  # seeded SELECT is what stops the scenario passing vacuously, since an INSERT that matched nothing would
+  # leave the count at 1 for the wrong reason.
+  Scenario: A session past its expiry is absent from my sessions though its row still reads ACTIVE
+    Given I execute the SQL query "INSERT INTO iam_session (id, user_id, organization_id, status, expires_at, device, created_at, updated_at) VALUES ('0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5dfe', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', 'ACTIVE', NOW() - INTERVAL '1 hour', 'A lapsed device', NOW(), NOW())"
+    And I execute the SQL query "SELECT id FROM iam_session WHERE id = '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5dfe' AND status = 'ACTIVE' AND expires_at < NOW()"
+    And there should have 1 records in SQL result
     When I send a "GET" request to "/sessions"
     Then the response status code should be 200
     And the JSON node "data" should have 1 elements
@@ -64,7 +86,14 @@ Feature: Server-side session registry and admission gate
     And I send a "GET" request to "/me"
     And the response status code should be 401
 
-  Scenario: A revoked session is inert on its next request
+  # The refusal drops the native session, and dropping it regenerates the session id, so this 401 carries a
+  # `Set-Cookie` where the admitted request carries none. That header is asserted here because it is the
+  # observable half of the refusal and nothing else in the suite watches it: this feature asserts no
+  # `Set-Cookie` at all, while `bank/access_control.feature` pins the ABSENCE of one on its own denial, so an
+  # analogy drawn from there would write the opposite assertion and be wrong. The flags come with it — a
+  # regenerated session cookie that lost `httponly` or `samesite` would be a worse defect than the duplicate
+  # query the invalidation exists to save.
+  Scenario: A revoked session is inert on its next request, and the refusal re-mints the cookie
     # Earlier scenarios in this feature revoke the shared registry session; reload so this one starts ACTIVE.
     Given I reload the fixtures
     And I send a "GET" request to "/me"
@@ -73,6 +102,30 @@ Feature: Server-side session registry and admission gate
     And I send a "GET" request to "/me"
     Then the response status code should be 401
     And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "session-expired"
+    And the header "Set-Cookie" should contain "httponly"
+    And the header "Set-Cookie" should contain "samesite=lax"
+
+  # The refusal drops the session but does NOT de-authenticate: the token survives in storage and
+  # `ContextListener` re-serialises it into the regenerated session on the way out, so the caller stays
+  # full-fledged and is refused by the gate again rather than falling through to `access_control`.
+  #
+  # TWO requests, and the count is the whole assertion. The first is the refusal itself, and on it the
+  # correlation is still present — every gate that has ever existed here answers it 401, so a scenario ending
+  # there pins a property the base already had and no change to `refuse()` can move. Only the SECOND request,
+  # carrying the cookie the refusal regenerated, can tell the two readings apart, and `/health` is the route
+  # where they differ: it is `PUBLIC_ACCESS`, so a genuinely anonymous caller is served 200 with no query at
+  # all, while a caller who merely lost their session row is still full-fledged and refused. Clear the token
+  # in `refuse()` and this scenario reds on the second request; that is what makes it a falsifier rather than
+  # a restatement.
+  Scenario: A refusal does not de-authenticate, so the next request is refused again even on a public route
+    Given I reload the fixtures
+    And I execute the SQL query "UPDATE iam_session SET status = 'REVOKED' WHERE id = '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d01'"
+    And I send a "GET" request to "/me"
+    And the response status code should be 401
+    And the JSON node "type" should be equal to "session-expired"
+    When I send a "GET" request to "/health"
+    Then the response status code should be 401
     And the JSON node "type" should be equal to "session-expired"
 
   Scenario: A time-expired session is inert on its next request

@@ -94,11 +94,33 @@ final class RunOutcomeContext extends AbstractContext
      * silent. What a report deliberately withholds is as much its contract as what it prints — an
      * identity id kept out of an operator's terminal is a decision, and without an assertion it is
      * only an intention.
+     *
+     * An absence is only a claim about the run when the run said something. Over an empty buffer the
+     * assertion satisfies itself, and it does so for whatever text is asked of it, so a green means
+     * "nothing was printed" and reads as "that value was withheld" — the one failure a step written to
+     * prove a withholding may not have. It is reachable rather than theoretical: a run producing no
+     * output at all is the normal state of a {@see MessengerConsumerContext} consume, whose whole
+     * output is a {@see \Symfony\Component\Console\Logger\ConsoleLogger} buffer that logs at info
+     * and debug — nothing at all at normal verbosity. So the step refuses the empty buffer instead of
+     * passing over it, and a scenario wanting to say "this run printed nothing" says that with a
+     * different assertion rather than borrowing this one's silence.
+     *
+     * Whitespace counts as nothing: a lone newline is a report as absent as no bytes at all, and
+     * admitting it would leave the same green available one character away.
      */
     #[Then('the last run output should not contain :text')]
     public function theLastRunOutputShouldNotContain(string $text): void
     {
         $output = $this->lastRun->output();
+
+        self::assertNotSame(
+            '',
+            \trim($output),
+            \sprintf(
+                'The last run produced no output, so the absence of "%s" is not observable in it.',
+                $text,
+            ),
+        );
 
         self::assertStringNotContainsString(
             $text,

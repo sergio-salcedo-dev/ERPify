@@ -20,6 +20,14 @@ function isStringOrNull(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
+/**
+ * Absent or a boolean — nothing else. The tolerance is for ABSENCE only: a field that is present
+ * but not a boolean is drift and still rejects, because the value would then be READ as a state.
+ */
+function isOptionalBoolean(value: unknown): value is boolean | undefined {
+  return value === undefined || typeof value === "boolean";
+}
+
 function isAuditScalarOrNull(value: unknown): value is AuditScalar | null {
   return (
     value === null ||
@@ -69,11 +77,25 @@ function isAuditEventMetadata(
 }
 
 /**
+ * The row as it arrives on the wire. Identical to {@link AuditEventDetail} except that
+ * `resourceErased` may be absent — see {@link isAuditEventDetailRow}.
+ */
+type AuditEventDetailWire = Omit<AuditEventDetail, "resourceErased"> & { resourceErased?: boolean };
+
+/**
  * Validates the un-enveloped row: the slim fields as the timeline guard checks them
  * (`level`/`actorType` accepted as any string — the read model is forensic and never narrows them)
  * plus the full `metadata`/diff shape.
+ *
+ * `resourceErased` is the one field whose ABSENCE is tolerated, mirroring the timeline guard: it
+ * identifies nothing and only drives an "erased" marker plus the withheld follow-resource pivot, so
+ * a client meeting an API that does not publish it must not lose the whole event — diff included —
+ * over a presentational boolean. Missing reads as `true`, in the safe direction and not the
+ * convenient one: an absent flag defaulted to `false` would offer the follow-resource pivot on a
+ * pseudonym for the whole window. A present non-boolean is still drift and still rejects, because
+ * such a value would be READ as a state.
  */
-function isAuditEventDetailRow(value: unknown): value is AuditEventDetail {
+function isAuditEventDetailRow(value: unknown): value is AuditEventDetailWire {
   return (
     isObjectRecord(value) &&
     typeof value.id === "string" &&
@@ -86,13 +108,13 @@ function isAuditEventDetailRow(value: unknown): value is AuditEventDetail {
     isStringOrNull(value.resourceType) &&
     isStringOrNull(value.resourceId) &&
     typeof value.actorErased === "boolean" &&
-    typeof value.resourceErased === "boolean" &&
+    isOptionalBoolean(value.resourceErased) &&
     isAuditEventMetadata(value.metadata)
   );
 }
 
 interface AuditEventDetailResponse {
-  data: AuditEventDetail;
+  data: AuditEventDetailWire;
 }
 
 /**
@@ -139,7 +161,7 @@ function toMetadata(
   return { ...placed, changes: toAuditChanges(placed.changes) };
 }
 
-function toAuditEventDetail(detail: AuditEventDetail): AuditEventDetail {
+function toAuditEventDetail(detail: AuditEventDetailWire): AuditEventDetail {
   return {
     id: detail.id,
     occurredOn: detail.occurredOn,
@@ -151,7 +173,7 @@ function toAuditEventDetail(detail: AuditEventDetail): AuditEventDetail {
     resourceType: detail.resourceType,
     resourceId: detail.resourceId,
     actorErased: detail.actorErased,
-    resourceErased: detail.resourceErased,
+    resourceErased: detail.resourceErased ?? true,
     metadata: toMetadata(detail.metadata),
   };
 }

@@ -24,7 +24,15 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * Each test runs inside a rolled-back transaction over a truncated `identity_user`, so the shared dev DB is
  * left untouched.
  *
+ *
+ * The public-method suppression is measured at 11 against a threshold of 10. Every public method here is
+ * one test case; merging two to reach the number would trade the ability to say WHICH case regressed for a
+ * metric aimed at production classes doing too much. A rule about a class's responsibilities does not
+ * transfer to a class whose responsibility is one assertion per method.
+ *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
 #[CoversClass(DoctrineActiveAdministratorDirectory::class)]
 final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
@@ -105,6 +113,33 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
             $this->seed(self::ACTIVE_VIEWER, 'viewer@erpify.test', [Role::VIEWER->value]);
 
             $this->assertFalse($this->directory->keepsAnActiveAdminWithout(self::ADMIN_A));
+        });
+    }
+
+    public function testAnIdentityOutsideTheActiveAdminSetIsRemovedFromNothing(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            // Not one ACTIVE administrator exists here: the sole identity carrying the role is SUSPENDED.
+            // Excluding an id the set never held leaves the set exactly as it was, so the answer cannot turn
+            // on how many administrators there are — otherwise suspending a viewer is refused for a rule the
+            // viewer is no part of, and the refusal names an invariant their change never touched.
+            $this->seed(self::SUSPENDED_ADMIN, 'suspended-admin@erpify.test', [Role::ADMIN->value], 'SUSPENDED');
+            $this->seed(self::ACTIVE_VIEWER, 'viewer@erpify.test', [Role::VIEWER->value]);
+
+            $this->assertTrue($this->directory->keepsAnActiveAdminWithout(self::ACTIVE_VIEWER));
+            $this->assertTrue($this->directory->keepsAnActiveAdminWithout(self::UNKNOWN_ID));
+        });
+    }
+
+    public function testTheSoleActiveAdministratorIsRecognisedAsAMemberUnderAnyUuidCasing(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
+
+            // Postgres renders `id` canonically lower-cased while the caller passes whatever its route
+            // carried, and membership of the set is now what decides between refusing and permitting: a
+            // case-sensitive reading would take the sole administrator for an outsider and drain the set.
+            $this->assertFalse($this->directory->keepsAnActiveAdminWithout(\strtoupper(self::ADMIN_A)));
         });
     }
 

@@ -120,6 +120,8 @@ tests/Unit/Gate/ArtifactGatePlacementRulesGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRegistryGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRulesGateTest.php :: home
 tests/Unit/Gate/AuditPruneStatementGateTest.php :: home
+tests/Unit/Gate/AuditRedactionSentinelParityTest.php :: home
+tests/Unit/Gate/AuditWriteOperationParityTest.php :: home
 tests/Unit/Gate/BehatStepVocabularyGateTest.php :: home
 tests/Unit/Gate/BehatSuiteCoverageGateTest.php :: home
 tests/Unit/Gate/BehatVocabularyReaderTest.php :: home

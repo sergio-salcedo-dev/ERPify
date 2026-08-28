@@ -172,10 +172,26 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
     }
 
     /**
-     * The writer is built by hand against the real database connection from the container: the
-     * `#[AsAlias]` service has no production consumer yet, so the autoconfigured private alias is
-     * pruned at compile time and cannot be resolved from the container. Its wiring is exercised
-     * end-to-end once a caller exists; here the concern is the SQL against real Postgres.
+     * A caller asking for the port gets this implementation. Two independent mechanisms name it — the
+     * `#[AsAlias]` attribute, and the service loader's rule that aliases a singly-implemented interface
+     * to its one implementer — so what is pinned here is the resolution rather than either mechanism,
+     * and a second implementer arriving is what makes the difference visible. The container is only read.
+     */
+    public function testThePortResolvesToTheDbalWriter(): void
+    {
+        self::bootKernel();
+
+        $writer = self::getContainer()->get(AuditLogWriter::class);
+
+        $this->assertInstanceOf(DbalAuditLogWriter::class, $writer);
+    }
+
+    /**
+     * The writer is constructed directly rather than resolved: the cases above assert the SQL of one
+     * concrete implementation against real Postgres, so they must not follow whatever the port's alias
+     * happens to point at — that binding is the subject of
+     * {@see testThePortResolvesToTheDbalWriter()}. The connection is the container's, so the work runs
+     * inside the transaction rolled back here.
      *
      * @param callable(AuditLogWriter, Connection): void $work
      */

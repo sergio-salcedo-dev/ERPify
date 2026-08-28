@@ -11,7 +11,9 @@ Feature: Restrict the bank routes to the bank permission
   # row. mallory (role-less) is denied every route; a VIEWER (read only) and an EDITOR (read+write, no delete)
   # pin that each route demands its exact permission — a write route weakened to bank.read would let the VIEWER
   # through and a delete route weakened to bank.write would let the EDITOR through, so those refusals must stay
-  # 403. Granted 2xx write/delete paths run as MANAGER in the create/update/delete features. The permission gate
+  # 403. The granted side is pinned in two places: the create/update/delete features run it as MANAGER, and
+  # this file carries the EDITOR write scenarios — the granted half of the very refusals above, without
+  # which a route weakened to demand nothing at all would still look correct here. The permission gate
   # dispatches ahead of payload mapping — #[IsGranted] rides ControllerAttributesListener at -10000 on
   # kernel.controller_arguments, RequestPayloadValueResolver maps at -10100 — so the permission verdict wins
   # even over a body that would fail validation; the invalid-body scenario pins that ordering.
@@ -168,6 +170,39 @@ Feature: Restrict the bank routes to the bank permission
     When I send a "DELETE" request to "/backoffice/banks/0190a001-0000-7000-8000-000000000001"
     Then the response status code should be 403
     And the JSON node "type" should be equal to "forbidden"
+
+  # The positive counterpart to every refusal above, and the direction none of them covers: a write route
+  # over-restricted to bank.delete would keep every 403 here a 403, and the create/update features run as
+  # the default MANAGER, so nothing else in the suite would notice. The Background declares only Accept, so
+  # a write that must reach payload mapping adds its own Content-Type.
+  Scenario: An editor creates a bank — write is granted at the EDITOR tier
+    Given I am logged in as an editor
+    And I add "Content-Type" header equal to "application/json"
+    When I send a POST request to "/backoffice/banks" with body:
+    """
+    {
+      "name": "Editor Created Bank",
+      "shortName": "ECB"
+    }
+    """
+    Then the response status code should be 201
+    And the JSON node "data.name" should be equal to "Editor Created Bank"
+    And the JSON node "data.shortName" should be equal to "ECB"
+
+  # Seeded out-of-band on the side connection so the scenario owns a row no other scenario in this feature
+  # reads, rather than mutating one of the shared bank fixtures.
+  Scenario: An editor updates a bank — write is granted at the EDITOR tier
+    Given I am logged in as an editor
+    And I add "Content-Type" header equal to "application/json"
+    And I execute the SQL query "INSERT INTO bank (id, name, name_normalized, short_name, created_at, updated_at) VALUES ('ed17ed00-0000-7000-8000-000000000003', 'Editor Target Bank', 'editor target bank', 'ETB', NOW(), NOW())" on connection "seed"
+    When I send a PUT request to "/backoffice/banks/ed17ed00-0000-7000-8000-000000000003" with body:
+    """
+    {"name": "Editor Updated Bank", "shortName": "EUB"}
+    """
+    Then the response status code should be 200
+    And the JSON node "data.id" should be equal to "ed17ed00-0000-7000-8000-000000000003"
+    And the JSON node "data.name" should be equal to "Editor Updated Bank"
+    And the JSON node "data.shortName" should be equal to "EUB"
 
   Scenario: A granted manager reads the bank collection
     When I send a "GET" request to "/backoffice/banks"

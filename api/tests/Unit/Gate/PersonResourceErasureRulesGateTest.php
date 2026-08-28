@@ -42,6 +42,13 @@ final class PersonResourceErasureRulesGateTest extends TestCase
 
     private const string REAL_OWNER = 'src/Iam/Identity/Application/FulfilIdentityErasure.php';
 
+    private const string SNAPSHOT_TYPE = 'SnapshotFixtureResource';
+
+    private const string APPENDED_TYPE = 'AppendedFixtureResource';
+
+    /** @var list<string> */
+    private array $writableTrees = [];
+
     #[Test]
     public function theStalenessCheckReportsTheGraveyardAndSparesThePersonLine(): void
     {
@@ -236,6 +243,98 @@ final class PersonResourceErasureRulesGateTest extends TestCase
         $this->fail(\sprintf('%s parsed without complaint; the parser degraded it instead of rejecting.', $registry));
     }
 
+    /**
+     * The corpus every sweep reads is ONE snapshot, taken per instance and belonging to that instance.
+     *
+     * Both directions are the rule, and either alone is satisfiable by the wrong implementation: an instance
+     * that re-read `src` would repeat the walk, the read and the tokenising for each of the calls the gates
+     * make per classified type, while a snapshot outliving its instance would be shared state — one gate
+     * answering out of whatever an earlier one happened to read, which is worse than the work it saves.
+     *
+     * Driven over a tree this test writes, because the committed fixtures cannot change under a live
+     * instance and an unchanged answer over an unchanged tree proves nothing about when it was read.
+     */
+    #[Test]
+    public function theSourceCorpusIsOneSnapshotPerInstanceAndNeverOutlivesIt(): void
+    {
+        $root = $this->writableTree();
+        $registry = $this->over($root);
+
+        $this->assertSame([self::SNAPSHOT_TYPE], $registry->resourceTypesInSource());
+        $this->assertSame(['src/Writer.php'], $registry->sourceFilesCarrying(self::SNAPSHOT_TYPE));
+
+        $this->writeSource($root, 'Appended.php', [self::SNAPSHOT_TYPE, self::APPENDED_TYPE]);
+
+        $this->assertSame([self::SNAPSHOT_TYPE], $registry->resourceTypesInSource(), $this->reReadMessage());
+        $this->assertSame(
+            ['src/Writer.php'],
+            $registry->sourceFilesCarrying(self::SNAPSHOT_TYPE),
+            $this->reReadMessage(),
+        );
+
+        $fresh = $this->over($root);
+
+        $this->assertSame(
+            [self::APPENDED_TYPE, self::SNAPSHOT_TYPE],
+            $fresh->resourceTypesInSource(),
+            $this->outlivedMessage(),
+        );
+        $this->assertSame(
+            ['src/Appended.php', 'src/Writer.php'],
+            $fresh->sourceFilesCarrying(self::SNAPSHOT_TYPE),
+            $this->outlivedMessage(),
+        );
+    }
+
+    private function reReadMessage(): string
+    {
+        return 'The instance answered out of the tree as it is now, so it re-read the corpus rather than '
+            . 'reusing the snapshot it had already taken.';
+    }
+
+    private function outlivedMessage(): string
+    {
+        return "A second instance answered out of the first one's snapshot, so the corpus is cached beyond "
+            . "the instance that read it and one gate can be served another gate's view of `src`.";
+    }
+
+    private function over(string $root): AuditResourceTypeRegistry
+    {
+        return new AuditResourceTypeRegistry($root, $root . '/src', $root . '/.audit-resource-types');
+    }
+
+    /**
+     * A tree of the shape the registry reads, writable so the corpus can change under a live instance.
+     */
+    private function writableTree(): string
+    {
+        $root = \sys_get_temp_dir() . '/audit-resource-snapshot-' . \bin2hex(\random_bytes(8));
+
+        $this->assertTrue(\mkdir($root . '/src', 0o700, true));
+        $this->writableTrees[] = $root;
+
+        \file_put_contents($root . '/.audit-resource-types', self::SNAPSHOT_TYPE . " => non-person\n");
+        $this->writeSource($root, 'Writer.php', [self::SNAPSHOT_TYPE]);
+
+        return $root;
+    }
+
+    /**
+     * @param list<string> $types
+     */
+    private function writeSource(string $root, string $file, array $types): void
+    {
+        $calls = \implode("\n", \array_map(
+            static fn (string $type): string => \sprintf("        AuditResource::of('%s', \$id);", $type),
+            $types,
+        ));
+
+        $class = \basename($file, '.php');
+        $body = "<?php\n\nclass %s\n{\n    public function write(string \$id): void\n    {\n%s\n    }\n}\n";
+
+        \file_put_contents($root . '/src/' . $file, \sprintf($body, $class, $calls));
+    }
+
     private function registry(): AuditResourceTypeRegistry
     {
         return AuditResourceTypeRegistry::fromGateLocation(__DIR__);
@@ -248,5 +347,26 @@ final class PersonResourceErasureRulesGateTest extends TestCase
             self::FIXTURES . '/src',
             self::FIXTURES . '/' . $registry,
         );
+    }
+
+    /**
+     * `rmdir()` is asserted rather than called: on a non-empty directory it only warns, and
+     * `tools/phpunit/phpunit.dist.xml` restricts warning failures to `src`, so a tree this cleanup does not
+     * reach would accumulate in the container's temp on every run in silence.
+     */
+    protected function tearDown(): void
+    {
+        foreach ($this->writableTrees as $writableTree) {
+            foreach (\array_diff((array) \scandir($writableTree . '/src'), ['.', '..']) as $entry) {
+                \unlink($writableTree . '/src/' . $entry);
+            }
+
+            \unlink($writableTree . '/.audit-resource-types');
+            $this->assertTrue(\rmdir($writableTree . '/src'));
+            $this->assertTrue(\rmdir($writableTree), \sprintf('The fixture tree %s survived its test.', $writableTree));
+        }
+
+        $this->writableTrees = [];
+        parent::tearDown();
     }
 }
