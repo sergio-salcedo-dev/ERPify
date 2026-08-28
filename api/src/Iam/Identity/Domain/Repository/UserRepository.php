@@ -33,4 +33,16 @@ interface UserRepository
     public function findByIdForUpdate(string $id): ?User;
 
     public function findByEmail(#[SensitiveParameter] Email $email): ?User;
+
+    /**
+     * The same identifier lookup under a pessimistic write lock (`SELECT … FOR UPDATE`), re-read from the
+     * locked row rather than from a cached snapshot. Callable only inside a transaction.
+     *
+     * It exists because the lockout counter is written from a path that has only the ADDRESS: recording a
+     * failed login resolves the identity by email, and deciding whether to increment or to trip the lock on
+     * an unlocked read lets that decision be taken against state another transaction has already replaced —
+     * a recovery-secret redemption clearing the lock, or an administrator unlocking the account, both
+     * followed by a write that puts `locked_until` back.
+     */
+    public function findByEmailForUpdate(#[SensitiveParameter] Email $email): ?User;
 }

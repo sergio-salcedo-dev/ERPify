@@ -72,4 +72,10 @@ final readonly class ProbingUserRepository implements UserRepository
     {
         return $this->inner->findByEmail($email);
     }
+
+    #[Override]
+    public function findByEmailForUpdate(Email $email): ?User
+    {
+        return $this->inner->findByEmailForUpdate($email);
+    }
 }

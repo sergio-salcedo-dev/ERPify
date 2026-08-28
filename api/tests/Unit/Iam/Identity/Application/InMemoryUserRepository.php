@@ -48,6 +48,9 @@ final class InMemoryUserRepository implements UserRepository
     /** Runs at the locked re-fetch, so a test can commit a rival write at exactly the TOCTOU moment. */
     public ?Closure $onFindByIdForUpdate = null;
 
+    /** The same hook on the address-keyed locked re-fetch, which the failed-login path takes. */
+    public ?Closure $onFindByEmailForUpdate = null;
+
     /**
      * Runs before the user is recorded, so a test can make one row's persistence fail the way a flush fault
      * would — the failure a sweep's per-row boundary exists to absorb, and one no mailer double can stage.
@@ -115,6 +118,28 @@ final class InMemoryUserRepository implements UserRepository
 
     #[Override]
     public function findByEmail(Email $email): ?User
+    {
+        return $this->byEmail($email);
+    }
+
+    /**
+     * Journals its acquisition and honours {@see $goneUnderLock}, exactly as the id-keyed locked finder does:
+     * the failed-login path resolves its identity by address, so a test staging the row vanishing between the
+     * unlocked probe and the lock has to be able to stage it on THIS lookup too.
+     */
+    #[Override]
+    public function findByEmailForUpdate(Email $email): ?User
+    {
+        $this->lockOrderJournal?->locked(LockOrderJournal::IDENTITY_USER);
+
+        if ($this->onFindByEmailForUpdate instanceof Closure) {
+            ($this->onFindByEmailForUpdate)();
+        }
+
+        return $this->goneUnderLock ? null : $this->byEmail($email);
+    }
+
+    private function byEmail(Email $email): ?User
     {
         foreach ($this->all() as $user) {
             if ($user->email() === $email->toString()) {
