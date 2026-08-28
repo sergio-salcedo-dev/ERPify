@@ -140,10 +140,11 @@ rol (cualquier identidad ACTIVE) · forzar ≥2 administradores · el secreto en
 - [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- clave `br-4e-602-secreto-de-recuperacion`.
 - [ ] `docs/adr/administrative-recovery-channel.md` + `docs/deployment-guide.md` +
       `PRODUCTION_SECURITY_CHECKLIST.md` -- registrar el mecanismo elegido y sus residuales.
-- [ ] **Riesgo aceptado** -- abrir issue para el TTL de diez años y etiquetarlo con `@accepted-risk #<n>`
-      en el párrafo del agregado, como hace `NotifyLockedIdentities.php:88-91`. Un riesgo aceptado exige
+- [ ] **Riesgo aceptado — issue #870 ya abierta.** Etiquetar el párrafo del agregado con
+      `@accepted-risk #870`, en la forma de `NotifyLockedIdentities.php:88-91`. Un riesgo aceptado exige
       artefacto abierto y rastreable, no un docblock: los diez años son una decisión, no una consecuencia
-      accidental de que `SingleUseToken` exija TTL. Gate: `AcceptedRiskTagGateTest`.
+      accidental de que `SingleUseToken` exija TTL. Gates: `AcceptedRiskTagGateTest` y el workflow
+      `accepted-risk-live-state.yml`, que exige que #870 siga **abierta**.
 
 **Acceptance Criteria:**
 - Dado un secreto acuñado y una cuenta con `locked_until` en el futuro (verificado por `SELECT`
