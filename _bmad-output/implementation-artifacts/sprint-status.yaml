@@ -373,6 +373,20 @@ development_status:
   # administrador único (sin un segundo ADMIN, nadie puede invocar esta palanca) queda deliberadamente fuera,
   # registrado en el propio issue.
   br-4d-602-desbloqueo-administrativo: done
+  # Cuarta arista y el NÚCLEO que quedaba: el hueco de administrador único que br-4d dejó fuera a
+  # propósito. Mecanismo decidido contra los invariantes I-1/I-2 del ADR (no contra su coste): agregado
+  # propio, selector-verificador sobre `SingleUseToken`, acuñado desde sesión viva demostrando la
+  # contraseña actual, canjeado anónimo gastando sólo el presupuesto por selector, y el canje establece
+  # sesión ANTES de consumir la fila. Clave propia por la misma razón que br-4b/4c/4d.
+  #
+  # PRIMERA clave de este fichero que no está en `done`, y es deliberado: la spec está congelada en
+  # `ready-for-dev` (spec-gh-602-secreto-de-recuperacion.md, commit 47d81db3, rama
+  # feat/iam-recovery-secret-iu9p) y no existe todavía ni una línea de código de producción. Marcarla
+  # `done` aquí sería exactamente la deriva que el resto de comentarios de este bloque vigilan.
+  #
+  # #602 SIGUE OPEN, y sólo se cierra cuando el caso de administrador único tenga una arista real —
+  # medida y registrada en un comentario del issue, como hicieron br-4b/4c/4d.
+  br-4e-602-secreto-de-recuperacion: ready-for-dev
   br-5-ciclo-de-vida-iam-session: done
   # Medido el 2026-08-12 contra 781c75a2: TRES de los cinco issues no son código. #589 lo resolvió el arco
   # #596-#601 (el mismo de BR-1) y el gate NFR26 corre hoy con 9 tests y cero skips; #250 quedó obsoleto por
