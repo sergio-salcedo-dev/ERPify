@@ -10,14 +10,15 @@ Base commit: `f86b2662` (the merge of PR #866) · Branch: `chore/deferred-work-s
 ## A. Register integrity
 
 Produced mechanically by `deferred-work-sweep-register-gate.py` — never by hand.
+Measured on the branch head after Wave G: `OK    every register invariant holds`, exit 0.
 
 | Property | Expected | Measured |
 |---|---:|---|
-| base count (`f86b2662`) | 98 | _pending_ |
-| deleted by this branch | 45 | _pending_ |
-| added | 0 | _pending_ |
-| surviving head count | 53 | _pending_ |
-| survivors with modified text | 1 (ITEM 41 only) | _pending_ |
+| base count (`f86b2662`) | 98 | **98** |
+| deleted by this branch | 45 | **45** |
+| added | 0 | **0** |
+| surviving head count | 53 | **53** |
+| survivors with modified text | 1 (ITEM 41 only) | **1** |
 
 The 53 survivors are 27 `trigger-gated` + 24 `needs-decision` + 2 the product
 owner deferred (ITEM 41, ITEM 56).
@@ -244,6 +245,48 @@ holds: the old grep could not have worked anyway, since it matches the eleven
 docblock mentions of the attribute alongside the thirteen real sites. The stale
 "declaring `acceptFormat: ['json']`" prose in `ProblemDetailsFactory`'s 415
 docblock was corrected with it.
+
+## C-bis. End-to-end verification, and why its first three readings were noise
+
+The e2e suite is the one gate this branch had never run, and running it took four
+readings to produce a verdict rather than a number — each earlier one refuted by
+measurement, not by argument.
+
+| Reading | Result | What it actually measured |
+|---|---|---|
+| `make pwa.test` | e2e half `EACCES` | `pwa/.next-e2e` is root-owned in this worktree; Playwright's own `webServer` cannot build. Not a code signal at all |
+| Live stack, `PLAYWRIGHT_BASE_URL=…:35292` | 160 failed | A dead port — the `php` container had restarted and its ephemeral HTTPS port had moved to 35302 |
+| Live stack, `…:35302` | 33 failed | Real port, broken stack: `DEFAULT_URI=https://localhost:0`, because the worktree stack was brought up on ephemeral ports and that variable interpolated the literal `0`, so every absolute URL the app generates is unreachable |
+| `HTTPS_PORT=8443 make docker.up`, then `…:8443` | **1 failed, 173 passed** | The suite |
+
+The one survivor is `banks-delete-preconditions.spec.ts` — a **mocked-API** spec,
+failing a focus assertion after a refresh. It is **pre-existing**, established by
+A/B rather than by the plausible argument that this branch does not touch banks:
+with the base (`f86b2662`) versions of all six PWA source files this branch
+changes installed in place, the same spec still fails 6 of 6, three runs. The
+sources were restored by byte copy, not by `git checkout`, and the restore was
+verified as an empty diff.
+
+Two properties of that spec worth recording rather than smoothing over: in the
+full parallel run **one** of its six cases fails, and in isolation **all six** do,
+identically across three consecutive runs. So that spec is order- or state-
+dependent rather than flaky, and neither shape is this branch's to fix.
+
+**And the suite as a whole is not a reliable local signal, which is the honest
+conclusion rather than a green.** A second full run against the same stack and the
+same head reported **4 failed / 170 passed**, and its failing set is **disjoint**
+from the first run's: `banks-real-api`, `banks` (cards-view delete),
+`shared/rate-limit` (go-back) and `frontoffice/landing` (mobile sign-in CTA), with
+the first run's `banks-delete-preconditions` case passing. Nothing overlaps. Two
+runs of one head that disagree completely on which tests fail are measuring the
+environment — a dev-mode Next server behind a proxy, eleven parallel workers, and
+a shared dev database the Behat suite resets out from under it — not the code.
+
+So what this branch can honestly claim about e2e is: it was run (it never had
+been), the one failure that reproduced was proven pre-existing against the base by
+A/B, and the rest do not reproduce. It cannot claim a green, and the DoD line is
+marked accordingly. CI, which runs against a purpose-built stack, is the reader
+that can settle it.
 
 ## D. Deleted-as-dead (8)
 

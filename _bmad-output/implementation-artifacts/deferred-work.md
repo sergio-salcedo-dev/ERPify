@@ -4,7 +4,6 @@
 ## Deferred from: code review of PR #853 — audit write-operation snapshot header (2026-08-26)
 
 - **(api/Shared/Audit — redundancia latente) `entry.action` y `metadata.operation` codifican la misma información sin ningún mecanismo que los mantenga de acuerdo.** Ambas implementaciones de `auditAction()` (`Bank`, `BankAccount`) sufijan mecánicamente `_CREATED`/`_UPDATED`/`_DELETED`, así que hoy el kind de escritura es recuperable también del final de `action`. Nada impide que un módulo futuro nombre su acción de otra forma y deje las dos fuentes divergiendo. No bloqueante hoy porque solo hay dos módulos auditados y ambos siguen la convención. Trigger: el primer `auditAction()` cuyo sufijo no termine en uno de los tres verbos. Ref: `api/src/Shared/Audit/Domain/AuditedEntity.php` (contrato), `api/src/Backoffice/Bank/Domain/Entity/Bank.php:118-125`.
-- **(api+pwa/Shared/Audit — cobertura de contrato) Nada fija por separado que el valor persistido de `operation` es exactamente `AuditWriteOperation::name` (no una etiqueta custom), ni que los tres literales del espejo PWA coincidan con las tres cases del enum PHP.** Hoy solo lo demuestran indirectamente tres aserciones de string en el test funcional (lado PHP) y la suite E2E (lado PWA, solo el caso CREATED) — un typo en el espejo PWA solo lo cazaría el E2E, más lento y más frágil que un unit test dedicado. No arreglado en esta pasada: es un test nuevo de bajo valor inmediato, no un defecto. Ref: `api/src/Shared/Audit/Domain/AuditWriteOperation.php`, `pwa/src/context/backoffice/audit/domain/AuditChange.ts:48-52`.
 
 ## Deferred from: code review of PR #849 — campos vacíos y dirección inferida en el diff de auditoría (2026-08-26)
 
@@ -60,13 +59,8 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
 
 ## Deferred from: code review of spec-iam-session-validity-predicate (2026-07-27)
 
-- **(api/Iam/Session — coste) Dos SELECT idénticos por request en las rutas de sesión.** `SessionAdmissionGate.php:73` ejecuta `findActiveById` en cada request `/api` y **descarta el resultado** (solo comprueba `instanceof`); acto seguido `MySessionsController.php:41` y `RevokeOtherSessionsController.php:39` repiten la consulta idéntica. Fix: que el gate publique la `Session` admitida en un holder de scope-request y los controllers la lean. En un repo que presupuesta queries en Behat, es un descuido medible.
-- **(api/features — cobertura) Ninguna escena Behat prueba que una sesión caducada desaparece de `GET /sessions`.** El equivalente para el gate sí existe (`session.feature:78-84`, 401 + `session-expired`), pero los tres escenarios de `/sessions` siembran solo expiry futuro (`session.feature:43-59`). Solo cubierto a nivel de adaptador (`DoctrineSessionRepositoryTest.php:89-101`). No es fuga de acceso sino de información: listar como viva una sesión muerta engaña al usuario que audita sus dispositivos.
-- **(api/tests — cobertura) `SessionAdmissionGateTest` nunca ejercita el camino de admisión.** Usa `createStub(SessionRepository::class)` sin configurar `findActiveById`, así que siempre devuelve `null`: no existe ningún unit test donde el gate **admita**. Invertir la condición del `if` no lo detectaría ningún test unitario; solo Behat. Ref: `api/tests/Unit/Iam/Session/Infrastructure/Security/SessionAdmissionGateTest.php:42-51`.
 
 ## Deferred from: removal of the image upload surface (2026-07-23)
-- **(api/Shared/ErrorContract — contrato) El 415 no tiene `type` propio y cae al genérico `http-error`.** `HTTP_STATUS_TYPE_MAP` (`ProblemDetailsFactory.php:144-153`) no mapea `Response::HTTP_UNSUPPORTED_MEDIA_TYPE`, y `docs/api-error-contract.md` no tiene fila para 415. La PWA rutea por `body.type`, así que un cliente que mande un cuerpo form-encoded recibe un cubo inespecífico. Preexistente (415 ya era alcanzable con `text/plain`), pero **ensanchado** al fijar `acceptFormat: ['json']` en los once endpoints: ahora un form-encoded lo dispara. Fix: añadir el mapeo + su fila en el contrato de error (NFR26). Ref: `api/src/Shared/ErrorContract/Application/ProblemDetailsFactory.php:144`.
-- **(api/Shared/Http — diseño) `acceptFormat: ['json']` se repite en once sitios en vez de ser el default del atributo.** Cada `#[StrictRequestPayload]` declara la lista a mano; un controlador nuevo que la omita vuelve a aceptar form/multipart sin que nada avise. El default vive en `StrictRequestPayload.php`, que esta PR tenía vetado tocar. Fix: mover `['json']` al default del atributo y quitar las once repeticiones, o añadir un test estructural que falle si un `#[StrictRequestPayload]` no declara el formato. Ref: `api/src/Shared/Http/Infrastructure/StrictRequestPayload.php:44`.
 - **(docs/rules — ejemplo huérfano) La regla de embeddables no tiene ninguna instancia viva.** `docs/rules/architecture.md` describe el patrón `#[ORM\Embeddable]` con ejemplos hipotéticos: `git grep 'ORM\Embedd' -- api/src` no devuelve nada. La regla sigue siendo orientación legítima, pero contradice la densidad documental del repo (nada especulativo). Decidir al aparecer el primer embeddable real: anclar el ejemplo en él, o retirar la regla.
 
 
@@ -75,7 +69,6 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
 ## Deferred from: code review of ii-7-session-lifecycle-registry-gate-failclosed (2026-07-11, revisión fresca)
 
 - **(api/Iam/Session — eventos) La revocación bulk emite su evento aunque afecte 0 filas.** `DoctrineSessionRepository::bulkRevokeActive` ejecuta el `UPDATE` dirigido sin mirar el rowcount, y `RevokeOtherSessions`/`RevokeAllSessions` publican `OtherSessionsRevoked`/`AllSessionsRevoked` incondicionalmente en el outbox. Inerte hoy (R2 wire-on-consumer, Decisión H: sin reactor/consumidor); muerde cuando II-5 (force re-login everywhere) o una notificación reaccione — un «tus sesiones se cerraron» dispararía sobre un revoke de 0 filas (usuario sin sesiones activas, o «cerrar las demás» siendo la actual la única). Fix al cablear el consumidor: `bulkRevokeActive` devuelve el nº de filas afectadas y el handler solo publica si >0. Ref: `api/src/Iam/Session/Application/RevokeOtherSessions.php:38`, `api/src/Iam/Session/Application/RevokeAllSessions.php`, `api/src/Iam/Session/Infrastructure/Persistence/Doctrine/DoctrineSessionRepository.php:129`.
-- **(api/Iam/Session — defensa en profundidad / coste) El gate 401 no invalida la cookie nativa.** Al rechazar una sesión revocada/expirada, `SessionAdmissionGate` lanza `SessionNoLongerActive` pero no toca `TokenStorage`/la sesión nativa, así que la cookie full-fledged sobrevive hasta su TTL nativo. Un cliente que ignore el 401 (o un atacante replicando la cookie revocada) fuerza un `findActiveById` (round-trip DB) en **cada** request —incluso a rutas `PUBLIC_ACCESS` como `/api/v1/health`— mientras que un anónimo se rechaza en `access_control` **sin** query: un portador de cookie revocada es más caro de servir que un anónimo (amplificación leve de DoS autenticado). Optimización, no bug de corrección (la sesión se rechaza correctamente). Considerar `invalidate()`/`setToken(null)` en el rechazo del gate. Ref: `api/src/Iam/Session/Infrastructure/Security/SessionAdmissionGate.php:73`.
 - **(api/Organization/Membership — determinismo) `FindUserOrganizationId` resuelve la org con `findOneBy` no determinista bajo multi-membership.** `DoctrineMembershipRepository::findByUserId` usa `findOneBy(['userId' => ...])` sin `ORDER BY` ni aserción de fila única; si un usuario llegara a tener >1 membership, la `organizationId` sellada en la sesión acuñada sería la fila que Postgres devuelva primero (arbitraria). Seguro bajo el invariante «una membership por usuario» de hoy (UNIQUE index `membership(user_id)`), pero un futuro slice multi-org ataría sesiones a una org aleatoria sin guardarraíl en este seam. Fix al entrar multi-org: orden explícito / selección de org de admisión determinista, o aserción de unicidad. Ref: `api/src/Organization/Membership/Infrastructure/Persistence/Doctrine/DoctrineMembershipRepository.php:39`, `api/src/Organization/Membership/Application/FindUserOrganizationId.php`.
 
 ## Deferred from: code review of ii-7-session-lifecycle-registry-gate-failclosed (2026-07-10)
@@ -100,7 +93,6 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
 
 ## Deferred from: code review of E2 crypto-shredding — stories 2.1–2.4 (2026-07-01)
 
-- **(Epic 2 / Story 2.4) `erase-subject` concurrente no es idempotente — falla ruidoso en vez de no-op.** Dos ejecuciones concurrentes del mismo `bank-account-id` (comando CLI manual, raro): A borra el registro + destruye la DEK + commitea; B (que cargó la cuenta antes del commit de A, READ COMMITTED) flushea su propio borrado → la captura `onFlush` re-sella el snapshot DELETE → `encrypt` topa con el scope ya tombstoneado → `DekDestroyed` → rollback de B y el CLI reporta "Erasure failed". **Falla seguro** (nada queda legible; A borró del todo), pero un duplicado concurrente da un error confuso en vez del no-op limpio del re-run secuencial. Fix opcional: `SELECT … FOR UPDATE` sobre `findById` dentro de la transacción. Ref: `api/src/Backoffice/BankAccount/Application/EraseBankAccountSubject.php`.
 
 ## Deferred from: code review of stories 1.3 & 1.4 (2026-06-24)
 
@@ -110,17 +102,16 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
 ## Deferred from: code review of Epic 1 audit specs (2026-06-23)
 
 - **(Epic 2+) `metadata` PII-free sin enforcement estructural.** FR12 ("nunca PII/payload en `metadata`") es hoy solo prosa; un dev puede pasar `metadata: ['iban' => …]` y compila/pasa gates. Aceptable en Epic 1 (un consumidor, `metadata` vacío). Revisit trigger: al entrar el 2.º/3.er consumidor con `metadata` no vacío, añadir un guardrail testable (test de arquitectura que escanee los callsites de `log(...)`, o una allowlist de claves de `metadata` por acción).
+    - **Disparador ya cumplido (medido el 2026-08-28).** El `metadata` no vacío se pasa hoy en **12 puntos de llamada**, en 11 ficheros y **4 contextos acotados** (`Backoffice/Audit`, `Backoffice/BankAccount`, `Iam/Identity`, `Shared/Audit`); en tres de ellos el conjunto de claves se calcula fuera del punto de llamada — `AuditTrailReadAuditListener::metadataFor()`, `StoredIdentityDrift::toAuditMetadata()` y el ternario `lockedUntil` de `RecordLockoutNoticeAuditBestEffort` — así que ahí las claves no son ni legibles en el callsite. El «Revisit trigger» de arriba dejó de estar pendiente hace tiempo. Lo que cierra la bala es un registro `api/.audit-metadata-keys` + motor + gate, al modo de `.audit-resource-types`: talla L y PR propia, fuera del barrido de 2026-08-28 por decisión explícita del product owner.
 - **(Epic 2) `metadata` jsonb sin tope de tamaño.** A diferencia de `user_agent` (`VARCHAR(512)`) o `action` (`VARCHAR(100)`), `metadata` jsonb no tiene cota → vector de inflado PII/almacenamiento cuando el access-log genérico de Epic 2 lo pueble automáticamente. Considerar una cota de tamaño en el escritor o un AC de Epic 2 que prohíba volcar `query`/`body` crudos.
 - **(Epic 4 / cuando entre auth) `correlation_id` inbound es semi-confiable del cliente.** `CorrelationIdListener` acepta un `X-Correlation-Id` canónico verbatim → un cliente que reusa/forja el header colisiona la correlación entre filas no relacionadas (dilución del rastro / posible envenenamiento de la vista del investigador en Epic 4). La atribución forense robusta debe anclarse en `actor_id` (cuando exista auth) + `occurred_on`, no solo en `correlation_id`. Consideración para Epic 4 / al entrar auth.
 - **(Epic 2) El contrato de fallo de la rama `security` sigue sin re-revisarse, y su disparador ya saltó.** La condición que este item esperaba —un productor real en vez de fixtures sintéticos— se cumple: `AccessDeniedAuditListener:64` emite `ACCESS_DENIED` con `AuditLevel::SECURITY` sobre peticiones `/api` reales. Lo que queda pendiente es la revisión que eso habilitaba: el contrato de fallo decidido en D1 (propagar cuando falle la persistencia) nunca se ha contrastado contra ese caso de uso vivo. Ref: `api/src/Shared/Audit/Infrastructure/Http/EventListener/AccessDeniedAuditListener.php:64`.
 
 ## Deferred from: code review of story-1.2 (2026-06-23)
 
-- **(Story 1.3) Sincronía `MAX_FIELD_LENGTH = 100` ↔ `VARCHAR(100)`.** La constante de `AuditLogEntry` (`:29`) es un espejo declarado del ancho de columna `action`/`resource_type` de 1.3 (acoplamiento consciente, D-1.2.h) pero nada lo verifica. Al aterrizar 1.3, confirmar que el ancho coincide e idealmente añadir un test de referencia cruzada. Ref: `api/src/Shared/Audit/Application/AuditLogEntry.php:29`.
 
 ## Deferred from: code review of story-1.3 (2026-06-23)
 
-- **(Story 1.4) Cableado `#[AsAlias(AuditLogWriter::class)]` sin test.** El alias del adaptador se poda en compilación (sin consumidor de producción hasta 1.4), así que `AuditLogWriterIdempotencyTest` instancia `new DbalAuditLogWriter(...)` a mano en vez de resolver el puerto del contenedor. Cuando 1.4 añada el primer consumidor, incluir un test end-to-end que resuelva `AuditLogWriter::class` del contenedor y asierte que es el `DbalAuditLogWriter` (cierra la brecha de cableado de AC3). Ref: `api/tests/Functional/Shared/Persistence/AuditLogWriterIdempotencyTest.php:167-194`.
 
 ## Deferred from: code review of spec-pwa-components-boundary-remediation (2026-06-21)
 
@@ -128,7 +119,6 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
 
 ## Deferred from: code review of 1-5-migrar-bank-accounts-viewed-al-subsistema-real-primer-actor-auditado (2026-06-24)
 
-- **Las escrituras raw-DBAL a `audit_log` no marcan el `FixturesChangeTracker`.** `FixturesWriteListener` es `onFlush`-only (`api/tests/Behat/Doctrine/FixturesWriteListener.php:16`), así que un request de sólo-lectura que produce una fila `audit_log` (vía el insert raw-DBAL del worker al consumir el transporte `audit`) no dispara `onFlush` → el tracker puede quedar limpio → el restore por-feature del siguiente escenario se salta → la fila `audit_log` se filtra hacia delante. **Benigno hoy** (`audit.feature` es el único lector+escritor de `audit_log` y corre como un solo escenario), pero **latente**: si aterriza un 2º escenario/feature que lea `audit_log`, o cambia el orden de ejecución, contaría filas viejas. Misma limitación del harness que afecta a `event_store`/`bank_count` (raw-DBAL), enmascarada hasta ahora porque esas tablas siempre se escriben junto a una mutación ORM que sí hace flush. Fix de harness (fuera del alcance de 1.5): marcar el tracker también en escrituras raw-DBAL a tablas de backbone, o que `audit.feature` pida `Given I reload the fixtures` explícito.
 
 ## Deferred from: code review of rm-1-nucleo-autorizacion-voter-puerto-politica (2026-07-06)
 
@@ -140,17 +130,13 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
 
 ## Deferred from: code review of rm-4-gateo-bankaccount-coleccion-anidada (2026-07-08)
 
-- **(api/Backoffice/BankAccount — test hardening) POST/PUT sin escenario positivo EDITOR (`write→2xx`).** `bank_account/access_control.feature` fija la dirección crítica de seguridad (viewer→write→403) pero no un `editor→POST/PUT→2xx`; una regresión que sobre-restrinja create/update a `DELETE`/`CHANGE_STATUS` no se cazaría (create/update.feature corren como MANAGER, que retiene ambos por tier/grant). Mismo hueco que el precedente `bank/access_control.feature` (ya en main) → conviene un follow-up que lo cubra en Bank y BankAccount a la vez. Ref: `api/features/backoffice/bank_account/access_control.feature`, `api/features/backoffice/bank/access_control.feature`.
 
 ## Deferred from: code review of ii-2-shared-token-singleusetoken (2026-07-08)
 
-- **(Shared/Token · contrato del consumidor II-4/II-5) `SingleUseToken` no fuerza el single-use — el consumidor debe retirar el digest atómicamente.** El VO posee entropía + hash + compare constant-time, pero `verify()` devuelve `true` repetidamente hasta el TTL (el nombre `SingleUseToken` promete de más). Es Decisión 2 (single-use = lifecycle del consumidor, D5 `Invitation.status`). Riesgo: si el handler de aceptación de invitación (o el de reset) valida el token y luego falla **antes** de retirar el digest, el enlace es replayable dentro de la ventana TTL. Contrato para II-4/II-5: **retire-then-act en la misma transacción** (idempotente). Ref: `api/src/Shared/Token/Domain/SingleUseToken.php`.
 
 
 ## Deferred from: code review of ii-3-identitystatus-userchecker-admision-tipos-error (2026-07-10)
 
-- **(member-lifecycle · #462) Estado 0-admins: la guarda rechaza suspender a un no-admin ajeno con 409 engañoso.** `keepsAnActiveAdminWithout($id)` devuelve `false` si NO hay admin activo alguno, sea quien sea el target; el adapter real (INNER JOIN) debe acotar la guarda a «el target es el admin cuya baja deja <1». Solo alcanzable en un estado que el invariante prohíbe. Ref: `api/src/Iam/Identity/Application/ChangeUserStatus.php:65`.
-- **(test hardening) AC4 sin test único que compare las tres respuestas pre-identidad cara a cara.** wrong-password / unknown-email / INVITED se asertan idénticas en 3 escenarios separados (status+type+title), pero no hay comparación única ni aserción de forma/tamaño. Garantía estructural (mismo code path). Test opcional que fije el invariante. Ref: `api/features/backoffice/identity/login.feature:110`.
 
 ## Deferred from: code review of ii-6-lockout-lockeduntil (2026-07-11)
 
@@ -158,23 +144,18 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
 
 ## Deferred from: code review of ii-6-lockout-lockeduntil (2026-07-12)
 
-- **(Iam/Identity · defensa en profundidad) La rama 503 de `ClearLockoutOnLoginSuccess` no invalida la sesión, a diferencia del minting.** `SessionMintingSuccessListener` (@ -128) invalida la sesión antes de lanzar su `SessionStoreUnavailable` (503); `ClearLockoutOnLoginSuccess` (@ -64, corre antes) re-mapea el fallo de clear a `LockoutStoreUnavailable` (503) **sin** invalidar la sesión → el token autenticado ya está en el token-storage cuando dispara `LoginSuccessEvent`, así que `ContextListener::onKernelResponse` podría persistirlo y emitir una cookie de sesión junto al 503. **Inerte** en la práctica: el gate de admisión fail-closed de II-7 deniega toda petición sin fila de registro `iam_session`, que en este camino nunca se acuña. Asimetría de defensa-en-profundidad, no un agujero explotable; el fix (invalidar la sesión en el `catch`, espejo del minting) requiere inyectar la sesión/request en el listener, que hoy solo toma el registrar. Ref: `api/src/Iam/Identity/Infrastructure/Security/ClearLockoutOnLoginSuccess.php:49-53`.
 
 ## Deferred from: code review of ii-4-invitation-accept-pantallas-acceso (2026-07-13)
 
 - **(Iam/Invitation · test seguridad · con el follow-up CSRF `check_header`) Sin test negativo de CSRF (403 sin mutación).** El accept exige `#[IsCsrfTokenValid('invitation_accept')]`, pero con `check_header` **off** (diferido por Decisión C) el CSRF stateless se satisface por same-origin — que `AcceptInvitationOriginListener` (prio 9) ya impone antes del firewall. No existe un input que CSRF rechace y Origin no, así que un test funcional negativo no puede fallar tal como está cableado. Escribible cuando se habilite el double-submit `check_header` (follow-up de consolidación `LoginOriginListener`). Ref: `api/src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php:34`.
 - **(Iam/Invitation · test seguridad · anti-fixation) Sin assert de que el id de sesión se regenera (NFR3).** `Security::login` dispara el `migrate(true)` nativo; el funcional ya aserta «exactamente 1 sesión acuñada» pero no planta un id de sesión previo y compara pre/post. Garantía provista por el framework; el gap es un guard de regresión si un futuro cambio abandona el camino `Security::login`. Una aserción funcional robusta requiere plantar la cookie de sesión (frágil con el test client) → bundle con el follow-up `check_header`. Ref: `api/tests/Functional/Iam/Invitation/InvitationAcceptFunctionalTest.php`.
 - **(PWA · UX · ventana rara) Fallo del re-probe `/me` tras un 204 muestra la pantalla de éxito sin sesión.** `TokenActionScreen` hace `await login()` fuera del try/catch y `setAccepted(true)` incondicional; si el re-probe falla (blip de red/carrera de cookie) se muestra el éxito pero `AuthProvider` queda `UNAUTHENTICATED` → la CTA rebota a `/login`. La cuenta **está** activa (recupera por login con el password recién fijado); fix ambiguo. Ref: `pwa/src/app/(auth)/_components/TokenActionScreen.tsx:67-73`.
-- **(Iam/Invitation · test · AC2) Sin test de fallo a-mitad de la transacción de accept.** Los 6 tests de rechazo fallan **antes** de los flips (`activate`/`accept`), asertando el guard pre-mutación, no el rollback. La atomicidad está garantizada estructuralmente por el único `transactional`; el test específico que inyecta un fallo de `save`/`publish` tras los flips falta. Ref: `api/tests/Unit/Iam/Invitation/Application/AcceptInvitationTest.php`.
-- **(Iam/Invitation · test · AC3) El caso `REVOKED` no es un fixture distinto en el test de opacidad de 5 casos.** Ambos sets sustituyen *malformed* + *wrong-secret* por *used* + *revoked*; una invitación `REVOKED` nunca se presenta. Cubierto conductualmente (revoked pega en el mismo guard `status==SENT` que el caso accepted). Añadir el caso literal endurece la fidelidad a la enumeración de AC3. Ref: `api/tests/Functional/Iam/Invitation/InvitationAcceptFunctionalTest.php:197`.
 
 ## Deferred from: code review of ii-5-reset-password-uniforme (2026-07-13)
 
-- **(test hardening) AC6 byte-identidad + efecto del supersede aserta­dos débilmente.** El escenario Behat "4 tokens muertos = un `invalid-token`" solo verifica `status 400 + node type=invalid-token` por caso, no compara los bodies cara a cara (el spec exige "byte-idéntica"); el unit `testActiveIdentitySupersedes…` prueba que se LLAMA `deleteAllForUser`, no que borra un token pre-existente ni el orden delete-before-save. El código es correcto hoy (type+title fijos, sin `detail` dinámico; delete-then-save en `RequestPasswordReset:71-73`); los asserts no cierran el invariante. Ref: `api/features/backoffice/identity/password_reset.feature:76`, `api/tests/Unit/Iam/Identity/Application/RequestPasswordResetTest.php:21`.
 
 ## Deferred from: ii-5 D1–D3 follow-on (2026-07-14)
 
-- **(pwa/reset · UX · low) Un `204` perdido en tránsito deja al usuario en un callejón `INVALID_LINK` pese a haber cambiado la contraseña.** Si el servidor procesa el reset (token consumido, credencial fijada, cookie emitida) pero la respuesta se pierde en tránsito, `repo.reset` rechaza como fallo de transporte → `setRequestFailed`. Al reintentar, el token ya está consumido → `400 invalid-token` → muro `INVALID_LINK`. Inherente al token single-use + reintento no idempotente; recuperable iniciando sesión con la nueva contraseña, pero sin guía ("puede que tu contraseña ya haya cambiado — prueba a iniciar sesión"). Ref: `pwa/src/app/(auth)/_components/ResetPasswordForm.tsx:61-68`.
 
 ## Deferred from: code review of landing-login-cta (2026-07-15)
 
@@ -190,7 +171,6 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
 
 ## Deferred from: code review of u-3-cambio-de-estado-suspend-deactivate (2026-07-18)
 
-- **(guard · semántica · low) El guard confunde «no queda ningún admin» con «este es el último admin».** `keepsAnActiveAdminWithout($userId)` responde «¿existe algún admin activo con id≠excluido?», no «¿es el objetivo el último admin?». En un estado con 0 admins activos, excluir a un **no-admin** deja 0 → suspender a un `VIEWER` inocente devuelve `409 last-active-administrator-protected` (error engañoso). Fail-safe (bloquea, nunca permite drenar); solo alcanzable en un estado 0-admins que el propio endpoint previene (llega vía seeds / futuro editor de roles U-4). Ref: `api/src/Iam/Identity/Infrastructure/Persistence/Doctrine/DoctrineActiveAdministratorDirectory.php:35`.
 - **(session · semántica · low) `AllSessionsRevoked` se emite aunque el objetivo tenga 0 sesiones, y el éxito lo fija duro.** `RevokeAllSessions::revoke` publica el evento incondicionalmente; los escenarios de éxito de `status.feature` asertan `1 event … "erpify.iam.session.all-revoked"` para identidades que «never log in». El significado del evento («se revocaron sesiones») diverge de lo ocurrido («nada que revocar»); si `RevokeAllSessions` se endurece a emitir-solo-si-revocó, este test de status (módulo ajeno) rompe. Pre-existente al módulo Session. Ref: `api/src/Iam/Session/Application/RevokeAllSessions.php`.
 
 
@@ -201,21 +181,16 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
 ## Deferred from: code review of spec-realtime-authorize-terminal-denial (2026-07-22)
 
 - **(pwa/real-time · recuperación · low) Un feed abandonado por denegación terminal no se re-arma nunca, ni cuando el permiso vuelve.** Tras un 401/403 la suscripción se cierra y solo un remontaje (o un cambio de `topicsKey`/`authorizePath`) reintenta: si un ADMIN devuelve el rol un segundo después, la pestaña sigue con datos estáticos hasta una recarga completa, sin señal para el usuario. Es el precio deliberado de cortar el bucle de reautorización; la superficie UI del estado «realtime no disponible» quedó explícitamente fuera de alcance (sería un patrón nuevo — hoy `<Can>` gatea JSX renderizado, no capabilities de fondo). A evaluar junto con esa decisión: un único reintento de re-arme a intervalo largo, o un seam `onRealtimeUnavailable` que la superficie consuma. Ref: `pwa/src/context/shared/real-time/infrastructure/useMercureRealtime.ts` (`handleStreamError`).
-- **(api/Backoffice/Bank · cobertura · low) El camino concedido de `BankRealtimeAuthorizeController` no está pinneado por ningún test.** Su gemelo sí lo está (`api/tests/Unit/Backoffice/BankAccount/Infrastructure/Controller/BankAccountRealtimeAuthorizeControllerTest.php` decodifica el JWT y asserta los topics firmados y `mercure.publish: []`), pero no existe `BankRealtimeAuthorizeControllerTest`: que el 204 firme exactamente `MercureBankTopic::COLLECTION` + `DETAIL_TEMPLATE` y no conceda publicación no lo verifica nada. Asimetría pre-existente; la cobertura Behat añadida en esta spec cubre solo el camino denegado. Ref: `api/src/Backoffice/Bank/Infrastructure/Controller/BankRealtimeAuthorizeController.php`.
 
 ## Deferred from: users-fetch-before-gate (2026-07-22)
 
-- **(pwa/backoffice · UX · low) El menú lateral ofrece entradas que el rol no puede abrir.** `NavItem`/`NavSubItem` (`pwa/src/app/backoffice/_lib/backofficeMenu.ts:55-72`) no tienen campo de permiso, así que «Users» se pinta para los cinco roles aunque `users.read` sea solo-ADMIN: cuatro de cada cinco roles reciben una invitación a un callejón «Access denied». El gate de página ya impide la petición (y por tanto la fila `ACCESS_DENIED` falsa), así que esto es puramente UX de navegación, no corrección funcional — y el gate de página seguirá siendo obligatorio aunque el menú filtre, porque la URL se puede teclear. Follow-up: añadir `permission?: Permission` al modelo de menú y filtrar en el render; toca el modelo de datos de ~30 entradas y merece su propio PR.
 
 ## Deferred from: code review of spec-php-unit-memory-limit-oom (2026-07-22)
 
-- **(ci · deriva del gate · medium) CI nunca ejecuta `make php.unit`, así que el techo de memoria que bloquea merges es el de coverage (1G), no el del gate.** `.github/workflows/ci.yml:126` corre `make php.unit.coverage`; `php.unit` solo se ejecuta en local (`Makefile:40 app.test`, `make/ci.mk:7 ci.test` → `php.test` → `php.unit`). Consecuencia medida: la suite creció hasta 127–143 MB y cruzó el default de 128M **sin que CI se enterara** — el síntoma apareció solo en la máquina del dev. Elevar `php.unit` a 512M mueve el punto de detonación, no lo elimina: cuando la huella pase de 512M volverá a manifestarse igual (un test distinto cada pasada) y CI seguirá verde hasta los 1G. Direcciones: añadir un job que ejecute `make php.unit` (el gate estricto de `failOnWarning`, que hoy no se ejerce en CI porque coverage usa `--do-not-fail-on-phpunit-warning`), o fijar un presupuesto de memoria asertado. Ref: `.github/workflows/ci.yml:119,126`, `make/php-test.mk`.
 
 ## Deferred from: code review of g-2-ids-de-persona-fuera-de-audit-log-metadata (2026-08-04)
 
 - **(api/Iam · evidencia de cumplimiento · medium) La ruta de reparación puede ejecutar un borrado sin dejar fila que nombre al sujeto.** `FulfilIdentityErasure:144` condiciona `GDPR_SUBJECT_ERASED` a `$identity->erasedAnything()` (identidad + tokens). Cuando la identidad ya no está pero quedan referencias — el estado exacto que `identity:gdpr:reconcile-subject-references` existe para detectar, y que `UserEraseController` documenta como «a completed cleanup, not a no-op» — solo se escribe `GDPR_ERASURE_EXECUTED`. **Preexistente**: la guarda no cambió en #636, y desde la review esa fila sí lleva `anonymized_actor_id`, así que el pseudónimo ya no queda huérfano. Lo que sigue abierto es si el eje **recurso** debe tener fila propia en ese camino. Dos tests fijan hoy el comportamiento contrario a propósito (`testResourceRowsAloneStillProduceComplianceEvidence`, `testReferenceRowsAloneStillProduceComplianceEvidence`), así que cambiarlo es reabrir su argumento, no corregir un descuido.
-- **(api/tests · coste del gate · low) `AuditResourceTypeRegistry::filesDerivingType()` re-barre todo `api/src` en cada invocación**, y `everyPersonTypeIsBuiltByTheFileDeclaredToEraseIt` la llama dentro del bucle. Con un tipo `person` cuesta una barrida extra; el coste crece linealmente con lo que el registro quiere fomentar (un segundo contexto que declare un tipo-persona), dentro de `php.quality`, que CI ejecuta en cada PR. `$sources`/`$constants` son idénticos entre llamadas y se pueden memoizar.
-- **(pwa/audit · orden de despliegue · low) Los type-guards del timeline tratan `resourceErased` con la misma severidad que `id`.** Si la API no envía el campo — despliegue del PWA por delante, o rollback de la API — `isAuditEntry` devuelve `false` para todas las filas y la pantalla entera cae en `MALFORMED_RESPONSE_ENVELOPE`, sin degradación posible para un booleano de presentación. Ref: `pwa/src/context/backoffice/audit/infrastructure/ApiAuditTimelineRepository.ts:49`, `ApiAuditEventDetailRepository.ts:76`.
 
 ## Deferred from: quick-dev intent split of spec-iam-account-profile (2026-08-04)
 
@@ -225,42 +200,9 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
 
 ## Deferred from: code review of br-2-residuos-eje-referencias-persona (2026-08-07)
 
-- **`identity_user.failed_attempts` está exento del trinquete de defaults sin argumento escrito.** El
-  docblock de `MigrationColumnDefaults` argumenta la exención de `status` (el agregado siempre fija el valor)
-  y no dice nada de `failed_attempts`, que comparte la lista cerrada. Ref:
-  `api/tests/Support/MigrationColumnDefaults.php:51-53`.
-- **El borrado del `Referer` en el access log es global al sitio.** Cierra el sumidero de ids de persona, y
-  con él se pierde la señal de procedencia para investigar CSRF, enlaces de phishing y tráfico entrante — en
-  todas las peticiones, para un problema confinado a tres pantallas. Un filtro por ruta o un `replace` sobre
-  el propio valor acotaría la pérdida. Queda descrito como hecho, no registrado como coste aceptado. Ref:
-  `api/frankenphp/Caddyfile:64-73`, `PRODUCTION_SECURITY_CHECKLIST.md:361-377`.
 
 ## Deferred from: code review of br-1-behat-vocabulario-falsabilidad (2026-08-10)
 
-- **La forma negativa de la tabla de outbox pasa sobre una cola vacía.** El bucle sobre
-  `messagesOnQueue()` no se ejecuta y el paso vuelve sin haber hecho ninguna aserción, así que «no debería
-  haberse creado un evento conteniendo X» es cierto tanto si ninguno casó como si el setup no produjo nada.
-  El test que lo cubre usa una cola no vacía. Ref: `api/tests/Behat/Context/OutboxContext.php:231-239`,
-  `api/tests/Unit/Behat/Context/OutboxTableMatchTest.php`.
-- **`runWorker()` registra exit 0 para una consumición que resolvió cero receivers.** Un `receivers`
-  ausente, vacío o con entradas no-string deja `[]`, el `Worker` gira hasta el límite de tiempo y
-  `the last run should succeed` pasa sobre una ejecución que no leyó nada — el caso que `LastRun` rechaza
-  para «no se ha ejecutado nada» y no para «se ejecutó en vacío». Ref:
-  `api/tests/Behat/Context/MessengerConsumerContext.php:201-236`.
-- **`the last run output should not contain` pasa vacuamente sobre un buffer vacío.** A verbosidad normal
-  el `ConsoleLogger` no escribe nada (el `Worker` solo loguea en `info`/`debug`), `output()` devuelve `''` y
-  la aserción negativa se cumple sola. El docblock del paso nombra justo la afirmación que esto vuelve
-  infalsificable. Ref: `api/tests/Behat/Context/RunOutcomeContext.php:92-108`.
-- **`I consume N messages` no asegura que se consumieran N.** Con menos mensajes pendientes que el límite,
-  el listener de tiempo para el worker, `run()` vuelve normal y el exit code es 0. Ref:
-  `api/tests/Behat/Context/MessengerConsumerContext.php:201-236`.
-- **Dos ejecuciones en un mismo escenario dejan la primera inasertable sin señal.** `record()` sobrescribe
-  incondicionalmente; la regla («aserta cada ejecución antes de empezar la siguiente») está escrita y nada
-  la enforcea. Ningún escenario comprometido la rompe hoy. Ref:
-  `api/tests/Behat/Support/Execution/LastRun.php:36-40`, `api/tests/Behat/Context/RunOutcomeContext.php:26-29`.
-- **La verbosidad se resuelve por última clave, no por máximo.** `{"-vvv": true, "--verbose": true}` acaba
-  en `VERY_VERBOSE`, degradando desde `DEBUG` según el orden de declaración. Ref:
-  `api/tests/Behat/Context/MessengerConsumerContext.php:118-124`.
 
 ## Deferred from: code review of br-4c-602-observabilidad-del-throttle-de-recuperacion (2026-08-12)
 
@@ -270,12 +212,9 @@ Hallazgos aceptados como reales pero fuera del ADR: son decisiones de la primera
 
 ## Deferred from: code review of spec-audit-anonymous-actor-ip-redaction (2026-08-12)
 
-- **The PWA's copy of the `[REDACTED]` literal has no parity gate.** `AuditRedaction::SENTINEL` earns its extraction on "a second, drifted copy is a silent compliance failure rather than a cosmetic duplication", and the three PHP/Gherkin literals that spell it out (`AuditResourceAnonymiserFunctionalTest`, `AuditActorAnonymiserFunctionalTest`, `erase.feature`) are deliberate falsifiers that redden on drift. `pwa/src/context/backoffice/audit/infrastructure/ui/RedactedValue.tsx:23` hardcodes the same literal with nothing red on drift. Harmless today only because the component has no caller — `ip`/`user_agent` are withheld from the detail payload — which is a fact about the payload, not a guard. `api/tests/Unit/Gate/RedactionVocabularyParityTest.php` is the existing pattern for gating a cross-deployable literal by reading it as text. Pre-existing on `main`.
 
 ## Deferred from: code review of br-5-ciclo-de-vida-iam-session (2026-08-14)
 
-- **`SessionRepository::findByUserId()` surfaces a store outage as a raw 500, not the contracted 503.** `findActiveById()` wraps its execution in a `try` that converts `DbalException` into `SessionStoreUnavailable`; `findByUserId()` — reached from `GET /sessions` via `MySessionsController` — has never had one, so a lost connection or statement timeout on the listing escapes unconverted. The functional fixture `UnavailableSessionRepository::findByUserId()` throws the domain exception, i.e. the double asserts a contract production does not honour. Pre-existing on `main`; surfaced by the edge-case pass on BR-5, which only shared an applier between the two methods. Ref: `api/src/Iam/Session/Infrastructure/Persistence/Doctrine/DoctrineSessionRepository.php:91-111`.
-- **The 503 the admission gate fails closed on is pinned only by a mock of a method that cannot throw.** `DoctrineSessionRepositoryStoreUnavailableTest` makes `EntityManager::createQueryBuilder()` raise the DBAL failure, but that method is `return new QueryBuilder($this)` — no connection, no statement. In production the outage arises at `getOneOrNullResult()`. A refactor moving the execution out of the `try` therefore keeps both unit tests green while turning the gate's 503 into a 500, and this is the auth TCB. The fix is to drive the failure from the execution (an EM whose `createQuery()` throws), so the red tracks the real boundary. Pre-existing; BR-5 corrected the docblock that had restated the mock as a production constraint.
 - **The session retention sweep's cost is asserted rather than measured, unlike the prune it sits beside.** Neither retention branch is served by an index (`iam_session` carries only `iam_session_pkey` and `idx_iam_session_user_id_status`), so each tick is a sequential scan, and the schedule's catch-up means an outage is followed by one deleting sweep plus one full scan per missed period. `audit_log`'s prune has its equivalent cost measured to the millisecond and documented at the statement. Not measurable today — the table holds zero rows in dev and there is no production deployment — so an index would be a speculative optimisation; revisit with a real row count.
 
 ## Deferred from: adversarial pass of the #831 residual fix (2026-08-22)

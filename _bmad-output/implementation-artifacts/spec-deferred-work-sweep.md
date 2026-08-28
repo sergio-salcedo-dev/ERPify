@@ -69,54 +69,54 @@ context:
 ## Tasks & Acceptance
 
 **Execution — Ola 0: borrar lo que ya está muerto (sin código)**
-- [ ] `deferred-work.md` — borrar las 8 viñetas ALREADY-RESOLVED (22, 24, 34, 40, 50, 52, 78, 90) — el defecto ya no existe. Cada borrado debe tener **evidencia trazable en el historial de la PR** (`file:line` o commit que lo resolvió): reunida en el cuerpo de la PR o en el artefacto, no necesariamente ocho citas literales dentro de un mensaje de commit.
+- [x] `deferred-work.md` — borrar las 8 viñetas ALREADY-RESOLVED (22, 24, 34, 40, 50, 52, 78, 90) — el defecto ya no existe. Cada borrado debe tener **evidencia trazable en el historial de la PR** (`file:line` o commit que lo resolvió): reunida en el cuerpo de la PR o en el artefacto, no necesariamente ocho citas literales dentro de un mensaje de commit.
 
 **Ola A — falsabilidad del arnés Behat y cobertura**
-- [ ] `OutboxContext.php` (81) — la forma negativa refuta sobre cola vacía — hoy pasa sin aserción alguna.
-- [ ] `MessengerConsumerContext.php` (82, 84, 86) — 0 receivers ya no es exit 0; `I consume N` cuenta lo consumido; la verbosidad se resuelve por **máximo**, no por última clave.
-- [ ] `RunOutcomeContext.php` (83) — `output should not contain` no pasa sobre un buffer vacío.
-- [ ] `LastRun.php` (85) — `record()` refuta si la ejecución anterior nunca se leyó.
-- [ ] `api/features/backoffice/bank{,_account}/access_control.feature` (51) — escenario positivo `editor → write → 2xx` en ambos.
-- [ ] `api/tests/Unit/Backoffice/Bank/.../BankRealtimeAuthorizeControllerTest.php` (71) — fija topics firmados y `publish: []`, espejo del gemelo de BankAccount.
-- [ ] `.github/workflows/ci.yml` (73) — paso `make php.unit` en el job `api-test`: hoy CI solo corre `php.unit.coverage` (1G, warnings relajados), así que el techo estricto de 512M y `failOnWarning` **nunca se ejercen en CI**.
-- [ ] `PRODUCTION_SECURITY_CHECKLIST.md` §7 (80) — registrar como **coste aceptado** que el borrado del `Referer` es global al sitio para un problema confinado a tres pantallas.
+- [x] `OutboxContext.php` (81) — la forma negativa refuta sobre cola vacía — hoy pasa sin aserción alguna.
+- [x] `MessengerConsumerContext.php` (82, 84, 86) — 0 receivers ya no es exit 0; `I consume N` cuenta lo consumido; la verbosidad se resuelve por **máximo**, no por última clave.
+- [x] `RunOutcomeContext.php` (83) — `output should not contain` no pasa sobre un buffer vacío.
+- [x] `LastRun.php` (85) — `record()` refuta si la ejecución anterior nunca se leyó.
+- [x] `api/features/backoffice/bank{,_account}/access_control.feature` (51) — escenario positivo `editor → write → 2xx` en ambos.
+- [x] `api/tests/Unit/Backoffice/Bank/.../BankRealtimeAuthorizeControllerTest.php` (71) — fija topics firmados y `publish: []`, espejo del gemelo de BankAccount.
+- [x] `.github/workflows/ci.yml` (73) — paso `make php.unit` en el job `api-test`: hoy CI solo corre `php.unit.coverage` (1G, warnings relajados), así que el techo estricto de 512M y `failOnWarning` **nunca se ejercen en CI**.
+- [x] `PRODUCTION_SECURITY_CHECKLIST.md` §7 (80) — registrar como **coste aceptado** que el borrado del `Referer` es global al sitio para un problema confinado a tres pantallas.
 
 **Ola B — auditoría**
-- [ ] `api/tests/Unit/Gate/AuditWriteOperationParityTest.php` (2) — el enum PHP y sus tres literales espejo del PWA no pueden derivar.
-- [ ] `api/tests/Functional/.../AuditLogEntryFieldLengthContractTest.php` (44) — `MAX_FIELD_LENGTH` contra `information_schema`, no contra un comentario.
-- [ ] `AuditLogWriterIdempotencyTest.php` (45) — resolver `AuditLogWriter` del contenedor; corregir el docblock que aún dice «sin consumidor de producción» (ya hay dos).
-- [ ] `TestDebugDataHolder.php` (47) — marcar `FixturesChangeTracker` también en escrituras raw-DBAL. **«Estrictamente aditivo» debe ser comprobable en el diff**: la forma es `contabilidad existente + contabilidad raw-DBAL`, nunca `contabilidad existente → contabilidad rediseñada`, porque `DoctrineContext` depende de ella. Falsador en dos direcciones: una escritura raw-DBAL **incrementa** el tracker, y una escritura ORM **conserva su semántica actual sin cambio** (un `SELECT` no marca nada).
-- [ ] `AuditResourceTypeRegistry.php` (75) — memoizar el corpus. **Antes de aceptar la optimización hay que responder a su pregunta de scope:** ¿es el corpus de `api/src` constante durante toda la ejecución de `php.quality`? Si algún test crea o modifica ficheros bajo `api/src`, una segunda invocación leería estado obsoleto y la caché convertiría un gate en estado compartido incorrecto. Verificarlo primero; si no se puede garantizar, la memoización **no entra** y la bala se queda.
-- [ ] `api/tests/Unit/Gate/` (91) — paridad del centinela `[REDACTED]` con `RedactedValue.tsx`, cuarto sitio sin guardián.
-- [ ] `deferred-work.md` (41) — **no se implementa** (fuera por decisión); su viñeta se queda y gana una línea: el disparador ya saltó, hay 4 consumidores de metadata libre.
+- [x] `api/tests/Unit/Gate/AuditWriteOperationParityTest.php` (2) — el enum PHP y sus tres literales espejo del PWA no pueden derivar.
+- [x] `api/tests/Functional/.../AuditLogEntryFieldLengthContractTest.php` (44) — `MAX_FIELD_LENGTH` contra `information_schema`, no contra un comentario.
+- [x] `AuditLogWriterIdempotencyTest.php` (45) — resolver `AuditLogWriter` del contenedor; corregir el docblock que aún dice «sin consumidor de producción» (ya hay dos).
+- [x] `TestDebugDataHolder.php` (47) — marcar `FixturesChangeTracker` también en escrituras raw-DBAL. **«Estrictamente aditivo» debe ser comprobable en el diff**: la forma es `contabilidad existente + contabilidad raw-DBAL`, nunca `contabilidad existente → contabilidad rediseñada`, porque `DoctrineContext` depende de ella. Falsador en dos direcciones: una escritura raw-DBAL **incrementa** el tracker, y una escritura ORM **conserva su semántica actual sin cambio** (un `SELECT` no marca nada).
+- [x] `AuditResourceTypeRegistry.php` (75) — memoizar el corpus. **Antes de aceptar la optimización hay que responder a su pregunta de scope:** ¿es el corpus de `api/src` constante durante toda la ejecución de `php.quality`? Si algún test crea o modifica ficheros bajo `api/src`, una segunda invocación leería estado obsoleto y la caché convertiría un gate en estado compartido incorrecto. Verificarlo primero; si no se puede garantizar, la memoización **no entra** y la bala se queda.
+- [x] `api/tests/Unit/Gate/` (91) — paridad del centinela `[REDACTED]` con `RedactedValue.tsx`, cuarto sitio sin guardián.
+- [x] `deferred-work.md` (41) — **no se implementa** (fuera por decisión); su viñeta se queda y gana una línea: el disparador ya saltó, hay 4 consumidores de metadata libre.
 
 **Ola C — sesión**
-- [ ] `SessionAdmissionGate.php` (17, 27) — rechazada → invalidar la sesión nativa → 4xx/503; admitida → adjuntar la `Session` **al atributo de ESE `Request`**, que es lo que la hace propiedad de la petición y no del worker. Prohibido explícitamente: singleton de contenedor, estado global, estado estático — bajo FrankenPHP worker mode cualquiera de los tres es contaminación cross-request. Dos mutaciones separadas (ver la partición 17/27 en *Always*).
-- [ ] `MySessionsController.php`, `RevokeOtherSessionsController.php` (17) — leer esa `Session` en vez de repetir la consulta.
-- [ ] `DoctrineSessionRepository.php` (92) — `findByUserId()` convierte `DbalException` en 503, como su hermana.
-- [ ] `DoctrineSessionRepositoryStoreUnavailableTest.php` (93) — el fallo se dispara desde `createQuery()`, no desde `createQueryBuilder()` (que **no puede lanzar**): hoy el test es verde sobre una mutación que rompe el 503.
-- [ ] `session.feature` (18, 19) — escenario de sesión caducada fuera de `GET /sessions`; test unitario del camino de **admisión** del gate.
+- [x] `SessionAdmissionGate.php` (17, 27) — rechazada → invalidar la sesión nativa → 4xx/503; admitida → adjuntar la `Session` **al atributo de ESE `Request`**, que es lo que la hace propiedad de la petición y no del worker. Prohibido explícitamente: singleton de contenedor, estado global, estado estático — bajo FrankenPHP worker mode cualquiera de los tres es contaminación cross-request. Dos mutaciones separadas (ver la partición 17/27 en *Always*).
+- [x] `MySessionsController.php`, `RevokeOtherSessionsController.php` (17) — leer esa `Session` en vez de repetir la consulta.
+- [x] `DoctrineSessionRepository.php` (92) — `findByUserId()` convierte `DbalException` en 503, como su hermana.
+- [x] `DoctrineSessionRepositoryStoreUnavailableTest.php` (93) — el fallo se dispara desde `createQuery()`, no desde `createQueryBuilder()` (que **no puede lanzar**): hoy el test es verde sobre una mutación que rompe el 503.
+- [x] `session.feature` (18, 19) — escenario de sesión caducada fuera de `GET /sessions`; test unitario del camino de **admisión** del gate.
 
 **Ola D — identidad e invitación**
-- [ ] `DoctrineActiveAdministratorDirectory.php` + doble in-memory (54+67, duplicados) — la guarda responde «¿es el objetivo el último admin?», no «¿queda algún admin?».
-- [ ] `ClearLockoutOnLoginSuccess.php` (57) — invalidar la sesión en el `catch` 503, espejo del minting (`LoginSuccessEvent` ya expone `getRequest()`).
-- [ ] (56) — **no se implementa** (fuera por decisión): la carrera la posee #462. Su viñeta se queda intacta.
-- [ ] Tests (55, 61, 62, 63) — byte-identidad de las tres respuestas pre-identidad; fallo a-mitad de `AcceptInvitation` vía el hook `onSave` existente; sexto caso `REVOKED`; byte-identidad del reset + orden delete-before-save.
-- [ ] `MigrationColumnDefaults.php` (79) — escribir el argumento de la exención de `failed_attempts`, hoy ausente.
-- [ ] `deferred-work.md` (53) — solo borrar: el contrato retire-then-act **ya lo cumplen** `AcceptInvitation` y `CompletePasswordReset`.
+- [x] `DoctrineActiveAdministratorDirectory.php` + doble in-memory (54+67, duplicados) — la guarda responde «¿es el objetivo el último admin?», no «¿queda algún admin?».
+- [x] `ClearLockoutOnLoginSuccess.php` (57) — invalidar la sesión en el `catch` 503, espejo del minting (`LoginSuccessEvent` ya expone `getRequest()`).
+- [x] (56) — **no se implementa** (fuera por decisión): la carrera la posee #462. Su viñeta se queda intacta.
+- [x] Tests (55, 61, 62, 63) — byte-identidad de las tres respuestas pre-identidad; fallo a-mitad de `AcceptInvitation` vía el hook `onSave` existente; sexto caso `REVOKED`; byte-identidad del reset + orden delete-before-save.
+- [x] `MigrationColumnDefaults.php` (79) — escribir el argumento de la exención de `failed_attempts`, hoy ausente.
+- [x] `deferred-work.md` (53) — solo borrar: el contrato retire-then-act **ya lo cumplen** `AcceptInvitation` y `CompletePasswordReset`.
 
 **Ola E — contrato HTTP**
-- [ ] `ProblemDetailsFactory.php` + `docs/api-error-contract.md` (20) — 415 gana `type` propio; hoy cae al cubo genérico.
-- [ ] `StrictRequestPayload.php` (21) — `['json']` como default; **ver Ask First**.
-- [ ] `EraseBankAccountSubject.php` + repositorio (37) — `findByIdForUpdate`: hoy dos borrados concurrentes fallan ruidosamente en vez de ser no-op. **El falsador debe distinguir idempotencia de concurrencia real**: dos llamadas secuenciales (`delete(); delete();`) no demuestran ninguna carrera y no valen como prueba. Lo que hay que exhibir es `T1 bloquea la fila → T2 intenta la misma → T1 borra y commitea → T2 observa la ausencia → T2 no-op`, con dos conexiones/transacciones (patrón `AdministratorErasureRaceFunctionalTest`). Si solo se consigue probar idempotencia secuencial, se dice así y la bala **no** se declara cerrada por concurrencia.
+- [x] `ProblemDetailsFactory.php` + `docs/api-error-contract.md` (20) — 415 gana `type` propio; hoy cae al cubo genérico.
+- [x] `StrictRequestPayload.php` (21) — `['json']` como default; **ver Ask First**.
+- [x] `EraseBankAccountSubject.php` + repositorio (37) — `findByIdForUpdate`: hoy dos borrados concurrentes fallan ruidosamente en vez de ser no-op. **El falsador debe distinguir idempotencia de concurrencia real**: dos llamadas secuenciales (`delete(); delete();`) no demuestran ninguna carrera y no valen como prueba. Lo que hay que exhibir es `T1 bloquea la fila → T2 intenta la misma → T1 borra y commitea → T2 observa la ausencia → T2 no-op`, con dos conexiones/transacciones (patrón `AdministratorErasureRaceFunctionalTest`). Si solo se consigue probar idempotencia secuencial, se dice así y la bala **no** se declara cerrada por concurrencia.
 
 **Ola F — PWA**
-- [ ] `AccessWall.tsx` (64) — una frase en `INVALID_RESET_LINK`: la contraseña puede haber cambiado ya.
-- [ ] `backofficeMenu.ts` + `BackOfficeLayoutClient.tsx` (72) — `permission?` y filtrado en **ambos** puntos de render.
-- [ ] `ApiAuditTimelineRepository.ts`, `ApiAuditEventDetailRepository.ts` (76) — la tolerancia es ante la **ausencia**, nunca ante la corrupción del contrato. Cuatro estados, y el type-guard los separa: `missing` → válido, por defecto `false`; `false` → válido; `true` → válido; `"false"` / `null` / `42` → **inválido, sigue tumbando el envelope**. Prohibido degradar el campo a `any` o aceptar cualquier valor en silencio. Falsador: un caso por estado, incluidos los tres inválidos.
+- [x] `AccessWall.tsx` (64) — una frase en `INVALID_RESET_LINK`: la contraseña puede haber cambiado ya.
+- [x] `backofficeMenu.ts` + `BackOfficeLayoutClient.tsx` (72) — `permission?` y filtrado en **ambos** puntos de render.
+- [x] `ApiAuditTimelineRepository.ts`, `ApiAuditEventDetailRepository.ts` (76) — la tolerancia es ante la **ausencia**, nunca ante la corrupción del contrato. Cuatro estados, y el type-guard los separa: `missing` → válido, por defecto `false`; `false` → válido; `true` → válido; `"false"` / `null` / `42` → **inválido, sigue tumbando el envelope**. Prohibido degradar el campo a `any` o aceptar cualquier valor en silencio. Falsador: un caso por estado, incluidos los tres inválidos.
 
 **Ola G — cierre (el ÚLTIMO commit de la rama, sin excepción)**
-- [ ] `deferred-work.md` — borrar las 37 viñetas cerradas (las 8 muertas ya salieron en la Ola 0) y aplicar la única edición permitida, la del ITEM 41. El orden es `implementación → falsador → suite verde → independencia de mutación → borrado del registro`, **nunca** `borrado → a ver si pasan los tests`: mientras dura el desarrollo el registro debe seguir describiendo el estado real, y una viñeta borrada sobre una implementación aún no verificada es exactamente la contabilidad falsa que esta PR existe para erradicar.
+- [x] `deferred-work.md` — borrar las 37 viñetas cerradas (las 8 muertas ya salieron en la Ola 0) y aplicar la única edición permitida, la del ITEM 41. El orden es `implementación → falsador → suite verde → independencia de mutación → borrado del registro`, **nunca** `borrado → a ver si pasan los tests`: mientras dura el desarrollo el registro debe seguir describiendo el estado real, y una viñeta borrada sobre una implementación aún no verificada es exactamente la contabilidad falsa que esta PR existe para erradicar.
 
 **Acceptance Criteria:**
 - Dado el registro a 98 viñetas en `f86b2662`, cuando la rama termina, entonces tiene **53**: 45 menos, 0 añadidas.
@@ -160,17 +160,19 @@ La última fila es la que importa además de los rojos: prueba que las 45 viñet
 
 Checklist recorrible por el revisor sin interpretar el documento:
 
-- [ ] 98 → 53 · [ ] 45 borradas · [ ] 0 añadidas
-- [ ] ITEM 41 único superviviente modificado
-- [ ] ITEM 41 permanece · [ ] ITEM 56 permanece idéntico
-- [ ] las 27 `trigger-gated` permanecen · [ ] las 24 `needs-decision` permanecen
-- [ ] existen las 37 filas de cierre · [ ] cada fila tiene mutación independiente
-- [ ] mutación de 82 / 84 / 86 verificada por separado
-- [ ] mutación de 17 / 27 verificada por separado
-- [ ] 54/67 documentados como duplicados con mutación compartida
-- [ ] los 11 endpoints del ITEM 21 auditados uno a uno
-- [ ] register-gate = 0 · [ ] `php.quality` = 0 · [ ] `pwa.quality` = 0
-- [ ] `php.unit` = 0 · [ ] `php.behat` = 0 · [ ] `pwa.test` = 0
+- [x] 98 → 53 · [x] 45 borradas · [x] 0 añadidas
+- [x] ITEM 41 único superviviente modificado
+- [x] ITEM 41 permanece · [x] ITEM 56 permanece idéntico
+- [x] las 27 `trigger-gated` permanecen · [x] las 24 `needs-decision` permanecen
+- [x] existen las 37 filas de cierre (repartidas en **36** filas — `54+67` es una para dos balas)
+- [~] **cada fila tiene mutación independiente: 32 de 36.** Cuatro exceptuadas por nombre y con su motivo en la sección B del artefacto de evidencia — 53 (verificación, sin cambio que mutar), 79 y 80 (prosa, sin falsador alguno) y 73 (falsador circular). **No se marca en verde**: la pasada adversarial midió que esta línea no se cumple, y marcarla sería exactamente la contabilidad falsa que esta PR existe para erradicar.
+- [x] mutación de 82 / 84 / 86 verificada por separado
+- [x] mutación de 17 / 27 verificada por separado
+- [x] 54/67 documentados como duplicados con mutación compartida
+- [x] los endpoints del ITEM 21 auditados uno a uno — resultaron ser **13**, no 11, y los 13 ya declaraban `acceptFormat`, así que el volteo del default no restringió nada (el «once» de la bala era el conteo correcto de *repetición* el día que se escribió). Tabla completa en la sección C.
+- [x] register-gate = 0 · [x] `php.quality` = 0 · [x] `pwa.quality` = 0
+- [x] `php.unit` = 0 · [x] `php.behat` = 0 · [x] `pwa.test.unit` = 0
+- [~] **`pwa.test.e2e` NO se marca en verde.** Se ejecutó — nunca se había ejecutado en esta rama — y dos pasadas del mismo head dieron 1 fallo y 4 fallos con conjuntos **disjuntos**, así que miden el entorno (Next en modo dev, 11 workers, BD de dev que Behat resetea) y no el código. El único fallo que sí reprodujo se midió **preexistente** contra `f86b2662` por A/B con las fuentes PWA de la base instaladas. Detalle en la sección C-bis del artefacto de evidencia.
 
 ## Adversarial pass
 
