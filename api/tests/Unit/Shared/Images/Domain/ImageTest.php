@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Images\Domain;
 
 use DateTimeImmutable;
-use Erpify\Shared\Images\Domain\Image;
+use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;

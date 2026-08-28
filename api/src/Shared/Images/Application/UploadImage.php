@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Images\Application;
 
-use Erpify\Shared\Images\Domain\Image;
+use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\ImageProcessor;
 
@@ -16,8 +16,6 @@ use Erpify\Shared\Images\Domain\ImageProcessor;
  * (NFR6), and no conservation-contract parameter (FR2/FR6) — a caller with an "Evidence" contract
  * has no signature to invoke here at all.
  *
- * This story stops at assembling the {@see Image} from the processor's output — no storage, no
- * persistence. Story 1.2 extends this same class with that step without changing this signature.
  */
 final readonly class UploadImage
 {

@@ -195,6 +195,18 @@ Erpify\Iam\Invitation\Domain\Entity\Invitation::$id => non-person
 Erpify\Iam\Session\Domain\Entity\Session::$id => non-person
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$id => non-person
 
+# The image aggregate's own primary key. It denotes a stored representation, never the person a picture may
+# happen to be of: this module holds no owner, no filename and no classification, and it is the CONSUMING
+# context that decides an image belongs to a natural person. So the day a consumer adds
+# `User::$avatarImageId`, that COLUMN is what needs a `person ::` line naming its erasure — not this one,
+# which would still be describing a row about bytes.
+#
+# The identifier is deliberately a plain `Types::GUID` rather than a dedicated DBAL type, and that is what
+# keeps this line possible at all: the gate builds its universe by reading `#[ORM\Column]` attributes whose
+# type IS `Types::GUID`, so a custom `image_id` type would drop the column out of the sweep entirely and this
+# classification would go unasked for rather than being made and checked.
+Erpify\Shared\Images\Domain\Entity\Image::$id => non-person
+
 # References between aggregates that are not people.
 Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::$bankId => non-person
 Erpify\Organization\Membership\Domain\Entity\Membership::$organizationId => non-person
