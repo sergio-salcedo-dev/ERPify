@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Shared\Images\Application;
 
 use Erpify\Shared\Images\Application\UploadImage;
 use Erpify\Shared\Images\Domain\CanonicalImage;
+use Erpify\Shared\Images\Domain\ImageProcessor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -21,7 +22,7 @@ final class UploadImageTest extends TestCase
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/png', 10, 20);
         $processor = new StubImageProcessor($canonicalImage);
-        $uploadImage = new UploadImage($processor);
+        $uploadImage = self::uploadImageWith($processor);
 
         $image = $uploadImage->upload('raw-bytes');
 
@@ -39,7 +40,7 @@ final class UploadImageTest extends TestCase
     public function testGeneratesADistinctIdInternallyOnEveryUpload(): void
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/png', 10, 20);
-        $uploadImage = new UploadImage(new StubImageProcessor($canonicalImage));
+        $uploadImage = self::uploadImageWith(new StubImageProcessor($canonicalImage));
 
         $first = $uploadImage->upload('raw-bytes');
         $second = $uploadImage->upload('raw-bytes');
@@ -68,7 +69,7 @@ final class UploadImageTest extends TestCase
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/jpeg', 10, 20);
         $processor = new StubImageProcessor($canonicalImage);
-        $uploadImage = new UploadImage($processor);
+        $uploadImage = self::uploadImageWith($processor);
 
         $uploadImage->upload('raw-bytes', 'image/jpeg');
 
@@ -82,10 +83,24 @@ final class UploadImageTest extends TestCase
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/jpeg', 10, 20);
         $processor = new StubImageProcessor($canonicalImage);
-        $uploadImage = new UploadImage($processor);
+        $uploadImage = self::uploadImageWith($processor);
 
         $uploadImage->upload('raw-bytes');
 
         $this->assertSame([['bytes' => 'raw-bytes', 'declaredMediaType' => null]], $processor->receivedCalls);
+    }
+
+    /**
+     * The collaborators the storage and persistence steps need. Cases here are about assembling the
+     * aggregate, so they take working in-memory implementations of the ports and assert nothing about them.
+     */
+    private static function uploadImageWith(ImageProcessor $processor): UploadImage
+    {
+        return new UploadImage(
+            $processor,
+            new InMemoryImageStorage(),
+            new InMemoryImageRepository(),
+            new ImmediateTransactionManager(),
+        );
     }
 }

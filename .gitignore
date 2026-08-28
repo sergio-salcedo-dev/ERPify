@@ -25,6 +25,12 @@ erpify-local-root-ca.crt
 # API — PHP / Composer / Symfony
 api/vendor/
 api/var/
+# Image bytes, wherever STORAGE_LOCAL_PATH is pointed. The deployed root is a named volume outside this
+# tree, so this line protects only a workspace someone reconfigured onto it — and it is NOT what makes the
+# bytes durable. Durability is the volume's; if STORAGE_LOCAL_PATH moves, this stops applying with nothing
+# to warn about it.
+/storage/
+api/storage/
 api/public/bundles/
 api/.phpunit.result.cache
 api/.phpunit.cache/

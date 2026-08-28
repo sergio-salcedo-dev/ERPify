@@ -68,6 +68,16 @@ you change anything here.
       `node`/`debian`). Never unpin.
 - [ ] Xdebug is disabled in prod images.
 
+- [ ] **Image bytes live on the `image_storage` named volume, mounted at `/app/storage` by both `php` and
+      `messenger_worker`.** It is not optional and it admits no residual: with no volume the storage adapter
+      writes into the container's writable layer, so every redeploy empties the store while every `image`
+      row survives — and nothing reports it, because this module deliberately keeps no bookkeeping that
+      could find the divergence. The prod image creates the mount point owned by `www-data` before anything
+      mounts over it, since Docker seeds a new named volume from the image's directory ownership and the
+      runtime user is unprivileged. Verify after deploy: the path is a mountpoint, it is writable by the
+      runtime user, it is not inside the source tree, it is not served by Caddy, and bytes written before a
+      `--force-recreate` are still readable after it.
+
 ## 4. Network isolation
 
 - [ ] Postgres sits on the `internal` `backend` network with **no published

@@ -48,6 +48,10 @@ services:
       MERCURE_JWT_SECRET: ${CADDY_MERCURE_JWT_SECRET:-!ChangeThisMercureHubJWTSecretKey!}
       SYMFONY_TRUSTED_PROXIES: "${SYMFONY_TRUSTED_PROXIES:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
       MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default?auto_setup=0}
+      # Points at the named volume, never inside `./api`. The application falls back to a path under
+      # `var/` when this is unset (a CLI run outside the stack), which is gitignored but NOT durable —
+      # durability is the volume's job, and this variable is what connects the two.
+      STORAGE_LOCAL_PATH: ${STORAGE_LOCAL_PATH:-/app/storage}
       MAILER_DSN: ${MAILER_DSN:-null://null}
       MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
       # Seconds an SMTP server may hold a caller per socket operation; one send costs round-trips x this.
@@ -57,6 +61,7 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+      - image_storage:/app/storage
     ports:
       - name: http
         target: 80
@@ -153,6 +158,9 @@ services:
       APP_ENV: ${APP_ENV:-dev}
       DATABASE_URL: postgresql://${POSTGRES_USER:-erpify_user}:${POSTGRES_PASSWORD:-erpify_password}@database:5432/${POSTGRES_DB:-erpify_db}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
       MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default?auto_setup=0}
+      # The worker is what physically deletes bytes, so it must resolve the same root as `php`. A worker
+      # pointed elsewhere finds an empty store and reports every deletion as done.
+      STORAGE_LOCAL_PATH: ${STORAGE_LOCAL_PATH:-/app/storage}
       MAILER_DSN: ${MAILER_DSN:-null://null}
       MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
       # Seconds an SMTP server may hold a caller per socket operation; one send costs round-trips x this.
@@ -164,9 +172,21 @@ services:
       MERCURE_URL: ${CADDY_MERCURE_URL:-http://php/.well-known/mercure}
       MERCURE_PUBLIC_URL: ${CADDY_MERCURE_PUBLIC_URL:-https://${SERVER_NAME:-localhost}:${HTTPS_PORT:-443}/.well-known/mercure}
       MERCURE_JWT_SECRET: ${CADDY_MERCURE_JWT_SECRET:-!ChangeThisMercureHubJWTSecretKey!}
+    volumes:
+      # The same store `php` writes into. The worker is what physically removes bytes, so a worker without
+      # this mount would answer every deletion against an empty root — and an empty root is exactly what a
+      # confirmed erasure of bytes that are still there looks like from the inside.
+      - image_storage:/app/storage
     command: ["php", "bin/console", "messenger:consume", "async", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "--time-limit=3600"]
 
 volumes:
   caddy_data:
   caddy_config:
   database_data:
+  # Canonical bytes of stored images. A named volume rather than a path inside the source tree, because a
+  # container being recreated must not take the bytes with it: without this the adapter writes into the
+  # container's writable layer and every redeploy silently empties storage while every row survives, which
+  # nothing downstream would report. Mounted by `php` (writes) and by `messenger_worker` (deletes), so the
+  # two must never diverge on it. It deliberately sits outside `./api`, so the bytes are not in the bind
+  # mount, never reach `git status`, and are not reachable as static files.
+  image_storage:
