@@ -4,7 +4,7 @@ baseline_commit: f86b2662dd4be317d449cd4bebcdc46c77b1814d
 
 # Story 1.2: Persistir la imagen y garantizar el borrado fiable de sus bytes
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -408,14 +408,17 @@ como «duplicación», aunque lo que describe —tasks y numeración de AC— no
 
 ## Tasks / Subtasks
 
-- [ ] **Task 0 — Cerrar la decisión de forma de persistencia ANTES de escribir código** (AC 6)
-  - [ ] Leer *Dev Notes → La decisión abierta*. Es una decisión de modelado/persistencia: `CLAUDE.md`
-        (*Per-aggregate persistence strategy*) la reserva al usuario. **Preséntala con sus costes y espera
-        respuesta.** No la cierres unilateralmente ni la infieras del resto de la historia.
-  - [ ] Registrar la opción elegida y su argumento en *Dev Agent Record → Completion Notes*.
-  - [ ] **Es un gate, no una tarea más: ninguna tarea de implementación empieza antes de que esté cerrada.**
-        Las Tasks 2, 3, 9 y 11 dependen de la forma elegida (hidratación, identity map, `remove()`, forma del
-        constructor, tests), así que arrancarlas antes produce trabajo que hay que rehacer.
+- [x] **Task 0 — Forma de persistencia: DECIDIDA, gate cerrado** (AC 6)
+  - [x] Consultadas en paralelo las tres personas (Winston, Amelia, Murat) sobre el árbol real, más una
+        cuarta lectura externa. Argumento completo y discrepancias en *Dev Agent Record → Completion Notes*.
+  - [x] **Decisión de Sergio (2026-08-28): `final readonly class Image` como entidad ORM directamente
+        mapeada, SIN `AggregateRoot`, SIN `Identifiable`, SIN `Timestamped`.** Identidad de dominio
+        `ImageId` en la API pública (`id(): ImageId`), representación persistida `private string $id`
+        con `#[ORM\Column(type: Types::GUID)]`. **Sin tipo DBAL propio.**
+  - [x] **Sub-decisión de Task 2 (misma sesión): `createdAt` se mapea `datetimetz_immutable`**
+        (`DateTimeTzMicrosType` → `TIMESTAMP(6) WITH TIME ZONE`), no `Types::DATETIME_IMMUTABLE`.
+  - [x] Las opciones A (tipo DBAL propio), B (patrón de casa) y D (modelo de persistencia separado)
+        quedan **descartadas con argumento**, no pendientes. No se reabren durante la implementación.
 
 - [ ] **Task 1 — Habilitar el mapeo Doctrine del shared kernel** (AC 6) — `api/config/packages/doctrine.yaml`
   - [ ] Añadir el bloque `mappings:` que falta. Hoy `auto_mapping: false` y sólo hay `Backoffice`, `Iam`,
@@ -725,6 +728,11 @@ como «duplicación», aunque lo que describe —tasks y numeración de AC— no
 ## Dev Notes
 
 ### La decisión abierta — forma de persistencia del agregado `Image`
+
+> **CERRADA el 2026-08-28 por Sergio.** El veredicto y su argumento están en *Dev Agent Record →
+> Completion Notes*; lo de abajo se conserva porque es el planteamiento del fork, pero **tres de sus
+> premisas resultaron falsas al medirlas** (no había precedente de entidad ORM en el shared kernel;
+> `readonly` era un riesgo Doctrine sin medir; la opción B era viable). No lo uses como guía.
 
 **No la cierres tú solo.** `CLAUDE.md` (*Per-aggregate persistence strategy*) reserva al usuario las
 decisiones de estrategia de persistencia y de frontera de agregado. Ninguna AC ni el decision firewall fijan
@@ -1065,12 +1073,137 @@ de recursos y vetting de `intervention/gif` (**son de la Story 1.3, no los absor
   excepciones que dejaba ramas inalcanzables, y una afirmación sobre el mensaje del driver que se dio por
   medida sin medirla.
 
+- 2026-08-28 — Task 0 cerrada por Sergio. Se consultó en paralelo a Winston, Amelia y Murat sobre el
+  árbol real, más una cuarta lectura externa; **los cuatro convergen en una forma que no estaba entre
+  las tres opciones del borrador** —entidad ORM sin `AggregateRoot` ni traits, identidad de dominio
+  `ImageId` sobre una columna `Types::GUID` escalar— y tres de los cuatro en conservar `final
+  readonly`. B queda descartada por dos fatales acumulativos (`AggregateRoot::id()` es
+  `final protected … : string`, y `updated_at` no se puede desmapear desde la subclase) más los tres
+  setters públicos que contradicen D3; A queda descartada porque un tipo DBAL propio **saca la columna
+  del universo de `make php.lint.person-reference`**, que filtra por `Types::GUID`. Se corrigen tres
+  premisas falsas del borrador: la opción B ya se implementó para este mismo concepto y se retiró en
+  `08f8199b`; la hidratación de `readonly` está soportada de primera clase por ORM 3.6.8; y la cita
+  que lo sostenía apuntaba a una rama de proxy legacy que en este proyecto es código muerto.
+  Sub-decisión: `createdAt` se mapea `datetimetz_immutable` (`TIMESTAMP(6) WITH TIME ZONE`), no
+  `TIMESTAMP(0)`, para que el test de hidratación sea falsable por precisión en vez de depender de
+  una carrera de reloj.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
+Claude Opus 5 (`claude-opus-5[1m]`), workflow `bmad-dev-story`.
+
 ### Debug Log References
 
+Consulta de Task 0 (2026-08-28), tres personas en paralelo con dossier de evidencia y restricción de
+solo lectura, más una cuarta lectura externa sobre el mismo dossier. Dossier y prompt externo en
+`tmp/bmad-md/` (gitignored).
+
 ### Completion Notes List
+
+#### Task 0 — Forma de persistencia del agregado `Image` (decisión de Sergio, 2026-08-28)
+
+**Decidido:** `final readonly class Image` como entidad ORM directamente mapeada, **sin**
+`AggregateRoot`, **sin** `Identifiable`, **sin** `Timestamped`. Identidad de dominio `ImageId` en la
+API pública; representación persistida `private string $id` con `#[ORM\Column(type: Types::GUID)]`,
+declarada en el cuerpo de la clase y asignada en el constructor —el mismo patrón que `createdAt` ya
+usaba—, de modo que `final readonly` sobrevive. **Sin tipo DBAL propio.** `createdAt` se mapea
+`datetimetz_immutable` (`DateTimeTzMicrosType` → `TIMESTAMP(6) WITH TIME ZONE`).
+
+**Cómo se decidió.** El borrador dejaba tres opciones (A `final readonly` + VO de identidad, B patrón
+de casa, C intermedia) y Sergio se inclinaba por B. Se consultó en paralelo a Winston (arquitecto),
+Amelia (ingeniera) y Murat (arquitecto de tests) sobre el árbol real, y después a una cuarta lectura
+externa. **Los cuatro convergen en una forma que no estaba entre las tres opciones**, y tres de los
+cuatro en conservar `readonly`.
+
+**Por qué se descarta B (el patrón de casa), pese a la inclinación inicial.** Dos fatales acumulativos
+y un tercer coste que nadie había escrito:
+
+1. `AggregateRoot::id()` es `final protected function id(): string` (`AggregateRoot.php:55`), e
+   `Image::id()` es pública y devuelve `ImageId`. No hay modificación legal de la subclase que lo
+   arregle: `final` impide el override, y `ImageId` no es subtipo de `string`. Muere en tiempo de
+   enlazado de la clase, es decir en `cache:warmup`.
+2. `Timestamped` añade `updated_at NOT NULL` (`Timestamped.php:16-17`), un octavo campo que la AC 6
+   prohíbe, y **no se puede desmapear desde la subclase**: `#[ORM\AttributeOverrides]` redefine una
+   columna, no la elimina, y el trait viene soldado a la clase base (`AggregateRoot.php:20`).
+3. Los traits publican `setId()`, `setCreatedAt()` y `setUpdatedAt()`. `Image` pasaría de cero
+   superficie de mutación pública a tres setters, con lo que el invariante D3 del ADR degrada de
+   *cierto por construcción* a *cierto por convención*. Medido: `->setId(` tiene **0 llamadas en todo
+   `api/src`** frente a 16 de `getId()` — es superficie muerta que arrastran ocho agregados.
+
+Y su único beneficio declarado no tiene consumidor: `AggregateRoot` existe para recolectar eventos de
+dominio, e `Image` no emite ninguno — la Task 6 prohíbe publicar en la subida y la Task 7 pone al
+consumidor como emisor, así que `pullDomainEvents()` devolvería `[]` de por vida.
+
+**Por qué se descarta A (tipo DBAL propio para `ImageId`).** Razón que ninguna de las tres opciones
+anticipaba: el gate de referencias-a-persona construye su universo filtrando por
+`Types::GUID === $attribute->newInstance()->type` (`api/tests/Support/PersonReferences.php:375`). Una
+columna `#[ORM\Column(type: 'image_id')]` **desaparece de ese universo**: `make php.lint.person-reference`
+no la pide, no la exige y no se entera. En el módulo cuyo ADR gira entero sobre borrado GDPR, sería un
+verde por ausencia de sujeto — y refuta la fila que la propia historia daba por buena en su tabla de
+registros. Coste adicional: el identity map del ORM hace `implode(' ', $identificador)` y sólo trata
+aparte los `BackedEnum` (`UnitOfWork::getIdHashByIdentifier`), así que un VO como identificador exige
+que implemente `Stringable`, lo que lo abre a interpolación silenciosa en strings y logs.
+
+**Por qué se descarta el modelo de persistencia separado (`Image` puro + `ImageRecord` ORM).** Es la
+forma más pura desde Clean Architecture, y se descarta por YAGNI / Regla de Tres: siete campos, cero
+asociaciones, cero colecciones, cero mutaciones. Además contradice una excepción que el repo ya
+bendice por ADR (`external-dependencies-in-domain`): metadata `#[ORM]` pasiva en `Domain/`.
+
+**Por qué se conserva `readonly` — la única discrepancia real entre los consultados.** Winston propuso
+la misma forma soltando `readonly`, sin argumentar la pérdida; no lo vio conservable. Amelia y Murat
+demostraron que sí lo es (propiedad declarada en el cuerpo, como `createdAt`), y el argumento que
+decide es de falsabilidad: `Types::DATETIME_IMMUTABLE` declara `TIMESTAMP(0)` en Postgres
+(`PostgreSQLPlatform.php:611`), luego el test natural de hidratación —`persist → clear → find →
+comparar`— **pasa en verde aunque el re-estampado de `createdAt` sea total**, siempre que ambas
+operaciones caigan en el mismo segundo. Con `readonly`, ese invariante lo sostiene el runtime:
+re-escribir una propiedad `readonly` ya inicializada lanza (`ReadonlyAccessor.php:42-48`). Sin él, la
+única defensa es un test que por defecto se escribe mal.
+
+**Sub-decisión: `createdAt` como `datetimetz_immutable`.** Precedente medido en las dos direcciones —
+las siete entidades del árbol usan `TIMESTAMP(0)`, pero las tablas del propio shared kernel usan
+`TIMESTAMP(6) WITH TIME ZONE` (`dek_keystore`, `Version20260701083342.php:19`). Se elige la del shared
+kernel porque hace el test de hidratación falsable **también por precisión**: un re-estampado cambia
+los microsegundos aunque caiga dentro del mismo segundo, así que el rojo deja de depender de una
+carrera de reloj.
+
+**Premisas del borrador que resultaron falsas al medirlas, y que quedan corregidas aquí:**
+
+- *"No hay ni una sola entidad ORM bajo `api/src/Shared/`; `Image` sería la primera"* — falso en la
+  parte que importa. Hasta el 2026-07-23 existió `Erpify\Shared\Media\Domain\Entity\Media`,
+  declarada `final class Media extends AggregateRoot` con `#[ORM\Entity]`, junto con **dos** mappings
+  del shared kernel (`SharedMedia`, `SharedStorage`). Los borró `08f8199b` (*"chore(api): remove the
+  image upload surface (#557)"*). **La opción B ya se implementó para este mismo concepto y se
+  retiró**, lo que sube el listón del argumento para repetirla.
+- *"Hidratación de `final readonly`: sin precedente aquí, hay que medirlo"* — medido y disuelto. ORM
+  3.6.8 instancia sin pasar por el constructor y sabe escribir propiedades `readonly` no inicializadas
+  (`ReadonlyAccessor`, `ReflectionReadonlyProperty`, `UnitOfWork.php:2427` →
+  `ClassMetadata.php:817-820` → `doctrine/instantiator`). El riesgo real de A no era la hidratación.
+- La cita original de ese mecanismo (`UnitOfWork.php:2410-2413`) apuntaba a la rama de proxy legacy,
+  **código muerto** en este proyecto porque `doctrine-bundle` fuerza `enableNativeLazyObjects => true`
+  (`DoctrineExtension.php:944`). La conclusión se sostiene por otra línea.
+
+**Residual aceptado, a fijar con test y no a descubrir (Task 11).** `refresh()` sobre una `Image` ya
+gestionada **lanzaría**: el guardia de `ReadonlyAccessor` compara por identidad de objeto (`!==`,
+`:42`) y un `DateTimeImmutable` rehidratado nunca es la misma instancia. Hoy hay **0** llamadas a
+`->refresh(` en `api/src`, pero el repo sí usa el idioma `HINT_REFRESH` en otro módulo
+(`DoctrineUserRepository.php:68`). `refresh(Image)` queda **fuera del contrato**, declarado y probado.
+
+**Hallazgo colateral, independiente de la decisión, que entra en el alcance (Task 11).** El test que
+supuestamente hace cierto el invariante D3 tiene un agujero demostrable dentro de su propio fichero:
+su docblock afirma que *"la firma del constructor es la lista completa de lo que este agregado puede
+contener"*, y `createdAt` se declara en el cuerpo (`Image.php:25`), **fuera de la firma**
+(`Image.php:27-34`). Una propiedad de clasificación declarada del mismo modo pasaría el test en verde.
+Se sustituye por una aserción sobre la **superficie completa** —todas las propiedades y todos los
+métodos públicos, más ausencia explícita de mutadores y de campos de clasificación—, que es
+independiente de la opción elegida y estrictamente más fuerte que la actual.
+
+**Deuda transversal detectada, NO resuelta aquí.** `AggregateRoot` combina hoy cuatro contratos
+(identidad, sellos temporales, eventos de dominio y convención Doctrine) y publica un setter de
+identidad con cero consumidores. La pregunta que queda para un ADR futuro es cuáles de esas
+propiedades son invariantes de **toda** entidad ORM de ERPify y cuáles son sólo convenciones del
+patrón actual. No se toca `AggregateRoot` en esta historia: el `blast radius` sería los ocho agregados
+existentes, por un caso local.
 
 ### File List
