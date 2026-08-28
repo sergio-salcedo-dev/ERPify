@@ -43,6 +43,8 @@ import { ApiForgotPasswordRepository } from "../../../backoffice/user/infrastruc
 import type { ForgotPasswordRepository } from "../../../backoffice/user/domain/ForgotPasswordRepository";
 import { ApiResetPasswordRepository } from "../../../backoffice/user/infrastructure/ApiResetPasswordRepository";
 import type { ResetPasswordRepository } from "../../../backoffice/user/domain/ResetPasswordRepository";
+import { ApiRedeemRecoverySecretRepository } from "../../../backoffice/user/infrastructure/ApiRedeemRecoverySecretRepository";
+import type { RedeemRecoverySecretRepository } from "../../../backoffice/user/domain/RedeemRecoverySecretRepository";
 import { ApiInviteUserRepository } from "../../../backoffice/user/infrastructure/ApiInviteUserRepository";
 import type { InviteUserRepository } from "../../../backoffice/user/domain/InviteUserRepository";
 import { InviteUser } from "../../../backoffice/user/application/InviteUser";
@@ -62,6 +64,8 @@ import { ApiIdentityRepository } from "@/context/shared/access/infrastructure/Ap
 import type { IdentityRepository } from "@/context/shared/access/domain/IdentityRepository";
 import { ApiSessionsRepository } from "@/context/shared/access/infrastructure/ApiSessionsRepository";
 import type { SessionsRepository } from "@/context/shared/access/domain/SessionsRepository";
+import { ApiRecoverySecretRepository } from "@/context/shared/access/infrastructure/ApiRecoverySecretRepository";
+import type { RecoverySecretRepository } from "@/context/shared/access/domain/RecoverySecretRepository";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { EventTargetDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/EventTargetDebugTokenObserver";
 import { NoopDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/NoopDebugTokenObserver";
@@ -279,6 +283,13 @@ container
   .to(ApiResetPasswordRepository)
   .inSingletonScope();
 
+// Account recovery: redeeming the standby secret a locked-out user typed in. Public like the
+// two adapters above and, like them, a real HTTP adapter over the injected HttpClient.
+container
+  .bind<RedeemRecoverySecretRepository>("BackOfficeRedeemRecoverySecretRepository")
+  .to(ApiRedeemRecoverySecretRepository)
+  .inSingletonScope();
+
 // Identity / session subsystem: the AuthProvider hydrates from `/me`, and the
 // "My sessions" surface reads/revokes the user's own session registry.
 container
@@ -288,6 +299,14 @@ container
 container
   .bind<SessionsRepository>("SessionsRepository")
   .to(ApiSessionsRepository)
+  .inSingletonScope();
+
+// The same identity's standby recovery credential: read, minted and revoked from the profile
+// surface. A port of its own rather than more methods on IdentityRepository — minting a
+// second credential is not a way of resolving who you are.
+container
+  .bind<RecoverySecretRepository>("RecoverySecretRepository")
+  .to(ApiRecoverySecretRepository)
   .inSingletonScope();
 
 export { container };

@@ -21,6 +21,11 @@ export const Routes = {
   RESET_PASSWORD: "/reset-password",
   /** Public accept-invitation page — sets the credential that activates an invited account. */
   ACCEPT_INVITATION: "/accept-invitation",
+  /**
+   * Public account-recovery page — the holder types in the standby secret they minted, and a
+   * successful redemption signs them in. The secret is never carried here in the URL.
+   */
+  RECOVERY: "/recovery",
   /** Authenticated BackOffice root — every `/backoffice/*` path lives under this prefix. */
   BACKOFFICE: "/backoffice",
   /**

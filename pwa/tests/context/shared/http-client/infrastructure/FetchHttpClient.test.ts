@@ -9,6 +9,7 @@ import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import type { Telemetry } from "@/context/shared/observability/domain/Telemetry";
 import { isProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
+import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { NAVIGATION_COMMIT_BUDGET_MS } from "@/context/shared/navigation/infrastructure/hardNavigate";
 
@@ -779,6 +780,34 @@ describe("FetchHttpClient", () => {
       // strand the user on "session expired" instead.
       expect(replace).not.toHaveBeenCalled();
     });
+
+    // The three pre-identity token actions, driven from the endpoint constants rather than from a
+    // hand-written list of paths. Each is PUBLIC_ACCESS, so the FIREWALL cannot 401 them — and reading
+    // that as "these entries are dead" is the mistake this case exists to refuse: their 401 comes from
+    // the CSRF listener, which answers `unauthenticated` to a missing or malformed `X-CSRF-Token`.
+    // Measured against the running stack for all three.
+    //
+    // Until now `/me` and the sign-out call were the only exemptions with a test, so deleting either of
+    // the other entries left the whole suite green. The redemption is the one where the failure would
+    // hurt most: that screen exists for somebody who CANNOT log in, so bouncing them to
+    // `/login?reason=session-expired` is both a false statement and a dead end.
+    it.each([
+      ["invitation accept", API_ENDPOINTS.BACKOFFICE.INVITATIONS.ACCEPT],
+      ["password reset", API_ENDPOINTS.BACKOFFICE.RESET_PASSWORD],
+      ["recovery-secret redemption", API_ENDPOINTS.BACKOFFICE.RECOVERY_REDEEM],
+    ])(
+      "does not redirect for the %s handshake (its 401 is a CSRF rejection)",
+      async (_name, path) => {
+        respond401();
+        const client = await freshClient();
+
+        await expect(client.post(path, {})).rejects.toMatchObject({
+          problem: { status: HttpStatus.UNAUTHORIZED },
+        });
+
+        expect(replace).not.toHaveBeenCalled();
+      },
+    );
 
     it("does not redirect when the document is already on /login", async () => {
       vi.stubGlobal("location", { pathname: Routes.LOGIN, search: "", replace });

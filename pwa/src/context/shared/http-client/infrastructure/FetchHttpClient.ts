@@ -86,10 +86,18 @@ interface ReadResponse {
 //    loop the unauthenticated landing (AuthProvider sets `unauthenticated` and
 //    RequireAuth does the routing).
 //  - `/backoffice/login` reports bad credentials on the login page itself.
-//  - `/backoffice/invitations/accept` and `/backoffice/reset-password` run for
-//    an as-yet-unauthenticated user; an origin/CSRF rejection is a handshake
-//    failure the token-action screen owns, so it must not be bounced to
-//    `/login?reason=session-expired`.
+//  - `/backoffice/invitations/accept`, `/backoffice/reset-password` and
+//    `/backoffice/recovery/redeem` run for an as-yet-unauthenticated user; an
+//    origin/CSRF rejection is a handshake failure the token-action screen owns,
+//    so it must not be bounced to `/login?reason=session-expired`. Their 401 does
+//    not come from the firewall — all three are PUBLIC_ACCESS — it comes from the
+//    CSRF listener, which is why "the firewall cannot 401 these" is not a reason
+//    to drop any of them from this list. Measured against the running stack: a
+//    request to any of the three with a missing or malformed `X-CSRF-Token`
+//    answers 401 `unauthenticated`.
+//    The redemption is the one that would hurt most: it exists for somebody who
+//    CANNOT log in, so bouncing them to the login screen with "session expired"
+//    is both false and a dead end.
 //  - `/sessions/revoke-current` IS the sign-out call. On an already-expired
 //    session it 401s, and bouncing that would race the sign-out's own
 //    navigation and strand the user on "session expired" instead of the public
@@ -106,6 +114,7 @@ function isAuthHandshakeEndpoint(input: string): boolean {
     path.endsWith(API_ENDPOINTS.BACKOFFICE.LOGIN) ||
     path.endsWith(API_ENDPOINTS.BACKOFFICE.INVITATIONS.ACCEPT) ||
     path.endsWith(API_ENDPOINTS.BACKOFFICE.RESET_PASSWORD) ||
+    path.endsWith(API_ENDPOINTS.BACKOFFICE.RECOVERY_REDEEM) ||
     path.endsWith(API_ENDPOINTS.IDENTITY.SESSIONS_REVOKE_CURRENT)
   );
 }

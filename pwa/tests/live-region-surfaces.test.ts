@@ -50,6 +50,9 @@ const LIVE_REGION_SURFACES: Readonly<Record<string, string>> = {
     "genuine failure",
   "app/backoffice/profile/_components/ChangePasswordForm.tsx":
     "the result of a user action — the success confirmation replacing the submitted form",
+  "app/backoffice/profile/_components/RecoverySecretPanel.tsx":
+    "the result of a user action — the minted secret replacing the form, and the one moment " +
+    "the warning that it will never be shown again has to reach someone who cannot see it",
 };
 
 function* walk(dir: string): Generator<string> {
