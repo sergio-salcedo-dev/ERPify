@@ -23,7 +23,7 @@ final class UploadImageTest extends TestCase
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/png', 10, 20);
         $processor = new StubImageProcessor($canonicalImage);
-        $uploadImage = self::uploadImageWith($processor);
+        $uploadImage = $this->uploadImageWith($processor);
 
         $image = $uploadImage->upload('raw-bytes');
 
@@ -35,13 +35,13 @@ final class UploadImageTest extends TestCase
     }
 
     /**
-     * AC 2 / NFR4: the module mints the id internally — nothing a caller passes in ever reaches the
+     * The module mints the id internally — nothing a caller passes in ever reaches the
      * processor, because the public signature has no parameter for one to travel through.
      */
     public function testGeneratesADistinctIdInternallyOnEveryUpload(): void
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/png', 10, 20);
-        $uploadImage = self::uploadImageWith(new StubImageProcessor($canonicalImage));
+        $uploadImage = $this->uploadImageWith(new StubImageProcessor($canonicalImage));
 
         $first = $uploadImage->upload('raw-bytes');
         $second = $uploadImage->upload('raw-bytes');
@@ -50,7 +50,7 @@ final class UploadImageTest extends TestCase
     }
 
     /**
-     * AC 6: no signature anywhere in this class accepts a conservation-contract parameter — the
+     * No signature anywhere in this class accepts a conservation-contract parameter — the
      * only two arguments {@see UploadImage::upload()} declares are bytes and an optional declared
      * media type.
      */
@@ -70,7 +70,7 @@ final class UploadImageTest extends TestCase
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/jpeg', 10, 20);
         $processor = new StubImageProcessor($canonicalImage);
-        $uploadImage = self::uploadImageWith($processor);
+        $uploadImage = $this->uploadImageWith($processor);
 
         $uploadImage->upload('raw-bytes', 'image/jpeg');
 
@@ -84,7 +84,7 @@ final class UploadImageTest extends TestCase
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/jpeg', 10, 20);
         $processor = new StubImageProcessor($canonicalImage);
-        $uploadImage = self::uploadImageWith($processor);
+        $uploadImage = $this->uploadImageWith($processor);
 
         $uploadImage->upload('raw-bytes');
 
@@ -95,7 +95,7 @@ final class UploadImageTest extends TestCase
      * The collaborators the storage and persistence steps need. Cases here are about assembling the
      * aggregate, so they take working in-memory implementations of the ports and assert nothing about them.
      */
-    private static function uploadImageWith(ImageProcessor $processor): UploadImage
+    private function uploadImageWith(ImageProcessor $processor): UploadImage
     {
         return new UploadImage(
             $processor,

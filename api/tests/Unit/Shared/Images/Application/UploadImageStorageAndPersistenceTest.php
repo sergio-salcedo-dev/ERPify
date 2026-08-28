@@ -6,7 +6,7 @@ namespace Erpify\Tests\Unit\Shared\Images\Application;
 
 use Erpify\Shared\Images\Application\UploadImage;
 use Erpify\Shared\Images\Domain\CanonicalImage;
-use Erpify\Shared\Images\Domain\ImageId;
+use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
@@ -21,6 +21,9 @@ use RuntimeException;
  * what is deliberately left behind when something fails.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the subject is the collaboration itself, so the doubles
+ *                                                   for every port it drives are the test
  */
 #[CoversClass(UploadImage::class)]
 final class UploadImageStorageAndPersistenceTest extends TestCase
@@ -31,7 +34,8 @@ final class UploadImageStorageAndPersistenceTest extends TestCase
         $canonical = new CanonicalImage('canonical-bytes', 'image/webp', 10, 20);
 
         $image = $this->uploadImage($storage, processor: new StubImageProcessor($canonical))
-            ->upload('ORIGINAL-UPLOADED-BYTES');
+            ->upload('ORIGINAL-UPLOADED-BYTES')
+        ;
 
         $this->assertSame(['canonical-bytes'], \array_values($storage->objects));
         $this->assertSame('canonical-bytes', $storage->read($image->id()));
@@ -69,8 +73,10 @@ final class UploadImageStorageAndPersistenceTest extends TestCase
         $canonical = new CanonicalImage('canonical-bytes', 'image/png', 4, 4);
 
         try {
-            $this->uploadImage($storage, new StubImageProcessor($canonical), new FailingImageRepository())->upload('raw');
-            self::fail('the persistence failure must surface to the caller');
+            $this->uploadImage($storage, new StubImageProcessor($canonical), new FailingImageRepository())
+                ->upload('raw')
+            ;
+            $this->fail('the persistence failure must surface to the caller');
         } catch (RuntimeException) {
             $this->assertCount(1, $storage->objects, 'the orphan is accepted, not silently cleaned up');
         }
@@ -80,6 +86,10 @@ final class UploadImageStorageAndPersistenceTest extends TestCase
      * Two properties in one sequence: the bytes are written BEFORE the transaction opens — so no rollback
      * is ever expected to undo a filesystem write — and the caller receives the aggregate only after the
      * row has committed.
+     *
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter") the probe's two promoted properties are both read in
+     *                                                   its `transactional()`; promotion inside an anonymous
+     *                                                   class is invisible to the analyser
      */
     public function testTheObjectIsStoredBeforeTheTransactionAndReturnedOnlyAfterItCommits(): void
     {
@@ -88,9 +98,14 @@ final class UploadImageStorageAndPersistenceTest extends TestCase
         $canonical = new CanonicalImage('canonical-bytes', 'image/png', 4, 4);
         $repository = new InMemoryImageRepository();
 
-        $probe = new class($storage, $transactions) implements TransactionManager {
-            public bool $objectWasStoredBeforeTheTransaction = false;
+        $probe = new class ($storage, $transactions) implements TransactionManager {
+            public bool $storedBeforeTheTransaction = false;
 
+            /**
+             * @SuppressWarnings("PHPMD.UnusedFormalParameter") both promoted properties are read below;
+             *                                                   promotion inside an anonymous class is
+             *                                                   invisible to the analyser
+             */
             public function __construct(
                 private readonly InMemoryImageStorage $storage,
                 private readonly ImmediateTransactionManager $inner,
@@ -100,7 +115,7 @@ final class UploadImageStorageAndPersistenceTest extends TestCase
             #[Override]
             public function transactional(callable $operation): mixed
             {
-                $this->objectWasStoredBeforeTheTransaction = [] !== $this->storage->objects;
+                $this->storedBeforeTheTransaction = [] !== $this->storage->objects;
 
                 return $this->inner->transactional($operation);
             }
@@ -108,9 +123,13 @@ final class UploadImageStorageAndPersistenceTest extends TestCase
 
         $image = (new UploadImage(new StubImageProcessor($canonical), $storage, $repository, $probe))->upload('raw');
 
-        $this->assertTrue($probe->objectWasStoredBeforeTheTransaction);
+        $this->assertTrue($probe->storedBeforeTheTransaction);
         $this->assertSame(1, $transactions->committed, 'the row committed');
-        $this->assertNotNull($repository->findById($image->id()), 'and the identity handed back resolves to it');
+        $this->assertInstanceOf(
+            Image::class,
+            $repository->findById($image->id()),
+            'and the identity handed back resolves to it',
+        );
     }
 
     private function uploadImage(
@@ -126,4 +145,3 @@ final class UploadImageStorageAndPersistenceTest extends TestCase
         );
     }
 }
-

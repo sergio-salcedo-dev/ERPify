@@ -26,6 +26,25 @@ use Erpify\Shared\Images\Domain\ImageId;
  * Erring toward failure costs a retry. This is not inherited from the storage library — it is imposed on
  * whatever library implements it.
  *
+ * **What `store()` guarantees, and when.** On return, reading the identifier back yields exactly the bytes
+ * handed in — verified, not assumed. It does NOT promise that a partial object was never observable under
+ * the identifier while the write was in flight: the write is direct, with no temporary object renamed into
+ * place. That is a decision rather than an oversight, and it costs nothing here because nothing can observe
+ * the window. The identifier is minted inside the upload use case and reaches no caller until its row has
+ * committed, and `store()` refuses an identifier that already carries an object, so the only reader who
+ * could look during the write is one holding an identifier nobody has handed out. An atomic rename would
+ * buy that unobservable window at the price of a second filesystem operation, a temporary namespace to
+ * garbage-collect and a failure mode — a rename that fails after a complete write — this contract has no
+ * vocabulary for.
+ *
+ * **These failures do not carry an HTTP status, deliberately.** None of them implements an error-contract
+ * marker, so today an uncaught one is an unhandled exception rather than a mapped response. A status is a
+ * statement about a WIRE contract, and this module publishes no route: the only caller is the queue
+ * consumer, where a marker changes nothing because the retry decision reads the exception rather than a
+ * status. Minting one here would fix the mapping before the surface that has to honour it exists — and the
+ * mapping the delivery story needs (absence to 404, transient to 5xx) is a property of that route reading
+ * this vocabulary, which is exactly what the three verdicts above are for.
+ *
  * No method returns a URL, and none accepts or returns a path or a storage key. Where the bytes live, and
  * how they are addressed physically, is the adapter's business; delivery belongs to the read story.
  *

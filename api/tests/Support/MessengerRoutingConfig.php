@@ -16,6 +16,12 @@ use Symfony\Component\Yaml\Yaml;
  * config, a routing value has three accepted shapes, and PHP config is executed rather than parsed.
  *
  * @internal test support
+ *
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity") the branching is the shape of what Symfony accepts
+ *                                                     across those files — a transport written as a bare
+ *                                                     DSN or as a map, a `when@test` section, a routing
+ *                                                     value in three forms — and every extraction that
+ *                                                     keeps a method readable adds to this same total
  */
 final readonly class MessengerRoutingConfig
 {
@@ -173,45 +179,59 @@ final readonly class MessengerRoutingConfig
             $config = Yaml::parseFile($file, Yaml::PARSE_CUSTOM_TAGS);
 
             foreach (\is_array($config) ? $config : [] as $sectionName => $section) {
-                $dsn = $this->transportsIn($section)[self::PERSISTED_TRANSPORT] ?? null;
-                $dsn = \is_array($dsn) ? ($dsn['dsn'] ?? null) : $dsn;
+                $violation = $this->misdeclarationIn($file, (string) $sectionName, $section);
 
-                if (null === $dsn) {
-                    continue;
-                }
-
-                $expected = \str_starts_with((string) $sectionName, 'when@test')
-                    ? self::NON_TRANSACTIONAL_TEST_DSN_PREFIX
-                    : null;
-
-                if (null !== $expected) {
-                    if (!\is_string($dsn) || !\str_starts_with($dsn, $expected)) {
-                        $violations[] = \sprintf(
-                            '%s [%s] declares "%s" as %s; the pinned test substitution is %s',
-                            $file,
-                            $sectionName,
-                            self::PERSISTED_TRANSPORT,
-                            \json_encode($dsn),
-                            $expected,
-                        );
-                    }
-
-                    continue;
-                }
-
-                if (!\is_string($dsn) || !$this->resolvesToADurableTransport($dsn)) {
-                    $violations[] = \sprintf(
-                        '%s [%s] declares "%s" as %s; it must resolve to a Doctrine DSN',
-                        $file,
-                        $sectionName,
-                        self::PERSISTED_TRANSPORT,
-                        \json_encode($dsn),
-                    );
+                if (null !== $violation) {
+                    $violations[] = $violation;
                 }
             }
         }
 
         return $violations;
+    }
+
+    /**
+     * The verdict for ONE section of one file, or `null` when it declares nothing about this transport.
+     *
+     * Split out so the loop above stays a loop: the branching here is the shape of what Symfony accepts —
+     * a transport written as a bare DSN or as a map, and a `when@test` section whose substitution is
+     * pinned rather than judged — not a decision this reader gets to simplify away.
+     */
+    private function misdeclarationIn(string $file, string $sectionName, mixed $section): ?string
+    {
+        $dsn = $this->transportsIn($section)[self::PERSISTED_TRANSPORT] ?? null;
+        $dsn = \is_array($dsn) ? ($dsn['dsn'] ?? null) : $dsn;
+
+        if (null === $dsn) {
+            return null;
+        }
+
+        if (\str_starts_with($sectionName, 'when@test')) {
+            if (\is_string($dsn) && \str_starts_with($dsn, self::NON_TRANSACTIONAL_TEST_DSN_PREFIX)) {
+                return null;
+            }
+
+            return \sprintf(
+                '%s [%s] declares "%s" as %s; the pinned test substitution is %s',
+                $file,
+                $sectionName,
+                self::PERSISTED_TRANSPORT,
+                \json_encode($dsn),
+                self::NON_TRANSACTIONAL_TEST_DSN_PREFIX,
+            );
+        }
+
+        if (\is_string($dsn) && $this->resolvesToADurableTransport($dsn)) {
+            return null;
+        }
+
+        return \sprintf(
+            '%s [%s] declares "%s" as %s; it must resolve to a Doctrine DSN',
+            $file,
+            $sectionName,
+            self::PERSISTED_TRANSPORT,
+            \json_encode($dsn),
+        );
     }
 
     /**

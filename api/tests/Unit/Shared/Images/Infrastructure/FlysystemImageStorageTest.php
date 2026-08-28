@@ -16,6 +16,7 @@ use League\Flysystem\Local\LocalFilesystemAdapter;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use ReflectionMethod;
 use ReflectionNamedType;
 
 /**
@@ -23,6 +24,8 @@ use ReflectionNamedType;
  * way a filesystem does, which is the property the integrity check exists to catch.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the port's whole verdict vocabulary is under test here
  */
 #[CoversClass(FlysystemImageStorage::class)]
 final class FlysystemImageStorageTest extends TestCase
@@ -46,16 +49,45 @@ final class FlysystemImageStorageTest extends TestCase
         );
     }
 
+    /**
+     * The other half of the promise above, and the half a healthy temporary directory can never exercise:
+     * `store()` returning success has to MEAN the bytes are there, not merely that the substrate reported
+     * a completed write. Driven through a filesystem that accepts the write and keeps half of it — the
+     * shape of a truncated write — so the guarantee is a property of the adapter rather than of the
+     * machine the suite happens to run on.
+     */
+    public function testAWriteTheFilesystemAcceptedButCorruptedIsRefusedRatherThanReportedAsStored(): void
+    {
+        $storage = new FlysystemImageStorage(
+            new PartiallyWritingFilesystem($this->root),
+            $this->root,
+            new RecordingLogger(),
+        );
+        $imageId = ImageId::generate();
+
+        try {
+            $storage->store($imageId, \random_bytes(2048));
+            $this->fail('a write the substrate corrupted must not be reported as stored');
+        } catch (ImageStorageFailed $imageStorageFailed) {
+            $this->assertSame(StorageOperation::VerifyIntegrity, $imageStorageFailed->operation());
+        }
+
+        // The corrupt object is left where it is. Compensation is out of this contract by decision, and
+        // nothing is stranded by it: the identifier is never handed to a caller, so nobody comes back
+        // for it, and the surviving object is an orphan of exactly the kind the upload path accepts.
+        $this->assertFileExists($this->pathFor($imageId));
+    }
+
     public function testReadingAnAbsentObjectIsAConfirmedAbsenceRatherThanAFailure(): void
     {
         $storage = $this->storage();
 
         try {
             $storage->read(ImageId::generate());
-            self::fail('an absent object must be reported');
-        } catch (ImageBytesNotFound $absence) {
-            $this->assertSame(StorageFailureCategory::ConfirmedAbsence, $absence->storageFailure());
-            $this->assertSame(StorageOperation::Read, $absence->operation());
+            $this->fail('an absent object must be reported');
+        } catch (ImageBytesNotFound $imageBytesNotFound) {
+            $this->assertSame(StorageFailureCategory::ConfirmedAbsence, $imageBytesNotFound->storageFailure());
+            $this->assertSame(StorageOperation::Read, $imageBytesNotFound->operation());
         }
     }
 
@@ -87,9 +119,9 @@ final class FlysystemImageStorageTest extends TestCase
 
         try {
             $storage->store($imageId, 'second');
-            self::fail('a reused identifier must be refused rather than overwriting');
-        } catch (ImageStorageFailed $failure) {
-            $this->assertSame(StorageFailureCategory::Permanent, $failure->storageFailure());
+            $this->fail('a reused identifier must be refused rather than overwriting');
+        } catch (ImageStorageFailed $imageStorageFailed) {
+            $this->assertSame(StorageFailureCategory::Permanent, $imageStorageFailed->storageFailure());
         }
 
         $this->assertSame('first', $storage->read($imageId), 'the original bytes survive the refused write');
@@ -140,7 +172,7 @@ final class FlysystemImageStorageTest extends TestCase
     public function testThePortExposesNoUrlReturningMethod(): void
     {
         $methods = \array_map(
-            static fn (\ReflectionMethod $method): string => $method->getName(),
+            static fn (ReflectionMethod $method): string => $method->getName(),
             (new ReflectionClass(ImageStorage::class))->getMethods(),
         );
 
@@ -153,8 +185,8 @@ final class FlysystemImageStorageTest extends TestCase
 
     public function testEveryOperationOnTheContractSpeaksIdentitiesRatherThanPaths(): void
     {
-        foreach ((new ReflectionClass(ImageStorage::class))->getMethods() as $method) {
-            foreach ($method->getParameters() as $parameter) {
+        foreach ((new ReflectionClass(ImageStorage::class))->getMethods() as $reflectionMethod) {
+            foreach ($reflectionMethod->getParameters() as $parameter) {
                 $type = $parameter->getType();
 
                 if (!$type instanceof ReflectionNamedType || 'string' !== $type->getName()) {

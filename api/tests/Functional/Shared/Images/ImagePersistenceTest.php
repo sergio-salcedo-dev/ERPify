@@ -6,10 +6,10 @@ namespace Erpify\Tests\Functional\Shared\Images;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
-use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -41,16 +41,7 @@ final class ImagePersistenceTest extends KernelTestCase
             $stamped = new DateTimeImmutable('2020-01-01T00:00:00.123456+00:00');
             $imageId = ImageId::generate();
 
-            SystemClock::set(new class($stamped) implements Clock {
-                public function __construct(private readonly DateTimeImmutable $now)
-                {
-                }
-
-                public function now(): DateTimeImmutable
-                {
-                    return $this->now;
-                }
-            });
+            SystemClock::set(new FixedClock($stamped));
 
             try {
                 $image = new Image($imageId, \str_repeat('a', 64), 'image/webp', 800, 600, 4096);
@@ -123,7 +114,7 @@ final class ImagePersistenceTest extends KernelTestCase
             $entityManager->persist($image);
             $entityManager->flush();
 
-            $this->expectException(\LogicException::class);
+            $this->expectException(LogicException::class);
             $entityManager->refresh($image);
         });
     }

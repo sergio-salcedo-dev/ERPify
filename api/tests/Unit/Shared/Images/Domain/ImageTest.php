@@ -81,7 +81,7 @@ final class ImageTest extends TestCase
     }
 
     /**
-     * AC 4: verified on the observable model, not by reflecting for the absence of a method — the
+     * Verified on the observable model, not by reflecting for the absence of a method — the
      * constructor's own signature is the complete list of what this aggregate can ever hold, and it
      * carries no conservation-contract / classification field. `final` + a class-level `readonly`
      * modifier is what makes it true by construction: nothing here can add a mutation surface later.

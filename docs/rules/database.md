@@ -121,11 +121,20 @@ in-memory schema, so `make db.diff` generates and keeps its migration. These tab
 does not.
 
 **`auto_mapping: false` is intentional — the mapping list is an allowlist of what the ORM owns.**
-`config/packages/doctrine.yaml` declares each ORM tree by hand (`Backoffice`, `Iam`,
-`Organization`); Doctrine does **not** auto-discover `#[ORM\Entity]` anywhere under `src/`. Two
+`config/packages/doctrine.yaml` declares each ORM tree by hand (`Backoffice`, `Iam`, `Organization`,
+`SharedImages`); Doctrine does **not** auto-discover `#[ORM\Entity]` anywhere under `src/`. Two
 reasons: the DDD layout scatters entities across contexts (there is no conventional `src/Entity` for
 auto-mapping to find), and — the deciding one — keeping the list explicit makes *what Doctrine ORM
 manages* a reviewable line in the diff instead of a side effect of an attribute appearing somewhere.
+
+**A shared-kernel mapping names the capability module's entity directory, never `Erpify\Shared`.** The
+first ORM entity under `src/Shared/` is mapped as `SharedImages`, pointed at
+`src/Shared/Images/Domain/Entity` — one entry per capability that persists through the ORM, and the
+`Domain/Entity` leaf rather than the module root, so it is also the directory
+`config/services.yaml` already excludes from the container. A prefix covering the whole shared kernel
+would restore `auto_mapping: true` over half the tree by another name, and would silently adopt the
+capabilities that persist **without** the ORM on purpose — the crypto keystore, the event store, the
+audit log — the moment anybody wrote an `#[ORM\Entity]` anywhere beneath it.
 When an aggregate stops being ORM-persisted (as the domain-event log did when it became the raw-DBAL
 `event_store`), its entity **and** its `doctrine.yaml` mapping are removed together — a mapping pointing
 at an entity-less directory is dead config Doctrine rejects.

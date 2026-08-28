@@ -51,7 +51,7 @@ trait TemporaryImageStorage
             }
         }
 
-        self::fail(\sprintf('no stored object was found under the root for the given identity'));
+        self::fail('no stored object was found under the root for the given identity');
     }
 
     private function readFromDiskDirectly(ImageId $id): string
@@ -83,6 +83,11 @@ trait TemporaryImageStorage
         }
     }
 
+    /**
+     * @SuppressWarnings("PHPMD.ErrorControlOperator") teardown must not fail the run over a mode it cannot
+     *                                                  restore; the recursive delete below is what actually
+     *                                                  has to succeed
+     */
     private static function removeTree(string $root): void
     {
         if (!\is_dir($root)) {
@@ -95,6 +100,6 @@ trait TemporaryImageStorage
         }
 
         @\chmod($root, 0o755);
-        exec('rm -rf ' . \escapeshellarg($root));
+        \exec('rm -rf ' . \escapeshellarg($root));
     }
 }

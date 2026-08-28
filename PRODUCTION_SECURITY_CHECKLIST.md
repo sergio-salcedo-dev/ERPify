@@ -1491,6 +1491,33 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Expiry: re-assess before the first production deployment or the first customer**, whichever
       comes first.
 
+- [ ] **Image bytes have a durable home and no reconciliation, and one identifier outlives every erasure
+      path.** Four residuals of `Shared/Images`, listed together because each is invisible from the others.
+      **One — the volume is the durability.** `compose.yaml` mounts the named volume `image_storage` at
+      `/app/storage` for both `php` and `messenger_worker`, and `flysystem.yaml` sets
+      `lazy_root_creation: true` so an unmounted root surfaces as a permanent failure instead of being
+      replaced by a fresh empty directory in the container's writable layer. Measured, that substitution is
+      not a slow leak but an immediate one: with the root absent every `delete()` answers success, so the
+      application reports erasures of bytes that are somewhere else entirely. A deployment that drops the
+      volume empties storage on each redeploy while every row survives, and nothing here would say so.
+      **Two — a lost deletion request is silent and permanent.** `ImageDeletionRequested` is queued; if it
+      is never consumed, or dead-letters and ages out of the 30-day `failed` retention, the bytes and the
+      row stay alive indefinitely with no monitoring on that axis. There is deliberately no reconciliation
+      between rows and stored objects: the bookkeeping that would find an orphan is the same bookkeeping the
+      module refuses to build, so nothing can distinguish "never asked for" from "asked for and lost".
+      **Three — orphaned objects accumulate by design.** A store that succeeded followed by a persist that
+      did not leaves an object with no row, and this slice introduces no compensation, no reversal and no
+      collector. It is bounded by the failure rate rather than by anything in the code.
+      **Four — `event_store` keeps the `ImageId` for ever, and routing changes nothing.**
+      `PersistDomainEventMiddleware` appends every dispatched event with its real `aggregate_id` before
+      Messenger picks a transport; identity erasure rewrites by the value of the **subject's** identifier,
+      which an `ImageId` is not, so the row survives. For an avatar that identifier is a reference to a
+      person's likeness. Recorded in [`docs/adr/image-deletion-signal-transport.md`](docs/adr/image-deletion-signal-transport.md)
+      D3, which also states what classifying `Shared.Image` as `person` does **not** buy — it forced the
+      decision into a diff, and nothing more. Closing two and three is a reconciliation the consuming epic
+      would have to justify against the no-bookkeeping decision; closing four is the consuming epic's, since
+      only a consumer knows whether a given image denotes a person.
+
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

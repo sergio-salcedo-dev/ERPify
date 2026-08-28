@@ -8,7 +8,7 @@ use DomainException;
 use Throwable;
 
 /**
- * The decoder failed on an already-allowlisted, within-limits input (AC 9) — the translation
+ * The decoder failed on an already-allowlisted, within-limits input — the translation
  * boundary for the image library's own decode exceptions, which never cross into `Application/`
  * untranslated.
  */

@@ -47,7 +47,7 @@ final class DoctrineImageRepositoryTest extends KernelTestCase
     public function testFindingAnAbsentIdentityAnswersNullRatherThanFailing(): void
     {
         $this->withRepository(function (ImageRepository $repository): void {
-            $this->assertNull($repository->findById(ImageId::generate()));
+            $this->assertNotInstanceOf(Image::class, $repository->findById(ImageId::generate()));
         });
     }
 
@@ -64,7 +64,7 @@ final class DoctrineImageRepositoryTest extends KernelTestCase
             $repository->remove($persisted);
             $entityManager->clear();
 
-            $this->assertNull($repository->findById($imageId));
+            $this->assertNotInstanceOf(Image::class, $repository->findById($imageId));
         });
     }
 

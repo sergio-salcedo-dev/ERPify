@@ -8,8 +8,8 @@ use DomainException;
 
 /**
  * A resource guard rejected the input before the decoder could consume unbounded memory/CPU
- * (NFR8, AC 7/12) — the byte-size guard maps to a distinct {@see FailureCategory} from the
- * declared-dimension/pixel-budget guards, so NFR9's observability line can tell them apart.
+ * — the byte-size guard maps to a distinct {@see FailureCategory} from the declared-dimension and
+ * pixel-budget guards, so the observability line can tell them apart.
  */
 final class ImageResourceLimitExceeded extends DomainException implements ImageProcessingException
 {

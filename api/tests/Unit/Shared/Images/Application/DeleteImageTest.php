@@ -31,7 +31,7 @@ final class DeleteImageTest extends TestCase
         $deleteImage->delete($image->id());
 
         $this->assertSame([], $storage->objects);
-        $this->assertNull($repository->findById($image->id()));
+        $this->assertNotInstanceOf(Image::class, $repository->findById($image->id()));
     }
 
     /**
@@ -106,12 +106,16 @@ final class DeleteImageTest extends TestCase
 
         try {
             $deleteImage->delete($image->id());
-            self::fail('a storage failure must surface');
-        } catch (ImageStorageUnavailable $failure) {
-            $this->assertSame(StorageOperation::Delete, $failure->operation());
+            $this->fail('a storage failure must surface');
+        } catch (ImageStorageUnavailable $imageStorageUnavailable) {
+            $this->assertSame(StorageOperation::Delete, $imageStorageUnavailable->operation());
         }
 
-        $this->assertNotNull($repository->findById($image->id()), 'the row survives, so the work is retryable');
+        $this->assertInstanceOf(
+            Image::class,
+            $repository->findById($image->id()),
+            'the row survives, so the work is retryable',
+        );
     }
 
     private function storedImage(InMemoryImageStorage $storage, InMemoryImageRepository $repository): Image
@@ -134,4 +138,3 @@ final class DeleteImageTest extends TestCase
         return [$storage, $repository, new DeleteImage($storage, $repository, new ImmediateTransactionManager())];
     }
 }
-

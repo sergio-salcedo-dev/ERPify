@@ -29,6 +29,9 @@ use PHPUnit\Framework\TestCase;
  * a documented gap, because the green tick stops anyone looking.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") one test method per asserted direction; merging any two
+ *                                                  would hide which one went red
  */
 #[CoversNothing]
 final class PersistentTransportRoutingShapeGateTest extends TestCase

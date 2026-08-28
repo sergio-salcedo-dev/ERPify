@@ -14,11 +14,10 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
 /**
  * Ingestion use case (naming category 6 — `docs/rules/cqrs-naming.md`): bytes in, an {@see Image}
  * out. Invoked directly, never through a bus. Mints the {@see ImageId} itself — no public signature
- * anywhere in this module accepts one as input (NFR4) — and never accepts anything but raw bytes
- * plus an optional declared media type: no `UploadedFile`/`File`/`SplFileInfo`/path/filename/URL
- * (NFR6), and no conservation-contract parameter (FR2/FR6) — a caller with an "Evidence" contract
- * has no signature to invoke here at all.
- *
+ * anywhere in this module accepts one as input — and never accepts anything but raw bytes plus an
+ * optional declared media type: no `UploadedFile`/`File`/`SplFileInfo`/path/filename/URL, and no
+ * conservation-contract parameter — a caller with an "Evidence" contract has no signature to invoke
+ * here at all.
  */
 final readonly class UploadImage
 {

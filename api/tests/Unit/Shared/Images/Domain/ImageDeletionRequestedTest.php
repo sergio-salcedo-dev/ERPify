@@ -88,7 +88,8 @@ final class ImageDeletionRequestedTest extends TestCase
 
         foreach ($files as $file) {
             if ($file->isFile() && 'php' === $file->getExtension()) {
-                $sources[$file->getFilename()] = self::codeWithoutComments((string) \file_get_contents($file->getPathname()));
+                $contents = (string) \file_get_contents($file->getPathname());
+                $sources[$file->getFilename()] = $this->codeWithoutComments($contents);
             }
         }
 
@@ -106,7 +107,7 @@ final class ImageDeletionRequestedTest extends TestCase
      * the prose explaining why there is no hook — measured here, the handler's own docblock naming
      * `postRemove` as the shape it exists to avoid was enough to fail this check.
      */
-    private static function codeWithoutComments(string $source): string
+    private function codeWithoutComments(string $source): string
     {
         $code = '';
 

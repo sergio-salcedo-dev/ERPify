@@ -10,7 +10,7 @@ use Erpify\Shared\Images\Domain\Exception\UnsupportedImageFormat;
 use finfo;
 
 /**
- * The cheap checks {@see InterventionImageProcessor} runs before a full decode (Task 5, Fase 0/1):
+ * The cheap checks {@see InterventionImageProcessor} runs before a full decode:
  * empty input → byte-size limit → MIME allowlist/mismatch → declared-dimension/pixel budget.
  * Extracted out of the processor as its own collaborator (SRP: "does this input even qualify for
  * a decode attempt" is a distinct concern from orchestrating decode/normalize/encode) — which is
@@ -62,7 +62,7 @@ final readonly class ImagePreflightGuard
         }
 
         // A mismatch is rejected even when both the declared and the detected format are
-        // individually allowlisted (decoder-confusion defense, AC 13). MIME type/subtype tokens are
+        // individually allowlisted (decoder-confusion defense). MIME type/subtype tokens are
         // case-insensitive (RFC 2045), so the comparison normalizes case on both sides — the
         // detected side is compared as-is too, since finfo already returns canonical lowercase.
         if (null !== $declaredMediaType && \strtolower(\trim($declaredMediaType)) !== $detected) {
@@ -81,7 +81,7 @@ final readonly class ImagePreflightGuard
 
     /**
      * Reads only the declared header (never the full raster) so the resource guards run before the
-     * decoder allocates anything proportional to the content (AC 7, 12). `getimagesizefromstring()`
+     * decoder allocates anything proportional to the content. `getimagesizefromstring()`
      * warns on content it cannot parse — a deliberate, narrow suppression: the warning is discarded,
      * but the `false` outcome itself is NOT — it fails closed (below) rather than falling through to
      * an unbounded full decode, which would defeat the point of running this guard before one.

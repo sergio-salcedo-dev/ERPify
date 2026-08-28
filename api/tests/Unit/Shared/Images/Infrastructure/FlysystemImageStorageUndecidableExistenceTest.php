@@ -45,15 +45,15 @@ final class FlysystemImageStorageUndecidableExistenceTest extends TestCase
 
         try {
             $storage->delete(ImageId::generate());
-            self::fail('a missing root must not be reported as the object being absent');
-        } catch (ImageStorageFailed $failure) {
-            $this->assertSame(StorageFailureCategory::Permanent, $failure->storageFailure());
+            $this->fail('a missing root must not be reported as the object being absent');
+        } catch (ImageStorageFailed $imageStorageFailed) {
+            $this->assertSame(StorageFailureCategory::Permanent, $imageStorageFailed->storageFailure());
             // The reason is asserted, not only the category: an absent root and an untraversable one are
             // both permanent, and `is_executable()` answers false for both, so a category-only assertion
             // leaves the absence branch unfalsifiable — measured by deleting it and watching this stay
             // green. An operator reading "cannot be traversed" for a volume that was never mounted looks
             // at permissions instead of at the mount.
-            $this->assertStringContainsString('not present', $failure->getMessage());
+            $this->assertStringContainsString('not present', $imageStorageFailed->getMessage());
         }
 
         $this->assertDirectoryDoesNotExist($missingRoot, 'the adapter must not create the root it could not find');
@@ -127,7 +127,7 @@ final class FlysystemImageStorageUndecidableExistenceTest extends TestCase
         \chmod($script, 0o644);
 
         $output = [];
-        exec(\sprintf('su nonroot -c %s 2>&1', \escapeshellarg('php ' . $script)), $output);
+        \exec(\sprintf('su nonroot -c %s 2>&1', \escapeshellarg('php ' . $script)), $output);
 
         return \trim(\implode("\n", $output));
     }

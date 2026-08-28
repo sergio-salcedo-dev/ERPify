@@ -18,6 +18,17 @@ namespace Erpify\Shared\Images\Domain\Storage;
 enum StorageFailureCategory: string
 {
     /**
+     * Whether this verdict describes a normal RESULT rather than a fault of the substrate. Read by the
+     * observability signal to decide its level: an image nobody stored is the ordinary answer to a stale
+     * identifier, and reporting it as loudly as an unmounted volume trains an operator to ignore the level
+     * that means something is broken.
+     */
+    public function isOutcome(): bool
+    {
+        return self::ConfirmedAbsence === $this;
+    }
+
+    /**
      * The object is DEMONSTRABLY absent. Only a check that could have seen the object had it been there
      * may answer this: a failure to determine existence is never absence.
      */

@@ -7,11 +7,11 @@ namespace Erpify\Shared\Images\Domain\Exception;
 use DomainException;
 
 /**
- * A MIME rejection at the decoder's security boundary (AC 8, 13) — never a decision about the
+ * A MIME rejection at the decoder's security boundary — never a decision about the
  * conservation contract. The two rejection reasons share this class (both are "the decoder will
  * not touch this content") but map to distinct {@see FailureCategory} values: the detected format
  * itself is not supported, or it does not match what the caller declared (decoder-confusion
- * defense, AC 13) — a mismatch is rejected even when both formats are individually allowlisted.
+ * defense) — a mismatch is rejected even when both formats are individually allowlisted.
  */
 final class UnsupportedImageFormat extends DomainException implements ImageProcessingException
 {

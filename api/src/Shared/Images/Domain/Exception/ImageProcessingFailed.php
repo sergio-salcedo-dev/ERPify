@@ -8,7 +8,7 @@ use DomainException;
 use Throwable;
 
 /**
- * Normalization or re-encoding failed on an already-decoded image (AC 9) — the translation
+ * Normalization or re-encoding failed on an already-decoded image — the translation
  * boundary for the image library's own normalize/encode exceptions.
  */
 final class ImageProcessingFailed extends DomainException implements ImageProcessingException

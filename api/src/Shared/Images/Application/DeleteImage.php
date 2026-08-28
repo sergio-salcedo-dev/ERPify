@@ -49,7 +49,7 @@ final readonly class DeleteImage
         // is what keeps a broken connection from being recorded as an erasure already done.
         $image = $this->imageRepository->findById($id);
 
-        if (null === $image) {
+        if (!$image instanceof \Erpify\Shared\Images\Domain\Entity\Image) {
             return;
         }
 

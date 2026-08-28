@@ -7,7 +7,7 @@ namespace Erpify\Shared\Images\Domain\Exception;
 use DomainException;
 
 /**
- * The input is zero bytes — rejected before any decode attempt (AC 11).
+ * The input is zero bytes — rejected before any decode attempt.
  */
 final class EmptyImageInput extends DomainException implements ImageProcessingException
 {

@@ -20,6 +20,10 @@ use Symfony\Component\Messenger\Attribute\AsMessage;
  * against every routing shape Messenger accepts without a dirty entry ever existing in the real config.
  *
  * @internal test support
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") each public method is one independent direction of the
+ *                                                  registry's contract; folding two into one would make a
+ *                                                  red name the wrong invariant
  */
 final readonly class PersistentTransportPolicy
 {

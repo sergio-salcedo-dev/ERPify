@@ -27,14 +27,6 @@ use Override;
  */
 final class ImageDeletionRequested extends DomainEvent
 {
-    public function __construct(
-        string $aggregateId,
-        ?string $eventId = null,
-        ?DateTimeImmutable $occurredOn = null,
-    ) {
-        parent::__construct($aggregateId, $eventId, $occurredOn);
-    }
-
     #[Override]
     public static function eventName(): string
     {
