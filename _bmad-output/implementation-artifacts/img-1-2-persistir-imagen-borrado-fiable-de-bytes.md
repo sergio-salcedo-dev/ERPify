@@ -313,35 +313,44 @@ como «duplicación», aunque lo que describe —tasks y numeración de AC— no
     stamp forman parte de la superficie de retención en cuanto el evento entra en `event_store` y en
     `messenger_messages`. Revisa qué serializa el `EventBus` y aférmalo sobre el envelope completo.
 
-12. **La señal de lifecycle se publica tras commit y se consume después — outbox, nunca síncrono (NFR4).**
+12. **La señal se enruta a un transporte durable, y el módulo no publica nada — reescrita, ver abajo.**
     Se enruta a `async` en `api/config/packages/messenger.yaml`, y su `aggregateType()` se clasifica en
-    `api/.persistent-transport-policy` con el **veredicto conservador** y su excepción argumentada:
-    `Image => person :: <ruta del ADR>`. Las tres razones, medidas:
-    (a) el gate exige la línea **esté enrutada o no** (*"routed or not"*,
-    `PersistentTransportPolicyGateTest:28`), así que no enrutar no compra ninguna exención;
-    (b) un `DomainEvent` sin enrutar **se maneja en proceso**, y como los casos de uso publican dentro de
-    `TransactionManager::transactional(...)`, su handler correría **dentro de la transacción del
-    propietario** — exactamente lo que NFR4 (`epics-images.md:242-245`), el decision firewall (`:449-450`) y
-    el invariante 4 del ADR (`:116`) prohíben, con el agravante de que un fallo de Flysystem rollearía la
-    escritura de negocio del consumidor y dejaría una referencia viva sobre bytes ya destruidos;
-    (c) el registro prevé el caso mixto y le da respuesta: *"Where a type is mixed, the conservative verdict
-    is the correct one, and routing any of its events then needs an argued ADR exception"*
-    (`api/.persistent-transport-policy:27-31`), con precedente vivo `Iam.Session => person` (`:67`).
-    **El *after-commit* lo garantiza el mecanismo, no el nombre del transporte.** Enrutar a `async` no es
-    por sí solo un protocolo de commit: lo que da la garantía es que `async` resuelve al **transporte
-    Doctrine sobre la misma conexión** (`MESSENGER_TRANSPORT_DSN`, `queue_name: async`) y que
-    `EventBus::publish()` se invoca **dentro** de `TransactionManager::transactional(...)`, de modo que el
-    `INSERT` en `messenger_messages` vive en la misma transacción y un rollback se lo lleva: el worker no
-    puede ver una fila no committeada. **La garantía depende por tanto del DSN, no del routing** — si
-    `MESSENGER_TRANSPORT_DSN` apuntase a un broker externo, enrutar a `async` enviaría fuera de la
-    transacción y la propiedad desaparecería en silencio con esta AC en verde. La AC se verifica con un test
-    que demuestre las dos direcciones: **un rollback del propietario no deja mensaje consumible, y un commit
-    sí lo deja disponible**.
-    El ADR que la línea nombra es entregable de esta historia (Task 7). Argumenta por qué se encola un id
-    potencialmente persona-denotante, y **dice explícitamente qué riesgo NO cierra**: la clasificación
-    conservadora es una decisión de transporte, no una mitigación de erasure — no borra nada, y deja el
-    `ImageId` en `messenger_messages` sin TTL y en `event_store` para siempre (AC 18c). Venderla como
-    mitigación sería el error que el ADR existe para impedir.
+    `api/.persistent-transport-policy` con el veredicto conservador y su excepción argumentada:
+    `Shared.Image => person :: docs/adr/image-deletion-signal-transport.md`. Un `DomainEvent` **sin
+    enrutar se maneja en proceso** —`RunProjectionsOnDomainEvent` está registrado para
+    `DomainEvent::class` y los casos de uso publican dentro de `transactional(...)`—, así que correría
+    dentro de la transacción del propietario: exactamente lo que NFR4, el decision firewall y el
+    invariante 4 del ADR prohíben. Y el módulo **no publica ningún evento** en ninguna de sus rutas.
+
+    **Esta AC estaba mal escrita, y se reescribe con su medición.** Prescribía *"un test que demuestre
+    las dos direcciones: un rollback del propietario no deja mensaje consumible, y un commit sí"*. Dos
+    hechos medidos lo impiden:
+
+    - **No hay propietario.** `new ImageDeletionRequested` tiene **cero apariciones** en `api/src`: el
+      publicador es el contexto consumidor, por contrato de esta misma historia. Un test que satisfaga
+      la AC literal fabrica su propio publicador y **mide su andamio**, no el sistema. La lista de la
+      línea 168 ya nombraba la AC 12 entre las ocho «cuyo test nombrado no puede observar su fallo», y
+      se cerró como parcheada sin tocar la AC.
+    - **El entorno de test sustituye el transporte.** `messenger.yaml` mapea `async` a
+      `in-memory://?serialize=true` bajo `when@test`, e `InMemoryTransport` **no participa en la
+      transacción**: medido, tras un rollback retiene el mensaje. La propiedad es cierta en producción
+      y falsa donde el test correría.
+
+    **Lo que esta historia entrega, y es falsable:** el evento está enrutado a un transporte cuyo
+    nombre resuelve a un DSN Doctrine, y su clasificación con excepción ADR **implica** que esté
+    enrutado. Ambas cosas las afirma `make php.lint.persistent-transport`, y ambas tienen mutante
+    medido: borrar la línea de routing enrojece
+    `PersistentTransportPolicyGateTest::everyAdrExceptedEventActuallyReachesATransport` —antes de esta
+    aserción ese borrado dejaba **todos los gates en verde** y reinstalaba el borrado síncrono—, y
+    reescribir el DSN de `async` enrojece
+    `PersistentTransportRoutingShapeGateTest::theDurableTransportStillHasATransactionalDsn`.
+
+    **Lo que NO entrega esta historia, con su dueño:** que el `INSERT` en `messenger_messages` viva en
+    la transacción del propietario, observado de punta a punta. Su sujeto es el primer publicador
+    real, así que es criterio de la historia que lo introduzca, en la épica de consumidor. Y el salto
+    del DSN no lo cierra ningún gate: tres de los cinco sitios que lo declaran son interpolaciones
+    `${MESSENGER_TRANSPORT_DSN:-…}` en los compose, de modo que el entorno del despliegue gana. Eso es
+    **riesgo aceptado con issue abierta**, no un docblock: @accepted-risk #872
 
 13. **`ImageStorage` no devuelve URLs.** Ningún método del puerto retorna una URL — la entrega es
     responsabilidad de la Story 1.3, no de storage.
@@ -1205,5 +1214,53 @@ identidad con cero consumidores. La pregunta que queda para un ADR futuro es cu�
 propiedades son invariantes de **toda** entidad ORM de ERPify y cuáles son sólo convenciones del
 patrón actual. No se toca `AggregateRoot` en esta historia: el `blast radius` sería los ocho agregados
 existentes, por un caso local.
+
+#### AC 12 — reescrita tras consultar a las tres personas (2026-08-28)
+
+**El problema, medido.** La AC prescribía un test que este entorno no puede alojar y cuyo sujeto no
+existe en esta historia. Dos hechos: `new ImageDeletionRequested` tiene **cero apariciones** en
+`api/src` —el publicador es el contexto consumidor, por contrato de esta misma historia—, y
+`when@test` sustituye `async` por `in-memory://`, un transporte que **no participa en la
+transacción** (sonda ejecutada: tras un rollback retiene el mensaje). El test que se escribió contra
+`messenger_messages` se retiró: su mitad de rollback era verde vacuo, y sólo se detectó porque el
+control positivo —la mitad del commit— se puso en rojo.
+
+**Tres hipótesis alternativas refutadas midiendo, no descartadas de oídas:** no era caché rancia del
+contenedor (purgado `var/cache/test*`), no era el `messenger_worker` consumiendo (parado), y no era
+que la tabla no se escriba nunca en test (dos funcionales la escriben directamente — lo correcto es
+que nada la escribe *a través de Messenger*).
+
+**El agujero que nadie había visto, y que la consulta destapó.** Borrar la línea de routing dejaba
+`php.lint.persistent-transport` y `php.lint.event-bus` **en exit 0**: la completitud del registro
+exige línea *"routed or not"* y nunca lee la ruta, así que un `git rm` de una línea reinstalaba el
+borrado síncrono dentro de la transacción del propietario —el GRAVE-1 del pase adversarial de la
+épica— con la build verde. Falsificado antes y después.
+
+**Lo entregado, en los motores que ya existían, sin ficheros ni targets nuevos:**
+
+- `PersistentTransportPolicy::adrExceptedEventsReachingNoTransport()` — un tipo clasificado
+  `person :: <ADR>` afirma que se encola *igualmente*, luego un evento con esa clasificación que no
+  alcanza transporte tiene una excepción que no argumenta nada. Derivado del registro, sin lista a
+  mano. *Mutante medido: borrar la ruta enrojece con el nombre del evento y su ADR.*
+- `MessengerRoutingConfig::misdeclaredPersistedTransport()` — el dual del que ya existía para `sync`.
+  `async` se confía por nombre como durable y sobre la conexión del llamante; fuera de test debe
+  resolver a `%env(MESSENGER_TRANSPORT_DSN)%` o a un `doctrine://` literal, y **dentro** de test se
+  fija la sustitución in-memory, para que cambiarla obligue a revisar la afirmación en vez de dejar un
+  comentario que ya miente. *Mutante medido: `amqp://` enrojece nombrando fichero, sección y valor.*
+
+**Lo que no entrega, con dueño en vez de en un docblock:** la observación de punta a punta del
+`INSERT` en `messenger_messages` pertenece a la historia que introduzca el primer publicador real, en
+la épica de consumidor. Y el salto del DSN no lo cierra ningún gate —tres de los cinco sitios que lo
+declaran son interpolaciones que el entorno del despliegue gana— así que es **riesgo aceptado con
+issue abierta**: #872, etiquetado `@accepted-risk` en el ADR y en la AC.
+
+**Deuda colateral detectada, NO tocada aquí.** Existen cuatro copias de `RecordingEventBus` y sólo la
+de `Backoffice/Bank` expone `publishedInsideUnitOfWork`; el mutante de sacar el `publish()` fuera de
+`transactional(...)` pasa verde hoy en `AcceptInvitation`, `StartSession`, `ChangeMyPassword` y
+`RevokeAllSessions`. Es de otros módulos y se nombra en vez de arrastrarse.
+
+**Corrección propia:** había duplicado `ImmediateTransactionManager` en el árbol de este módulo
+cuando ya existía en `Shared/Persistence/Double/` con `isInUnitOfWork()`, que es justamente el
+observable que distingue un publish dentro de la transacción de uno fuera. Retirada la copia.
 
 ### File List

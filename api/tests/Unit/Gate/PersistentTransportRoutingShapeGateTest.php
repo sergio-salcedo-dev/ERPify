@@ -156,6 +156,17 @@ final class PersistentTransportRoutingShapeGateTest extends TestCase
     }
 
     #[Test]
+    public function theDurableTransportStillHasATransactionalDsn(): void
+    {
+        // The dual of the `sync` assertion above. `async` is trusted by NAME as durable and on the caller's
+        // own connection: that is where the after-commit guarantee comes from, not from the routing entry.
+        // It also pins the test environment's in-memory substitution, which does NOT join the transaction —
+        // so a change to it goes red and the "no test here can demonstrate this" claim has to be revisited
+        // rather than silently stop being true.
+        $this->assertSame([], $this->policy()->config()->misdeclaredPersistedTransport());
+    }
+
+    #[Test]
     public function noPhpConfigFileDeclaresMessengerConfiguration(): void
     {
         // PHP config is executed, not parsed. Rather than a partial reader that would quietly under-report,

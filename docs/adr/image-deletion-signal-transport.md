@@ -40,6 +40,8 @@ The classification is a decision about **transport**, not a mitigation of erasur
 
 Reading D1 as "the id is protected because it was classified `person`" is the specific error this section exists to prevent. What the classification buys is that the decision was **forced into a diff and reviewed**, which is all the registry ever claimed for it.
 
+There is a fourth residual, and it is the one no gate can reach: the after-commit guarantee itself depends on `MESSENGER_TRANSPORT_DSN` still resolving to the Doctrine transport on the caller's own connection. Three of the five places declaring it are `${MESSENGER_TRANSPORT_DSN:-…}` interpolations in the compose files, so a deployment's environment wins — deliberately, since the DSN has to be configurable. `make php.lint.persistent-transport` pins what the repository declares (both halves falsified by mutation: rewriting the DSN, and deleting the routing line), and that is all a green there means. Accepted rather than closed, and tracked where it can be audited instead of in this paragraph. @accepted-risk #872
+
 ## Consequences
 
 - `api/.persistent-transport-policy` carries `Shared.Image => person :: docs/adr/image-deletion-signal-transport.md`.
