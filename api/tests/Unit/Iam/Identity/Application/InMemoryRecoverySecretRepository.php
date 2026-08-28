@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
+use Closure;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Repository\RecoverySecretRepository;
 use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
@@ -34,6 +35,15 @@ final class InMemoryRecoverySecretRepository implements RecoverySecretRepository
     /** Set when a test is asserting WHERE this table's lock falls among the others. */
     public ?LockOrderJournal $lockOrderJournal = null;
 
+    /**
+     * Runs at the LOCKED re-read, so a test can commit a rival write at exactly the TOCTOU moment — the
+     * only instant at which a second redemption or a revocation can change what this one decides.
+     */
+    public ?Closure $onLockedRead = null;
+
+    /** Makes the retire fail the way a flush fault would, after the session has already been minted. */
+    public ?Closure $onRemove = null;
+
     /** @var array<string, RecoverySecret> */
     private array $bySelector = [];
 
@@ -54,6 +64,10 @@ final class InMemoryRecoverySecretRepository implements RecoverySecretRepository
     #[Override]
     public function remove(RecoverySecret $secret): void
     {
+        if ($this->onRemove instanceof Closure) {
+            ($this->onRemove)();
+        }
+
         $this->removed[] = $secret;
 
         $selector = $secret->getId();
@@ -74,6 +88,10 @@ final class InMemoryRecoverySecretRepository implements RecoverySecretRepository
     {
         $this->lockOrderJournal?->locked(LockOrderJournal::RECOVERY_SECRET);
 
+        if ($this->onLockedRead instanceof Closure) {
+            ($this->onLockedRead)();
+        }
+
         return $this->bySelector[$selector] ?? null;
     }
 
@@ -87,6 +105,10 @@ final class InMemoryRecoverySecretRepository implements RecoverySecretRepository
     public function findByUserIdForUpdate(string $userId): ?RecoverySecret
     {
         $this->lockOrderJournal?->locked(LockOrderJournal::RECOVERY_SECRET);
+
+        if ($this->onLockedRead instanceof Closure) {
+            ($this->onLockedRead)();
+        }
 
         return $this->firstFor($userId);
     }
