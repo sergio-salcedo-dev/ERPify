@@ -79,10 +79,17 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
     {
         $this->askedWithout[] = $userId;
 
-        return \array_any(
+        $anotherActiveAdminRemains = \array_any(
             $this->adminUserIsActive,
             static fn (bool $isActive, $adminUserId): bool => $isActive && $adminUserId !== $userId,
         );
+
+        // The second half of the adapter's reading, and it must mirror it or the double lies about the one
+        // state the two callers disagree on: an identity the active-admin set never held is removed from
+        // nothing, so it cannot drain a set of any size, the empty one included. An entry valued `false` is a
+        // phantom — the identity carries ADMIN without being ACTIVE — and is no more a member than an absent
+        // key is.
+        return $anotherActiveAdminRemains || !($this->adminUserIsActive[$userId] ?? false);
     }
 
     /**

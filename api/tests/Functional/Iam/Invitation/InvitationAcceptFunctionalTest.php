@@ -31,7 +31,7 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Drives the public accept endpoint end-to-end against REAL Postgres and the real firewall. Proves the happy
  * path activates the identity, retires the invitation and mints exactly one session (Security::login fires the
- * login path once), that all five dead-token cases collapse to one byte-identical 400 invalid-token, and that a
+ * login path once), that all six dead-token cases collapse to one uniform 400 invalid-token, and that a
  * cross-site POST is rejected 403 without mutation.
  *
  * A full-flow functional test against the real graph legitimately touches many types (three contexts'
@@ -106,7 +106,7 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
         $this->assertCount(1, $this->service(SessionRepository::class)->findByUserId($userId));
     }
 
-    public function testAllFiveDeadTokenCasesReturnOneByteIdenticalInvalidToken(): void
+    public function testAllSixDeadTokenCasesReturnOneUniformInvalidToken(): void
     {
         $bodies = [];
 
@@ -117,7 +117,7 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
             $bodies[] = $this->problem();
         }
 
-        $this->assertCount(5, $bodies);
+        $this->assertCount(6, $bodies);
 
         foreach ($bodies as $body) {
             $this->assertSame('invalid-token', $body['type']);
@@ -192,7 +192,8 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
     }
 
     /**
-     * @return list<string> the five dead-token shapes: malformed, non-existent, wrong secret, expired, accepted
+     * @return list<string> the six dead-token shapes: malformed, non-existent, wrong secret, expired,
+     *                      accepted and revoked
      */
     private function deadTokens(): array
     {
@@ -213,7 +214,32 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
             $validInvitationId . '.the-wrong-secret',
             $expiredToken,
             $acceptedToken,
+            $this->revokedToken(),
         ];
+    }
+
+    /**
+     * A withdrawn invitation reaches the accept flow with a token whose secret still verifies, so the only
+     * thing refusing it is the `SENT` guard — the same guard the already-accepted case meets. Presenting it
+     * pins the enumeration the endpoint claims rather than the branch, which is already reached.
+     *
+     * @return string the raw `<invitationId>.<secret>` token of an invitation revoked after it was sent
+     */
+    private function revokedToken(): string
+    {
+        [, $token] = $this->seedSentInvitation();
+        $invitationId = \substr($token, 0, (int) \strpos($token, '.'));
+
+        $invitations = $this->service(InvitationRepository::class);
+        $invitation = $invitations->findById($invitationId);
+        $this->assertInstanceOf(Invitation::class, $invitation);
+
+        $invitation->revoke();
+        $invitation->pullDomainEvents();
+
+        $invitations->save($invitation);
+
+        return $token;
     }
 
     private function onlyInvitationId(): string

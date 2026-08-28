@@ -6,8 +6,8 @@ namespace Erpify\Iam\Identity\Domain\Repository;
 
 /**
  * Consumer-owned port over the organization's administrators, answering the two questions the write-side use
- * cases must ask before they change one: would at least one active `ADMIN` remain if this identity were
- * excluded, and does this identity carry the role at all?
+ * cases must ask before they change one: does the active-`ADMIN` set survive this identity leaving it, and
+ * does this identity carry the role at all?
  *
  * Both return a bare `bool` — no `Membership` / `User` / `Role[]` crosses the boundary. The single-tenant
  * organization is implicit. The production adapter reads the role source directly — a single-context read over
@@ -48,10 +48,19 @@ interface ActiveAdministratorDirectory
     public function lockActiveAdministrators(): void;
 
     /**
+     * Whether an active administrator is left once this identity is taken OUT of the set — which is not the
+     * same question as whether some active administrator other than this identity exists, and the difference
+     * is the whole contract. A subject the set does not hold is removed from nothing, so the answer is `true`
+     * however few administrators there are, the empty set included; only the set's sole member drains it.
+     * Answering the weaker question makes a zero-administrator organization refuse every caller, including a
+     * plain `VIEWER` whose transition has no bearing on the invariant at all.
+     *
      * Authoritative only over administrators whose backing `User` both exists AND is `ACTIVE`: an identity
-     * that is absent or no longer `ACTIVE` must never keep a phantom administrator alive. Its adapter takes a
-     * `FOR UPDATE` lock over the active-admin set so concurrent transitions serialize — the invariant is
-     * set-based, so it must be read inside the caller's transaction.
+     * that is absent or no longer `ACTIVE` is not in the set, so it can neither keep a phantom administrator
+     * alive nor be drained out of it. Its adapter takes a `FOR UPDATE` lock over the active-admin set so
+     * concurrent transitions serialize — the invariant is set-based, so it must be read inside the caller's
+     * transaction, and the caller must already hold the subject's own row for the membership half of the
+     * answer to still be true at commit.
      */
     public function keepsAnActiveAdminWithout(string $userId): bool;
 

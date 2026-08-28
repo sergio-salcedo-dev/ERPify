@@ -89,15 +89,18 @@ Marker resolution honours implements-clause order, intersected with the canonica
 
 ### Symfony framework exception bridge
 
-| Symfony exception                                 | HTTP status            | `type`                                                       |
-|---------------------------------------------------|------------------------|--------------------------------------------------------------|
-| `Validator\Exception\ValidationFailedException` * | 422                    | `validation-failed` (+ `violations[]`)                       |
-| `Security\Core\Exception\AccessDeniedException`   | 403                    | `forbidden`                                                  |
-| `Security\Core\Exception\AuthenticationException` | 401                    | `unauthenticated`                                            |
-| `HttpKernel\Exception\HttpExceptionInterface`     | from `getStatusCode()` | mirrors marker default for known statuses, else `http-error` |
-| Anything else (`\Throwable`)                      | 500                    | `unhandled-exception`                                        |
+| Symfony exception                                        | HTTP status            | `type`                                                                    |
+|----------------------------------------------------------|------------------------|---------------------------------------------------------------------------|
+| `Validator\Exception\ValidationFailedException` *        | 422                    | `validation-failed` (+ `violations[]`)                                    |
+| `Security\Core\Exception\AccessDeniedException`          | 403                    | `forbidden`                                                               |
+| `Security\Core\Exception\AuthenticationException`        | 401                    | `unauthenticated`                                                         |
+| `HttpKernel\Exception\UnsupportedMediaTypeHttpException` | 415                    | `unsupported-media-type`                                                  |
+| `HttpKernel\Exception\HttpExceptionInterface`            | from `getStatusCode()` | `HTTP_STATUS_TYPE_MAP` — the marker default per status, else `http-error` |
+| Anything else (`\Throwable`)                             | 500                    | `unhandled-exception`                                                     |
 
 \* The factory walks `getPrevious()` so wrapped `ValidationFailedException` (e.g. inside Symfony's `RequestPayloadValueResolver` 422 wrapper used by `#[MapRequestPayload]` / `#[MapQueryString]`) is unwrapped and re-emitted as a **422** carrying the structured `violations[]` extension in place of Symfony's generic, unstructured 422 body. `violations[]` shape: `[{field, message, code}, ...]`.
+
+**415 is the one status in `HTTP_STATUS_TYPE_MAP` no marker backs, and it earns its own `type` for the reason the others do.** No domain code raises it: the refusal is Symfony's argument resolver rejecting a body whose format the endpoint does not accept, so a form-encoded or multipart request against a `#[MapRequestPayload]` route declaring `acceptFormat: ['json']` is answered before any handler runs — and every write endpoint here declares it. Under the generic `http-error` bucket that refusal is indistinguishable on the wire from any other unmapped status, so a client routing on `type` alone cannot tell "resend this as JSON" from a failure it can do nothing about. The map entry is pinned by `ProblemDetailsFactoryTest::testHttpStatusTypeMapHasExactlyTheCanonicalNineEntries` and by the concrete producer in `testUnsupportedMediaTypeHttpExceptionCarriesItsOwnTypeRatherThanTheGenericBucket`; because a marker-free status is invisible to the marker-mirror assertion beside them, it is declared in that file's `MARKER_FREE_BRIDGE_STATUSES` — otherwise the mirror silently degrades into a subset check any new entry satisfies.
 
 #### `message` selection for denormalization violations
 

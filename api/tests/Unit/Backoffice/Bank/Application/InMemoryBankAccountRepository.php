@@ -61,6 +61,12 @@ final class InMemoryBankAccountRepository implements BankAccountRepository
     }
 
     #[Override]
+    public function findByIdForUpdate(string $id): ?BankAccount
+    {
+        throw new LogicException('BankDeleter never reads single accounts.');
+    }
+
+    #[Override]
     public function countByBankId(string $bankId): int
     {
         if (!$this->firstCallDone) {

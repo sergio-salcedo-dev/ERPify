@@ -53,9 +53,26 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
     #[Override]
     public function keepsAnActiveAdminWithout(string $userId): bool
     {
-        return \array_any(
-            $this->lockedActiveAdminIds(),
+        $activeAdminIds = $this->lockedActiveAdminIds();
+
+        $anotherActiveAdminRemains = \array_any(
+            $activeAdminIds,
             static fn ($adminId): bool => \is_string($adminId) && 0 !== \strcasecmp($adminId, $userId),
+        );
+
+        if ($anotherActiveAdminRemains) {
+            return true;
+        }
+
+        // Nobody else is an active administrator, so the answer turns on the subject alone. Removing an
+        // identity the set never holds takes nothing out of it — an active VIEWER, or anyone at all while the
+        // set is empty, leaves the invariant exactly as it was found, and refusing there would answer them
+        // with a conflict about an invariant their change does not touch. Only the set's sole member drains
+        // it. The membership reading is the same locked statement the exclusion above reads, so both halves
+        // of the answer come from one acquisition rather than from two snapshots that can disagree.
+        return !\array_any(
+            $activeAdminIds,
+            static fn ($adminId): bool => \is_string($adminId) && 0 === \strcasecmp($adminId, $userId),
         );
     }
 

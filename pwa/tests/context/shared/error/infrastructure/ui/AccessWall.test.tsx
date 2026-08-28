@@ -100,7 +100,9 @@ describe("AccessWall", () => {
     // and only the exit path differs.
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(invitationTitle ?? "");
     expect(
-      screen.getByText("You can request a new link to reset your password."),
+      screen.getByText(
+        "If this link was already used, your new password is active — sign in with it. Otherwise, you can request a new link to reset your password.",
+      ),
     ).toBeInTheDocument();
 
     const signIn = screen.getByRole("link", { name: "Sign in" });
@@ -112,6 +114,31 @@ describe("AccessWall", () => {
     expect(request).toHaveAttribute(
       "data-testid",
       "access-wall__request-reset-link--invalid-reset-link",
+    );
+  });
+
+  it("tells the reset wall's visitor their new password may already be live", () => {
+    // A reset the server applied whose 204 never arrived leaves the visitor here with a working
+    // credential and nothing that says so: the retry meets a spent token and every other signal
+    // reads as failure. The exit was already on this wall — what was missing is the reason to take
+    // it, so the copy is the whole fix.
+    render(<AccessWall variant={AccessWallVariant.INVALID_RESET_LINK} />);
+
+    const body = screen.getByTestId("access-wall--invalid-reset-link").textContent ?? "";
+    expect(body).toContain("your new password is active");
+    expect(body).toContain("sign in with it");
+    // Guidance is only guidance while the exit it names is reachable from this same wall.
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
+  });
+
+  it("keeps the reset hint off the invitation wall", () => {
+    // The two walls are deliberately identical above the description, which is exactly why this
+    // needs pinning: the hint is true of a spent RESET link only. An invitation link sets no
+    // password, so telling its visitor one is active would send them to sign in with nothing.
+    render(<AccessWall variant={AccessWallVariant.INVALID_LINK} />);
+
+    expect(screen.getByTestId("access-wall--invalid-link").textContent ?? "").not.toContain(
+      "your new password is active",
     );
   });
 

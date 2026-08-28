@@ -42,7 +42,7 @@ final readonly class UserPatchStatusController
      */
     public function __invoke(
         string $id,
-        #[StrictRequestPayload(acceptFormat: ['json'])]
+        #[StrictRequestPayload]
         ChangeUserStatusRequest $request,
     ): Response {
         $user = match ($request->status) {

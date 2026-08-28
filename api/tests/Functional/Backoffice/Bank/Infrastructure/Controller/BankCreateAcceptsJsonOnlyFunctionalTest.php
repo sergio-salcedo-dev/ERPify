@@ -83,6 +83,11 @@ final class BankCreateAcceptsJsonOnlyFunctionalTest extends WebTestCase
             (string) $this->client->getResponse()->getContent(),
         );
         $this->assertSame(0, $this->countBanks());
+        $this->assertSame(
+            'unsupported-media-type',
+            $this->problemType(),
+            'the refusal carries its own wire type, so a client can answer it by resending as JSON',
+        );
     }
 
     public function testAJsonBodyIsAccepted(): void
@@ -100,6 +105,25 @@ final class BankCreateAcceptsJsonOnlyFunctionalTest extends WebTestCase
             (string) $this->client->getResponse()->getContent(),
         );
         $this->assertSame(1, $this->countBanks());
+    }
+
+    /**
+     * The `type` member of the RFC 9457 body, which is what a client routes on. Read here rather than left
+     * to the status code alone: 415 and the generic bucket share a status the moment the bridge map loses
+     * its entry, and only the body says which of the two the caller was handed.
+     */
+    private function problemType(): string
+    {
+        $body = \json_decode(
+            (string) $this->client->getResponse()->getContent(),
+            associative: true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+        $this->assertIsArray($body);
+        $this->assertArrayHasKey('type', $body);
+        $this->assertIsString($body['type']);
+
+        return $body['type'];
     }
 
     private function countBanks(): int

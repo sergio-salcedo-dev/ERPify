@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Menu, Bell, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { Logo, MonogramAvatar, SidebarItem, ThemeToggle } from "@/components/erpify";
@@ -24,6 +24,7 @@ import {
   type NavSubItem,
   type NavAction,
 } from "./_lib/backofficeMenu";
+import { permittedMenuGroups } from "./_lib/menuAccess";
 import { RequireAuth, DevSessionSwitcher } from "@/context/shared/access/infrastructure/ui";
 import { useSession } from "@/context/shared/access/application/useSession";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
@@ -183,7 +184,11 @@ export default function BackOfficeLayoutClient({
   // still closes the mobile Sheet without navigating anywhere, and must not claim otherwise.
   const closingSheetViaNavigationRef = useRef(false);
 
-  const menuGroups = backofficeMenuGroups;
+  // Filtered once, here, because the desktop sidebar and the mobile drawer render the same model
+  // through different JSX: filtering at either render site would leave the other painting an entry
+  // the role cannot open. Hiding is an affordance decision only — every route keeps its own gate,
+  // since the URL can be typed.
+  const menuGroups = useMemo(() => permittedMenuGroups(backofficeMenuGroups, session), [session]);
 
   // Sign-out is in flight. State rather than a ref because the click closes the menu, so a
   // second attempt needs it reopened — an asynchronous gap a re-render always wins.

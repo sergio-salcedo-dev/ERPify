@@ -45,6 +45,7 @@ import {
   Info,
 } from "lucide-react";
 import { Routes } from "@/context/shared/routing/domain/Routes";
+import { Permission } from "@/context/shared/access/domain/Permission";
 import { bankRoutes } from "@/app/backoffice/banks/_lib/bankRoutes";
 import { bankAccountRoutes } from "@/app/backoffice/bank-accounts/_lib/bankAccountRoutes";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
@@ -63,7 +64,16 @@ import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevTool
  */
 export type NavAction = "sign-out";
 
-export interface NavSubItem {
+/**
+ * The permission an entry needs before it is painted. Declared on both levels because either can
+ * point at a gated surface. It is an affordance filter and nothing more: the page behind the entry
+ * keeps its own gate, since a URL can always be typed — hiding a door is not locking it.
+ */
+interface NavPermission {
+  permission?: Permission;
+}
+
+export interface NavSubItem extends NavPermission {
   name: string;
   path: string;
   icon?: LucideIcon;
@@ -71,7 +81,7 @@ export interface NavSubItem {
   action?: NavAction;
 }
 
-export interface NavItem {
+export interface NavItem extends NavPermission {
   name: string;
   icon: LucideIcon;
   path: string;
@@ -214,7 +224,12 @@ export const backofficeMenuGroups: NavGroup[] = [
         icon: SettingsIcon,
         path: `${BASE}/users`,
         subItems: [
-          { name: "Users", path: `${BASE}/users`, icon: Users },
+          {
+            name: "Users",
+            path: `${BASE}/users`,
+            icon: Users,
+            permission: Permission.USERS_READ,
+          },
           { name: "Features & Modules", path: `${BASE}/settings/features`, icon: SlidersVertical },
           { name: "Audit Logs", path: `${BASE}/audit`, icon: History },
           { name: "System Health", path: `${BASE}/health`, icon: Activity },

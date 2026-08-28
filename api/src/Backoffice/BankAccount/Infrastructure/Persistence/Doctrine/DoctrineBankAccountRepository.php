@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
@@ -51,6 +52,12 @@ final readonly class DoctrineBankAccountRepository implements BankAccountReposit
     public function findById(string $id): ?BankAccount
     {
         return $this->entityManager->find(BankAccount::class, $id);
+    }
+
+    #[Override]
+    public function findByIdForUpdate(string $id): ?BankAccount
+    {
+        return $this->entityManager->find(BankAccount::class, $id, LockMode::PESSIMISTIC_WRITE);
     }
 
     #[Override]

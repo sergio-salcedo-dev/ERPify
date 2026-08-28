@@ -52,7 +52,7 @@ final readonly class CreateInvitationController
     ) {
     }
 
-    public function __invoke(#[StrictRequestPayload(acceptFormat: ['json'])] InviteUserRequest $request): Response
+    public function __invoke(#[StrictRequestPayload] InviteUserRequest $request): Response
     {
         $roles = $this->rolesFrom($request);
 

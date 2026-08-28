@@ -22,6 +22,12 @@ use Symfony\Component\Security\Http\Event\LoginSuccessEvent;
  * The catch is narrow: a genuine bug (a `TypeError`, an invalid transition) still surfaces loud. It reads only
  * the authenticated {@see SecurityUser}'s id and delegates to the idempotent {@see LoginAttemptRegistrar} — a
  * Symfony event adapter, hence Infrastructure.
+ *
+ * Fail-closed on that path, like the sibling: the authenticated token is already in the token storage when this
+ * runs, so `ContextListener` would otherwise persist it on the way out and answer the 503 with a live session
+ * cookie. The session is dropped before the throw so the failure leaves nothing admitted behind it. Reading the
+ * session unguarded is the sibling's contract too — the `main` firewall is stateful and the framework's session
+ * listener puts a factory on every request, so there is no session-less login for `getSession()` to raise on.
  */
 #[AsEventListener(event: LoginSuccessEvent::class, priority: self::PRIORITY)]
 final readonly class ClearLockoutOnLoginSuccess
@@ -49,6 +55,8 @@ final readonly class ClearLockoutOnLoginSuccess
         try {
             $this->registrar->clear($userId);
         } catch (DbalException $dbalException) {
+            $event->getRequest()->getSession()->invalidate();
+
             throw LockoutStoreUnavailable::storeUnreachable($dbalException);
         }
     }

@@ -73,7 +73,7 @@ final readonly class ChangeMyPasswordController
     public function __invoke(
         #[CurrentUser]
         SecurityUser $user,
-        #[StrictRequestPayload(acceptFormat: ['json'])]
+        #[StrictRequestPayload]
         ChangeMyPasswordRequest $request,
     ): Response {
         $identityId = $user->id() ?? throw new LogicException('An authenticated identity must have an id.');

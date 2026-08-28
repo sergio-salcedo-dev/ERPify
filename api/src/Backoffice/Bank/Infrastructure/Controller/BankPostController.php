@@ -26,7 +26,7 @@ final readonly class BankPostController
     }
 
     public function __invoke(
-        #[StrictRequestPayload(acceptFormat: ['json'])]
+        #[StrictRequestPayload]
         CreateBankCommand $bankCommand,
     ): Response {
         $bank = $this->bankCreator->create($bankCommand);

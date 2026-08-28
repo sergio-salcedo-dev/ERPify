@@ -22,6 +22,9 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Session\Session;
+use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Http\Event\LoginSuccessEvent;
@@ -40,6 +43,12 @@ final class ClearLockoutOnLoginSuccessTest extends TestCase
 {
     private const string NOW = '2026-07-11T12:00:00+00:00';
 
+    /**
+     * The key the firewall serialises the authenticated token under; holding it is what makes a session "logged
+     * in" to the next request.
+     */
+    private const string TOKEN_KEY = '_security_main';
+
     public function testClearsTheLockoutForTheAdmittedIdentity(): void
     {
         $user = $this->lockedUser();
@@ -51,16 +60,32 @@ final class ClearLockoutOnLoginSuccessTest extends TestCase
         $this->assertFalse($user->isLockedAt(new DateTimeImmutable(self::NOW)));
     }
 
-    public function testAStoreFailureWhileClearingBecomesARetryable503(): void
+    public function testAStoreFailureWhileClearingBecomesARetryable503AndDropsTheSession(): void
     {
         $user = $this->lockedUser();
         $repository = $this->createStub(UserRepository::class);
         $repository->method('findById')->willReturn($user);
         $repository->method('save')->willThrowException($this->createStub(DbalException::class));
 
-        $this->expectException(LockoutStoreUnavailable::class);
+        $session = new Session(new MockArraySessionStorage());
+        $session->set(self::TOKEN_KEY, 'serialized-authenticated-token');
 
-        $this->listener($repository)($this->loginSuccessFor(new SecurityUser($user)));
+        $request = new Request();
+        $request->setSession($session);
+
+        $thrown = null;
+
+        try {
+            $this->listener($repository)($this->loginSuccessFor(new SecurityUser($user), $request));
+        } catch (LockoutStoreUnavailable $lockoutStoreUnavailable) {
+            $thrown = $lockoutStoreUnavailable;
+        }
+
+        $this->assertInstanceOf(LockoutStoreUnavailable::class, $thrown);
+        $this->assertFalse(
+            $session->has(self::TOKEN_KEY),
+            'A 503 must not answer with a session the firewall would replay as an admitted identity.',
+        );
     }
 
     public function testIgnoresAnUnexpectedAuthenticatedUserType(): void
@@ -85,13 +110,14 @@ final class ClearLockoutOnLoginSuccessTest extends TestCase
         return new ClearLockoutOnLoginSuccess($registrar);
     }
 
-    private function loginSuccessFor(UserInterface $user): LoginSuccessEvent
+    private function loginSuccessFor(UserInterface $user, ?Request $request = null): LoginSuccessEvent
     {
         $token = $this->createStub(TokenInterface::class);
         $token->method('getUser')->willReturn($user);
 
         $event = $this->createStub(LoginSuccessEvent::class);
         $event->method('getAuthenticatedToken')->willReturn($token);
+        $event->method('getRequest')->willReturn($request ?? new Request());
 
         return $event;
     }

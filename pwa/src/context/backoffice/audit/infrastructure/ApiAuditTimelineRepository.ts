@@ -10,8 +10,14 @@ import type {
   AuditTimelineRepository,
 } from "../domain/AuditTimelineRepository";
 
+/**
+ * A row as it arrives on the wire. Identical to {@link AuditEntry} except that `resourceErased` may
+ * be absent — see {@link isAuditEntry} for why that one field is tolerated and nothing else is.
+ */
+type AuditEntryWire = Omit<AuditEntry, "resourceErased"> & { resourceErased?: boolean };
+
 interface AuditTimelineResponse {
-  data: AuditEntry[];
+  data: AuditEntryWire[];
   pagination: PageEnvelope;
 }
 
@@ -28,12 +34,27 @@ function isNumberOrNull(value: unknown): value is number | null {
 }
 
 /**
+ * Absent or a boolean — nothing else. The tolerance is for ABSENCE only: a field that is present
+ * but not a boolean is drift and still rejects, because the value would then be READ as a state.
+ */
+function isOptionalBoolean(value: unknown): value is boolean | undefined {
+  return value === undefined || typeof value === "boolean";
+}
+
+/**
  * Validates one timeline row. Every field is checked at the trust boundary so a contract drift
  * surfaces as a typed failure (MALFORMED_RESPONSE_ENVELOPE) instead of a silent mismap. `level` and
  * `actorType` are accepted as any string by design — the read model is forensic and never narrows
  * them to a closed set (an unknown token must still render, not break the investigation).
+ *
+ * `resourceErased` is the one field whose ABSENCE is tolerated, and the asymmetry is deliberate: it
+ * identifies nothing, it only drives an "erased" badge and withholds the follow-resource pivot, so
+ * a client running ahead of the API (or one meeting a rolled-back API) must not lose the entire
+ * screen over it. Missing reads as `false`. The cost is stated rather than hidden — inside that
+ * window an erased resource renders as not-erased and its pivot is offered on a pseudonym — which
+ * is why only absence is admitted and a corrupt value still fails the envelope.
  */
-function isAuditEntry(value: unknown): value is AuditEntry {
+function isAuditEntry(value: unknown): value is AuditEntryWire {
   return (
     isObjectRecord(value) &&
     typeof value.id === "string" &&
@@ -46,7 +67,7 @@ function isAuditEntry(value: unknown): value is AuditEntry {
     isStringOrNull(value.resourceType) &&
     isStringOrNull(value.resourceId) &&
     typeof value.actorErased === "boolean" &&
-    typeof value.resourceErased === "boolean"
+    isOptionalBoolean(value.resourceErased)
   );
 }
 
@@ -89,7 +110,7 @@ export function toAuditTimelinePage(response: AuditTimelineResponse): AuditTimel
   };
 }
 
-function toAuditEntry(row: AuditEntry): AuditEntry {
+function toAuditEntry(row: AuditEntryWire): AuditEntry {
   return {
     id: row.id,
     occurredOn: row.occurredOn,
@@ -101,7 +122,7 @@ function toAuditEntry(row: AuditEntry): AuditEntry {
     resourceType: row.resourceType,
     resourceId: row.resourceId,
     actorErased: row.actorErased,
-    resourceErased: row.resourceErased,
+    resourceErased: row.resourceErased ?? false,
   };
 }
 

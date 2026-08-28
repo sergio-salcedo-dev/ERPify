@@ -115,6 +115,28 @@ final class ChangeUserStatusTest extends TestCase
         $this->makeUseCase($repository, $directory, $eventBus, $sessions)->deactivate(UserMother::DEFAULT_ID);
     }
 
+    public function testSuspendingAnIdentityOutsideTheActiveAdminSetIsNotRefusedAsTheLastAdministrator(): void
+    {
+        // No ACTIVE administrator exists at all — the only identity carrying the role is a phantom — and the
+        // target is not one either. Removing an identity the set never held cannot empty it, so refusing here
+        // would answer a plain viewer with a conflict naming an invariant they are no part of.
+        $user = UserMother::create();
+        $repository = new InMemoryUserRepository($user);
+        $eventBus = new RecordingEventBus();
+        $sessions = new InMemorySessionRepository();
+        $directory = new InMemoryActiveAdministratorDirectory([self::GHOST_ADMIN_ID => false]);
+
+        $changed = $this->makeUseCase($repository, $directory, $eventBus, $sessions)->suspend(UserMother::DEFAULT_ID);
+
+        $this->assertSame(IdentityStatus::SUSPENDED, $changed->status());
+        $this->assertSame([$user], $repository->saved);
+        $this->assertCount(1, $eventBus->publishedEvents);
+        $this->assertSame([UserMother::DEFAULT_ID], $sessions->revokeAllCalls);
+        // The question is still put: this use case cannot know whether its target counts, and deciding that
+        // here would take the directory's place as the sole authority on who does.
+        $this->assertSame([UserMother::DEFAULT_ID], $directory->askedWithout);
+    }
+
     public function testTheTargetIsReadUnderARowLock(): void
     {
         $repository = new InMemoryUserRepository(UserMother::create());

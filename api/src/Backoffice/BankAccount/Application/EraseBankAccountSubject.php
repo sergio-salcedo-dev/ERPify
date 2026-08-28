@@ -47,7 +47,10 @@ final readonly class EraseBankAccountSubject
         $scope = EncryptionScopeId::forBankAccount($bankAccountId);
 
         return $this->transactionManager->transactional(function () use ($bankAccountId, $scope): SubjectErasureResult {
-            $account = $this->bankAccountRepository->findById($bankAccountId);
+            // Locking read: it is what makes a second erasure of the same subject a no-op instead of a
+            // failure. Unlocked, a competitor can destroy the scope's key between this read and the flush
+            // below, and the change capture then seals the deletion snapshot under a tombstoned key.
+            $account = $this->bankAccountRepository->findByIdForUpdate($bankAccountId);
             $liveRecordErased = $account instanceof BankAccount;
 
             if ($liveRecordErased) {
