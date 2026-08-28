@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Images\Application;
 use Erpify\Shared\Images\Application\UploadImage;
 use Erpify\Shared\Images\Domain\CanonicalImage;
 use Erpify\Shared\Images\Domain\ImageProcessor;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;

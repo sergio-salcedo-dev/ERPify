@@ -65,3 +65,10 @@ Iam.Invitation => person
 # is the `userId` and their payload is empty: byte-identical in shape to the leak this policy was written
 # for. One verdict per type means the type takes the verdict of its most exposed event.
 Iam.Session => person
+
+# One aggregate type covering two id semantics, and the registry's own instruction for that case applied:
+# an image may be a bank's logo (not a person) or a person's avatar (a reference to them), and this module
+# cannot tell them apart by construction — it holds no owner and no classification. The conservative
+# verdict is therefore the correct one, and routing it anyway is what needs the argued exception. The ADR
+# says what the decision buys, and is explicit that it closes no erasure risk at all.
+Shared.Image => person :: docs/adr/image-deletion-signal-transport.md

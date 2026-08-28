@@ -7,8 +7,7 @@ parameters:
 flysystem:
     storages:
         images.storage:
-            adapter: 'local'
-            options:
+            local:
                 directory: '%env(STORAGE_LOCAL_PATH)%/images'
                 # The adapter creates its root in the constructor unless this is set, so an unmounted volume
                 # would be silently replaced by a fresh empty directory inside the container's writable layer.

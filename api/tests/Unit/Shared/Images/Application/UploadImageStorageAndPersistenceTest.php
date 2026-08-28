@@ -9,6 +9,7 @@ use Erpify\Shared\Images\Domain\CanonicalImage;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use InvalidArgumentException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;

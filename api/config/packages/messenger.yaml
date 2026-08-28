@@ -22,6 +22,12 @@ framework:
             Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent: async
             Erpify\Backoffice\BankAccount\Domain\Event\BankAccountDeletedDomainEvent: async
             Erpify\Backoffice\BankAccount\Domain\Event\BankAccountStatusChangedDomainEvent: async
+            # Routed rather than left in-process, and the reason is the inverse of the usual one: an
+            # unrouted DomainEvent is handled inside the publisher's transaction, so a storage failure
+            # would roll back the owner's business write over bytes already destroyed. See
+            # docs/adr/image-deletion-signal-transport.md — and note the after-commit guarantee comes from
+            # `async` resolving to the Doctrine transport on the same connection, not from this line.
+            Erpify\Shared\Images\Domain\Event\ImageDeletionRequested: async
 
         # A queued event outlives the erasure of whoever it is about. Nothing in the erasure chain touches
         # either queue: `async` has no TTL and no prune, and `failed`'s 30-day retention sweep bounds the
