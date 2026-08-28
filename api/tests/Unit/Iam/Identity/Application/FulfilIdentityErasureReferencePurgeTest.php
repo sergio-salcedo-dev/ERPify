@@ -86,6 +86,7 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
             'anonymized_actor_id' => RecordingAuditActorAnonymiser::PSEUDONYM,
             'anonymized_resource_rows' => 0,
             'anonymized_event_rows' => 0,
+            'recovery_secrets_deleted' => 0,
             'reset_tokens_deleted' => 0,
             'sessions_deleted' => 0,
             'memberships_deleted' => 1,
@@ -136,6 +137,7 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
             new EraseIdentitySubject(
                 $users,
                 new InMemoryPasswordResetTokenRepository(),
+                new InMemoryRecoverySecretRepository(),
                 new InlineTransactionManager(),
             ),
             new OrderedAuditSubjectTrailErasure(

@@ -194,6 +194,7 @@ Erpify\Organization\Membership\Domain\Entity\Membership::$id => non-person
 Erpify\Iam\Invitation\Domain\Entity\Invitation::$id => non-person
 Erpify\Iam\Session\Domain\Entity\Session::$id => non-person
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$id => non-person
+Erpify\Iam\Identity\Domain\Entity\RecoverySecret::$id => non-person
 
 # References between aggregates that are not people.
 Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::$bankId => non-person
@@ -211,6 +212,7 @@ Erpify\Iam\Identity\Domain\Entity\User::$id => person :: src/Iam/Identity/Applic
 # References to a person held by another aggregate. Each row is deleted outright rather than scrubbed:
 # neither table has a business meaning that survives the person it is about.
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
+Erpify\Iam\Identity\Domain\Entity\RecoverySecret::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
 Erpify\Iam\Session\Domain\Entity\Session::$userId => person :: src/Iam/Session/Application/PurgeUserSessions.php
 
 # The two that cross a bounded context. NO column anywhere in the schema references `identity_user` — the

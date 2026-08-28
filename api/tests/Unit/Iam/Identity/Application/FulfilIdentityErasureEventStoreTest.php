@@ -91,6 +91,7 @@ final class FulfilIdentityErasureEventStoreTest extends TestCase
             new EraseIdentitySubject(
                 new InMemoryUserRepository(UserMother::create()),
                 new InMemoryPasswordResetTokenRepository($this->tokenFor(UserMother::DEFAULT_ID)),
+                new InMemoryRecoverySecretRepository(),
                 new InlineTransactionManager(),
             ),
             new OrderedAuditSubjectTrailErasure(
@@ -116,6 +117,7 @@ final class FulfilIdentityErasureEventStoreTest extends TestCase
             new EraseIdentitySubject(
                 new InMemoryUserRepository(),
                 new InMemoryPasswordResetTokenRepository(),
+                new InMemoryRecoverySecretRepository(),
                 new InlineTransactionManager(),
             ),
             new OrderedAuditSubjectTrailErasure(

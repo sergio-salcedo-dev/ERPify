@@ -15,6 +15,7 @@ use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasu
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryActiveAdministratorDirectory;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryPasswordResetTokenRepository;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
@@ -162,6 +163,7 @@ final class EraseIdentitySubjectCommandTest extends TestCase
             new EraseIdentitySubject(
                 $users,
                 new InMemoryPasswordResetTokenRepository(),
+                new InMemoryRecoverySecretRepository(),
                 new InlineTransactionManager(),
             ),
             new OrderedAuditSubjectTrailErasure(

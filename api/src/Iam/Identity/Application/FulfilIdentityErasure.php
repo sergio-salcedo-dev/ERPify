@@ -188,6 +188,7 @@ final readonly class FulfilIdentityErasure
                 $result = new FulfilIdentityErasureResult(
                     $identity->identityErased,
                     $identity->resetTokensDeleted,
+                    $identity->recoverySecretsDeleted,
                     $anonymisation->affectedRows,
                     $anonymisedResourceRows,
                     $anonymisedEventRows,
@@ -223,7 +224,10 @@ final readonly class FulfilIdentityErasure
             self::SUBJECT_ERASURE_ACTION,
             AuditLevel::SECURITY,
             $subject,
-            ['reset_tokens_deleted' => $identity->resetTokensDeleted],
+            [
+                'reset_tokens_deleted' => $identity->resetTokensDeleted,
+                'recovery_secrets_deleted' => $identity->recoverySecretsDeleted,
+            ],
         );
     }
 
@@ -299,6 +303,7 @@ final readonly class FulfilIdentityErasure
             'anonymized_actor_id' => $pseudonym,
             'anonymized_resource_rows' => $result->anonymizedResourceRows,
             'anonymized_event_rows' => $result->anonymizedEventRows,
+            'recovery_secrets_deleted' => $result->recoverySecretsDeleted,
             'reset_tokens_deleted' => $result->resetTokensDeleted,
             'sessions_deleted' => $result->sessionsDeleted,
             'memberships_deleted' => $result->membershipsDeleted,

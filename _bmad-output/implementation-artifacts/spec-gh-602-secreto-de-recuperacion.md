@@ -2,8 +2,9 @@
 title: '#602 — secreto de recuperación con puerta de credencial (caso administrador único)'
 type: 'feature'
 created: '2026-08-28'
-status: 'ready-for-dev'
+status: 'in-progress'
 review_loop_iteration: 0
+baseline_commit: '57b93dc2'
 context:
   - '{project-root}/docs/adr/administrative-recovery-channel.md'
 ---
@@ -108,24 +109,24 @@ rol (cualquier identidad ACTIVE) · forzar ≥2 administradores · el secreto en
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `api/src/Iam/Identity/Domain/Entity/RecoverySecret.php` -- agregado nuevo (selector = PK, `userId`
+- [x] `api/src/Iam/Identity/Domain/Entity/RecoverySecret.php` -- agregado nuevo (selector = PK, `userId`
       con `#[PersonSubjectReference]`, digest, expiración lejana, `verify()` opaco). Evento nombra al usuario.
-- [ ] `api/migrations/` -- `make db.diff` para `identity_recovery_secret`.
-- [ ] `api/src/Iam/Identity/Domain/Repository/RecoverySecretRepository.php` + implementación Doctrine --
+- [x] `api/migrations/` -- `make db.diff` para `identity_recovery_secret`.
+- [x] `api/src/Iam/Identity/Domain/Repository/RecoverySecretRepository.php` + implementación Doctrine --
       `findBySelector`, `save`, `remove`, `deleteAllForUser` (borrado GDPR).
-- [ ] `api/src/Iam/Identity/Application/MintRecoverySecret.php` -- verifica `currentPassword`, refusa si ya
+- [x] `api/src/Iam/Identity/Application/MintRecoverySecret.php` -- verifica `currentPassword`, refusa si ya
       hay uno vivo, devuelve el texto plano una sola vez.
-- [ ] `api/src/Iam/Identity/Application/RedeemRecoverySecret.php` -- resuelve opaco → `ensureActive()` →
+- [x] `api/src/Iam/Identity/Application/RedeemRecoverySecret.php` -- resuelve opaco → `ensureActive()` →
       `Security::login()` → **luego** transacción: limpia cerrojo + retira fila.
-- [ ] `api/src/Iam/Identity/Application/RevokeRecoverySecret.php` -- borrado explícito por el dueño.
+- [x] `api/src/Iam/Identity/Application/RevokeRecoverySecret.php` -- borrado explícito por el dueño.
 - [ ] Controladores en `api/src/Iam/Identity/Infrastructure/Http/` -- `POST /me/recovery-secret`,
       `DELETE /me/recovery-secret`, `GET /me/recovery-secret` (metadatos: existe y desde cuándo, **nunca**
       el selector), `POST /recovery/redeem` (anónimo, guarda same-origin, presupuesto por selector).
 - [ ] `api/config/packages/security.yaml` + `api/.public-access-exemptions` -- exención `exact` del canje.
-- [ ] `api/.person-reference-policy` -- `$id => non-person`, `$userId => person :: …EraseIdentitySubject.php`.
-- [ ] `api/src/Iam/Identity/Application/EraseIdentitySubject.php` + `Dbal…RecoverySecretPersonReferences.php`
+- [x] `api/.person-reference-policy` -- `$id => non-person`, `$userId => person :: …EraseIdentitySubject.php`.
+- [x] `api/src/Iam/Identity/Application/EraseIdentitySubject.php` + `Dbal…RecoverySecretPersonReferences.php`
       -- borrado GDPR y detective tagueado.
-- [ ] `api/.audit-evidence-actions` -- `RECOVERY_SECRET_MINTED|REDEEMED|REVOKED => ordinary`.
+- [x] `api/.audit-evidence-actions` -- `RECOVERY_SECRET_MINTED|REDEEMED|REVOKED => ordinary`.
 - [ ] `api/src/Iam/Identity/Application/LoginAttemptRegistrar.php` -- cerrar la carrera: lectura bajo
       bloqueo de fila (`findByEmailForUpdate`), en la misma transacción que la mutación.
 - [ ] `pwa/src/app/backoffice/profile/` -- pantalla de acuñar/ver/revocar (`metadata.title`, copy en
@@ -137,10 +138,10 @@ rol (cualquier identidad ACTIVE) · forzar ≥2 administradores · el secreto en
       canjes simultáneos (gana uno), canje vs revocación, canje vs login fallido, login OK + mutación DB
       fallida (secreto recanjeable). Más: el selector nunca aparece en evento/auditoría/log/DTO, el
       selector no deriva de `userId`, y el cambio de contraseña no invalida el secreto.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- clave `br-4e-602-secreto-de-recuperacion`.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- clave `br-4e-602-secreto-de-recuperacion`.
 - [ ] `docs/adr/administrative-recovery-channel.md` + `docs/deployment-guide.md` +
       `PRODUCTION_SECURITY_CHECKLIST.md` -- registrar el mecanismo elegido y sus residuales.
-- [ ] **Riesgo aceptado — issue #870 ya abierta.** Etiquetar el párrafo del agregado con
+- [x] **Riesgo aceptado — issue #870 ya abierta.** Etiquetar el párrafo del agregado con
       `@accepted-risk #870`, en la forma de `NotifyLockedIdentities.php:88-91`. Un riesgo aceptado exige
       artefacto abierto y rastreable, no un docblock: los diez años son una decisión, no una consecuencia
       accidental de que `SingleUseToken` exija TTL. Gates: `AcceptedRiskTagGateTest` y el workflow

@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
-use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\EraseIdentitySubject;
-use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Shared\Audit\Application\AuditLogger;
-use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\Support\ConstructorCollaboratorTypes;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\PasswordResetTokenMother;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\RecoverySecretMother;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -23,17 +22,23 @@ final class EraseIdentitySubjectTest extends TestCase
 {
     private const string TOKEN_ID = '0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e21';
 
-    public function testErasesTheIdentityAndItsResetTokens(): void
+    public function testErasesTheIdentityItsResetTokensAndItsRecoverySecret(): void
     {
         $users = new InMemoryUserRepository(UserMother::create());
-        $tokens = new InMemoryPasswordResetTokenRepository($this->tokenFor(UserMother::DEFAULT_ID));
+        $tokens = new InMemoryPasswordResetTokenRepository(PasswordResetTokenMother::pendingFor(id: self::TOKEN_ID));
+        $secrets = new InMemoryRecoverySecretRepository(RecoverySecretMother::mintedFor());
 
-        $result = $this->useCase($users, $tokens)->execute(UserMother::DEFAULT_ID);
+        $result = $this->useCase($users, $tokens, $secrets)->execute(UserMother::DEFAULT_ID);
 
         $this->assertTrue($result->identityErased);
         $this->assertSame(1, $result->resetTokensDeleted);
+        // Asserted as a COUNT and not merely as "the call happened": the recovery secret is the one artefact
+        // here with a ten-year TTL and no sweep behind it, so a delete that matched zero rows would leave a
+        // person's id in place for a decade with nothing scheduled to notice.
+        $this->assertSame(1, $result->recoverySecretsDeleted);
         $this->assertTrue($users->removeCalled);
         $this->assertSame([UserMother::DEFAULT_ID], $tokens->deleteAllForUserCalls);
+        $this->assertSame([UserMother::DEFAULT_ID], $secrets->deleteAllForUserCalls);
     }
 
     public function testItHoldsNoAuditCollaboratorSoItCannotPersistAnIdentifierItCannotErase(): void
@@ -59,7 +64,9 @@ final class EraseIdentitySubjectTest extends TestCase
         $users = new InMemoryUserRepository();
         $tokens = new InMemoryPasswordResetTokenRepository();
 
-        $result = $this->useCase($users, $tokens)->execute(UserMother::DEFAULT_ID);
+        $result = $this->useCase($users, $tokens, new InMemoryRecoverySecretRepository())
+            ->execute(UserMother::DEFAULT_ID)
+        ;
 
         $this->assertFalse($result->erasedAnything());
         $this->assertFalse($users->removeCalled);
@@ -68,7 +75,7 @@ final class EraseIdentitySubjectTest extends TestCase
     public function testAMalformedSubjectIdIsRejectedBeforeAnyWork(): void
     {
         $tokens = new InMemoryPasswordResetTokenRepository();
-        $useCase = $this->useCase(new InMemoryUserRepository(), $tokens);
+        $useCase = $this->useCase(new InMemoryUserRepository(), $tokens, new InMemoryRecoverySecretRepository());
 
         $this->expectException(InvalidUuidException::class);
 
@@ -78,14 +85,8 @@ final class EraseIdentitySubjectTest extends TestCase
     private function useCase(
         InMemoryUserRepository $users,
         InMemoryPasswordResetTokenRepository $tokens,
+        InMemoryRecoverySecretRepository $secrets,
     ): EraseIdentitySubject {
-        return new EraseIdentitySubject($users, $tokens, new InlineTransactionManager());
-    }
-
-    private function tokenFor(string $userId): PasswordResetToken
-    {
-        $generated = SingleUseToken::mint(new DateTimeImmutable('2026-07-14T13:00:00+00:00'));
-
-        return PasswordResetToken::issue(self::TOKEN_ID, $userId, $generated->token);
+        return new EraseIdentitySubject($users, $tokens, $secrets, new InlineTransactionManager());
     }
 }

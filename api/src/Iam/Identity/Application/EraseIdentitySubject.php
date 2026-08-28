@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
+use Erpify\Iam\Identity\Domain\Repository\RecoverySecretRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -14,8 +15,12 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * GDPR "right to erasure" for an identity subject — the identity-context counterpart to
  * {@see \Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject} (kept per-module: each context
  * owns forgetting its own subject data). It hard-deletes the identity aggregate (the module's PII is the
- * user row itself — email and credential hash) AND every pending password-reset token, in one transaction,
- * so no credential-recovery artefact outlives the subject.
+ * user row itself — email and credential hash), every pending password-reset token AND the recovery secret,
+ * in one transaction, so no credential-recovery artefact outlives the subject.
+ *
+ * The recovery secret is the one whose absence would be least visible and most durable: it has a ten-year
+ * TTL and no retention sweep to age it out, so a `user_id` left behind here would outlive the erasure by a
+ * decade with nothing scheduled to notice.
  *
  * It answers for this module's rows alone. A `user_id` held by another context carries no foreign key, so
  * nothing here cascades to it: each such reference is erased by the context that owns it, chained by
@@ -41,6 +46,7 @@ final readonly class EraseIdentitySubject
     public function __construct(
         private UserRepository $users,
         private PasswordResetTokenRepository $resetTokens,
+        private RecoverySecretRepository $recoverySecrets,
         private TransactionManager $transactionManager,
     ) {
     }
@@ -58,6 +64,12 @@ final readonly class EraseIdentitySubject
             // suspended. Their order is a correctness requirement, not a habit. This use case has no such
             // requirement — it holds the subject's id before the transaction opens and could acquire either
             // way — so it is the one that conforms.
+            //
+            // The recovery secret joins at the END, with one degree of freedom less than that suggests:
+            // minting and redeeming both take `identity_user` before `identity_recovery_secret`, and
+            // redemption cannot reorder — it learns which identity to lock only from the row its selector
+            // resolves — so user-first is fixed on this table too. Its position relative to the reset tokens
+            // is the part that is genuinely free, because no other path reaches both of those two.
             $user = $this->users->findById($userId);
             $identityErased = $user instanceof User;
 
@@ -66,8 +78,14 @@ final readonly class EraseIdentitySubject
             }
 
             $tokensDeleted = $this->resetTokens->deleteAllForUser($userId);
+            $recoverySecretsDeleted = $this->recoverySecrets->deleteAllForUser($userId);
 
-            return new IdentityErasureResult($userId, $identityErased, $tokensDeleted);
+            return new IdentityErasureResult(
+                $userId,
+                $identityErased,
+                $tokensDeleted,
+                $recoverySecretsDeleted,
+            );
         });
     }
 }
