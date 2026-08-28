@@ -229,10 +229,25 @@ final class OutboxContext extends AbstractContext
         );
     }
 
+    /**
+     * The empty queue is refused before the loop, because it is the case this shape cannot tell apart.
+     * A loop over nothing returns having asserted nothing, so "no event carried these properties" is
+     * equally true when every event was read and none matched and when the scenario published nothing
+     * at all — and the second is a broken setup proving the absence it was written to prove.
+     */
     #[Then('there should not have been an outbox event created on the queue :queueName containing:')]
     public function noOutboxEventCreatedOnQueueContaining(string $queueName, TableNode $table): void
     {
-        foreach ($this->outbox->messagesOnQueue($queueName) as $message) {
+        $messages = $this->outbox->messagesOnQueue($queueName);
+
+        self::assertNotEmpty($messages, \sprintf(
+            'Queue "%s" holds no outbox events at all, so the absence this step asserts is vacuous: '
+            . 'nothing matched because nothing was published. Pin what the scenario does expect on '
+            . 'that queue before asserting what it must not.',
+            $queueName,
+        ));
+
+        foreach ($messages as $message) {
             if ($this->eventMatchesTable($message['event'], $table)) {
                 self::fail('An outbox event was found containing the properties that should be absent');
             }

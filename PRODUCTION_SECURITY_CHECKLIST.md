@@ -1246,6 +1246,27 @@ mitigated state. Accepting one means recording who accepted it and against which
       statement "any client can force the deployment to retain a person's identifier here" is **still true
       after the strip** — the strip removed the axis a legitimate UI drives, not the axis a hostile caller
       drives. Closing it needs a header allowlist plus a path mechanism, or no access log for `/api/*`.
+      **The accepted cost, stated rather than hidden:** the `Referer` delete is global to the site, while the
+      leak it answers is confined to the back-office documents whose own URL carries a person id — the user
+      detail route (`/backoffice/users/<uuid>`) and the audit screen's `?actorId=`/`?resourceId=`
+      (`pwa/src/app/backoffice/users/[id]`, `pwa/src/app/backoffice/audit`). Every other request on this
+      deployment — the PWA's own documents, static assets, `/.well-known/mercure`, and any `/api/*` call from
+      a screen that names no id — now records no referring URL either. What is given up is the referring URL
+      as investigative signal: an entry can no longer say which page a request came from, so a CSRF report
+      cannot be corroborated from the log, a link arriving from a phishing page or any third-party host
+      cannot be traced back to where it was published, and an incident timeline loses the navigation order it
+      would otherwise reconstruct. Per-route filtering was not taken, and the file is the reason: the site
+      declares ONE `log` block (`api/frankenphp/Caddyfile:20`) and its `format filter` carries no request
+      matcher, so every rule inside it applies to every entry that logger writes. Scoping the delete to the
+      two screens therefore means a second logger declared beside it — its own encoder and its own copy of
+      every rule — plus a directive in the matched route to send requests there; two copies of a redaction
+      rule set are free to drift, and the copy that drifts is the one nobody is reading. Weighed against a
+      signal no investigation on this deployment has yet needed, the duplication loses; it is not impossible,
+      and a deployment that comes to depend on `Referer` should reopen it rather than quietly re-add the
+      header. **Nothing gates the trade-off itself.** `CaddyfileAccessLogRedactionGateTest` asserts the
+      delete is PRESENT, which is the opposite direction — it would red on restoring the
+      signal, and can say nothing about whether losing it site-wide was the right price. This paragraph is
+      the only record.
 - [ ] **The embedded Mercure hub logs subscriber topics in clear, on a logger this site's filter does not
       govern.** Measured: `GET /.well-known/mercure?topic=<value>` produces an access line reading
       `?REDACTED` **and**, on stderr, `http.handlers.mercure … "topics": ["<value>"]`. They are separate

@@ -18,6 +18,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
+use Symfony\Component\Messenger\Event\WorkerMessageHandledEvent;
 use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
 use Symfony\Component\Messenger\EventListener\StopWorkerOnTimeLimitListener;
 use Symfony\Component\Messenger\Handler\HandlerDescriptor;
@@ -84,14 +86,14 @@ final class MessengerConsumerContext extends AbstractContext
     #[When('I consume :count messages from the :transportName transport')]
     public function iConsume(int $count, string $transportName): void
     {
-        $this->runWorker([$transportName], $count, self::TIME_LIMIT_SECONDS, OutputInterface::VERBOSITY_VERY_VERBOSE);
+        $this->consumeExactly($count, $transportName, self::TIME_LIMIT_SECONDS);
     }
 
     #[When('I consume :count message from the :transportName transport with time limit :seconds')]
     #[When('I consume :count messages from the :transportName transport with time limit :seconds')]
     public function iConsumeWithTimeLimit(int $count, string $transportName, int $seconds): void
     {
-        $this->runWorker([$transportName], $count, $seconds, OutputInterface::VERBOSITY_VERY_VERBOSE);
+        $this->consumeExactly($count, $transportName, $seconds);
     }
 
     /**
@@ -115,17 +117,9 @@ final class MessengerConsumerContext extends AbstractContext
         $limit = \is_numeric($limitRaw) ? (int) $limitRaw : 1;
         $timeLimit = \is_numeric($timeLimitRaw) ? (int) $timeLimitRaw : self::TIME_LIMIT_SECONDS;
 
-        $verbosity = OutputInterface::VERBOSITY_NORMAL;
-
-        foreach (self::VERBOSITY_FLAGS as $flag => $level) {
-            if (\array_key_exists($flag, $decoded)) {
-                $verbosity = $level;
-            }
-        }
-
         $names = \is_array($receivers) ? \array_values($receivers) : [$receivers];
 
-        $this->runWorker($names, $limit, $timeLimit, $verbosity);
+        $this->runWorker($names, $limit, $timeLimit, $this->verbosityFrom($decoded));
     }
 
     /**
@@ -196,19 +190,77 @@ final class MessengerConsumerContext extends AbstractContext
     }
 
     /**
-     * @param list<mixed> $transportNames
+     * A consume the scenario named a count for has to have read that many messages. Fewer pending than
+     * asked for is not a shorter run: the time-limit listener stops the worker, nothing throws and the
+     * exit code is 0, so the step reports success over a queue it never drained.
+     *
+     * Only the `I consume N …` phrasings go through here. {@see iExecuteCommandWithOptions()} models raw
+     * `messenger:consume` parity, where `--limit` is a ceiling and timing out is a legitimate outcome.
      */
-    private function runWorker(array $transportNames, int $limit, int $timeLimit, int $verbosity): void
+    private function consumeExactly(int $count, string $transportName, int $timeLimit): void
+    {
+        $consumed = $this->runWorker(
+            [$transportName],
+            $count,
+            $timeLimit,
+            OutputInterface::VERBOSITY_VERY_VERBOSE,
+        );
+
+        self::assertSame($count, $consumed, \sprintf(
+            'Asked for %d message(s) from transport "%s" and the worker consumed %d before stopping on '
+            . 'its time limit, so this step asserted nothing.',
+            $count,
+            $transportName,
+            $consumed,
+        ));
+    }
+
+    /**
+     * The strongest flag present wins. Resolving by position would not: the map spells very-verbose on both
+     * sides of `-vvv`, so `{"-vvv": true, "--verbose": true}` would consume one level below what it asked
+     * for, and a run degrading its own verbosity is invisible in the output it then fails to produce.
+     *
+     * @param array<string, mixed> $decoded
+     */
+    private function verbosityFrom(array $decoded): int
+    {
+        $verbosity = OutputInterface::VERBOSITY_NORMAL;
+
+        foreach (self::VERBOSITY_FLAGS as $flag => $level) {
+            if (\array_key_exists($flag, $decoded)) {
+                $verbosity = \max($verbosity, $level);
+            }
+        }
+
+        return $verbosity;
+    }
+
+    /**
+     * @param list<mixed> $transportNames
+     *
+     * @return int how many messages the run took off the transports — handled plus failed
+     */
+    private function runWorker(array $transportNames, int $limit, int $timeLimit, int $verbosity): int
     {
         $receivers = [];
+        $unusable = [];
 
         foreach ($transportNames as $transportName) {
             if (!\is_string($transportName)) {
+                $unusable[] = \get_debug_type($transportName);
+
                 continue;
             }
 
             $receivers[$transportName] = $this->transports->receiver($transportName);
         }
+
+        // A worker holding no receiver reads nothing, spins to its time limit and reports success, so
+        // every assertion standing on the run would pass over a consume that never touched a transport.
+        self::assertNotSame([], $receivers, \sprintf(
+            'No transport name resolved to a receiver (unusable: %s)',
+            [] === $unusable ? 'none given' : \implode(', ', $unusable),
+        ));
 
         $output = new BufferedOutput($verbosity);
         $logger = new ConsoleLogger($output);
@@ -218,6 +270,13 @@ final class MessengerConsumerContext extends AbstractContext
         $dispatcher = new EventDispatcher();
         $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener($limit, $logger));
         $dispatcher->addSubscriber(new StopWorkerOnTimeLimitListener($timeLimit, $logger));
+
+        $consumed = 0;
+        $countOne = static function () use (&$consumed): void {
+            ++$consumed;
+        };
+        $dispatcher->addListener(WorkerMessageHandledEvent::class, $countOne);
+        $dispatcher->addListener(WorkerMessageFailedEvent::class, $countOne);
 
         $worker = new Worker($receivers, $this->routableMessageBus, $dispatcher, $logger);
 
@@ -233,6 +292,8 @@ final class MessengerConsumerContext extends AbstractContext
         }
 
         $this->lastRun->record($exitCode, $output->fetch());
+
+        return $consumed;
     }
 
     private function refuseSupersededPhrase(string $canonical): never
