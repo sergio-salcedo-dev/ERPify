@@ -181,7 +181,7 @@ hallazgo, porque una lista de hallazgos sin disposición no es auditable.
 | Enrutar a `async` no es por sí solo un protocolo *after-commit* | **Aceptado** | AC 12 nombra el mecanismo (transporte Doctrine sobre la misma conexión + `publish()` dentro de `transactional()`) y exige test de rollback en las dos direcciones; se dice que la garantía depende del DSN | Medido: `SymfonyMessengerEventBus` despacha al bus, `async` usa `MESSENGER_TRANSPORT_DSN` con `queue_name: async` |
 | No está definido quién publica y quién ejecuta el borrado | **Aceptado** | Task 7 fija el reparto y renombra la señal a una *petición* (`ImageDeletionRequested`) | — |
 | El contrato absent/transient/permanent no se deriva de Flysystem | **Aceptado** | AC 2 y AC 3 declaran que el contrato lo hace cierto el adaptador, con default conservador; tabla cerrada en Dev Notes; Task 4 exige el algoritmo antes de implementar | — |
-| `delete()` basado en `file_exists()` confunde permiso denegado con ausencia | **Aceptado** | AC 2 lo nombra como el modo de fallo a evitar y exige prueba con permisos reales | No verificable aquí: `league/flysystem` no está instalado. La fuerza del hallazgo no depende de ello |
+| `delete()` basado en `file_exists()` confunde permiso denegado con ausencia | **Aceptado y medido** | AC 2 lo nombra como el modo de fallo a evitar, con la medición, y exige prueba con permisos reales | La cita original era a `flysystem-local` 3.x, que **no está instalado** aquí. Medido en su lugar el nivel que decide el resultado: con el directorio padre en `chmod 000`, `stat()` falla `EACCES` y la comprobación de existencia devuelve `false`, igual que para un fichero ausente. Propiedad del syscall, independiente de la librería y de su versión |
 | El objeto excepción y su `$previous` son canal de exfiltración | **Aceptado** | Task 11 prueba las cuatro superficies: mensaje, cadena `$previous`, `ErrorDetailsStamp` serializado y contexto del log | — |
 | «Captura por la interfaz y mapea los concretos, en ese orden» | **Aceptado — defecto introducido por el primer pase** | Reescrito como mapping por especificidad decreciente; se dice que capturar la interfaz primero deja ramas inalcanzables | — |
 | La afirmación sobre `UniqueConstraintViolationException` era especulativa | **Aceptado — defecto introducido por el primer pase** | Convertido en tarea de medición contra Postgres real | Medido sólo el mecanismo: `DriverException::__construct` concatena el mensaje del driver (`DriverException.php:27`). El texto de PG **no** se ha ejecutado |
@@ -220,12 +220,17 @@ como «duplicación», aunque lo que describe —tasks y numeración de AC— no
    la operación retorna fallo, no el éxito idempotente de la ausencia — *"fallo si la existencia no puede
    establecerse o el borrado no puede completarse"* (`epics-images.md:278-280`). Un `delete()` que no
    distingue "no estaba" de "no pude mirar" convierte una configuración rota en una erasure confirmada.
-   **Este contrato lo hace cierto el adaptador; no se hereda de la librería.** Delegar sin más en
-   `FilesystemOperator::delete()` no lo cumple: una implementación que decida la ausencia con `file_exists()`
-   devuelve `false` también ante un problema de permisos, de modo que un fallo de acceso saldría por la rama
-   de éxito idempotente y el sistema confirmaría una erasure que no ocurrió. La implementación debe separar
-   **ausencia confirmada** de **no he podido determinarlo**, y esa separación se prueba con permisos y
-   montajes reales, no con un doble.
+   **Este contrato lo hace cierto el adaptador; no se hereda de la librería, y el motivo está medido.**
+   `file_exists()` es un envoltorio de `stat()`, y `stat()` falla con `EACCES` cuando el directorio padre no
+   es accesible: la comprobación devuelve entonces exactamente el mismo `false` que devuelve para un fichero
+   que no existe. Medido el 2026-08-28 sobre un fichero real cuyo directorio padre se puso a `chmod 000`:
+   presente → `true`; padre inaccesible → `stat()` `EACCES` y `false`; permisos restaurados → `true`, sin
+   que el fichero se hubiese borrado nunca. Es decir, **una comprobación de existencia basada en `stat()` no
+   puede distinguir «ausente» de «no he podido mirar», y falla hacia «ausente»** — la dirección que en el
+   camino de borrado produce una erasure confirmada que no ocurrió. Es una propiedad del syscall, así que la
+   hereda cualquier implementación que decida la ausencia por esa vía, sea cual sea la versión de la
+   librería. La implementación debe separar **ausencia confirmada** de **no he podido determinarlo**, y esa
+   separación se prueba con permisos y montajes reales, no con un doble.
 
 3. **La ausencia confirmada y el fallo transitorio son distinguibles en el puerto (A-5, y requisito de la
    Story 1.3).** El puerto declara su superficie completa — `store`, `read`, `delete` — y **dice a qué
