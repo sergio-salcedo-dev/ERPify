@@ -58,6 +58,34 @@ final class ChangeUserStatusTest extends TestCase
         $this->assertSame([], $sessions->revokeAllCalls);
     }
 
+    /**
+     * The wire admits either casing — `Uuid::ensure()` validates a route id without normalising it and
+     * `Symfony\Component\Uid\Uuid::isValid` accepts both — so the guard is reached with an upper-case id, and
+     * the double must answer it the way the adapter does (`strcasecmp`, both halves). Without that mirroring
+     * this use case permits the drain the guard exists to refuse, while the adapter refuses it: the divergence
+     * would not fail any adapter test, it would silently make every unit test here a green over the wrong
+     * answer.
+     */
+    public function testTheLastActiveAdministratorIsProtectedUnderAnyUuidCasing(): void
+    {
+        $user = UserMother::create();
+        $repository = new InMemoryUserRepository($user);
+        $eventBus = new RecordingEventBus();
+        $sessions = new InMemorySessionRepository();
+        $directory = new InMemoryActiveAdministratorDirectory([\strtoupper(UserMother::DEFAULT_ID) => true]);
+
+        try {
+            $this->makeUseCase($repository, $directory, $eventBus, $sessions)->suspend(UserMother::DEFAULT_ID);
+            $this->fail('Expected LastActiveAdministratorProtected.');
+        } catch (LastActiveAdministratorProtected) {
+            // the upper-case entry IS the target, so removing it drains the set
+        }
+
+        $this->assertSame(IdentityStatus::ACTIVE, $user->status());
+        $this->assertSame([], $repository->saved);
+        $this->assertSame([], $eventBus->publishedEvents);
+    }
+
     public function testSuspendingAnAdminWhileOtherActiveAdminsRemainAppliesPublishesAndRevokes(): void
     {
         $user = UserMother::create();

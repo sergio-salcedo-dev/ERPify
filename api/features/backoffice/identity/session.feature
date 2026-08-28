@@ -40,9 +40,15 @@ Feature: Server-side session registry and admission gate
     Then the response status code should be 200
     And 1 requests got executed only for doctrine connection "default"
 
-  Scenario: My sessions lists the current device, distinguished
+  # The query count is the pin for the OTHER half of the admitted-session publication: the gate already loaded
+  # this row at `kernel.request`, so the controller reads it off the Request attribute instead of running the
+  # identical lookup a second time. Nothing else in the suite can see that — the responses are byte-identical
+  # with and without it, so only the cost distinguishes them, and without this assertion both controllers could
+  # be reverted to their own lookup with every test green.
+  Scenario: My sessions lists the current device, distinguished, without re-reading the admitted session
     When I send a "GET" request to "/sessions"
     Then the response status code should be 200
+    And 2 requests got executed only for doctrine connection "default"
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].current" should be true
     And the JSON node "data[0].device" should be equal to "Behat test client"
@@ -80,7 +86,14 @@ Feature: Server-side session registry and admission gate
     And I send a "GET" request to "/me"
     And the response status code should be 401
 
-  Scenario: A revoked session is inert on its next request
+  # The refusal drops the native session, and dropping it regenerates the session id, so this 401 carries a
+  # `Set-Cookie` where the admitted request carries none. That header is asserted here because it is the
+  # observable half of the refusal and nothing else in the suite watches it: this feature asserts no
+  # `Set-Cookie` at all, while `bank/access_control.feature` pins the ABSENCE of one on its own denial, so an
+  # analogy drawn from there would write the opposite assertion and be wrong. The flags come with it — a
+  # regenerated session cookie that lost `httponly` or `samesite` would be a worse defect than the duplicate
+  # query the invalidation exists to save.
+  Scenario: A revoked session is inert on its next request, and the refusal re-mints the cookie
     # Earlier scenarios in this feature revoke the shared registry session; reload so this one starts ACTIVE.
     Given I reload the fixtures
     And I send a "GET" request to "/me"
@@ -89,6 +102,22 @@ Feature: Server-side session registry and admission gate
     And I send a "GET" request to "/me"
     Then the response status code should be 401
     And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "session-expired"
+    And the header "Set-Cookie" should contain "httponly"
+    And the header "Set-Cookie" should contain "samesite=lax"
+
+  # The refusal drops the session but does NOT de-authenticate: the token survives in storage and
+  # `ContextListener` re-serialises it into the regenerated session on the way out, so the caller stays
+  # full-fledged and is refused by the gate again rather than falling through to `access_control`. This pins
+  # the consequence at the one route where the two readings differ — `/health` is `PUBLIC_ACCESS`, so an
+  # anonymous caller is served it with no query at all, and a bearer of a dead session is not. Asserting the
+  # 401 here is what stops the narrower claim drifting back into the wider one; a change that really did
+  # de-authenticate would red this scenario, which is the point.
+  Scenario: A refused session keeps its identity, so even a public route stays refused
+    Given I reload the fixtures
+    And I execute the SQL query "UPDATE iam_session SET status = 'REVOKED' WHERE id = '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d01'"
+    When I send a "GET" request to "/health"
+    Then the response status code should be 401
     And the JSON node "type" should be equal to "session-expired"
 
   Scenario: A time-expired session is inert on its next request

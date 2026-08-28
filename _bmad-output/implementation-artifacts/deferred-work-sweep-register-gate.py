@@ -38,9 +38,19 @@ EXPECTED_REMOVED = 45
 EXPECTED_ADDED = 0
 
 # The one survivor whose text this sweep is allowed to change: its "revisit
-# trigger" already fired (four free-metadata consumers, not one), so leaving the
-# wording untouched would preserve a statement the sweep measured to be false.
-ALLOWED_MUTATED_SURVIVOR = "audit-metadata-keys"
+# trigger" already fired, so leaving the wording untouched would preserve a
+# statement the sweep measured to be false.
+#
+# The carve-out is anchored on text present in that bullet's BASE form, and it is
+# matched on BOTH halves of the edit. Keying it on a token in the ADDED half alone
+# was measured to be a hole exactly where this gate claims its value: the token
+# named a registry the register does not mention at all, so any bullet could claim
+# the exemption by containing it — rewrite an unrelated survivor to include it,
+# leave ITEM 41 untouched, delete the 45, and every count balances with the gate
+# green over the silent rewrite the docstring says identity-by-content exists to
+# refuse. An anchor from the base text cannot be claimed that way, because the
+# rewritten bullet's own removed half would have to carry it too.
+ALLOWED_MUTATED_SURVIVOR_ANCHOR = "PII-free sin enforcement estructural"
 
 
 
@@ -114,8 +124,11 @@ def main() -> int:
     # An "added" bullet is either a genuinely new deferral (forbidden outright)
     # or the rewritten half of a survivor somebody edited. Both are refused; the
     # allowed ITEM 41 edit is the single carve-out, matched on its own subject.
-    unexplained_added = [b for b in added if ALLOWED_MUTATED_SURVIVOR not in b]
-    allowed_edits = [b for b in added if ALLOWED_MUTATED_SURVIVOR in b]
+    unexplained_added = [b for b in added if ALLOWED_MUTATED_SURVIVOR_ANCHOR not in b]
+    allowed_edits = [b for b in added if ALLOWED_MUTATED_SURVIVOR_ANCHOR in b]
+    # The other half of the same edit. An edit shows up on both sides; a deletion
+    # shows up only here, which is how "ITEM 41 must survive" becomes checkable.
+    removed_allowed = [b for b in removed if ALLOWED_MUTATED_SURVIVOR_ANCHOR in b]
 
     # An edited survivor shows up on BOTH sides — its old text is absent from
     # head, its new text absent from base — so a raw `removed` count would read
@@ -135,6 +148,16 @@ def main() -> int:
 
     if len(allowed_edits) > 1:
         failures.append(f"the allowed survivor edit appears {len(allowed_edits)} times, expected at most 1")
+    if len(removed_allowed) > 1:
+        failures.append(
+            f"{len(removed_allowed)} base bullets carry the allowed-edit anchor, expected exactly 1 — "
+            "the anchor no longer identifies a single survivor"
+        )
+    if len(removed_allowed) != len(allowed_edits):
+        failures.append(
+            f"the allowed survivor edit is half-present: {len(removed_allowed)} base half(ves), "
+            f"{len(allowed_edits)} head half(ves) — an edit must show both, and ITEM 41 must survive"
+        )
 
     report = {
         "base_commit": args.base,
@@ -145,6 +168,7 @@ def main() -> int:
         "added": len(added),
         "survivors": len(survivors),
         "allowed_survivor_edits": len(allowed_edits),
+        "allowed_survivor_base_halves": len(removed_allowed),
         "expected_head_count": EXPECTED_HEAD_COUNT,
         "failures": failures,
     }

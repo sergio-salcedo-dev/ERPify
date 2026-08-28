@@ -15,8 +15,11 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 /**
  * Single-context production adapter for {@see ActiveAdministratorDirectory}: answers both administrator
  * questions straight off `identity_user`, with no JOIN to Organization's Membership. Roles live on the identity
- * aggregate and nowhere else, so an active administrator is a row whose `status` is `ACTIVE`, whose `roles`
- * contains `ADMIN`, and whose id differs — no cross-context seam and no phantom membership to discount,
+ * aggregate and nowhere else, so an active administrator is a row whose `status` is `ACTIVE` and whose `roles`
+ * contains `ADMIN`. The subject's id is not part of that definition: it is one of the two questions asked OVER
+ * the set — does another member remain, and is the subject a member at all — and the second is what separates
+ * "this removal drains the set" from "some administrator exists somewhere". No cross-context seam and no
+ * phantom membership to discount,
  * because the source IS the user row (an absent/hard-deleted user is simply never counted). Moving that
  * authority to `Membership` would take a role column that table does not have, so it is a schema decision
  * before it is an adapter one; the port is what stays unchanged across it.

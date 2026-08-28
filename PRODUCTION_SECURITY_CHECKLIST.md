@@ -429,13 +429,22 @@ you change anything here.
       behind the token check**: a dead accept link never pays an argon2id run (no unauthenticated KDF
       amplification). The accept is capped **per selector** (`token_action_per_selector` limiter); exhaustion
       folds into the same opaque `invalid-token`, never a per-selector 429.
-- [x] **Every payload-mapping endpoint accepts JSON only.** All eleven `#[StrictRequestPayload]` sites
-      declare `acceptFormat: ['json']`, so a form-encoded or `multipart/form-data` body is refused with
-      415 at the argument resolver, before any controller or handler runs. Uniformity is the control:
-      the API declares no `#[MapUploadedFile]` argument anywhere, and a route that silently accepted a
-      multipart body would be the seam through which a file part could re-enter. Verify with
-      `git grep -n '#\[StrictRequestPayload' -- api/src` — every attribute site must carry the format
-      list. Gate: `BankCreateAcceptsJsonOnlyFunctionalTest`.
+- [x] **Every payload-mapping endpoint accepts JSON only, and it is the type's default that says so.**
+      `StrictRequestPayload::__construct` defaults `acceptFormat` to `['json']`, so a form-encoded or
+      `multipart/form-data` body is refused with 415 at the argument resolver, before any controller or
+      handler runs — and an endpoint added tomorrow inherits the refusal by writing nothing. The thirteen
+      attribute sites carry no format list of their own; the guarantee is one line in one type rather than
+      a declaration repeated thirteen times, which is what makes an omission impossible instead of merely
+      unlikely. Uniformity is the control: the API declares no `#[MapUploadedFile]` argument anywhere, and
+      a route that silently accepted a multipart body would be the seam through which a file part could
+      re-enter. Verify the two halves separately, because no single grep sees both — the attribute's name
+      also appears in docblocks, so counting `#[StrictRequestPayload` matches prose as well as sites:
+      (1) the default holds — `git grep -n 'acceptFormat' -- api/src` names only the constructor in
+      `Shared/Http/Infrastructure/StrictRequestPayload.php`, so no call site has widened it; (2) the
+      default means what it says — `StrictRequestPayloadTest::itRefusesAFormEncodedBodyWithoutBeingAskedTo`
+      and `itAcceptsAJsonBodyWithoutBeingAskedTo` put a payload declaring no format through Symfony's own
+      resolver and assert the 415 and the 200, so the pin is the status a caller receives rather than the
+      value the constructor stored. Gate: `BankCreateAcceptsJsonOnlyFunctionalTest`.
 - [ ] **Password reset (`POST /api/v1/backoffice/forgot-password` · `/reset-password`):** the credential-recovery
       surface, mirroring the invitation flow. Forgot answers a **uniform 202** for every email/identity state
       (only an `ACTIVE` identity mints a token, and that work is never observable to the anonymous requester) — no
@@ -457,7 +466,7 @@ you change anything here.
       the authorization**, and it is also the CSRF control: the endpoint carries no `#[IsGranted]` (every identity
       acts on its own — the `^/api` `IS_AUTHENTICATED_FULLY` rule plus the Session Admission Gate are the access
       decision) and no `#[IsCsrfTokenValid]`, like the other authenticated writes, because a cross-site forgery
-      does not know the current password and `#[StrictRequestPayload(acceptFormat: ['json'])]` refuses a form
+      does not know the current password and `#[StrictRequestPayload]`, JSON-only by its own default, refuses a form
       post. A wrong current password is **403 `invalid-current-password`**, never 401 — a 401 would bounce the
       caller to the login screen for a typo — and it writes nothing: no hash, no event, no revocation, no email.
       A new password equal to the stored one is **422 `new-password-must-differ`**, decided inside the

@@ -142,11 +142,11 @@ final readonly class ProblemDetailsFactory
      * `testHttpStatusTypeMapValuesMirrorMarkerDefaultTypeMapValues`.
      *
      * 415 is the one entry no marker backs, and it needs one for the same reason the others do. No
-     * domain code raises it: the refusal happens in Symfony's argument resolver, so an endpoint
-     * declaring `acceptFormat: ['json']` answers a form-encoded or multipart body before any handler
-     * runs. Left out of this map that refusal reaches the wire as `http-error`, indistinguishable
-     * from every other unmapped status, and a client routing on `type` cannot tell "resend this as
-     * JSON" from a failure it can do nothing about.
+     * domain code raises it: the refusal happens in Symfony's argument resolver, so an endpoint mapping
+     * a {@see \Erpify\Shared\Http\Infrastructure\StrictRequestPayload} answers a form-encoded or multipart
+     * body before any handler runs. Left out of this map that refusal reaches the wire as `http-error`,
+     * indistinguishable from every other unmapped status, and a client routing on `type` cannot tell
+     * "resend this as JSON" from a failure it can do nothing about.
      */
     private const array HTTP_STATUS_TYPE_MAP = [
         Response::HTTP_BAD_REQUEST => 'invalid-input',

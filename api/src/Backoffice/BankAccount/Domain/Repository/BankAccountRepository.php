@@ -24,7 +24,12 @@ interface BankAccountRepository
     /**
      * Loads the account under a pessimistic write lock, so two callers deciding the same aggregate's fate
      * serialise on its row: the second blocks until the first commits, then re-reads and finds whatever the
-     * first left behind. Subject erasure needs it because its two effects — removing the record and
+     * first left behind — **provided the caller has not already loaded this account in the same unit of
+     * work**. With the entity managed, the lock routes through a refresh that hydrates nothing from a
+     * vanished row and hands back the stale snapshot, so the loser would read the account as still present
+     * and report an erasure that erased nothing. The one caller does not load it beforehand, which is what
+     * makes the guarantee hold today rather than by construction; a second caller must clear the unit of
+     * work first. Subject erasure needs it because its two effects — removing the record and
      * destroying the scope's key — are one transaction whose second half cannot be replayed: a competitor
      * that tombstones the key between an unlocked read and this transaction's own flush meets the change
      * capture sealing PII under a key that no longer exists, so a request whose only honest answer is

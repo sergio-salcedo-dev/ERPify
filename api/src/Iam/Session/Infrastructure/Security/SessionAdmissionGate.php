@@ -34,11 +34,21 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
  * unreachable store surfaces as {@see \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable} from the
  * repository (→ 503) — the gate never swallows it, so it fails closed rather than open.
  *
- * **Refusing also drops the native session** ({@see refuse()}), the same way explicit sign-out does. Without
- * that, the cookie behind a refused request survives to its own TTL and every subsequent request — including
- * the `PUBLIC_ACCESS` ones an anonymous caller gets served with no query at all — arrives full-fledged and
- * spends another `findActiveById` round-trip, so bearing a revoked cookie costs the deployment more than
- * bearing none. One refusal now makes the next request anonymous, refused at `access_control`.
+ * **Refusing also drops the native session** ({@see refuse()}), the same way explicit sign-out does — and what
+ * that buys is narrower than "the caller becomes anonymous", which is why the narrow statement is the one
+ * written here. A refusal does not de-authenticate: `ContextListener` is a global `kernel.response` listener,
+ * this gate's own `getToken()` is what marks the firewall as having run, and it re-serialises the token that
+ * is still in storage into the session `invalidate()` just regenerated. So the caller arrives full-fledged
+ * again on the next request and is refused HERE a second time, never at `access_control`, and a
+ * `PUBLIC_ACCESS` route keeps answering 401 to a stale-cookie bearer. Measured against the running stack,
+ * following the regenerated cookie: `GET /api/v1/sessions` is 401 `session-expired`, and so is
+ * `GET /api/v1/health`, which is the route that would have to be served for the anonymity reading to be true.
+ *
+ * What the invalidation removes is the `iamSessionId` correlation, so every refusal after the first
+ * short-circuits at {@see CurrentSessionReference} and never reaches `findActiveById` — no database
+ * round-trip for a caller bearing a dead cookie. That is the whole of the gain, and its price is a session
+ * destroy, a regenerate and a `Set-Cookie` per refused request. Neither side of that trade is benchmarked,
+ * so it is stated as a shape and not as a win.
  *
  * **The admitted session is published on the Request** under {@see ADMITTED_SESSION_ATTRIBUTE}, read back by
  * {@see admittedSession()}. The row is already loaded here on every authenticated request, and the controllers
@@ -115,11 +125,19 @@ final readonly class SessionAdmissionGate
     }
 
     /**
-     * Drops the native session, then raises the 401. Guarded on `hasSession()` because the gate runs on every
-     * `/api` request and a request carrying no session at all must still refuse with the same 401 — reaching
-     * `getSession()` there would raise a `SessionNotFoundException` and turn the refusal into a 500.
+     * Drops the native session, then raises the 401. The `hasSession()` guard is a TEST contract, not a
+     * production one, and saying so is the point: `AbstractSessionListener` puts a session factory on every
+     * main request at priority 128, long before this gate at 7, and `Request::hasSession()` answers on the
+     * factory — so in the running application it is always true and `getSession()` can never raise here. What
+     * the guard keeps working is the bare `Request::create()` a unit test hands to the no-correlation branch.
+     * It is not the protection a session-less caller would need either: `getSession()` would materialise and
+     * start one, and `invalidate()` would hand that caller a cookie.
      *
-     * The response shape is unchanged: the throw is the only thing the Problem Details pipeline sees.
+     * The BODY and the STATUS are unchanged — the throw is the only thing the Problem Details pipeline sees —
+     * but the response is not: dropping the session regenerates its id, so the 401 carries a `Set-Cookie`, and
+     * touching the session makes the framework add `Cache-Control: private, must-revalidate` with an `Expires`
+     * beside it. `session.feature` asserts the cookie and its flags, because a regenerated session cookie that
+     * lost `httponly` or `samesite` would be a worse defect than the round-trip the invalidation saves.
      */
     private function refuse(Request $request): never
     {

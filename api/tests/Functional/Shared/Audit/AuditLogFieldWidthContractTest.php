@@ -50,7 +50,10 @@ final class AuditLogFieldWidthContractTest extends KernelTestCase
     {
         $width = $this->connection->fetchOne(
             'SELECT character_maximum_length FROM information_schema.columns '
-            . 'WHERE table_name = :table AND column_name = :column',
+            // `table_schema` is part of the identity of a column: without it a second schema holding a table
+            // of the same name makes this a single-row read over an ambiguous set, and `fetchOne` would take
+            // whichever row the planner returned first.
+            . 'WHERE table_schema = current_schema() AND table_name = :table AND column_name = :column',
             ['table' => self::TABLE, 'column' => $column],
         );
 

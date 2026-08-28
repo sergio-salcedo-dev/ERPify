@@ -3,6 +3,7 @@ title: 'Barrido de deferred-work.md: 98 balas a 53 en una PR'
 type: 'chore'
 created: '2026-08-27'
 status: 'in-progress'
+baseline_commit: 'f86b2662'
 review_loop_iteration: 0
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/deferred-work.md'
@@ -127,7 +128,7 @@ context:
 
 ## Design Notes
 
-El valor de esta PR no es el número. Es que las 49 que quedan queden por una razón **verificada**: 27 tienen un disparador que no ha saltado y 22 exigen una decisión humana. Antes de este triaje eso era una afirmación; ahora es una medición bala a bala contra el árbol.
+El valor de esta PR no es el número. Es que las **53** que quedan queden por una razón **verificada**: 27 tienen un disparador que no ha saltado, **24** exigen una decisión humana y 2 las aplazó el product owner. (Esta frase decía «49 … y 22», los números del triaje original de 96 balas; #866 editó cuatro viñetas y dos de ellas se triaron después del rebase, ambas `needs-decision`. Que la deriva de conteo apareciese dentro de la PR escrita para erradicar la deriva de conteo es exactamente el motivo de que la aritmética la verifique un gate y no una lectura.) Antes de este triaje eso era una afirmación; ahora es una medición bala a bala contra el árbol.
 
 Tres hallazgos que solo aparecen leyendo el código y que cambian qué se hace:
 - **ITEM 40 es una bala falsa.** Afirma que `ExceptionResponder` no detiene la propagación; `RequestEvent::setResponse()` llama a `stopPropagation()`. La bala se borra por errónea, no por resuelta.
@@ -170,3 +171,233 @@ Checklist recorrible por el revisor sin interpretar el documento:
 - [ ] los 11 endpoints del ITEM 21 auditados uno a uno
 - [ ] register-gate = 0 · [ ] `php.quality` = 0 · [ ] `pwa.quality` = 0
 - [ ] `php.unit` = 0 · [ ] `php.behat` = 0 · [ ] `pwa.test` = 0
+
+## Adversarial pass
+
+**Ejecutada el 2026-08-28, antes de abrir la PR, y cambió el resultado en vez de confirmarlo.**
+
+**Cómo.** Tres lecturas hostiles en paralelo, cada una en contexto fresco, sin el
+razonamiento de quien escribió el código y en modo solo-lectura, con lentes
+distintas y solapamiento deliberado en los bordes: (1) el TCB de autenticación
+(`SessionAdmissionGate`, `ClearLockoutOnLoginSuccess`, la guarda de último admin,
+`DoctrineSessionRepository`); (2) auditoría/GDPR, contrato HTTP y PWA; (3)
+falsabilidad — atacar la afirmación central de la rama («cada bala cerrada tiene
+un falsador y una mutación independiente») contra el propio artefacto de
+evidencia. Encima, mediciones vivas propias contra el stack del worktree, que es
+lo que decidió el hallazgo más grave. La instrucción a las tres fue romper la
+rama, no aprobarla, y lo más valioso que podían devolver era una fila del
+artefacto cuya afirmación pudieran demostrar falsa. Devolvieron dos.
+
+### GRAVE
+
+**A1 — El docblock del `SessionAdmissionGate` afirmaba una propiedad de
+autenticación que no se cumple.** Decía: *«One refusal now makes the next request
+anonymous, refused at `access_control`»*. Es falso. Rechazar **no**
+des-autentica: el token sigue en `TokenStorage`, `ContextListener` es un listener
+global de `kernel.response`, y la propia llamada a `getToken()` de esta clase es
+la que marca el firewall como ejecutado — así que el token se re-serializa en la
+sesión que `invalidate()` acaba de regenerar. Medido en vivo contra el stack,
+**siguiendo la cookie regenerada**: `GET /api/v1/sessions` → `401
+session-expired`, y `GET /api/v1/health` — que es `PUBLIC_ACCESS`, el ejemplo que
+el propio docblock elegía como titular — → **`401 session-expired`** también. Mi
+primera sonda no lo vio porque reenviaba la cookie rancia en vez de la nueva; esa
+es exactamente la diferencia entre medir el precondicionante y medir la
+consecuencia.
+*Cerrado:* docblock reescrito a lo que la medición dice, más un escenario Behat
+que fija la consecuencia en la ruta donde las dos lecturas difieren (`/health` →
+401). Un cambio que sí des-autenticase pondría ese escenario rojo, que es el
+punto. Lo que la invalidación **sí** compra queda dicho y acotado: borra la
+correlación `iamSessionId`, así que el segundo rechazo y los siguientes
+cortocircuitan antes de `findActiveById`. Ni ese ahorro ni su precio (destroy +
+regenerate + `Set-Cookie` por petición rechazada) están medidos, y ahora se dice
+así en vez de afirmarse como una victoria.
+
+**A2 — El artefacto de evidencia afirmaba de sí mismo una completitud que no
+tiene, en el párrafo donde se felicitaba por su honestidad.** La versión anterior
+señalaba el ITEM 53 como la única fila sin mutación propia y sostenía que la
+línea de la DoD *«cada fila tiene mutación independiente»* valía para «las 36
+filas que cambiaron código». Son **cuatro** las filas sin mutación independiente,
+y la tabla lo decía ella misma: 79 (`falsador: none — docblock`), 80 (`falsador:
+None — prose`), 73 (cuyo falsador es «el propio paso», circular) y 53. Dos de
+ellas son **más débiles** que la que se señalaba como excepción.
+*Cerrado:* la contabilidad real es **32 de 36** filas con mutación propia, con
+las cuatro exceptuadas por nombre en una tabla y el motivo de cada una. La
+cabecera de la sección B decía «one per closed bullet (37)» sobre 36 filas
+(`54+67` es una fila para dos balas); ahora dice qué unidad cuenta.
+
+### SERIOUS
+
+**S1 — El gate de integridad del registro tenía un agujero justo donde afirma su
+valor.** `ALLOWED_MUTATED_SURVIVOR = "audit-metadata-keys"` se buscaba **por
+subcadena en la mitad AÑADIDA**, y ese token **no aparece en el registro** ni en
+la base ni en HEAD. Consecuencia medida: reescribe cualquier otro superviviente
+metiéndole ese literal, deja el ITEM 41 intacto, borra las 45 — y la aritmética
+cuadra entera (`head`=53, `deleted`=45, `allowed_edits`=1) con **exit 0 sobre un
+superviviente reescrito en silencio**, que es la dirección que el docstring del
+gate dice existir para cerrar.
+*Cerrado:* la excepción se ancla ahora en texto presente en la forma **base** del
+ITEM 41 y se exige en **las dos mitades**. Falsificado en tres direcciones, y las
+tres se ejecutaron: (A) estado final real → `OK`, exit 0, 53 viñetas / 45
+borradas — que es además la prueba de que la aritmética del spec es alcanzable;
+(B) el agujero exacto → **exit 1** con los conteos igualmente cuadrados, que es
+por lo que el gate viejo lo dejaba pasar; (C) ITEM 41 borrado en vez de editado →
+exit 1, invariante nueva que el gate no tenía.
+
+**S2 — Una casilla `[x]` de seguridad quedó falsa por culpa de esta misma rama.**
+`PRODUCTION_SECURITY_CHECKLIST.md` afirmaba que «los once sitios
+`#[StrictRequestPayload]` declaran `acceptFormat: ['json']`» y prescribía
+verificarlo con un `git grep`. Tras voltear el default, **cero** sitios lo
+declaran: el criterio de aprobación del propio checklist fallaba contra su propio
+árbol. La receta antigua tampoco podía funcionar, porque ese grep casa también
+las once menciones en docblocks junto a los trece sitios reales.
+*Cerrado:* enunciado reescrito donde la garantía vive de verdad (el default del
+tipo), con una receta verificada, y la prosa rancia equivalente corregida en el
+docblock del 415 de `ProblemDetailsFactory` y en la línea del endpoint de cambio
+de contraseña.
+
+**S3 — El doble in-memory de la guarda de último admin discrepa del adapter en
+mayúsculas, en el eje que esta rama declaró importante.** El adapter usa
+`strcasecmp` en sus dos mitades; el doble usaba `!==` y una búsqueda de clave
+sensible a mayúsculas. `Uuid::ensure()` valida sin normalizar y
+`Symfony\Component\Uid\Uuid::isValid` admite ambas grafías, así que un id en
+mayúsculas llega a la guarda desde la ruta: el adapter responde `false` (409) y
+el doble respondía `true` (permitir). Esta rama añadió el test de mayúsculas *del
+adapter* y dejó el doble divergente, con lo que cada test unitario que lo usa era
+un verde sobre la respuesta contraria.
+*Cerrado:* doble hecho insensible a mayúsculas en ambas mitades, con su falsador
+(`ChangeUserStatusTest::testTheLastActiveAdministratorIsProtectedUnderAnyUuidCasing`).
+Revertido el doble a sensible: rojo en **exactamente** ese test, 1 de 9.
+
+**S4 — La mitad de controlador del ITEM 17 no estaba fijada por nada.** Las
+respuestas son byte-idénticas con y sin la lectura del atributo, así que solo el
+**coste** las distingue, y `session.feature` tenía una única aserción de conteo de
+queries, sobre `/me`. Revertir ambos controladores a su propia consulta dejaba la
+suite entera verde. La fila de evidencia describía una mutación **emparejada**
+(gate + controladores a la vez), que por construcción no puede distinguir qué
+mitad está fijada.
+*Cerrado:* aserción de conteo sobre `GET /sessions`. Medido: 2 queries. Revertido
+el controlador: `Failed asserting that 3 matches expected 2`, rojo en exactamente
+1 escenario.
+
+**S5 — `ClearLockoutOnLoginSuccess` afirmaba un remedio que su propio test no
+mide.** El docblock decía que soltar la sesión hace que el 503 «no deje nada
+admitido detrás». No es así, por el mismo mecanismo de A1:
+`AuthenticatorManager` pone el token en storage antes de despachar el evento y
+`ContextListener` lo re-serializa en la sesión regenerada. El test nuevo mira
+`$session->has('_security_main')` justo al volver el listener — aguas arriba del
+listener de `kernel.response` que lo vuelve a poner — mientras su mensaje de
+aserción enuncia la propiedad de extremo a extremo.
+*Cerrado:* docblock reescrito al beneficio que sí existe y es estrecho — en un
+re-login estando ya dentro, `SessionStrategyListener` migra la sesión con sus
+datos intactos, así que una correlación `iamSessionId` viva sobreviviría a un
+fallo que no puede acuñar su reemplazo; `invalidate()` la borra.
+
+**S6 — `docs/api-error-contract.md` (obligatorio por NFR26) era falso en tres
+formas.** Nombraba `#[MapRequestPayload]`, que `StrictRequestPayloadGateTest`
+prohíbe en todo `api/src`; decía que las rutas declaran `acceptFormat: ['json']`,
+que ya no es cierto en ninguna; y afirmaba que «every write endpoint here declares
+it», cuando cuatro POST no mapean payload alguno y por tanto no producen 415
+(`/login` responde **400** desde `json_login`, y tres rutas no llevan cuerpo).
+*Cerrado:* los tres enunciados corregidos, con el 400 de `/login` dicho
+explícitamente porque es la lectura que un cliente haría mal.
+
+### Registrado y NO arreglado, con su motivo
+
+- **Los ITEMs 81 y 82 endurecen pasos clasificados `idle`** en
+  `api/.behat-step-vocabulary` — ningún escenario los alcanza. Los cierres son
+  reales (sus falsadores unitarios existen y se ponen rojos), pero la «condición
+  original» de esas dos filas se lee como un falso-verde vivo en la suite de
+  aceptación cuando ninguna de las dos formas puede producirla un escenario del
+  árbol. Para el 82 es estructural: `iConsume`/`iConsumeWithTimeLimit` reciben un
+  `string $transportName`, así que el camino de cero receivers solo es alcanzable
+  por el paso CLI crudo, que está ocioso. No se toca porque endurecer un paso
+  ocioso es exactamente lo que la regla de la casa pide («la gramática es un
+  activo que se gasta»); lo que faltaba era decirlo.
+- **Son siete supresiones de PHPMD, no seis, y tres no llevan número medido.**
+  Ninguna sobre clase de producción (53 en `api/src` en la base y 53 en HEAD).
+  Cuatro llevan medición y alternativa descartada; las tres de
+  `BankAccountSubjectErasureRaceFunctionalTest`, `LoginPreIdentityOpacityFunctionalTest`
+  y `ResetPasswordDeadTokenOpacityFunctionalTest` no. **La respuesta a la pregunta
+  abierta que los commits plantean y no zanjan:** el umbral no se transfiere
+  uniformemente y contestarlo en bloque es el error. `TooManyPublicMethods` sí
+  deja de aplicar en una clase de test — la métrica aproxima «esta clase tiene
+  demasiadas responsabilidades» y ahí cada método público **es** un caso, así que
+  fusionar dos para bajar a 10 destruye lo único que la suite te da en una
+  regresión: qué caso rompió. `CouplingBetweenObjects` **sí** se transfiere en
+  parte: un recuento alto de imports en un test suele ser la señal de que el test
+  monta más maquinaria de la que su afirmación necesita. Por eso las dos
+  supresiones que aguantan el escrutinio son las que **enseñan** que los imports
+  son el ensamblaje del propio sujeto. Regla: `TooManyPublicMethods` en tests, con
+  una línea de motivo; `CouplingBetweenObjects` solo con el número y la
+  descomposición. Las tres de arriba deberían enunciarlo o mirarse — se registra
+  aquí en vez de tocarlas, porque son ficheros que esta rama no abrió por otro
+  motivo.
+- **El ITEM 47 hace que `FixturesChangeTracker::hasChanged()` sea prácticamente
+  constante `true`.** Toda petición autenticada escribe `iam_session`/`audit_log`
+  por DBAL crudo, así que casi todo escenario marca ahora y paga restore, y la
+  optimización de clonado de plantilla queda en gran parte gastada. Es la
+  dirección segura (la BD cambió de verdad), el cambio es estrictamente aditivo
+  como se afirmaba, y el coste medido no se materializó — pero es más de lo que
+  el docblock sugiere y no estaba dicho.
+- **`admittedSession()` y `currentSession->get()` ya no están atados por
+  construcción.** Antes salían de una sola lectura con el mismo id; ahora uno
+  viene del atributo publicado en `kernel.request` y el otro se re-lee en el
+  controlador, y nada los compara. Busqué una divergencia viva y **no la hay**
+  (el único escritor de `iamSessionId` a media petición es el listener de acuñado
+  vía `Security::login()`, en una ruta que no lee el atributo), pero la invariante
+  se sostiene hoy por coincidencia y no por construcción.
+- **`AuditWriteOperationParityTest` no fija lo que la bala pedía «por separado».**
+  Compara el enum con el espejo del PWA, pero no lee `AuditWriteCaptureListener`,
+  así que mutar `$diff['operation'] = $operation->name` lo deja verde. La
+  propiedad **sí** está cubierta, por tres aserciones de string preexistentes en
+  el test funcional del listener; lo que no está es aislada.
+- **El default de `resourceErased` falla hacia abierto.** La API lo declara
+  `public bool` no anulable en los dos recursos, así que la forma ausente no tiene
+  productor hoy; el `?? false` elegido significa que si algún día falta, un
+  recurso borrado se pinta como no-borrado. Los dos docblocks enuncian ese coste,
+  y `true` habría sido el default conservador. Se deja como está por decisión
+  explícita de la bala (tolerar la **ausencia**, nunca la corrupción) y porque el
+  type-guard sí rechaza `null`, `"false"`, `42`, `0` y `{}` — verificado.
+- **Los dos gates de paridad nuevos quitan comentarios con un regex ingenuo**
+  (`#/\*.*?\*/#s`, `#//[^\n]*#`) sobre fuente TypeScript, así que un `"https://…"`
+  dentro de un literal borraría código real. No se dispara hoy en ninguno de los
+  tres ficheros que leen.
+- **`api-test` sigue declarando `timeout-minutes: 15`** mientras el job corre
+  ahora la suite unitaria **dos veces** (sin instrumentar y bajo cobertura
+  Xdebug). No se sube a ojo: el número al que subirlo lo da la primera ejecución
+  post-merge.
+- **El test de carrera del ITEM 37 no conduce la pata que la bala describe.**
+  Conduce el lado del poseedor y la lectura de ausencia post-commit sobre la
+  conexión rechazada; el «T2 bloquea → despierta → relee bajo su propio lock →
+  no-op» no se ejecuta. El docblock ya es honesto en que el contendiente es SQL
+  cruda y argumenta por qué; lo que no dice es que esa pata queda sin conducir.
+  El cambio de producción **sí** está falsado (revertir `findByIdForUpdate` pone
+  rojo `assertTrue($this->contenderBlocked)`).
+
+### Menores cerrados en el paso
+
+Contabilidad del ITEM 86 (`exit 2` era vocabulario de *error*; un `assertSame`
+fallido es *failure*, exit 1) · conteos rancios en las Design Notes del spec
+(«49 … 22» → 53 / 24, con la ironía anotada) · docblock de
+`DoctrineActiveAdministratorDirectory` que aún definía el conjunto por «whose id
+differs» · la justificación de `hasSession()` en `refuse()`, que describía como
+protección de producción lo que es un contrato de test, y el «response shape is
+unchanged», que es cierto del cuerpo y del estado pero no de la respuesta ·
+precondición ausente en el docblock del puerto `findByIdForUpdate` (con la
+entidad ya gestionada el lock pasa por un refresh que devuelve el snapshot
+rancio) · fixture del ancla de verbos de escritura, que no podía ver el ancla que
+decía fijar (`INSERT_BANK` falla el `\b` por sí solo; ahora es un token desnudo, y
+borrar `^\s*` pone rojo 1 de 10) · predicado `table_schema` ausente en la lectura
+de `information_schema` · fichero de sonda `tempnam()` sin borrar · afirmación de
+tiempos de Behat, que citaba una muestra única (tres ejecuciones dieron 45s, 40s y
+36,22s, dispersión mayor que el efecto afirmado).
+
+### Lo que un verde aquí NO prueba
+
+Esta sección registra la forma y el contenido de la lectura hostil, no su
+suficiencia. Las tres lentes se solapan pero no agotan la rama: nadie atacó el
+PWA más allá del menú, los repositorios de auditoría y `AccessWall`; nadie
+ejecutó la suite de mutación completa; y las mediciones vivas se hicieron contra
+un stack de desarrollo de un worktree, no contra producción. Dos de los hallazgos
+GRAVE fueron afirmaciones **documentales** falsas, no defectos de comportamiento
+— lo que dice algo sobre dónde mira esta clase de revisión y dónde no.

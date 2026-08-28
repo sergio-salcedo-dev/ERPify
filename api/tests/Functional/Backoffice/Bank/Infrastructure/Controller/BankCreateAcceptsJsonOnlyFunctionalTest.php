@@ -65,6 +65,11 @@ final class BankCreateAcceptsJsonOnlyFunctionalTest extends WebTestCase
             (string) $this->client->getResponse()->getContent(),
         );
         $this->assertSame(0, $this->countBanks(), 'the refused request creates nothing');
+
+        // The probe outlives the assertion otherwise: `UploadedFile` in test mode neither moves nor removes
+        // it, and a functional suite that leaves a file per run in the system temp directory is a leak whose
+        // only symptom is elsewhere.
+        \unlink($file);
     }
 
     public function testAFormEncodedBodyIsRefusedEvenWithoutAFilePart(): void

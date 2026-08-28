@@ -81,7 +81,8 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
 
         $anotherActiveAdminRemains = \array_any(
             $this->adminUserIsActive,
-            static fn (bool $isActive, $adminUserId): bool => $isActive && $adminUserId !== $userId,
+            static fn (bool $isActive, $adminUserId): bool => $isActive
+                && 0 !== \strcasecmp((string) $adminUserId, $userId),
         );
 
         // The second half of the adapter's reading, and it must mirror it or the double lies about the one
@@ -89,7 +90,25 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
         // nothing, so it cannot drain a set of any size, the empty one included. An entry valued `false` is a
         // phantom — the identity carries ADMIN without being ACTIVE — and is no more a member than an absent
         // key is.
-        return $anotherActiveAdminRemains || !($this->adminUserIsActive[$userId] ?? false);
+        return $anotherActiveAdminRemains || !($this->activeEntryFor($userId) ?? false);
+    }
+
+    /**
+     * Identity comparison is case-insensitive, mirroring the adapter's `strcasecmp` in both of its halves.
+     * `Uuid::ensure()` validates a route id without normalising it and `Symfony\Component\Uid\Uuid::isValid`
+     * admits either casing, so an upper-case id reaches the guard from the wire. A case-sensitive double
+     * answers `true` (permit) where the adapter answers `false` (409) for the same input, which makes every
+     * unit test that uses it a false green on the one axis the adapter's own test declares important.
+     */
+    private function activeEntryFor(string $userId): ?bool
+    {
+        foreach ($this->adminUserIsActive as $adminUserId => $isActive) {
+            if (0 === \strcasecmp((string) $adminUserId, $userId)) {
+                return $isActive;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -102,7 +121,7 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
     {
         $this->askedWhetherAdministrator[] = $userId;
 
-        return \array_key_exists($userId, $this->adminUserIsActive);
+        return null !== $this->activeEntryFor($userId);
     }
 
     /**

@@ -31,7 +31,7 @@ measured 53 differ because #866 **edited** four bullets as well as deleting
 twenty-four; two of those edits had never been triaged and were triaged after the
 rebase — both `needs-decision`, neither closable here.
 
-## B. Closure rows — one per closed bullet (37)
+## B. Closure rows — 36 rows covering the 37 closed bullets (`54+67` is one row for two)
 
 Independence rule: reverting a row's mutation reddens **its** falsifier and leaves
 every other row's falsifier green. Sharing a file is not sharing a mutation.
@@ -47,13 +47,13 @@ every other row's falsifier green. Sharing a file is not sharing a mutation.
 | 83 | `the last run output should not contain` satisfied itself over an empty buffer | Refuse a buffer that is empty or whitespace-only | `RunOutputAbsenceTest::testAnAbsenceIsNotProvenOverARunThatPrintedNothing` | Remove the emptiness assertion | Reverted: 83 red, 85 green | CLOSED |
 | 84 | `I consume N` asserted nothing about how many were consumed | Count `WorkerMessageHandled`/`Failed` on the private dispatcher; `consumeExactly()` asserts the count — the raw-CLI step deliberately does not | `MessengerConsumerContextTest::testAConsumeThatReadsFewerMessagesThanTheStepNamedIsRefused` | Revert `iConsume`/`iConsumeWithTimeLimit` to call `runWorker()` directly | Reverted: 84 red, 82 and 86 green | CLOSED |
 | 85 | `LastRun::record()` overwrote an unread run with no signal | Track whether the run was read; refuse a second record over an unread one | `LastRunTest::testRecordingOverARunNothingReadIsRefused` | Drop the `$read` field and the guard | Reverted: 85 red, 83 green | CLOSED |
-| 86 | Verbosity resolved by last matching flag, so `-vvv --verbose` degraded to VERY_VERBOSE | `verbosityFrom()` takes the maximum | `MessengerVerbosityResolutionTest::testTheStrongestVerbosityFlagWinsOverTheLastOneDeclared` | `\max($verbosity, $level)` → `$level` | Re-measured after the class split: 86 red (exit 2), 82/84 green (exit 0) | CLOSED |
+| 86 | Verbosity resolved by last matching flag, so `-vvv --verbose` degraded to VERY_VERBOSE | `verbosityFrom()` takes the maximum | `MessengerVerbosityResolutionTest::testTheStrongestVerbosityFlagWinsOverTheLastOneDeclared` | `\max($verbosity, $level)` → `$level` | Re-measured after the class split: 86 red (1 failure), 82/84 green — recorded here as `exit 2` first, which PHPUnit reserves for an ERROR; a failed `assertSame` is a FAILURE and exits 1, so the number named an outcome the stated mutation cannot produce | CLOSED |
 
 | 2 | Nothing pinned that the persisted `operation` equals `AuditWriteOperation::name`, nor that the three PWA literals match the enum | New `AuditWriteOperationParityTest` comparing the enum's case names against the values parsed out of the PWA object literal, plus a pin that the payload guard is still derived from it | `theWriteOperationVocabularyIsTheSameOnBothDeployables` | Renamed a case PHP-side; renamed the literal PWA-side; replaced the derived guard with a hand-written set. Negative control: a commented-out value stays green | Own file | CLOSED |
 | 17 | The gate loaded the admitted `Session`, discarded it, and both controllers re-ran the identical query | The gate publishes the row on the **Request** (never a singleton or static — FrankenPHP worker mode); controllers read it, falling back to a fresh lookup | `SessionAdmissionGateTest::testItPublishesTheAdmittedSessionOnTheRequest` | Collapse the gate back to the discarded `instanceof` and restore both controllers | Reverted: 17 red, 27 and 19 green | CLOSED |
 | 18 | No scenario proved an expired session leaves `GET /sessions`; covered only at adapter level | Scenario seeding an `ACTIVE` row with `expires_at` in the past, with a row-count assertion so the seed cannot be vacuous | The scenario | Behat, verified in the serial run: 470 scenarios green | Own file | CLOSED |
 | 19 | No unit test admitted, so inverting the gate's condition reddened nothing | `testItAdmitsALiveSession` + the publication test | `SessionAdmissionGateTest::testItAdmitsALiveSession` | Make the gate refuse every session. **Baseline measured first: the same mutation on the original gate passed the original suite — 6 tests, exit 0** | Reverted: 19 red, 17 and 27 green | CLOSED |
-| 27 | Rejecting a session left the native cookie alive, so a revoked-cookie bearer cost a DB round-trip on every request while an anonymous caller cost none | Both refusal branches route through `refuse()`, which invalidates the native session before throwing — mirroring `RevokeCurrentSessionController` | `testItDropsTheNativeSessionWhenTheSessionIsNoLongerActive` and `…WhenThereIsNoCorrelation`, one per branch | Replace both `refuse()` calls with the bare throw | Reverted: 27 red (2 failures), 17 and 19 green | CLOSED |
+| 27 | Rejecting a session left the native cookie alive, so a revoked-cookie bearer cost a DB round-trip on every request while an anonymous caller cost none | Both refusal branches route through `refuse()`, which invalidates the native session before throwing — mirroring `RevokeCurrentSessionController` | `testItDropsTheNativeSessionWhenTheSessionIsNoLongerActive` and `…WhenThereIsNoCorrelation`, one per branch — plus `session.feature`'s revoked-session scenario, which asserts the `Set-Cookie` the invalidation puts on the 401, so the falsifier now reaches the wire and not only the unit seam | Replace both `refuse()` calls with the bare throw | Reverted: 27 red (2 unit failures + 1 Behat scenario), 17 and 19 green | CLOSED |
 | 44 | `MAX_FIELD_LENGTH = 100` mirrored a `VARCHAR(100)` width with nothing comparing them | Functional test asking `information_schema.columns` for both columns | `AuditLogFieldWidthContractTest::eachGuardedColumnIsAsWideAsTheEntryGuard` | `MAX_FIELD_LENGTH` 100 → 101 | Own file | CLOSED |
 | 45 | The port's alias had no consumer, so the test built the writer by hand and the wiring was unpinned | A method resolving `AuditLogWriter` from the container; the stale docblock corrected | `AuditLogWriterIdempotencyTest::testThePortResolvesToTheDbalWriter` | **Removing `#[AsAlias]` is a NON-falsifier (exit 0)** — the binding comes from `registerAliasesForSinglyImplementedInterfaces()`. The working mutation adds a second implementer that redirects the port | Own file | CLOSED |
 | 47 | Raw-DBAL writes raise no ORM flush, so `FixturesChangeTracker` stayed clean and rows leaked across features | `TestDebugDataHolder::addQuery()` marks the tracker when the leading keyword is INSERT/UPDATE/DELETE/TRUNCATE, before the existing filter and touching none of its accounting | `testRawWriteMarksTheFixturesTrackerEvenWhenTheQueryIsFilteredOut` and `testPlainSelectLeavesTheFixturesTrackerClean` | Delete the marking (write test reds); mark unconditionally (read test reds) | Own file | CLOSED |
@@ -75,6 +75,45 @@ every other row's falsifier green. Sharing a file is not sharing a mutation.
 | 72 | The sidebar painted "Users" for every role though `users.read` is ADMIN-only | `permission?` on the nav model + one pure filter feeding **both** render sites | `backOfficeMenuPermissions.test.tsx` | Revert the layout to the unfiltered constant (proves the render site is filtered, not just the function); delete the permission; delete the parent re-point | Own file | CLOSED |
 | 76 | `resourceErased` was guarded as strictly as `id`, so its absence failed the whole envelope | Optional in the wire guard, defaulted at the mapper; the domain type stays strictly boolean | `ApiAuditTimelineRepository.test.ts` + the detail counterpart, five cases each | Widen the guard (8 red); restore the strict guard (2 red); drop the mapper default (2 red) | Own file | CLOSED |
 | 79 | `failed_attempts` sat in the closed exemption list with no written argument | The argument written — and **not** the one `status` uses | none — docblock, and it says so | n/a | Own file | CLOSED |
+| 53 | `SingleUseToken::verify()` answers `true` repeatedly until the TTL, so a consumer that validates the token and then fails **before** retiring the digest leaves the link replayable inside the window. The bullet does not ask for a change to the VO — it states a contract its II-4/II-5 consumers must meet: retire-then-act in one transaction, idempotent | **None.** Measured: both consumers already meet it. `AcceptInvitation:60-86` loads the invitation `findByIdForUpdate`, retires it with `accept()` (`SENT → ACCEPTED`) and saves inside one `transactional()`; `CompletePasswordReset:93-101` calls `tokens->consume()` — a conditional delete guarded by its affected-row count — **before** `resetPassword()`, in one transaction under the user's row lock. `git grep '\->verify(' -- api/src` finds exactly two callers of the two entity `verify()` methods, so the contract has no third consumer; `SendInvitation`, `ResendInvitation` and `RequestPasswordReset` mint and are not bound by it | `AcceptInvitationTest` + `InvitationAcceptFunctionalTest` (the mid-flight failure case ITEM 61 added) and `CompletePasswordResetTest` (the delete-before-save ordering ITEM 63 added) | **None of its own** — no production line changed | **N/A by construction — see the note below.** Reverting ITEM 61's or ITEM 63's mutation reddens their own falsifiers, and those same falsifiers are what pin this contract | CLOSED BY VERIFICATION |
+
+**Four rows carry no independent mutation, and the count is stated here rather
+than left for a reader to discover.** An earlier version of this paragraph named
+ITEM 53 as the single exception and asserted the Definition of Done line *"cada
+fila tiene mutación independiente"* held for "the 36 rows that changed code".
+The adversarial pass measured that claim false against this very table, which is
+the most useful thing it could have found: the document a reviewer audits *by*
+was asserting a completeness property it did not have, in the paragraph
+congratulating itself for honesty. The real accounting:
+
+| ITEM | Why it carries no independent mutation | Falsifier it does have |
+|---|---|---|
+| 53 | Verification, not a change — both consumers already satisfied the contract | ITEMs 61 and 63's tests, which pin the two consumers |
+| 79 | A written argument in a docblock; there is no behaviour to mutate | **None** |
+| 80 | A recorded accepted cost in `PRODUCTION_SECURITY_CHECKLIST.md` §7 | **None** |
+| 73 | The CI step IS the change, so it cannot also be its own falsifier | The mechanism, verifiable by reading `ci.yml` + `make/php-test.mk` + `config.mk`, never by a local red |
+
+So **32 of the 36 rows** carry a mutation that reddens their own falsifier and
+leaves the others green; that is what the DoD line covers, and the four above are
+exempted by name rather than counted inside it. Two of them (79, 80) are prose
+closures with nothing that can go red at all — legitimate, because the bullets
+asked for an argument to be written down, but they are the weakest closures here
+and weaker than 53, which at least names falsifiers. ITEM 73's mechanism is real
+and gating (`.github/workflows/ci.yml` runs `make php.unit` in `api-test` with no
+`if:` and no `continue-on-error`, `make/config.mk` pins `PHPUNIT_MEMORY_LIMIT` at
+512M, `phpunit.dist.xml` sets `failOnWarning`, and `ci-success` needs `api-test`),
+so the bullet is genuinely closed — just not by the standard its row claims.
+
+**A cost that came with ITEM 73 and was not weighed:** `api-test` still declares
+`timeout-minutes: 15` while the job now runs the unit suite **twice**, once
+uninstrumented and once under Xdebug coverage. The budget was not raised. Left as
+measured rather than adjusted, because guessing at a CI timeout is how a flaky
+red gets manufactured; the number to raise it to is the one the first post-merge
+run reports.
+
+If a third consumer of `SingleUseToken::verify()` ever appears, nothing in this
+branch refuses it the replay window — a gap the register no longer records, and
+stated here instead.
 
 ### Declared shared mutations
 
@@ -126,26 +165,85 @@ correlation id).
 **A pre-existing suite passed a gate that refused every request.** Measured before writing ITEM 19's
 test: the mutation "refuse every session" left `SessionAdmissionGateTest` at 6 tests, exit 0.
 
-**Measured, not estimated:** ITEM 47 makes more scenarios dirty the fixtures tracker and pay a restore.
-The full Behat suite went from 45s to 40s across the wave — no cost materialised.
+**Measured, and the measurement is weaker than a single number suggests.** ITEM 47 makes more scenarios
+dirty the fixtures tracker and pay a restore, so the mechanism for a slowdown is real. Four separate runs
+of the full suite across the branch reported 45s, 40s, 36.22s and 45.14s — the spread between them is larger
+than any effect being claimed, and the last two bracket the first, so what these runs support is "no cost
+materialised", never a speed-up. A wall-clock sample on a shared dev stack is not a benchmark, and quoting one figure as
+if it were is the kind of asserted performance claim this repo refuses; the honest statement is that the
+suite did not get slower, and that a real measurement would need repeated timed runs against a quiet host.
 
 **Unverified and recorded as such:** invalidating the native session (ITEM 27) regenerates the session
 id, so the 401 response is expected to carry a `Set-Cookie` — the same one `RevokeCurrentSessionController`
 already emits on logout. Body and status are unchanged and the full suite is green, but the header was
 not observed live. It belongs in this branch's adversarial pass.
 
-## C. ITEM 21 — the eleven endpoints
+## C. ITEM 21 — every `StrictRequestPayload` site, one row each
 
 Flipping `StrictRequestPayload`'s default to `['json']` restricts every site that
-does not declare `acceptFormat`. All eleven are inspected individually; a single
-intentional form/multipart consumer is a HALT, not a restriction.
+does not declare `acceptFormat`. The governing decision demanded each site be
+inspected individually and a single intentional form/multipart consumer treated as
+a HALT, not as something to restrict.
+
+**Measured at the base commit `f86b2662`: thirteen sites, not eleven, and all
+thirteen already declared `acceptFormat: ['json']` verbatim.** So the flip
+restricted nothing at runtime; it is a DRY consolidation that closes a *latent*
+hole rather than a live one. The bullet's "once sitios" was not a competing
+measurement of the same thing: it was written by `08f8199b` (2026-07-23) and
+counted the *repetition* — eleven was the exact site count on that day, and its
+stated hazard was prospective ("un controlador nuevo que la omita"). Two sites
+were added in the five weeks since — `BankAccountIbanLookupController` and
+`ChangeMyPasswordController` — and both declared the list, so the hazard never
+fired. That is the difference between a hole nobody fell into and a hole that is
+closed.
 
 | Endpoint | Declares `acceptFormat`? | form/multipart intentional? | Verdict |
 |---|---|---|---|
-| _eleven rows, filled before the default is flipped_ | | | |
+| `POST /api/v1/backoffice/banks` — `api/src/Backoffice/Bank/Infrastructure/Controller/BankPostController.php:29` | YES — `acceptFormat: ['json']` | No. Maps `CreateBankCommand` (two `string` members); `BankCreateAcceptsJsonOnlyFunctionalTest` already pinned multipart and form-encoded to 415 at base | unaffected by the flip |
+| `PUT /api/v1/backoffice/banks/{id}` — `BankPutController.php:36` | YES | No. `UpdateBankCommand` = two `string`s, no `UploadedFile` member | unaffected by the flip |
+| `POST /api/v1/backoffice/bank-accounts/iban-lookup` — `BankAccountIbanLookupController.php:38` | YES | No. `LookupBankAccountByIbanQuery` = one `string $iban` | unaffected by the flip |
+| `PATCH /api/v1/backoffice/bank-accounts/{id}/status` — `BankAccountPatchStatusController.php:36` | YES | No. `ChangeBankAccountStatusCommand` = one backed enum | unaffected by the flip |
+| `POST /api/v1/backoffice/bank-accounts` — `BankAccountPostController.php:38` | YES | No. `CreateBankAccountCommand` = strings + enum | unaffected by the flip |
+| `PUT /api/v1/backoffice/bank-accounts/{id}` — `BankAccountPutController.php:36` | YES | No. `UpdateBankAccountCommand` = strings + enum | unaffected by the flip |
+| `POST /api/v1/me/password` — `ChangeMyPasswordController.php:76` | YES | No. `ChangeMyPasswordRequest` = two `string`s; the class docblock already states "JSON-only … so no form post can reach it" | unaffected by the flip |
+| `PATCH /api/v1/backoffice/users/{id}/roles` — `UserPatchRolesController.php:57` | YES | No. `ChangeUserRolesRequest` = `array $roles` | unaffected by the flip |
+| `PATCH /api/v1/backoffice/users/{id}/status` — `UserPatchStatusController.php:45` | YES | No. `ChangeUserStatusRequest` = one enum | unaffected by the flip |
+| `POST /api/v1/backoffice/reset-password` — `CompletePasswordResetController.php:59` | YES | No. `ResetPasswordRequest` = two `string`s; `ResetPasswordForm.tsx` is `onSubmit`-driven with no `action=`/`method=` | unaffected by the flip |
+| `POST /api/v1/backoffice/forgot-password` — `RequestPasswordResetController.php:45` | YES | No. `ForgotPasswordRequest` = one `string $email`; `ForgotPasswordForm.tsx` is `onSubmit`-driven | unaffected by the flip |
+| `POST /api/v1/backoffice/invitations/accept` — `AcceptInvitationController.php:64` | YES | No. `AcceptInvitationRequest` = two `string`s | unaffected by the flip |
+| `POST /api/v1/backoffice/invitations` — `CreateInvitationController.php:55` | YES | No. `InviteUserRequest` = `string $email` + `array $roles` | unaffected by the flip |
 
-Fails if fewer than eleven rows appear, if any row is intentional form/multipart,
-or if the default is changed before this table is complete.
+**No HALT condition anywhere**, and the evidence is wider than the DTOs: `UploadedFile`
+appears in exactly two files in `api/src` (`TransportOnlyUploadedFileDenormalizer`,
+which exists to refuse body-described files, and `Shared/Images/Application/UploadImage`,
+which has no HTTP surface); there is no `#[MapUploadedFile]` anywhere in `api/src`;
+`x-www-form-urlencoded` appears nowhere in the repository; `FormData`/`multipart`
+appear nowhere in `pwa/src` or the e2e suite; and Behat's two form-capable steps are
+classified `idle` in `api/.behat-step-vocabulary:163-164` — every feature posts
+`with body:`.
+
+**Cross-check of the flip's actual effect.** `git diff f86b2662..HEAD -- api/`
+deletes exactly fourteen lines containing `acceptFormat`: the thirteen call-site
+declarations (one per file above) plus the constructor's own former default. The
+thirteen deleted declarations equal the thirteen sites found, one-to-one, no
+residue in either direction; HEAD introduces no new call site. Direct
+`#[MapRequestPayload]` usage in `api/src` is **zero**, so the sweep's scoping has
+no unaffected parallel population — `StrictRequestPayloadGateTest` forbids the bare
+attribute.
+
+**A drift this measurement found, fixed in the same branch.**
+`PRODUCTION_SECURITY_CHECKLIST.md` carried a `[x]`-checked assertion that "all
+eleven `#[StrictRequestPayload]` sites declare `acceptFormat: ['json']`" and
+prescribed the verification "`git grep -n '#\[StrictRequestPayload' -- api/src` —
+every attribute site must carry the format list". After the flip **zero** sites
+carry the list, so the checklist's own stated pass criterion failed against its own
+tree — a security assertion made false by this branch's change, which is exactly
+the direction the repo requires a checklist update for. The bullet now states the
+guarantee where it actually lives (the type's default), and gives a recipe that
+holds: the old grep could not have worked anyway, since it matches the eleven
+docblock mentions of the attribute alongside the thirteen real sites. The stale
+"declaring `acceptFormat: ['json']`" prose in `ProblemDetailsFactory`'s 415
+docblock was corrected with it.
 
 ## D. Deleted-as-dead (8)
 

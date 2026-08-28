@@ -136,7 +136,10 @@ final class TestDebugDataHolderTest extends TestCase
     {
         FixturesChangeTracker::reset();
 
-        $sql = "SELECT id FROM audit_log WHERE action = 'INSERT_BANK'";
+        // A BARE verb inside the statement, not `INSERT_BANK`: the trailing word boundary already refuses a
+        // token followed by `_`, so that fixture would stay green with the leading `^\s*` anchor deleted and
+        // the anchor — the thing this case exists to pin — would be unfalsified.
+        $sql = "SELECT id FROM audit_log WHERE action = 'INSERT'";
         (new FakeController())->record($this->testDebugDataHolder, $this->makeQuery($sql));
 
         $this->assertFalse(FixturesChangeTracker::hasChanged());
