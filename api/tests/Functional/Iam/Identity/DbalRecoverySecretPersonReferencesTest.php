@@ -16,7 +16,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
  * Proves the person-reference source against REAL Postgres: the read hits `identity_recovery_secret.user_id`
- * and reports a holder that no live identity backs.
+ * and returns the holder it finds there. It does NOT exercise the reconciler's anti-join — nothing here
+ * withholds an identity — so what it pins is table-and-column, not the divergence report built on top.
  *
  * The unit gate proves this source declares a key the registry carries; only a real read proves the query
  * points at the right table and the right column. A source whose SQL named some other table would satisfy

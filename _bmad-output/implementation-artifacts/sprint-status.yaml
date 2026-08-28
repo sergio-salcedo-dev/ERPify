@@ -379,10 +379,15 @@ development_status:
   # contraseña actual, canjeado anónimo gastando sólo el presupuesto por selector, y el canje establece
   # sesión ANTES de consumir la fila. Clave propia por la misma razón que br-4b/4c/4d.
   #
-  # PRIMERA clave de este fichero que no está en `done`, y es deliberado: la spec está congelada en
-  # `ready-for-dev` (spec-gh-602-secreto-de-recuperacion.md, commit 47d81db3, rama
-  # feat/iam-recovery-secret-iu9p) y no existe todavía ni una línea de código de producción. Marcarla
-  # `done` aquí sería exactamente la deriva que el resto de comentarios de este bloque vigilan.
+  # PRIMERA clave de este fichero que no está en `done`, y es deliberado. La spec está en `in-progress`
+  # (spec-gh-602-secreto-de-recuperacion.md, rama feat/iam-recovery-secret-iu9p) y el código de producción
+  # está escrito: agregado, casos de uso, cuatro endpoints, borrado GDPR, las dos pantallas PWA. Pasa a
+  # `done` cuando la review de código de la tarea completa termine, no al mergear — marcarla antes sería
+  # exactamente la deriva que el resto de comentarios de este bloque vigilan.
+  #
+  # Este comentario decía «no existe todavía ni una línea de código de producción» mucho después de que
+  # existieran 3076. Lo encontró un pase adversarial, no una relectura: un comentario que nadie vuelve a
+  # medir es la forma en que este fichero —el primero que lee una sesión nueva— empieza a mentir.
   #
   # #602 SIGUE OPEN, y sólo se cierra cuando el caso de administrador único tenga una arista real —
   # medida y registrada en un comentario del issue, como hicieron br-4b/4c/4d.

@@ -290,7 +290,7 @@ by the same demotion chain above, which is strictly worse than the gap it would 
 An installation with one administrator has no peer to unlock it, and the persisted lockout is keyed by an
 email address anyone can learn. The recovery secret is the edge that does not depend on anybody else:
 
-1. Signed in, go to **Account ▸ profile** and mint one. It asks for the current password.
+1. Signed in, go to **User Profile ▸ My profile** and mint one. It asks for the current password.
 2. It is displayed **exactly once**. Only its digest is stored, so nothing — no operator, no database, no
    support request — can show it again.
 3. Store it away from the machine that runs the application, the way a root CA key or a PKI seed is stored.

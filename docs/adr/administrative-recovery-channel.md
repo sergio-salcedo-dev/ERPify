@@ -220,7 +220,9 @@ nothing else, so no budget on it is keyed by an address or an identity (I-1); an
 through an authenticated session that proves the current password, never by email and never from a terminal,
 so no vendor-held knowledge reconstructs it (I-2). The corollary is enforced by construction rather than by
 care — the selector is the row's primary key, so every event names the **user**, and it appears in no audit
-row, DTO, log line or URL.
+row, log line or URL, and in no DTO but the minting response, which is the delivery surface the corollary
+exempts. Two places do hold it at rest and are named rather than implied: the row itself, where it is the
+primary key, and the rate-limiter pool, which stores the bucket key for the window's duration.
 
 What it costs, none of which D1–D6 anticipated:
 

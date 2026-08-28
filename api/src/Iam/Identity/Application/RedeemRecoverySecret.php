@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Application;
 
 use Closure;
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
@@ -50,6 +51,11 @@ use SensitiveParameter;
  *      anywhere reaches the secret ahead of the user. Re-verifying under the lock is what makes "at most one
  *      consumption" a property of the system rather than of a comment: without it two concurrent redemptions
  *      both verify a row neither has yet removed.
+ *   5. If step 4's status wall fires, REVOKE the session step 3 established. It is already committed — the
+ *      login's own listeners insert and commit the `iam_session` row — and the admission gate reads that row
+ *      and never the identity's status, so a 403 body over a live session would leave an administrator's
+ *      suspension defeated by a race an attacker can simply retry. The two writes live in different
+ *      transactions and no ordering makes them one, so compensating is the only close available.
  *
  * **"Single use" here means at most one PERSISTED CONSUMPTION, not at most one authentication.** Steps 3 and 4
  * are not one atomic act — `RecoverySecret`, `User.lockout` and the session are three state machines and no
@@ -66,6 +72,15 @@ use SensitiveParameter;
  * the only secret of a customer with no shell, and it would turn a one-off theft into permanent undetectable
  * access — destroying the one detection property this design has, which is that the owner sees their secret
  * disappear. The fixed point is: recover, then mint again explicitly.
+ *
+ * Its object coupling sits one above the default threshold. More than half of that number is the failure
+ * vocabulary this flow declares — the opaque refusal and the two status walls — which is a published
+ * contract rather than a hidden dependency; the rest is one collaborator per step of a single atomic act:
+ * two repositories, the audit projection, the compensating session revoke, the event bus, the transaction
+ * seam and the clock. The compensation is what pushed it over, and collapsing any of them to satisfy the
+ * metric would hide a step this flow's correctness is stated in terms of.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final readonly class RedeemRecoverySecret
 {
@@ -73,6 +88,7 @@ final readonly class RedeemRecoverySecret
         private UserRepository $users,
         private RecoverySecretRepository $secrets,
         private RecordRecoverySecretAuditBestEffort $audit,
+        private RevokeSessionsBestEffort $revokeSessions,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,
@@ -106,10 +122,55 @@ final readonly class RedeemRecoverySecret
 
         $establishSession($user->email());
 
+        try {
+            $this->consume($userId, $selector, $secret, $now);
+        } catch (AccountDeactivated|AccountSuspended $wall) {
+            // **The session above is already committed, and the wall below cannot undo it.** The status
+            // re-read under the lock refuses the CONSUMPTION; it does not refuse the session, because
+            // `Security::login()` has already run its listeners — the `iam_session` row is inserted and
+            // committed by one of them, and the native cookie is set. So an administrator suspending this
+            // identity while the login was in flight would otherwise get a 403 body over a live, admitted
+            // session, and the admission gate reads the session row and never the identity's status, so it
+            // would keep working until it expired. Suspension is the containment against a leaked recovery
+            // secret; that must not be the race an attacker retries until it lands.
+            //
+            // Compensating is the only close available: the two writes are in different transactions and no
+            // ordering makes them one, so what remains is to undo the session once the wall is known. It runs
+            // best-effort — a revoke that fails may not turn the 403 into a 500 — and it revokes EVERY
+            // session of a walled identity, which is what the suspension itself would have done.
+            $this->revokeSessions->revoke($userId);
+
+            throw $wall;
+        }
+
+        // Post-commit, so the row can only describe a consumption that actually persisted — never a mere
+        // verification, and never the loser of the race above.
+        $this->audit->recordRedeemed($userId);
+    }
+
+    /**
+     * The consuming half, in ONE transaction: take the user row, re-sample its status, re-read the secret
+     * under the same lock and re-verify against THAT row, clear the lockout and retire the secret.
+     *
+     * Extracted from the caller so the status wall it can raise has somewhere to be caught — the session is
+     * already committed by the time this runs, and the caller has to undo it.
+     *
+     * @throws InvalidRecoverySecret               when the row was retired or changed under the lock
+     * @throws AccountSuspended|AccountDeactivated when the identity stopped being admissible
+     */
+    private function consume(
+        string $userId,
+        string $selector,
+        #[SensitiveParameter]
+        string $secret,
+        DateTimeImmutable $now,
+    ): void {
         $this->transactionManager->transactional(function () use ($userId, $selector, $secret, $now): void {
             // USER FIRST — by id, the same order minting takes and the order recording a failed login takes
-            // on its own half. The re-sample walls an identity an administrator suspended while the session
-            // above was being minted.
+            // on its own half. The re-sample refuses the CONSUMPTION for an identity an administrator walled
+            // while the login was in flight; it does NOT refuse the session, which is already committed by
+            // then — undoing that is the caller's compensating revoke, and saying otherwise here would be a
+            // security claim this code does not make good on.
             $user = $this->users->findByIdForUpdate($userId) ?? throw new InvalidRecoverySecret();
             $user->ensureActive();
 
@@ -135,10 +196,6 @@ final readonly class RedeemRecoverySecret
             $this->eventBus->publish(...$liveSecret->pullDomainEvents());
             $this->secrets->remove($liveSecret);
         });
-
-        // Post-commit, so the row can only describe a consumption that actually persisted — never a mere
-        // verification, and never the loser of the race above.
-        $this->audit->recordRedeemed($userId);
     }
 
     /**

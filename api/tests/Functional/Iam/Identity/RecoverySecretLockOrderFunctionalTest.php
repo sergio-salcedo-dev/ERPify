@@ -11,6 +11,7 @@ use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort;
 use Erpify\Iam\Identity\Application\RedeemRecoverySecret;
+use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\HashedPassword;
@@ -174,12 +175,14 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
         $users = self::getContainer()->get(UserRepository::class);
         $secrets = self::getContainer()->get(RecoverySecretRepository::class);
         $transactions = self::getContainer()->get(TransactionManager::class);
+        $revokeSessions = self::getContainer()->get(RevokeSessionsBestEffort::class);
         $eventBus = self::getContainer()->get(EventBus::class);
         $clock = self::getContainer()->get(Clock::class);
 
         $this->assertInstanceOf(UserRepository::class, $users);
         $this->assertInstanceOf(RecoverySecretRepository::class, $secrets);
         $this->assertInstanceOf(TransactionManager::class, $transactions);
+        $this->assertInstanceOf(RevokeSessionsBestEffort::class, $revokeSessions);
         $this->assertInstanceOf(EventBus::class, $eventBus);
         $this->assertInstanceOf(Clock::class, $clock);
 
@@ -187,6 +190,7 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
             $users,
             new ProbingRecoverySecretRepository($secrets, $onArrival(...), $onLeaving(...)),
             new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
+            $revokeSessions,
             $eventBus,
             $transactions,
             $clock,

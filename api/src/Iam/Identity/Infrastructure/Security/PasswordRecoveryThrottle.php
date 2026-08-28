@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
+use Erpify\Shared\Token\Domain\SelectorBudgetKey;
 use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
@@ -47,6 +48,6 @@ final readonly class PasswordRecoveryThrottle
      */
     public function allowCompletion(string $tokenSelector): bool
     {
-        return $this->perSelectorLimiter->create($tokenSelector)->consume()->isAccepted();
+        return $this->perSelectorLimiter->create(SelectorBudgetKey::of($tokenSelector))->consume()->isAccepted();
     }
 }

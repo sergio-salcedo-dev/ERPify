@@ -699,7 +699,8 @@ you change anything here.
       instants and an explicit revoke is the whole of what makes that governable.
       **(c)** the **selector is a denial capability**: whoever learns one can spend that selector's budget and
       hold the channel shut in silence without authenticating. It is contained by construction (it is the row's
-      key, so events name the user, and it reaches no audit row, DTO, log or URL) and bounded by the threat
+      key, so events name the user, and it reaches no audit row, log or URL, and no DTO but the minting
+      response that delivers it) and bounded by the threat
       model — that denial is dominated by the cheaper email-keyed attack #602 opens with, not by the
       selector's entropy, which is a UUID v7 and therefore not a per-id CSPRNG draw.
       **(d)** the secret, the lockout and the session are **three state machines no transaction spans**, so

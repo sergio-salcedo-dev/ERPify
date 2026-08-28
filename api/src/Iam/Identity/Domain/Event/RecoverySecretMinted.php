@@ -17,7 +17,10 @@ use Override;
  * credential, and whoever knows a selector can spend that selector's whole redemption budget and hold the
  * channel closed in silence. An envelope carrying it would write it to `event_store.aggregate_id`, which has
  * no TTL and whose one sanctioned mutation erases by a person's id and so would never match a selector.
- * Emitted to the outbox; it has no consumer yet, so it is wired to no transport (wire-on-consumer).
+ * Emitted to the outbox and deliberately unrouted — not a wire-on-consumer default awaiting a first
+ * consumer, but the rule for every `Iam.Identity` event: the envelope id IS the personal datum, and the
+ * persisted Messenger transports have no erasure path. Saying "no consumer yet" here would invite exactly
+ * the wiring `api/.persistent-transport-policy` forbids.
  */
 final class RecoverySecretMinted extends DomainEvent
 {

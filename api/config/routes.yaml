@@ -8,8 +8,8 @@ api_v1_back_office:
         _format: json
 
 # Iam is a top-level context, but the backoffice access handshake keeps its established
-# /api/v1/backoffice/* URLs — login plus the pre-identity password-recovery pair
-# (forgot-password/reset-password), which share the login prefix by design (security.yaml
+# /api/v1/backoffice/* URLs — login plus the three pre-identity recovery writes
+# (forgot-password, reset-password, recovery/redeem), which share the login prefix by design (security.yaml
 # check_path + access_control + the PWA depend on them). The resource is scoped to Identity's
 # Http dir so this prefix stays confined to the access surface and never leaks onto other Iam
 # controllers (the /me and session self-service surfaces mount under /api/v1 via their own resources).

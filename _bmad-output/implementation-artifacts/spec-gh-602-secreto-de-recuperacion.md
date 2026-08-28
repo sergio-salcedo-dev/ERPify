@@ -119,27 +119,27 @@ rol (cualquier identidad ACTIVE) · forzar ≥2 administradores · el secreto en
 - [x] `api/src/Iam/Identity/Application/RedeemRecoverySecret.php` -- resuelve opaco → `ensureActive()` →
       `Security::login()` → **luego** transacción: limpia cerrojo + retira fila.
 - [x] `api/src/Iam/Identity/Application/RevokeRecoverySecret.php` -- borrado explícito por el dueño.
-- [ ] Controladores en `api/src/Iam/Identity/Infrastructure/Http/` -- `POST /me/recovery-secret`,
+- [x] Controladores en `api/src/Iam/Identity/Infrastructure/Http/` -- `POST /me/recovery-secret`,
       `DELETE /me/recovery-secret`, `GET /me/recovery-secret` (metadatos: existe y desde cuándo, **nunca**
       el selector), `POST /recovery/redeem` (anónimo, guarda same-origin, presupuesto por selector).
-- [ ] `api/config/packages/security.yaml` + `api/.public-access-exemptions` -- exención `exact` del canje.
+- [x] `api/config/packages/security.yaml` + `api/.public-access-exemptions` -- exención `exact` del canje.
 - [x] `api/.person-reference-policy` -- `$id => non-person`, `$userId => person :: …EraseIdentitySubject.php`.
 - [x] `api/src/Iam/Identity/Application/EraseIdentitySubject.php` + `Dbal…RecoverySecretPersonReferences.php`
       -- borrado GDPR y detective tagueado.
 - [x] `api/.audit-evidence-actions` -- `RECOVERY_SECRET_MINTED|REDEEMED|REVOKED => ordinary`.
-- [ ] `api/src/Iam/Identity/Application/LoginAttemptRegistrar.php` -- cerrar la carrera: lectura bajo
+- [x] `api/src/Iam/Identity/Application/LoginAttemptRegistrar.php` -- cerrar la carrera: lectura bajo
       bloqueo de fila (`findByEmailForUpdate`), en la misma transacción que la mutación.
-- [ ] `pwa/src/app/backoffice/profile/` -- pantalla de acuñar/ver/revocar (`metadata.title`, copy en
+- [x] `pwa/src/app/backoffice/profile/` -- pantalla de acuñar/ver/revocar (`metadata.title`, copy en
       inglés). Muestra **creado y caduca**, no sólo que existe: su caducidad es la única forma en que el
       canal muere sin que nadie actúe.
-- [ ] `pwa/src/app/(auth)/recovery/page.tsx` -- canje; el secreto se **teclea o pega**, jamás en la URL.
-- [ ] `api/tests/` + `api/features/` -- PHPUnit por fila de la matriz; Behat del canje con
+- [x] `pwa/src/app/(auth)/recovery/page.tsx` -- canje; el secreto se **teclea o pega**, jamás en la URL.
+- [x] `api/tests/` + `api/features/` -- PHPUnit por fila de la matriz; Behat del canje con
       `SELECT … AND locked_until > NOW()` intermedio antes de afirmar. **Concurrencia obligatoria**: dos
       canjes simultáneos (gana uno), canje vs revocación, canje vs login fallido, login OK + mutación DB
       fallida (secreto recanjeable). Más: el selector nunca aparece en evento/auditoría/log/DTO, el
       selector no deriva de `userId`, y el cambio de contraseña no invalida el secreto.
 - [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- clave `br-4e-602-secreto-de-recuperacion`.
-- [ ] `docs/adr/administrative-recovery-channel.md` + `docs/deployment-guide.md` +
+- [x] `docs/adr/administrative-recovery-channel.md` + `docs/deployment-guide.md` +
       `PRODUCTION_SECURITY_CHECKLIST.md` -- registrar el mecanismo elegido y sus residuales.
 - [x] **Riesgo aceptado — issue #870 ya abierta.** Etiquetar el párrafo del agregado con
       `@accepted-risk #870`, en la forma de `NotifyLockedIdentities.php:88-91`. Un riesgo aceptado exige
@@ -200,6 +200,96 @@ rol (cualquier identidad ACTIVE) · forzar ≥2 administradores · el secreto en
   ahora lo que corre, y cierra el hueco por modelo de amenaza —adivinar un selector sólo compra
   denegación, dominada por el ataque que #602 ya documenta— en vez de por una propiedad de entropía que el
   código no tiene.
+
+## Adversarial pass
+
+Dos pases hostiles, read-only, en contexto fresco y con encargos **disjuntos** sobre `f86b2662..HEAD`
+(109 ficheros, +5571/−206): uno sobre seguridad y concurrencia del API, otro sobre GDPR, los registros, los
+ejes de auditoría/eventos y la PWA. A ambos se les dijo explícitamente que **no se fiaran de los mensajes de
+commit ni de los docblocks**, y que un comentario falso contase como hallazgo. Todo lo de abajo se verificó
+contra el árbol o contra el stack antes de aceptarse o rechazarse.
+
+### GRAVE
+
+Ninguno. Ninguno de los dos encontró dato personal sobreviviendo a su propio borrado, ni un hueco explotable
+sin credencial.
+
+### Aceptados y arreglados
+
+- **La sesión se acuñaba antes del muro de estado, y mi docblock afirmaba lo contrario.** `Security::login()`
+  commitea la fila `iam_session` a través de sus propios listeners, así que la relectura bloqueada del paso 4
+  sólo podía convertir una sesión viva en un cuerpo 403 — y el gate de admisión lee la fila de sesión, nunca
+  el estado de la identidad. Una suspensión concurrente (la única contención contra un secreto filtrado)
+  quedaba derrotada por una carrera reintentable. **Arreglado** con una revocación compensatoria en el muro,
+  el docblock corregido para decir que refusa el *consumo* y no la sesión, y un caso nuevo que escenifica la
+  suspensión **bajo el bloqueo** — falsificado quitando la compensación: un solo rojo, el caso nuevo.
+- **El presupuesto «por selector» no era por selector.** `Uuid::isValid()` acepta cualquier caja y la columna
+  es `uuid` nativo de Postgres, que compara sin distinguirla — medido: `'0190…4a5b'::uuid =
+  '0190…4A5B'::uuid` responde `t`. La clave del limitador iba **verbatim**, así que una fila respondía a
+  ~2000 buckets y un límite de 10/15min se volvía decenas de miles. Es la misma clase de defecto que
+  `RecoveryBudgetKey` ya documenta para el eje de la dirección, un método más abajo. **Arreglado** en
+  `Shared\Token\Domain\SelectorBudgetKey`, que es donde vive el primitivo — lo que lo corrige en las
+  **tres** superficies a la vez (reset, invitación, canje), no sólo en la mía.
+- **Un sitio nuevo donde la dirección de una persona es parámetro nombrado**, en un closure del controlador,
+  fuera de los dos gates que vigilan ese eje. **Eliminado** pasando el seam como callable de primera clase:
+  el método destino ya está clasificado `sensitive`.
+- **El gate de CSRF que escribí reproducía el fallo que existe para rechazar**: leía sólo la constante
+  `CSRF_TOKEN_ID`, así que un controlador con el id inline no aportaba nada al conjunto y, ausente también del
+  YAML, dejaba los dos lados iguales y el gate verde sobre un endpoint que 401 en cada petición legítima.
+  **Arreglado**: lee las dos grafías y **falla** si un fichero recogido no cede ninguna. Falsificado con esa
+  forma exacta.
+- **`sprint-status.yaml` afirmaba que no existía «ni una línea de código de producción»** con 3076 escritas.
+  Es el primer fichero que lee una sesión nueva. Corregido, y con la razón por la que mintió.
+- **La guía de despliegue mandaba a «Account ▸ profile»**, ruta que no existe (`User Profile ▸ My profile`) —
+  y es el único paso del que depende toda la función en el traspaso.
+- **Comentarios y documentos falsos o rancios**, todos corregidos: «aparece en ningún DTO» refutado por un
+  fichero de este mismo cambio; `RecoverySecretMinted` contradiciendo a sus dos hermanos sobre
+  wire-on-consumer; el docblock del detective afirmando que reporta huérfanos cuando no ejerce el anti-join;
+  el comentario del canje diciendo que una presentación malformada «no puede casar nada» cuando el namespace
+  del limitador es compartido; `routes.yaml` y `InvitationAcceptThrottle` describiendo dos consumidores donde
+  ya hay tres.
+
+### Rechazado, con su razón
+
+- **«La PWA no ofrece la ruta de recuperación» — aceptado en parte, rechazado en su encuadre.** El pase lo
+  presentó como que faltaba un enlace. Verificado: `Routes.RECOVERY` no tenía **ningún** consumidor, y el muro
+  de bloqueo ofrecía exactamente las dos aristas que el atacante ya tiene cerradas. Eso no es un enlace que
+  falta, es la función siendo inalcanzable para su único usuario. **Arreglado** en el muro, que es donde el
+  usuario está en el momento en que la necesita — no en la pantalla de login, que sí sería anunciar la arista
+  a un anónimo.
+
+### Aceptado y NO arreglado — decisión abierta para Sergio
+
+- **`DELETE /me/recovery-secret` no exige la contraseña actual ni gasta presupuesto.** Mi docblock argumenta
+  que destruir el secreto «no concede nada»; el pase lo refuta con una cadena concreta: quien roba una sesión
+  no puede cambiar la contraseña (hay re-prueba), pero **sí puede destruir el secreto** con una petición, leer
+  la dirección en `GET /me` y mantener la cuenta cerrada por el cerrojo indexado por email. El desvío
+  forgot→reset corre sobre un presupuesto que el mismo atacante drena, y su agotamiento es silencioso por
+  contrato. Coste de arreglarlo: quien agotó el bucket compartido espera 15 minutos para revocar un secreto
+  que cree comprometido, y la PWA gana un campo de contraseña en el diálogo. Coste de no arreglarlo: pérdida
+  permanente del canal, irreversible. **No lo decido yo**: revierte una decisión documentada y cambia una
+  superficie de producto.
+
+### Hallazgo del propio pase de falsificación, no de los agentes
+
+El escenario de aceptación que el ADR exige —«sella `locked_until` en el futuro … y ponte rojo al quitar la
+transición»— **no se ponía rojo**. Medido: quitar `clearLockout()` del caso de uso deja los ocho escenarios
+verdes, porque `ClearLockoutOnLoginSuccess` limpia el contador como efecto del propio login. El escenario
+prueba que **la arista existe** de punta a punta, que es lo que #602 necesita, pero no puede atribuir quién
+limpió. Queda escrito en el propio fichero de feature, y se añadió la aserción que sí es exclusiva de este
+caso de uso (la fila `RECOVERY_SECRET_REDEEMED`, condicionada al consumo persistido). Quitar la retirada de la
+fila sí pone dos escenarios en rojo.
+
+### Ángulos que volvieron limpios
+
+Contención del selector en todos los sumideros alcanzables (evento, envelope, `audit_log`, log, DTO, URL);
+recuperabilidad del texto plano en cliente y servidor, incluido el scrubbing de Sentry; el eje de borrado
+GDPR completo, con sus contadores y su entrada de cumplimiento; la fuente detective leyendo tabla y columna
+correctas y su `DISTINCT` ausente descansando sobre el índice único; las clasificaciones de los siete
+registros; ausencia de ciclo ABBA enumerando **todos** los caminos que tocan las dos filas, incluida la cadena
+de borrado; `findBySelector()` no bloqueando; el muro 403 inalcanzable sin poseer el secreto; CSRF, same-origin
+y access-control del endpoint anónimo; la migración; inyección y mass assignment; el bucket compartido de
+prueba de credencial; y los gates de la PWA.
 
 ## Design Notes
 

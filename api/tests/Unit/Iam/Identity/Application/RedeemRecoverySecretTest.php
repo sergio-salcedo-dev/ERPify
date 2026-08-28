@@ -8,15 +8,19 @@ use Closure;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort;
 use Erpify\Iam\Identity\Application\RedeemRecoverySecret;
+use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\GeneratedRecoverySecret;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Event\RecoverySecretRedeemed;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidRecoverySecret;
+use Erpify\Iam\Session\Application\RevokeAllSessions;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
+use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -52,6 +56,18 @@ final class RedeemRecoverySecretTest extends TestCase
      * @var list<string>
      */
     private array $signedIn = [];
+
+    /**
+     * The session store the compensating revoke reaches. A walled identity must not walk away with the
+     * session the login already committed, so the cases below assert on what this recorded.
+     */
+    private InMemorySessionRepository $sessions;
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->sessions = new InMemorySessionRepository();
+    }
 
     #[Test]
     public function aValidSecretEstablishesTheSessionClearsTheLockoutAndRetiresTheRow(): void
@@ -223,6 +239,43 @@ final class RedeemRecoverySecretTest extends TestCase
             $this->useCase($users, $secrets)->redeem($generated->plaintext(), $this->sessionSeam());
         } finally {
             $this->assertSame([], $secrets->removed);
+            // Refused BEFORE the login runs, so there is no session to compensate for — and asserting that
+            // is what keeps this case distinct from its sibling below, where the wall arrives too late.
+            $this->assertSame([], $this->signedIn);
+            $this->assertSame([], $this->sessions->revokeAllCalls);
+        }
+    }
+
+    #[Test]
+    public function anIdentityWalledUNDERTheLockLosesTheSessionTheLoginAlreadyCommitted(): void
+    {
+        // The race the pre-login check cannot see: the identity is admissible when the session is minted and
+        // walled by the time the consuming transaction reads it under the lock. `Security::login()` has by
+        // then inserted and COMMITTED the `iam_session` row, and the admission gate reads that row and never
+        // the identity's status — so a 403 body over a live session would leave an administrator's
+        // suspension defeated by a race an attacker can simply retry until it lands. The status re-read
+        // refuses the consumption; only the compensating revoke refuses the session.
+        $user = UserMother::create();
+        $users = new InMemoryUserRepository($user);
+        $users->onFindByIdForUpdate = static function () use ($user): void {
+            $user->suspend();
+            $user->pullDomainEvents();
+        };
+        $secrets = new InMemoryRecoverySecretRepository();
+        $generated = $this->mintFor($secrets, UserMother::DEFAULT_ID);
+
+        $this->expectException(AccountSuspended::class);
+
+        try {
+            $this->useCase($users, $secrets)->redeem($generated->plaintext(), $this->sessionSeam());
+        } finally {
+            $this->assertSame([UserMother::DEFAULT_EMAIL], $this->signedIn, 'the session was never established');
+            $this->assertSame([], $secrets->removed, 'the walled redemption consumed the secret');
+            $this->assertSame(
+                [UserMother::DEFAULT_ID],
+                $this->sessions->revokeAllCalls,
+                'the walled identity kept the session the redemption had already established',
+            );
         }
     }
 
@@ -280,6 +333,15 @@ final class RedeemRecoverySecretTest extends TestCase
             $users,
             $secrets,
             new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
+            new RevokeSessionsBestEffort(
+                new RevokeAllSessions(
+                    $this->sessions,
+                    new RecordingEventBus(),
+                    new InlineTransactionManager(),
+                    FixedClock::at(self::NOW),
+                ),
+                new NullLogger(),
+            ),
             $eventBus ?? new RecordingEventBus(),
             new InlineTransactionManager(),
             FixedClock::at(self::NOW),

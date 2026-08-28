@@ -66,25 +66,64 @@ final class StatelessCsrfTokenIdGateTest extends TestCase
     }
 
     /**
+     * Reads BOTH spellings, and refuses a file that yields neither.
+     *
+     * Reading only the `CSRF_TOKEN_ID` constant reproduced the exact failure this gate exists to refuse: a
+     * controller spelling the id inline in the attribute contributes nothing to this set, so if the id is
+     * also missing from the YAML both sets stay equal, the gate is green, and every legitimate request to
+     * that endpoint answers 401. Found by an adversarial pass over the gate's own first version.
+     *
+     * `preg_match_all`, not `preg_match`: one file may carry more than one, and reading only the first
+     * would leave the rest in the same silence.
+     *
      * @return list<string>
      */
     private function declaredTokenIds(): array
     {
         $ids = [];
+        $silent = [];
 
-        foreach ($this->controllersDeclaringACsrfToken() as $source) {
-            if (1 === \preg_match("/public const string CSRF_TOKEN_ID = '([^']+)'/", $source, $matches)) {
-                $ids[] = $matches[1];
+        foreach ($this->controllersDeclaringACsrfToken() as $path => $source) {
+            $found = [];
+
+            foreach (
+                [
+                    "/public const string CSRF_TOKEN_ID = '([^']+)'/",
+                    "/#\\[IsCsrfTokenValid\\(\\s*'([^']+)'/",
+                ] as $pattern
+            ) {
+                \preg_match_all($pattern, $source, $matches);
+                $found = [...$found, ...$matches[1]];
             }
+
+            if ([] === $found) {
+                $silent[] = $path;
+
+                continue;
+            }
+
+            $ids = [...$ids, ...$found];
         }
 
+        // A file the sweep collected but could not read an id out of is the blind spot itself, so it fails
+        // here rather than silently contributing nothing to a set comparison that would then pass.
+        $this->assertSame(
+            [],
+            $silent,
+            "A controller declares #[IsCsrfTokenValid] but this gate cannot read its token id:\n"
+            . \implode("\n", $silent)
+            . "\nAn id it cannot read is an id it cannot check is registered stateless — and an unregistered"
+            . "\nid makes the endpoint answer 401 to every legitimate request.",
+        );
+
+        $ids = \array_values(\array_unique($ids));
         \sort($ids);
 
         return $ids;
     }
 
     /**
-     * @return list<string>
+     * @return array<string, string> repo-relative path => source of every file declaring the attribute
      */
     private function controllersDeclaringACsrfToken(): array
     {
@@ -102,7 +141,7 @@ final class StatelessCsrfTokenIdGateTest extends TestCase
             $source = \file_get_contents($file->getPathname());
 
             if (\is_string($source) && \str_contains($source, '#[IsCsrfTokenValid(')) {
-                $sources[] = $source;
+                $sources[\str_replace($root . '/', '', $file->getPathname())] = $source;
             }
         }
 

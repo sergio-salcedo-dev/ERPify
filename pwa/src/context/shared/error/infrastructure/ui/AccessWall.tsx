@@ -54,6 +54,18 @@ const RECOVER_ACTION: AccessWallAction = {
   title: "Recover access to your account",
 };
 
+// Offered on the LOCKED wall beside the reset, and the ordering matters: a password reset is keyed by
+// the same email address the lockout is, so whoever can hold the account locked can drain that budget
+// too. A recovery secret is keyed by nothing the attacker knows. Without this action the only two
+// edges this screen offers are the two the attack already closes, and the channel built for exactly
+// this moment is reachable only by typing a URL nobody was told about.
+const REDEEM_RECOVERY_SECRET_ACTION: AccessWallAction = {
+  testId: "redeem-recovery-secret",
+  href: Routes.RECOVERY,
+  label: "Use your recovery secret",
+  title: "Sign in with the recovery secret you saved",
+};
+
 // No self-service "request invitation" route exists in this single-tenant,
 // invitation-first system — a new invitation is minted by an administrator. The
 // action points to the public landing (the entry point where a locked-out user
@@ -96,8 +108,10 @@ const COPY: Record<AccessWallVariant, AccessWallCopy> = {
     status: "Locked",
     title: "Access temporarily locked",
     description:
-      "Access to this account is temporarily locked. Recover your access or try signing in again in a few minutes.",
-    actions: [RECOVER_ACTION, SIGN_IN_ACTION],
+      "Access to this account is temporarily locked. If you saved a recovery secret, use it to get back in " +
+      "now — a password reset is locked by the same thing that locked this account. Otherwise recover your " +
+      "access or try signing in again in a few minutes.",
+    actions: [REDEEM_RECOVERY_SECRET_ACTION, RECOVER_ACTION, SIGN_IN_ACTION],
   },
   [AccessWallVariant.INVALID_LINK]: {
     icon: Link2Off,

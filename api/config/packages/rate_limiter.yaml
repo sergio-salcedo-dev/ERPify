@@ -108,7 +108,9 @@ framework:
         # this one is deployment surface. Its value arrives through RATE_LIMIT_PASSWORD_CHANGE_PER_IDENTITY_*,
         # so renaming it would leave any deployment's own override silently unread and the budget silently
         # back at the committed default — a failure with no red anywhere. A misleading class name is a lie a
-        # reader can see; a renamed env var is a lie only production discovers. Exhaustion is a VISIBLE 429, which is the deliberate difference from the two budgets
+        # reader can see; a renamed env var is a lie only production discovers.
+        #
+        # Exhaustion is a VISIBLE 429, which is the deliberate difference from the two budgets
         # above: they sit on PRE-identity surfaces where a per-target 429 would answer "this account exists",
         # while this endpoint is reached only through an established session, so the caller already knows the
         # identity exists — it is their own. There is nothing left to leak.

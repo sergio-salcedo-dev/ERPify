@@ -73,16 +73,25 @@ final readonly class RedeemRecoverySecretController
         #[StrictRequestPayload(acceptFormat: ['json'])]
         RedeemRecoverySecretRequest $request,
     ): Response {
-        // Spent on the selector half alone, before the use case resolves anything. A malformed presentation
-        // has no selector to key, so it keys the whole string — which can match no row either way, and keeps
-        // this branch free of a shape check the opaque wall below already owns.
+        // Spent on the selector half alone, before the use case resolves anything, and case-folded so one
+        // row cannot answer to thousands of buckets. A malformed presentation has no selector to key, so it
+        // keys the whole string: that matches no ROW, but `token_action_per_selector` is shared with the
+        // reset completion and the invitation accept, so a dot-less presentation naming another surface's
+        // live selector spends THAT link's budget from here. No amplification — the same drain costs the same
+        // one request against the other endpoint directly — but the namespace is shared, and saying it can
+        // match nothing would be false.
         if (!$this->throttle->allowCompletion(\explode('.', $request->secret, 2)[0])) {
             throw new InvalidRecoverySecret();
         }
 
+        // Handed over as a first-class callable rather than wrapped in an arrow function, and that is not
+        // style: a closure declaring `string $email` is a NEW site where a natural person's address is a
+        // named parameter, and closure frames carry their arguments into `Throwable::getTrace()`. The
+        // method it forwards to is already classified `sensitive` in `api/.person-address-parameter-policy`;
+        // forwarding directly keeps the address's declaration sites exactly where that registry can see them.
         $this->redeemRecoverySecret->redeem(
             $request->secret,
-            fn (string $email): null => $this->reauthenticateDevice->reauthenticate($email),
+            $this->reauthenticateDevice->reauthenticate(...),
         );
 
         return new Response(status: Response::HTTP_NO_CONTENT);
