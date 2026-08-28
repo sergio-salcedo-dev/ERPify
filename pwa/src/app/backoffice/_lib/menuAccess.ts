@@ -1,7 +1,6 @@
 import { authorize } from "@/context/shared/access/domain/authorize";
-import type { Permission } from "@/context/shared/access/domain/Permission";
 import type { Session } from "@/context/shared/access/domain/Session";
-import type { NavGroup, NavItem, NavSubItem } from "./backofficeMenu";
+import type { NavGroup, NavItem, NavPermission, NavSubItem } from "./backofficeMenu";
 
 /**
  * Whether a session may be offered an entry. An entry declaring no permission is offered to every
@@ -11,7 +10,7 @@ import type { NavGroup, NavItem, NavSubItem } from "./backofficeMenu";
  * The pure `authorize()` rather than `useCan`, because this runs once per entry inside a loop and a
  * hook cannot.
  */
-function allows(session: Session | null, entry: { permission?: Permission }): boolean {
+function allows(session: Session | null, entry: NavPermission): boolean {
   const required = entry.permission;
   return required === undefined || (session !== null && authorize(session, required));
 }
@@ -43,20 +42,12 @@ function permittedItem(session: Session | null, item: NavItem): NavItem | null {
 }
 
 /**
- * The navigation model as this session may be offered it: every entry whose declared permission the
- * session does not hold is gone, and a group left with no items disappears with them.
- *
- * Applied once, at the single place both sidebars read their model from, because the desktop and
- * mobile surfaces render the same groups through different JSX — filtering at either render site
- * would leave the other painting doors the role cannot open. It is navigation UX and never a control:
- * the page behind each route enforces its own gate, and must, because the URL can be typed.
- */
-/**
  * The account entries this session may be offered. The avatar menu renders from `accountMenuItem`
  * rather than from the groups, so it does not pass through {@link permittedMenuGroups} — and
  * `NavPermission` is declared on `NavSubItem` as well as `NavItem`, so a `permission` on "Active
- * sessions" or "Notifications" would be a field the type advertises and this surface never honours.
- * Filtering here is what makes the declaration mean the same thing on both menus.
+ * sessions" or "Notifications" would be a field the type advertises and no account surface honours.
+ * Filtering here is what makes the declaration mean the same thing on every menu — the caller filters
+ * once into an item and hands THAT to all three account surfaces, never this list to one of them.
  *
  * Only the ENTRIES are filtered, never the account item itself: it is the chrome's own affordance
  * and is always offered, so a `permission` on the parent would have nowhere to be honoured. That is
@@ -69,9 +60,18 @@ export function permittedAccountEntries(
   return entries.filter((entry) => allows(session, entry));
 }
 
+/**
+ * The navigation model as this session may be offered it: every entry whose declared permission the
+ * session does not hold is gone, and a group left with no items disappears with them.
+ *
+ * Applied once, at the single place both sidebars read their model from, because the desktop and
+ * mobile surfaces render the same groups through different JSX — filtering at either render site
+ * would leave the other painting doors the role cannot open. It is navigation UX and never a control:
+ * the page behind each route enforces its own gate, and must, because the URL can be typed.
+ */
 export function permittedMenuGroups(
-  groups: readonly NavGroup[],
   session: Session | null,
+  groups: readonly NavGroup[],
 ): NavGroup[] {
   return groups
     .map((group) => ({

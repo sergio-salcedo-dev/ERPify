@@ -29,8 +29,10 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  *   - any DBAL failure on any statement (a lost connection, a statement timeout, an exhausted pool — all
  *     {@see DbalException}) is converted to the domain {@see SessionStoreUnavailable} (→ 503) by
  *     {@see convertingStoreFailure()}, so a store outage lets the gate fail closed instead of leaking a raw
- *     500. Both reads and the bulk revoke go through it: revoke-others runs a read and then an UPDATE in one
- *     request, so guarding only the reads would answer one outage with two different statuses. Every statement
+ *     500. All six methods go through it — reads, the persist/flush, the bulk revokes and the two hard
+ *     deletes — because a single request reaches several of them: revoke-others runs a read and then an
+ *     UPDATE, and the erasure path admits through `findActiveById` and then deletes through
+ *     `deleteAllForUser`. Guarding a subset answers one outage with two different statuses. Every statement
  *     is fixed DQL with no user-supplied fragment, so a DBAL exception here is always infrastructural — a 503
  *     (which still reaches Sentry) is the honest outcome, never masking an application bug. The bulk
  *     revocations are directed DQL UPDATEs (no aggregate hydration, no per-row event).
@@ -64,8 +66,12 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     #[Override]
     public function save(Session $session): void
     {
-        $this->entityManager->persist($session);
-        $this->entityManager->flush();
+        $this->convertingStoreFailure(function () use ($session): mixed {
+            $this->entityManager->persist($session);
+            $this->entityManager->flush();
+
+            return null;
+        });
     }
 
     #[Override]
@@ -127,13 +133,12 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     #[Override]
     public function deleteAllForUser(string $userId): int
     {
-        $affected = $this->entityManager->createQueryBuilder()
+        $affected = $this->convertingStoreFailure(fn (): mixed => $this->entityManager->createQueryBuilder()
             ->delete(Session::class, 's')
             ->where(self::USER_ID_FILTER)
             ->setParameter('userId', $userId)
             ->getQuery()
-            ->execute()
-        ;
+            ->execute());
 
         return \is_int($affected) ? $affected : 0;
     }
@@ -167,7 +172,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     #[Override]
     public function deleteRetired(DateTimeImmutable $revokedBefore, DateTimeImmutable $expiredBefore): int
     {
-        $affected = $this->entityManager->createQueryBuilder()
+        $affected = $this->convertingStoreFailure(fn (): mixed => $this->entityManager->createQueryBuilder()
             ->delete(Session::class, 's')
             ->where('(s.status = :revoked AND s.revokedAt < :revokedBefore)')
             ->orWhere('(s.expiresAt < :expiredBefore)')
@@ -175,8 +180,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             ->setParameter('revokedBefore', $revokedBefore)
             ->setParameter('expiredBefore', $expiredBefore)
             ->getQuery()
-            ->execute()
-        ;
+            ->execute());
 
         return \is_int($affected) ? $affected : 0;
     }
@@ -214,26 +218,29 @@ final readonly class DoctrineSessionRepository implements SessionRepository
      * timeout, an exhausted pool, all {@see DbalException} — into the domain {@see SessionStoreUnavailable}
      * (→ 503).
      *
-     * EVERY statement in this adapter goes through it, reads and the bulk revoke alike, so one outage cannot
-     * produce two answers. `POST /sessions/revoke-others` reaches the listing read and then the UPDATE in the
-     * same request: with the write unguarded, which status the caller receives for a single outage would
-     * depend on which statement the connection happened to die on — 503 from the read, a raw 500 from the
-     * write. A conversion written per method is exactly the shape somebody adds to a second statement and
-     * forgets on a third.
+     * EVERY statement in this adapter goes through it, so one outage cannot produce two answers. Two request
+     * shapes reach more than one: `POST /sessions/revoke-others` runs the listing read and then the UPDATE,
+     * and the identity erasure admits through `findActiveById` before `PurgeUserSessions` reaches
+     * `deleteAllForUser`. With either write unguarded, which status the caller receives for a single outage
+     * would depend on which statement the connection happened to die on — 503 from the read, a raw 500 from
+     * the write. A conversion written per method is exactly the shape somebody adds to a second statement and
+     * forgets on a third, which is what this adapter did with three of its six until the omission was read
+     * against the universal its own docblock already claimed.
      *
-     * **It takes the whole read as a callable rather than guarding a body from outside, because what must be
-     * guarded is the EXECUTION and nothing places it there but the caller.**
+     * **It takes the whole statement as a callable rather than guarding a body from outside, because what
+     * must be guarded is the EXECUTION and nothing places it there but the caller.**
      * `EntityManager::createQueryBuilder()` only news up a `QueryBuilder`: it opens no connection and can raise
      * nothing this converts. The outage arises where the query runs — `getOneOrNullResult()` / `getResult()`,
-     * which reach `EntityManager::createQuery()` and then the driver. Handing the read in means the execution
-     * cannot end up outside the guard while the guard still looks present.
+     * which reach `EntityManager::createQuery()` and then the driver — or, for `save()`, at the `flush()` and
+     * never at the `persist()`. Handing the statement in means the execution cannot end up outside the guard
+     * while the guard still looks present.
      *
-     * @param callable(): mixed $read
+     * @param callable(): mixed $statement
      */
-    private function convertingStoreFailure(callable $read): mixed
+    private function convertingStoreFailure(callable $statement): mixed
     {
         try {
-            return $read();
+            return $statement();
         } catch (DbalException $dbalException) {
             throw SessionStoreUnavailable::storeUnreachable($dbalException);
         }

@@ -63,13 +63,19 @@ final class MessengerConsumerContext extends AbstractContext
     private const int TIME_LIMIT_SECONDS = 5;
 
     /**
+     * The levels `Application::configureIO()` resolves these to, and the long form is the one worth
+     * stating: bare `--verbose` is level ONE there, the same as `-v` — level two needs `-vv` or an
+     * explicit `--verbose=2`. Mapping it to VERY_VERBOSE would make this context more generous than the
+     * CLI it claims parity with, so a step asserting on output the real command emits only at `-vv`
+     * would pass here and fail there.
+     *
      * @var array<string, int>
      */
     private const array VERBOSITY_FLAGS = [
         '-v' => OutputInterface::VERBOSITY_VERBOSE,
         '-vv' => OutputInterface::VERBOSITY_VERY_VERBOSE,
         '-vvv' => OutputInterface::VERBOSITY_DEBUG,
-        '--verbose' => OutputInterface::VERBOSITY_VERY_VERBOSE,
+        '--verbose' => OutputInterface::VERBOSITY_VERBOSE,
     ];
 
     public function __construct(

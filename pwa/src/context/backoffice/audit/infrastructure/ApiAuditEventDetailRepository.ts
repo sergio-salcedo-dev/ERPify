@@ -90,8 +90,10 @@ type AuditEventDetailWire = Omit<AuditEventDetail, "resourceErased"> & { resourc
  * `resourceErased` is the one field whose ABSENCE is tolerated, mirroring the timeline guard: it
  * identifies nothing and only drives an "erased" marker plus the withheld follow-resource pivot, so
  * a client meeting an API that does not publish it must not lose the whole event — diff included —
- * over a presentational boolean. Missing reads as `false`; a present non-boolean is still drift and
- * still rejects, because such a value would be READ as a state.
+ * over a presentational boolean. Missing reads as `true`, in the safe direction and not the
+ * convenient one: an absent flag defaulted to `false` would offer the follow-resource pivot on a
+ * pseudonym for the whole window. A present non-boolean is still drift and still rejects, because
+ * such a value would be READ as a state.
  */
 function isAuditEventDetailRow(value: unknown): value is AuditEventDetailWire {
   return (
@@ -171,7 +173,7 @@ function toAuditEventDetail(detail: AuditEventDetailWire): AuditEventDetail {
     resourceType: detail.resourceType,
     resourceId: detail.resourceId,
     actorErased: detail.actorErased,
-    resourceErased: detail.resourceErased ?? false,
+    resourceErased: detail.resourceErased ?? true,
     metadata: toMetadata(detail.metadata),
   };
 }

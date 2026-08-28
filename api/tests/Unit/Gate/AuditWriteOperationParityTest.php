@@ -68,7 +68,7 @@ final class AuditWriteOperationParityTest extends TestCase
         $code = $this->withoutComments($this->read($this->repoRoot() . '/' . self::GUARD));
 
         $derivations = \preg_match_all(
-            '/AUDIT_WRITE_OPERATIONS\s*:[^=]*=\s*new Set\(\s*Object\.values\(\s*AuditWriteOperation\s*\)\s*\)/',
+            '/AUDIT_WRITE_OPERATIONS\s*(?::[^=]*)?=\s*new Set\(\s*Object\.values\(\s*AuditWriteOperation\s*\)\s*\)/',
             $code,
         );
 

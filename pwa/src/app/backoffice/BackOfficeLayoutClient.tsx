@@ -188,7 +188,7 @@ export default function BackOfficeLayoutClient({
   // through different JSX: filtering at either render site would leave the other painting an entry
   // the role cannot open. Hiding is an affordance decision only — every route keeps its own gate,
   // since the URL can be typed.
-  const menuGroups = useMemo(() => permittedMenuGroups(backofficeMenuGroups, session), [session]);
+  const menuGroups = useMemo(() => permittedMenuGroups(session, backofficeMenuGroups), [session]);
 
   // Sign-out is in flight. State rather than a ref because the click closes the menu, so a
   // second attempt needs it reopened — an asynchronous gap a re-render always wins.
@@ -332,7 +332,11 @@ export default function BackOfficeLayoutClient({
   // The top-bar menu mirrors the sidebar's Account group rather than declaring its own
   // entries, so the two can never drift. Logout is split out: it is the only entry whose
   // target leaves the back office, and it reads as destructive.
+  // Filtered ONCE into an item, never per render site: the account entries are painted by three
+  // surfaces (top-bar dropdown, sidebar footer, mobile drawer) through three different JSX blocks,
+  // so a list filtered for one of them leaves the other two offering doors the role cannot open.
   const accountEntries = permittedAccountEntries(session, accountMenuItem.subItems ?? []);
+  const permittedAccountItem: NavItem = { ...accountMenuItem, subItems: accountEntries };
   const accountLinks = accountEntries.filter((entry) => entry.action !== "sign-out");
   const accountLogout = accountEntries.find((entry) => entry.action === "sign-out");
 
@@ -459,8 +463,8 @@ export default function BackOfficeLayoutClient({
                 </p>
               )}
               <SidebarItem
-                {...withEntryState(accountMenuItem)}
-                isActive={isItemActive(accountMenuItem)}
+                {...withEntryState(permittedAccountItem)}
+                isActive={isItemActive(permittedAccountItem)}
                 onClick={handleNavigation}
                 isCompact={isCompact}
               />
@@ -588,7 +592,7 @@ export default function BackOfficeLayoutClient({
                           <span className="text-sm">{accountMenuItem.name}</span>
                         </button>
                         <div className="ml-8 mt-1 space-y-1">
-                          {accountMenuItem.subItems?.map((subItem) => (
+                          {permittedAccountItem.subItems?.map((subItem) => (
                             <button
                               type="button"
                               // Identity, never the label: this site relabels the entry it is

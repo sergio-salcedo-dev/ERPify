@@ -150,7 +150,8 @@ describe("ApiAuditTimelineRepository response guard", () => {
  * nothing — it drives an "erased" badge and withholds the follow-resource pivot — so a client
  * running ahead of the API, or one meeting a rolled-back API, must not lose every row of the screen
  * to MALFORMED_RESPONSE_ENVELOPE over it. Four states, and the guard has to separate them: missing
- * is valid and reads as `false`, `false`/`true` are valid, and anything else is still drift.
+ * is valid and reads as `true` — erased, the safe direction — `false`/`true` are valid, and anything
+ * else is still drift.
  */
 describe("ApiAuditTimelineRepository resourceErased tolerance", () => {
   /** The row as an API that does not publish the flag would send it: the key is absent, not null. */
@@ -175,13 +176,17 @@ describe("ApiAuditTimelineRepository resourceErased tolerance", () => {
     expect(guard(envelope)).toBe(true);
   });
 
-  it("reads an omitted flag as not-erased rather than as absent", async () => {
-    // The mapper is the half that decides what the UI sees. Admitting the row while leaving the
-    // field `undefined` would push the absence into every consumer that reads it as a boolean.
+  it("reads an omitted flag as erased, the safe direction, rather than as absent", async () => {
+    // The mapper is the half that decides what the UI sees, and the DIRECTION is the assertion.
+    // Admitting the row while leaving the field `undefined` pushes the absence into every consumer
+    // that reads it as a boolean; defaulting it to `false` is worse than that — it answers the
+    // privacy question with the permissive value, so the pivot is offered on a pseudonym. The
+    // sibling flag on this same row, `actorErased`, rejects an absent value outright; tolerating
+    // this one is a decision about the SCREEN surviving, never about the affordance loosening.
     const httpClient = httpClientReturning({ data: [rowWithoutTheFlag()], pagination });
     const page = await new ApiAuditTimelineRepository(httpClient).search(BASE_CRITERIA);
 
-    expect(page.entries[0].resourceErased).toBe(false);
+    expect(page.entries[0].resourceErased).toBe(true);
   });
 
   it.each([false, true])("admits and carries through the flag when present (%s)", async (flag) => {

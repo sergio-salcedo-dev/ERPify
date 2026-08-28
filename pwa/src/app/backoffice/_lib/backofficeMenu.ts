@@ -68,8 +68,11 @@ export type NavAction = "sign-out";
  * The permission an entry needs before it is painted. Declared on both levels because either can
  * point at a gated surface. It is an affordance filter and nothing more: the page behind the entry
  * keeps its own gate, since a URL can always be typed — hiding a door is not locking it.
+ *
+ * Exported so the one filter that reads it binds to the NAMED type: spelled structurally at the filter, a
+ * second field added here would be advertised by every entry and honoured by nothing.
  */
-interface NavPermission {
+export interface NavPermission {
   permission?: Permission;
 }
 

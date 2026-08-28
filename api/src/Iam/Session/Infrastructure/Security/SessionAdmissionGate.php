@@ -51,8 +51,9 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
  * so it is stated as a shape and not as a win.
  *
  * **The admitted session is published on the Request** under {@see ADMITTED_SESSION_ATTRIBUTE}, read back by
- * {@see admittedSession()}. The row is already loaded here on every authenticated request, and the controllers
- * that need it were loading it a second time. The carrier is the Request and never this service or a static:
+ * {@see admittedSession()}. The row is already loaded here on every authenticated request, so a controller that
+ * needs it reads it from there instead of issuing the same lookup. The carrier is the Request and never this
+ * service or a static:
  * FrankenPHP runs in worker mode, so the container and every service in it outlive the request, and a session
  * held anywhere container-scoped would be read by the NEXT request — an admission defect far worse than the
  * duplicate query it saves. A Request dies with its request by construction.

@@ -182,8 +182,8 @@ describe("ApiAuditEventDetailRepository response guard", () => {
 /**
  * The detail guard mirrors the timeline's tolerance on the one presentational field: `resourceErased`
  * may be absent, because losing the whole event — diff included — over a badge is the wrong failure.
- * Four states, separated: missing is valid and reads as `false`, `false`/`true` are valid, anything
- * else is drift and still rejects.
+ * Four states, separated: missing is valid and reads as `true` — the safe direction, mirroring the
+ * timeline — `false`/`true` are valid, anything else is drift and still rejects.
  */
 describe("ApiAuditEventDetailRepository resourceErased tolerance", () => {
   /** The row as an API that does not publish the flag would send it: the key is absent, not null. */
@@ -197,12 +197,15 @@ describe("ApiAuditEventDetailRepository resourceErased tolerance", () => {
     expect(isAuditEventDetailResponse({ data: rowWithoutTheFlag() })).toBe(true);
   });
 
-  it("reads an omitted flag as not-erased rather than as absent", async () => {
+  it("reads an omitted flag as erased, the safe direction, rather than as absent", async () => {
+    // The direction is the assertion. `false` would answer the privacy question with the permissive
+    // value and offer the follow-resource pivot on a pseudonym; the sibling `actorErased` on this
+    // same payload rejects an absent value outright.
     const httpClient = httpClientReturning({ data: rowWithoutTheFlag() });
 
     const detail = await new ApiAuditEventDetailRepository(httpClient).findById(DETAIL.id);
 
-    expect(detail.resourceErased).toBe(false);
+    expect(detail.resourceErased).toBe(true);
   });
 
   it.each([false, true])("admits and carries through the flag when present (%s)", async (flag) => {

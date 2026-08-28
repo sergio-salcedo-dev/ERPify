@@ -59,14 +59,18 @@ final class ChangeUserStatusTest extends TestCase
     }
 
     /**
-     * The wire admits either casing — `Uuid::ensure()` validates a route id without normalising it and
-     * `Symfony\Component\Uid\Uuid::isValid` accepts both — so the guard is reached with an upper-case id, and
-     * the double must answer it the way the adapter does (`strcasecmp`, both halves). Without that mirroring
-     * this use case permits the drain the guard exists to refuse, while the adapter refuses it: the divergence
-     * would not fail any adapter test, it would silently make every unit test here a green over the wrong
-     * answer.
+     * **The subject here is the DOUBLE, not the use case, and the name says so because the distinction is
+     * the point.** `ChangeUserStatus` compares no ids at all — it calls `Uuid::ensure()`, which validates a
+     * route id without normalising it, and then delegates the whole decision to the directory. So the only
+     * edit that reds this case is one to {@see InMemoryActiveAdministratorDirectory}; deleting `strcasecmp`
+     * from the production adapter leaves it green, and that invariant is pinned where it lives, by
+     * `DoctrineActiveAdministratorDirectoryTest`.
+     *
+     * It earns its place anyway: the wire admits either casing, so a double comparing case-SENSITIVELY
+     * answers `true` (permit) where the adapter answers `false` (409) for the same input — which would make
+     * every other unit test in this file a green over the opposite answer, and no adapter test would notice.
      */
-    public function testTheLastActiveAdministratorIsProtectedUnderAnyUuidCasing(): void
+    public function testTheInMemoryDirectoryMatchesTheAdaptersCaseInsensitiveMembership(): void
     {
         $user = UserMother::create();
         $repository = new InMemoryUserRepository($user);

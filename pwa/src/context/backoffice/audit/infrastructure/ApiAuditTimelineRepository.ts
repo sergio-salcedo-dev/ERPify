@@ -50,9 +50,12 @@ function isOptionalBoolean(value: unknown): value is boolean | undefined {
  * `resourceErased` is the one field whose ABSENCE is tolerated, and the asymmetry is deliberate: it
  * identifies nothing, it only drives an "erased" badge and withholds the follow-resource pivot, so
  * a client running ahead of the API (or one meeting a rolled-back API) must not lose the entire
- * screen over it. Missing reads as `false`. The cost is stated rather than hidden — inside that
- * window an erased resource renders as not-erased and its pivot is offered on a pseudonym — which
- * is why only absence is admitted and a corrupt value still fails the envelope.
+ * screen over it. **Missing reads as `true`, and the direction is the whole point.** Tolerating the
+ * absence is what keeps the screen; defaulting it to `false` would spend that window treating every
+ * pseudonym as a live identifier and offering the follow-resource pivot on it — the one outcome the
+ * flag exists to prevent. `true` costs a window in which nothing is followable and every row reads
+ * as erased: a loss of function, never a disclosure. Only absence is admitted; a corrupt value still
+ * fails the envelope.
  */
 function isAuditEntry(value: unknown): value is AuditEntryWire {
   return (
@@ -122,7 +125,7 @@ function toAuditEntry(row: AuditEntryWire): AuditEntry {
     resourceType: row.resourceType,
     resourceId: row.resourceId,
     actorErased: row.actorErased,
-    resourceErased: row.resourceErased ?? false,
+    resourceErased: row.resourceErased ?? true,
   };
 }
 

@@ -58,25 +58,14 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
     {
         $activeAdminIds = $this->lockedActiveAdminIds();
 
-        $anotherActiveAdminRemains = \array_any(
-            $activeAdminIds,
-            static fn ($adminId): bool => \is_string($adminId) && 0 !== \strcasecmp($adminId, $userId),
-        );
-
-        if ($anotherActiveAdminRemains) {
-            return true;
-        }
-
-        // Nobody else is an active administrator, so the answer turns on the subject alone. Removing an
-        // identity the set never holds takes nothing out of it — an active VIEWER, or anyone at all while the
-        // set is empty, leaves the invariant exactly as it was found, and refusing there would answer them
-        // with a conflict about an invariant their change does not touch. Only the set's sole member drains
-        // it. The membership reading is the same locked statement the exclusion above reads, so both halves
-        // of the answer come from one acquisition rather than from two snapshots that can disagree.
-        return !\array_any(
-            $activeAdminIds,
-            static fn ($adminId): bool => \is_string($adminId) && 0 === \strcasecmp($adminId, $userId),
-        );
+        // Only the SOLE member of the set drains it, which is one comparison and not two questions. With
+        // anyone else in the set an administrator remains whatever the subject is; and an identity the set
+        // never held is removed from nothing, so an active VIEWER — or anyone at all while the set is empty —
+        // leaves the invariant exactly as it was found, and refusing there would answer them with a conflict
+        // about an invariant their change does not touch. Both readings come from the one locked acquisition
+        // above rather than from two snapshots that can disagree, and the comparison is case-insensitive
+        // because `Uuid::ensure()` validates a route id without normalising its casing.
+        return 1 !== \count($activeAdminIds) || 0 !== \strcasecmp($activeAdminIds[0], $userId);
     }
 
     /**
@@ -92,11 +81,18 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
      * places `LockRows` above `Sort`, so the rows are locked as they emerge sorted rather than merely returned
      * that way. Must run inside the caller's transaction for the lock to hold until commit.
      *
-     * @return list<mixed> the locked ids, discarded by the caller that only wants the lock
+     * Narrowed to strings HERE rather than guarded at each reader. `id` is a Postgres `uuid`, so the driver
+     * yields strings and the filter removes nothing — but a guard written per reader has to decide what a
+     * non-string MEANS, and the two readings of this set would decide it in opposite directions: skipping it
+     * makes "another administrator remains" false and "the subject is a member" false too, which together
+     * PERMIT the drain. Narrowing once is what keeps the last-admin invariant's failure direction closed
+     * without asking either reader to think about a row shape that cannot occur.
+     *
+     * @return list<string> the locked ids, discarded by the caller that only wants the lock
      */
     private function lockedActiveAdminIds(): array
     {
-        return $this->connection->fetchFirstColumn(
+        $ids = $this->connection->fetchFirstColumn(
             <<<'SQL'
                 SELECT id
                 FROM identity_user
@@ -110,6 +106,8 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
                 'adminRole' => $this->adminRoleOperand(),
             ],
         );
+
+        return \array_values(\array_filter($ids, \is_string(...)));
     }
 
     #[Override]

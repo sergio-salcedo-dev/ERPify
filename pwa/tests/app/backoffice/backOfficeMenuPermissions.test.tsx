@@ -118,7 +118,7 @@ describe("the back-office sidebar and the permission each entry declares", () =>
     // two surfaces that cannot expand a sub-list (the compact sidebar, the mobile drawer). Leaving
     // the parent aimed at the withheld leaf would keep the dead end one click away from the entry
     // this filter just removed.
-    const forManager = itemNamed(permittedMenuGroups(backofficeMenuGroups, MANAGER), ITS_PARENT);
+    const forManager = itemNamed(permittedMenuGroups(MANAGER, backofficeMenuGroups), ITS_PARENT);
 
     expect(itemNamed(backofficeMenuGroups, ITS_PARENT).path).toBe(USERS_PATH);
     expect(forManager.path).not.toBe(USERS_PATH);
@@ -127,8 +127,8 @@ describe("the back-office sidebar and the permission each entry declares", () =>
 
   it("leaves an entry declaring no permission untouched for either session", () => {
     // Non-vacuous: a filter that dropped everything would satisfy the withholding case above.
-    const admin = permittedMenuGroups(backofficeMenuGroups, ADMIN);
-    const manager = permittedMenuGroups(backofficeMenuGroups, MANAGER);
+    const admin = permittedMenuGroups(ADMIN, backofficeMenuGroups);
+    const manager = permittedMenuGroups(MANAGER, backofficeMenuGroups);
     const leafNames = (groups: readonly { items: NavItem[] }[]) =>
       groups.flatMap((group) => group.items).flatMap((item) => item.subItems ?? []);
 
@@ -197,11 +197,34 @@ describe("the back-office sidebar and the permission each entry declares", () =>
     expect(source).toMatch(/const accountEntries = permittedAccountEntries\(\s*session,/);
   });
 
+  // Deriving the filtered list is half the wiring; the other half is that EVERY account surface reads
+  // it. Three render it through three different JSX blocks — the top-bar dropdown, the sidebar footer
+  // and the mobile drawer — so a filter consumed by one of them is not a filter, it is a filter on one
+  // menu. The check is containment rather than an enumeration of the three: the raw `subItems` may be
+  // read exactly once, at the derivation, so a FOURTH surface added later cannot reach the unfiltered
+  // list either. Source-read for the same reason as the case above — no account entry declares a
+  // permission today, so the filtered and unfiltered lists are equal and nothing behavioural can tell
+  // them apart.
+  it("hands the filtered account item to every surface, never the raw model", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/app/backoffice/BackOfficeLayoutClient.tsx"),
+      "utf8",
+    );
+
+    const rawEntryReads = source.match(/accountMenuItem\.subItems/g) ?? [];
+
+    expect(rawEntryReads).toHaveLength(1);
+    expect(source).toMatch(
+      /const accountEntries = permittedAccountEntries\(\s*session,\s*accountMenuItem\.subItems/,
+    );
+    expect(source).not.toMatch(/withEntryState\(accountMenuItem\)/);
+  });
+
   it("offers nothing gated to a session that has not resolved yet", () => {
     // The chrome only renders behind RequireAuth, so this arm is defensive — but a null session
     // reading as "allowed" would paint the whole menu during any future unguarded render.
     expect(
-      permittedMenuGroups(backofficeMenuGroups, null)
+      permittedMenuGroups(null, backofficeMenuGroups)
         .flatMap((group) => group.items)
         .flatMap((item) => item.subItems ?? [])
         .map((sub) => sub.name),

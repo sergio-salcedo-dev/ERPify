@@ -20,15 +20,15 @@ use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 /**
- * The two ways a consume step used to report success over a run that asserted nothing.
+ * The two ways a consume step can report success over a run that asserted nothing.
  *
- * All three are invisible from Gherkin, which is why they have to be pinned here: a feature can assert
- * that a step passes, never that it fails, and each defect's symptom IS the step passing. A worker
- * holding no receiver, and a worker that read fewer messages than the step named, both end on the
- * time-limit listener with exit code 0 and an output nobody can tell from a real consume.
+ * Both are invisible from Gherkin, which is why they have to be pinned here: a feature can assert that a
+ * step passes, never that it fails, and each defect's symptom IS the step passing. A worker holding no
+ * receiver, and a worker that read fewer messages than the step named, both end on the time-limit
+ * listener with exit code 0 and an output nobody can tell from a real consume.
  *
- * The third defect of that family — verbosity resolved by last flag rather than by maximum — is pinned
- * in {@see MessengerVerbosityResolutionTest}, which needs none of this class's wiring.
+ * A third member of the same family — verbosity resolved by last flag rather than by maximum — is pinned
+ * in {@see MessengerVerbosityResolutionTest} instead, because it needs none of this class's wiring.
  *
  * The matching halves are not decoration. Without them a step that refused every consume would satisfy
  * the refusing halves just as well, and the file would prove nothing.

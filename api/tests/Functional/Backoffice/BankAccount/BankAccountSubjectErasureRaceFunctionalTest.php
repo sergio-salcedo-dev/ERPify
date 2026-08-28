@@ -14,6 +14,7 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
+use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
@@ -80,7 +81,7 @@ final class BankAccountSubjectErasureRaceFunctionalTest extends KernelTestCase
         $this->entityManager = $this->service(EntityManagerInterface::class);
         $this->bankId = Uuid::generate();
         $this->accountId = Uuid::generate();
-        $this->scope = 'BankAccount:' . $this->accountId;
+        $this->scope = EncryptionScopeId::forBankAccount($this->accountId)->toString();
     }
 
     protected function tearDown(): void

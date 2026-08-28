@@ -58,6 +58,25 @@ final class MessengerVerbosityResolutionTest extends TestCase
     }
 
     /**
+     * Parity with the real console, which is the whole claim `iExecuteCommandWithOptions` makes. Bare
+     * `--verbose` is level ONE in `Application::configureIO()` — `-vv` and `--verbose=2` are what reach
+     * level two — so mapping the long form to VERY_VERBOSE would make a step here see output the same
+     * invocation does not produce on the CLI. Asserted against `-vv` in the same case, because a
+     * resolution collapsing both to VERBOSE would satisfy the long form alone.
+     */
+    public function testTheLongVerboseFlagResolvesToOneLevelJustAsTheConsoleDoes(): void
+    {
+        $this->assertSame(
+            OutputInterface::VERBOSITY_VERBOSE,
+            $this->resolveVerbosity(['--verbose' => true]),
+        );
+        $this->assertSame(
+            OutputInterface::VERBOSITY_VERY_VERBOSE,
+            $this->resolveVerbosity(['-vv' => true]),
+        );
+    }
+
+    /**
      * @param array<string, mixed> $decoded
      */
     private function resolveVerbosity(array $decoded): mixed

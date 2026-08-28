@@ -517,3 +517,132 @@ ejecutó la suite de mutación completa; y las mediciones vivas se hicieron cont
 un stack de desarrollo de un worktree, no contra producción. Dos de los hallazgos
 GRAVE fueron afirmaciones **documentales** falsas, no defectos de comportamiento
 — lo que dice algo sobre dónde mira esta clase de revisión y dónde no.
+
+### Tercera ronda — revisión de diseño (DDD / SOLID / Tell-Don't-Ask / Demeter / DRY-KISS-YAGNI)
+
+Lectura hostil en tres contextos frescos y de solo lectura, uno por lote
+(`api/src`, `pwa/src`, tests+Behat), consolidada y **verificada hallazgo a
+hallazgo contra el árbol y contra `vendor/`** antes de tocar nada. Corrió sobre
+`5c6a95cf`, que incluye el merge de `main` posterior a la Ola G — la tabla de
+verificación de la segunda ronda se midió sobre `9453c9fe` y no cubría ese head.
+
+Cambió el resultado, no lo confirmó.
+
+**GRAVE — el adaptador de sesiones afirmaba un universal que no cumplía.**
+`DoctrineSessionRepository` documentaba *«any DBAL failure on any statement»* y
+*«EVERY statement in this adapter goes through it»*, y **tres de sus seis
+métodos** quedaban fuera de `convertingStoreFailure()`: `save()`,
+`deleteAllForUser()` y `deleteRetired()`. La justificación que el propio helper
+da para existir se realiza en uno de los tres: el borrado de identidad admite
+por `findActiveById` (503) y luego borra por `PurgeUserSessions` →
+`deleteAllForUser` (500 crudo), o sea una avería contestada con dos estados en
+una petición — exactamente lo que el helper dice impedir. Los seis pasan ahora
+por la guarda, y el puerto declara `@throws` en los seis en vez de solo en
+`findActiveById`.
+
+**SERIO — `findByIdForUpdate` exportaba hacia arriba una precondición que el
+adaptador puede imponer.** El docblock del puerto de dominio cedía al llamante
+la obligación de no tener el agregado ya cargado, en vocabulario de `UnitOfWork`
+de Doctrine. Verificado en `vendor/doctrine/orm/src/EntityManager.php:327-346`:
+con acierto en el mapa de identidad, `find(..., PESSIMISTIC_WRITE)` enruta por
+`EntityPersister::refresh()` y **devuelve la instancia gestionada igualmente**,
+así que un llamante que ya lo hubiera cargado recibiría una foto viva de una
+fila borrada y el borrado informaría de un registro que no borró. Ahora es una
+lectura DQL con `setLockMode` + `HINT_REFRESH`: cero filas es `null` sea cual
+sea el estado de la unidad de trabajo. El puerto pierde doce líneas de contrato
+delegado. Pinchado por `BankAccountLockingReadFunctionalTest`, **medido en ambas
+direcciones**: con `find()` el caso enrojece, con la consulta pasa.
+
+**SERIO — el filtro de permisos del menú se aplicaba en 1 de 3 superficies.**
+`permittedAccountEntries` alimentaba solo el desplegable de la barra superior;
+el pie del sidebar (`withEntryState(accountMenuItem)`) y el cajón móvil
+(`accountMenuItem.subItems?.map`) pintaban el modelo crudo. `menuAccess.ts`
+afirmaba lo contrario como hecho. El propio diff denuncia esa forma dos veces
+—el comentario de `withEntryState` la llama *«the same half-support this diff
+removes from the mobile drawer»*— y la reintroducía al lado. Ahora se filtra una
+vez a un item y las tres superficies leen de él. El falsador es de contención,
+no una enumeración de las tres: `accountMenuItem.subItems` puede leerse
+**exactamente una vez**, así que una cuarta superficie tampoco alcanza la lista
+sin filtrar. Provocados sus dos brazos por separado.
+
+**SERIO — `resourceErased ?? false` fallaba ABIERTO en el eje GDPR.** La
+tolerancia a la ausencia está argumentada y se conserva; lo que estaba mal es la
+**dirección**. El argumento escrito («que no se pierda la pantalla entera»)
+justifica admitir la ausencia, no resolverla con el valor permisivo: en esa
+ventana cada pseudónimo se trataba como identificador vivo y se ofrecía el pivote
+`follow-resource` sobre él, que es justo lo que la bandera existe para impedir.
+La asimetría lo delata — `actorErased`, la bandera hermana de la misma fila,
+rechaza la ausencia de plano. Ahora `?? true`: se pierde función en la ventana,
+nunca se divulga. Falsado en los dos ficheros.
+
+**MENORES cerrados** — `'--verbose' => VERY_VERBOSE` en el contexto de Behat,
+cuando `Application::configureIO()` lo resuelve a nivel UNO
+(`vendor/symfony/console/Application.php:1017`), de modo que el contexto era más
+generoso que la CLI con la que declara paridad (corregido y pinchado; falsado:
+128 vs 64); el guardián de `AuditWriteOperationParityTest` exigía la anotación de
+tipo y habría enrojecido con un mensaje falso al quitarla; la dirección
+fail-open del `is_string` en `keepsAnActiveAdminWithout`, colapsando además dos
+pasadas en la frase que el comentario ya escribía; dos comentarios relativos al
+cambio (`SessionAdmissionGate`, `MessengerConsumerContextTest`) y un «dos/tres»
+sin antecedente; `NavPermission` sin exportar, redeclarada estructuralmente en su
+único consumidor; dos bloques JSDoc apilados que dejaban `permittedMenuGroups`
+sin documentar y su docblock colgando de otra función; orden de argumentos
+inconsistente entre las dos exportadas del módulo; y `'BankAccount:' . $id`
+reconstruido a mano en vez de pedírselo a `EncryptionScopeId::forBankAccount()`.
+
+**Registrado y NO arreglado, con su motivo**
+
+1. **El estático `SessionAdmissionGate::admittedSession()`.** Dos controllers
+   dependen de una clase concreta de `Infrastructure\Security` por llamada
+   estática, y «resolver la sesión admitida o 401» se escribe ahora **tres**
+   veces. El arreglo correcto es un puerto de Application
+   (`CurrentAdmittedSession`) junto al `CurrentSessionReference` que ya existe y
+   ya posee exactamente esa clase de seam — pero es puerto nuevo + adaptador +
+   cableado en la ruta de autenticación, o sea una refactorización, no la regla
+   del boy-scout. Decisión del propietario.
+2. **`keepsAnActiveAdminWithout` es un nombre que miente.** Devuelve `true` para
+   el conjunto vacío, donde no se «keeps an active admin» en absoluto, y el
+   docblock gasta ocho líneas explicando que el nombre no significa lo que dice.
+   Renombrar cruza interfaz, dos implementaciones, llamantes y tests.
+3. **El motor de lectura de fuentes PWA está en cinco clases de gate.**
+   `repoRoot()` ×5, `read()` ×6, `withoutComments()` ×3 + `PhpSource`, cuando la
+   regla del repo pone los motores en `api/tests/Support/`. Esta rama añadió las
+   copias 4 y 5. **Medido:** el riesgo que hace subtil a `withoutComments`
+   —`#//[^\n]*#` se come el resto de cualquier línea con `https://`— es
+   **latente, no vivo**: cero ocurrencias de `://` en los tres corpus que leen
+   los gates nuevos. Arreglarlo bien exige entrar en tres ficheros que esta rama
+   no abre.
+4. **`InMemoryPasswordResetTokenRepository` diverge del adaptador tras
+   `deleteAllForUser`.** El doble borra de su índice y `findById()` da `null`; el
+   `DELETE` DQL real no desaloja el mapa de identidad, así que en la misma unidad
+   de trabajo puede devolver la entidad. Benigno hoy (la lectura ocurre en otra
+   petición).
+5. **`StrictRequestPayload` conserva `null` en la unión** de `acceptFormat`, que
+   es la única forma de reabrir con una tecla el agujero que el nuevo default
+   cierra. Ningún llamante lo necesita; estrecharlo es una decisión de firma.
+6. **Tres sitios afirman «estas N negativas son indistinguibles» con tres
+   fuerzas distintas**, y `InvitationAcceptFunctionalTest` es el débil.
+7. **`ChangeUserStatusTest` casing**: el caso no puede falsificar lo que su
+   nombre afirmaba — `ChangeUserStatus` no compara ids en absoluto, delega. Se
+   renombró para decir que su sujeto es el DOBLE (que sí merece el pin), pero la
+   forma correcta sería un test de contrato sobre el puerto ejecutado contra el
+   doble y contra el adaptador.
+
+**Verificación de esta ronda** (todas sobre `5c6a95cf` + los arreglos, código de
+salida impreso, no reutilizado):
+
+| Gate | Exit | Medido |
+|---|---:|---|
+| `make php.quality.dry-run` | 0 | la variante que corre CI |
+| `make pwa.quality.dry-run` | 0 | |
+| `make php.unit` | 0 | 3315 tests, 15278 aserciones, 2 skipped |
+| `make pwa.test.unit` | 0 | 250 ficheros, 1584 tests |
+| `make php.behat` | 0 | 471 escenarios, 4374 pasos |
+
+**Lo que un verde aquí NO prueba.** Nadie ejecutó `pwa.test.e2e` en esta ronda,
+que la segunda ya declaraba no-verde por ruido de entorno. Los tres lotes leyeron
+el diff, no la rama entera: un defecto en código que la rama no toca es invisible
+a esta lectura. Y la ventana de F2 —una API retrocedida entre #375 y #636— no se
+verificó como topología de despliegue realmente alcanzable; si no lo es, lo
+correcto no es la dirección segura sino borrar la tolerancia entera, que es la
+lectura YAGNI y sigue siendo decisión del propietario.
