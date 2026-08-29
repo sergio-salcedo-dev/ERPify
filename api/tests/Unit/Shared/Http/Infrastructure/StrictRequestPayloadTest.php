@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Http\Infrastructure;
 
 use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use ReflectionMethod;
+use ReflectionParameter;
+use ReflectionType;
 use stdClass;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -128,6 +133,68 @@ final class StrictRequestPayloadTest extends TestCase
         );
 
         $this->assertInstanceOf(stdClass::class, $this->mapPayload($request));
+    }
+
+    /**
+     * The resolver gates its format check on truthiness — `if ($attribute->acceptFormat && ...)` — so a falsy
+     * argument skips the check outright instead of loosening it, and the endpoint accepts the form-encoded and
+     * multipart bodies this attribute exists to refuse.
+     *
+     * The cases below are EXAMPLES of that predicate, never the definition of it: `'0'` is here because a
+     * guard written as a list of `null`, `[]` and `''` reads as exhaustive and admits it. The guard is one
+     * truthiness test for exactly that reason, so this provider can be short without the policy being short.
+     *
+     * The type half is read through reflection rather than compared against a literal: a signature asserted
+     * against a copy of itself is a tautology, and the parameter is what a call site actually meets.
+     */
+    #[Test]
+    public function itsAcceptFormatCannotBeSpelledAsNull(): void
+    {
+        $constructor = (new ReflectionClass(StrictRequestPayload::class))->getConstructor();
+
+        $this->assertInstanceOf(ReflectionMethod::class, $constructor);
+
+        $acceptFormat = \array_find(
+            $constructor->getParameters(),
+            static fn (ReflectionParameter $parameter): bool => 'acceptFormat' === $parameter->getName(),
+        );
+
+        $this->assertInstanceOf(
+            ReflectionParameter::class,
+            $acceptFormat,
+            'The constructor no longer declares an $acceptFormat parameter.',
+        );
+
+        $type = $acceptFormat->getType();
+
+        $this->assertInstanceOf(ReflectionType::class, $type);
+        $this->assertFalse(
+            $type->allowsNull(),
+            'acceptFormat admits null again. The parent defaults to it and the resolver treats it as falsy, '
+            . 'so the format check is skipped and a form-encoded body maps like a JSON one.',
+        );
+    }
+
+    /**
+     * @param array<string>|string $acceptFormat
+     */
+    #[DataProvider('provideItRefusesAFalsyAcceptFormatCases')]
+    #[Test]
+    public function itRefusesAFalsyAcceptFormat(array|string $acceptFormat): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new StrictRequestPayload(acceptFormat: $acceptFormat);
+    }
+
+    /**
+     * @return iterable<string, array{0: array<string>|string}>
+     */
+    public static function provideItRefusesAFalsyAcceptFormatCases(): iterable
+    {
+        yield 'the empty list' => [[]];
+        yield 'the empty string' => [''];
+        yield "the string '0'" => ['0'];
     }
 
     /**

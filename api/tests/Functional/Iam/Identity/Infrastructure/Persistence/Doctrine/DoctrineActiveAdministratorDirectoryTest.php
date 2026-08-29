@@ -71,13 +71,13 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
         $this->directory = new DoctrineActiveAdministratorDirectory($this->connection);
     }
 
-    public function testAnotherActiveAdministratorKeepsTheDirectorySatisfied(): void
+    public function testAnotherActiveAdministratorLetsTheSetSurviveTheRemoval(): void
     {
         $this->inRolledBackTransaction(function (): void {
             $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
             $this->seed(self::ADMIN_B, 'admin-b@erpify.test', [Role::ADMIN->value]);
 
-            $this->assertTrue($this->directory->keepsAnActiveAdminWithout(self::ADMIN_A));
+            $this->assertTrue($this->directory->survivesRemovalOf(self::ADMIN_A));
         });
     }
 
@@ -87,8 +87,8 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
             $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
 
             // Excluded → nothing remains; not excluded → it is the surviving admin.
-            $this->assertFalse($this->directory->keepsAnActiveAdminWithout(self::ADMIN_A));
-            $this->assertTrue($this->directory->keepsAnActiveAdminWithout(self::UNKNOWN_ID));
+            $this->assertFalse($this->directory->survivesRemovalOf(self::ADMIN_A));
+            $this->assertTrue($this->directory->survivesRemovalOf(self::UNKNOWN_ID));
         });
     }
 
@@ -102,7 +102,7 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
             // admin any more than a SUSPENDED or DEACTIVATED one does — the guard filters on `status = ACTIVE`.
             $this->seed(self::INVITED_ADMIN, 'invited-admin@erpify.test', [Role::ADMIN->value], 'INVITED');
 
-            $this->assertFalse($this->directory->keepsAnActiveAdminWithout(self::ADMIN_A));
+            $this->assertFalse($this->directory->survivesRemovalOf(self::ADMIN_A));
         });
     }
 
@@ -112,7 +112,7 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
             $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
             $this->seed(self::ACTIVE_VIEWER, 'viewer@erpify.test', [Role::VIEWER->value]);
 
-            $this->assertFalse($this->directory->keepsAnActiveAdminWithout(self::ADMIN_A));
+            $this->assertFalse($this->directory->survivesRemovalOf(self::ADMIN_A));
         });
     }
 
@@ -126,8 +126,8 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
             $this->seed(self::SUSPENDED_ADMIN, 'suspended-admin@erpify.test', [Role::ADMIN->value], 'SUSPENDED');
             $this->seed(self::ACTIVE_VIEWER, 'viewer@erpify.test', [Role::VIEWER->value]);
 
-            $this->assertTrue($this->directory->keepsAnActiveAdminWithout(self::ACTIVE_VIEWER));
-            $this->assertTrue($this->directory->keepsAnActiveAdminWithout(self::UNKNOWN_ID));
+            $this->assertTrue($this->directory->survivesRemovalOf(self::ACTIVE_VIEWER));
+            $this->assertTrue($this->directory->survivesRemovalOf(self::UNKNOWN_ID));
         });
     }
 
@@ -139,7 +139,7 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
             // Postgres renders `id` canonically lower-cased while the caller passes whatever its route
             // carried, and membership of the set is now what decides between refusing and permitting: a
             // case-sensitive reading would take the sole administrator for an outsider and drain the set.
-            $this->assertFalse($this->directory->keepsAnActiveAdminWithout(\strtoupper(self::ADMIN_A)));
+            $this->assertFalse($this->directory->survivesRemovalOf(\strtoupper(self::ADMIN_A)));
         });
     }
 
@@ -149,7 +149,7 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
             $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
             $this->seed(self::ADMIN_B, 'admin-b@erpify.test', [Role::ADMIN->value]);
 
-            $this->directory->keepsAnActiveAdminWithout(self::ADMIN_A);
+            $this->directory->survivesRemovalOf(self::ADMIN_A);
 
             // `SELECT ... FOR UPDATE` takes a RowShareLock on identity_user held until commit; a plain read
             // would only take AccessShareLock. Its presence proves the guard locks the admin set — the lock
@@ -199,7 +199,7 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
         });
     }
 
-    public function testAnAdministratorMembershipWhoseIdentityIsGoneCannotKeepTheDirectorySatisfied(): void
+    public function testAnAdministratorMembershipWhoseIdentityIsGoneCannotKeepTheSetAlive(): void
     {
         $this->inRolledBackTransaction(function (): void {
             $this->seed(self::ADMIN_A, 'admin-a@erpify.test', [Role::ADMIN->value]);
@@ -235,7 +235,7 @@ final class DoctrineActiveAdministratorDirectoryTest extends KernelTestCase
                 (int) $seeded,
                 'The orphan membership was not seeded — nothing below proves anything.',
             );
-            $this->assertFalse($this->directory->keepsAnActiveAdminWithout(self::ADMIN_A));
+            $this->assertFalse($this->directory->survivesRemovalOf(self::ADMIN_A));
             $this->assertFalse($this->directory->holdsAdministratorRole(self::UNKNOWN_ID));
         });
     }

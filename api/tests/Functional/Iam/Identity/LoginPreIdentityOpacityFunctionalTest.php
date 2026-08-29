@@ -15,6 +15,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\UserChecker;
 use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\ComparesOpaqueRefusals;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -54,6 +55,8 @@ use Symfony\Component\HttpFoundation\Response;
 #[CoversClass(UserProvider::class)]
 final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
 {
+    use ComparesOpaqueRefusals;
+
     private const string LOGIN_PATH = '/api/v1/backoffice/login';
 
     private const string ORIGIN = 'http://localhost';
@@ -64,15 +67,6 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
      * `instance` — and that one varies by contract rather than by accident.
      */
     private const string CORRELATION_ID = '0190a1de-0602-7abc-8def-000000000055';
-
-    private const string INSTANCE_PLACEHOLDER = '<per-occurrence-instance>';
-
-    /**
-     * The one member whose whole job is to reveal the cause. It is emitted under `dev`/`test` and omitted in
-     * `prod`, so on the deployed wire it cannot make the three answers differ — and holding it to sameness
-     * here would be asserting against its contract rather than for it.
-     */
-    private const string CAUSE_NAMING_MEMBER = 'debug';
 
     private const string REGISTERED_PASSWORD = 'the-registered-password';
 
@@ -147,15 +141,9 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
 
             $this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode(), $case . ': ' . $raw);
 
-            $body = $this->decode($raw, $case);
-            $instances[] = $this->instanceOf($body, $case, $raw);
+            [$body, $instance] = $this->comparableRefusal($raw, $case);
+            $instances[] = $instance;
 
-            $body['instance'] = self::INSTANCE_PLACEHOLDER;
-            unset($body[self::CAUSE_NAMING_MEMBER]);
-
-            // Compared as a whole array rather than member by member: an identical comparison over arrays
-            // also holds the key ORDER, so a member added, dropped or moved on one of the three answers is
-            // a failure here without anyone having remembered to name it.
             $answers[$case] = [
                 'content-type' => $response->headers->get('Content-Type'),
                 'body' => $body,
@@ -171,12 +159,8 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
         $reference = $answers[self::WRONG_PASSWORD_CASE];
 
         $this->assertStringContainsString('application/problem+json', (string) $reference['content-type']);
-        $this->assertSame($reference, $answers[self::UNKNOWN_EMAIL_CASE]);
-        $this->assertSame($reference, $answers[self::INVITED_CASE]);
 
-        // Setting `instance` aside would also hide three answers sharing ONE value, which would be a
-        // correlation leak in its own right — so the substitution is only sound while the three are distinct.
-        $this->assertCount(3, \array_unique($instances));
+        $this->assertRefusalsAreIndistinguishable($answers, $instances);
     }
 
     /**
@@ -203,31 +187,6 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
             ],
             content: (string) \json_encode(['email' => $email, 'password' => $password]),
         );
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function decode(string $raw, string $case): array
-    {
-        $body = \json_decode($raw, true, flags: JSON_THROW_ON_ERROR);
-
-        $this->assertIsArray($body, $case . ': ' . $raw);
-
-        /** @var array<string, mixed> $body */
-        return $body;
-    }
-
-    /**
-     * @param array<string, mixed> $body
-     */
-    private function instanceOf(array $body, string $case, string $raw): string
-    {
-        $instance = $body['instance'] ?? null;
-
-        $this->assertIsString($instance, $case . ': ' . $raw);
-
-        return $instance;
     }
 
     /**

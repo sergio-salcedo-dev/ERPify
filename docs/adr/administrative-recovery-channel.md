@@ -160,7 +160,7 @@ replaces B1 without changing a line here.
 
 Raising the floor to ≥2 is the only variant that breaks something. Erasure refuses any subject holding
 `ADMIN` (`FulfilIdentityErasure.php:135-137`), so erasing an administrator requires demoting them first,
-and demotion consults `keepsAnActiveAdminWithout` (`ChangeUserRoles.php:128`, `ChangeUserStatus.php:85`).
+and demotion consults `survivesRemovalOf` (`ChangeUserRoles.php:186`, `ChangeUserStatus.php:91`).
 With a floor of 2, neither of exactly two administrators is demotable and erasing one would need a
 **third**. An invariant that radiates side effects into an unrelated process is mis-chosen: it should
 close the problem that motivated it, and this one does not close #602 at all.

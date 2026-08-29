@@ -75,7 +75,7 @@ final class InMemoryActiveAdministratorDirectory implements ActiveAdministratorD
     }
 
     #[Override]
-    public function keepsAnActiveAdminWithout(string $userId): bool
+    public function survivesRemovalOf(string $userId): bool
     {
         $this->askedWithout[] = $userId;
 

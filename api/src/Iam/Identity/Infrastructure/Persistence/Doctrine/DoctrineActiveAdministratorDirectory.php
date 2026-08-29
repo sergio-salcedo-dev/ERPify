@@ -54,7 +54,7 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
     }
 
     #[Override]
-    public function keepsAnActiveAdminWithout(string $userId): bool
+    public function survivesRemovalOf(string $userId): bool
     {
         $activeAdminIds = $this->lockedActiveAdminIds();
 
@@ -75,7 +75,7 @@ final readonly class DoctrineActiveAdministratorDirectory implements ActiveAdmin
      * Locks the whole active-admin set — not only the rows other than a given id — so two concurrent
      * transitions acquire the same rows in the same order and the second blocks behind the first, then re-reads
      * the committed state under READ COMMITTED. Excluding an id in SQL would make the two lock sets diverge and
-     * could deadlock; {@see keepsAnActiveAdminWithout()} applies its exclusion in PHP instead. The explicit
+     * could deadlock; {@see survivesRemovalOf()} applies its exclusion in PHP instead. The explicit
      * `ORDER BY` is what makes that shared order real: Postgres does not promise a stable scan order across
      * plans, so without it two concurrent callers could take the same rows in opposite orders and deadlock. It
      * places `LockRows` above `Sort`, so the rows are locked as they emerge sorted rather than merely returned

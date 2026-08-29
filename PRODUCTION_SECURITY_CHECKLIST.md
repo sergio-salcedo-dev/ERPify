@@ -445,6 +445,16 @@ you change anything here.
       and `itAcceptsAJsonBodyWithoutBeingAskedTo` put a payload declaring no format through Symfony's own
       resolver and assert the 415 and the 200, so the pin is the status a caller receives rather than the
       value the constructor stored. Gate: `BankCreateAcceptsJsonOnlyFunctionalTest`.
+      **The default is no longer the only control, because it was never the whole one.** The resolver gates
+      its format check on TRUTHINESS (`RequestPayloadValueResolver:242`), so a falsy `acceptFormat` does not
+      loosen the check, it skips it — and a call site could therefore disable the refusal while leaving the
+      default untouched. The constructor now refuses a falsy value outright, mirroring that predicate rather
+      than enumerating the values satisfying it: a list of `null`, `[]` and `''` reads as exhaustive and
+      admits `'0'`, measured accepting a form-encoded body through the real resolver. **Residual:** the
+      refusal is raised while Symfony builds the attribute per request (`ArgumentMetadataFactory`), so a
+      mis-declared site is a runtime 500 on that endpoint — not a build failure, and invisible to CI. And
+      grep (1) above cannot see such a site at all, since the widening would be an attribute argument rather
+      than the string `acceptFormat`; what covers that direction is the constructor, not the recipe.
 - [ ] **Password reset (`POST /api/v1/backoffice/forgot-password` · `/reset-password`):** the credential-recovery
       surface, mirroring the invitation flow. Forgot answers a **uniform 202** for every email/identity state
       (only an `ACTIVE` identity mints a token, and that work is never observable to the anonymous requester) — no

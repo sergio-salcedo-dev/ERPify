@@ -22,6 +22,7 @@ use Erpify\Organization\Organization\Domain\Repository\OrganizationRepository;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\ComparesOpaqueRefusals;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -46,6 +47,8 @@ use Symfony\Component\HttpFoundation\Response;
 #[CoversClass(\Erpify\Iam\Invitation\Infrastructure\Persistence\Doctrine\DoctrineInvitationRepository::class)]
 final class InvitationAcceptFunctionalTest extends WebTestCase
 {
+    use ComparesOpaqueRefusals;
+
     private const string ACCEPT_PATH = '/api/v1/backoffice/invitations/accept';
 
     private const string ORIGIN = 'http://localhost';
@@ -53,6 +56,13 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
     private const string PASSWORD = 'a-valid-password';
 
     private const string CSRF_TOKEN = 'a-32-char-stateless-csrf-nonce!!';
+
+    /**
+     * A canonical lowercase UUIDv7, the only shape the correlation listener echoes back. Without it the
+     * listener mints one per request, so the six refusals would carry six different `correlation-id` values
+     * and the whole-body comparison below would fail on a member that says nothing about the cause.
+     */
+    private const string CORRELATION_ID = '0190a1de-0602-7abc-8def-000000000071';
 
     private const string TRUNCATE_SQL
         = 'TRUNCATE iam_invitation, iam_session, membership, organization, identity_user, event_store CASCADE';
@@ -108,23 +118,49 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
 
     public function testAllSixDeadTokenCasesReturnOneUniformInvalidToken(): void
     {
-        $bodies = [];
+        $answers = [];
+        $instances = [];
 
-        foreach ($this->deadTokens() as $deadToken) {
+        $deadTokens = $this->deadTokens();
+
+        // Distinct tokens, asserted rather than counted: two cases collapsing onto the same token would leave
+        // six answers agreeing trivially while five causes are exercised, and nothing would go red — neither
+        // the count nor the instances, which are minted per occurrence rather than per cause.
+        $this->assertCount(6, $deadTokens);
+        $this->assertCount(6, \array_unique($deadTokens));
+
+        foreach ($deadTokens as $case => $deadToken) {
             $this->post($deadToken, self::ORIGIN);
 
-            $this->assertStatus(Response::HTTP_BAD_REQUEST);
-            $bodies[] = $this->problem();
+            $response = $this->client->getResponse();
+            $raw = (string) $response->getContent();
+
+            $this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode(), $case . ': ' . $raw);
+
+            [$body, $instance] = $this->comparableRefusal($raw, $case);
+            $instances[] = $instance;
+
+            // The six are raised from four different lines of the use case, so anything that carried that
+            // provenance onto the wire — an extension, a differing `detail`, a reordered payload — diverges.
+            $answers[$case] = [
+                'content-type' => $response->headers->get('Content-Type'),
+                'body' => $body,
+            ];
         }
 
-        $this->assertCount(6, $bodies);
+        // Every cause answered, asserted before the comparison: a short map would let the identity assertions
+        // below compare a value against itself.
+        $this->assertSame(\array_keys($deadTokens), \array_keys($answers));
 
-        foreach ($bodies as $body) {
-            $this->assertSame('invalid-token', $body['type']);
-            $this->assertSame($bodies[0]['type'], $body['type']);
-            $this->assertSame($bodies[0]['title'], $body['title']);
-            $this->assertSame($bodies[0]['status'], $body['status']);
-        }
+        $this->assertArrayHasKey('no separator', $answers);
+
+        $reference = $answers['no separator'];
+
+        $this->assertArrayHasKey('type', $reference['body']);
+        $this->assertSame('invalid-token', $reference['body']['type']);
+        $this->assertStringContainsString('application/problem+json', (string) $reference['content-type']);
+
+        $this->assertRefusalsAreIndistinguishable($answers, $instances);
     }
 
     public function testACrossSitePostIsRejectedWithoutMutating(): void
@@ -152,6 +188,7 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
                 'CONTENT_TYPE' => 'application/json',
                 'HTTP_ORIGIN' => $origin,
                 'HTTP_X_CSRF_TOKEN' => self::CSRF_TOKEN,
+                'HTTP_X_CORRELATION_ID' => self::CORRELATION_ID,
             ],
             content: (string) \json_encode([
                 'token' => $token,
@@ -192,8 +229,8 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
     }
 
     /**
-     * @return list<string> the six dead-token shapes: malformed, non-existent, wrong secret, expired,
-     *                      accepted and revoked
+     * @return array<string, string> the six dead-token shapes keyed by cause: malformed, non-existent, wrong
+     *                               secret, expired, accepted and revoked
      */
     private function deadTokens(): array
     {
@@ -208,13 +245,15 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
         $this->service(EntityManagerInterface::class)->clear();
         unset($acceptedUserId);
 
+        // Keyed by cause so a failure names which refusal diverged, and so two cases cannot silently collapse
+        // into the same token: a positional list of six stays six however many distinct causes it exercises.
         return [
-            'malformed-no-separator',
-            Uuid::generate() . '.a-non-existent-secret',
-            $validInvitationId . '.the-wrong-secret',
-            $expiredToken,
-            $acceptedToken,
-            $this->revokedToken(),
+            'no separator' => 'malformed-no-separator',
+            'unknown selector' => Uuid::generate() . '.a-non-existent-secret',
+            'wrong secret' => $validInvitationId . '.the-wrong-secret',
+            'expired' => $expiredToken,
+            'already accepted' => $acceptedToken,
+            'revoked' => $this->revokedToken(),
         ];
     }
 
@@ -248,17 +287,6 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
         $this->assertIsString($id);
 
         return $id;
-    }
-
-    /**
-     * @return array{type: string, title: string, status: int}
-     */
-    private function problem(): array
-    {
-        /** @var array{type: string, title: string, status: int} $body */
-        $body = \json_decode((string) $this->client->getResponse()->getContent(), true, flags: JSON_THROW_ON_ERROR);
-
-        return $body;
     }
 
     /**
