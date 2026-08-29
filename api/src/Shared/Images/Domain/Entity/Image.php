@@ -75,7 +75,9 @@ final readonly class Image
         #[ORM\Column(name: 'byte_size', type: Types::INTEGER)]
         private int $byteSize,
     ) {
-        if (self::DIGEST_HEX_LENGTH !== \strlen($this->digest) || 1 !== \preg_match('/^[0-9a-f]+$/', $this->digest)) {
+        // `D` is load-bearing: without it `$` also matches before a trailing newline, so 63 hex digits
+        // followed by "\n" are 64 characters that satisfy both halves of this guard.
+        if (self::DIGEST_HEX_LENGTH !== \strlen($this->digest) || 1 !== \preg_match('/^[0-9a-f]+$/D', $this->digest)) {
             throw new InvalidArgumentException('The digest must be a 64-character hexadecimal SHA-256 string.');
         }
 

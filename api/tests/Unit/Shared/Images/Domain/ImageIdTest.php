@@ -48,4 +48,27 @@ final class ImageIdTest extends TestCase
     {
         $this->assertFalse(ImageId::generate()->equals(ImageId::generate()));
     }
+
+    /**
+     * The spelling is normalised, because this identifier is read as a VALUE in one place and as a STRING
+     * in another and the two must not disagree.
+     *
+     * `Uuid::isValid()` matches case-insensitively, so `fromString()` accepts upper case; Postgres compares
+     * its `uuid` column by value, so the row is found either way; and the storage adapter derives its key
+     * by slicing the characters, so the key is not. Left unnormalised, a deletion for an upper-cased id
+     * finds no object — a CONFIRMED absence, which is a success — deletes the row, and leaves the bytes
+     * behind with nothing referencing them, unreachable for ever.
+     *
+     * Asserted on the value rather than on `equals()` alone: `equals()` is one of the two readers, and a
+     * normalisation that only fixed the comparison would leave the key still sliced from the raw spelling.
+     */
+    public function testTheSpellingIsNormalisedSoAValueHasExactlyOneStringForm(): void
+    {
+        $canonical = Uuid::generate();
+        $shouted = \strtoupper($canonical);
+
+        $this->assertNotSame($canonical, $shouted, 'the fixture must actually differ, or this proves nothing');
+        $this->assertSame($canonical, ImageId::fromString($shouted)->toString());
+        $this->assertTrue(ImageId::fromString($shouted)->equals(ImageId::fromString($canonical)));
+    }
 }

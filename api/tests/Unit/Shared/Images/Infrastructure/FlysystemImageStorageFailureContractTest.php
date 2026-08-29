@@ -19,6 +19,7 @@ use League\Flysystem\Local\LocalFilesystemAdapter;
 use League\Flysystem\UnableToCreateDirectory;
 use League\Flysystem\UnableToDeleteFile;
 use League\Flysystem\UnableToReadFile;
+use League\Flysystem\UnableToSetVisibility;
 use League\Flysystem\UnableToWriteFile;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -127,7 +128,9 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
 
                 $value = $identifier->toString();
 
-                foreach ([$value, \substr($value, 0, 8), $digest, self::PROBE_BYTES] as $secret) {
+                // The tail, not the head: that is the half the storage key is sharded on, so it is the
+                // half a partial key leak would spell.
+                foreach ([$value, \substr($value, -8), $digest, self::PROBE_BYTES] as $secret) {
                     $this->assertStringNotContainsString($secret, $haystack, $where);
                 }
             }
@@ -188,6 +191,7 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
     {
         return [
             ...$this->writeScenarios(),
+            ...$this->shardCreationScenarios(),
             ...$this->integrityScenarios(),
             ...$this->readScenarios(),
             ...$this->deleteScenarios(),
@@ -229,12 +233,14 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
                     ;
                 },
             ],
+            // The net answers TRANSIENT: a type the adapter does not name carries no condition to
+            // classify, so it degrades the way `verdictFor()` already does for an unrecognised one.
             'the library fails the write in a way it does not name' => [
-                'class' => ImageStorageFailed::class,
-                'category' => StorageFailureCategory::Permanent,
+                'class' => ImageStorageUnavailable::class,
+                'category' => StorageFailureCategory::Transient,
                 'operation' => StorageOperation::Store,
                 'run' => function (ImageId $identifier, LoggerInterface $logger): void {
-                    $failure = UnableToCreateDirectory::atLocation($this->keyLike($identifier), 'permission denied');
+                    $failure = UnableToSetVisibility::atLocation($this->keyLike($identifier), 'permission denied');
 
                     $this->storage($logger, $this->raisingFrom('write', $failure))
                         ->store($identifier, self::PROBE_BYTES)
@@ -242,6 +248,43 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
                 },
             ],
         ];
+    }
+
+    /**
+     * `ensureDirectoryExists()` runs BEFORE the write, so a shard the substrate refuses to create is the
+     * likeliest write failure of all — and it arrives as `UnableToCreateDirectory`. Both verdicts are
+     * driven, because reading the type instead of the condition made one substrate condition permanent
+     * here and transient one type over.
+     *
+     * @return array<string, Scenario>
+     */
+    private function shardCreationScenarios(): array
+    {
+        $scenarios = [];
+        $permanent = StorageFailureCategory::Permanent;
+        $transient = StorageFailureCategory::Transient;
+        $verdicts = [
+            'only an operator clears' => [ImageStorageFailed::class, $permanent, 'Permission denied'],
+            'a retry may clear' => [ImageStorageUnavailable::class, $transient, 'Device or resource busy'],
+        ];
+
+        foreach ($verdicts as $label => [$class, $category, $condition]) {
+            $scenarios['the shard directory cannot be created for a condition ' . $label] = [
+                'class' => $class,
+                'category' => $category,
+                'operation' => StorageOperation::Store,
+                'run' => function (ImageId $identifier, LoggerInterface $logger) use ($condition): void {
+                    $reason = \sprintf('mkdir(): %s', $condition);
+                    $failure = UnableToCreateDirectory::atLocation($this->keyLike($identifier), $reason);
+
+                    $this->storage($logger, $this->raisingFrom('write', $failure))
+                        ->store($identifier, self::PROBE_BYTES)
+                    ;
+                },
+            ];
+        }
+
+        return $scenarios;
     }
 
     /**
@@ -313,12 +356,12 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
                 },
             ],
             'the library fails the read in a way it does not name' => [
-                'class' => ImageStorageFailed::class,
-                'category' => StorageFailureCategory::Permanent,
+                'class' => ImageStorageUnavailable::class,
+                'category' => StorageFailureCategory::Transient,
                 'operation' => StorageOperation::Read,
                 'run' => function (ImageId $identifier, LoggerInterface $logger): void {
                     $this->storage($logger)->store($identifier, self::PROBE_BYTES);
-                    $failure = UnableToCreateDirectory::atLocation($this->keyLike($identifier), 'permission denied');
+                    $failure = UnableToSetVisibility::atLocation($this->keyLike($identifier), 'permission denied');
 
                     $this->storage($logger, $this->raisingFrom('read', $failure))
                         ->read($identifier)
@@ -348,12 +391,12 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
                 },
             ],
             'the library fails the deletion in a way it does not name' => [
-                'class' => ImageStorageFailed::class,
-                'category' => StorageFailureCategory::Permanent,
+                'class' => ImageStorageUnavailable::class,
+                'category' => StorageFailureCategory::Transient,
                 'operation' => StorageOperation::Delete,
                 'run' => function (ImageId $identifier, LoggerInterface $logger): void {
                     $this->storage($logger)->store($identifier, self::PROBE_BYTES);
-                    $failure = UnableToCreateDirectory::atLocation($this->keyLike($identifier), 'permission denied');
+                    $failure = UnableToSetVisibility::atLocation($this->keyLike($identifier), 'permission denied');
 
                     $this->storage($logger, $this->raisingFrom('delete', $failure))
                         ->delete($identifier)
@@ -385,7 +428,7 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
     {
         $value = $identifier->toString();
 
-        return \sprintf('%s/%s/%s', \substr($value, 0, 2), \substr($value, 2, 2), $value);
+        return \sprintf('%s/%s/%s', \substr($value, -4, 2), \substr($value, -2), $value);
     }
 
     private function raisingFrom(string $operation, Throwable $failure): FilesystemOperator
@@ -412,14 +455,5 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
         }
 
         $this->fail(\sprintf('%s: the scenario completed instead of raising', $label));
-    }
-
-    private function storage(LoggerInterface $logger, ?FilesystemOperator $filesystem = null): FlysystemImageStorage
-    {
-        return new FlysystemImageStorage(
-            $filesystem ?? new Filesystem(new LocalFilesystemAdapter($this->root, lazyRootCreation: true)),
-            $this->root,
-            $logger,
-        );
     }
 }

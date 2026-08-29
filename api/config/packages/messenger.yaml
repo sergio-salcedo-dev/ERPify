@@ -8,6 +8,28 @@ framework:
                 options:
                     queue_name: async
                     auto_setup: false
+                # Declared, because the default is not a policy — it is whatever Symfony ships, and what it
+                # ships is `max_retries: 3, delay: 1000, multiplier: 2`: retries at 1 s, 2 s and 4 s, so a
+                # substrate unavailable for more than SEVEN SECONDS dead-letters the message. That budget
+                # was never chosen; no `retry_strategy` existed anywhere in `api/config`.
+                #
+                # Seven seconds does not survive an ordinary event: a deploy, a database failover, a volume
+                # remount, an operator clearing a full disk. And for one of the events on this transport the
+                # consequence is not a delayed side effect but a lost instruction —
+                # `ImageDeletionRequested` is a work item, not a fact, and nothing re-dispatches it from
+                # `event_store` (its consumer is an `#[AsMessageHandler]`, not a `Projector`), so once it
+                # ages out of `failed` the bytes it was to release are unreachable for ever.
+                #
+                # 1 s, 3 s, 9 s, 27 s, 81 s, 4 m, 12 m, 36 m, then capped at an hour: about three hours of
+                # coverage across ten attempts. The Doctrine transport re-queues a retry with a future
+                # `available_at` rather than holding a worker, so the cost of the long tail is rows waiting,
+                # not throughput. `failed` still catches whatever outlives it — the window is widened, never
+                # removed, and residual two of PRODUCTION_SECURITY_CHECKLIST.md §7 is what it does not close.
+                retry_strategy:
+                    max_retries: 10
+                    delay: 1000
+                    multiplier: 3
+                    max_delay: 3600000
             failed:
                 dsn: 'doctrine://default?queue_name=failed'
                 options:

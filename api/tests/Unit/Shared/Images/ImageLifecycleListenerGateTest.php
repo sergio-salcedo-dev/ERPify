@@ -35,7 +35,21 @@ final class ImageLifecycleListenerGateTest extends TestCase
 {
     private const string MODULE = '/src/Shared/Images';
 
-    private const array FORBIDDEN = ['AsEntityListener', 'AsDoctrineListener', 'postRemove', 'preRemove'];
+    /**
+     * **Matched without regard to case, and that is not tidiness.** The lower-cased spellings are the
+     * `Events::` constants an `#[AsEntityListener(event: Events::postRemove)]` names. Doctrine's other —
+     * and more idiomatic — form is an attribute ON the entity: `#[ORM\HasLifecycleCallbacks]` plus
+     * `#[ORM\PostRemove]`, spelled with capitals. A case-sensitive sweep over the lower-cased tokens
+     * therefore missed exactly the shape a developer in a hurry would write, and `HasLifecycleCallbacks`
+     * — the switch that makes those callbacks run at all — was on no list at all.
+     */
+    private const array FORBIDDEN = [
+        'AsEntityListener',
+        'AsDoctrineListener',
+        'HasLifecycleCallbacks',
+        'postRemove',
+        'preRemove',
+    ];
 
     public function testTheModuleContainsNoDoctrineLifecycleListener(): void
     {
@@ -45,7 +59,11 @@ final class ImageLifecycleListenerGateTest extends TestCase
 
         foreach ($sources as $name => $source) {
             foreach (self::FORBIDDEN as $forbidden) {
-                $this->assertStringNotContainsString($forbidden, $source, $name . ' must declare no lifecycle hook');
+                $this->assertStringNotContainsStringIgnoringCase(
+                    $forbidden,
+                    $source,
+                    $name . ' must declare no lifecycle hook',
+                );
             }
         }
     }

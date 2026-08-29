@@ -14,6 +14,7 @@ use Erpify\Shared\Images\Domain\Storage\StorageFailureCategory;
 use Erpify\Shared\Images\Domain\Storage\StorageOperation;
 use League\Flysystem\FilesystemException;
 use League\Flysystem\FilesystemOperator;
+use League\Flysystem\UnableToCreateDirectory;
 use League\Flysystem\UnableToDeleteFile;
 use League\Flysystem\UnableToReadFile;
 use League\Flysystem\UnableToWriteFile;
@@ -45,6 +46,15 @@ use Throwable;
  * `FilesystemException` interface last, as a net: catching the interface first would make every concrete
  * branch unreachable. The set of concrete types is not closed — the library ships more of them than the
  * obvious three — so the net is mandatory rather than decorative.
+ *
+ * **The net answers transient, the same direction {@see verdictFor()} defaults to.** Only the concrete
+ * types expose `reason()`, and the library declares no interface promising one, so a failure arriving
+ * through the net carries no condition to classify. Answering permanent there made the default direction
+ * depend on which type transported the condition: `ensureDirectoryExists()` raises `UnableToCreateDirectory`
+ * before the write, so a `mkdir` refused by something a retry resolves was permanent while the identical
+ * condition arriving as `UnableToWriteFile` was transient. That type is now caught by name and its
+ * condition read; everything still reaching the net degrades toward the retry, at the cost this class
+ * already declares — a consumer retrying something no retry fixes.
  *
  * Neither the key nor the library's own exception is carried into the translated failure, not even as
  * `previous`: the library quotes the path in its message, and the path is derived from the image
@@ -109,10 +119,14 @@ final readonly class FlysystemImageStorage implements ImageStorage
 
         try {
             $this->filesystem->write($key, $bytes);
+        } catch (UnableToCreateDirectory $refusal) {
+            // Two arms rather than one union: rector and php-cs-fixer disagree on the spacing of a
+            // multi-catch, so the union made this file's verdict depend on which fixer ran last.
+            throw $this->discard($key, $this->verdictFor($refusal->reason(), StorageOperation::Store));
         } catch (UnableToWriteFile $refusal) {
-            throw $this->report($this->verdictFor($refusal->reason(), StorageOperation::Store));
+            throw $this->discard($key, $this->verdictFor($refusal->reason(), StorageOperation::Store));
         } catch (FilesystemException) {
-            throw $this->report(new ImageStorageFailed(StorageOperation::Store, 'the write could not be completed'));
+            throw $this->discard($key, new ImageStorageUnavailable(StorageOperation::Store));
         }
 
         $this->verifyStoredBytes($key, $bytes);
@@ -133,7 +147,7 @@ final readonly class FlysystemImageStorage implements ImageStorage
         } catch (UnableToReadFile $refusal) {
             throw $this->report($this->verdictFor($refusal->reason(), StorageOperation::Read));
         } catch (FilesystemException) {
-            throw $this->report(new ImageStorageFailed(StorageOperation::Read, 'the read could not be completed'));
+            throw $this->report(new ImageStorageUnavailable(StorageOperation::Read));
         }
     }
 
@@ -162,9 +176,7 @@ final readonly class FlysystemImageStorage implements ImageStorage
         } catch (UnableToDeleteFile $refusal) {
             throw $this->report($this->verdictFor($refusal->reason(), StorageOperation::Delete));
         } catch (FilesystemException) {
-            throw $this->report(
-                new ImageStorageFailed(StorageOperation::Delete, 'the deletion could not be completed'),
-            );
+            throw $this->report(new ImageStorageUnavailable(StorageOperation::Delete));
         }
     }
 
@@ -195,14 +207,27 @@ final readonly class FlysystemImageStorage implements ImageStorage
     /**
      * The root must be present and traversable. Its absence is the unmounted-volume case and is permanent:
      * no retry mounts a volume, and treating it as transient would have a consumer retry for ever.
+     *
+     * **Decided at the syscall, for the reason {@see objectExists()} spells out at length.** `is_dir()` and
+     * `is_executable()` are `stat()` wrappers, so with an ancestor of the root at mode 0000 they answer
+     * `false` and the operator is told the root "is not present" — sending them to look at the mount when
+     * the fault is a permission. The verdict is the same either way, which is what keeps this a diagnosis
+     * bug rather than a correctness one, but the diagnosis is the only thing this message is for.
      */
     private function guardRootIsUsable(StorageOperation $operation): void
     {
-        if (!\is_dir($this->root)) {
-            throw $this->report(new ImageStorageFailed($operation, 'the storage root is not present'));
+        \clearstatcache(true, $this->root);
+
+        if (!\posix_access($this->root, POSIX_F_OK)) {
+            throw $this->report(new ImageStorageFailed(
+                $operation,
+                self::ABSENT_PATH === \posix_get_last_error()
+                    ? 'the storage root is not present'
+                    : 'the presence of the storage root could not be established',
+            ));
         }
 
-        if (!\is_executable($this->root)) {
+        if (!\posix_access($this->root, POSIX_X_OK)) {
             throw $this->report(new ImageStorageFailed($operation, 'the storage root cannot be traversed'));
         }
     }
@@ -277,15 +302,21 @@ final readonly class FlysystemImageStorage implements ImageStorage
     }
 
     /**
-     * Removes an object the verification refused, then hands the failure back.
+     * Removes an object a failed write or a refused verification left behind, then hands the failure back.
      *
-     * Leaving it would poison the identifier for ever: `store()` refuses a key that already carries an
+     * **A failed write leaves one too, and that is not obvious.** `LocalFilesystemAdapter::write()` calls
+     * `file_put_contents()`, whose `open(2)` carries `O_CREAT|O_TRUNC`: the file exists under the final key
+     * before a single byte is written, so a write that fails part-way — `ENOSPC`, a quota, an I/O error —
+     * still leaves an object there. Under `ENOSPC` that residue is self-amplifying: every attempt consumes
+     * more of the space that was already exhausted.
+     *
+     * Leaving either would poison the identifier for ever: `store()` refuses a key that already carries an
      * object, so a retry under the same id would meet the corrupt one and be rejected as a reuse, and
      * `read()` performs no digest check, so those bytes would be served as valid. Removal also makes the
      * port's promise true as written — a partial object is observable only while the write is in flight.
      *
-     * The removal is best-effort by design: a substrate that just failed a read-back may well fail this
-     * too, and the caller is owed the verification failure rather than whatever the cleanup hit.
+     * The removal is best-effort by design: a substrate that just failed a write or a read-back may well
+     * fail this too, and the caller is owed the original failure rather than whatever the cleanup hit.
      */
     private function discard(string $key, ImageStorageException $failure): ImageStorageException
     {
@@ -299,18 +330,6 @@ final readonly class FlysystemImageStorage implements ImageStorage
         return $this->report($failure);
     }
 
-    /**
-     * Emits the signal and hands the failure back so a call site reads `throw $this->report(...)`.
-     *
-     * The context carries the operation and the verdict, both from closed enums, and nothing else. No
-     * identifier, digest, key, byte count or filename: a metric dimension with a free value is a
-     * cardinality explosion, and an identifier here would be retained by a sink no erasure path reaches.
-     *
-     * A confirmed absence is reported one level below the rest, because it is an OUTCOME rather than a
-     * fault: an image nobody stored is the ordinary answer to a caller holding an identifier this
-     * deployment never wrote, and reporting it at the same level as an unmounted volume trains an
-     * operator to ignore the level that means something is broken.
-     */
     /**
      * Which class of failure a refusal from the library is.
      *
@@ -340,6 +359,18 @@ final readonly class FlysystemImageStorage implements ImageStorage
         return new ImageStorageUnavailable($operation);
     }
 
+    /**
+     * Emits the signal and hands the failure back so a call site reads `throw $this->report(...)`.
+     *
+     * The context carries the operation and the verdict, both from closed enums, and nothing else. No
+     * identifier, digest, key, byte count or filename: a metric dimension with a free value is a
+     * cardinality explosion, and an identifier here would be retained by a sink no erasure path reaches.
+     *
+     * A confirmed absence is reported one level below the rest, because it is an OUTCOME rather than a
+     * fault: an image nobody stored is the ordinary answer to a caller holding an identifier this
+     * deployment never wrote, and reporting it at the same level as an unmounted volume trains an
+     * operator to ignore the level that means something is broken.
+     */
     private function report(ImageStorageException $failure): ImageStorageException
     {
         $this->emit($failure->operation(), $failure->storageFailure());

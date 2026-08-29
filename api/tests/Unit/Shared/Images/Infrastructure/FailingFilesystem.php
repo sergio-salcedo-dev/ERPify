@@ -63,14 +63,6 @@ final class FailingFilesystem extends Filesystem
         parent::delete($location);
     }
 
-    #[Override]
-    public function fileExists(string $location): bool
-    {
-        $this->raiseWhenAskedFor('fileExists');
-
-        return parent::fileExists($location);
-    }
-
     private function raiseWhenAskedFor(string $operation): void
     {
         if ($operation === $this->failingOperation) {

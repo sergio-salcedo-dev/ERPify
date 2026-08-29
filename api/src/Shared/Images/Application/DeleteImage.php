@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Images\Application;
 
+use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
 use Erpify\Shared\Images\Domain\Storage\ImageStorage;
@@ -23,8 +24,12 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * absent object is a success. The reverse order would leave an object with no row referencing it, and this
  * module keeps no record that could ever find it again.
  *
- * **All four states, since delivery is at-least-once and two workers can race:**
+ * **Every state, since delivery is at-least-once and two workers can race:**
  * row present + object present → both removed;
+ * row present + object absent → the object's absence is success, so the row is removed and the pair is
+ * closed. This is the state the paragraph above says the order deliberately produces: it is what a
+ * redelivery meets after a crash between the two steps, and enumerating the other four while leaving this
+ * one out described a protocol whose whole justification was the case it omitted;
  * row absent + object present → the object is removed anyway, which is what the accepted orphans of the
  * upload path make inevitable;
  * row absent + object absent → nothing happens, and that is success;
@@ -49,7 +54,7 @@ final readonly class DeleteImage
         // is what keeps a broken connection from being recorded as an erasure already done.
         $image = $this->imageRepository->findById($id);
 
-        if (!$image instanceof \Erpify\Shared\Images\Domain\Entity\Image) {
+        if (!$image instanceof Image) {
             return;
         }
 

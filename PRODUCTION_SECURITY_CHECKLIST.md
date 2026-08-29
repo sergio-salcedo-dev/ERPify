@@ -1507,7 +1507,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       nothing here reports a deployment that simply never uses images.
       **Two — a lost deletion request is silent and permanent.** `ImageDeletionRequested` is queued; if it is
       never consumed, or dead-letters and ages out of the 30-day `failed` retention, the bytes and the row
-      stay alive indefinitely with no monitoring on that axis. There is deliberately no reconciliation
+      stay alive indefinitely with no monitoring on that axis. **How easily it dead-letters is the half that
+      was never measured**: no `retry_strategy` existed anywhere in `api/config`, so the whole `async`
+      transport ran on Symfony's default of three retries at 1 s, 2 s and 4 s — a storage outage longer than
+      seven seconds was enough. The transport now declares ten attempts over about three hours, which makes
+      the residual rare rather than closing it; the 30-day prune destroys the request either way, and
+      `event_store` cannot re-dispatch it because the consumer is a message handler and not a projector. There is deliberately no reconciliation
       between rows and stored objects: the bookkeeping that would find an orphan is the same bookkeeping the
       module refuses to build, so nothing can distinguish "never asked for" from "asked for and lost". A
       second latent case joins it the day a consumer adds a foreign key into `image`: the row deletion would

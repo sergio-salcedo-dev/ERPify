@@ -102,6 +102,46 @@ final class DeleteImageIntegrationTest extends KernelTestCase
     }
 
     /**
+     * The state the bytes-first order is CHOSEN to produce, over both real substrates.
+     *
+     * A crash between the two steps leaves the row alive and the object gone, and the argument for this
+     * order is that the next delivery resolves it while the mirror image — an object no row can name —
+     * is unrecoverable by construction. That argument is the reason the protocol looks the way it does,
+     * and until now nothing drove the state it turns on: the storage-failure case below raises inside the
+     * root guard, before a byte is touched, so it observes the ORDER of the two lines rather than the
+     * retryability of what sits between them.
+     */
+    public function testARowWhoseObjectIsAlreadyGoneIsClosedByTheNextDelivery(): void
+    {
+        $this->withDeletion(function (
+            DeleteImage $deleteImage,
+            ImageStorage $storage,
+            EntityManagerInterface $entityManager,
+        ): void {
+            $identifier = $this->seed($storage, $entityManager);
+
+            // The crash, reproduced: the bytes are released and the process dies before the row is.
+            $storage->delete($identifier);
+            $this->assertObjectIsGone($storage, $identifier);
+            $this->assertInstanceOf(
+                Image::class,
+                $this->rowFor($entityManager, $identifier),
+                'the intermediate state is a live row over absent bytes, or this case proves nothing',
+            );
+
+            $deleteImage->delete($identifier);
+            $entityManager->clear();
+
+            $this->assertObjectIsGone($storage, $identifier);
+            $this->assertNotInstanceOf(
+                Image::class,
+                $this->rowFor($entityManager, $identifier),
+                'the redelivery must close the pair rather than stalling on the absent object',
+            );
+        });
+    }
+
+    /**
      * At-least-once delivery, made concrete: the second run must not fail, must not resurrect the row and
      * must leave the same final state. It is the case an implementation that treated absence as an error
      * would pass every other test and fail here, in production, on a redelivery.

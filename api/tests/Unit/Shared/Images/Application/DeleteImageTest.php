@@ -15,7 +15,11 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Every state the handler can meet, because delivery is at-least-once and the upload path accepts orphans:
- * both halves present, only the object, neither, and a lookup that fails rather than answering absent.
+ * both halves present, only the row, only the object, neither, and a lookup that fails rather than
+ * answering absent.
+ *
+ * "Only the row" is the one the enumeration used to leave out, and it is the state the bytes-first order
+ * exists to produce — so the protocol's whole justification was the case nothing observed.
  *
  * @internal
  */
@@ -46,6 +50,26 @@ final class DeleteImageTest extends TestCase
         $deleteImage->delete($imageId);
 
         $this->assertSame([], $storage->objects);
+    }
+
+    /**
+     * The state a crash between the two steps leaves behind, and therefore the state the NEXT delivery
+     * meets. It is the one the bytes-first order is chosen to produce — the argument for that order is
+     * that this state is retryable and its mirror image is not — so leaving it unobserved left the
+     * decision resting on the only case nobody drove.
+     *
+     * A confirmed absence is a success on the delete path, so the row must go and the pair must close.
+     */
+    public function testWithOnlyTheRowLeftTheRedeliveryClosesThePair(): void
+    {
+        [$storage, $repository, $deleteImage] = $this->deleteImage();
+        $image = new Image(ImageId::generate(), \str_repeat('c', 64), 'image/png', 2, 2, 8);
+        $repository->save($image);
+
+        $deleteImage->delete($image->id());
+
+        $this->assertSame([], $storage->objects);
+        $this->assertSame([], $repository->rows, 'an already-absent object must not stop the row being removed');
     }
 
     public function testWithNeitherHalfPresentItSucceedsWithoutEffect(): void

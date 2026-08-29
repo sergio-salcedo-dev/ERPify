@@ -56,10 +56,24 @@ use SensitiveParameter;
  * No method returns a URL, and none accepts or returns a path or a storage key. Where the bytes live, and
  * how they are addressed physically, is the adapter's business; delivery belongs to the read story.
  *
- * A future consumer that references an image belonging to a natural person declares that reference in
- * `api/.person-reference-policy`, at its own column. An {@see ImageId} never determines by itself whether
- * it denotes personal data: this module holds no owner and no classification, so the consuming context is
- * the only place that knows.
+ * **A consumer whose image belongs to a natural person carries an obligation this module cannot hold.**
+ * An {@see ImageId} never determines by itself whether it denotes personal data: this module holds no
+ * owner and no classification, so the consuming context is the only place that knows. What that context
+ * owes, concretely:
+ *
+ * - `#[PersonalData]` on its own property, which is the attribute that says the value is about a person
+ *   even when the column that stores it is not a person reference;
+ * - a line in `api/.person-reference-policy` for the column, which its `Types::GUID` type puts inside that
+ *   gate's universe whatever it is classified as;
+ * - and, if it classifies the column `person`, the `#[PersonSubjectReference]` and the
+ *   `PersonReferenceSource` that classification demands.
+ *
+ * **Read the registry's own comment before assuming the third bullet applies.** By its rule a column
+ * holding an IMAGE id is `non-person` — the id denotes stored bytes — so it will not demand an erasure
+ * owner, and the obligation that survives is the first bullet plus publishing
+ * {@see \Erpify\Shared\Images\Domain\Event\ImageDeletionRequested} when the person is erased. That
+ * asymmetry is the point of naming it here: a consumer that reads only the registry is told nothing is
+ * required of it, which is true of the registry and false of the person.
  */
 interface ImageStorage
 {

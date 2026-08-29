@@ -12,7 +12,6 @@ use Erpify\Shared\Images\Domain\Storage\StorageFailureCategory;
 use Erpify\Shared\Images\Domain\Storage\StorageOperation;
 use Erpify\Shared\Images\Infrastructure\FlysystemImageStorage;
 use League\Flysystem\Filesystem;
-use League\Flysystem\Local\LocalFilesystemAdapter;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -264,12 +263,65 @@ final class FlysystemImageStorageTest extends TestCase
         }
     }
 
-    private function storage(): FlysystemImageStorage
+    /**
+     * A write that fails leaves an object behind, and `store()` owes its removal.
+     *
+     * The library's `write()` opens with `O_CREAT|O_TRUNC`, so the key is occupied before any byte lands
+     * and a failure part-way through leaves a short object under it. Left there it poisons the identifier
+     * for ever — a retry meets it and is refused as a reused id, and `read()` runs no digest check, so
+     * those bytes would be served as valid — and under `ENOSPC` every attempt adds another one, consuming
+     * the space that was already exhausted.
+     */
+    public function testAFailedWriteLeavesNoObjectBehind(): void
     {
-        return new FlysystemImageStorage(
-            new Filesystem(new LocalFilesystemAdapter($this->root, lazyRootCreation: true)),
+        $imageId = ImageId::generate();
+        $storage = new FlysystemImageStorage(
+            new FailingAfterPartialWriteFilesystem($this->root),
             $this->root,
             new RecordingLogger(),
         );
+
+        try {
+            $storage->store($imageId, 'canonical bytes the substrate will only half accept');
+            $this->fail('a refused write must surface');
+        } catch (ImageStorageFailed) {
+            // The condition PHP reports is one no retry resolves, so the verdict is permanent.
+        }
+
+        $residue = [];
+
+        foreach (self::walk($this->root) as $file) {
+            $residue[] = $file->getFilename();
+        }
+
+        $this->assertSame([], $residue, 'the half-written object must not survive the failure');
+    }
+
+    /**
+     * The key agrees with the row, whatever case the identifier arrived in.
+     *
+     * `Uuid::isValid()` matches case-insensitively and Postgres compares its `uuid` column by value, while
+     * this adapter builds its key by slicing the characters — so the normalisation `ImageId` performs is
+     * what keeps those two readers pointing at the same thing. Without it a deletion for an upper-cased id
+     * finds no object, reports a CONFIRMED absence, and leaves the bytes behind with the row gone.
+     */
+    public function testAnIdentifierInAnotherCaseAddressesTheSameObject(): void
+    {
+        $storage = $this->storage();
+        $imageId = ImageId::generate();
+        $storage->store($imageId, 'bytes addressed once');
+
+        $shouted = ImageId::fromString(\strtoupper($imageId->toString()));
+
+        $this->assertSame('bytes addressed once', $storage->read($shouted));
+
+        $storage->delete($shouted);
+
+        try {
+            $storage->read($imageId);
+            $this->fail('the object must be gone for the canonical spelling too');
+        } catch (ImageBytesNotFound) {
+            // The pair closed: one value, one key, one object.
+        }
     }
 }

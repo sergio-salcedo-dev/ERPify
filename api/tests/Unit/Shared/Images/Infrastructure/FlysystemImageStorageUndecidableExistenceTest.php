@@ -114,6 +114,38 @@ final class FlysystemImageStorageUndecidableExistenceTest extends TestCase
     }
 
     /**
+     * The root guard's own version of the same distinction, and the branch that did not exist until the
+     * guard stopped deciding with `is_dir()`.
+     *
+     * With the root's PARENT untraversable, `is_dir($root)` answers `false` for exactly the `EACCES` the
+     * guard is there to catch — so the operator was told the root "is not present" and went to look at the
+     * mount, when the fault was a permission. The verdict is permanent either way, which is what keeps
+     * this a diagnosis defect rather than a correctness one; the message is the only thing it produces.
+     */
+    public function testARootThatCannotBeExaminedIsNotReportedAsAnAbsentRoot(): void
+    {
+        $vault = $this->root . '/vault';
+        $storageRoot = $vault . '/images';
+        \mkdir($storageRoot, 0o755, true);
+
+        \chmod($vault, 0o000);
+
+        try {
+            $outcome = $this->deleteAsUnprivilegedUser(ImageId::generate(), $storageRoot);
+        } finally {
+            \chmod($vault, 0o755);
+        }
+
+        $this->assertSame('FAILED', $outcome['outcome']);
+        $this->assertStringContainsString('could not be established', $outcome['message']);
+        $this->assertStringNotContainsString(
+            'not present',
+            $outcome['message'],
+            'a root that exists and cannot be examined must not be reported as one that is absent',
+        );
+    }
+
+    /**
      * Blocks one directory on the path to a stored object, runs the deletion as an unprivileged user, and
      * asserts the three things that matter: it failed rather than reporting an erasure, the bytes survived,
      * and the verdict it raised carries neither the identifier nor a `previous` that could.
@@ -170,8 +202,13 @@ final class FlysystemImageStorageUndecidableExistenceTest extends TestCase
      *
      * @return array{outcome: string, message: string, previous: int}
      */
-    private function deleteAsUnprivilegedUser(ImageId $imageId): array
+    private function deleteAsUnprivilegedUser(ImageId $imageId, ?string $storageRoot = null): array
     {
+        // The script always lives under the case's own root, never under the adapter's: the root-guard
+        // case blocks the adapter's root precisely so the probe cannot stat it, and a script living there
+        // would be unreadable too — the probe would report nothing and the assertion would be about the
+        // harness rather than about the guard.
+        $storageRoot ??= $this->root;
         $script = $this->root . '/probe.php';
         \file_put_contents($script, \strtr(<<<'PROBE'
             <?php
@@ -206,7 +243,7 @@ final class FlysystemImageStorageUndecidableExistenceTest extends TestCase
             }
 
             echo json_encode($report);
-            PROBE, ['__ROOT__' => $this->root, '__ID__' => $imageId->toString()]));
+            PROBE, ['__ROOT__' => $storageRoot, '__ID__' => $imageId->toString()]));
         \chmod($script, 0o644);
 
         $output = [];

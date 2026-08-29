@@ -5,7 +5,12 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Images\Infrastructure;
 
 use Erpify\Shared\Images\Domain\ImageId;
+use Erpify\Shared\Images\Infrastructure\FlysystemImageStorage;
 use FilesystemIterator;
+use League\Flysystem\Filesystem;
+use League\Flysystem\FilesystemOperator;
+use League\Flysystem\Local\LocalFilesystemAdapter;
+use Psr\Log\LoggerInterface;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
@@ -17,6 +22,12 @@ use SplFileInfo;
  * `pathFor()` SEARCHES the tree for a file named after the identifier instead of recomputing the key the
  * way the adapter does. Recomputing it would make every assertion about the key circular: the test would
  * agree with the implementation by construction and could not observe a wrong derivation.
+ *
+ * `storage()` lives here because the root does: three cases were each building the adapter over
+ * `$this->root` with their own copy of the same four lines, so the wiring under test could drift between
+ * them one file at a time. Both arguments default, which is what lets a case that only wants a working
+ * adapter, one that wants to read the log, and one that wants a substrate that fails all name the same
+ * builder.
  *
  * @internal
  */
@@ -37,6 +48,17 @@ trait TemporaryImageStorage
         self::removeTree($this->root);
 
         parent::tearDown();
+    }
+
+    private function storage(
+        ?LoggerInterface $logger = null,
+        ?FilesystemOperator $filesystem = null,
+    ): FlysystemImageStorage {
+        return new FlysystemImageStorage(
+            $filesystem ?? new Filesystem(new LocalFilesystemAdapter($this->root, lazyRootCreation: true)),
+            $this->root,
+            $logger ?? new RecordingLogger(),
+        );
     }
 
     /**

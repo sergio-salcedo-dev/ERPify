@@ -11,7 +11,6 @@ use Erpify\Shared\Images\Domain\Storage\StorageFailureCategory;
 use Erpify\Shared\Images\Domain\Storage\StorageOperation;
 use Erpify\Shared\Images\Infrastructure\FlysystemImageStorage;
 use League\Flysystem\Filesystem;
-use League\Flysystem\FilesystemOperator;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -144,9 +143,11 @@ final class FlysystemImageStorageObservabilityTest extends TestCase
                 );
             }
 
-            // The derived key is the identifier under two shards OF the identifier, so a partial leak
-            // spells the opening characters rather than the whole value.
-            $this->assertStringNotContainsString(\substr($identifier->toString(), 0, 4), $serialised, $label);
+            // The derived key is the identifier under two shards OF the identifier, and the shards are
+            // sliced off its TAIL — a UUID v7's head is a millisecond clock, so sharding there would put a
+            // ~50-day window in one directory. A partial leak therefore spells the CLOSING characters, and
+            // a probe reading the opening ones checks a substring no key the adapter builds contains.
+            $this->assertStringNotContainsString(\substr($identifier->toString(), -4), $serialised, $label);
         }
     }
 
@@ -260,14 +261,5 @@ final class FlysystemImageStorageObservabilityTest extends TestCase
         }
 
         $this->fail(\sprintf('%s: the scenario completed instead of raising', $label));
-    }
-
-    private function storage(LoggerInterface $logger, ?FilesystemOperator $filesystem = null): FlysystemImageStorage
-    {
-        return new FlysystemImageStorage(
-            $filesystem ?? new Filesystem(new LocalFilesystemAdapter($this->root, lazyRootCreation: true)),
-            $this->root,
-            $logger,
-        );
     }
 }
