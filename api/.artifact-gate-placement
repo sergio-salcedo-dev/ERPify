@@ -192,6 +192,7 @@ tests/Unit/Shared/ErrorContract/Application/NativeJsonEncodeContractTest.php :: 
 tests/Unit/Shared/ErrorContract/Domain/Exception/TaxonomyArchitectureTest.php :: mirrored :: src/Shared/ErrorContract
 tests/Unit/Shared/Serialization/ResourceDtoContractTest.php :: mirrored :: src/Shared/Serialization
 tests/Unit/Support/PhpSourceTest.php :: mirrored :: tests/Support
+tests/Unit/Support/ResourceResponderBuilderTest.php :: mirrored :: tests/Support
 
 # Kernel-free by shape, which is what the detector reads, but its subject is a RUNNING behaviour rather than
 # an artifact read as data: it sends real requests through Caddy and reads the line Caddy wrote. By the

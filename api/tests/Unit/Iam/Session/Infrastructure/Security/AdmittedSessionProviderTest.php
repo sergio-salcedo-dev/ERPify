@@ -43,13 +43,13 @@ final class AdmittedSessionProviderTest extends TestCase
      */
     private const string A_DIFFERENT_ID = '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c6e';
 
+    private const string A_SUBJECT_ID = '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c6a';
+
     public function testTheIdItAnswersWithComesFromTheCorrelationAndNeverFromTheEntity(): void
     {
-        // Read through reflection rather than compared as two literals: PHPStan narrows a literal pair to
-        // "always true" and the guard stops guarding, which is the shape it exists to prevent.
-        $this->assertNotSame(
-            self::A_DIFFERENT_ID,
-            (new ReflectionClass(SessionMother::class))->getConstant('DEFAULT_ID'),
+        $this->assertTheseDisagree(
+            'A_DIFFERENT_ID',
+            'CORRELATED_ID',
             'This case can only tell the two implementations apart while the carried session and the '
             . 'correlation disagree; equal values would make it assert that a thing equals itself.',
         );
@@ -66,6 +66,31 @@ final class AdmittedSessionProviderTest extends TestCase
             . 'entity would also reintroduce Uuid::ensure, and with it a 400 on a path that answers 401/503.',
         );
         $this->assertSame($carried, $admitted->session);
+    }
+
+    /**
+     * The subject comes off the CARRIED session: the correlation is an authority on which session this is,
+     * never on whose it is, so an implementation deriving the subject from the id reads the wrong member.
+     *
+     * What this does NOT pin is the Tell-Don't-Ask half its docblock elsewhere claims — `$pair->userId()`
+     * and `$pair->session->userId()` are observably identical, so no test can separate them and nothing
+     * here pretends to.
+     */
+    public function testTheSubjectItDelegatesIsTheCarriedSessionsOwn(): void
+    {
+        $this->assertTheseDisagree(
+            'A_SUBJECT_ID',
+            'CORRELATED_ID',
+            'The subject and the correlation must differ, or an implementation deriving the subject from '
+            . 'the id passes this case too.',
+        );
+
+        $carried = SessionMother::active(userId: self::A_SUBJECT_ID);
+        $provider = $this->provider($this->correlation(self::CORRELATED_ID), $this->storeThatIsNeverAsked());
+
+        $admitted = $provider->requireAdmitted($this->requestCarrying($carried));
+
+        $this->assertSame(self::A_SUBJECT_ID, $admitted->userId());
     }
 
     public function testItReadsThePublishedSessionWithoutAskingTheRepository(): void
@@ -148,6 +173,30 @@ final class AdmittedSessionProviderTest extends TestCase
                 \sprintf('%s must stay readonly; see this case for what that does and does not cover.', $class),
             );
         }
+    }
+
+    /**
+     * Two of this class's own constants, asserted to still differ.
+     *
+     * Read through reflection because PHPStan narrows a pair of literals to "always true" and refuses the
+     * assertion, which is how a guard against vacuity becomes vacuous itself. Reflection also decides the
+     * SUBJECT of the comparison: the values a case's discriminating power rests on are the ones it uses, so
+     * comparing against some other class's constant is only ever accidentally equivalent — measured here,
+     * `SessionMother::DEFAULT_ID` and `CORRELATED_ID` are the same literal in two files with no link
+     * between them, and a guard reading the first would have gone on passing while the pair it was meant to
+     * separate collapsed.
+     *
+     * `getConstant()` answers `false` for a name that no longer exists, and `assertNotSame` over `false`
+     * passes — so the read is asserted to have found something before anything is compared. Without that
+     * the guard fails OPEN on a rename, which is the direction that costs.
+     */
+    private function assertTheseDisagree(string $first, string $second, string $because): void
+    {
+        $constants = (new ReflectionClass(self::class))->getConstants();
+
+        $this->assertArrayHasKey($first, $constants, \sprintf('%s is no longer declared here.', $first));
+        $this->assertArrayHasKey($second, $constants, \sprintf('%s is no longer declared here.', $second));
+        $this->assertNotSame($constants[$first], $constants[$second], $because);
     }
 
     private function provider(

@@ -130,6 +130,117 @@ gate nuevo lee sólo `api/src`: la exclusión casa cualquier clase del backtrace
 también descarta consultas y es invisible aquí. El presupuesto de 9 acarrea las escrituras de la propia
 revocación: lo que pincha es la AUSENCIA de una consulta más, no la composición de las nueve.
 
+## Ronda 2 — la puerta de cobertura de código nuevo
+
+Todo lo demás de la PR estaba verde; el único rojo era el quality gate de Sonar, `new_coverage` **68,4 %**
+contra un umbral de 80. El resto de condiciones OK (`new_reliability_rating` 1, `new_security_rating` 1,
+`new_maintainability_rating` 1, `new_duplicated_lines_density` 0,0, `new_security_hotspots_reviewed` 100) y
+cero issues para la PR, así que era cobertura y no un defecto.
+
+**No era atribución, y eso se midió antes de escribir una línea.** Ambas clases nuevas ya llevaban su
+`#[CoversClass]` y `AdmittedSessionProvider` marcaba 100 %. El desglose por fichero:
+
+| Fichero | Líneas nuevas cubribles | Sin cubrir |
+|---|---:|---:|
+| `AdmittedSessionProvider.php` | 11 | 0 |
+| `AdmittedSession.php` | 4 | 2 — `userId()` |
+| `MySessionsController.php` | 2 | 2 |
+| `RevokeOtherSessionsController.php` | 2 | 2 |
+
+13 de 19 = 68,42 %, que es exactamente la cifra del gate. Los dos controllers estaban a **0 % también en
+`main`**: Behat los ejercita y no alimenta clover en absoluto. Ese 0 % de `main` se leyó del propio Sonar
+(`get_file_coverage_details` sobre la rama `main`: 15 líneas cubribles, 15 sin cubrir, frente a 9 y 9 en la
+PR) — **conteo de Sonar, no de clover**, que cuenta distinto; el clover local da 7 sentencias para el mismo
+fichero. La conclusión no depende de cuál se use: cero cubiertas en ambos.
+
+**Lo que se añade no es relleno para el gate.** Los casos nuevos pinchan lo único que ninguna otra cosa
+puede pinchar: producción mantiene de acuerdo a los dos miembros del par (el gate publica la misma fila que
+cargó para el id correlacionado), así que **ningún escenario de aceptación, ni el presupuesto de consultas
+que ya existe, distingue «pedirle el id al par» de «alcanzarlo a través de la entidad»**. Es el mismo
+argumento que el docblock de `AdmittedSessionProviderTest` hace para sí mismo, una capa más arriba.
+
+Ese desacuerdo tiene dirección: un controller que exceptuara la fila *acarreada* revocaría el dispositivo
+del propio llamante y dejaría vivo otro.
+
+**Las guardas de vacuidad leen el par del que cada caso depende, y fallan CERRADAS.** Ese es el hallazgo
+GRAVE del pase adversarial, y merece decirse aquí porque la primera versión no lo hacía: una guarda que
+compara contra la constante de OTRA clase sólo es equivalente a la invariante por coincidencia. Medido:
+`CORRELATED_ID` y `SessionMother::DEFAULT_ID` son el mismo literal en dos ficheros sin vínculo. Ahora cada
+guarda lee por reflexión las constantes de su propia clase y afirma que la lectura encontró algo antes de
+comparar — `getConstant()` devuelve `false` para un nombre que ya no existe, y `assertNotSame('<uuid>',
+false)` pasa, así que sin esa aserción un renombrado dejaba la guarda decorativa.
+
+**Un trait y una factoría, y el motivo del trait es una presión de diseño real.** PHPMD
+`CouplingBetweenObjects` (límite 13, sin baseline y sin exclusión para `tests`) marcó 20 y 16.
+`AdmitsASessionRequest` tiene dos consumidores. `ResourceResponderBuilder` vive en `api/tests/Support/`
+junto a `PhpSource`, con su test en `tests/Unit/Support/`: es una factoría estática, no un trait — no toca
+`$this`, así que un trait sólo le habría negado usarse desde un data provider o un `setUpBeforeClass`.
+Ensambla colaboradores `final readonly` en vez de abstraer sobre ellos, y **lleva sus metadatos de
+serialización**: un `new ObjectNormalizer()` desnudo no lee ninguno, así que un `#[SerializedName]` sobre un
+Resource DTO sería invisible aquí y efectivo en producción — `ResourceDtoContractTest` cierra la dirección
+del tipo no escalar, nunca la del renombrado. `ResourceResponderBuilderTest` hace esa mitad falsable.
+
+Sigue sin ser el servicio del contenedor: éste lleva un normalizador y ningún encoder, y aquél el
+`serializer` completo. Para un Resource DTO plano y escalar-only por contrato eso basta; un DTO que se
+saliera de ese contrato lo detiene `ResourceDtoContractTest` antes.
+
+### Verificación — ronda 2
+
+Ejecución fresca sobre el árbol final, código de salida impreso:
+
+| Gate | Exit | Medido |
+|---|---:|---|
+| `make php.quality` | 0 | los fixers no tocaron nada fuera de los ficheros de esta ronda |
+| `make php.quality.dry-run` | 0 | la variante que corre CI — enrojeció primero, ver abajo |
+| `make php.md` | 0 | 0 violaciones (era 2 antes de extraer el trait) |
+| `make php.stan` | 0 | 1545 ficheros, sin errores |
+| `make php.lint.gate-placement` | 0 | con la línea nueva del registro |
+| `make php.unit.coverage` | 0 | clover: **0 sentencias sin cubrir** en los cuatro ficheros (22 cubribles) |
+
+`php.quality` y `php.quality.dry-run` **no son intercambiables aquí**, y esta ronda lo midió: con el builder
+en `tests/Unit/Shared/…`, el modo apply escribía `@see ResourceResponderBuilderTest` y el dry-run pedía la
+forma FQCN — verde en local, `Error 2` en CI. Se resolvió colocándolo donde el precedente lo pone
+(`tests/Support`, como `PhpSource`), no suprimiendo la regla.
+
+### Matriz de mutación — ronda 2
+
+Cada una provocada por separado contra la forma **final** de los tests, y restaurada por **copia de bytes**
+desde una copia pristina, nunca `git checkout --`:
+
+| Mutación | Enrojece |
+|---|---|
+| F1 · `MySessionsController` deriva el id del mapper de la entidad | «flags the correlated device» (sola) |
+| F2 · `MySessionsController` lista por el id de sesión en vez de por el sujeto | los dos casos del fichero |
+| F3 · `RevokeOtherSessionsController` exceptúa la fila acarreada | «spares the correlated session» (sola) |
+| F4 · `AdmittedSession::userId()` deriva el sujeto del id | «the subject it delegates» (sola) |
+| G1 · `A_DIFFERENT_ID` pasa a coincidir con `CORRELATED_ID` | la guarda de «comes from the correlation» |
+| S1a · `A_SUBJECT_ID` pasa a coincidir con `CORRELATED_ID` | la guarda de «the subject it delegates» |
+| S1b · `SUBJECT_ID` del trait pasa a coincidir con `CORRELATED_ID` | las dos guardas de sujeto de los controllers |
+| S2 · la lectura por reflexión apunta a un nombre inexistente | las dos guardas del trait (antes pasaba) |
+| S3 · el normalizador pierde sus metadatos | `ResourceResponderBuilderTest` (sola) |
+
+G1 y S2 son las que importan: **bajo la forma anterior de las guardas, las dos pasaban en verde**. Es la
+diferencia entre una guarda y un comentario que dice que hay una.
+
+Dos ejecuciones intermedias murieron con `Error 137` (OOM del contenedor `php`, con tres stacks Docker
+arriba) y se repitieron: un exit distinto de cero cuyo log no contiene un fallo de aserción no es una
+falsificación.
+
+**Lo que un verde aquí NO prueba.**
+
+1. La cobertura sigue siendo de PHPUnit: Behat no alimenta clover, así que los escenarios de aceptación de
+   `session.feature` no cuentan.
+2. Por `#[CoversClass]`, la cadena responder/mapper/`RevokeOtherSessions` **no recibe crédito de cobertura**
+   desde los tests de controller aunque se ejecute entera en ellos.
+3. El caso del sujeto afirma a quién se le piden las sesiones, no que la respuesta las filtre.
+4. `ResourceResponderBuilder` no es el servicio del contenedor (un normalizador, ningún encoder).
+5. Nada pincha la consistencia interna del par en la ruta real (`$admitted->session->getId() ===
+   $admitted->id->toString()`), mientras cuatro casos normalizan deliberadamente lo contrario. Es
+   endurecimiento barato y no un defecto vivo: `SessionAdmissionGate` publica la misma fila que cargó.
+6. Los dobles NO son todos de árbol. El listado usa `InMemorySessionRepository` (y por eso el orden asertado
+   es una propiedad del puerto), pero los dos casos con expectativas usan `createMock(SessionRepository)`,
+   que es lo que `docs/rules/testing.md` pide cuando hay `expects()`.
+
 ## Adversarial pass
 
 Lectura hostil en contexto fresco e independiente sobre el diff completo, antes de abrir la PR. **Cambió el
@@ -204,3 +315,63 @@ no «una suma no pincharía», que era falso.
 **Lo que el pase NO pudo verificar**: no ejecutó nada (los exit 0 de la tabla de arriba son de esta sesión,
 no suyos), no reprodujo la matriz de mutación, y la composición de las nueve consultas la derivó por lectura
 — la parte que sí se verificó aquí es que la revocación es una sola sentencia y que un POST no se audita.
+
+### Pase adversarial — ronda 2 (cobertura)
+
+Segunda lectura hostil, contexto fresco e independiente, sobre el diff completo de esta ronda y **antes de
+commitear**. **Cambió el resultado, no lo confirmó**: 1 GRAVE, 5 SERIO y 7 MENOR. Todos verificados contra
+el árbol antes de actuar; todos aplicados salvo los que se registran abajo como no-hallazgos.
+
+**GRAVE · G1 — la guarda de vacuidad comparaba el par equivocado.**
+`AdmittedSessionProviderTest::testTheIdItAnswersWithComesFromTheCorrelationAndNeverFromTheEntity` depende de
+`A_DIFFERENT_ID ≠ CORRELATED_ID`, y la guarda afirmaba `A_DIFFERENT_ID ≠ SessionMother::DEFAULT_ID`. Sólo
+resultaba equivalente por coincidencia: **verificado, `CORRELATED_ID` y `SessionMother::DEFAULT_ID` son el
+mismo literal `…5c6d` en dos ficheros sin vínculo alguno**. Poner `A_DIFFERENT_ID = CORRELATED_ID` dejaba la
+guarda verde y el caso pasando con las dos implementaciones — es decir, exactamente la vacuidad que su propio
+comentario decía impedir. **Corregido** con un helper que lee por reflexión las constantes de la propia
+clase, y **falsado**: la mutación que antes pasaba ahora enrojece.
+
+**SERIO · S1 — los dos casos sobre el SUJETO llegaban sin guarda.** La ronda entera se argumenta sobre
+«una guarda impide que se vuelva vacuo» y los casos que añade sobre el otro eje no tenían ninguna. El eje es
+de autorización: con los literales coincidiendo, «el listado y la revocación van contra el sujeto admitido»
+se pondría verde sobre un controller cableado al id de sesión. **Corregido** con
+`assertTheSubjectDisagreesWithTheCorrelation()` y falsado en los dos ficheros.
+
+**SERIO · S2 — la guarda por reflexión fallaba ABIERTA.** `ReflectionClass::getConstant()` devuelve `false`
+para un nombre inexistente y `assertNotSame('<uuid>', false)` pasa, así que un renombrado la dejaba
+decorativa sin romper nada. **Corregido** afirmando que la lectura encontró algo antes de comparar, y
+falsado apuntando la lectura a un nombre que no existe.
+
+**SERIO · S3 — el builder no era la cadena de producción en el eje que decide el cable.** Verificado contra
+el contenedor compilado: el `ObjectNormalizer` inyectado lleva `ClassMetadataFactory` y name converter, y el
+del builder no llevaba ninguno — así que `#[SerializedName]`, `#[SerializedPath]` e `#[Ignore]` sobre un
+Resource DTO serían invisibles en test y efectivos en producción. **Corregido** cableando los metadatos, y
+la afirmación pasó de docblock a test: `ResourceResponderBuilderTest`, falsado quitándolos.
+
+**SERIO · S4 — `assertSame` sobre el payload entero pagaba la fragilidad de cinco clases sin cobrar la
+cobertura de ninguna.** Sensible al orden de claves, así que reordenar el constructor de `SessionResource`
+—invisible para cualquier consumidor JSON— lo enrojecía; y por `#[CoversClass]` ninguna de esas clases
+recibía crédito. **Corregido**: el caso afirma ahora sólo su propia claim (qué fila lleva `current`), lo que
+además eliminó toda la maquinaria de congelar el reloj ambiental.
+
+**SERIO · S5 — afirmación falsa en este artefacto sobre los dobles.** Decía «los dobles son de árbol, según
+la regla del proyecto»; los dos casos con expectativas usan `createMock(SessionRepository)`, y la regla
+citada no existe con ese contenido — `docs/rules/testing.md` regula `createStub` vs `createMock`, que sí se
+cumple. **Corregido arriba**, y el listado pasó a `InMemorySessionRepository`, con lo que el orden asertado
+es ahora una propiedad del puerto y no del doble.
+
+**MENORES atendidos**: `api/config/reference.php` había quedado modificado por la regeneración del
+contenedor y se restauró en vez de entrar en un commit sólo-de-tests (nunca con `git add -A`); el builder
+pasó de trait a factoría estática en `tests/Support` — no tocaba `$this`, y como trait no podía usarse desde
+un data provider; el `FROZEN_INSTANT` del test de revocación se renombró a `USE_CASE_INSTANT`, porque en el
+fichero hermano el mismo nombre designaba una congelación ambiental; el docblock que prometía pinchar
+«delegado en vez de navegado» dice ahora que esa mitad no la pincha nada; y la lista de *lo que un verde NO
+prueba* incorpora las cinco ausencias que el pase nombró.
+
+**MENOR registrado y NO arreglado, con su motivo**: el conteo «15 líneas cubribles antes» es de Sonar y no
+del clover, que cuenta distinto — se dice ahora de dónde sale en vez de dejarlo como una cifra sin fuente.
+
+**Lo que el pase NO pudo verificar**: no ejecutó nada (los exit 0 de la tabla son de esta sesión, no suyos),
+no provocó las mutaciones F1–F4 —las razonó por lectura— y no consultó Sonar; la única medición ajena que sí
+auditó es el clover, y salió exacta al dígito. El servidor MCP de GitHub estaba caído (401), así que tampoco
+pudo leer el estado remoto de la PR.
