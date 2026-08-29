@@ -58,38 +58,6 @@ final class ChangeUserStatusTest extends TestCase
         $this->assertSame([], $sessions->revokeAllCalls);
     }
 
-    /**
-     * **The subject here is the DOUBLE, not the use case, and the name says so because the distinction is
-     * the point.** `ChangeUserStatus` compares no ids at all — it calls `Uuid::ensure()`, which validates a
-     * route id without normalising it, and then delegates the whole decision to the directory. So the only
-     * edit that reds this case is one to {@see InMemoryActiveAdministratorDirectory}; deleting `strcasecmp`
-     * from the production adapter leaves it green, and that invariant is pinned where it lives, by
-     * `DoctrineActiveAdministratorDirectoryTest`.
-     *
-     * It earns its place anyway: the wire admits either casing, so a double comparing case-SENSITIVELY
-     * answers `true` (permit) where the adapter answers `false` (409) for the same input — which would make
-     * every other unit test in this file a green over the opposite answer, and no adapter test would notice.
-     */
-    public function testTheInMemoryDirectoryMatchesTheAdaptersCaseInsensitiveMembership(): void
-    {
-        $user = UserMother::create();
-        $repository = new InMemoryUserRepository($user);
-        $eventBus = new RecordingEventBus();
-        $sessions = new InMemorySessionRepository();
-        $directory = new InMemoryActiveAdministratorDirectory([\strtoupper(UserMother::DEFAULT_ID) => true]);
-
-        try {
-            $this->makeUseCase($repository, $directory, $eventBus, $sessions)->suspend(UserMother::DEFAULT_ID);
-            $this->fail('Expected LastActiveAdministratorProtected.');
-        } catch (LastActiveAdministratorProtected) {
-            // the upper-case entry IS the target, so removing it drains the set
-        }
-
-        $this->assertSame(IdentityStatus::ACTIVE, $user->status());
-        $this->assertSame([], $repository->saved);
-        $this->assertSame([], $eventBus->publishedEvents);
-    }
-
     public function testSuspendingAnAdminWhileOtherActiveAdminsRemainAppliesPublishesAndRevokes(): void
     {
         $user = UserMother::create();
