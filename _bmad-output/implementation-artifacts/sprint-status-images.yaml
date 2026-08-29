@@ -75,7 +75,22 @@ development_status:
   # enrutado de la señal de borrado) y uno sobre el código en tres lecturas paralelas (2026-08-29),
   # que encontró dos GRAVE con todas las puertas en verde — la existencia indecidible un nivel por
   # encima del directorio guardado, y la raíz de almacenamiento que ningún despliegue creaba.
-  # Story 1.3 sigue en backlog (solo cortada dentro de epics-images.md, sin fichero propio todavía).
+  # img-1-3: ya tiene fichero propio
+  # (img-1-3-leer-representacion-canonica-de-forma-segura.md: bmad-create-story, 2026-08-29) — por eso pasa a
+  # ready-for-dev. Su análisis midió el árbol en 202767ab y encontró catorce desajustes con el corte del
+  # épico, cuatro capaces de dejar una decisión del épico falsa con todas las puertas en verde: la auditoría
+  # genérica se activa por defecto sobre todo GET 2xx bajo /api/ y sólo se desactiva por el NOMBRE de la ruta
+  # (`str_starts_with($route, 'shared_')`, AuditPolicy.php:66) — rama que hoy no usa ninguna ruta y no pincha
+  # ningún test, así que la decisión «cero filas de audit_log» dependía de un acoplamiento invisible; la
+  # opción «nivel debug» que el épico ofrece como una de las tres cotas del log de ausencia está descartada
+  # por ObservabilityChannelGateTest:42,85, que fija `info` en test y prod; ningún recurso de
+  # api/config/routes.yaml carga src/Shared/, así que un #[Route] ahí no registra nada y todo queda verde; y
+  # el path `GET /images/{imageId}` que escribe el épico cae fuera del `^/api` del firewall sin que
+  # php.lint.public-access lo note. Corregido además RESIDUAL-1, que describía como inexistente el limitador
+  # global anonymous_api (120 req/min por IP, aplicado sin mirar la autenticación). Queda una decisión abierta
+  # para Sergio antes de implementar (Task 0): muestreo vs. contador agregado para la cota del log.
+  # PENDIENTE antes de abrir PR: pase adversarial EXTERNO sobre el artefacto — el registrado hoy es
+  # autoadministrado y el CLAUDE.md raíz no lo acepta como gate.
   # img-1-1: code review (bmad-code-review, PR #862) completo 2026-08-27 — 1 decision-needed
   # resuelto (fail-closed) y 6 patch aplicados, make php.stan/php.quality/php.unit en verde.
   # img-1-2: code review (bmad-code-review, PR #873) completo 2026-08-29 — tres capas en paralelo
@@ -91,5 +106,5 @@ development_status:
   epic-images: in-progress
   img-1-1-subir-imagen-obtener-representacion-canonica: done
   img-1-2-persistir-imagen-borrado-fiable-de-bytes: done
-  img-1-3-leer-representacion-canonica-de-forma-segura: backlog
+  img-1-3-leer-representacion-canonica-de-forma-segura: ready-for-dev
   epic-images-retrospective: optional
