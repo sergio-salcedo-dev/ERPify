@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 /**
- * AC 15: privacy-safe observability.
+ * Privacy-safe observability over the processing pipeline.
  *
  * @internal
  */
@@ -76,8 +76,8 @@ final class InterventionImageProcessorObservabilityTest extends TestCase
 
     public function testTheOriginalDomainExceptionStillPropagatesWhenLoggingItselfFails(): void
     {
-        // Observability is never load-bearing for the rejection (Task 6) — a failing logger must
-        // not swallow or replace the original domain exception.
+        // Observability is never load-bearing for the rejection — a failing logger must not swallow
+        // or replace the original domain exception.
         $processor = new InterventionImageProcessor(20_971_520, 40_000_000, 10_000, 4096, 85, new ThrowingLogger());
 
         $this->expectException(EmptyImageInput::class);

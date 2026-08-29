@@ -20,6 +20,10 @@ use Symfony\Component\Messenger\Attribute\AsMessage;
  * against every routing shape Messenger accepts without a dirty entry ever existing in the real config.
  *
  * @internal test support
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") each public method is one independent direction of the
+ *                                                  registry's contract; folding two into one would make a
+ *                                                  red name the wrong invariant
  */
 final readonly class PersistentTransportPolicy
 {
@@ -182,6 +186,54 @@ final readonly class PersistentTransportPolicy
         }
 
         return [] === $seen ? $this->attributeTransportsFor($fqcn) : $seen;
+    }
+
+    /**
+     * The other direction of the `person :: <ADR>` form, and the one nothing was checking.
+     *
+     * That spelling does not mean "classified conservatively". It means "classified conservatively AND
+     * queued anyway, with the ADR arguing why" — the registry's own words. So an event whose type carries
+     * an ADR exception and reaches NO transport has an exception that argues for nothing: it is handled in
+     * process instead, inside the publisher's own transaction, which is the effect the exception was
+     * written to avoid.
+     *
+     * Measured before this existed: deleting one routing line left `php.lint.persistent-transport` and
+     * `php.lint.event-bus` both at exit 0. The completeness check demands a registry line "routed or not"
+     * and never looks at the route, so the classification stayed valid while its premise disappeared.
+     *
+     * Derived from the registry rather than from a list of class names: a type spelled `person` with no
+     * `::` is deliberately unrouted and is not a subject here.
+     *
+     * @param array<string, list<string>> $routes routing key => transport names
+     * @param array<string, string>       $events event FQCN => aggregateType
+     *
+     * @return list<string>
+     */
+    public function adrExceptedEventsReachingNoTransport(array $routes, array $events): array
+    {
+        $classification = $this->classification();
+        $violations = [];
+
+        foreach ($events as $fqcn => $aggregateType) {
+            $exception = $classification[$aggregateType] ?? null;
+
+            if (null === $exception || self::PERSON_NO_EXCEPTION === $exception) {
+                continue;
+            }
+
+            if ([] !== $this->sendersFor($fqcn, $routes)) {
+                continue;
+            }
+
+            $violations[] = \sprintf(
+                '%s (%s) is classified `person :: %s` but reaches no transport, so it is handled in process',
+                $fqcn,
+                $aggregateType,
+                $exception,
+            );
+        }
+
+        return $violations;
     }
 
     /**

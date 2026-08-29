@@ -9,8 +9,8 @@ use Psr\Log\AbstractLogger;
 use Stringable;
 
 /**
- * Spy PSR-3 logger capturing each record's level, message and context, so a test can assert the
- * NFR9 observability line carries exactly the permitted keys and nothing else.
+ * Spy PSR-3 logger capturing each record's level, message and context, so a test can assert what the
+ * observability line carries — and, more to the point, what it does not.
  *
  * @internal
  */

@@ -4,7 +4,7 @@ baseline_commit: f86b2662dd4be317d449cd4bebcdc46c77b1814d
 
 # Story 1.2: Persistir la imagen y garantizar el borrado fiable de sus bytes
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -70,7 +70,9 @@ ni cómo se liberan cuando decida que ya no los necesito.
 
 ## Adversarial pass
 
-**Estado: dos pases.** El primero, autoadministrado sobre el borrador, es el bloque A-1..A-7 de abajo —
+**Estado: tres pases.** El tercero, sobre el CÓDIGO implementado y en tres lecturas paralelas, está
+registrado inmediatamente debajo; encontró dos GRAVE que ninguna puerta veía. El primero, autoadministrado
+sobre el borrador, es el bloque A-1..A-7 de abajo —
 insuficiente por sí solo. El segundo, **externo**, corrió en una sesión distinta y está registrado más abajo
 con sus hallazgos y su alcance; corrigió el A-4 de esta lista. El `CLAUDE.md` raíz exige la lectura hostil por
 alguien distinto del autor, y el propio ADR lo repite para esta historia en concreto
@@ -204,6 +206,95 @@ hallazgo, porque una lista de hallazgos sin disposición no es auditable.
 colgada la frase de cierre original. Corregida. Es plausible que sea lo que la revisión externa amplificó
 como «duplicación», aunque lo que describe —tasks y numeración de AC— no se reproduce.
 
+### Tercera lectura externa — tres pases en paralelo sobre el CÓDIGO, 2026-08-29
+
+Las dos lecturas anteriores fueron sobre el **artefacto**. Esta es sobre el **código implementado**, que es
+lo que la Task 13 pide y lo que el ADR de conservación exige nominalmente para una historia que toca
+borrado. Tres agentes en contexto fresco, en paralelo, cada uno con restricción explícita de **solo
+lectura** y un ángulo propio: (1) retención y fuga de identificadores, (2) falsabilidad de las aserciones
+nuevas, (3) contrato de borrado y almacenamiento. Ninguno podía editar, y las mutaciones que proponían las
+ejecuté yo.
+
+**Dos GRAVE, cada uno encontrado de forma independiente por dos de los tres pases, y ambos reproducidos por
+mí antes de tocar nada.** Los dos habrían llegado a `main` con las 90 pruebas del módulo en verde.
+
+#### GRAVE-1 — `delete()` confirmaba un borrado sobre bytes que seguían en disco
+
+La guarda de `objectExists()` inspeccionaba **solo el directorio contenedor**. La key es
+`<shard>/<shard>/<id>`, así que con el shard EXTERIOR a modo 0000 la propia comprobación
+`is_dir(<root>/ab/cd)` responde `false` —es otro `stat()` chocando con el mismo `EACCES`—, la guarda se
+salta a sí misma, y el `false` de la librería llega intacto a la rama de ausencia idempotente.
+
+Reproducido como uid 1000 en el contenedor: `SILENT_SUCCESS`, y el objeto intacto en disco. El test que
+existía para esa rama **restauraba a 0755 el shard intermedio** antes de la sonda, de modo que ejercitaba
+exactamente el único nivel que sí estaba guardado.
+
+*Arreglo:* la existencia se decide en el syscall, no con una cadena de predicados. `access(2)` distingue lo
+que `file_exists()` confunde: `ENOENT` es «no hay nada bajo esta key», cualquier otro errno es «no he podido
+mirar». Una cadena de `is_dir()`/`is_executable()` no puede sustituirlo porque **son el mismo `stat()`** y
+reproducen el fallo un nivel más abajo. *Falsificado:* con la implementación anterior, el caso del shard
+intermedio se pone rojo y el del contenedor pasa — exactamente el agujero, y nada más.
+
+#### GRAVE-2 — la raíz de almacenamiento no la creaba nadie, y el módulo estaba muerto en cualquier despliegue
+
+`flysystem.yaml` y el adaptador resuelven la raíz a `<STORAGE_LOCAL_PATH>/images`. El `Dockerfile` crea
+`/app/storage` —el punto de montaje— y nada crea `images`. Medido contra el contenedor vivo: `store`, `read`
+y `delete` fallaban los tres con `Permanent :: the storage root is not present`. Cada `ImageDeletionRequested`
+habría agotado los reintentos y caído a `failed`.
+
+Noventa pruebas estaban en verde porque **todas construían el adaptador a mano sobre un directorio temporal
+que ellas mismas habían creado**. Ninguna resolvía el servicio cableado.
+
+*Arreglo, y la condición ES el control:* el entrypoint aprovisiona la raíz **solo si el punto de montaje lo
+es de verdad** (device distinto al de su padre). Crearla incondicionalmente dejaría la guarda sin significado,
+y una raíz creada dentro de la capa del contenedor es justo lo que hace que todo `delete()` responda éxito.
+Verificado de punta a punta: raíz borrada → imagen reconstruida → el entrypoint la crea al arrancar.
+*Falsificador nuevo:* `ImageStorageWiringTest` resuelve el `ImageStorage` del contenedor y hace un viaje
+completo contra la raíz real; sin aprovisionar se pone rojo con el error exacto del despliegue.
+
+#### SERIO — disposición por hallazgo
+
+| Hallazgo | Disposición | Qué cambió |
+|---|---|---|
+| `catch (RuntimeException)` se tragaba el `$this->fail()` (`AssertionFailedError` ES un `RuntimeException`), y las aserciones del `catch` corrían sobre el camino de ÉXITO | **Aceptado** | Los dobles lanzan `StubPersistenceFailure` propio y el test usa `expectException` + `finally`. *Mutante: que `UploadImage` deje de propagar el fallo ahora se pone rojo; antes pasaba* |
+| `ENOSPC`/`EACCES` se clasificaban **transitorios**, contradiciendo el enum, el docblock de `ImageStorageFailed` y la AC 3 — y el test fijaba el lado equivocado | **Aceptado** | El veredicto lo decide la CONDICIÓN que reporta la librería, no su tipo. La razón se lee y **nunca se transporta** (contiene la ruta, y la ruta contiene el id); lo que viaja es el literal de nuestra lista. El residual —una condición permanente no reconocida degrada a transitoria— queda escrito donde se decide |
+| Una verificación de integridad fallida dejaba el objeto corrupto bajo la key **para siempre**, envenenando ese identificador, y el docblock decía que la ventana no era observable | **Aceptado** | `store()` retira el objeto que rechazó (best-effort) antes de lanzar. El test afirma ahora que no sobrevive y que el identificador sigue siendo usable |
+| El esquema se afirmaba solo por **nombre de columna**, mientras la Task 11 prometía nullability, tipos, PK e índices; nada podía ver un índice único sobre `digest` | **Aceptado** | Tipos y nullability en la misma consulta, más el conjunto completo de índices y de constraints. *Falsificado creando el índice único en la BD real: rojo, y verde otra vez al borrarlo* |
+| El ADR afirmaba un test que **no existe** (*«asserted by a test that demonstrates both directions»*) | **Aceptado** | Reescrito: dice qué se afirma de verdad (routing y forma del DSN, con sus mutantes) y que la observación de punta a punta es de la épica consumidora — @accepted-risk #872 |
+| El vocabulario de tres clases **no lo lee nadie**, mientras el docblock decía que el reintento lee la excepción | **Aceptado** | El puerto lo dice ahora en claro: hoy sólo decide el nivel de la señal, y su primer lector real es la historia de entrega |
+| `lazy_root_creation` estaba acreditado en tres documentos con una propiedad que no da (sólo difiere el `mkdir` a la primera escritura) | **Aceptado** | Corregidos los tres; el crédito va a la guarda. Y un test nuevo afirma que un `store()` contra una raíz ausente rechaza en vez de aprovisionarla |
+| La tabla de traducción decía cubrir «todas las ramas» y cubría 10 de 14 | **Aceptado** | Dos ramas más en la tabla; las dos de permisos se cubren donde son alcanzables (sonda sin privilegios), que además afirma allí las superficies de fuga. La afirmación del docblock se acota a lo que hace |
+| La raíz se declaraba en **dos sitios** sin nada que los comparase; una divergencia desactivaría toda la protección de existencia indecidible | **Aceptado** | Un único parámetro `erpify.images.storage_root`, leído por la configuración y por el adaptador |
+| El sharding no reparte: `ImageId` es UUID v7, cuyo hex inicial es un reloj | **Aceptado, medido** | 4000 identificadores → **1** directorio con el esquema anterior, **3869** con el nuevo. Los shards se leen de la cola aleatoria. Test que afirma el reparto |
+| Los dos registros dan veredictos opuestos sobre el mismo valor, y el comentario prometía un dueño que la regla **no puede exigir** | **Aceptado en parte** | `non-person` se mantiene: este registro clasifica por si la columna guarda el identificador **de una persona**, y un id de imagen no lo es. Lo que se corrige es la promesa: ningún registro de este repo pedirá jamás ese dueño, y eso queda como residual con su razón, no como una casilla que alguien marcará |
+
+#### MENOR — aplicados
+
+Docblock de `sync` que había quedado rotulando `async` · FQCN inline en `DeleteImage` · la ausencia
+idempotente del borrado no emitía señal (la AC 4 la quiere observable) · `Image::$createdAt` público frente
+a seis privadas con accesor · `hash_equals` sobre dos hashes locales sustituido por comparar los bytes · el
+guardia de no-vacuidad del test de fugas era inoperante en tres de las cuatro superficies · una de las dos
+supresiones de PHPMD estaba muerta y la razón de la otra era falsa · `#[SensitiveParameter]` en los
+parámetros que llevan los bytes canónicos · el test de `refresh()` afirmaba `LogicException` a secas ·
+`DeleteImageOnDeletionRequested` no tenía ningún test · el gate estructural escondido dentro de un test de
+comportamiento, invisible al registro de colocación, extraído y clasificado · el párrafo de política de
+`messenger.yaml` decía que **todos** los eventos de arriba cumplen la regla · el residual «huérfanos» del
+checklist infravaloraba lo que un huérfano es (la imagen misma, imborrable por construcción).
+
+#### Lo que NO se cerró, con su razón
+
+- **Sin `fsync`.** La verificación relee por la misma capa, así que prueba la vista del kernel, no que los
+  bytes llegaran al disco. Sigue teniendo valor —`file_put_contents` puede devolver una escritura corta sin
+  devolver `false`, que es justo lo que el adaptador comprueba— pero la promesa es hasta la caché de página.
+- **Un estado no reintentable, latente.** El día que un contexto consumidor añada una FK contra `image`, un
+  borrado cuyos bytes ya no están fallará igual en cada reintento. Nada de esta rebanada lo alcanza; queda
+  nombrado junto al RESIDUAL-2 para que la épica consumidora no lo redescubra.
+- **La premisa de D2 depende del futuro publicador.** Es cierta hoy —`RunProjectionsOnDomainEvent` maneja
+  `DomainEvent::class` y el patrón de la casa publica DENTRO de la transacción—, pero un consumidor que
+  publique tras el commit la disolvería. La decisión se sostiene igual sobre el argumento del reintento.
+- **`make shell.lint` no se pudo correr local** (shellcheck no instalable aquí bajo PEP 668). El fichero
+  tocado se pasó por `koalaman/shellcheck:stable` vía docker: **0 hallazgos**. El job de CI es el árbitro.
+
 ## Acceptance Criteria
 
 1. **Integridad de ida y vuelta, no mera recuperabilidad (NFR7).** Dados bytes canónicos producidos por
@@ -313,35 +404,44 @@ como «duplicación», aunque lo que describe —tasks y numeración de AC— no
     stamp forman parte de la superficie de retención en cuanto el evento entra en `event_store` y en
     `messenger_messages`. Revisa qué serializa el `EventBus` y aférmalo sobre el envelope completo.
 
-12. **La señal de lifecycle se publica tras commit y se consume después — outbox, nunca síncrono (NFR4).**
+12. **La señal se enruta a un transporte durable, y el módulo no publica nada — reescrita, ver abajo.**
     Se enruta a `async` en `api/config/packages/messenger.yaml`, y su `aggregateType()` se clasifica en
-    `api/.persistent-transport-policy` con el **veredicto conservador** y su excepción argumentada:
-    `Image => person :: <ruta del ADR>`. Las tres razones, medidas:
-    (a) el gate exige la línea **esté enrutada o no** (*"routed or not"*,
-    `PersistentTransportPolicyGateTest:28`), así que no enrutar no compra ninguna exención;
-    (b) un `DomainEvent` sin enrutar **se maneja en proceso**, y como los casos de uso publican dentro de
-    `TransactionManager::transactional(...)`, su handler correría **dentro de la transacción del
-    propietario** — exactamente lo que NFR4 (`epics-images.md:242-245`), el decision firewall (`:449-450`) y
-    el invariante 4 del ADR (`:116`) prohíben, con el agravante de que un fallo de Flysystem rollearía la
-    escritura de negocio del consumidor y dejaría una referencia viva sobre bytes ya destruidos;
-    (c) el registro prevé el caso mixto y le da respuesta: *"Where a type is mixed, the conservative verdict
-    is the correct one, and routing any of its events then needs an argued ADR exception"*
-    (`api/.persistent-transport-policy:27-31`), con precedente vivo `Iam.Session => person` (`:67`).
-    **El *after-commit* lo garantiza el mecanismo, no el nombre del transporte.** Enrutar a `async` no es
-    por sí solo un protocolo de commit: lo que da la garantía es que `async` resuelve al **transporte
-    Doctrine sobre la misma conexión** (`MESSENGER_TRANSPORT_DSN`, `queue_name: async`) y que
-    `EventBus::publish()` se invoca **dentro** de `TransactionManager::transactional(...)`, de modo que el
-    `INSERT` en `messenger_messages` vive en la misma transacción y un rollback se lo lleva: el worker no
-    puede ver una fila no committeada. **La garantía depende por tanto del DSN, no del routing** — si
-    `MESSENGER_TRANSPORT_DSN` apuntase a un broker externo, enrutar a `async` enviaría fuera de la
-    transacción y la propiedad desaparecería en silencio con esta AC en verde. La AC se verifica con un test
-    que demuestre las dos direcciones: **un rollback del propietario no deja mensaje consumible, y un commit
-    sí lo deja disponible**.
-    El ADR que la línea nombra es entregable de esta historia (Task 7). Argumenta por qué se encola un id
-    potencialmente persona-denotante, y **dice explícitamente qué riesgo NO cierra**: la clasificación
-    conservadora es una decisión de transporte, no una mitigación de erasure — no borra nada, y deja el
-    `ImageId` en `messenger_messages` sin TTL y en `event_store` para siempre (AC 18c). Venderla como
-    mitigación sería el error que el ADR existe para impedir.
+    `api/.persistent-transport-policy` con el veredicto conservador y su excepción argumentada:
+    `Shared.Image => person :: docs/adr/image-deletion-signal-transport.md`. Un `DomainEvent` **sin
+    enrutar se maneja en proceso** —`RunProjectionsOnDomainEvent` está registrado para
+    `DomainEvent::class` y los casos de uso publican dentro de `transactional(...)`—, así que correría
+    dentro de la transacción del propietario: exactamente lo que NFR4, el decision firewall y el
+    invariante 4 del ADR prohíben. Y el módulo **no publica ningún evento** en ninguna de sus rutas.
+
+    **Esta AC estaba mal escrita, y se reescribe con su medición.** Prescribía *"un test que demuestre
+    las dos direcciones: un rollback del propietario no deja mensaje consumible, y un commit sí"*. Dos
+    hechos medidos lo impiden:
+
+    - **No hay propietario.** `new ImageDeletionRequested` tiene **cero apariciones** en `api/src`: el
+      publicador es el contexto consumidor, por contrato de esta misma historia. Un test que satisfaga
+      la AC literal fabrica su propio publicador y **mide su andamio**, no el sistema. La lista de la
+      línea 168 ya nombraba la AC 12 entre las ocho «cuyo test nombrado no puede observar su fallo», y
+      se cerró como parcheada sin tocar la AC.
+    - **El entorno de test sustituye el transporte.** `messenger.yaml` mapea `async` a
+      `in-memory://?serialize=true` bajo `when@test`, e `InMemoryTransport` **no participa en la
+      transacción**: medido, tras un rollback retiene el mensaje. La propiedad es cierta en producción
+      y falsa donde el test correría.
+
+    **Lo que esta historia entrega, y es falsable:** el evento está enrutado a un transporte cuyo
+    nombre resuelve a un DSN Doctrine, y su clasificación con excepción ADR **implica** que esté
+    enrutado. Ambas cosas las afirma `make php.lint.persistent-transport`, y ambas tienen mutante
+    medido: borrar la línea de routing enrojece
+    `PersistentTransportPolicyGateTest::everyAdrExceptedEventActuallyReachesATransport` —antes de esta
+    aserción ese borrado dejaba **todos los gates en verde** y reinstalaba el borrado síncrono—, y
+    reescribir el DSN de `async` enrojece
+    `PersistentTransportRoutingShapeGateTest::theDurableTransportStillHasATransactionalDsn`.
+
+    **Lo que NO entrega esta historia, con su dueño:** que el `INSERT` en `messenger_messages` viva en
+    la transacción del propietario, observado de punta a punta. Su sujeto es el primer publicador
+    real, así que es criterio de la historia que lo introduzca, en la épica de consumidor. Y el salto
+    del DSN no lo cierra ningún gate: tres de los cinco sitios que lo declaran son interpolaciones
+    `${MESSENGER_TRANSPORT_DSN:-…}` en los compose, de modo que el entorno del despliegue gana. Eso es
+    **riesgo aceptado con issue abierta**, no un docblock: @accepted-risk #872
 
 13. **`ImageStorage` no devuelve URLs.** Ningún método del puerto retorna una URL — la entrega es
     responsabilidad de la Story 1.3, no de storage.
@@ -408,74 +508,77 @@ como «duplicación», aunque lo que describe —tasks y numeración de AC— no
 
 ## Tasks / Subtasks
 
-- [ ] **Task 0 — Cerrar la decisión de forma de persistencia ANTES de escribir código** (AC 6)
-  - [ ] Leer *Dev Notes → La decisión abierta*. Es una decisión de modelado/persistencia: `CLAUDE.md`
-        (*Per-aggregate persistence strategy*) la reserva al usuario. **Preséntala con sus costes y espera
-        respuesta.** No la cierres unilateralmente ni la infieras del resto de la historia.
-  - [ ] Registrar la opción elegida y su argumento en *Dev Agent Record → Completion Notes*.
-  - [ ] **Es un gate, no una tarea más: ninguna tarea de implementación empieza antes de que esté cerrada.**
-        Las Tasks 2, 3, 9 y 11 dependen de la forma elegida (hidratación, identity map, `remove()`, forma del
-        constructor, tests), así que arrancarlas antes produce trabajo que hay que rehacer.
+- [x] **Task 0 — Forma de persistencia: DECIDIDA, gate cerrado** (AC 6)
+  - [x] Consultadas en paralelo las tres personas (Winston, Amelia, Murat) sobre el árbol real, más una
+        cuarta lectura externa. Argumento completo y discrepancias en *Dev Agent Record → Completion Notes*.
+  - [x] **Decisión de Sergio (2026-08-28): `final readonly class Image` como entidad ORM directamente
+        mapeada, SIN `AggregateRoot`, SIN `Identifiable`, SIN `Timestamped`.** Identidad de dominio
+        `ImageId` en la API pública (`id(): ImageId`), representación persistida `private string $id`
+        con `#[ORM\Column(type: Types::GUID)]`. **Sin tipo DBAL propio.**
+  - [x] **Sub-decisión de Task 2 (misma sesión): `createdAt` se mapea `datetimetz_immutable`**
+        (`DateTimeTzMicrosType` → `TIMESTAMP(6) WITH TIME ZONE`), no `Types::DATETIME_IMMUTABLE`.
+  - [x] Las opciones A (tipo DBAL propio), B (patrón de casa) y D (modelo de persistencia separado)
+        quedan **descartadas con argumento**, no pendientes. No se reabren durante la implementación.
 
-- [ ] **Task 1 — Habilitar el mapeo Doctrine del shared kernel** (AC 6) — `api/config/packages/doctrine.yaml`
-  - [ ] Añadir el bloque `mappings:` que falta. Hoy `auto_mapping: false` y sólo hay `Backoffice`, `Iam`,
+- [x] **Task 1 — Habilitar el mapeo Doctrine del shared kernel** (AC 6) — `api/config/packages/doctrine.yaml`
+  - [x] Añadir el bloque `mappings:` que falta. Hoy `auto_mapping: false` y sólo hay `Backoffice`, `Iam`,
         `Organization` (`doctrine.yaml:12-31`); sin esto los atributos `#[ORM]` sobre `Image` son inertes y
         `make db.diff` genera una migración vacía **sin error**.
-  - [ ] Decidir y argumentar el `prefix`/`dir`: `Erpify\Shared` completo abre a mapeo todo el shared kernel;
+  - [x] Decidir y argumentar el `prefix`/`dir`: `Erpify\Shared` completo abre a mapeo todo el shared kernel;
         acotarlo a `Erpify\Shared\Images` es más estrecho pero introduce un mapping por módulo. Mide el
         efecto sobre `make db.diff` (no debe aparecer ninguna tabla inesperada).
-  - [ ] Verificar con `make sf c='doctrine:mapping:info'` que `Image` aparece listada. Un mapeo ausente es
+  - [x] Verificar con `make sf c='doctrine:mapping:info'` que `Image` aparece listada. Un mapeo ausente es
         silencioso; esta comprobación es la única que lo delata antes de la migración.
 
-- [ ] **Task 2 — Mapear el agregado `Image`** (AC 6) — `api/src/Shared/Images/Domain/…`
-  - [ ] Aplicar la forma elegida en Task 0. Si la entidad se mueve a `Domain/Entity/`, recuerda que
+- [x] **Task 2 — Mapear el agregado `Image`** (AC 6) — `api/src/Shared/Images/Domain/…`
+  - [x] Aplicar la forma elegida en Task 0. Si la entidad se mueve a `Domain/Entity/`, recuerda que
         `api/config/services.yaml:43` excluye `'../src/**/Domain/Entity/'` del contenedor — es la
         convención, y hoy `Image` está fuera de esa ruta.
-  - [ ] Id `Types::GUID` app-asignado: `#[ORM\Id]` + `#[ORM\Column(type: Types::GUID)]` **sin**
+  - [x] Id `Types::GUID` app-asignado: `#[ORM\Id]` + `#[ORM\Column(type: Types::GUID)]` **sin**
         `#[ORM\GeneratedValue]` — `docs/rules/database.md:81-92` lo pin­ea, y re-añadir un generador
         reintroduce el desajuste de id que ya mordió antes (`IdentifiableAssignedIdentifierTest`).
-  - [ ] `createdAt`: el repo tiene tipos DBAL propios `datetimetz`/`datetimetz_immutable` →
+  - [x] `createdAt`: el repo tiene tipos DBAL propios `datetimetz`/`datetimetz_immutable` →
         `DateTimeTzMicrosType` (`doctrine.yaml:6-8`). Decide cuál usar y sé coherente con `Timestamped`, que
         usa `Types::DATETIME_IMMUTABLE`. **No añadas `updated_at`**: el esquema son siete campos (AC 6).
-  - [ ] **API de reconstitución explícita, no hidratación accidental.** Decide y nombra el mecanismo
+  - [x] **API de reconstitución explícita, no hidratación accidental.** Decide y nombra el mecanismo
         —constructor privado + named constructor estático, o el que la forma elegida permita— en vez de
         confiar en que la reflexión de Doctrine "ya lo hace". Test obligatorio, sin reflexión:
         `persist(createdAt = T)` → `clear()` del EntityManager → `find(ImageId)` → `createdAt === T`.
-  - [ ] **El tipo DBAL de `createdAt` se decide por el contrato de precisión temporal de `Image`**, no por
+  - [x] **El tipo DBAL de `createdAt` se decide por el contrato de precisión temporal de `Image`**, no por
         coherencia con `Timestamped`: ese trait ya está descartado por AC 6 (añade `updated_at`), así que
         deja de ser una restricción relevante. El repo tiene `datetimetz`/`datetimetz_immutable` →
         `DateTimeTzMicrosType` (`doctrine.yaml:6-8`); elige y argumenta.
-  - [ ] Camino de hidratación que **no re-estampe `createdAt`**. Hoy el constructor lo fija incondicionalmente
+  - [x] Camino de hidratación que **no re-estampe `createdAt`**. Hoy el constructor lo fija incondicionalmente
         con `SystemClock::now()` (`Image.php:56`); la review de la Story 1.1 difirió esto aquí de forma
         explícita (*"Story 1.2 (persistencia) necesitará un camino de hidratación desde fila de BD que no
         re-estampe `createdAt`"*).
-  - [ ] Actualizar `api/tests/Unit/Shared/Images/Domain/ImageTest.php:89-105`, que fija por reflexión
+  - [x] Actualizar `api/tests/Unit/Shared/Images/Domain/ImageTest.php:89-105`, que fija por reflexión
         `isFinal()`, `isReadOnly()` y la lista exacta de parámetros del constructor. **Rompe por diseño**: si
         cambia el constructor, ese test se actualiza con argumento, no se relaja.
 
-- [ ] **Task 3 — Puerto `ImageRepository` + adaptador Doctrine** (AC 6, 9) —
+- [x] **Task 3 — Puerto `ImageRepository` + adaptador Doctrine** (AC 6, 9) —
       `api/src/Shared/Images/Domain/…` + `Infrastructure/Persistence/Doctrine/…`
-  - [ ] Interfaz en `Domain/`, mínima: guardar, buscar por `ImageId`, borrar. Plantilla exacta de forma:
+  - [x] Interfaz en `Domain/`, mínima: guardar, buscar por `ImageId`, borrar. Plantilla exacta de forma:
         `api/src/Backoffice/Bank/Domain/Repository/BankRepository.php` (`save`/`remove`/`findById`, docblock
         de una línea diciendo qué puerto es).
-  - [ ] **Cerrar el contrato de cada método, que hoy no está escrito en ningún sitio:**
+  - [x] **Cerrar el contrato de cada método, que hoy no está escrito en ningún sitio:**
         `findById(ImageId): ?Image` — `null` es ausencia confirmada de la fila, nunca un fallo de BD (AC 20);
         `save()` y `remove()` **no hacen commit ni deciden la frontera transaccional**, que pertenece a
         `TransactionManager` — si `save()` hiciera `flush()`, el repositorio estaría tomando control parcial
         de la transacción y AC 12 dejaría de sostenerse; `remove()` es idempotente respecto a una fila ya
         ausente, o declara explícitamente qué hace en ese caso.
-  - [ ] **`remove()` no es una API de ciclo de vida.** Anótalo en el docblock del puerto: sólo el handler de
+  - [x] **`remove()` no es una API de ciclo de vida.** Anótalo en el docblock del puerto: sólo el handler de
         borrado físico (Task 7) puede llamarlo, porque quien decide que una imagen ya no se necesita es el
         agregado consumidor, no `Images`. Expuesto como primitive genérico, nada impide que otro código
         borre la fila fuera del protocolo y deje el objeto de storage sin referencia — el bookkeeping que
         NFR3 prohíbe construir. Valora si el puerto público debe siquiera exponerlo.
-  - [ ] Adaptador en `Infrastructure/`, `final readonly`, `#[AsAlias(ImageRepository::class)]`, por
+  - [x] Adaptador en `Infrastructure/`, `final readonly`, `#[AsAlias(ImageRepository::class)]`, por
         **composición** con `EntityManagerInterface` inyectado — nunca herencia de una base ORM. Plantilla:
         `DoctrineBankRepository` (`:44-50`). Ojo: `InterventionImageProcessor` **no** lleva `#[AsAlias]`
         porque es implementación única; para un puerto nuevo copia el patrón explícito de
         `DoctrineTransactionManager` / `DoctrineBankRepository`.
-  - [ ] La firma no acepta ni devuelve paths, URLs ni storage keys (NFR6, eje **valor**).
-  - [ ] **Traducir también el borde del repositorio, y medir antes de diseñar la sanitización.**
+  - [x] La firma no acepta ni devuelve paths, URLs ni storage keys (NFR6, eje **valor**).
+  - [x] **Traducir también el borde del repositorio, y medir antes de diseñar la sanitización.**
         `DoctrineTransactionManager` sólo traduce `RetryableException` y
         `ForeignKeyConstraintViolationException`, así que una `UniqueConstraintViolationException` sobre la PK
         cruza cruda a `Application/`. Lo que **está medido** es el mecanismo: `DriverException::__construct`
@@ -485,16 +588,16 @@ como «duplicación», aunque lo que describe —tasks y numeración de AC— no
         provócalo contra Postgres real y lee el mensaje, en vez de asumirlo. AC 16 sólo cubre Flysystem;
         cubre este borde con el mismo criterio, y con la evidencia en la mano.
 
-- [ ] **Task 4 — Puerto `ImageStorage` + adaptador Flysystem** (AC 1, 2, 3, 5, 13, 16) —
+- [x] **Task 4 — Puerto `ImageStorage` + adaptador Flysystem** (AC 1, 2, 3, 5, 13, 16) —
       `api/src/Shared/Images/Domain/ImageStorage.php` + `Infrastructure/FlysystemImageStorage.php`
-  - [ ] `composer require league/flysystem-bundle`. **Hoy no hay ninguna librería de filesystem instalada**
+  - [x] `composer require league/flysystem-bundle`. **Hoy no hay ninguna librería de filesystem instalada**
         — cero paquetes `league/*` (el único hit en `api/composer.lock` es el mapa `conflict` de
         `roave/security-advisories`). Config previa recuperable:
         `git show 08f8199^:api/config/packages/flysystem.yaml` (storage nombrado `erpify.storage`, env
         `STORAGE_LOCAL_PATH`) — **renombra el namespace a `images`**, no revivas el nombre viejo.
-  - [ ] Naming por capacidad, no `*Interface`: puerto `ImageStorage`, adaptador `FlysystemImageStorage`
+  - [x] Naming por capacidad, no `*Interface`: puerto `ImageStorage`, adaptador `FlysystemImageStorage`
         (misma regla que produjo `ImageProcessor`/`InterventionImageProcessor`).
-  - [ ] **Medir, no copiar, la idempotencia del `delete()`.** El adaptador retirado hacía
+  - [x] **Medir, no copiar, la idempotencia del `delete()`.** El adaptador retirado hacía
         `fileExists()` y luego `delete()` — un TOCTOU y un I/O de más. Lee
         `api/vendor/league/flysystem-local/…` tras el `composer require` y comprueba si `delete()` ya es
         idempotente ante fichero ausente; la documentación oficial **no** lo declara. Escribe la guarda
@@ -502,11 +605,11 @@ como «duplicación», aunque lo que describe —tasks y numeración de AC— no
         puede llevarse por delante la tercera rama de NFR7** (AC 2): si la existencia no puede establecerse
         —permiso denegado, montaje ausente— eso es *fallo*, no el éxito idempotente de la ausencia. Comprueba
         qué hace el adaptador instalado en ese caso concreto, no sólo con el fichero ausente.
-  - [ ] Traducir la jerarquía de excepciones de Flysystem (`UnableToWriteFile`, `UnableToDeleteFile`,
+  - [x] Traducir la jerarquía de excepciones de Flysystem (`UnableToWriteFile`, `UnableToDeleteFile`,
         `UnableToReadFile`, `FilesystemException`) a excepciones de dominio distinguibles que separen
         **ausencia confirmada**, **fallo transitorio** y **fallo permanente** (AC 3). Nada de
         `catch (\Throwable)`.
-  - [ ] **La lista de tipos de Flysystem NO es cerrada, y enumerarla como whitelist es el error.**
+  - [x] **La lista de tipos de Flysystem NO es cerrada, y enumerarla como whitelist es el error.**
         `FilesystemException` es una **interfaz** común, y la librería expone bastantes más concretos que los
         cuatro obvios (`UnableToCheckExistence`, `UnableToCreateDirectory`, `UnableToRetrieveMetadata`,
         `UnableToSetVisibility`…), además de los errores nativos que el adaptador local pueda dejar salir.
@@ -514,134 +617,136 @@ como «duplicación», aunque lo que describe —tasks y numeración de AC— no
         `FilesystemException` como red de seguridad al final, y lo nativo que el contrato exija después—, de
         forma que nada quede sin traducir y ninguna rama quede inalcanzable. Capturar la interfaz **antes**
         que los concretos haría inalcanzables los concretos: es un bug, no un orden.
-  - [ ] **Escribe el algoritmo de clasificación antes de implementar el puerto, no durante.** Para cada
+  - [x] **Escribe el algoritmo de clasificación antes de implementar el puerto, no durante.** Para cada
         operación, di qué evidencia autoriza cada veredicto y qué se hace cuando no hay evidencia: el default
         es conservador (AC 3), así que sólo se declara ausencia confirmada cuando es demostrable. Decide
         entre comprobar existencia explícitamente y aceptar el TOCTOU —aceptable si sólo **clasifica** el
         resultado, no si decide si borrar—, inspeccionar el error nativo, o tratar todo lo no demostrablemente
         ausente como fallo de infraestructura. La tercera es la más defendible y es la que hay que argumentar
         si se elige otra.
-  - [ ] Nuevo vendor → nuevo collector en `api/tools/deptrac/deptrac.yaml`: `Vendor.Flysystem`, permitido
+  - [x] Nuevo vendor → nuevo collector en `api/tools/deptrac/deptrac.yaml`: `Vendor.Flysystem`, permitido
         **sólo** en `Shared.Infrastructure`, a la misma granularidad agregada que `Vendor.Intervention`
         (`deptrac.yaml:207-211`, `:243-255`). La review de la Story 1.1 descartó explícitamente un hallazgo
         que pedía granularidad más fina: no la introduzcas.
-  - [ ] Verificación de integridad de AC 1: tras `store()`, releer y comparar `SHA-256` contra
+  - [x] Verificación de integridad de AC 1: tras `store()`, releer y comparar `SHA-256` contra
         `Image.digest`. Decide y argumenta si la verificación es del propio `store()` o de un test — si es
         del `store()`, es un I/O de lectura por subida y eso hay que decirlo, no esconderlo.
-  - [ ] **Visibilidad y overwrite (AC 21).** Decide si la escritura es atómica —temporal, escritura completa,
+  - [x] **Visibilidad y overwrite (AC 21).** Decide si la escritura es atómica —temporal, escritura completa,
         verificación, `rename` a la key final— o directa sobre la key final. Sin `rename`, existe una ventana
         en la que otro proceso puede observar un fichero parcial bajo la key definitiva, y AC 1 sólo garantiza
         el estado **posterior** al retorno de `store()`. Y `store()` sobre una key existente **falla**: el
         `ImageId` es identidad, no contenido.
-  - [ ] **La key es una propiedad del adaptador y lleva su test** (AC 21c): determinista a partir del
+  - [x] **La key es una propiedad del adaptador y lleva su test** (AC 21c): determinista a partir del
         `ImageId`, relativa, sin `..`, sin path absoluto, sin ningún dato del caller.
 
-- [ ] **Task 5 — Superficie de despliegue de los bytes** (AC 5, y hallazgo A-6) — `compose*.yaml`, `.gitignore`
-  - [ ] **Ningún compose declara volumen de storage hoy.** Sin esto, en dev los bytes caen en el bind mount
+- [x] **Task 5 — Superficie de despliegue de los bytes** (AC 5, y hallazgo A-6) — `compose*.yaml`, `.gitignore`
+  - [x] **Ningún compose declara volumen de storage hoy.** Sin esto, en dev los bytes caen en el bind mount
         `./api:/app/api` (host, sin `.gitignore`, contaminando `git status`) y en prod el servicio `php` no
         declara volúmenes en absoluto: **se pierden en cada redespliegue**.
-  - [ ] **Declarar el volumen. No es opcional y no admite residual**: sin él, cada redespliegue borra todos
+  - [x] **Declarar el volumen. No es opcional y no admite residual**: sin él, cada redespliegue borra todos
         los bytes y conserva todas las filas, de modo que *"una escritura aceptada es subsecuentemente
         recuperable"* (NFR7 / AC 1) sería falsa para el 100 % de las imágenes, nada lo detectaría, y NFR3
         prohíbe el bookkeeping que lo encontraría. Un residual que niega una AC de la propia historia no es
         un residual: es la AC incumplida. Anota además el volumen en `PRODUCTION_SECURITY_CHECKLIST.md`.
-  - [ ] **Fijar la superficie, no sólo "declarar el volumen".** Nombre del volumen, mount point,
+  - [x] **Fijar la superficie, no sólo "declarar el volumen".** Nombre del volumen, mount point,
         `STORAGE_LOCAL_PATH`, usuario/grupo que escribe y permisos, qué compose es canónico y qué pasa en un
         upgrade. AC 5 se comprueba contra propiedades observables: el root configurado **no** está dentro del
         árbol de fuentes, sobrevive a recrear el contenedor, es escribible por el proceso php, **no lo sirve
-        Caddy**, y no está bajo control de versiones. Un test o comprobación de despliegue que recree el
-        contenedor y demuestre que los bytes siguen ahí.
-  - [ ] Añadir el path de storage a `.gitignore`. **Es un control distinto del anterior y no lo sustituye**:
+        Caddy**, y no está bajo control de versiones. La supervivencia a un `--force-recreate` se entrega
+        como línea de verificación en `PRODUCTION_SECURITY_CHECKLIST.md`, **no como test**: nada en la suite
+        recrea un contenedor, y llamarlo test haría pasar por demostrado lo que sigue siendo una
+        instrucción para el despliegue.
+  - [x] Añadir el path de storage a `.gitignore`. **Es un control distinto del anterior y no lo sustituye**:
         `.gitignore` protege el workspace de desarrollo del path previsto; la persistencia la da el volumen.
         Si `STORAGE_LOCAL_PATH` cambia, el `.gitignore` deja de aplicar sin que nada avise. Memoria del repo:
         `git add -A` ya barrió trabajo ajeno una vez.
-  - [ ] Como el volumen es condición para que AC 1 sea cierta, entra también en
+  - [x] Como el volumen es condición para que AC 1 sea cierta, entra también en
         `PRODUCTION_SECURITY_CHECKLIST.md` — pero la garantía es la AC, no la checklist.
 
-- [ ] **Task 6 — Extender `UploadImage`** (AC 7, 8, 15) — `api/src/Shared/Images/Application/UploadImage.php`
-  - [ ] Añadir los pasos de storage y persistencia **sin cambiar la firma pública**
+- [x] **Task 6 — Extender `UploadImage`** (AC 7, 8, 15) — `api/src/Shared/Images/Application/UploadImage.php`
+  - [x] Añadir los pasos de storage y persistencia **sin cambiar la firma pública**
         `upload(string $bytes, ?string $declaredMediaType = null): Image`. El test
         `UploadImageTest.php:55-65` la fija por reflexión.
-  - [ ] Orden exacto: `ImageId::generate()` → `process()` → `ImageStorage::store()` → persistir `Image` →
+  - [x] Orden exacto: `ImageId::generate()` → `process()` → `ImageStorage::store()` → persistir `Image` →
         devolver. El retorno ocurre **después** del commit (AC 8).
-  - [ ] **`UploadImage` no publica ningún evento en esta rebanada.** La única señal de la historia es la de
+  - [x] **`UploadImage` no publica ningún evento en esta rebanada.** La única señal de la historia es la de
         borrado, y la publica el consumidor (Task 7). Si acabas necesitando publicar algo aquí, dilo
         explícitamente con su nombre y su momento — la sola presencia de `EventBus` en esta task no autoriza
         un evento de subida.
-  - [ ] `Application/` no importa Doctrine ni Messenger: usa
+  - [x] `Application/` no importa Doctrine ni Messenger: usa
         `Erpify\Shared\Persistence\Application\TransactionManager::transactional(callable): mixed` y, donde
         haga falta publicar, `Erpify\Shared\Event\Domain\EventBus::publish(DomainEvent ...)`. Gate:
         `make php.lint.event-bus`,
         más `make php.deptrac`. Call site de referencia: `BankUpdater.php:41-45`.
-  - [ ] **No** envolver la escritura de storage en la transacción: AC 7 exige explícitamente que no estén
+  - [x] **No** envolver la escritura de storage en la transacción: AC 7 exige explícitamente que no estén
         acopladas, y una transacción no puede revertir el filesystem.
 
-- [ ] **Task 7 — Borrado: caso de uso, orden y señal** (AC 9, 10, 11, 12, 18) — `Application/` + `Domain/Event/`
-  - [ ] **Fija primero el reparto de responsabilidades, que hoy la historia deja ambiguo.** Son tres cosas
+- [x] **Task 7 — Borrado: caso de uso, orden y señal** (AC 9, 10, 11, 12, 18) — `Application/` + `Domain/Event/`
+  - [x] **Fija primero el reparto de responsabilidades, que hoy la historia deja ambiguo.** Son tres cosas
         distintas y sólo dos las entrega esta rebanada:
         el **consumidor** decide que ya no necesita la imagen y **publica la señal tras su commit** — no hay
         consumidor todavía, así que esta historia sólo deja el seam;
         **`Images` posee el borrado físico** y lo ejecuta en el **handler** de esa señal;
         `Images` **nunca** decide el ciclo de vida. Escríbelo en el docblock del handler.
-  - [ ] **Nombra la señal por lo que significa.** Lo que el consumidor emite es una *petición* de borrado,
+  - [x] **Nombra la señal por lo que significa.** Lo que el consumidor emite es una *petición* de borrado,
         no la afirmación de que ya ocurrió: `ImageDeletionRequested` (o equivalente) describe el contrato;
         `ImageDeleted` afirmaría un hecho que aún no ha pasado y engaña al siguiente lector.
-  - [ ] Handler que ejecuta `ImageStorage::delete()` y **después** el borrado de la fila, con el contrato de
+  - [x] Handler que ejecuta `ImageStorage::delete()` y **después** el borrado de la fila, con el contrato de
         estados de AC 20. El orden inverso está descartado con argumento en AC 9 — anótalo en el código, es
         exactamente el tipo de *why* que un futuro lector invertiría "simplificando".
-  - [ ] Payload y sobre con **sólo** `ImageId` (AC 11). Plantilla **estructural** si es un `DomainEvent`:
+  - [x] Payload y sobre con **sólo** `ImageId` (AC 11). Plantilla **estructural** si es un `DomainEvent`:
         `BankCreatedDomainEvent` (`eventName()`, `aggregateType()`, `toPrimitives()`, `fromPrimitives()`).
         **Copia la forma, no las garantías**: un evento de creación de agregado y una petición de borrado
         asíncrona no comparten idempotencia, reintento, entrega duplicada ni orden. Documenta las de esta.
-  - [ ] **Enrútala a `async`** en `api/config/packages/messenger.yaml` (AC 12) — publicar tras commit y
+  - [x] **Enrútala a `async`** en `api/config/packages/messenger.yaml` (AC 12) — publicar tras commit y
         consumir después es lo que NFR4 fija, y dejarla sin enrutar la haría síncrona dentro de la
         transacción del propietario.
-  - [ ] Añadir su línea a `api/.persistent-transport-policy` con el veredicto conservador y su excepción:
+  - [x] Añadir su línea a `api/.persistent-transport-policy` con el veredicto conservador y su excepción:
         `Image => person :: <ruta del ADR>`. La línea hace falta **enrutes o no** (*"routed or not"*,
         `PersistentTransportPolicyGateTest:28`), así que no enrutar no habría ahorrado la decisión.
-  - [ ] **Escribir el ADR que la línea nombra**, argumentando por qué se encola un id potencialmente
+  - [x] **Escribir el ADR que la línea nombra**, argumentando por qué se encola un id potencialmente
         persona-denotante: qué se gana (el borrado sale de la transacción y gana reintento del worker), qué
         se paga (el `ImageId` vive en `messenger_messages`, sin TTL y sin camino de erasure) y por qué el
         veredicto conservador es `person` pese a que un logo de banco no lo sea. Sin ADR existente la línea
         no vale y `make php.lint.persistent-transport` la rechaza.
-  - [ ] **Probar el *after-commit*, no darlo por hecho (AC 12).** Test en las dos direcciones: un rollback
+  - [x] **Probar el *after-commit*, no darlo por hecho (AC 12).** Test en las dos direcciones: un rollback
         del propietario **no deja mensaje consumible**, y un commit sí lo deja disponible. Lo que da la
         garantía es que `async` resuelve al transporte Doctrine sobre la misma conexión y que el `publish()`
         ocurre dentro de `transactional(...)`, no el nombre del transporte; deja escrito que **la propiedad
         depende del DSN**, porque un broker externo la rompería con esta AC en verde.
-  - [ ] Confirma `make php.lint.persistent-transport` en verde **con el exit code impreso**, después de
+  - [x] Confirma `make php.lint.persistent-transport` en verde **con el exit code impreso**, después de
         añadir la línea y el ADR — no antes.
-  - [ ] Cero `#[AsEntityListener]` en el módulo (AC 10).
-  - [ ] Documentar los residuales de AC 18 donde los vaya a leer la épica de consumidor.
+  - [x] Cero `#[AsEntityListener]` en el módulo (AC 10).
+  - [x] Documentar los residuales de AC 18 donde los vaya a leer la épica de consumidor.
 
-- [ ] **Task 8 — Observabilidad de storage** (AC 4) — `Infrastructure/`
-  - [ ] Reutilizar el canal Monolog `observability` vía
+- [x] **Task 8 — Observabilidad de storage** (AC 4) — `Infrastructure/`
+  - [x] Reutilizar el canal Monolog `observability` vía
         `#[Autowire(service: 'monolog.logger.observability')]`, igual que `InterventionImageProcessor`. **No
         crear** `MetricsRecorder`/StatsD ni infraestructura de métricas nueva.
-  - [ ] Extender los vocabularios cerrados existentes (`FailureCategory`, `operation`) en vez de inventar
+  - [x] Extender los vocabularios cerrados existentes (`FailureCategory`, `operation`) en vez de inventar
         unos paralelos. `operation` gana `store`, `read` y `delete`, más el fallo de integridad de AC 1 —
         NFR9 nombra `images.read.miss` e `images.storage.integrity_failure`, así que un vocabulario limitado
         a `store`/`delete` deja dos fallos sin señal. `FailureCategory` es cerrado y sus siete casos son de
         pipeline: decide y argumenta si gana casos de storage o si el storage lleva el suyo propio, porque
         NFR9 sólo admite `format`, `operation` y `failure_category` como dimensiones.
-  - [ ] **Los conjuntos de valores son cerrados y se testean como cerrados.** Si son dimensiones de métrica,
+  - [x] **Los conjuntos de valores son cerrados y se testean como cerrados.** Si son dimensiones de métrica,
         un valor libre es una explosión de cardinalidad: enumera `operation` y `failure_category` como enums
         y aférma que no puede salir nada fuera de esos conjuntos.
-  - [ ] **`images.read.miss` significa ausencia confirmada y sólo eso.** Un fallo al determinar la existencia
+  - [x] **`images.read.miss` significa ausencia confirmada y sólo eso.** Un fallo al determinar la existencia
         no es un miss — es error (AC 3). Si se conflacionan, la métrica de "imagen no encontrada" se dispara
         con un problema de permisos y nadie mira el sitio correcto.
-  - [ ] Claves prohibidas en el contexto, verificadas por test **sobre los VALORES, nunca sobre los nombres
+  - [x] Claves prohibidas en el contexto, verificadas por test **sobre los VALORES, nunca sobre los nombres
         de las claves**: `imageId`, `digest`, storage key, bytes, filename (NFR9). Un contexto
         `['path' => 'images/01H9…']` pasa cualquier chequeo por nombre y filtra el id íntegro — es
         literalmente el modo de fallo que `CLAUDE.md` registra dos veces con el filtro `query` de Caddy, que
         enumeraba nombres de parámetro. Serializa el contexto y busca el `ImageId` y el digest como
         subcadena.
-  - [ ] **Registrar en `api/tests/Unit/Gate/BestEffortReportChannelGateTest.php:89-98` (`REPORTERS`) TODA
+  - [x] **Registrar en `api/tests/Unit/Gate/BestEffortReportChannelGateTest.php:89-98` (`REPORTERS`) TODA
         clase nueva que loguee**, no sólo el adaptador: el gate deriva su universo de las clases con
         `LoggerInterface` que invocan `$this->logger->`, así que si también loguean el caso de uso de borrado
         o el repositorio, cada una necesita su línea o `make php.unit` se pone en rojo — le pasó a la
         Story 1.1 con `InterventionImageProcessor`.
-  - [ ] Ojo con el sumidero: `docs/rules/security.md:73` recuerda que el mensaje de una excepción se persiste
+  - [x] Ojo con el sumidero: `docs/rules/security.md:73` recuerda que el mensaje de una excepción se persiste
         en `messenger_messages` vía `ErrorDetailsStamp`, tabla que ningún camino de erasure alcanza. El
         **texto de toda excepción del módulo** obedece la misma lista prohibida que el log — no sólo el de
         `delete()`. Flysystem pone la ruta en el mensaje (`UnableToWriteFile::atLocation($path)`) y el
@@ -649,82 +754,134 @@ como «duplicación», aunque lo que describe —tasks y numeración de AC— no
         (`sprintf('Cannot read object storage key "%s".', $key)`), así que `store()`, `read()` y el
         `$previous` conservado filtran la key —es decir, el `ImageId`— si nadie lo impide.
 
-- [ ] **Task 9 — Migración** (AC 6) — `api/migrations/2026/`
-  - [ ] `make db.diff` y **leer** el SQL generado antes de `make db.migrate`. Si sale vacía, Task 1 no está
+- [x] **Task 9 — Migración** (AC 6) — `api/migrations/2026/`
+  - [x] `make db.diff` y **leer** el SQL generado antes de `make db.migrate`. Si sale vacía, Task 1 no está
         hecha.
-  - [ ] `getDescription()` de una línea + docblock de clase explicando el *porqué*, incluido qué restaura y
+  - [x] `getDescription()` de una línea + docblock de clase explicando el *porqué*, incluido qué restaura y
         qué no el `down()`. Plantilla: `api/migrations/2026/Version20260819091752.php`.
-  - [ ] `down()` reversible. **Sin** índice único sobre el digest (NFR2/NFR3) y sin `updated_at`.
-  - [ ] No revivir la tabla `media` ni `media_content_hash_uniq`: la destruyó a propósito
+  - [x] `down()` reversible. **Sin** índice único sobre el digest (NFR2/NFR3) y sin `updated_at`.
+  - [x] No revivir la tabla `media` ni `media_content_hash_uniq`: la destruyó a propósito
         `Version20260723104340.php` y `deferred-work.md:81` lo prohíbe explícitamente.
 
-- [ ] **Task 10 — Registros y contrato de error** (AC 3, 17)
-  - [ ] `api/.person-reference-policy`: si el mapeo introduce alguna columna `Types::GUID` en una entidad,
+- [x] **Task 10 — Registros y contrato de error** (AC 3, 17)
+  - [x] `api/.person-reference-policy`: si el mapeo introduce alguna columna `Types::GUID` en una entidad,
         **necesita línea** o `make php.lint.person-reference` rompe la build. Formato:
         `<Fqcn>::$<prop> => non-person` | `=> person :: <ruta del fichero que la borra>`. La PK propia del
         sujeto es la única exenta, y `Image` no es un sujeto: su id es `non-person` (el `ImageId` se vuelve
         dato personal **en el consumidor**, que es quien lo declara — AC 17).
-  - [ ] Contrato de error: decide y argumenta si las excepciones del módulo entran en el pipeline RFC 9457
+  - [x] Contrato de error: decide y argumenta si las excepciones del módulo entran en el pipeline RFC 9457
         ahora (marcadores de `Shared/ErrorContract`, p. ej. `ServiceUnavailable` → 503 para el fallo
         transitorio) o si eso pertenece a la Story 1.3 con la ruta HTTP. **Hoy no entran** (hallazgo A-5) y
         salen como 500 a Sentry. Si tocas el contrato, `docs/api-error-contract.md` es obligatorio (NFR26) y
         el gate es `make php.lint.error-contract`.
 
-- [ ] **Task 11 — Tests** (todas las AC) — `api/tests/Unit/Shared/Images/…`, `api/tests/Functional/…`
-  - [ ] Ver *Dev Notes → Matriz AC → test*. Dobles: `InMemoryImageStorage` (implementación alternativa
+- [x] **Task 11 — Tests** (todas las AC) — `api/tests/Unit/Shared/Images/…`, `api/tests/Functional/…`
+  - [x] Ver *Dev Notes → Matriz AC → test*. Dobles: `InMemoryImageStorage` (implementación alternativa
         usable) vs. `StubImageStorage` (valor fijo) — la convención de nombres está en
         `docs/rules/testing.md`. Viven junto a los tests que los usan.
-  - [ ] El test de integridad (AC 1) y el de dos objetos independientes (AC 14) necesitan un storage **real**
+  - [x] El test de integridad (AC 1) y el de dos objetos independientes (AC 14) necesitan un storage **real**
         (filesystem temporal), no un doble: un doble en memoria no puede fallar en escritura parcial, que es
         justo lo que AC 1 afirma detectar.
-  - [ ] Test funcional contra **Postgres real**, nunca SQLite; extiende `KernelTestCase`. Referencia:
+  - [x] Test funcional contra **Postgres real**, nunca SQLite; extiende `KernelTestCase`. Referencia:
         `api/tests/Functional/Shared/Persistence/`.
-  - [ ] **Afirma la siembra antes que la ausencia** (`docs/rules/testing.md`): comprueba primero que se emitió
+  - [x] **Afirma la siembra antes que la ausencia** (`docs/rules/testing.md`): comprueba primero que se emitió
         la línea de log, después que no contiene las claves prohibidas — si el logger nunca se invocó, "no
         contiene `digest`" es verdad vacía. Mismo patrón para "el objeto de storage ya no existe": afirma
         primero que existía.
-  - [ ] **El test de integridad no puede apoyarse sólo en el `read()` del mismo adaptador** (AC 1): si
+  - [x] **El test de integridad no puede apoyarse sólo en el `read()` del mismo adaptador** (AC 1): si
         `store()` y `read()` comparten una capa defectuosa, una transformación simétrica pasa el round-trip.
         Compara también contra el filesystem temporal directamente, o contra un `FilesystemOperator`
         independiente del método bajo prueba.
-  - [ ] **Tests de concurrencia y entrega duplicada** (AC 20): el mismo mensaje procesado dos veces deja el
+  - [x] **Tests de concurrencia y entrega duplicada** (AC 20): el mismo mensaje procesado dos veces deja el
         mismo estado final, no resucita la fila y no falla; y los cuatro estados fila×objeto de AC 20 tienen
         cada uno su caso.
-  - [ ] **El esquema se afirma contra el catálogo real de PostgreSQL** (AC 6), no sólo contra el mapeo:
+  - [x] **El esquema se afirma contra el catálogo real de PostgreSQL** (AC 6), no sólo contra el mapeo:
         columnas exactas, nullability, PK, tipos, sin índice extra y sin FK extra. `doctrine:mapping:info`
         sólo demuestra que Doctrine ve la entidad.
-  - [ ] **La sanitización se prueba en las cuatro superficies, no sólo en el log** (AC 4, 16): mensaje de la
+  - [x] **La sanitización se prueba en las cuatro superficies, no sólo en el log** (AC 4, 16): mensaje de la
         excepción, **cadena `$previous` completa**, `ErrorDetailsStamp` serializado en `messenger_messages`, y
         contexto del log — cada uno buscado contra `ImageId`, digest y storage key. Un mensaje de
         infraestructura arrastra la ruta, y la ruta contiene el id: el objeto excepción es un canal de
         exfiltración por derecho propio, aunque el logger esté limpio.
-  - [ ] Nada de tests por reflexión para probar una ausencia; prueba el modelo observable.
+  - [x] Nada de tests por reflexión para probar una ausencia; prueba el modelo observable.
 
-- [ ] **Task 12 — Registro de pendientes y docs** — `deferred-work.md`, `docs/`
-  - [ ] **Borrar** las balas `deferred-work.md:56` y `:57` (las cierra esta historia). Es un registro
+- [x] **Task 12 — Registro de pendientes y docs** — `deferred-work.md`, `docs/`
+  - [x] **Borrar** las balas `deferred-work.md:56` y `:57` (las cierra esta historia). Es un registro
         pending-only: se borra la bala, no se anota "hecho". **Dejar** `:58` y `:59`.
-  - [ ] **Barrer los IDs de historia/requisito que la Story 1.1 dejó mergeados en los ficheros que toques.**
+  - [x] **Barrer los IDs de historia/requisito que la Story 1.1 dejó mergeados en los ficheros que toques.**
         Medido en `f86b2662`: 23 apariciones en `api/src/Shared/Images/` y 12 en sus tests, entre ellas
         `UploadImage.php:20` (*"Story 1.2 extends this same class…"*), que es justo el fichero de Task 6, e
         `InterventionImageProcessor.php:40`. `CLAUDE.md` → *Code comments* los prohíbe en `main` y manda la
         regla del boy-scout al editar; sin barrido explícito nadie los quita.
-  - [ ] Actualizar `docs/architecture-api.md` si se añade transporte/evento, `docs/rules/database.md` si el
+  - [x] Actualizar `docs/architecture-api.md` si se añade transporte/evento, `docs/rules/database.md` si el
         mapeo del shared kernel establece patrón nuevo, y `PRODUCTION_SECURITY_CHECKLIST.md` por el volumen
         de storage y el residual que quede abierto.
 
-- [ ] **Task 13 — Pase adversarial y cierre** (proceso, no código)
-  - [ ] Lectura hostil **externa** sobre el código implementado (fresh context, otro modelo o una persona),
+- [x] **Task 13 — Pase adversarial y cierre** (proceso, no código)
+  - [x] Lectura hostil **externa** sobre el código implementado (fresh context, otro modelo o una persona),
         registrada en `## Adversarial pass` de este fichero y **commiteada** ANTES de `gh pr create`. El ADR
         lo exige nominalmente para historias que tocan borrado
         (`images-vs-documents-conservation-contract.md:129`); la autocertificación no cierra el gate.
-  - [ ] `make php.stan` sobre cada fichero nuevo/tocado; `make php.deptrac`; `make php.quality`;
+  - [x] `make php.stan` sobre cada fichero nuevo/tocado; `make php.deptrac`; `make php.quality`;
         `make php.unit` completo. Cada uno con exit code impreso y fresco, no de una ejecución anterior.
-  - [ ] Re-derivar el *File List* de `git diff --stat` antes de marcar done: el de la Story 1.1 se quedó
+  - [x] Re-derivar el *File List* de `git diff --stat` antes de marcar done: el de la Story 1.1 se quedó
         corto en tres ficheros.
+
+### Review Findings
+
+> `bmad-code-review`, 2026-08-29 — **todo aplicado en esta PR**; tres capas en paralelo (Blind Hunter · Edge Case Hunter · Acceptance
+> Auditor), lectura hostil independiente y read-only sobre el código en `fedb6cbf`. Cada hallazgo fue
+> re-verificado contra el árbol antes de asignarle severidad. AC: 20 CUMPLIDAS, 1 PARCIAL (AC 17),
+> 0 INCUMPLIDAS. Firewall de decisiones y lista de "No entrega": sin transgresiones.
+
+- [x] [Review][Decision] **La purga a 30 días de `failed` destruye la ORDEN de borrado, no sólo su contexto.**
+  `DbalFailedMessagePruner` justifica la purga con «el evento sobrevive en `event_store`», cierto para un
+  hecho con proyecciones reconstruibles y falso para una orden de trabajo: `DeleteImageOnDeletionRequested`
+  es un `#[AsMessageHandler]`, no un `Projector`, así que nada la re-dirige desde `event_store`.
+  **Resuelto declarando la `retry_strategy` que nunca existió.** Medido: no había ninguna en
+  `api/config/packages`, luego todo el bus corría con el default de Symfony — 3 reintentos a 1 s / 2 s / 4 s,
+  **siete segundos** de cobertura para los ocho tipos de evento que viajan por `async`. Un deploy, un
+  failover de base de datos, un remontaje de volumen o un disco que un operador está vaciando la superan.
+  Ahora son diez intentos escalando ×3 hasta un techo de una hora: ~3 h. El transporte Doctrine reencola el
+  reintento con `available_at` futuro, así que la cola larga cuesta filas esperando, no throughput.
+  **No cierra el agujero y no se vende como que lo cierra**: a los 30 días la orden se pierde igual. Eso
+  queda como residual dos de `PRODUCTION_SECURITY_CHECKLIST.md` §7, ahora con el dato que le faltaba, y el
+  ADR (`image-deletion-signal-transport.md`) deja de leer esa ventana como mera cota de exposición de PII.
+  Descartadas: filtrar el pruner por clase (obliga a mirar dentro de `headers`, rompe el plan que
+  `FailedMessagePrunePlanFunctionalTest` fija y contradice «un statement, y nombra su cola»), y marcar el
+  fallo permanente como `UnrecoverableMessage` (lo mandaría a `failed` *sin* reintentos — la dirección
+  contraria — sobre un camino que todavía no tiene productor; es de la Story 1.3, cuando alguien lea el
+  veredicto).
+- [x] [Review][Patch] La storage key se deriva de la GRAFÍA del `ImageId` y la fila se busca por su VALOR: un id en mayúsculas borra la fila y deja los bytes, informando "ausencia confirmada" [api/src/Shared/Images/Domain/ImageId.php:16]
+- [x] [Review][Patch] Un `write()` fallido deja el objeto creado bajo la key final y nada lo retira; en `ENOSPC` el fallo se auto-amplifica [api/src/Shared/Images/Infrastructure/FlysystemImageStorage.php:110]
+- [x] [Review][Patch] Los tres `catch (FilesystemException)` deciden el veredicto por TIPO y responden siempre `Permanent`, contradiciendo la regla que el tercer pase declara haber instalado; `UnableToCreateDirectory::reason()` existe y no se lee [api/src/Shared/Images/Infrastructure/FlysystemImageStorage.php:114]
+- [x] [Review][Patch] `ImageLifecycleListenerGateTest::FORBIDDEN` no cubre `HasLifecycleCallbacks`, `PostRemove` ni `PreRemove`: un `#[ORM\PostRemove]` sobre `Image` — el contraejemplo exacto de la invariante 4 del ADR — pasa el gate en verde [api/tests/Unit/Shared/Images/ImageLifecycleListenerGateTest.php:38]
+- [x] [Review][Patch] El estado "fila presente + objeto ausente" — el único que el orden bytes-primero existe para producir — no está ni en la enumeración de "All four states" ni en ningún test [api/src/Shared/Images/Application/DeleteImage.php:26]
+- [x] [Review][Patch] `ImageTest` sigue afirmando sobre la firma del constructor: el registro dice haberlo sustituido por una aserción de superficie completa y no lo hizo, y el agujero se ensanchó a dos campos declarados en el cuerpo (`$id`, `$createdAt`) [api/tests/Unit/Shared/Images/Domain/ImageTest.php:89]
+- [x] [Review][Patch] `guardRootIsUsable()` decide con `is_dir`/`is_executable`, los predicados que `objectExists()` declara insuficientes en su propio docblock; el diagnóstico "the storage root is not present" es el consejo equivocado cuando el problema es de permisos, y un test fija ese literal [api/src/Shared/Images/Infrastructure/FlysystemImageStorage.php:199]
+- [x] [Review][Patch] La nota de AC 17 no nombra `#[PersonalData]` ni `#[PersonSubjectReference]`, y remite a un registro que esta misma PR argumenta que clasificará el avatar `non-person` y no pedirá dueño de erasure [api/src/Shared/Images/Domain/Storage/ImageStorage.php:59]
+- [x] [Review][Patch] Dos sondas de fuga siguen codificando el sharding por CABEZA que esta PR sustituyó por la COLA: comprueban caracteres que ninguna key producida contiene [api/tests/Unit/Shared/Images/Infrastructure/FlysystemImageStorageFailureContractTest.php:388]
+- [x] [Review][Patch] El guardián del digest acepta 63 hex + salto de línea: `preg_match('/^[0-9a-f]+$/')` sin el modificador `D` [api/src/Shared/Images/Domain/Entity/Image.php:78]
+- [x] [Review][Patch] Docblock huérfano: el bloque que documenta el contexto y el nivel de la señal rotula `verdictFor()`, y `report()` queda sin documentar [api/src/Shared/Images/Infrastructure/FlysystemImageStorage.php:302]
+- [x] [Review][Patch] El registro lista "FQCN inline en `DeleteImage`" entre los MENOR aplicados; sigue en el árbol y `fedb6cbf` no toca ese fichero [api/src/Shared/Images/Application/DeleteImage.php:52]
+- [x] [Review][Patch] `FailingFilesystem::fileExists()` es un override muerto: tras el arreglo de GRAVE-1 el adaptador nunca llama a `fileExists()` y ningún escenario lo usa [api/tests/Unit/Shared/Images/Infrastructure/FailingFilesystem.php:66]
+- [x] [Review][Patch] La tercera rama del aprovisionamiento del entrypoint (la raíz no existe) es silenciosa: ni provisiona ni avisa [api/frankenphp/docker-entrypoint.sh:40]
+- [x] [Review][Patch] El recipe de Flex borró de `bundles.php` el comentario que explica por qué Twig y el profiler están activos bajo `test`; el fixer recuperó el `declare` y nadie el porqué [api/config/bundles.php:18]
+- [x] [Review][Patch] La matriz AC → test no se re-derivó tras implementar: AC 1 conserva una reserva ya cerrada, AC 6 declara unit y llegó funcional, AC 7 y AC 8 declaran integración y llegaron unit con dobles
+- [x] [Review][Patch] "Barridos los IDs de historia … cero al terminar" es falso: queda uno en `api/src/Shared/Images/Domain/CanonicalImage.php:10`, y las cifras de partida (21/11) no coinciden con ningún patrón medible sobre el árbol
+- [x] [Review][Patch] Task 5 marca hecha "una comprobación de despliegue que recree el contenedor y demuestre que los bytes siguen ahí"; lo entregado es una línea de checklist que otro tendrá que ejecutar
+- [x] [Review][Patch] Una entrada del `File List` nombra el directorio `api/tests/Unit/Shared/Images/Infrastructure/Messenger/` en vez del fichero
+- [x] [Review][Defer] La ausencia confirmada es un productor de log `info` sin cota y disparable por el cliente sobre el canal `observability`, que en prod es el stream siempre encendido a stderr y está acotado sólo por volumen — en cuanto la Story 1.3 exponga `read()` detrás de una ruta, N identificadores aleatorios desalojan el log retenido a coste cero [api/src/Shared/Images/Infrastructure/FlysystemImageStorage.php:127] — se refunde en la Story 1.3 (que es quien expone la ruta y quien puede decidir la cota), no en `deferred-work.md`: CLAUDE.md prohíbe que una épica alimente su propia pila de diferidos
+
 
 ## Dev Notes
 
 ### La decisión abierta — forma de persistencia del agregado `Image`
+
+> **CERRADA el 2026-08-28 por Sergio.** El veredicto y su argumento están en *Dev Agent Record →
+> Completion Notes*; lo de abajo se conserva porque es el planteamiento del fork, pero **tres de sus
+> premisas resultaron falsas al medirlas** (no había precedente de entidad ORM en el shared kernel;
+> `readonly` era un riesgo Doctrine sin medir; la opción B era viable). No lo uses como guía.
 
 **No la cierres tú solo.** `CLAUDE.md` (*Per-aggregate persistence strategy*) reserva al usuario las
 decisiones de estrategia de persistencia y de frontera de agregado. Ninguna AC ni el decision firewall fijan
@@ -934,14 +1091,14 @@ al final.
 
 | AC | Qué prueba | Nivel |
 |---|---|---|
-| 1 | `store()` + relectura → bytes idénticos y `SHA-256` == `Image.digest` | Integración, storage real. **Ojo**: un filesystem temporal sano nunca produce la escritura parcial que la AC dice detectar, así que este test prueba la propiedad débil. La detección real depende de dónde caiga la decisión de Task 4 (verificación en `store()` vs. en un test); si cae en el test, la AC no es una propiedad del sistema y hay que decirlo |
+| 1 | `store()` + relectura → bytes idénticos y `SHA-256` == `Image.digest` | Unit sobre filesystem temporal real. La decisión de Task 4 cayó en `store()`, así que la AC **es** una propiedad del sistema y no del test; la escritura corrupta que un directorio sano nunca produce la fabrica `PartiallyWritingFilesystem`, y la escritura que falla dejando residuo, `FailingAfterPartialWriteFilesystem` |
 | 2 | `delete()` sobre ausente → éxito; existencia no establecible → fallo; fallo real de infra → fallo | Integración con **adaptador real** para las tres ramas (permisos retirados, montaje ausente); un doble sólo prueba que el caso de uso propaga, no la propiedad del `delete()` instalado |
 | 3 | Ausencia confirmada, fallo transitorio y fallo permanente son tipos distintos, y cada semántica dice a qué operación pertenece | Unit + un test que enumere la superficie del puerto |
 | 4 | Línea emitida con `operation` ∈ {`store`,`read`,`delete`,integridad}; ni `imageId`/`digest`/key/bytes/filename **como VALOR** (serializa el contexto y busca la subcadena; un chequeo por nombre de clave no vale) | Unit (afirma la línea **antes** que la ausencia) |
 | 5 | La key deriva sólo de `ImageId` | Unit sobre el adaptador |
-| 6 | Esquema exacto de siete campos | Unit estructural. **La revisión de la migración y `doctrine:mapping:info` son lectura humana, no gates**: si la entrada `Shared` de `doctrine.yaml` desaparece, `make db.diff` emite una migración vacía sin error y nada se pone rojo. Hace falta un test que afirme las columnas contra el esquema real |
-| 7 | Fallo de persistencia tras `store()` exitoso deja huérfano y nadie compensa | Integración |
-| 8 | El `ImageId` no es observable antes del commit | Integración |
+| 6 | Esquema exacto de siete campos | **Funcional contra Postgres real** (`ImagePersistenceTest`), no el unit estructural que esta fila pedía: lee el catálogo con tipos, nulabilidad, índices y constraints, que es lo único que sobrevive a que la entrada `Shared` de `doctrine.yaml` desaparezca — en ese caso `make db.diff` emite una migración vacía sin error y nada más se pone rojo. Se le añade la superficie de la entidad (`ImageTest`), porque dos de los siete campos se declaran en el cuerpo y no en la firma |
+| 7 | Fallo de persistencia tras `store()` exitoso deja huérfano y nadie compensa | **Unit con dobles** (`UploadImageStorageAndPersistenceTest`), no integración: lo que la AC afirma es el ORDEN de los pasos y la ausencia de compensación, y ambos son observables sin sustrato real. Lo que ningún doble prueba —que el objeto huérfano sobreviva de verdad en disco— lo cubre el storage real de AC 1 |
+| 8 | El `ImageId` no es observable antes del commit | **Unit con dobles**: una sonda que observa el `store()` antes de abrirse la transacción, más un contador de commits. La propiedad es estructural —el valor de retorno—, así que un sustrato real no añade nada que observar |
 | 9 | Orden storage→fila; fallo del 2.º paso deja estado reintentable | Integración |
 | 10 | Cero `#[AsEntityListener]` en el módulo | Unit estructural. **Acotado al módulo por diseño, y ese es su límite**: `BankStoredObjectRemoveListener` vivía fuera de `Shared/Images/`, y un listener registrado por tag `doctrine.event_listener` en `services.yaml` o vía `#[AsDoctrineListener]` tampoco se ve. El test cubre la letra de la AC, no su propósito |
 | 11 | Payload = sólo `ImageId` | Unit |
@@ -1065,12 +1222,385 @@ de recursos y vetting de `intervention/gif` (**son de la Story 1.3, no los absor
   excepciones que dejaba ramas inalcanzables, y una afirmación sobre el mensaje del driver que se dio por
   medida sin medirla.
 
+- 2026-08-28 — Task 0 cerrada por Sergio. Se consultó en paralelo a Winston, Amelia y Murat sobre el
+  árbol real, más una cuarta lectura externa; **los cuatro convergen en una forma que no estaba entre
+  las tres opciones del borrador** —entidad ORM sin `AggregateRoot` ni traits, identidad de dominio
+  `ImageId` sobre una columna `Types::GUID` escalar— y tres de los cuatro en conservar `final
+  readonly`. B queda descartada por dos fatales acumulativos (`AggregateRoot::id()` es
+  `final protected … : string`, y `updated_at` no se puede desmapear desde la subclase) más los tres
+  setters públicos que contradicen D3; A queda descartada porque un tipo DBAL propio **saca la columna
+  del universo de `make php.lint.person-reference`**, que filtra por `Types::GUID`. Se corrigen tres
+  premisas falsas del borrador: la opción B ya se implementó para este mismo concepto y se retiró en
+  `08f8199b`; la hidratación de `readonly` está soportada de primera clase por ORM 3.6.8; y la cita
+  que lo sostenía apuntaba a una rama de proxy legacy que en este proyecto es código muerto.
+  Sub-decisión: `createdAt` se mapea `datetimetz_immutable` (`TIMESTAMP(6) WITH TIME ZONE`), no
+  `TIMESTAMP(0)`, para que el test de hidratación sea falsable por precisión en vez de depender de
+  una carrera de reloj.
+
+- 2026-08-29 — Tasks 8, 11, 12 y la mitad pendiente de la 10, con las Tasks 1–7 y 9 verificadas y marcadas.
+  Cierra los tres huecos de la matriz AC → test que quedaban (la señal de observabilidad afirmada **por
+  valor**, la matriz de traducción de Flysystem sobre sus cuatro superficies de retención, y el protocolo de
+  borrado sobre filesystem y Postgres reales), y cierra la reserva que la propia matriz anotaba sobre AC 1
+  introduciendo el doble que hace falsable la verificación de integridad. Cambio propio y argumentado: el
+  nivel de la señal pasa a depender del veredicto, porque una ausencia confirmada es un desenlace y no un
+  fallo del sustrato. `make php.quality` estaba en rojo desde antes de esta sesión y ahora está en verde:
+  16 hallazgos de PHPMD, un fichero que PDepend no podía parsear —y que por tanto PHPMD saltaba entero— y
+  una dependencia (`league/flysystem`) que `api/src` importaba sin declarar.
+
+- 2026-08-29 — Pase adversarial sobre el código, en tres lecturas paralelas e independientes. **Dos GRAVE**,
+  cada uno hallado por dos de los tres pases y reproducido antes de tocar nada: `delete()` confirmaba un
+  borrado sobre bytes vivos siempre que un shard POR ENCIMA del contenedor fuese intraversable (la guarda
+  inspeccionaba un solo nivel, y el test de esa rama restauraba precisamente el nivel no guardado); y la raíz
+  de almacenamiento cableada no la creaba nadie, de modo que el módulo entero fallaba `Permanent` en cualquier
+  despliegue mientras noventa pruebas seguían verdes por construir el adaptador a mano. La existencia se
+  decide ahora en el syscall (`access(2)` separa `ENOENT` de «no he podido mirar»; una cadena de predicados
+  no puede, porque son el mismo `stat()`), y el entrypoint aprovisiona la raíz **sólo si hay algo montado de
+  verdad** — la condición es el control, no un detalle. Once SERIO más, todos aceptados: el veredicto
+  permanente/transitorio pasa a decidirse por la condición y no por el tipo, el objeto que la verificación de
+  integridad rechaza deja de sobrevivir, el esquema se afirma con tipos, nullability e índices, el sharding
+  se lee de la mitad aleatoria del identificador (medido: 4000 ids en **1** directorio antes, 3869 después),
+  y tres afirmaciones que el árbol no sostenía —un test que el ADR decía tener, una propiedad acreditada a
+  `lazy_root_creation`, y un vocabulario que se decía leído por el reintento— quedan dichas como son.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
+Claude Opus 5 (`claude-opus-5[1m]`), workflow `bmad-dev-story`.
+
 ### Debug Log References
+
+Consulta de Task 0 (2026-08-28), tres personas en paralelo con dossier de evidencia y restricción de
+solo lectura, más una cuarta lectura externa sobre el mismo dossier. Dossier y prompt externo en
+`tmp/bmad-md/` (gitignored).
 
 ### Completion Notes List
 
+#### Task 0 — Forma de persistencia del agregado `Image` (decisión de Sergio, 2026-08-28)
+
+**Decidido:** `final readonly class Image` como entidad ORM directamente mapeada, **sin**
+`AggregateRoot`, **sin** `Identifiable`, **sin** `Timestamped`. Identidad de dominio `ImageId` en la
+API pública; representación persistida `private string $id` con `#[ORM\Column(type: Types::GUID)]`,
+declarada en el cuerpo de la clase y asignada en el constructor —el mismo patrón que `createdAt` ya
+usaba—, de modo que `final readonly` sobrevive. **Sin tipo DBAL propio.** `createdAt` se mapea
+`datetimetz_immutable` (`DateTimeTzMicrosType` → `TIMESTAMP(6) WITH TIME ZONE`).
+
+**Cómo se decidió.** El borrador dejaba tres opciones (A `final readonly` + VO de identidad, B patrón
+de casa, C intermedia) y Sergio se inclinaba por B. Se consultó en paralelo a Winston (arquitecto),
+Amelia (ingeniera) y Murat (arquitecto de tests) sobre el árbol real, y después a una cuarta lectura
+externa. **Los cuatro convergen en una forma que no estaba entre las tres opciones**, y tres de los
+cuatro en conservar `readonly`.
+
+**Por qué se descarta B (el patrón de casa), pese a la inclinación inicial.** Dos fatales acumulativos
+y un tercer coste que nadie había escrito:
+
+1. `AggregateRoot::id()` es `final protected function id(): string` (`AggregateRoot.php:55`), e
+   `Image::id()` es pública y devuelve `ImageId`. No hay modificación legal de la subclase que lo
+   arregle: `final` impide el override, y `ImageId` no es subtipo de `string`. Muere en tiempo de
+   enlazado de la clase, es decir en `cache:warmup`.
+2. `Timestamped` añade `updated_at NOT NULL` (`Timestamped.php:16-17`), un octavo campo que la AC 6
+   prohíbe, y **no se puede desmapear desde la subclase**: `#[ORM\AttributeOverrides]` redefine una
+   columna, no la elimina, y el trait viene soldado a la clase base (`AggregateRoot.php:20`).
+3. Los traits publican `setId()`, `setCreatedAt()` y `setUpdatedAt()`. `Image` pasaría de cero
+   superficie de mutación pública a tres setters, con lo que el invariante D3 del ADR degrada de
+   *cierto por construcción* a *cierto por convención*. Medido: `->setId(` tiene **0 llamadas en todo
+   `api/src`** frente a 16 de `getId()` — es superficie muerta que arrastran ocho agregados.
+
+Y su único beneficio declarado no tiene consumidor: `AggregateRoot` existe para recolectar eventos de
+dominio, e `Image` no emite ninguno — la Task 6 prohíbe publicar en la subida y la Task 7 pone al
+consumidor como emisor, así que `pullDomainEvents()` devolvería `[]` de por vida.
+
+**Por qué se descarta A (tipo DBAL propio para `ImageId`).** Razón que ninguna de las tres opciones
+anticipaba: el gate de referencias-a-persona construye su universo filtrando por
+`Types::GUID === $attribute->newInstance()->type` (`api/tests/Support/PersonReferences.php:375`). Una
+columna `#[ORM\Column(type: 'image_id')]` **desaparece de ese universo**: `make php.lint.person-reference`
+no la pide, no la exige y no se entera. En el módulo cuyo ADR gira entero sobre borrado GDPR, sería un
+verde por ausencia de sujeto — y refuta la fila que la propia historia daba por buena en su tabla de
+registros. Coste adicional: el identity map del ORM hace `implode(' ', $identificador)` y sólo trata
+aparte los `BackedEnum` (`UnitOfWork::getIdHashByIdentifier`), así que un VO como identificador exige
+que implemente `Stringable`, lo que lo abre a interpolación silenciosa en strings y logs.
+
+**Por qué se descarta el modelo de persistencia separado (`Image` puro + `ImageRecord` ORM).** Es la
+forma más pura desde Clean Architecture, y se descarta por YAGNI / Regla de Tres: siete campos, cero
+asociaciones, cero colecciones, cero mutaciones. Además contradice una excepción que el repo ya
+bendice por ADR (`external-dependencies-in-domain`): metadata `#[ORM]` pasiva en `Domain/`.
+
+**Por qué se conserva `readonly` — la única discrepancia real entre los consultados.** Winston propuso
+la misma forma soltando `readonly`, sin argumentar la pérdida; no lo vio conservable. Amelia y Murat
+demostraron que sí lo es (propiedad declarada en el cuerpo, como `createdAt`), y el argumento que
+decide es de falsabilidad: `Types::DATETIME_IMMUTABLE` declara `TIMESTAMP(0)` en Postgres
+(`PostgreSQLPlatform.php:611`), luego el test natural de hidratación —`persist → clear → find →
+comparar`— **pasa en verde aunque el re-estampado de `createdAt` sea total**, siempre que ambas
+operaciones caigan en el mismo segundo. Con `readonly`, ese invariante lo sostiene el runtime:
+re-escribir una propiedad `readonly` ya inicializada lanza (`ReadonlyAccessor.php:42-48`). Sin él, la
+única defensa es un test que por defecto se escribe mal.
+
+**Sub-decisión: `createdAt` como `datetimetz_immutable`.** Precedente medido en las dos direcciones —
+las siete entidades del árbol usan `TIMESTAMP(0)`, pero las tablas del propio shared kernel usan
+`TIMESTAMP(6) WITH TIME ZONE` (`dek_keystore`, `Version20260701083342.php:19`). Se elige la del shared
+kernel porque hace el test de hidratación falsable **también por precisión**: un re-estampado cambia
+los microsegundos aunque caiga dentro del mismo segundo, así que el rojo deja de depender de una
+carrera de reloj.
+
+**Premisas del borrador que resultaron falsas al medirlas, y que quedan corregidas aquí:**
+
+- *"No hay ni una sola entidad ORM bajo `api/src/Shared/`; `Image` sería la primera"* — falso en la
+  parte que importa. Hasta el 2026-07-23 existió `Erpify\Shared\Media\Domain\Entity\Media`,
+  declarada `final class Media extends AggregateRoot` con `#[ORM\Entity]`, junto con **dos** mappings
+  del shared kernel (`SharedMedia`, `SharedStorage`). Los borró `08f8199b` (*"chore(api): remove the
+  image upload surface (#557)"*). **La opción B ya se implementó para este mismo concepto y se
+  retiró**, lo que sube el listón del argumento para repetirla.
+- *"Hidratación de `final readonly`: sin precedente aquí, hay que medirlo"* — medido y disuelto. ORM
+  3.6.8 instancia sin pasar por el constructor y sabe escribir propiedades `readonly` no inicializadas
+  (`ReadonlyAccessor`, `ReflectionReadonlyProperty`, `UnitOfWork.php:2427` →
+  `ClassMetadata.php:817-820` → `doctrine/instantiator`). El riesgo real de A no era la hidratación.
+- La cita original de ese mecanismo (`UnitOfWork.php:2410-2413`) apuntaba a la rama de proxy legacy,
+  **código muerto** en este proyecto porque `doctrine-bundle` fuerza `enableNativeLazyObjects => true`
+  (`DoctrineExtension.php:944`). La conclusión se sostiene por otra línea.
+
+**Residual aceptado, a fijar con test y no a descubrir (Task 11).** `refresh()` sobre una `Image` ya
+gestionada **lanzaría**: el guardia de `ReadonlyAccessor` compara por identidad de objeto (`!==`,
+`:42`) y un `DateTimeImmutable` rehidratado nunca es la misma instancia. Hoy hay **0** llamadas a
+`->refresh(` en `api/src`, pero el repo sí usa el idioma `HINT_REFRESH` en otro módulo
+(`DoctrineUserRepository.php:68`). `refresh(Image)` queda **fuera del contrato**, declarado y probado.
+
+**Hallazgo colateral, independiente de la decisión, que entra en el alcance (Task 11).** El test que
+supuestamente hace cierto el invariante D3 tiene un agujero demostrable dentro de su propio fichero:
+su docblock afirma que *"la firma del constructor es la lista completa de lo que este agregado puede
+contener"*, y `createdAt` se declara en el cuerpo (`Image.php:25`), **fuera de la firma**
+(`Image.php:27-34`). Una propiedad de clasificación declarada del mismo modo pasaría el test en verde.
+Se sustituye por una aserción sobre la **superficie completa** —todas las propiedades y todos los
+métodos públicos, más ausencia explícita de mutadores y de campos de clasificación—, que es
+independiente de la opción elegida y estrictamente más fuerte que la actual.
+
+**Deuda transversal detectada, NO resuelta aquí.** `AggregateRoot` combina hoy cuatro contratos
+(identidad, sellos temporales, eventos de dominio y convención Doctrine) y publica un setter de
+identidad con cero consumidores. La pregunta que queda para un ADR futuro es cuáles de esas
+propiedades son invariantes de **toda** entidad ORM de ERPify y cuáles son sólo convenciones del
+patrón actual. No se toca `AggregateRoot` en esta historia: el `blast radius` sería los ocho agregados
+existentes, por un caso local.
+
+#### AC 12 — reescrita tras consultar a las tres personas (2026-08-28)
+
+**El problema, medido.** La AC prescribía un test que este entorno no puede alojar y cuyo sujeto no
+existe en esta historia. Dos hechos: `new ImageDeletionRequested` tiene **cero apariciones** en
+`api/src` —el publicador es el contexto consumidor, por contrato de esta misma historia—, y
+`when@test` sustituye `async` por `in-memory://`, un transporte que **no participa en la
+transacción** (sonda ejecutada: tras un rollback retiene el mensaje). El test que se escribió contra
+`messenger_messages` se retiró: su mitad de rollback era verde vacuo, y sólo se detectó porque el
+control positivo —la mitad del commit— se puso en rojo.
+
+**Tres hipótesis alternativas refutadas midiendo, no descartadas de oídas:** no era caché rancia del
+contenedor (purgado `var/cache/test*`), no era el `messenger_worker` consumiendo (parado), y no era
+que la tabla no se escriba nunca en test (dos funcionales la escriben directamente — lo correcto es
+que nada la escribe *a través de Messenger*).
+
+**El agujero que nadie había visto, y que la consulta destapó.** Borrar la línea de routing dejaba
+`php.lint.persistent-transport` y `php.lint.event-bus` **en exit 0**: la completitud del registro
+exige línea *"routed or not"* y nunca lee la ruta, así que un `git rm` de una línea reinstalaba el
+borrado síncrono dentro de la transacción del propietario —el GRAVE-1 del pase adversarial de la
+épica— con la build verde. Falsificado antes y después.
+
+**Lo entregado, en los motores que ya existían, sin ficheros ni targets nuevos:**
+
+- `PersistentTransportPolicy::adrExceptedEventsReachingNoTransport()` — un tipo clasificado
+  `person :: <ADR>` afirma que se encola *igualmente*, luego un evento con esa clasificación que no
+  alcanza transporte tiene una excepción que no argumenta nada. Derivado del registro, sin lista a
+  mano. *Mutante medido: borrar la ruta enrojece con el nombre del evento y su ADR.*
+- `MessengerRoutingConfig::misdeclaredPersistedTransport()` — el dual del que ya existía para `sync`.
+  `async` se confía por nombre como durable y sobre la conexión del llamante; fuera de test debe
+  resolver a `%env(MESSENGER_TRANSPORT_DSN)%` o a un `doctrine://` literal, y **dentro** de test se
+  fija la sustitución in-memory, para que cambiarla obligue a revisar la afirmación en vez de dejar un
+  comentario que ya miente. *Mutante medido: `amqp://` enrojece nombrando fichero, sección y valor.*
+
+**Lo que no entrega, con dueño en vez de en un docblock:** la observación de punta a punta del
+`INSERT` en `messenger_messages` pertenece a la historia que introduzca el primer publicador real, en
+la épica de consumidor. Y el salto del DSN no lo cierra ningún gate —tres de los cinco sitios que lo
+declaran son interpolaciones que el entorno del despliegue gana— así que es **riesgo aceptado con
+issue abierta**: #872, etiquetado `@accepted-risk` en el ADR y en la AC.
+
+**Deuda colateral detectada, NO tocada aquí.** Existen cuatro copias de `RecordingEventBus` y sólo la
+de `Backoffice/Bank` expone `publishedInsideUnitOfWork`; el mutante de sacar el `publish()` fuera de
+`transactional(...)` pasa verde hoy en `AcceptInvitation`, `StartSession`, `ChangeMyPassword` y
+`RevokeAllSessions`. Es de otros módulos y se nombra en vez de arrastrarse.
+
+**Corrección propia:** había duplicado `ImmediateTransactionManager` en el árbol de este módulo
+cuando ya existía en `Shared/Persistence/Double/` con `isInUnitOfWork()`, que es justamente el
+observable que distingue un publish dentro de la transacción de uno fuera. Retirada la copia.
+
+#### Tasks 8 y 11 — la señal de storage y los tests que faltaban (2026-08-29)
+
+**Task 8.** El adaptador ya emitía la señal; lo que faltaba era el test, y la AC pedía una forma
+concreta de test que este repo ya había fallado dos veces. `FlysystemImageStorageObservabilityTest`
+serializa el registro y busca el identificador **como subcadena**, no como nombre de clave: un
+contexto `['path' => 'images/01H9…']` satisface cualquier chequeo por nombre y filtra el id entero.
+Cada aserción de ausencia prueba antes que el instrumento encuentra algo que **sí** está.
+
+El conjunto cerrado se prueba cerrado en las dos direcciones: ninguna dimensión sale de su enum, y
+**cada caso del enum es alcanzado** por un fallo real — un `operation` que nada produce es un valor
+que ningún panel verá y cuya desaparición nadie notaría. Alcanzar `verify_integrity` obligó a un
+doble (`PartiallyWritingFilesystem`) que acepta la escritura y guarda la mitad: un directorio
+temporal sano nunca produce la escritura corrupta que la AC 1 dice detectar, así que sin él esa
+promesa era infalsable. Mutantes medidos y restaurados por copia: plantar el id bajo una clave
+inocente (rojo en dos tests), quitar el `report()` de la rama de integridad (rojo), e igualar el
+nivel de la ausencia al del fallo (rojo).
+
+**Nivel por veredicto, cambio propio y argumentado.** Una ausencia confirmada se emite a `info` y
+todo lo demás a `warning`: leídos del sumidero son el mismo registro, y el nivel es lo único que
+distingue un 404 ordinario de un volumen sin montar. Se escribe como dos llamadas por nivel y no
+como `log($level, …)` porque el gate de portadores clasifica por el nombre del método y **rechaza**
+la forma PSR-3.
+
+**Task 11.** Tres huecos de la matriz, cada uno con su mutante:
+
+- `FlysystemImageStorageFailureContractTest` — la matriz de traducción completa (qué excepción de la
+  librería produce qué veredicto) y, sobre la misma tabla, las **cuatro superficies** de fuga:
+  mensaje, cadena `previous` completa, `ErrorDetailsStamp` serializado y contexto del log. Cada
+  escenario alimenta al adaptador una excepción de librería que **cita la key**, que es lo que hace
+  la librería de verdad. La mitad de AC 16 que dice «nada de `catch (\Throwable)`» se prueba por
+  comportamiento y no leyendo el fuente: una excepción que no es de la librería propaga intacta y no
+  emite señal. El stamp se declara **dominado** por las dos superficies anteriores en vez de
+  venderse como control independiente.
+- `DeleteImageIntegrationTest` — el protocolo sobre los dos sustratos reales a la vez. El test
+  unitario fija los cuatro estados contra dobles; lo que no puede mostrar es que un repositorio real
+  responda `null` sólo por ausencia. Mutante: invertir el orden (fila antes que bytes) enrojece aquí
+  y en el unitario.
+- `StorageFailureVocabularyTest` — los tres veredictos como vocabulario, derivado del enum en vez de
+  contra un número, más la disyunción con el vocabulario del pipeline que el docblock afirmaba.
+
+**Task 10, segunda mitad.** Las excepciones del módulo **no** entran en el pipeline RFC 9457 ahora, y
+la decisión queda escrita en el puerto: un estado es una afirmación sobre un contrato de **cable** y
+este módulo no publica ruta; el único llamante es el consumidor de cola, donde un marcador no cambia
+nada porque el reintento lee la excepción y no un estado. **AC 21(b)** queda igualmente argumentada
+donde se lee: la escritura es directa y verificada, no atómica, y la ventana observable no lo es por
+nadie porque el identificador no llega a ningún llamante hasta que su fila hace commit.
+
+**Task 12.** Borradas las balas `deferred-work.md:56` y `:57`; barridos los IDs de historia que la
+Story 1.1 dejó. Las cifras que esta línea daba (21 y 11) no salían de ningún patrón reproducible sobre
+el árbol y se retiran en vez de corregirse: lo comprobable es el estado final, y `grep -rnE
+'Story [0-9]|NFR[0-9]|MEDIA-[0-9]|FR[0-9]|AC [0-9]' api/src/Shared/Images/` es cero.
+`docs/architecture-api.md` gana el evento y su transporte, `docs/rules/database.md` el patrón de
+mapeo del shared kernel (una entrada por capacidad, apuntando a `Domain/Entity`), y
+`PRODUCTION_SECURITY_CHECKLIST.md` §7 los cuatro residuales del storage de bytes.
+
+**Lo que `make php.quality` destapó, y que ningún commit anterior de esta rama había ejecutado.**
+Estaba en rojo desde antes de esta sesión: 16 hallazgos de PHPMD y un fichero que PDepend **no podía
+parsear** —`ImagePersistenceTest`, por una clase anónima `readonly`—, de modo que PHPMD lo saltaba
+entero y ninguna de sus reglas corría sobre él. Se corrigió extrayendo un `FixedClock` con nombre, que
+además es la convención ya vigente (hay cuatro más en el árbol). Y `composer.check.missing-deps`
+fallaba: `api/src` importa `League\Flysystem\*` y sólo se había declarado `league/flysystem-bundle`,
+que lo arrastra de forma transitiva — exactamente el caso que `api/CLAUDE.md` describe. Declarado
+`league/flysystem: ^3.35`; el lock no movió ni una versión, sólo su `content-hash`.
+
 ### File List
+
+Derivado de `git diff --name-status origin/main...HEAD` más el árbol de trabajo, no de memoria: el de la Story 1.1 se quedó corto en tres ficheros por escribirse a mano.
+
+**Configuración, registros y despliegue**
+
+- `.gitignore` — modificado
+- `api/.artifact-gate-placement` — modificado
+- `api/.persistent-transport-policy` — modificado
+- `api/.person-reference-policy` — modificado
+- `api/Dockerfile` — modificado
+- `api/composer.json` — modificado
+- `api/composer.lock` — modificado
+- `api/config/bundles.php` — modificado
+- `api/config/packages/doctrine.yaml` — modificado
+- `api/config/packages/flysystem.yaml` — nuevo
+- `api/config/packages/messenger.yaml` — modificado
+- `api/config/reference.php` — modificado
+- `api/frankenphp/docker-entrypoint.sh` — modificado
+- `api/migrations/2026/Version20260828134621.php` — nuevo
+- `api/symfony.lock` — modificado
+- `api/tools/deptrac/deptrac.yaml` — modificado
+- `compose.yaml` — modificado
+
+**Código de producción**
+
+- `api/src/Shared/Images/Application/DeleteImage.php` — nuevo
+- `api/src/Shared/Images/Application/UploadImage.php` — modificado
+- `api/src/Shared/Images/Domain/Entity/Image.php` — nuevo
+- `api/src/Shared/Images/Domain/Event/ImageDeletionRequested.php` — nuevo
+- `api/src/Shared/Images/Domain/Exception/EmptyImageInput.php` — modificado
+- `api/src/Shared/Images/Domain/Exception/FailureCategory.php` — modificado
+- `api/src/Shared/Images/Domain/Exception/ImageDecodingFailed.php` — modificado
+- `api/src/Shared/Images/Domain/Exception/ImageProcessingException.php` — modificado
+- `api/src/Shared/Images/Domain/Exception/ImageProcessingFailed.php` — modificado
+- `api/src/Shared/Images/Domain/Exception/ImageResourceLimitExceeded.php` — modificado
+- `api/src/Shared/Images/Domain/Exception/UnsupportedImageFormat.php` — modificado
+- `api/src/Shared/Images/Domain/Image.php` — borrado
+- `api/src/Shared/Images/Domain/ImageProcessor.php` — modificado
+- `api/src/Shared/Images/Domain/Repository/ImageRepository.php` — nuevo
+- `api/src/Shared/Images/Domain/Storage/ImageBytesNotFound.php` — nuevo
+- `api/src/Shared/Images/Domain/Storage/ImageStorage.php` — nuevo
+- `api/src/Shared/Images/Domain/Storage/ImageStorageException.php` — nuevo
+- `api/src/Shared/Images/Domain/Storage/ImageStorageFailed.php` — nuevo
+- `api/src/Shared/Images/Domain/Storage/ImageStorageUnavailable.php` — nuevo
+- `api/src/Shared/Images/Domain/Storage/StorageFailureCategory.php` — nuevo
+- `api/src/Shared/Images/Domain/Storage/StorageOperation.php` — nuevo
+- `api/src/Shared/Images/Infrastructure/FlysystemImageStorage.php` — nuevo
+- `api/src/Shared/Images/Infrastructure/ImagePreflightGuard.php` — modificado
+- `api/src/Shared/Images/Infrastructure/InterventionImageProcessor.php` — modificado
+- `api/src/Shared/Images/Infrastructure/Messenger/DeleteImageOnDeletionRequested.php` — nuevo
+- `api/src/Shared/Images/Infrastructure/Persistence/Doctrine/DoctrineImageRepository.php` — nuevo
+
+**Tests**
+
+- `api/tests/Functional/Shared/Images/DeleteImageIntegrationTest.php` — nuevo
+- `api/tests/Functional/Shared/Images/DoctrineImageRepositoryTest.php` — nuevo
+- `api/tests/Functional/Shared/Images/FixedClock.php` — nuevo
+- `api/tests/Functional/Shared/Images/ImagePersistenceTest.php` — nuevo
+- `api/tests/Functional/Shared/Images/ImageStorageWiringTest.php` — nuevo
+- `api/tests/Support/MessengerRoutingConfig.php` — modificado
+- `api/tests/Support/PersistentTransportPolicy.php` — modificado
+- `api/tests/Unit/Gate/BestEffortReportChannelGateTest.php` — modificado
+- `api/tests/Unit/Gate/PersistentTransportPolicyGateTest.php` — modificado
+- `api/tests/Unit/Gate/PersistentTransportRoutingShapeGateTest.php` — modificado
+- `api/tests/Unit/Shared/Images/Application/DeleteImageTest.php` — nuevo
+- `api/tests/Unit/Shared/Images/Application/FailingImageRepository.php` — nuevo
+- `api/tests/Unit/Shared/Images/Application/InMemoryImageRepository.php` — nuevo
+- `api/tests/Unit/Shared/Images/Application/InMemoryImageStorage.php` — nuevo
+- `api/tests/Unit/Shared/Images/Application/StubPersistenceFailure.php` — nuevo
+- `api/tests/Unit/Shared/Images/Application/UnavailableImageStorage.php` — nuevo
+- `api/tests/Unit/Shared/Images/Application/UnreadableImageRepository.php` — nuevo
+- `api/tests/Unit/Shared/Images/Application/UploadImageStorageAndPersistenceTest.php` — nuevo
+- `api/tests/Unit/Shared/Images/Application/UploadImageTest.php` — modificado
+- `api/tests/Unit/Shared/Images/Domain/ImageDeletionRequestedTest.php` — nuevo
+- `api/tests/Unit/Shared/Images/Domain/ImageTest.php` — modificado
+- `api/tests/Unit/Shared/Images/Domain/StorageFailureVocabularyTest.php` — nuevo
+- `api/tests/Unit/Shared/Images/ImageLifecycleListenerGateTest.php` — nuevo
+- `api/tests/Unit/Shared/Images/Infrastructure/FailingFilesystem.php` — nuevo
+- `api/tests/Unit/Shared/Images/Infrastructure/FlysystemImageStorageFailureContractTest.php` — nuevo
+- `api/tests/Unit/Shared/Images/Infrastructure/FlysystemImageStorageObservabilityTest.php` — nuevo
+- `api/tests/Unit/Shared/Images/Infrastructure/FlysystemImageStorageTest.php` — nuevo
+- `api/tests/Unit/Shared/Images/Infrastructure/FlysystemImageStorageUndecidableExistenceTest.php` — nuevo
+- `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorCanonicalizationTest.php` — modificado
+- `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorDeterminismTest.php` — modificado
+- `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorMimeHandlingTest.php` — modificado
+- `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorObservabilityTest.php` — modificado
+- `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorResourceLimitsTest.php` — modificado
+- `api/tests/Unit/Shared/Images/Infrastructure/Messenger/DeleteImageOnDeletionRequestedTest.php` — nuevo
+- `api/tests/Unit/Shared/Images/Infrastructure/FailingAfterPartialWriteFilesystem.php` — nuevo (code review)
+- `api/tests/Unit/Shared/Images/Domain/ImageIdTest.php` — modificado (code review)
+- `api/tests/Unit/Shared/Images/Infrastructure/TemporaryImageStorage.php` — modificado (code review)
+- `api/config/packages/messenger.yaml` — modificado (code review: `retry_strategy` de `async`)
+- `api/config/bundles.php` — modificado (code review: comentario de Twig/profiler restaurado)
+- `CLAUDE.md` — modificado (code review: criterio de decisión a largo plazo, y cómo se corre una review)
+- `api/tests/Unit/Shared/Images/Infrastructure/PartiallyWritingFilesystem.php` — nuevo
+- `api/tests/Unit/Shared/Images/Infrastructure/RecordingLogger.php` — modificado
+- `api/tests/Unit/Shared/Images/Infrastructure/TemporaryImageStorage.php` — nuevo
+- `api/tests/Unit/Shared/Images/Infrastructure/ThrowingLogger.php` — modificado
+
+**Documentación y artefactos**
+
+- `PRODUCTION_SECURITY_CHECKLIST.md` — modificado
+- `_bmad-output/implementation-artifacts/deferred-work.md` — modificado
+- `_bmad-output/implementation-artifacts/img-1-2-persistir-imagen-borrado-fiable-de-bytes.md` — modificado
+- `_bmad-output/implementation-artifacts/sprint-status-images.yaml` — modificado
+- `docs/adr/image-deletion-signal-transport.md` — nuevo
+- `docs/architecture-api.md` — modificado
+- `docs/index.md` — modificado
+- `docs/rules/database.md` — modificado
+
+Total: 89 ficheros.

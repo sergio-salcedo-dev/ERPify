@@ -110,6 +110,25 @@ final class PersistentTransportPolicyGateTest extends TestCase
     }
 
     #[Test]
+    public function everyAdrExceptedEventActuallyReachesATransport(): void
+    {
+        // `person :: <ADR>` claims the type is queued ANYWAY, so an event carrying that classification and
+        // reaching no transport has an exception arguing for something that is not happening: it is handled
+        // in process, inside the publisher's transaction, which is what the exception exists to avoid.
+        //
+        // Measured before this assertion existed: deleting the one routing line left this whole target and
+        // `php.lint.event-bus` at exit 0, because completeness demands a registry line "routed or not" and
+        // never reads the route.
+        $policy = $this->policy();
+        $violations = $policy->adrExceptedEventsReachingNoTransport(
+            $policy->config()->configuredRoutes(),
+            $policy->eventsInSource(),
+        );
+
+        $this->assertSame([], $violations, \implode("\n", $violations));
+    }
+
+    #[Test]
     public function everyDeclaredExceptionNamesAnAdrThatExists(): void
     {
         $policy = $this->policy();

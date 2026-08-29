@@ -8,6 +8,28 @@ framework:
                 options:
                     queue_name: async
                     auto_setup: false
+                # Declared, because the default is not a policy — it is whatever Symfony ships, and what it
+                # ships is `max_retries: 3, delay: 1000, multiplier: 2`: retries at 1 s, 2 s and 4 s, so a
+                # substrate unavailable for more than SEVEN SECONDS dead-letters the message. That budget
+                # was never chosen; no `retry_strategy` existed anywhere in `api/config`.
+                #
+                # Seven seconds does not survive an ordinary event: a deploy, a database failover, a volume
+                # remount, an operator clearing a full disk. And for one of the events on this transport the
+                # consequence is not a delayed side effect but a lost instruction —
+                # `ImageDeletionRequested` is a work item, not a fact, and nothing re-dispatches it from
+                # `event_store` (its consumer is an `#[AsMessageHandler]`, not a `Projector`), so once it
+                # ages out of `failed` the bytes it was to release are unreachable for ever.
+                #
+                # 1 s, 3 s, 9 s, 27 s, 81 s, 4 m, 12 m, 36 m, then capped at an hour: about three hours of
+                # coverage across ten attempts. The Doctrine transport re-queues a retry with a future
+                # `available_at` rather than holding a worker, so the cost of the long tail is rows waiting,
+                # not throughput. `failed` still catches whatever outlives it — the window is widened, never
+                # removed, and residual two of PRODUCTION_SECURITY_CHECKLIST.md §7 is what it does not close.
+                retry_strategy:
+                    max_retries: 10
+                    delay: 1000
+                    multiplier: 3
+                    max_delay: 3600000
             failed:
                 dsn: 'doctrine://default?queue_name=failed'
                 options:
@@ -22,15 +44,28 @@ framework:
             Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent: async
             Erpify\Backoffice\BankAccount\Domain\Event\BankAccountDeletedDomainEvent: async
             Erpify\Backoffice\BankAccount\Domain\Event\BankAccountStatusChangedDomainEvent: async
+            # Routed rather than left in-process, and the reason is the inverse of the usual one: an
+            # unrouted DomainEvent is handled inside the publisher's transaction, so a storage failure
+            # would roll back the owner's business write over bytes already destroyed. See
+            # docs/adr/image-deletion-signal-transport.md — and note the after-commit guarantee comes from
+            # `async` resolving to the Doctrine transport on the same connection, not from this line.
+            Erpify\Shared\Images\Domain\Event\ImageDeletionRequested: async
 
         # A queued event outlives the erasure of whoever it is about. Nothing in the erasure chain touches
         # either queue: `async` has no TTL and no prune, and `failed`'s 30-day retention sweep bounds the
         # window rather than closing it — so an id that reaches one of them survives the deletion the
         # application confirmed to the subject.
         #
-        # The rule, which the events above satisfy and no event named after a person can: an "aggregate id
-        # alone" payload is safe to queue if and only if the aggregate is not a natural person. For an event
-        # about a person the id IS the personal datum, so an empty payload proves nothing.
+        # The rule: an "aggregate id alone" payload is safe to queue if and only if the aggregate is not a
+        # natural person. For an event about a person the id IS the personal datum, so an empty payload
+        # proves nothing.
+        #
+        # Every event above satisfies it EXCEPT `ImageDeletionRequested`, whose type is classified `person`
+        # conservatively — the same identifier covers a bank logo and someone's avatar and the module cannot
+        # tell them apart — and which is routed anyway as the argued exception the registry requires. Read
+        # docs/adr/image-deletion-signal-transport.md before copying that line: the exception is granted on
+        # the ground that NOT routing it would run the deletion inside the publisher's transaction, not on
+        # the ground that the id is harmless there.
         #
         # Enforced by api/.persistent-transport-policy and the gate over it (`make php.lint.persistent-transport`).
         # Symfony's own SendEmailMessage stays unrouted for the neighbouring reason: it would serialise the whole

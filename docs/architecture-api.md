@@ -61,6 +61,7 @@ api/src/
     ├── Infrastructure/ { Http, Persistence, Serializer }         # kernel adapters/helpers
     ├── Clock/          { Domain, Infrastructure }                # time port + Symfony/native adapters
     ├── Event/          { Domain, Application, Infrastructure }   # event backbone: DomainEvent, EventBus, event store, projections
+    ├── Images/         { Domain, Application, Infrastructure }   # canonicalization pipeline + byte storage (Flysystem) + Image row; deletion is requested by the consumer, never decided here — adr/image-deletion-signal-transport.md
     ├── Mailer/         { Application, Infrastructure }           # notification-mail port + adapter
     ├── Monitoring/     { Infrastructure }                        # Sentry before_send filter/scrubber
     ├── Search/         { Domain, Application, Infrastructure }   # filters + keyset engine + cursor envelope
@@ -305,6 +306,18 @@ Full reference (mapping table, header rules, observability, code map, test surfa
   resolving each event to the transports it would really be sent through rather than reading routing keys as
   class names. Its blind spots are enumerated in the registry header. It says nothing about `event_store`, which is appended to
   regardless of routing; that table's own person ids are erased by the identity erasure, not by this registry.
+- **`ImageDeletionRequested` is the one event routed for a reason other than fan-out.** `Shared/Images` owns
+  the physical removal of an image's bytes and never decides an image's lifecycle: the consuming aggregate
+  publishes the request after its own commit, and `DeleteImageOnDeletionRequested` runs `ImageStorage::delete()`
+  and *then* the row — an order whose every intermediate state is retryable, since deleting an absent object is
+  a success while an object with no row is unreachable for ever. Routing it to `async` is what keeps that work
+  out of the owner's transaction: an unrouted `DomainEvent` is handled in process, and use cases publish inside
+  `transactional(...)`, so a storage failure would roll back the owner's business write and leave a live
+  reference over destroyed bytes. `Shared.Image` is nonetheless classified `person` in
+  [`api/.persistent-transport-policy`](../api/.persistent-transport-policy) — the same identifier type covers a
+  bank logo and a person's avatar and this module cannot tell them apart — so the routing is an argued ADR
+  exception rather than a `non-person` verdict: [`adr/image-deletion-signal-transport.md`](./adr/image-deletion-signal-transport.md),
+  which also records what the classification does **not** buy.
 - **A persisted reference to a person needs a named owner of its erasure.** Because no object graph crosses a
   module boundary, a context that needs a person holds their id — and the two cross-context cases carry no
   physical foreign key at all, so nothing cascades when the identity row is deleted. Every `Types::GUID` column

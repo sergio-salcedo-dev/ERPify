@@ -6,6 +6,8 @@ namespace Erpify\Tests\Unit\Shared\Images\Application;
 
 use Erpify\Shared\Images\Application\UploadImage;
 use Erpify\Shared\Images\Domain\CanonicalImage;
+use Erpify\Shared\Images\Domain\ImageProcessor;
+use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -21,7 +23,7 @@ final class UploadImageTest extends TestCase
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/png', 10, 20);
         $processor = new StubImageProcessor($canonicalImage);
-        $uploadImage = new UploadImage($processor);
+        $uploadImage = $this->uploadImageWith($processor);
 
         $image = $uploadImage->upload('raw-bytes');
 
@@ -33,13 +35,13 @@ final class UploadImageTest extends TestCase
     }
 
     /**
-     * AC 2 / NFR4: the module mints the id internally — nothing a caller passes in ever reaches the
+     * The module mints the id internally — nothing a caller passes in ever reaches the
      * processor, because the public signature has no parameter for one to travel through.
      */
     public function testGeneratesADistinctIdInternallyOnEveryUpload(): void
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/png', 10, 20);
-        $uploadImage = new UploadImage(new StubImageProcessor($canonicalImage));
+        $uploadImage = $this->uploadImageWith(new StubImageProcessor($canonicalImage));
 
         $first = $uploadImage->upload('raw-bytes');
         $second = $uploadImage->upload('raw-bytes');
@@ -48,7 +50,7 @@ final class UploadImageTest extends TestCase
     }
 
     /**
-     * AC 6: no signature anywhere in this class accepts a conservation-contract parameter — the
+     * No signature anywhere in this class accepts a conservation-contract parameter — the
      * only two arguments {@see UploadImage::upload()} declares are bytes and an optional declared
      * media type.
      */
@@ -68,7 +70,7 @@ final class UploadImageTest extends TestCase
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/jpeg', 10, 20);
         $processor = new StubImageProcessor($canonicalImage);
-        $uploadImage = new UploadImage($processor);
+        $uploadImage = $this->uploadImageWith($processor);
 
         $uploadImage->upload('raw-bytes', 'image/jpeg');
 
@@ -82,10 +84,24 @@ final class UploadImageTest extends TestCase
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/jpeg', 10, 20);
         $processor = new StubImageProcessor($canonicalImage);
-        $uploadImage = new UploadImage($processor);
+        $uploadImage = $this->uploadImageWith($processor);
 
         $uploadImage->upload('raw-bytes');
 
         $this->assertSame([['bytes' => 'raw-bytes', 'declaredMediaType' => null]], $processor->receivedCalls);
+    }
+
+    /**
+     * The collaborators the storage and persistence steps need. Cases here are about assembling the
+     * aggregate, so they take working in-memory implementations of the ports and assert nothing about them.
+     */
+    private function uploadImageWith(ImageProcessor $processor): UploadImage
+    {
+        return new UploadImage(
+            $processor,
+            new InMemoryImageStorage(),
+            new InMemoryImageRepository(),
+            new ImmediateTransactionManager(),
+        );
     }
 }

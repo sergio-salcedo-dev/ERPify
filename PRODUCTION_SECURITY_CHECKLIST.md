@@ -68,6 +68,16 @@ you change anything here.
       `node`/`debian`). Never unpin.
 - [ ] Xdebug is disabled in prod images.
 
+- [ ] **Image bytes live on the `image_storage` named volume, mounted at `/app/storage` by both `php` and
+      `messenger_worker`.** It is not optional and it admits no residual: with no volume the storage adapter
+      writes into the container's writable layer, so every redeploy empties the store while every `image`
+      row survives — and nothing reports it, because this module deliberately keeps no bookkeeping that
+      could find the divergence. The prod image creates the mount point owned by `www-data` before anything
+      mounts over it, since Docker seeds a new named volume from the image's directory ownership and the
+      runtime user is unprivileged. Verify after deploy: the path is a mountpoint, it is writable by the
+      runtime user, it is not inside the source tree, it is not served by Caddy, and bytes written before a
+      `--force-recreate` are still readable after it.
+
 ## 4. Network isolation
 
 - [ ] Postgres sits on the `internal` `backend` network with **no published
@@ -1520,6 +1530,53 @@ mitigated state. Accepting one means recording who accepted it and against which
       a name the vocabulary failed to enumerate, which is the direction that actually shipped.
       **Expiry: re-assess before the first production deployment or the first customer**, whichever
       comes first.
+
+- [ ] **Image bytes: what the storage root guarantees, and the four things it does not.** Residuals of
+      `Shared/Images`, listed together because each is invisible from the others.
+      **One — the root is provisioned by the deployment, conditionally, and that condition is the control.**
+      `compose.yaml` mounts the named volume `image_storage` at `/app/storage` for both `php` and
+      `messenger_worker`, and the entrypoint creates `<STORAGE_LOCAL_PATH>/images` **only when that path is
+      genuinely a mount point** (its device differs from its parent's). The application refuses to invent
+      the root: `flysystem.yaml` sets `lazy_root_creation: true` and the adapter guards the root's existence
+      before every operation including the write — and it is the guard, not the flag, that delivers this;
+      the flag only defers the library's own `mkdir` to the first write. Measured, that substitution is not
+      a slow leak but an immediate one: with the root absent every `delete()` answers success, so the
+      application reports erasures of bytes that are somewhere else entirely. A deployment that drops the
+      volume therefore fails loudly on every image operation instead of writing into a layer that dies with
+      the container. **What still has to be verified at deploy time is that the volume is mounted at all** —
+      nothing here reports a deployment that simply never uses images.
+      **Two — a lost deletion request is silent and permanent.** `ImageDeletionRequested` is queued; if it is
+      never consumed, or dead-letters and ages out of the 30-day `failed` retention, the bytes and the row
+      stay alive indefinitely with no monitoring on that axis. **How easily it dead-letters is the half that
+      was never measured**: no `retry_strategy` existed anywhere in `api/config`, so the whole `async`
+      transport ran on Symfony's default of three retries at 1 s, 2 s and 4 s — a storage outage longer than
+      seven seconds was enough. The transport now declares ten attempts over about three hours, which makes
+      the residual rare rather than closing it; the 30-day prune destroys the request either way, and
+      `event_store` cannot re-dispatch it because the consumer is a message handler and not a projector. There is deliberately no reconciliation
+      between rows and stored objects: the bookkeeping that would find an orphan is the same bookkeeping the
+      module refuses to build, so nothing can distinguish "never asked for" from "asked for and lost". A
+      second latent case joins it the day a consumer adds a foreign key into `image`: the row deletion would
+      then fail identically on every retry, dead-lettering with the row alive and the bytes already gone.
+      **Three — an orphaned object is the likeness itself, and nothing can ever find it again.** A store that
+      succeeded followed by a persist that did not leaves canonical bytes whose identifier was handed to no
+      caller, with no row and no reference. For an avatar those bytes are the person's picture, not an opaque
+      id — this is the residual with the strongest personal-data content of the four, and the only one that
+      is permanently unerasable **by construction** rather than by an absent control: with no bookkeeping,
+      no query can enumerate them. Bounded by the failure rate, and by nothing else. (A write the substrate
+      corrupted is *not* in this bucket: the adapter removes an object its integrity check refused.)
+      **Four — `event_store` keeps the `ImageId` for ever, and routing changes nothing.**
+      `PersistDomainEventMiddleware` appends every dispatched event with its real `aggregate_id` before
+      Messenger picks a transport; identity erasure rewrites by the value of the **subject's** identifier,
+      which an `ImageId` is not, so the row survives. Note that no registry in this repository will ever ask
+      for an owner here: `api/.person-reference-policy` classifies a column by whether it holds a natural
+      person's identifier, and an image id is not one — so a future `User::$avatarImageId` gets a
+      `non-person` line and no `PersonReferenceSource`. The obligation is the consuming epic's, and it has
+      no detective control. Recorded in
+      [`docs/adr/image-deletion-signal-transport.md`](docs/adr/image-deletion-signal-transport.md) D3, which
+      also states what classifying `Shared.Image` as `person` does **not** buy — it forced the decision into
+      a diff, and nothing more. Closing two and three is a reconciliation the consuming epic would have to
+      justify against the no-bookkeeping decision; closing four is that epic's too, since only a consumer
+      knows whether a given image denotes a person.
 
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not

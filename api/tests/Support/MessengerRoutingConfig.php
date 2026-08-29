@@ -16,9 +16,24 @@ use Symfony\Component\Yaml\Yaml;
  * config, a routing value has three accepted shapes, and PHP config is executed rather than parsed.
  *
  * @internal test support
+ *
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity") the branching is the shape of what Symfony accepts
+ *                                                     across those files — a transport written as a bare
+ *                                                     DSN or as a map, a `when@test` section, a routing
+ *                                                     value in three forms — and every extraction that
+ *                                                     keeps a method readable adds to this same total
  */
 final readonly class MessengerRoutingConfig
 {
+    /** The transport whose name is trusted to mean "durable, and on the caller's own connection". */
+    public const string PERSISTED_TRANSPORT = 'async';
+
+    /** What `async` must be spelled as outside the test environment. */
+    public const string TRANSPORT_ENV_PLACEHOLDER = '%env(MESSENGER_TRANSPORT_DSN)%';
+
+    /** The substitution the test environment makes, pinned so a change to it has to be argued. */
+    public const string NON_TRANSACTIONAL_TEST_DSN_PREFIX = 'in-memory://';
+
     /** The only transport that never persists a message body, in every environment. */
     public const string NON_PERSISTED_TRANSPORT = 'sync';
 
@@ -133,6 +148,99 @@ final readonly class MessengerRoutingConfig
         }
 
         return $violations;
+    }
+
+    /**
+     * The dual of {@see misdeclaredNonPersistedTransports()}, and the half that was missing.
+     *
+     * `async` is trusted by NAME as the durable, transactional transport: the after-commit guarantee of
+     * every event routed to it comes from that name resolving to a Doctrine DSN on the SAME connection the
+     * use case is already writing through. Redefining it to anything else removes the guarantee while every
+     * routing check stays green, which is the same shape the `sync` half exists to refuse.
+     *
+     * The test environment's own override is asserted rather than tolerated. It replaces `async` with an
+     * in-memory transport, which does NOT join the transaction — measured, a rollback leaves the message
+     * held — so no test in this suite can demonstrate the guarantee end to end. Pinning that substitution
+     * means a later change to it turns this red and forces the claim to be revisited, instead of leaving a
+     * comment that has quietly stopped being true.
+     *
+     * What it cannot do, and this belongs in the docblock rather than only in an ADR: three of the five
+     * places that carry this DSN are `${MESSENGER_TRANSPORT_DSN:-…}` interpolations in the compose files,
+     * so the deployment's environment wins. A green here proves nobody committed an accident to the
+     * repository; it proves nothing about the value a deployment actually resolves.
+     *
+     * @return list<string>
+     */
+    public function misdeclaredPersistedTransport(): array
+    {
+        $violations = [];
+
+        foreach ($this->configFiles() as $file) {
+            $config = Yaml::parseFile($file, Yaml::PARSE_CUSTOM_TAGS);
+
+            foreach (\is_array($config) ? $config : [] as $sectionName => $section) {
+                $violation = $this->misdeclarationIn($file, (string) $sectionName, $section);
+
+                if (null !== $violation) {
+                    $violations[] = $violation;
+                }
+            }
+        }
+
+        return $violations;
+    }
+
+    /**
+     * The verdict for ONE section of one file, or `null` when it declares nothing about this transport.
+     *
+     * Split out so the loop above stays a loop: the branching here is the shape of what Symfony accepts —
+     * a transport written as a bare DSN or as a map, and a `when@test` section whose substitution is
+     * pinned rather than judged — not a decision this reader gets to simplify away.
+     */
+    private function misdeclarationIn(string $file, string $sectionName, mixed $section): ?string
+    {
+        $dsn = $this->transportsIn($section)[self::PERSISTED_TRANSPORT] ?? null;
+        $dsn = \is_array($dsn) ? ($dsn['dsn'] ?? null) : $dsn;
+
+        if (null === $dsn) {
+            return null;
+        }
+
+        if (\str_starts_with($sectionName, 'when@test')) {
+            if (\is_string($dsn) && \str_starts_with($dsn, self::NON_TRANSACTIONAL_TEST_DSN_PREFIX)) {
+                return null;
+            }
+
+            return \sprintf(
+                '%s [%s] declares "%s" as %s; the pinned test substitution is %s',
+                $file,
+                $sectionName,
+                self::PERSISTED_TRANSPORT,
+                \json_encode($dsn),
+                self::NON_TRANSACTIONAL_TEST_DSN_PREFIX,
+            );
+        }
+
+        if (\is_string($dsn) && $this->resolvesToADurableTransport($dsn)) {
+            return null;
+        }
+
+        return \sprintf(
+            '%s [%s] declares "%s" as %s; it must resolve to a Doctrine DSN',
+            $file,
+            $sectionName,
+            self::PERSISTED_TRANSPORT,
+            \json_encode($dsn),
+        );
+    }
+
+    /**
+     * Either the env placeholder the deployment fills, or a literal Doctrine DSN. Anything else — a broker,
+     * an in-memory transport, a `sync://` — breaks the coupling to the caller's transaction.
+     */
+    private function resolvesToADurableTransport(string $dsn): bool
+    {
+        return self::TRANSPORT_ENV_PLACEHOLDER === $dsn || \str_starts_with($dsn, 'doctrine://');
     }
 
     /**

@@ -195,6 +195,29 @@ Erpify\Iam\Invitation\Domain\Entity\Invitation::$id => non-person
 Erpify\Iam\Session\Domain\Entity\Session::$id => non-person
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$id => non-person
 
+# The image aggregate's own primary key. It denotes a stored representation, never the person a picture may
+# happen to be of: this module holds no owner, no filename and no classification, and it is the CONSUMING
+# context that decides an image belongs to a natural person.
+#
+# What this registry will and will not ask for, stated because the obvious expectation is wrong. This file
+# classifies a column by whether it holds the identifier OF A NATURAL PERSON, and every `person ::` line in
+# it holds a user id. A future `User::$avatarImageId` holds an IMAGE id, so by that rule it is `non-person`
+# too — this registry is never going to demand an erasure owner for an avatar's bytes, and no
+# `PersonReferenceSource` will ever be required for one. The obligation is real and it belongs to the
+# consuming epic; it simply has no detective control here, which is the residual recorded in
+# PRODUCTION_SECURITY_CHECKLIST.md rather than a gap this line closes.
+#
+# Note this is NOT the same question `api/.persistent-transport-policy` answers for `Shared.Image`, and the
+# two verdicts differ on purpose. That one asks what a value QUEUED on an unbounded transport may denote and
+# answers conservatively, because nothing there is ever erased. This one asks what a ROW holds, and this row
+# is erased by its own deletion path.
+#
+# The identifier is deliberately a plain `Types::GUID` rather than a dedicated DBAL type, and that is what
+# keeps this line possible at all: the gate builds its universe by reading `#[ORM\Column]` attributes whose
+# type IS `Types::GUID`, so a custom `image_id` type would drop the column out of the sweep entirely and this
+# classification would go unasked for rather than being made and checked.
+Erpify\Shared\Images\Domain\Entity\Image::$id => non-person
+
 # References between aggregates that are not people.
 Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::$bankId => non-person
 Erpify\Organization\Membership\Domain\Entity\Membership::$organizationId => non-person

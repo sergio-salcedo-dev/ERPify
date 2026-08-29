@@ -210,6 +210,12 @@ deptrac:
         - name: Vendor.Intervention
           collectors: [{ type: classLike, value: ^Intervention\\.* }]
 
+        # league/flysystem — the storage adapter's filesystem library. Infrastructure-only, for the same
+        # reason as the decoder above: this module's Domain/Storage/ImageStorage is a pure-PHP port, and the
+        # library's own exception hierarchy never crosses into Application.
+        - name: Vendor.Flysystem
+          collectors: [{ type: classLike, value: ^League\\Flysystem\\.* }]
+
     ruleset:
         # Domain rule is identical for every module: only the shared-kernel Domain
         # and the blessed external namespaces. No sibling layer, no framework runtime.
@@ -465,6 +471,7 @@ deptrac:
             - Vendor.Guzzle
             - Vendor.Sentry
             - Vendor.Intervention
+            - Vendor.Flysystem
 
     # Published cross-context seams — the exact (importer => imported) pairs blessed
     # in api/.bounded-context-allowlist. Keep the two lists in sync.

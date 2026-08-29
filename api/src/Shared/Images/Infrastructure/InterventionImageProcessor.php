@@ -14,6 +14,7 @@ use Intervention\Image\Exceptions\ImageException;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Interfaces\ImageInterface;
 use Psr\Log\LoggerInterface;
+use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Throwable;
 
@@ -25,7 +26,7 @@ use Throwable;
  *
  * Canonicalization is v1 IMPLICIT: no version field is persisted anywhere in this module. The
  * trigger for introducing an explicit versioning scheme is the first time this pipeline's output
- * changes in code merged to `main` (MEDIA-8).
+ * changes in code merged to `main`.
  *
  * Supported formats extend the epic's cited precedent (jpeg/png/webp) with GIF. Verified against
  * the installed `intervention/image` source: under the GD driver, the non-GIF decode path always
@@ -33,16 +34,16 @@ use Throwable;
  * regardless of any application-level handling — so "reduce an animated source to one frame" can
  * never be genuinely exercised through WebP here. GIF is the only allowlisted format whose
  * animation is actually decoded in full (via the `intervention/gif` companion package, gated by
- * the `decodeAnimation: false` driver option below), which is what makes AC 7's frame limit and
- * the canonicalization contract's "exactly one frame" property a real, tested claim rather than a
+ * the `decodeAnimation: false` driver option below), which is what makes the frame limit and the
+ * canonicalization contract's "exactly one frame" property a real, tested claim rather than a
  * vacuous one.
  *
- * Exception translation (AC 9, Task 4) catches ONLY `Intervention\Image\Exceptions\ImageException`
+ * Exception translation catches ONLY `Intervention\Image\Exceptions\ImageException`
  * at each stage — deliberately, not `\Throwable`. A `\TypeError`/`\ArgumentCountError`/OOM `\Error`
  * is a programming or environment defect, not a business rejection of untrusted image content, and
- * disguising it as one would hide exactly the failure NFR8 wants surfaced loudly rather than
- * silently absorbed as "just a bad image" (this is the documented decision Task 4 requires when the
- * library's exception hierarchy is trusted: the narrowest catch, not the widest). The residual risk
+ * disguising it as one would hide exactly the failure that must surface loudly rather than be
+ * silently absorbed as "just a bad image": where the library's exception hierarchy is trusted, the
+ * catch is the narrowest one, never the widest. The residual risk
  * this accepts is that a decode-library-internal failure Intervention itself does not wrap in
  * `ImageException` would propagate uncaught rather than being translated/logged here — verified
  * empirically as reachable only for genuinely malformed library usage (a misconfigured
@@ -69,15 +70,15 @@ final readonly class InterventionImageProcessor implements ImageProcessor
         #[Autowire(service: 'monolog.logger.observability')]
         private LoggerInterface $logger,
     ) {
-        // `decodeAnimation: false` is the NFR8 frame-count guard (Task 5's "Decode sin animación"):
-        // it makes the GD driver decode only the first frame of an animated source instead of
+        // `decodeAnimation: false` is the frame-count resource guard: it makes the GD driver decode
+        // only the first frame of an animated source instead of
         // materializing every frame, bounding the resource cost regardless of how many frames the
         // original carries.
         $this->imageManager = new ImageManager(new Driver(), decodeAnimation: false);
         $this->preflightGuard = new ImagePreflightGuard($maxInputBytes, $maxDecodedPixels, $maxInputDimension);
     }
 
-    public function process(string $bytes, ?string $declaredMediaType = null): CanonicalImage
+    public function process(#[SensitiveParameter] string $bytes, ?string $declaredMediaType = null): CanonicalImage
     {
         $format = 'unknown';
 
@@ -134,8 +135,8 @@ final readonly class InterventionImageProcessor implements ImageProcessor
 
     /**
      * Logs, then re-throws — the only place this class raises. Ownership: this adapter emits the
-     * NFR9 signal for every failure it detects or translates; `UploadImage` never logs the same
-     * failure again (Task 6).
+     * observability signal for every failure it detects or translates; `UploadImage` never logs the
+     * same failure again.
      */
     private function reject(
         string $event,

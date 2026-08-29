@@ -28,6 +28,29 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 		fi
 	fi
 
+	# The image-storage root the application refuses to invent for itself. It is provisioned here rather
+	# than in the image, and ONLY when something is genuinely mounted at its parent — compared by device
+	# id, since a mounted volume and the container's own filesystem never share one.
+	#
+	# The condition is the whole point. `lazy_root_creation` only defers the library's own mkdir to the
+	# first write, so what actually makes an unmounted volume fail loudly is the application's guard on the
+	# root existing; provision it unconditionally and that guard stops meaning anything. A root created
+	# inside the container's writable layer makes every deletion answer success — a confirmed erasure of
+	# bytes that are somewhere else entirely — which is the one failure this module exists to refuse.
+	#
+	# All three branches speak. The third one — the path is not there at all — used to be the `if`'s
+	# implicit else and printed nothing, so a mistyped mount left a container that boots clean, passes its
+	# healthcheck, and fails every image operation hours later with no line connecting the two.
+	if [ -n "${STORAGE_LOCAL_PATH:-}" ]; then
+		if [ ! -d "$STORAGE_LOCAL_PATH" ]; then
+			echo "! $STORAGE_LOCAL_PATH does not exist — leaving the image storage root unprovisioned."
+		elif [ "$(stat -c '%d' "$STORAGE_LOCAL_PATH")" != "$(stat -c '%d' "$(dirname "$STORAGE_LOCAL_PATH")")" ]; then
+			mkdir -p "$STORAGE_LOCAL_PATH/images"
+		else
+			echo "! $STORAGE_LOCAL_PATH is not a mount point — leaving the image storage root unprovisioned."
+		fi
+	fi
+
 	# Display information about the current project
 	# Or about an error in project initialization
 	php bin/console -V

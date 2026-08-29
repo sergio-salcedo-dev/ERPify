@@ -11,8 +11,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 /**
- * AC 14 (anti-polyglot) and the canonicalization contract's #4 (single frame), #5 (EXIF
- * orientation baked into pixels) and #6 (non-semantic metadata never affects the digest).
+ * The anti-polyglot guarantee, plus three properties of the canonicalization contract: a single
+ * frame, EXIF orientation baked into the pixels, and non-semantic metadata never affecting the
+ * digest.
  *
  * @internal
  */

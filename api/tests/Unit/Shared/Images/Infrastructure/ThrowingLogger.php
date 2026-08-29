@@ -10,9 +10,9 @@ use RuntimeException;
 use Stringable;
 
 /**
- * PSR-3 logger that always throws, so a test can prove NFR9's observability line is never
- * load-bearing for the rejection itself: the original domain exception must still propagate even
- * when the logger call fails.
+ * PSR-3 logger that always throws, so a test can prove the observability line is never load-bearing
+ * for the rejection itself: the original domain exception must still propagate even when the logger
+ * call fails.
  *
  * @internal
  */
