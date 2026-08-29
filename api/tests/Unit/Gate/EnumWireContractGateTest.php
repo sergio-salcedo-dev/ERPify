@@ -7,6 +7,8 @@ namespace Erpify\Tests\Unit\Gate;
 use BackedEnum;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
+use Erpify\Tests\Support\RepositoryRoot;
+use Erpify\Tests\Support\TypeScriptSource;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -113,7 +115,7 @@ final class EnumWireContractGateTest extends TestCase
     ): void {
         unset($enum, $vocabularyFile, $consequence);
 
-        $code = $this->withoutComments($this->read($this->repoRoot() . '/' . $guardFile));
+        $code = TypeScriptSource::withoutComments($this->read($this->repoRoot() . '/' . $guardFile));
 
         $derivations = \preg_match_all(
             '/const\s+' . \preg_quote($guard, '/') . '\s*:[^=]*=\s*new Set\(\s*'
@@ -200,7 +202,7 @@ final class EnumWireContractGateTest extends TestCase
      */
     private function declaredVocabulary(string $relativePath, string $constant): array
     {
-        $code = $this->withoutComments($this->read($this->repoRoot() . '/' . $relativePath));
+        $code = TypeScriptSource::withoutComments($this->read($this->repoRoot() . '/' . $relativePath));
         $quoted = \preg_quote($constant, '/');
 
         $declarations = \preg_match_all(
@@ -239,43 +241,16 @@ final class EnumWireContractGateTest extends TestCase
     }
 
     /**
-     * Blanks TypeScript comments before anything is extracted. Without this the gate reads text that
-     * never executes: a value named in a note beside the literal (`"CLOSED", // "SUSPENDED" next`) would
-     * join the declared set, and a docblock quoting the old declaration would BE the single declaration
-     * once the real one stopped matching — both green while the guard rejects the value.
-     *
-     * The blanking is textual, so a `//` inside a string literal blanks the rest of that line. That can
-     * only remove text from the haystack, never invent it: the worst it can do is turn a declaration
-     * into no declaration, which this gate already fails on.
-     */
-    private function withoutComments(string $source): string
-    {
-        $stripped = \preg_replace(['#/\*.*?\*/#s', '#//[^\n]*#'], '', $source);
-
-        $this->assertIsString($stripped);
-
-        return $stripped;
-    }
-
-    /**
-     * The PWA tree sits outside the `./api` build context, so in the container it arrives only through the
-     * read-only `./` bind mount at `/app/repo` declared in `compose.dev.yaml`. Missing it is a failure, not
-     * a skip: a contract gate that passes when it cannot see one of the two sides reports an agreement it
-     * never checked.
+     * The subject sits outside the `./api` build context, so in the container it arrives only through the
+     * read-only `./` bind mount at `/app/repo` declared in `compose.dev.yaml`. Missing it is a failure and
+     * never a skip: a gate that passes when it cannot see what it compares reports an agreement it never
+     * checked.
      */
     private function repoRoot(): string
     {
-        $apiRoot = \dirname(__DIR__, 3);
-
-        foreach ([\dirname($apiRoot), \dirname($apiRoot) . '/repo'] as $candidate) {
-            if (\is_dir($candidate . '/pwa/src')) {
-                return $candidate;
-            }
-        }
-
-        $this->fail(
-            'The PWA tree is not reachable, so this gate cannot check anything. Inside the container it '
-            . 'comes from the read-only `./` bind mount at /app/repo declared in compose.dev.yaml — '
+        return RepositoryRoot::path() ?? $this->fail(
+            'The PWA half of the enum wire contract is unreachable, so this gate cannot compare anything. Inside the '
+            . 'container it comes from the read-only `./` bind mount at /app/repo declared in compose.dev.yaml — '
             . 'restore it rather than relaxing this failure into a skip.',
         );
     }

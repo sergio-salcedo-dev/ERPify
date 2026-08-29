@@ -19,6 +19,7 @@ use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ComparesOpaqueRefusals;
+use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -49,6 +50,7 @@ use Symfony\Component\HttpFoundation\Response;
 final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
 {
     use ComparesOpaqueRefusals;
+    use ResolvesContainerServices;
 
     private const string RESET_PATH = '/api/v1/backoffice/reset-password';
 
@@ -201,20 +203,5 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
                 'password' => self::SUBMITTED_PASSWORD,
             ]),
         );
-    }
-
-    /**
-     * @template T of object
-     *
-     * @param class-string<T> $id
-     *
-     * @return T
-     */
-    private function service(string $id): object
-    {
-        $service = self::getContainer()->get($id);
-        $this->assertInstanceOf($id, $service);
-
-        return $service;
     }
 }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Gate;
 
 use Erpify\Shared\Audit\Domain\AuditRedaction;
+use Erpify\Tests\Support\RepositoryRoot;
+use Erpify\Tests\Support\TypeScriptSource;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -68,7 +70,7 @@ final class AuditRedactionSentinelParityTest extends TestCase
 
     private function renderedSentinel(): string
     {
-        $source = $this->withoutComments($this->read($this->repoRoot() . '/' . self::RENDER_SITE));
+        $source = TypeScriptSource::withoutComments($this->read($this->repoRoot() . '/' . self::RENDER_SITE));
 
         $rendered = \preg_match_all('#>\s*([^<>{}]+?)\s*</span>#s', $source, $matches);
 
@@ -86,39 +88,17 @@ final class AuditRedactionSentinelParityTest extends TestCase
     }
 
     /**
-     * Blanks TypeScript comments before anything is extracted. Load-bearing here rather than defensive:
-     * the component's own docblock spells the sentinel out twice, so a gate reading the raw file could
-     * satisfy itself from prose while the rendered literal had drifted.
-     */
-    private function withoutComments(string $source): string
-    {
-        $stripped = \preg_replace(['#/\*.*?\*/#s', '#//[^\n]*#'], '', $source);
-
-        $this->assertIsString($stripped);
-
-        return $stripped;
-    }
-
-    /**
-     * The PWA tree sits outside the `./api` build context, so in the container it arrives only through the
-     * read-only `./` bind mount at `/app/repo` declared in `compose.dev.yaml`. Missing it is a failure, not
-     * a skip: a parity gate that passes when it cannot see one of the two sites reports an agreement it
-     * never checked.
+     * The subject sits outside the `./api` build context, so in the container it arrives only through the
+     * read-only `./` bind mount at `/app/repo` declared in `compose.dev.yaml`. Missing it is a failure and
+     * never a skip: a gate that passes when it cannot see what it compares reports an agreement it never
+     * checked.
      */
     private function repoRoot(): string
     {
-        $apiRoot = \dirname(__DIR__, 3);
-
-        foreach ([\dirname($apiRoot), \dirname($apiRoot) . '/repo'] as $candidate) {
-            if (\is_dir($candidate . '/pwa/src')) {
-                return $candidate;
-            }
-        }
-
-        $this->fail(
-            'The PWA tree is not reachable, so this gate cannot check anything. Inside the container it '
-            . 'comes from the read-only `./` bind mount at /app/repo declared in compose.dev.yaml — '
-            . 'restore it rather than relaxing this failure into a skip.',
+        return RepositoryRoot::path() ?? $this->fail(
+            'The PWA site of the redaction sentinel is unreachable, so this parity gate cannot compare anything. '
+            . 'Inside the container it comes from the read-only `./` bind mount at /app/repo declared in '
+            . 'compose.dev.yaml — restore it rather than relaxing this failure into a skip.',
         );
     }
 

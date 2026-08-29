@@ -14,6 +14,7 @@ use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
 use Erpify\Organization\Organization\Infrastructure\Cli\ProvisionOrganizationCommand;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
@@ -35,6 +36,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(CreateInitialAdministratorCommand::class)]
 final class BootstrapCommandsTest extends KernelTestCase
 {
+    use ResolvesContainerServices;
+
     private const string TRUNCATE_SQL = 'TRUNCATE membership, organization, identity_user';
 
     private const string ORGANIZATION_NAME = 'ERPify';
@@ -179,21 +182,6 @@ final class BootstrapCommandsTest extends KernelTestCase
         \assert(\is_numeric($count));
 
         return (int) $count;
-    }
-
-    /**
-     * @template T of object
-     *
-     * @param class-string<T> $id
-     *
-     * @return T
-     */
-    private function service(string $id): object
-    {
-        $service = self::getContainer()->get($id);
-        $this->assertInstanceOf($id, $service);
-
-        return $service;
     }
 
     private function truncate(): void

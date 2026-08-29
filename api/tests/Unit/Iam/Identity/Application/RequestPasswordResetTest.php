@@ -134,11 +134,12 @@ final class RequestPasswordResetTest extends TestCase
             new RecordingPasswordResetEmailSender(),
         )->request(UserMother::DEFAULT_EMAIL);
 
-        // The pending link is GONE from the store, which is the guarantee — "deleteAllForUser was called"
-        // is satisfied by a supersede that leaves the superseded row readable, and two live reset links for
-        // one identity is exactly the state the supersede exists to prevent.
-        $this->assertNotInstanceOf(PasswordResetToken::class, $tokens->findById(self::SUPERSEDED_TOKEN_ID));
-
+        // Deliberately NOT asserted here: that the superseded row has stopped being readable. That is
+        // read-after-delete inside one unit of work, which `PasswordResetTokenRepository::deleteAllForUser()`
+        // declares undefined — the Doctrine adapter's `find()` consults an identity map a bulk DELETE does
+        // not evict. Asserting it would pin a promise the port refuses to make and hand every future adapter
+        // the gymnastics of keeping it. What the supersede actually guarantees is the ORDER, and that is
+        // asserted below at the instant of the write.
         $this->assertCount(1, $tokens->saved);
         $issuedId = $tokens->saved[0]->getId();
         $this->assertIsString($issuedId);

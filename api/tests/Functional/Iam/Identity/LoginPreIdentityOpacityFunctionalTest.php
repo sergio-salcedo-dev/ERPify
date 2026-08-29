@@ -16,6 +16,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ComparesOpaqueRefusals;
+use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -56,6 +57,7 @@ use Symfony\Component\HttpFoundation\Response;
 final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
 {
     use ComparesOpaqueRefusals;
+    use ResolvesContainerServices;
 
     private const string LOGIN_PATH = '/api/v1/backoffice/login';
 
@@ -187,20 +189,5 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
             ],
             content: (string) \json_encode(['email' => $email, 'password' => $password]),
         );
-    }
-
-    /**
-     * @template T of object
-     *
-     * @param class-string<T> $id
-     *
-     * @return T
-     */
-    private function service(string $id): object
-    {
-        $service = self::getContainer()->get($id);
-        $this->assertInstanceOf($id, $service);
-
-        return $service;
     }
 }

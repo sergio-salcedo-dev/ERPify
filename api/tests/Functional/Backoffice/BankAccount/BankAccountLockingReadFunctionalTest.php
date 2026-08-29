@@ -10,6 +10,7 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountRepository;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -33,6 +34,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(DoctrineBankAccountRepository::class)]
 final class BankAccountLockingReadFunctionalTest extends KernelTestCase
 {
+    use ResolvesContainerServices;
+
     private EntityManagerInterface $entityManager;
 
     private BankAccountRepository $accounts;
@@ -100,20 +103,5 @@ final class BankAccountLockingReadFunctionalTest extends KernelTestCase
     private function unusedIban(string $accountId): string
     {
         return 'ES00' . \strtoupper(\substr(\str_replace('-', '', $accountId), 0, 20));
-    }
-
-    /**
-     * @template T of object
-     *
-     * @param class-string<T> $id
-     *
-     * @return T
-     */
-    private function service(string $id): object
-    {
-        $service = self::getContainer()->get($id);
-        $this->assertInstanceOf($id, $service);
-
-        return $service;
     }
 }

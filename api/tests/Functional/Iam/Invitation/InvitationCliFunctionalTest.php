@@ -20,6 +20,7 @@ use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Organization\Organization\Domain\Repository\OrganizationRepository;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
@@ -46,6 +47,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(\Erpify\Iam\Invitation\Infrastructure\Mail\SymfonyInvitationEmailSender::class)]
 final class InvitationCliFunctionalTest extends KernelTestCase
 {
+    use ResolvesContainerServices;
+
     private const string TRUNCATE_SQL
         = 'TRUNCATE iam_invitation, iam_session, membership, organization, identity_user, event_store CASCADE';
 
@@ -177,21 +180,6 @@ final class InvitationCliFunctionalTest extends KernelTestCase
     private function tokenSelector(string $token): string
     {
         return \substr($token, 0, (int) \strpos($token, '.'));
-    }
-
-    /**
-     * @template T of object
-     *
-     * @param class-string<T> $id
-     *
-     * @return T
-     */
-    private function service(string $id): object
-    {
-        $service = self::getContainer()->get($id);
-        $this->assertInstanceOf($id, $service);
-
-        return $service;
     }
 
     private function truncate(): void
