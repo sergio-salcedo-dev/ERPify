@@ -14,6 +14,7 @@ use Intervention\Image\Exceptions\ImageException;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Interfaces\ImageInterface;
 use Psr\Log\LoggerInterface;
+use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Throwable;
 
@@ -77,7 +78,7 @@ final readonly class InterventionImageProcessor implements ImageProcessor
         $this->preflightGuard = new ImagePreflightGuard($maxInputBytes, $maxDecodedPixels, $maxInputDimension);
     }
 
-    public function process(string $bytes, ?string $declaredMediaType = null): CanonicalImage
+    public function process(#[SensitiveParameter] string $bytes, ?string $declaredMediaType = null): CanonicalImage
     {
         $format = 'unknown';
 

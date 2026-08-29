@@ -34,9 +34,16 @@ framework:
         # window rather than closing it — so an id that reaches one of them survives the deletion the
         # application confirmed to the subject.
         #
-        # The rule, which the events above satisfy and no event named after a person can: an "aggregate id
-        # alone" payload is safe to queue if and only if the aggregate is not a natural person. For an event
-        # about a person the id IS the personal datum, so an empty payload proves nothing.
+        # The rule: an "aggregate id alone" payload is safe to queue if and only if the aggregate is not a
+        # natural person. For an event about a person the id IS the personal datum, so an empty payload
+        # proves nothing.
+        #
+        # Every event above satisfies it EXCEPT `ImageDeletionRequested`, whose type is classified `person`
+        # conservatively — the same identifier covers a bank logo and someone's avatar and the module cannot
+        # tell them apart — and which is routed anyway as the argued exception the registry requires. Read
+        # docs/adr/image-deletion-signal-transport.md before copying that line: the exception is granted on
+        # the ground that NOT routing it would run the deletion inside the publisher's transaction, not on
+        # the ground that the id is harmless there.
         #
         # Enforced by api/.persistent-transport-policy and the gate over it (`make php.lint.persistent-transport`).
         # Symfony's own SendEmailMessage stays unrouted for the neighbouring reason: it would serialise the whole

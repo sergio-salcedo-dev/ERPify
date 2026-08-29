@@ -10,6 +10,7 @@ use Erpify\Shared\Images\Domain\ImageProcessor;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
 use Erpify\Shared\Images\Domain\Storage\ImageStorage;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use SensitiveParameter;
 
 /**
  * Ingestion use case (naming category 6 — `docs/rules/cqrs-naming.md`): bytes in, an {@see Image}
@@ -47,7 +48,7 @@ final readonly class UploadImage
      * committed. The claim is about the RETURN VALUE, not about the universe: the id exists in memory
      * before that, and may exist in a log or an exception message.
      */
-    public function upload(string $bytes, ?string $declaredMediaType = null): Image
+    public function upload(#[SensitiveParameter] string $bytes, ?string $declaredMediaType = null): Image
     {
         $canonicalImage = $this->imageProcessor->process($bytes, $declaredMediaType);
 

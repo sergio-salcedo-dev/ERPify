@@ -8,7 +8,6 @@ use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
 use Override;
-use RuntimeException;
 
 /**
  * A repository whose lookup fails, so a test can distinguish "the row is not there" from "I could not
@@ -31,6 +30,6 @@ final class UnreadableImageRepository implements ImageRepository
     #[Override]
     public function findById(ImageId $id): ?Image
     {
-        throw new RuntimeException('the row could not be read');
+        throw new StubPersistenceFailure('the row could not be read');
     }
 }

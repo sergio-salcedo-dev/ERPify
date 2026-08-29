@@ -8,12 +8,14 @@ use Erpify\Shared\Images\Domain\Event\ImageDeletionRequested;
 use Erpify\Shared\Images\Domain\ImageId;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
-use SplFileInfo;
 
 /**
- * What the signal is allowed to carry, and what the module is not allowed to contain.
+ * What the signal is allowed to carry.
+ *
+ * The module's structural rule — that no Doctrine lifecycle hook removes bytes — used to live here too,
+ * and moved to {@see \Erpify\Tests\Unit\Shared\Images\ImageLifecycleListenerGateTest}: it reads the
+ * tree as data rather than exercising anything, and inside a behavioural test it was invisible to the
+ * placement registry, whose heuristic skips any file that also credits production coverage.
  *
  * @internal
  */
@@ -66,59 +68,5 @@ final class ImageDeletionRequestedTest extends TestCase
             $original->occurredOn()->format(DATE_ATOM),
             $restored->occurredOn()->format(DATE_ATOM),
         );
-    }
-
-    /**
-     * No Doctrine lifecycle listener anywhere in this module. The contrary shape is the one the governing
-     * ADR names as its counter-example: a `postRemove` listener deleting bytes as a side effect of the
-     * owner's flush, inside the owner's transaction.
-     *
-     * The check is deliberately scoped to this module, and that scope IS its limit: the listener the ADR
-     * names lived outside `Shared/Images/`, and a listener registered by service tag or by
-     * `#[AsDoctrineListener]` would not be seen either. It covers the letter of the rule, not its purpose.
-     */
-    public function testTheModuleContainsNoDoctrineLifecycleListener(): void
-    {
-        $sources = [];
-
-        /** @var iterable<SplFileInfo> $files */
-        $files = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator(\dirname(__DIR__, 5) . '/src/Shared/Images'),
-        );
-
-        foreach ($files as $file) {
-            if ($file->isFile() && 'php' === $file->getExtension()) {
-                $contents = (string) \file_get_contents($file->getPathname());
-                $sources[$file->getFilename()] = $this->codeWithoutComments($contents);
-            }
-        }
-
-        $this->assertNotSame([], $sources, 'the sweep must see the module, or it asserts nothing');
-
-        foreach ($sources as $name => $source) {
-            foreach (['AsEntityListener', 'AsDoctrineListener', 'postRemove', 'preRemove'] as $forbidden) {
-                $this->assertStringNotContainsString($forbidden, $source, $name . ' must declare no lifecycle hook');
-            }
-        }
-    }
-
-    /**
-     * The subject is CODE, so comments are dropped before matching. A text sweep cannot tell a hook from
-     * the prose explaining why there is no hook — measured here, the handler's own docblock naming
-     * `postRemove` as the shape it exists to avoid was enough to fail this check.
-     */
-    private function codeWithoutComments(string $source): string
-    {
-        $code = '';
-
-        foreach (\token_get_all($source) as $token) {
-            if (\is_array($token) && \in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
-                continue;
-            }
-
-            $code .= \is_array($token) ? $token[1] : $token;
-        }
-
-        return $code;
     }
 }

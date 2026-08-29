@@ -14,7 +14,6 @@ use InvalidArgumentException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 
 /**
  * The steps this use case gained beyond assembling the aggregate: what reaches storage, in what order, and
@@ -72,12 +71,16 @@ final class UploadImageStorageAndPersistenceTest extends TestCase
         $storage = new InMemoryImageStorage();
         $canonical = new CanonicalImage('canonical-bytes', 'image/png', 4, 4);
 
+        // `expectException` rather than a `fail()` inside a `try`: PHPUnit's own assertion failure is a
+        // `RuntimeException`, so a catch broad enough to hold the double's failure also swallows the
+        // `fail()` that was supposed to red the test.
+        $this->expectException(StubPersistenceFailure::class);
+
         try {
             $this->uploadImage($storage, new StubImageProcessor($canonical), new FailingImageRepository())
                 ->upload('raw')
             ;
-            $this->fail('the persistence failure must surface to the caller');
-        } catch (RuntimeException) {
+        } finally {
             $this->assertCount(1, $storage->objects, 'the orphan is accepted, not silently cleaned up');
         }
     }
@@ -87,9 +90,11 @@ final class UploadImageStorageAndPersistenceTest extends TestCase
      * is ever expected to undo a filesystem write — and the caller receives the aggregate only after the
      * row has committed.
      *
-     * @SuppressWarnings("PHPMD.UnusedFormalParameter") the probe's two promoted properties are both read in
-     *                                                   its `transactional()`; promotion inside an anonymous
-     *                                                   class is invisible to the analyser
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter") `$inner` is a promoted property of the anonymous
+     *                                                   probe below and is read in its `transactional()`;
+     *                                                   the analyser reports it here, on the enclosing
+     *                                                   method, so the suppression has to sit here too —
+     *                                                   which means it blankets that whole class
      */
     public function testTheObjectIsStoredBeforeTheTransactionAndReturnedOnlyAfterItCommits(): void
     {

@@ -4,14 +4,23 @@ parameters:
     # the declared volume provides, and they must never be reachable as static files nor land in `git status`.
     env(STORAGE_LOCAL_PATH): '%kernel.project_dir%/var/storage'
 
+    # ONE declaration, because two would be a silent hole rather than a duplication. The adapter is handed
+    # this path as well as the operator built from it, and it stat()s the path to tell a demonstrable
+    # absence from an existence it could not establish. Were the two to drift to a path that merely EXISTS,
+    # every one of those checks would answer about a tree holding none of the bytes, and each undecidable
+    # existence would be reported as a confirmed erasure — with every gate green.
+    erpify.images.storage_root: '%env(STORAGE_LOCAL_PATH)%/images'
+
 flysystem:
     storages:
         images.storage:
             local:
-                directory: '%env(STORAGE_LOCAL_PATH)%/images'
-                # The adapter creates its root in the constructor unless this is set, so an unmounted volume
-                # would be silently replaced by a fresh empty directory inside the container's writable layer.
-                # Measured: with the root absent, `delete()` then answers success for every key — a confirmed
-                # erasure of bytes nobody removed. Failing to reach a root that should exist must be an error,
-                # not a directory this application invents.
+                directory: '%erpify.images.storage_root%'
+                # Set so the library does not create the root in its constructor. It does NOT by itself make
+                # an unmounted volume fail: read in the library's source, the flag only defers that `mkdir`
+                # to the first write. What actually refuses is the adapter's own guard, which runs before
+                # every operation including the write; this flag is what stops the constructor getting
+                # there first. Both halves are needed, and crediting the flag alone is how the guard gets
+                # deleted as redundant. Measured: with the root absent, `delete()` answers success for
+                # every key — a confirmed erasure of bytes nobody removed.
                 lazy_root_creation: true

@@ -9,6 +9,7 @@ use Erpify\Shared\Images\Domain\Exception\ImageDecodingFailed;
 use Erpify\Shared\Images\Domain\Exception\ImageProcessingFailed;
 use Erpify\Shared\Images\Domain\Exception\ImageResourceLimitExceeded;
 use Erpify\Shared\Images\Domain\Exception\UnsupportedImageFormat;
+use SensitiveParameter;
 
 /**
  * Capability port: bytes in, canonical representation out. Invocable in isolation, with no dependency
@@ -28,5 +29,5 @@ interface ImageProcessor
      * @throws ImageDecodingFailed        the decoder could not read the (allowlisted, within-limits) input
      * @throws ImageProcessingFailed      normalization or encoding failed
      */
-    public function process(string $bytes, ?string $declaredMediaType = null): CanonicalImage;
+    public function process(#[SensitiveParameter] string $bytes, ?string $declaredMediaType = null): CanonicalImage;
 }

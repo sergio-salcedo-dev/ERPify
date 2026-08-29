@@ -33,7 +33,7 @@ final class ImageTest extends TestCase
         $this->assertSame(32, $image->width());
         $this->assertSame(24, $image->height());
         $this->assertSame(12345, $image->byteSize());
-        $this->assertLessThanOrEqual(new DateTimeImmutable(), $image->createdAt);
+        $this->assertLessThanOrEqual(new DateTimeImmutable(), $image->createdAt());
     }
 
     public function testRejectsADigestShorterThanSixtyFourHexCharacters(): void

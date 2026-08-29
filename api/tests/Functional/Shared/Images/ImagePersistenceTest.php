@@ -60,7 +60,7 @@ final class ImagePersistenceTest extends KernelTestCase
 
             $this->assertSame(
                 $stamped->format('Y-m-d\TH:i:s.u'),
-                $found->createdAt->format('Y-m-d\TH:i:s.u'),
+                $found->createdAt()->format('Y-m-d\TH:i:s.u'),
                 'createdAt survives the round trip to the microsecond; a re-stamp moves it',
             );
 
@@ -85,19 +85,69 @@ final class ImagePersistenceTest extends KernelTestCase
     public function testTheTableHoldsExactlyTheSevenFieldsTheContractAllows(): void
     {
         $this->withEntityManager(function (EntityManagerInterface $entityManager): void {
-            $columns = $entityManager->getConnection()->fetchFirstColumn(
-                'SELECT column_name FROM information_schema.columns
+            $columns = $entityManager->getConnection()->fetchAllAssociative(
+                'SELECT column_name, data_type, is_nullable FROM information_schema.columns
                  WHERE table_schema = current_schema() AND table_name = :table
                  ORDER BY column_name',
                 ['table' => 'image'],
             );
 
             $this->assertNotSame([], $columns, 'the table must exist, or the set comparison below is vacuous');
-            $this->assertSame(
-                ['byte_size', 'created_at', 'digest', 'height', 'id', 'media_type', 'width'],
-                $columns,
-                'exactly seven fields: no updated_at, no owner_id, no filename, no storage_path, no url',
+
+            // Type and nullability, not only the name. A column set alone cannot see `digest` widening to
+            // `text`, `byte_size` becoming nullable, or `created_at` losing its time zone — each of which
+            // changes what the aggregate can hold while every name stays where it was.
+            $this->assertSame([
+                ['column_name' => 'byte_size', 'data_type' => 'integer', 'is_nullable' => 'NO'],
+                ['column_name' => 'created_at', 'data_type' => 'timestamp with time zone', 'is_nullable' => 'NO'],
+                ['column_name' => 'digest', 'data_type' => 'character varying', 'is_nullable' => 'NO'],
+                ['column_name' => 'height', 'data_type' => 'integer', 'is_nullable' => 'NO'],
+                ['column_name' => 'id', 'data_type' => 'uuid', 'is_nullable' => 'NO'],
+                ['column_name' => 'media_type', 'data_type' => 'character varying', 'is_nullable' => 'NO'],
+                ['column_name' => 'width', 'data_type' => 'integer', 'is_nullable' => 'NO'],
+            ], $columns, 'exactly seven fields: no updated_at, no owner_id, no filename, no storage_path, no url');
+        });
+    }
+
+    /**
+     * The index set as a whole, because the criterion this table turns on is an ABSENCE and a column list
+     * cannot see it: two uploads of identical bytes are two independent images, so a unique index on
+     * `digest` would be deduplication introduced through the back door — and adding one leaves every
+     * assertion about columns green.
+     *
+     * Asserted as the complete set rather than as "no index on digest", so a foreign key or a covering
+     * index arriving with a future consumer has to be a deliberate edit here rather than a silent
+     * addition. The primary key is asserted in the same breath: it is what makes a reused identifier fail
+     * instead of overwriting.
+     */
+    public function testTheOnlyIndexOnTheTableIsItsPrimaryKey(): void
+    {
+        $this->withEntityManager(function (EntityManagerInterface $entityManager): void {
+            $connection = $entityManager->getConnection();
+
+            $indexes = $connection->fetchAllKeyValue(
+                'SELECT indexname, indexdef FROM pg_indexes
+                 WHERE schemaname = current_schema() AND tablename = :table
+                 ORDER BY indexname',
+                ['table' => 'image'],
             );
+
+            $this->assertNotSame([], $indexes, 'the table must exist, or this proves nothing');
+            $this->assertSame(['image_pkey'], \array_keys($indexes), 'no unique digest index, no extra index');
+
+            $primaryKey = $indexes['image_pkey'] ?? null;
+            $this->assertIsString($primaryKey);
+            $this->assertStringContainsString('UNIQUE INDEX image_pkey ON', $primaryKey);
+            $this->assertStringContainsString('(id)', $primaryKey, 'the identity is the key');
+
+            $constraints = $connection->fetchFirstColumn(
+                "SELECT constraint_type FROM information_schema.table_constraints
+                 WHERE table_schema = current_schema() AND table_name = :table AND constraint_type <> 'CHECK'
+                 ORDER BY constraint_type",
+                ['table' => 'image'],
+            );
+
+            $this->assertSame(['PRIMARY KEY'], $constraints, 'no foreign key: this module references nobody');
         });
     }
 
@@ -115,6 +165,10 @@ final class ImagePersistenceTest extends KernelTestCase
             $entityManager->flush();
 
             $this->expectException(LogicException::class);
+            // The message, not only the type: `ORMInvalidArgumentException` is a `LogicException` too, so
+            // a type-only assertion would pass for a refusal that had nothing to do with immutability —
+            // which is the entire claim this test's name makes.
+            $this->expectExceptionMessageIsOrContains('Attempting to change readonly property');
             $entityManager->refresh($image);
         });
     }

@@ -25,7 +25,6 @@ use Symfony\Component\Yaml\Yaml;
  */
 final readonly class MessengerRoutingConfig
 {
-    /** The only transport that never persists a message body, in every environment. */
     /** The transport whose name is trusted to mean "durable, and on the caller's own connection". */
     public const string PERSISTED_TRANSPORT = 'async';
 
@@ -35,6 +34,7 @@ final readonly class MessengerRoutingConfig
     /** The substitution the test environment makes, pinned so a change to it has to be argued. */
     public const string NON_TRANSACTIONAL_TEST_DSN_PREFIX = 'in-memory://';
 
+    /** The only transport that never persists a message body, in every environment. */
     public const string NON_PERSISTED_TRANSPORT = 'sync';
 
     public function __construct(private string $apiRoot)

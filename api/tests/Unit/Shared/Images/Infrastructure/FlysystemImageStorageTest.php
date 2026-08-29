@@ -26,6 +26,8 @@ use ReflectionNamedType;
  * @internal
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the port's whole verdict vocabulary is under test here
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") one method per property of the contract; merging any
+ *                                                two would hide which one went red
  */
 #[CoversClass(FlysystemImageStorage::class)]
 final class FlysystemImageStorageTest extends TestCase
@@ -72,10 +74,36 @@ final class FlysystemImageStorageTest extends TestCase
             $this->assertSame(StorageOperation::VerifyIntegrity, $imageStorageFailed->operation());
         }
 
-        // The corrupt object is left where it is. Compensation is out of this contract by decision, and
-        // nothing is stranded by it: the identifier is never handed to a caller, so nobody comes back
-        // for it, and the surviving object is an orphan of exactly the kind the upload path accepts.
-        $this->assertFileExists($this->pathFor($imageId));
+        // And it is not left behind. Keeping it would poison the identifier: `store()` refuses a key that
+        // already carries an object, so the retry would be rejected as a reuse, and `read()` runs no
+        // digest check, so the truncated bytes would be served as valid.
+        $healthy = $this->storage();
+
+        try {
+            $healthy->read($imageId);
+            $this->fail('the refused object must not survive its own refusal');
+        } catch (ImageBytesNotFound) {
+            $this->addToAssertionCount(1);
+        }
+
+        $healthy->store($imageId, 'the identifier is still usable');
+        $this->assertSame('the identifier is still usable', $healthy->read($imageId));
+    }
+
+    /**
+     * The adapter decides "demonstrably absent" from one errno, and a raw errno in source is a literal
+     * nobody can check by reading. This asks the kernel the suite is running on for the value it actually
+     * reports for a path that is not there, and compares it with the constant the adapter trusts — so a
+     * platform that disagreed would red here instead of silently reclassifying every absence as a failure
+     * (or, far worse, every undecidable existence as an absence).
+     */
+    public function testTheAbsenceErrnoTheAdapterTrustsIsWhatThisKernelReports(): void
+    {
+        $trusted = (new ReflectionClass(FlysystemImageStorage::class))->getConstant('ABSENT_PATH');
+
+        \posix_access($this->root . '/nothing-is-here', POSIX_F_OK);
+
+        $this->assertSame(\posix_get_last_error(), $trusted, 'ENOENT is what a path that is not there reports');
     }
 
     public function testReadingAnAbsentObjectIsAConfirmedAbsenceRatherThanAFailure(): void
@@ -163,6 +191,42 @@ final class FlysystemImageStorageTest extends TestCase
         $this->assertStringStartsNotWith('/', $relative);
         $this->assertSame($imageId->toString(), \basename($relative), 'the leaf IS the identity');
         $this->assertSame($this->pathFor($imageId), $this->pathFor($imageId), 'the derivation is deterministic');
+    }
+
+    /**
+     * A shard that does not spread is not a shard. This is asserted over minted identifiers rather than
+     * reasoned about, because the property depends on where the entropy sits in the identifier's layout:
+     * `ImageId` is a UUID v7, so its leading hex is a millisecond clock and sharding there yields one
+     * directory per ~50 days. Measured on the head-based derivation this replaced, 4000 identifiers gave
+     * a single bucket; the assertion below reds for it and passes for the tail.
+     */
+    public function testTheShardsSpreadAcrossDirectoriesRatherThanTrackingTheClock(): void
+    {
+        $buckets = [];
+
+        for ($minted = 0; $minted < 512; ++$minted) {
+            $key = $this->keyOf(ImageId::generate());
+            $buckets[\dirname($key)] = true;
+        }
+
+        $this->assertGreaterThan(
+            256,
+            \count($buckets),
+            'the shards must be read off the random half of the identifier, not off its timestamp',
+        );
+    }
+
+    /**
+     * The derivation as the adapter performs it, obtained by storing and looking the object up — never by
+     * recomputing it here, which would make every assertion about the key agree with the implementation
+     * by construction.
+     */
+    private function keyOf(ImageId $imageId): string
+    {
+        $storage = $this->storage();
+        $storage->store($imageId, 'bytes');
+
+        return \substr($this->pathFor($imageId), \strlen($this->root) + 1);
     }
 
     /**

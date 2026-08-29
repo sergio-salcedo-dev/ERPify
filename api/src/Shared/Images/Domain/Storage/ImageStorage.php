@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Images\Domain\Storage;
 
 use Erpify\Shared\Images\Domain\ImageId;
+use SensitiveParameter;
 
 /**
  * The canonical bytes of an image, addressed by identity alone.
@@ -39,11 +40,18 @@ use Erpify\Shared\Images\Domain\ImageId;
  *
  * **These failures do not carry an HTTP status, deliberately.** None of them implements an error-contract
  * marker, so today an uncaught one is an unhandled exception rather than a mapped response. A status is a
- * statement about a WIRE contract, and this module publishes no route: the only caller is the queue
- * consumer, where a marker changes nothing because the retry decision reads the exception rather than a
- * status. Minting one here would fix the mapping before the surface that has to honour it exists — and the
- * mapping the delivery story needs (absence to 404, transient to 5xx) is a property of that route reading
- * this vocabulary, which is exactly what the three verdicts above are for.
+ * statement about a WIRE contract, and this module publishes no route; minting one here would fix the
+ * mapping before the surface that has to honour it exists. The mapping the delivery story needs — absence
+ * to 404, transient to 5xx — is a property of that route reading this vocabulary, which is what the three
+ * verdicts above are for.
+ *
+ * **And nothing reads the verdict yet — said plainly, because the alternative is a claim that flatters
+ * it.** The only consumer today is the deletion handler, which lets every class escape unchanged; the
+ * transport declares no retry strategy and none of these implements Messenger's unrecoverable marker, so
+ * a permanent failure burns the same attempts as a transient one and dead-letters alongside it. The
+ * distinction currently buys exactly one thing: the level the observability signal reports under. Its
+ * first real reader is the delivery story, and wiring the worker to it is that story's call, not a gap
+ * this one left open by accident.
  *
  * No method returns a URL, and none accepts or returns a path or a storage key. Where the bytes live, and
  * how they are addressed physically, is the adapter's business; delivery belongs to the read story.
@@ -60,7 +68,7 @@ interface ImageStorage
      *                                 permanently unusable
      * @throws ImageStorageUnavailable when the substrate failed in a retryable way
      */
-    public function store(ImageId $id, string $bytes): void;
+    public function store(ImageId $id, #[SensitiveParameter] string $bytes): void;
 
     /**
      * @throws ImageBytesNotFound      when the object is demonstrably absent

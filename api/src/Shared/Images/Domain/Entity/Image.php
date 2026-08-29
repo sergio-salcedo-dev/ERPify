@@ -60,7 +60,7 @@ final readonly class Image
      * fresh one taken in the same second.
      */
     #[ORM\Column(name: 'created_at', type: Types::DATETIMETZ_IMMUTABLE)]
-    public DateTimeImmutable $createdAt;
+    private DateTimeImmutable $createdAt;
 
     public function __construct(
         ImageId $id,
@@ -102,6 +102,11 @@ final readonly class Image
     public function id(): ImageId
     {
         return ImageId::fromString($this->id);
+    }
+
+    public function createdAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
     }
 
     public function digest(): string

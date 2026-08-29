@@ -8,7 +8,6 @@ use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
 use Override;
-use RuntimeException;
 
 /**
  * A repository whose write always fails, so a test can observe what the use case leaves behind when the
@@ -21,7 +20,7 @@ final class FailingImageRepository implements ImageRepository
     #[Override]
     public function save(Image $image): void
     {
-        throw new RuntimeException('the row could not be written');
+        throw new StubPersistenceFailure('the row could not be written');
     }
 
     #[Override]

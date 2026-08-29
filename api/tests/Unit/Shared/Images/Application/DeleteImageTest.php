@@ -12,7 +12,6 @@ use Erpify\Shared\Images\Domain\Storage\StorageOperation;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 
 /**
  * Every state the handler can meet, because delivery is at-least-once and the upload path accepts orphans:
@@ -84,7 +83,7 @@ final class DeleteImageTest extends TestCase
         $storage = new InMemoryImageStorage();
         $deleteImage = new DeleteImage($storage, new UnreadableImageRepository(), new ImmediateTransactionManager());
 
-        $this->expectException(RuntimeException::class);
+        $this->expectException(StubPersistenceFailure::class);
         $deleteImage->delete(ImageId::generate());
     }
 

@@ -23,6 +23,7 @@
         "ext-intl": "*",
         "ext-json": "*",
         "ext-pdo": "*",
+        "ext-posix": "*",
         "ext-sodium": "*",
         "ext-xml": "*",
         "ext-zend-opcache": "*",

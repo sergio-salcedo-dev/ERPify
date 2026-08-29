@@ -150,6 +150,26 @@ final class FlysystemImageStorageObservabilityTest extends TestCase
         }
     }
 
+    /**
+     * A deletion that finds nothing is a SUCCESS, and it is the one outcome the caller cannot distinguish
+     * from a completed deletion — so if it emitted nothing, a deployment answering "already absent" for
+     * every request would produce no record at all. It is reported at the outcome level, not the fault
+     * level, so counting it never competes with the alert that means something is broken.
+     */
+    public function testAnIdempotentAbsenceOnTheDeletePathIsReportedRatherThanSilent(): void
+    {
+        $logger = new RecordingLogger();
+
+        $this->storage($logger)->delete(ImageId::generate());
+
+        $this->assertCount(1, $logger->records, 'the one successful outcome that must still be countable');
+        $this->assertSame('info', $logger->records[0]['level']);
+        $this->assertSame([
+            'operation' => StorageOperation::Delete->value,
+            'failure_category' => StorageFailureCategory::ConfirmedAbsence->value,
+        ], $logger->records[0]['context']);
+    }
+
     public function testTheSignalIsNeverLoadBearingForTheFailureItself(): void
     {
         $storage = $this->storage(new ThrowingLogger());

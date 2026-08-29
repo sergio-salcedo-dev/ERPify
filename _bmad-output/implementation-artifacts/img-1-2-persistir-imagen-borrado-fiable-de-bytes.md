@@ -4,7 +4,7 @@ baseline_commit: f86b2662dd4be317d449cd4bebcdc46c77b1814d
 
 # Story 1.2: Persistir la imagen y garantizar el borrado fiable de sus bytes
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -70,7 +70,9 @@ ni cómo se liberan cuando decida que ya no los necesito.
 
 ## Adversarial pass
 
-**Estado: dos pases.** El primero, autoadministrado sobre el borrador, es el bloque A-1..A-7 de abajo —
+**Estado: tres pases.** El tercero, sobre el CÓDIGO implementado y en tres lecturas paralelas, está
+registrado inmediatamente debajo; encontró dos GRAVE que ninguna puerta veía. El primero, autoadministrado
+sobre el borrador, es el bloque A-1..A-7 de abajo —
 insuficiente por sí solo. El segundo, **externo**, corrió en una sesión distinta y está registrado más abajo
 con sus hallazgos y su alcance; corrigió el A-4 de esta lista. El `CLAUDE.md` raíz exige la lectura hostil por
 alguien distinto del autor, y el propio ADR lo repite para esta historia en concreto
@@ -203,6 +205,95 @@ hallazgo, porque una lista de hallazgos sin disposición no es auditable.
 **Una duplicación real sí existía, y era mía**: al añadir el inciso (c) a AC 18 en el primer pase dejé
 colgada la frase de cierre original. Corregida. Es plausible que sea lo que la revisión externa amplificó
 como «duplicación», aunque lo que describe —tasks y numeración de AC— no se reproduce.
+
+### Tercera lectura externa — tres pases en paralelo sobre el CÓDIGO, 2026-08-29
+
+Las dos lecturas anteriores fueron sobre el **artefacto**. Esta es sobre el **código implementado**, que es
+lo que la Task 13 pide y lo que el ADR de conservación exige nominalmente para una historia que toca
+borrado. Tres agentes en contexto fresco, en paralelo, cada uno con restricción explícita de **solo
+lectura** y un ángulo propio: (1) retención y fuga de identificadores, (2) falsabilidad de las aserciones
+nuevas, (3) contrato de borrado y almacenamiento. Ninguno podía editar, y las mutaciones que proponían las
+ejecuté yo.
+
+**Dos GRAVE, cada uno encontrado de forma independiente por dos de los tres pases, y ambos reproducidos por
+mí antes de tocar nada.** Los dos habrían llegado a `main` con las 90 pruebas del módulo en verde.
+
+#### GRAVE-1 — `delete()` confirmaba un borrado sobre bytes que seguían en disco
+
+La guarda de `objectExists()` inspeccionaba **solo el directorio contenedor**. La key es
+`<shard>/<shard>/<id>`, así que con el shard EXTERIOR a modo 0000 la propia comprobación
+`is_dir(<root>/ab/cd)` responde `false` —es otro `stat()` chocando con el mismo `EACCES`—, la guarda se
+salta a sí misma, y el `false` de la librería llega intacto a la rama de ausencia idempotente.
+
+Reproducido como uid 1000 en el contenedor: `SILENT_SUCCESS`, y el objeto intacto en disco. El test que
+existía para esa rama **restauraba a 0755 el shard intermedio** antes de la sonda, de modo que ejercitaba
+exactamente el único nivel que sí estaba guardado.
+
+*Arreglo:* la existencia se decide en el syscall, no con una cadena de predicados. `access(2)` distingue lo
+que `file_exists()` confunde: `ENOENT` es «no hay nada bajo esta key», cualquier otro errno es «no he podido
+mirar». Una cadena de `is_dir()`/`is_executable()` no puede sustituirlo porque **son el mismo `stat()`** y
+reproducen el fallo un nivel más abajo. *Falsificado:* con la implementación anterior, el caso del shard
+intermedio se pone rojo y el del contenedor pasa — exactamente el agujero, y nada más.
+
+#### GRAVE-2 — la raíz de almacenamiento no la creaba nadie, y el módulo estaba muerto en cualquier despliegue
+
+`flysystem.yaml` y el adaptador resuelven la raíz a `<STORAGE_LOCAL_PATH>/images`. El `Dockerfile` crea
+`/app/storage` —el punto de montaje— y nada crea `images`. Medido contra el contenedor vivo: `store`, `read`
+y `delete` fallaban los tres con `Permanent :: the storage root is not present`. Cada `ImageDeletionRequested`
+habría agotado los reintentos y caído a `failed`.
+
+Noventa pruebas estaban en verde porque **todas construían el adaptador a mano sobre un directorio temporal
+que ellas mismas habían creado**. Ninguna resolvía el servicio cableado.
+
+*Arreglo, y la condición ES el control:* el entrypoint aprovisiona la raíz **solo si el punto de montaje lo
+es de verdad** (device distinto al de su padre). Crearla incondicionalmente dejaría la guarda sin significado,
+y una raíz creada dentro de la capa del contenedor es justo lo que hace que todo `delete()` responda éxito.
+Verificado de punta a punta: raíz borrada → imagen reconstruida → el entrypoint la crea al arrancar.
+*Falsificador nuevo:* `ImageStorageWiringTest` resuelve el `ImageStorage` del contenedor y hace un viaje
+completo contra la raíz real; sin aprovisionar se pone rojo con el error exacto del despliegue.
+
+#### SERIO — disposición por hallazgo
+
+| Hallazgo | Disposición | Qué cambió |
+|---|---|---|
+| `catch (RuntimeException)` se tragaba el `$this->fail()` (`AssertionFailedError` ES un `RuntimeException`), y las aserciones del `catch` corrían sobre el camino de ÉXITO | **Aceptado** | Los dobles lanzan `StubPersistenceFailure` propio y el test usa `expectException` + `finally`. *Mutante: que `UploadImage` deje de propagar el fallo ahora se pone rojo; antes pasaba* |
+| `ENOSPC`/`EACCES` se clasificaban **transitorios**, contradiciendo el enum, el docblock de `ImageStorageFailed` y la AC 3 — y el test fijaba el lado equivocado | **Aceptado** | El veredicto lo decide la CONDICIÓN que reporta la librería, no su tipo. La razón se lee y **nunca se transporta** (contiene la ruta, y la ruta contiene el id); lo que viaja es el literal de nuestra lista. El residual —una condición permanente no reconocida degrada a transitoria— queda escrito donde se decide |
+| Una verificación de integridad fallida dejaba el objeto corrupto bajo la key **para siempre**, envenenando ese identificador, y el docblock decía que la ventana no era observable | **Aceptado** | `store()` retira el objeto que rechazó (best-effort) antes de lanzar. El test afirma ahora que no sobrevive y que el identificador sigue siendo usable |
+| El esquema se afirmaba solo por **nombre de columna**, mientras la Task 11 prometía nullability, tipos, PK e índices; nada podía ver un índice único sobre `digest` | **Aceptado** | Tipos y nullability en la misma consulta, más el conjunto completo de índices y de constraints. *Falsificado creando el índice único en la BD real: rojo, y verde otra vez al borrarlo* |
+| El ADR afirmaba un test que **no existe** (*«asserted by a test that demonstrates both directions»*) | **Aceptado** | Reescrito: dice qué se afirma de verdad (routing y forma del DSN, con sus mutantes) y que la observación de punta a punta es de la épica consumidora — @accepted-risk #872 |
+| El vocabulario de tres clases **no lo lee nadie**, mientras el docblock decía que el reintento lee la excepción | **Aceptado** | El puerto lo dice ahora en claro: hoy sólo decide el nivel de la señal, y su primer lector real es la historia de entrega |
+| `lazy_root_creation` estaba acreditado en tres documentos con una propiedad que no da (sólo difiere el `mkdir` a la primera escritura) | **Aceptado** | Corregidos los tres; el crédito va a la guarda. Y un test nuevo afirma que un `store()` contra una raíz ausente rechaza en vez de aprovisionarla |
+| La tabla de traducción decía cubrir «todas las ramas» y cubría 10 de 14 | **Aceptado** | Dos ramas más en la tabla; las dos de permisos se cubren donde son alcanzables (sonda sin privilegios), que además afirma allí las superficies de fuga. La afirmación del docblock se acota a lo que hace |
+| La raíz se declaraba en **dos sitios** sin nada que los comparase; una divergencia desactivaría toda la protección de existencia indecidible | **Aceptado** | Un único parámetro `erpify.images.storage_root`, leído por la configuración y por el adaptador |
+| El sharding no reparte: `ImageId` es UUID v7, cuyo hex inicial es un reloj | **Aceptado, medido** | 4000 identificadores → **1** directorio con el esquema anterior, **3869** con el nuevo. Los shards se leen de la cola aleatoria. Test que afirma el reparto |
+| Los dos registros dan veredictos opuestos sobre el mismo valor, y el comentario prometía un dueño que la regla **no puede exigir** | **Aceptado en parte** | `non-person` se mantiene: este registro clasifica por si la columna guarda el identificador **de una persona**, y un id de imagen no lo es. Lo que se corrige es la promesa: ningún registro de este repo pedirá jamás ese dueño, y eso queda como residual con su razón, no como una casilla que alguien marcará |
+
+#### MENOR — aplicados
+
+Docblock de `sync` que había quedado rotulando `async` · FQCN inline en `DeleteImage` · la ausencia
+idempotente del borrado no emitía señal (la AC 4 la quiere observable) · `Image::$createdAt` público frente
+a seis privadas con accesor · `hash_equals` sobre dos hashes locales sustituido por comparar los bytes · el
+guardia de no-vacuidad del test de fugas era inoperante en tres de las cuatro superficies · una de las dos
+supresiones de PHPMD estaba muerta y la razón de la otra era falsa · `#[SensitiveParameter]` en los
+parámetros que llevan los bytes canónicos · el test de `refresh()` afirmaba `LogicException` a secas ·
+`DeleteImageOnDeletionRequested` no tenía ningún test · el gate estructural escondido dentro de un test de
+comportamiento, invisible al registro de colocación, extraído y clasificado · el párrafo de política de
+`messenger.yaml` decía que **todos** los eventos de arriba cumplen la regla · el residual «huérfanos» del
+checklist infravaloraba lo que un huérfano es (la imagen misma, imborrable por construcción).
+
+#### Lo que NO se cerró, con su razón
+
+- **Sin `fsync`.** La verificación relee por la misma capa, así que prueba la vista del kernel, no que los
+  bytes llegaran al disco. Sigue teniendo valor —`file_put_contents` puede devolver una escritura corta sin
+  devolver `false`, que es justo lo que el adaptador comprueba— pero la promesa es hasta la caché de página.
+- **Un estado no reintentable, latente.** El día que un contexto consumidor añada una FK contra `image`, un
+  borrado cuyos bytes ya no están fallará igual en cada reintento. Nada de esta rebanada lo alcanza; queda
+  nombrado junto al RESIDUAL-2 para que la épica consumidora no lo redescubra.
+- **La premisa de D2 depende del futuro publicador.** Es cierta hoy —`RunProjectionsOnDomainEvent` maneja
+  `DomainEvent::class` y el patrón de la casa publica DENTRO de la transacción—, pero un consumidor que
+  publique tras el commit la disolvería. La decisión se sostiene igual sobre el argumento del reintento.
+- **`make shell.lint` no se pudo correr local** (shellcheck no instalable aquí bajo PEP 668). El fichero
+  tocado se pasó por `koalaman/shellcheck:stable` vía docker: **0 hallazgos**. El job de CI es el árbitro.
 
 ## Acceptance Criteria
 
@@ -724,14 +815,14 @@ como «duplicación», aunque lo que describe —tasks y numeración de AC— no
         mapeo del shared kernel establece patrón nuevo, y `PRODUCTION_SECURITY_CHECKLIST.md` por el volumen
         de storage y el residual que quede abierto.
 
-- [ ] **Task 13 — Pase adversarial y cierre** (proceso, no código)
-  - [ ] Lectura hostil **externa** sobre el código implementado (fresh context, otro modelo o una persona),
+- [x] **Task 13 — Pase adversarial y cierre** (proceso, no código)
+  - [x] Lectura hostil **externa** sobre el código implementado (fresh context, otro modelo o una persona),
         registrada en `## Adversarial pass` de este fichero y **commiteada** ANTES de `gh pr create`. El ADR
         lo exige nominalmente para historias que tocan borrado
         (`images-vs-documents-conservation-contract.md:129`); la autocertificación no cierra el gate.
-  - [ ] `make php.stan` sobre cada fichero nuevo/tocado; `make php.deptrac`; `make php.quality`;
+  - [x] `make php.stan` sobre cada fichero nuevo/tocado; `make php.deptrac`; `make php.quality`;
         `make php.unit` completo. Cada uno con exit code impreso y fresco, no de una ejecución anterior.
-  - [ ] Re-derivar el *File List* de `git diff --stat` antes de marcar done: el de la Story 1.1 se quedó
+  - [x] Re-derivar el *File List* de `git diff --stat` antes de marcar done: el de la Story 1.1 se quedó
         corto en tres ficheros.
 
 ## Dev Notes
@@ -1107,6 +1198,21 @@ de recursos y vetting de `intervention/gif` (**son de la Story 1.3, no los absor
   16 hallazgos de PHPMD, un fichero que PDepend no podía parsear —y que por tanto PHPMD saltaba entero— y
   una dependencia (`league/flysystem`) que `api/src` importaba sin declarar.
 
+- 2026-08-29 — Pase adversarial sobre el código, en tres lecturas paralelas e independientes. **Dos GRAVE**,
+  cada uno hallado por dos de los tres pases y reproducido antes de tocar nada: `delete()` confirmaba un
+  borrado sobre bytes vivos siempre que un shard POR ENCIMA del contenedor fuese intraversable (la guarda
+  inspeccionaba un solo nivel, y el test de esa rama restauraba precisamente el nivel no guardado); y la raíz
+  de almacenamiento cableada no la creaba nadie, de modo que el módulo entero fallaba `Permanent` en cualquier
+  despliegue mientras noventa pruebas seguían verdes por construir el adaptador a mano. La existencia se
+  decide ahora en el syscall (`access(2)` separa `ENOENT` de «no he podido mirar»; una cadena de predicados
+  no puede, porque son el mismo `stat()`), y el entrypoint aprovisiona la raíz **sólo si hay algo montado de
+  verdad** — la condición es el control, no un detalle. Once SERIO más, todos aceptados: el veredicto
+  permanente/transitorio pasa a decidirse por la condición y no por el tipo, el objeto que la verificación de
+  integridad rechaza deja de sobrevivir, el esquema se afirma con tipos, nullability e índices, el sharding
+  se lee de la mitad aleatoria del identificador (medido: 4000 ids en **1** directorio antes, 3869 después),
+  y tres afirmaciones que el árbol no sostenía —un test que el ADR decía tener, una propiedad acreditada a
+  `lazy_root_creation`, y un vocabulario que se decía leído por el reintento— quedan dichas como son.
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -1342,6 +1448,7 @@ Derivado de `git diff --name-status origin/main...HEAD` más el árbol de trabaj
 **Configuración, registros y despliegue**
 
 - `.gitignore` — modificado
+- `api/.artifact-gate-placement` — modificado
 - `api/.persistent-transport-policy` — modificado
 - `api/.person-reference-policy` — modificado
 - `api/Dockerfile` — modificado
@@ -1352,6 +1459,7 @@ Derivado de `git diff --name-status origin/main...HEAD` más el árbol de trabaj
 - `api/config/packages/flysystem.yaml` — nuevo
 - `api/config/packages/messenger.yaml` — modificado
 - `api/config/reference.php` — modificado
+- `api/frankenphp/docker-entrypoint.sh` — modificado
 - `api/migrations/2026/Version20260828134621.php` — nuevo
 - `api/symfony.lock` — modificado
 - `api/tools/deptrac/deptrac.yaml` — modificado
@@ -1392,6 +1500,7 @@ Derivado de `git diff --name-status origin/main...HEAD` más el árbol de trabaj
 - `api/tests/Functional/Shared/Images/DoctrineImageRepositoryTest.php` — nuevo
 - `api/tests/Functional/Shared/Images/FixedClock.php` — nuevo
 - `api/tests/Functional/Shared/Images/ImagePersistenceTest.php` — nuevo
+- `api/tests/Functional/Shared/Images/ImageStorageWiringTest.php` — nuevo
 - `api/tests/Support/MessengerRoutingConfig.php` — modificado
 - `api/tests/Support/PersistentTransportPolicy.php` — modificado
 - `api/tests/Unit/Gate/BestEffortReportChannelGateTest.php` — modificado
@@ -1401,6 +1510,7 @@ Derivado de `git diff --name-status origin/main...HEAD` más el árbol de trabaj
 - `api/tests/Unit/Shared/Images/Application/FailingImageRepository.php` — nuevo
 - `api/tests/Unit/Shared/Images/Application/InMemoryImageRepository.php` — nuevo
 - `api/tests/Unit/Shared/Images/Application/InMemoryImageStorage.php` — nuevo
+- `api/tests/Unit/Shared/Images/Application/StubPersistenceFailure.php` — nuevo
 - `api/tests/Unit/Shared/Images/Application/UnavailableImageStorage.php` — nuevo
 - `api/tests/Unit/Shared/Images/Application/UnreadableImageRepository.php` — nuevo
 - `api/tests/Unit/Shared/Images/Application/UploadImageStorageAndPersistenceTest.php` — nuevo
@@ -1408,6 +1518,7 @@ Derivado de `git diff --name-status origin/main...HEAD` más el árbol de trabaj
 - `api/tests/Unit/Shared/Images/Domain/ImageDeletionRequestedTest.php` — nuevo
 - `api/tests/Unit/Shared/Images/Domain/ImageTest.php` — modificado
 - `api/tests/Unit/Shared/Images/Domain/StorageFailureVocabularyTest.php` — nuevo
+- `api/tests/Unit/Shared/Images/ImageLifecycleListenerGateTest.php` — nuevo
 - `api/tests/Unit/Shared/Images/Infrastructure/FailingFilesystem.php` — nuevo
 - `api/tests/Unit/Shared/Images/Infrastructure/FlysystemImageStorageFailureContractTest.php` — nuevo
 - `api/tests/Unit/Shared/Images/Infrastructure/FlysystemImageStorageObservabilityTest.php` — nuevo
@@ -1418,6 +1529,7 @@ Derivado de `git diff --name-status origin/main...HEAD` más el árbol de trabaj
 - `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorMimeHandlingTest.php` — modificado
 - `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorObservabilityTest.php` — modificado
 - `api/tests/Unit/Shared/Images/Infrastructure/InterventionImageProcessorResourceLimitsTest.php` — modificado
+- `api/tests/Unit/Shared/Images/Infrastructure/Messenger/` — nuevo
 - `api/tests/Unit/Shared/Images/Infrastructure/PartiallyWritingFilesystem.php` — nuevo
 - `api/tests/Unit/Shared/Images/Infrastructure/RecordingLogger.php` — modificado
 - `api/tests/Unit/Shared/Images/Infrastructure/TemporaryImageStorage.php` — nuevo
@@ -1431,6 +1543,7 @@ Derivado de `git diff --name-status origin/main...HEAD` más el árbol de trabaj
 - `_bmad-output/implementation-artifacts/sprint-status-images.yaml` — modificado
 - `docs/adr/image-deletion-signal-transport.md` — nuevo
 - `docs/architecture-api.md` — modificado
+- `docs/index.md` — modificado
 - `docs/rules/database.md` — modificado
 
-Total: 82 ficheros.
+Total: 89 ficheros.

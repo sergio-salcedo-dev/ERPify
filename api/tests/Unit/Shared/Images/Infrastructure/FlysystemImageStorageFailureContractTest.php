@@ -16,7 +16,6 @@ use Erpify\Shared\Images\Infrastructure\FlysystemImageStorage;
 use League\Flysystem\Filesystem;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\Local\LocalFilesystemAdapter;
-use League\Flysystem\UnableToCheckFileExistence;
 use League\Flysystem\UnableToCreateDirectory;
 use League\Flysystem\UnableToDeleteFile;
 use League\Flysystem\UnableToReadFile;
@@ -113,13 +112,17 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
             $identifier = ImageId::generate();
             $failure = $this->raise($scenario['run'], $identifier, $logger, $label);
 
-            foreach ($this->surfacesOf($failure, $logger) as $surface => $haystack) {
+            foreach ($this->surfacesOf($failure, $logger) as $surface => [$haystack, $knownToBeThere]) {
                 $where = \sprintf('%s / %s', $label, $surface);
 
-                $this->assertNotSame(
-                    '',
+                // A token this surface really carries, rather than `!== ''`: three of the four are never
+                // empty (a class name, a serialised object, `'[]'`), so an emptiness guard would only ever
+                // have been live on the message — and a search that cannot find anything proves nothing
+                // when it finds no identifier either.
+                $this->assertStringContainsStringIgnoringCase(
+                    $knownToBeThere,
                     $haystack,
-                    \sprintf('%s: an empty surface proves nothing — the search must have something to read', $where),
+                    \sprintf('%s: the search must find what IS there, or its silence proves nothing', $where),
                 );
 
                 $value = $identifier->toString();
@@ -142,7 +145,10 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
      * because it is the SINK — a reader who sees only a log assertion concludes the log is where an
      * exception's text goes, and `messenger_messages` is the copy no erasure path reaches.
      *
-     * @return array<string, string>
+     * Each surface is paired with a token it demonstrably carries, so a search that finds no identifier is
+     * known to be a search capable of finding anything at all.
+     *
+     * @return array<string, array{0: string, 1: string}>
      */
     private function surfacesOf(ImageStorageException $failure, RecordingLogger $logger): array
     {
@@ -153,22 +159,39 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
         }
 
         return [
-            'the translated message' => $failure->getMessage(),
-            'the previous chain' => $failure::class . ' -> ' . \implode(' -> ', $chain),
-            'the ErrorDetailsStamp' => \serialize(ErrorDetailsStamp::create($failure)),
-            'the observability record' => \json_encode($logger->records, JSON_THROW_ON_ERROR),
+            // Every verdict's text names the subject; the operation is in two of the three, so the token
+            // that is live for all of them is the subject itself.
+            'the translated message' => [$failure->getMessage(), 'image'],
+            'the previous chain' => [$failure::class . ' -> ' . \implode(' -> ', $chain), $failure::class],
+            'the ErrorDetailsStamp' => [\serialize(ErrorDetailsStamp::create($failure)), $failure::class],
+            'the observability record' => [
+                \json_encode($logger->records, JSON_THROW_ON_ERROR),
+                'image_storage_failure',
+            ],
         ];
     }
 
     /**
-     * Every branch of the adapter that raises, with the verdict it owes. Split by operation only because
-     * one table long enough to hold them all stops being readable.
+     * Every branch of the adapter that raises **and can be driven from this process**, with the verdict it
+     * owes. Split by operation only because one table long enough to hold them all stops being readable.
+     *
+     * The two it cannot reach are the permission branches — a root that cannot be traversed, and an
+     * existence that cannot be established — because this container runs the suite as uid 0 and the kernel
+     * lets root traverse a directory at mode 0000 (measured: `is_executable()` and `access(F_OK)` both
+     * answer true there for root, and false for uid 1000). They are exercised, with the same leak
+     * assertions, by the unprivileged subprocess in
+     * {@see FlysystemImageStorageUndecidableExistenceTest}.
      *
      * @return array<string, Scenario>
      */
     private function scenarios(): array
     {
-        return [...$this->writeScenarios(), ...$this->readAndDeleteScenarios()];
+        return [
+            ...$this->writeScenarios(),
+            ...$this->integrityScenarios(),
+            ...$this->readScenarios(),
+            ...$this->deleteScenarios(),
+        ];
     }
 
     /**
@@ -177,12 +200,29 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
     private function writeScenarios(): array
     {
         return [
-            'the library refuses the write' => [
+            'the library refuses the write for a condition a retry may clear' => [
                 'class' => ImageStorageUnavailable::class,
                 'category' => StorageFailureCategory::Transient,
                 'operation' => StorageOperation::Store,
                 'run' => function (ImageId $identifier, LoggerInterface $logger): void {
-                    $failure = UnableToWriteFile::atLocation($this->keyLike($identifier), 'no space left on device');
+                    $failure = UnableToWriteFile::atLocation($this->keyLike($identifier), 'Device or resource busy');
+
+                    $this->storage($logger, $this->raisingFrom('write', $failure))
+                        ->store($identifier, self::PROBE_BYTES)
+                    ;
+                },
+            ],
+            'the library refuses the write for a condition only an operator clears' => [
+                'class' => ImageStorageFailed::class,
+                'category' => StorageFailureCategory::Permanent,
+                'operation' => StorageOperation::Store,
+                'run' => function (ImageId $identifier, LoggerInterface $logger): void {
+                    // Worded as PHP words it, path included, because that is exactly what the library
+                    // hands back — and the assertions below prove the path does not survive the reading.
+                    $failure = UnableToWriteFile::atLocation($this->keyLike($identifier), \sprintf(
+                        'file_put_contents(%s): Failed to open stream: No space left on device',
+                        $this->keyLike($identifier),
+                    ));
 
                     $this->storage($logger, $this->raisingFrom('write', $failure))
                         ->store($identifier, self::PROBE_BYTES)
@@ -201,6 +241,15 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
                     ;
                 },
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, Scenario>
+     */
+    private function integrityScenarios(): array
+    {
+        return [
             'the stored object cannot be read back' => [
                 'class' => ImageStorageFailed::class,
                 'category' => StorageFailureCategory::Permanent,
@@ -239,7 +288,7 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
     /**
      * @return array<string, Scenario>
      */
-    private function readAndDeleteScenarios(): array
+    private function readScenarios(): array
     {
         return [
             'the object is demonstrably absent on read' => [
@@ -263,6 +312,28 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
                     ;
                 },
             ],
+            'the library fails the read in a way it does not name' => [
+                'class' => ImageStorageFailed::class,
+                'category' => StorageFailureCategory::Permanent,
+                'operation' => StorageOperation::Read,
+                'run' => function (ImageId $identifier, LoggerInterface $logger): void {
+                    $this->storage($logger)->store($identifier, self::PROBE_BYTES);
+                    $failure = UnableToCreateDirectory::atLocation($this->keyLike($identifier), 'permission denied');
+
+                    $this->storage($logger, $this->raisingFrom('read', $failure))
+                        ->read($identifier)
+                    ;
+                },
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, Scenario>
+     */
+    private function deleteScenarios(): array
+    {
+        return [
             'the library refuses the deletion' => [
                 'class' => ImageStorageUnavailable::class,
                 'category' => StorageFailureCategory::Transient,
@@ -276,14 +347,15 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
                     ;
                 },
             ],
-            'existence cannot be established' => [
+            'the library fails the deletion in a way it does not name' => [
                 'class' => ImageStorageFailed::class,
                 'category' => StorageFailureCategory::Permanent,
                 'operation' => StorageOperation::Delete,
                 'run' => function (ImageId $identifier, LoggerInterface $logger): void {
-                    $failure = UnableToCheckFileExistence::forLocation($this->keyLike($identifier));
+                    $this->storage($logger)->store($identifier, self::PROBE_BYTES);
+                    $failure = UnableToCreateDirectory::atLocation($this->keyLike($identifier), 'permission denied');
 
-                    $this->storage($logger, $this->raisingFrom('fileExists', $failure))
+                    $this->storage($logger, $this->raisingFrom('delete', $failure))
                         ->delete($identifier)
                     ;
                 },
