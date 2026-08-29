@@ -146,6 +146,23 @@ rol (cualquier identidad ACTIVE) · forzar ≥2 administradores · el secreto en
       artefacto abierto y rastreable, no un docblock: los diez años son una decisión, no una consecuencia
       accidental de que `SingleUseToken` exija TTL. Gates: `AcceptedRiskTagGateTest` y el workflow
       `accepted-risk-live-state.yml`, que exige que #870 siga **abierta**.
+- [x] **Puerta de credencial en la revocación** (decisión 2026-08-29).
+      `api/src/Iam/Identity/Infrastructure/Http/RevokeRecoverySecretRequest.php` nuevo, y la constante
+      `EXISTING_CREDENTIAL_CEILING` extraída a un sitio compartido en vez de una tercera copia.
+      `RevokeMyRecoverySecretController` pasa a `POST /me/recovery-secret/revoke` con
+      `#[StrictRequestPayload]` y `CurrentPasswordProofThrottle`; el `DELETE` desaparece.
+      `RevokeRecoverySecret::revoke()` toma el cierre de verificación y, dentro de su transacción,
+      `findByIdForUpdate` → `proveCurrentPassword` → `findByUserIdForUpdate`, en el orden canónico de I-B.
+      Sin `ensureActive()`. Sin alimentar `LoginAttemptRegistrar`.
+- [x] **PWA**: `revoke()` deja de usar `delete` y pasa a `post` con cuerpo — **sin ensanchar el puerto
+      `HttpClient`**, que es la razón de que la ruta sea POST. El diálogo de revocación gana campo de
+      contraseña, con la copia en inglés y los `data-testid` existentes intactos.
+- [x] **Concurrencia**: `RecoverySecretLockOrderFunctionalTest` cubre el nuevo camino de dos cerrojos
+      (revoke vs acuñación, revoke vs canje) con las sondas NOWAIT que ya usa. El análisis ABBA se re-corre
+      con revoke dentro, en vez de heredarse.
+- [x] **Docs**: ADR D7, `PRODUCTION_SECURITY_CHECKLIST.md`, guía de despliegue y `api/docs/` dicen la
+      superficie real; ningún documento puede seguir describiendo un `DELETE` que ya no existe.
+
 
 **Acceptance Criteria:**
 - Dado un secreto acuñado y una cuenta con `locked_until` en el futuro (verificado por `SELECT`
@@ -161,6 +178,11 @@ rol (cualquier identidad ACTIVE) · forzar ≥2 administradores · el secreto en
 - Dado un canje ganado, `RECOVERY_SECRET_REDEEMED` se emite **sólo tras confirmar el consumo persistido**,
   nunca tras la mera verificación.
 - Ningún evento, fila de auditoría, log ni DTO contiene el selector — con prueba que lo afirme.
+- Dado un secreto vivo y una sesión autenticada, cuando se revoca **sin** la contraseña correcta, entonces
+  la fila **sigue existiendo** y la respuesta es la refusal del contrato, no un 204. Con el presupuesto
+  compartido agotado, la respuesta es 429 y tampoco se borra nada.
+- Dada una identidad **sin** secreto y la contraseña correcta, la revocación sigue siendo un éxito vacío:
+  la existencia de la fila no cambia ni el código ni la forma de la respuesta.
 
 ## Spec Change Log
 
@@ -200,6 +222,90 @@ rol (cualquier identidad ACTIVE) · forzar ≥2 administradores · el secreto en
   ahora lo que corre, y cierra el hueco por modelo de amenaza —adivinar un selector sólo compra
   denegación, dominada por el ataque que #602 ya documenta— en vez de por una propiedad de entropía que el
   código no tiene.
+
+- **2026-08-29 · la única decisión que el pase adversarial dejó abierta, resuelta por Sergio.** Revocar
+  pasa a exigir la contraseña actual sobre el **mismo** bucket que acuñar y cambiar contraseña, y la ruta
+  pasa de `DELETE /me/recovery-secret` a `POST /me/recovery-secret/revoke`, sin alias. Los detalles, las
+  tres mediciones que fijaron la forma, la consecuencia de cerrojos y las cuatro alternativas rechazadas
+  están en `## Adversarial pass`, que es donde vive el hallazgo. Se consultó a una IA externa; coincidió en
+  el fondo, y se le corrigieron dos cosas contra el árbol: el nombre `revocation` (los cuatro precedentes
+  del repo son verbos) y un objeto `CurrentPasswordProof` en Application, que sería un retroceso sobre el
+  cierre que `ProveCurrentPassword` ya usa para no dejar salir el texto plano de Infrastructure.
+
+  Queda **fuera** de esta rama, con issue de seguimiento ([#874](https://github.com/sergio-salcedo-dev/ERPify/issues/874)): convertir el invariante en gate — un registro
+  clasificando qué actos son credential-affecting, en la forma de los otros registros de `api/.*`. Es una
+  pieza propia y la rama está terminada.
+
+- **2026-08-29 · la rama llevaba ROJA en CI desde `52894e09`, y la lista de verificación del traspaso decía
+  lo contrario.** `php.cs.dry-run` salía 2 sobre `RedeemRecoverySecret.php:127` — fichero sin modificar,
+  introducido por esta misma rama. Es la trampa que este repo ya tiene registrada: `make php.quality` corre
+  `php.cs` en modo *apply* y lo tapa, mientras CI corre `php.quality.dry-run`. Un gate que se declara verde
+  desde la ejecución equivocada es peor que uno rojo, porque nadie vuelve a mirarlo.
+
+  La causa es un empate real entre las dos herramientas de estilo, medido en ambas direcciones: con
+  `catch (A|B $e)` phpcs=2 / cs-fixer=0; con `catch (A | B $e)` phpcs=0 / cs-fixer=2. Las dos están dentro de
+  `php.quality.dry-run`. Descartados subir versión (phpcs ya es 4.0.4, la última mayor) y reestructurar
+  (`AccountDeactivated` y `AccountSuspended` son `final … implements Forbidden` sin padre propio, así que
+  capturar el padre ensancharía el `catch`).
+
+  **Resuelto excluyendo el sniff en `api/tools/phpcs/phpcs.xml`, y la exclusión se apoya en dos mediciones,
+  no en preferencia.** phpcs se equivoca: acepta todas las uniones compactas en firmas del árbol
+  (`array|string|null`) y refusa sólo la grafía del multi-catch, siendo el mismo `|` con el mismo
+  significado. Y además sobra: php-cs-fixer configura `binary_operator_spaces => single_space`, **más
+  estricto** que el `at_least_single_space` de @PSR12 — verificado plantando `$probe = 1+2;`, que pone
+  `php.cs-fixer.dry-run` en 2. La exclusión es estrecha: con un `if($x){…}` plantado, phpcs sigue dando cinco
+  errores PSR12.
+
+- **2026-08-29 · consulta a Amelia y Murat sobre a qué nivel fijar el contrato de revoke, y las dos me
+  corrigieron la misma premisa.** Yo había puesto como coste de Behat «vocabulario nuevo y su clasificación
+  en `api/.behat-step-vocabulary`». **Falso, medido**: `git diff origin/main...HEAD -- api/.behat-step-vocabulary`
+  está vacío — las 134 líneas del feature del canje se escribieron íntegras con pasos existentes, y todos los
+  que revoke necesitaría ya están `used`, incluido `the password-change budget is exhausted for identity`
+  (`RateLimitContext.php:82`), que ceba **el mismo** `limiter.password_change_per_identity` que revoke gasta.
+  La decisión no podía apoyarse en el coste, que era el eje que yo había planteado.
+
+  **Amelia: sí a Behat** (cinco escenarios, cero vocabulario). **Murat: no a Behat, sí a un `WebTestCase`.**
+  Gana Murat, por dos razones que Amelia no tiene: Behat **no acredita cobertura de producción** (lo dice el
+  docblock de `ChangeMyPasswordFunctionalTest:30`, y el hermano `/me/password` tiene las dos cosas), y cuatro
+  de los cinco escenarios re-afirmarían el 403, el 422, la forma Problem Details y el 401, todos fijados **una
+  vez y globalmente** por el pipeline de error y `access_control.feature:11`. Lo único exclusivo de Behat sería
+  ver el cubo compartido salir por la ruta de revoke, y esa compartición es **estructural** — una sola clase
+  `final readonly` con un `#[Autowire]` inyectada en los tres controladores, que ninguna mutación de una ruta
+  puede romper.
+
+  **Lo que ninguno de los dos discute, y es el hallazgo:** `grep -rn "me/recovery-secret" api/tests api/features`
+  daba **cero**. La ligadura ruta↔método es un literal que ningún test ejecutaba, y es justo el delta de esta
+  rama — la ruta se acababa de mover. Cerrado con `RevokeMyRecoverySecretFunctionalTest`, que fija tres cosas
+  y no más: la ruta y el método por el cable, el 422 de payload estricto llegando **por esta ruta** (el gate
+  estructural prueba que el atributo está, no que el 422 llegue), y el 204 con **aserción de la siembra antes
+  de afirmar la ausencia** — sin ese `SELECT` intermedio el test pasa con una siembra de cero filas, que es un
+  defecto que este repo ya se ha comido.
+
+- **2026-08-29 · la costura PWA↔API deja de ser prosa y pasa a ser gate.** Sergio pidió decidir por mérito a
+  largo plazo y no por si cabía en la historia, y eso invierte la respuesta: una issue habría sido la séptima
+  promesa de un repo que documenta que los controles estructurales aplazados son justo los que se pudren.
+
+  **El fichero pedía el gate por escrito.** El docblock de `ApiEndpoints.ts` dice que sus rutas «MUST match
+  the backend exactly» y que «typos become 404s only at runtime». ~50 constantes de cliente frente a 43 rutas
+  de API, y ningún instrumento las reconcilia: `ApiRecoverySecretRepository.test.ts` afirma contra **su propia
+  constante**, que respecto al API es una tautología.
+
+  **La fuente de verdad tiene que ser el router, y esto es lo que lo decide:** `routes.yaml` aplica el prefijo
+  **por directorio**, y dos hermanos del mismo contexto difieren — `Iam/Identity/Infrastructure/Http/` monta
+  bajo `/api/v1/backoffice` y `.../Controller/` bajo `/api/v1`. Mover un controlador entre ellos cambia su URL
+  pública en silencio. Un regex sobre los `#[Route]` reimplementaría Symfony justo en la parte que falla.
+
+  Tres piezas: `make sf.routes.manifest` (genera `api/.route-manifest.json` desde `debug:router`), un gate de
+  frescura que exige que el manifiesto commiteado sea igual al router vivo —sin él el manifiesto es una mentira
+  que envejece, el mismo defecto una capa arriba—, y un gate de contrato en la PWA que lee el AST y casa cada
+  constante **y el verbo de cada llamada** contra el manifiesto.
+
+  **Por qué el verbo, que es lo que justifica el tamaño:** un gate sólo-de-rutas habría salido **verde sobre
+  este mismo cambio**. `/me/recovery-secret` sigue existiendo con GET y POST; lo que se movió fue el verbo.
+
+  Una sola dirección, cliente → API. La inversa —toda ruta consumida— necesitaría allowlist para sondas de
+  salud y rutas `dev`, y la posición declarada de este repo es que una regla que necesita allowlist está mal
+  escrita.
 
 ## Adversarial pass
 
@@ -258,17 +364,54 @@ sin credencial.
   usuario está en el momento en que la necesita — no en la pantalla de login, que sí sería anunciar la arista
   a un anónimo.
 
-### Aceptado y NO arreglado — decisión abierta para Sergio
+### Aceptado y arreglado — la decisión de Sergio, 2026-08-29
 
-- **`DELETE /me/recovery-secret` no exige la contraseña actual ni gasta presupuesto.** Mi docblock argumenta
-  que destruir el secreto «no concede nada»; el pase lo refuta con una cadena concreta: quien roba una sesión
-  no puede cambiar la contraseña (hay re-prueba), pero **sí puede destruir el secreto** con una petición, leer
-  la dirección en `GET /me` y mantener la cuenta cerrada por el cerrojo indexado por email. El desvío
-  forgot→reset corre sobre un presupuesto que el mismo atacante drena, y su agotamiento es silencioso por
-  contrato. Coste de arreglarlo: quien agotó el bucket compartido espera 15 minutos para revocar un secreto
-  que cree comprometido, y la PWA gana un campo de contraseña en el diálogo. Coste de no arreglarlo: pérdida
-  permanente del canal, irreversible. **No lo decido yo**: revierte una decisión documentada y cambia una
-  superficie de producto.
+- **`DELETE /me/recovery-secret` no exigía la contraseña actual ni gastaba presupuesto.** El docblock
+  argumentaba que destruir el secreto «no concede nada»; el pase lo refutó con una cadena concreta: quien
+  roba una sesión no puede cambiar la contraseña ni acuñar (las dos re-prueban), pero **sí podía destruir
+  el secreto** con una petición, leer la dirección en `GET /me` —confirmado, `MeResource` la lleva— y
+  mantener la cuenta cerrada por el cerrojo indexado por email. El desvío forgot→reset corre sobre un
+  presupuesto que el mismo atacante drena, y su agotamiento es silencioso por contrato.
+
+  **Resuelto exigiendo la contraseña actual sobre el bucket compartido.** El encuadre que decide no es la
+  asimetría de costes sino la propiedad: **destruir una capacidad es tan sensible como concederla**, y aquí
+  la recuperabilidad forma parte de la frontera de seguridad. Queda un invariante enunciable — *todo acto
+  que crea, reemplaza o destruye una credencial y es alcanzable desde sesión viva re-prueba la credencial y
+  comparte presupuesto* — en lugar de tres docblocks justificándose por separado.
+
+  **La forma la decidieron tres mediciones, no el gusto REST.** (a) La contraseña no puede viajar en
+  cabecera: en este despliegue toda cabecera de petición excepto `Referer` se escribe en claro en el log de
+  acceso del contenedor, que tiene rotación por volumen pero ni TTL ni ruta de borrado. (b) El puerto
+  `HttpClient` de la PWA declara `delete(url, options)` sin cuerpo, y `sendWithBody` está tipado a
+  `"POST" | "PUT" | "PATCH"`; ensanchar un puerto compartido para un solo llamante es lo que la Regla de
+  Tres de este repo rechaza. (c) Los cuatro sub-caminos de acción del árbol son **verbos**
+  (`/banks/realtime/authorize`, `/invitations/accept`, `/backoffice/users/{id}/unlock`, `/recovery/redeem`),
+  cero nominalizaciones. De ahí `POST /me/recovery-secret/revoke`, y el `DELETE` **eliminado**, no
+  mantenido como alias: un alias sin la prueba reinstala el defecto entero. Cuesta cero en `security.yaml`
+  —el catch-all `^/api` va el último y una ruta protegida no necesita regla.
+
+  **Consecuencia de cerrojos, que es lo que este hallazgo tenía de caro y nadie había nombrado.** El caso de
+  uso documentaba no tomar el cerrojo del usuario, y llamaba deliberada esa asimetría con acuñación y canje.
+  Leer la credencial obliga a la fila del usuario, así que revoke pasa a ser el **tercer** camino que toma
+  los dos cerrojos, en el orden canónico `User` → `RecoverySecret` que I-A/I-B fijan. Sin ciclo ABBA, con la
+  misma forma que los otros dos, y `RecoverySecretLockOrderFunctionalTest` extendido para cubrirlo en vez de
+  afirmarlo. **No** se le añade `ensureActive()`: wallear aquí sólo preservaría el secreto de una identidad
+  suspendida, que de todos modos no puede canjearlo.
+
+  **Lo que se verificó antes de aceptar el coste.** La objeción natural —«un atacante drena el bucket
+  compartido para impedir que el dueño revoque, y gana tiempo para canjear un texto plano robado»— **no
+  funciona**: las dos rutas que consumen el bucket exigen sesión viva, así que quien no la tiene no puede
+  drenarlo, y quien la tiene no gana nada impidiendo una revocación que él mismo querría. El residual sigue
+  siendo sólo tecleo propio del dueño, exactamente el que el docblock del throttle ya había aceptado.
+
+  **Rechazadas, con su razón.** Un presupuesto propio para revoke: lo refuta el docblock del throttle —un
+  segundo bucket duplica los intentos por ventana contra la misma contraseña. Re-probar sólo si existe la
+  fila: rompe el 204 idempotente y hace que la forma de la respuesta revele la existencia. Un objeto
+  `CurrentPasswordProof` en Application: `ProveCurrentPassword` ya recibe `Closure(HashedPassword): bool`,
+  de modo que el texto plano no sale de Infrastructure y el cierre se invoca **después** de las
+  comprobaciones de hash ausente/corrupto, que responden las tres igual a propósito; una prueba calculada
+  con antelación no puede expresar «no había credencial» sin una segunda bandera, así que sería un
+  retroceso sobre una propiedad documentada.
 
 ### Hallazgo del propio pase de falsificación, no de los agentes
 
@@ -338,9 +481,17 @@ root.
 
 ## Verification
 
-**Commands:**
-- `make php.stan` -- 0, sin errores
-- `make php.quality` -- 0 (incluye `php.lint.person-reference`, `public-access`, `audit-evidence`, deptrac)
-- `make php.unit` -- 0, sin regresión
-- `make php.behat c='features/backoffice/identity/'` -- 0
-- `make pwa.quality` -- 0
+**Commands:** — medidos el 2026-08-29 sobre el árbol final, cada uno en ejecución fresca
+
+- `make php.stan` · `php.md` · `php.cs.dry-run` · `php.cs-fixer.dry-run` · `php.rector.dry-run` -- 0
+- `make php.deptrac` -- 0
+- `make php.unit` -- 0 (3313 tests, 15340 aserciones)
+- `make php.behat` -- 0 (473 escenarios, 4399 pasos)
+- `make php.lint.route-manifest` -- 0 · `make sf.routes.manifest` -- 0, y regenerar no cambia un byte
+- `make php.lint.{bounded-context,event-bus,error-contract,step-vocabulary,audit-evidence,public-access}` -- 0
+- `make php.lint.person-reference` · `php.lint.gate-placement` -- 0
+- `make pwa.quality` · `pwa.lint.graph` -- 0
+- `make pwa.test.unit` -- 0 (252 ficheros, 1580 tests)
+
+**`make php.quality` NO se corre como barrida única**: muere de forma intermitente con 137 (flake conocido de
+PHPMD/OOM). Se corren los miembros en grupos pequeños, y el que CI ejecuta es `php.quality.dry-run`.

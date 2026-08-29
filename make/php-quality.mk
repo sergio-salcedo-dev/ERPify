@@ -254,11 +254,65 @@ php.lint.schedule-consumption: ## Schedule transport-consumption gate
 # It also proves nothing about runtime — only that every service definition can be resolved.
 #
 # Not strictly read-only, unlike its neighbours in php.quality.dry-run: it rewrites var/cache/prod.
-# Nothing else in the sweep touches that directory (the rest run under APP_ENV=test, PHPStan owns
-# var/cache/phpstan), so it stays safe under the -j4 fan-out CI uses.
+# One other member of the sweep reads that directory — php.lint.route-manifest boots a prod kernel —
+# and it declares this target as a prerequisite so make orders the two rather than letting the -j4
+# fan-out race a clear against a boot. Everything else in the sweep runs under APP_ENV=test, and
+# PHPStan owns var/cache/phpstan.
 php.lint.prod-container: ## Prod service-container compile gate
 	@$(PHP_PROD) php bin/console cache:clear --env=prod --no-warmup
 	@$(PHP_PROD) php bin/console cache:warmup --env=prod
+
+## —— Route-manifest freshness gate —————————————————————————————————————————
+
+# Fails CI when api/.route-manifest.json is not byte-identical to what the PRODUCTION router
+# declares right now. The manifest is the API's committed inventory of its own public paths, and a
+# committed inventory nothing re-derives is a document that ages into a lie — the same defect one
+# layer up as the client-side path registry it exists to make checkable, whose own docblock has
+# said "keep this file in lock-step with routes.yaml and the controller attributes" while nothing
+# read it.
+#
+# The comparison is a plain diff against a fresh dump, so this gate has no rule engine and needs no
+# falsification suite: mutate the file, mutate a `#[Route]`, delete a line — each is one diff hunk.
+# It is the only php.lint.* member that is not a PHPUnit `--filter`, because its subject is the
+# LIVE router rather than a repository artifact read as data; there is nothing here for
+# api/.artifact-gate-placement to classify.
+#
+# It is also the enforcement of "do not hand-edit this file". JSON carries no comment, so that
+# instruction cannot live in the manifest; it lives in the failure message below, which names the
+# generator rather than describing the drift and leaving the reader to guess the remedy.
+#
+# php.lint.prod-container is a prerequisite for the reason sf.routes.manifest declares it: that
+# gate rewrites var/cache/prod, this one boots a prod kernel that reads it, and CI fans
+# php.quality.dry-run out with -j4. Sequencing them is what keeps the pair parallel-safe — the
+# sweep's "every prerequisite here is read-only" note is about src/, not about var/cache/prod.
+#
+# WHAT A GREEN PROVES: the committed manifest equals what the router declares, in this checkout,
+# against the DEV vendor tree (the limitation php.lint.prod-container records for itself). It does
+# not prove a listed path is reachable, authorised, forwarded by Caddy, or wired to a working
+# controller; it does not prove an unlisted path is unreachable; and it reconciles nothing against
+# any client's copy of these paths, which is the consumer's gate rather than this one.
+# The rest of the blind spots are enumerated in api/tools/route-manifest/dump.sh.
+#
+# The braces around the dump are load-bearing for the same reason they are in sf.routes.manifest:
+# `! cd … && docker …` parses as `(! cd …) && docker …`, which short-circuits on a successful `cd`
+# and never runs the dump — leaving an empty temp file that diffs against everything.
+php.lint.route-manifest: php.lint.prod-container ## Route-manifest freshness gate (committed manifest vs the prod router)
+	@actual="$$(mktemp)"; \
+	if ! { $(ROUTE_MANIFEST_DUMP) > "$$actual"; }; then \
+		rm -f "$$actual"; \
+		echo "✗ php.lint.route-manifest: could not read the production router — the check did not run" >&2; \
+		exit 1; \
+	fi; \
+	if diff -u "$(ROUTE_MANIFEST)" "$$actual"; then \
+		rm -f "$$actual"; \
+		echo "✓ php.lint.route-manifest: api/.route-manifest.json matches the production router"; \
+	else \
+		rm -f "$$actual"; \
+		echo "✗ php.lint.route-manifest: api/.route-manifest.json does not match the production router." >&2; \
+		echo "  The file is GENERATED — never hand-edit it. Run 'make sf.routes.manifest' and commit the result." >&2; \
+		echo "  Above, '-' is what the committed manifest claims and '+' is what the router declares." >&2; \
+		exit 1; \
+	fi
 
 ## —— Behat step-vocabulary gate ————————————————————————————————————————————
 
@@ -465,7 +519,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.composer-stability php.lint.prod-container php.lint.route-manifest composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -483,7 +537,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.composer-stability php.lint.prod-container composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.composer-stability php.lint.prod-container php.lint.route-manifest composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -493,7 +547,7 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence \
         php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary \
-        php.lint.composer-stability php.lint.prod-container php.lint.project-context php.lint.public-access \
+        php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.project-context php.lint.public-access \
         php.lint.gate-placement php.lint.log-carriers php.lint.log-retention \
         php.lint.accepted-risk \
         php.deptrac php.deptrac.baseline \

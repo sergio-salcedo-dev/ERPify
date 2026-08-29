@@ -3,6 +3,7 @@
 # =============================================================================
 
 .PHONY: sf sf.cc sf.cache.warmup sf.routes sf.about \
+        sf.routes.manifest \
         sf.messenger.stop-workers \
         sf.clear.vendor sf.clear.var sf.clear.var.log sf.clear.var.cache \
         sf.chown.var sf.clear sf.clear.sudo \
@@ -25,6 +26,41 @@ sf.routes: ## debug:router (filter with f='…')
 
 sf.about: ## bin/console about
 	@$(SYMFONY) about
+
+## —— Route manifest ———————————————————————————————————————————————————————
+
+# Writes api/.route-manifest.json — every route the PROD router declares, as
+# {"<name>": {"path": …, "methods": […]}} — so a client's copy of these paths has something
+# to be reconciled against. It exists because a path cannot be read off a controller's
+# `#[Route]`: config/routes.yaml applies a prefix per DIRECTORY and two sibling directories of
+# one context differ, so moving a controller changes its public URL and touches no attribute.
+#
+# `php.lint.prod-container` is a prerequisite for two reasons, and only one of them is
+# correctness. It compiles var/cache/prod, which booting the prod kernel here would otherwise
+# do implicitly — and under the -j4 fan-out CI gives php.quality.dry-run, that gate CLEARS
+# that directory while this recipe would be reading it. Sequencing them is what keeps the pair
+# safe in parallel; the same edge is why php.lint.route-manifest declares it too.
+#
+# Byte-for-byte deterministic (no timestamps, jq's codepoint ordering rather than the shell's
+# locale-dependent sort), so re-running it on an unchanged tree produces an unchanged file.
+# Never hand-edit the output — php.lint.route-manifest re-derives it and fails on any drift.
+#
+# The dump lands in a temp file and is copied over the manifest only once it has succeeded:
+# redirecting straight onto the tracked file would leave a truncated manifest behind on a failed
+# run, and `cat >` rather than `mv` so the file keeps its own mode instead of mktemp's 0600.
+# The braces around the dump are load-bearing — ROUTE_MANIFEST_DUMP expands to `cd … && docker …`,
+# and `! cd … && docker …` parses as `(! cd …) && docker …`, which short-circuits and never runs
+# the dump at all.
+sf.routes.manifest: php.lint.prod-container ## Regenerate api/.route-manifest.json from the prod router
+	@dump="$$(mktemp)"; \
+	if ! { $(ROUTE_MANIFEST_DUMP) > "$$dump"; }; then \
+		rm -f "$$dump"; \
+		echo "✗ sf.routes.manifest: could not read the production router — $(ROUTE_MANIFEST) left unchanged" >&2; \
+		exit 1; \
+	fi; \
+	cat "$$dump" > $(ROUTE_MANIFEST); \
+	rm -f "$$dump"; \
+	echo "✓ $(ROUTE_MANIFEST) regenerated"
 
 ## —— Symfony Messenger ————————————————————————————————————————————————————————————
 
