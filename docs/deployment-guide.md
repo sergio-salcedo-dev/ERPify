@@ -296,6 +296,8 @@ email address anyone can learn. The recovery secret is the edge that does not de
 3. Store it away from the machine that runs the application, the way a root CA key or a PKI seed is stored.
 4. To use it, open `/recovery` and paste it. That establishes a session and clears the lockout, and the
    session survives every later re-locking.
+5. To replace one, revoke it from the same screen and mint again — an account holds one at a time. Revoking
+   asks for the current password too, so that a stolen session cannot destroy the channel it exists to guard.
 
 **Say this to the customer in these words: mislaying it is permanent loss of the channel.** That is the cost
 B1 was chosen with, not an implementation shortcoming, and what follows from it — vendor rescue by writing to

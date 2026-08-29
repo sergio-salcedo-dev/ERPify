@@ -53,13 +53,20 @@ interface MintRecoverySecretRequest {
   currentPassword: string;
 }
 
+/** The wire body the revoke endpoint expects. */
+interface RevokeRecoverySecretRequest {
+  currentPassword: string;
+}
+
 /**
  * HTTP adapter over the signed-in identity's own recovery secret:
  *
  *  - `GET /me/recovery-secret` → `{ data: { exists, mintedAt, expiresAt } }`.
  *  - `POST /me/recovery-secret` → 201 `{ data: { secret, mintedAt, expiresAt } }`; the
  *    plaintext is returned once and is unrecoverable afterwards.
- *  - `DELETE /me/recovery-secret` → 204.
+ *  - `POST /me/recovery-secret/revoke` → 204, carrying the current password. A verb with a
+ *    body, because destroying the account's last way back in is proved with the credential
+ *    rather than with the session that asks.
  *
  * No status code is interpreted here. A wrong password is a 403 `invalid-current-password`
  * and a second mint a 409 `recovery-secret-already-exists`; both reach the caller as the
@@ -87,7 +94,10 @@ export class ApiRecoverySecretRepository implements RecoverySecretRepository {
     return data;
   }
 
-  async revoke(): Promise<void> {
-    await this.httpClient.delete(API_ENDPOINTS.IDENTITY.RECOVERY_SECRET);
+  async revoke(currentPassword: string): Promise<void> {
+    await this.httpClient.post<RevokeRecoverySecretRequest, void>(
+      API_ENDPOINTS.IDENTITY.RECOVERY_SECRET_REVOKE,
+      { currentPassword },
+    );
   }
 }

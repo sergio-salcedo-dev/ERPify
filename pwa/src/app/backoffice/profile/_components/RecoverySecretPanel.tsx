@@ -2,8 +2,15 @@
 
 import { useState, type ReactNode } from "react";
 import { LifeBuoy, TriangleAlert } from "lucide-react";
-import { AsyncBoundary, CopyButton, MutationError, StatusBadge } from "@/components/erpify";
+import {
+  AsyncBoundary,
+  CopyButton,
+  FormField,
+  MutationError,
+  StatusBadge,
+} from "@/components/erpify";
 import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import {
   Dialog,
   DialogClose,
@@ -16,6 +23,11 @@ import {
 } from "@/components/ui/dialog";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { useRecoverySecret } from "@/context/shared/access/application/useRecoverySecret";
+import { useZodForm } from "@/context/shared/validation/infrastructure";
+import {
+  RevokeRecoverySecretSchema,
+  type RevokeRecoverySecretFormValues,
+} from "@/context/backoffice/user/application/schemas/auth/RevokeRecoverySecretSchema";
 import type {
   MintedRecoverySecret,
   RecoverySecretStatus,
@@ -213,7 +225,7 @@ function ExistingSecret({
   mintedAt: string;
   expiresAt: string;
   revoking: boolean;
-  onRevoke: () => Promise<void>;
+  onRevoke: (currentPassword: string) => Promise<void>;
 }>) {
   return (
     <div
@@ -264,22 +276,45 @@ function SecretInstants({
 
 /**
  * Revoking destroys the account's only recovery edge, and nothing about the surface it sits on
- * warns of that, so the confirmation carries the consequence rather than the verb. It takes no
- * credential — the live session is the proof — which is exactly why it asks twice.
+ * warns of that, so the confirmation carries the consequence rather than the verb. The current
+ * password is the proof it asks for: a session on its own may create no way back into this
+ * account and may destroy none either, so a stolen one cannot close the last door behind it.
+ *
+ * The typed credential lives in this dialog's form state and nowhere else. Every exit resets
+ * it — cancel, Esc, a dismissed overlay, and the submit itself — so a reopened dialog starts
+ * empty whether the last attempt succeeded or was refused.
+ *
+ * A failed revoke closes the dialog and leaves the failure on the panel's persistent banner,
+ * where a mutation failure belongs; the field only ever carries what this form itself refuses
+ * to send.
  */
 function RevokeRecoverySecretDialog({
   revoking,
   onRevoke,
-}: Readonly<{ revoking: boolean; onRevoke: () => Promise<void> }>) {
+}: Readonly<{ revoking: boolean; onRevoke: (currentPassword: string) => Promise<void> }>) {
   const [open, setOpen] = useState(false);
 
-  const confirm = async (): Promise<void> => {
-    await onRevoke();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useZodForm<RevokeRecoverySecretFormValues>(RevokeRecoverySecretSchema, {
+    defaultValues: { currentPassword: "" },
+  });
+
+  const close = (): void => {
     setOpen(false);
+    reset();
   };
 
+  const onSubmit = handleSubmit(async ({ currentPassword }) => {
+    await onRevoke(currentPassword);
+    close();
+  });
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(next: boolean) => (next ? setOpen(true) : close())}>
       <DialogTrigger
         render={
           <Button
@@ -295,50 +330,69 @@ function RevokeRecoverySecretDialog({
         }
       />
       <DialogContent className="sm:max-w-md" data-testid="recovery-secret__revoke-dialog">
-        <DialogHeader>
-          <div className="flex items-start gap-3">
-            <span
-              className="bg-destructive/10 text-destructive flex size-10 shrink-0 items-center justify-center rounded-full"
-              aria-hidden="true"
-            >
-              <TriangleAlert className="size-5" />
-            </span>
-            <div className="flex flex-1 flex-col gap-2">
-              <DialogTitle className="text-lg">Revoke recovery secret</DialogTitle>
-              <DialogDescription className="text-base leading-relaxed">
-                The secret you saved stops working immediately, and this account keeps no other way
-                back in until you create a new one. This cannot be undone.
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <DialogFooter>
-          <DialogClose
-            render={
-              <Button
-                variant="ghost"
-                disabled={revoking}
-                aria-label="Keep the recovery secret"
-                title="Keep the recovery secret"
+        {/* The dialog mounts only after a click, so no unhydrated form can exist here to
+            perform a native GET carrying the password in the URL. */}
+        <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+          <DialogHeader>
+            <div className="flex items-start gap-3">
+              <span
+                className="bg-destructive/10 text-destructive flex size-10 shrink-0 items-center justify-center rounded-full"
+                aria-hidden="true"
               >
-                Cancel
-              </Button>
-            }
-          />
-          <Button
-            variant="destructive"
-            disabled={revoking}
-            onClick={() => {
-              void confirm();
-            }}
-            aria-label="Revoke it"
-            title="Revoke it"
-            data-testid="recovery-secret__revoke-confirm"
+                <TriangleAlert className="size-5" />
+              </span>
+              <div className="flex flex-1 flex-col gap-2">
+                <DialogTitle className="text-lg">Revoke recovery secret</DialogTitle>
+                <DialogDescription className="text-base leading-relaxed">
+                  The secret you saved stops working immediately, and this account keeps no other
+                  way back in until you create a new one. This cannot be undone.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <FormField
+            name="currentPassword"
+            label="Current password"
+            required
+            error={errors.currentPassword?.message}
+            helper="Revoking asks for your password, so a borrowed session cannot destroy the way back into this account."
           >
-            Revoke it
-          </Button>
-        </DialogFooter>
+            <PasswordInput
+              autoComplete="current-password"
+              defaultRevealed={false}
+              toggleTestId="recovery-secret__revoke-password-toggle"
+              {...register("currentPassword")}
+              data-testid="recovery-secret__revoke-password"
+            />
+          </FormField>
+
+          <DialogFooter>
+            <DialogClose
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={revoking}
+                  aria-label="Keep the recovery secret"
+                  title="Keep the recovery secret"
+                >
+                  Cancel
+                </Button>
+              }
+            />
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={revoking}
+              aria-label="Revoke it"
+              title="Revoke it"
+              data-testid="recovery-secret__revoke-confirm"
+            >
+              Revoke it
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

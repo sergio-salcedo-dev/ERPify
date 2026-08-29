@@ -12,21 +12,16 @@ use Symfony\Component\Validator\Constraints as Assert;
  * or one carrying a member this endpoint does not implement — is answered 422 `validation-failed` before the
  * use case runs.
  *
- * `currentPassword` carries no password policy, for the reason {@see ChangeMyPasswordRequest} gives about its
- * own: it is a credential that already exists, possibly minted under an older or wider rule, and asserting
- * today's minimum on it would refuse the very people the rule was widened for. Its only bound is a coarse
- * ceiling above every credential the system can hold, so an oversized body cannot turn a KDF run into an
- * amplification lever.
+ * `currentPassword` is bounded by {@see ExistingCredential} and by nothing else: minting re-proves a
+ * credential rather than setting one, so no password policy applies to it.
  *
  * `#[SensitiveParameter]`: a stack trace crossing this constructor must not print the plaintext.
  */
 final readonly class MintRecoverySecretRequest
 {
-    private const int EXISTING_CREDENTIAL_CEILING = 255;
-
     public function __construct(
         #[Assert\NotBlank]
-        #[Assert\Length(max: self::EXISTING_CREDENTIAL_CEILING)]
+        #[Assert\Length(max: ExistingCredential::LENGTH_CEILING)]
         #[SensitiveParameter]
         public string $currentPassword = '',
     ) {

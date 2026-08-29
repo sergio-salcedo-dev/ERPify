@@ -34,7 +34,8 @@ export interface RecoverySecretState {
   problem: ProblemDetails | null;
   revoking: boolean;
   revokeProblem: ProblemDetails | null;
-  revoke: () => Promise<void>;
+  /** Destroying the secret is proved with the current password, never with the session alone. */
+  revoke: (currentPassword: string) => Promise<void>;
   /** Fold a just-minted secret's instants into the read state without a second round trip. */
   applyMinted: (minted: MintedRecoverySecret) => void;
   dismissRevokeProblem: () => void;
@@ -43,9 +44,10 @@ export interface RecoverySecretState {
 
 /**
  * Reads whether the signed-in identity holds a recovery secret and exposes the revoke that
- * destroys it. Minting is deliberately absent: it is the only operation that needs a
- * credential and the only one whose rejection belongs on a form field, so it stays with the
- * form that collects the password rather than being laundered through shared state.
+ * destroys it. Minting is deliberately absent: its rejection belongs on the form field the
+ * password was typed into, so it stays with that form rather than being laundered through
+ * shared state. The revoke takes the credential too — it is the caller's to collect and this
+ * hook's only to pass through, never to hold.
  *
  * A successful mint is folded in through {@link RecoverySecretState.applyMinted} rather than
  * re-reading: the 201 already carries the authoritative instants, so a second GET would ask
@@ -92,11 +94,11 @@ export function useRecoverySecret(): RecoverySecretState {
     load();
   }, [load]);
 
-  const revoke = useCallback(async () => {
+  const revoke = useCallback(async (currentPassword: string) => {
     setRevoking(true);
     setRevokeProblem(null);
     try {
-      await repository().revoke();
+      await repository().revoke(currentPassword);
       if (!mountedRef.current) return;
       setStatus({ exists: false, mintedAt: null, expiresAt: null });
     } catch (error) {

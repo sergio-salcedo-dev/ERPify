@@ -98,11 +98,11 @@ framework:
             interval: '%env(RATE_LIMIT_TOKEN_ACTION_INTERVAL)%'
             lock_factory: null
 
-        # `password_change_per_identity` — per-identity budget on the two routes that require the caller to
-        # RE-PROVE the current password from a live session: POST /me/password and POST /me/recovery-secret.
-        # Keyed by the signed-in identity's id, and shared between them on purpose — see the paragraph on
-        # drift below, which is the reason the consuming class is named CurrentPasswordProofThrottle rather
-        # than after whichever controller reached it first.
+        # `password_change_per_identity` — per-identity budget on the routes that require the caller to
+        # RE-PROVE the current password from a live session: POST /me/password, POST /me/recovery-secret and
+        # POST /me/recovery-secret/revoke. Keyed by the signed-in identity's id, and shared between them on
+        # purpose — see the paragraph on drift below, which is the reason the consuming class is named
+        # CurrentPasswordProofThrottle rather than after whichever controller reached it first.
         #
         # THE KEY KEEPS ITS ORIGINAL NAME while the abstraction's did not, and that asymmetry is deliberate:
         # this one is deployment surface. Its value arrives through RATE_LIMIT_PASSWORD_CHANGE_PER_IDENTITY_*,
@@ -120,7 +120,7 @@ framework:
         # listening". Reusing it is the point: a wrong `currentPassword` here does NOT feed that counter (by
         # decision — marking failures from a route reachable only with a live session would turn a stolen
         # session into a lockout DoS against the owner), so this limiter is the ONLY per-identity budget on
-        # the route and inventing a second number for the same question is how the two drift apart.
+        # these routes and inventing a second number for the same question is how the two drift apart.
         #
         # What it does and does not buy: an attacker holding the session is delayed, not stopped — the budget
         # lives in the cache pool, so a deploy or a second worker resets or splits it, and `lock_factory: null`

@@ -235,7 +235,8 @@ What it costs, none of which D1–D6 anticipated:
 - **Possessing it equals possessing a recovery credential until one of four events.** It survives a password
   rotation, it is not rotated when spent, and it dies only by redemption, revocation, expiry or subject
   erasure. The profile surface that lists it — minted at, expires at, with an explicit revoke — is the whole
-  of what makes that governable.
+  of what makes that governable, and D8 is why that revoke re-proves the credential rather than trusting the
+  session it arrives on.
 - **The selector is a denial capability, which is why the corollary is not merely hygiene.** Whoever learns
   one can spend that selector's redemption budget and hold the channel shut in silence, without ever
   authenticating. That denial is dominated by the cheaper email-keyed attack this ADR opens with, which is
@@ -245,6 +246,46 @@ What it costs, none of which D1–D6 anticipated:
   The session is established BEFORE the row is retired — inverted, a failed session mint would leave the
   secret spent and the administrator with nothing to present — so a partial failure is retryable rather than
   terminal, and the endpoint does not promise 204 through it.
+
+## D8 — Revoking is a credential-affecting act, so it re-proves like the other two
+
+*Amendment (2026-08-29, from an adversarial pass over the delivered branch.)* Revocation initially required
+only a live session, on the argument that destroying the secret grants nothing and is the safe direction of
+the endpoint's failure. **That argument reasons about the wrong axis.** An attacker holding a stolen session
+can change nothing — the password change and the mint both re-prove — but could destroy the recovery secret
+with one request, read the owner's address from `GET /me`, and hold the account shut with the email-keyed
+lockout this whole ADR opens with. The forgot→reset detour runs on the budget that same attacker drains and
+its exhaustion is silent by contract, so the owner meets a 202 and no email. The escape hatch is gone,
+irreversibly, and the only remedy left is the vendor writing to the database.
+
+**The decision: destroying a recovery capability is as sensitive as granting one, so every authenticated act
+that creates, replaces or destroys a credential re-proves it and spends the same per-identity budget.** That
+is one invariant instead of three endpoints justifying themselves separately, and unlike an enumeration of
+exceptions it is a rule something can be built to check. Availability of the recovery edge is part of the
+security boundary here, not a usability concern beside it.
+
+Discarded, each for a measured reason:
+
+- **A budget of its own for revocation.** A second bucket doubles the guesses per window against the same
+  password, which is precisely why minting and the password change already share one.
+- **Re-proving only when a row exists.** It breaks the idempotent 204 by making the response shape disclose
+  existence, and it decides authorisation from the state of the resource it is authorising against.
+- **Keeping `DELETE /me/recovery-secret` as a deprecated alias.** An ungated path is an ungated path; the
+  route was new and unreleased, so nothing was owed compatibility.
+- **`DELETE` carrying a JSON body.** The password may not ride a header (every request header but `Referer`
+  reaches the container access log in clear) so it must be a body — but the client's shared HTTP port declares
+  no body on `delete`, and widening a shared port for a single caller is the abstraction the Rule of Three
+  refuses. Hence `POST /me/recovery-secret/revoke`, spelled as a verb like every other action sub-path here.
+
+What it costs: an owner who has just exhausted the shared budget by mistyping waits out the window before
+they can revoke a secret they believe is compromised. That residual is **self-inflicted only** — both routes
+that drain the bucket require a live session, so it cannot be induced from outside — and it is bounded and
+self-healing, against a loss that was permanent.
+
+A second-order consequence, named because it is the expensive one: reading the credential forces the user
+row, so revocation becomes the third path taking both locks and must take them in the order minting and
+redemption already take them (`User`, then `RecoverySecret`). The ABBA argument is re-run with it inside
+rather than inherited.
 
 ## Falsification
 

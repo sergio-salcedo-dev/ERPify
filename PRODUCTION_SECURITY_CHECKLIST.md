@@ -686,9 +686,13 @@ you change anything here.
       would put the recovery channel in the namespace the attack already occupies. Every death case
       (malformed, unknown, lapsed, wrong, already consumed, budget exhausted) answers one byte-identical
       400 `invalid-token`; a valid secret over a non-`ACTIVE` identity is the one identified 403, and the row
-      is not consumed. Minting shares the per-identity credential-proof budget with `POST /me/password`
+      is not consumed. **Revoked** at `POST /me/recovery-secret/revoke`, which re-proves the current password like the other
+      two: a stolen session cannot change the password or mint, but an ungated revoke let it destroy the
+      channel permanently and then hold the account shut with the email-keyed lockout — the very attack this
+      credential answers. Destroying a recovery capability is as sensitive as granting one. Minting, the
+      password change and the revoke share ONE per-identity credential-proof budget
       (`CurrentPasswordProofThrottle`) — a bucket of its own would hand a stolen session twice the guesses
-      against the same password, since neither route feeds the persisted lockout. Full record:
+      against the same password, since none of the three feeds the persisted lockout. Full record:
       [`docs/adr/administrative-recovery-channel.md`](docs/adr/administrative-recovery-channel.md) D7.
       **Four residuals, each accepted rather than closed:**
       **(a)** the secret is valid for **ten years** — `SingleUseToken` makes "no expiry" unrepresentable and a
@@ -696,7 +700,10 @@ you change anything here.
       accepted risk with an open issue ([#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870)).
       **(b)** possessing it equals possessing a recovery credential until redemption, revocation, expiry or
       subject erasure — it survives a password rotation by design, and the profile screen listing it with both
-      instants and an explicit revoke is the whole of what makes that governable.
+      instants and a credential-gated revoke is the whole of what makes that governable. The gate costs the
+      owner a wait of up to one window when they have just spent the shared budget mistyping; that residual is
+      self-inflicted only — both routes that drain the bucket require a live session, so nobody can drain it
+      from outside to keep a revoke from happening.
       **(c)** the **selector is a denial capability**: whoever learns one can spend that selector's budget and
       hold the channel shut in silence without authenticating. It is contained by construction (it is the row's
       key, so events name the user, and it reaches no audit row, log or URL, and no DTO but the minting

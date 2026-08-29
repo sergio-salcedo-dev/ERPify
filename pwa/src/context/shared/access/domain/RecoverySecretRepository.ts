@@ -20,6 +20,11 @@ export interface RecoverySecretRepository {
    */
   mint(currentPassword: string): Promise<MintedRecoverySecret>;
 
-  /** Destroy the account's secret. Takes no credential and is irreversible. */
-  revoke(): Promise<void>;
+  /**
+   * Destroy the account's secret, proving ownership with the current password: a session on
+   * its own may not remove the account's last way back in. Irreversible — nothing recovers the
+   * destroyed secret, only a fresh mint replaces it. Rejects with `invalid-current-password`
+   * or `rate-limited`.
+   */
+  revoke(currentPassword: string): Promise<void>;
 }

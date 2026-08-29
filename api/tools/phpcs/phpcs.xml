@@ -37,6 +37,30 @@
     <rule ref="Generic.Arrays.DisallowLongArraySyntax"/>
 
     <!-- Sniff Exclusions -->
+    <!--
+        Operator spacing is php-cs-fixer's axis, not this tool's, and keeping both makes the two contradict
+        each other on one construct. `PSR12.Operators.OperatorSpacing` reads the `|` of a multi-catch
+        (`catch (A|B $e)`) as a binary operator and demands spaces around it, while php-cs-fixer's
+        `types_spaces` demands the compact form back — so `php.quality.dry-run`, which runs BOTH, is red
+        whichever way the line is written. Measured, in both directions: `A|B` is phpcs 2 / cs-fixer 0, and
+        `A | B` is phpcs 0 / cs-fixer 2.
+
+        phpcs is the one that is wrong, and it is also the redundant one:
+        - It contradicts itself. Every compact union type in a signature (`array|string|null $acceptFormat`)
+          passes this same run untouched; only the catch spelling is refused, though the `|` means the same
+          thing in both places.
+        - php-cs-fixer already owns this rule and enforces it MORE strictly — `binary_operator_spaces` is
+          configured to `single_space`, deliberately overriding @PSR12's `at_least_single_space`. Verified
+          rather than assumed: a planted `$probe = 1+2;` puts `php.cs-fixer.dry-run` at exit 2.
+
+        So excluding these two codes removes a contradiction and loses no enforcement. Only the
+        missing-space codes go: whatever else the sniff reports is untouched.
+    -->
+    <rule ref="PSR12.Operators.OperatorSpacing">
+        <exclude name="PSR12.Operators.OperatorSpacing.NoSpaceBefore"/>
+        <exclude name="PSR12.Operators.OperatorSpacing.NoSpaceAfter"/>
+    </rule>
+
     <!-- Allow newline immediately after `(` in multi-line control-structure conditions -->
     <rule ref="PEAR.ControlStructures.MultiLineCondition">
         <exclude name="PEAR.ControlStructures.MultiLineCondition.SpacingAfterOpenBrace"/>
