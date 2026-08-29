@@ -80,6 +80,25 @@ Feature: Server-side session registry and admission gate
     And the JSON node "data" should have 1 elements
     And the JSON node "data[0].current" should be true
 
+  # The budget for the OTHER consumer of the admitted session. It gets a scenario of its own because the
+  # count resets per SCENARIO and not per request: folded into the sign-out scenario above it would still
+  # move on a stray query, but it could not say WHICH of that scenario's three requests moved it.
+  #
+  # Read what it pins narrowly. Only one of the nine is the revocation — a single bulk UPDATE; the rest is
+  # the transaction envelope and the event-store write plus projection catch-up that publishing through the
+  # outbox costs. No audit row is among them, because the policy audits GETs and lets writes fall through.
+  # So the assertion is not a statement about what a sign-out should cost: it is the absence of ONE more
+  # query, the one a controller resolving the admitted session for itself would add.
+  #
+  # It will therefore also move for reasons that have nothing to do with that. A second projector adds its
+  # own catch-up, and routing OtherSessionsRevoked to `async` removes it — both are anticipated paths, not
+  # regressions. If this reds on a change that touched neither controller, re-derive the number rather than
+  # reading the scenario name as a diagnosis.
+  Scenario: Signing out other devices reads the admitted session without re-running its lookup
+    When I send a "POST" request to "/sessions/revoke-others"
+    Then the response status code should be 204
+    And 9 requests got executed only for doctrine connection "default"
+
   Scenario: Signing out this device revokes its session so the cookie is inert
     When I send a "POST" request to "/sessions/revoke-current"
     Then the response status code should be 204
