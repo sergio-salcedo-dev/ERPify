@@ -17,6 +17,7 @@ use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -57,6 +58,8 @@ use Throwable;
 #[CoversClass(EraseBankAccountSubject::class)]
 final class BankAccountSubjectErasureRaceFunctionalTest extends KernelTestCase
 {
+    use ResolvesContainerServices;
+
     private EntityManagerInterface $entityManager;
 
     private ?Connection $outside = null;
@@ -294,20 +297,5 @@ final class BankAccountSubjectErasureRaceFunctionalTest extends KernelTestCase
         }
 
         return $this->outside;
-    }
-
-    /**
-     * @template T of object
-     *
-     * @param class-string<T> $id
-     *
-     * @return T
-     */
-    private function service(string $id): object
-    {
-        $service = self::getContainer()->get($id);
-        $this->assertInstanceOf($id, $service);
-
-        return $service;
     }
 }

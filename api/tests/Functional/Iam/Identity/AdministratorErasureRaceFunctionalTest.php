@@ -25,6 +25,7 @@ use Erpify\Shared\Audit\Application\AuditSubjectTrailErasure;
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\ResolvesContainerServices;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -63,6 +64,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(FulfilIdentityErasure::class)]
 final class AdministratorErasureRaceFunctionalTest extends KernelTestCase
 {
+    use ResolvesContainerServices;
+
     private EntityManagerInterface $entityManager;
 
     private ?Connection $outside = null;
@@ -227,20 +230,5 @@ final class AdministratorErasureRaceFunctionalTest extends KernelTestCase
         }
 
         return $this->outside;
-    }
-
-    /**
-     * @template T of object
-     *
-     * @param class-string<T> $id
-     *
-     * @return T
-     */
-    private function service(string $id): object
-    {
-        $service = self::getContainer()->get($id);
-        $this->assertInstanceOf($id, $service);
-
-        return $service;
     }
 }

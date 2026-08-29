@@ -5,15 +5,17 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Http\Infrastructure;
 
 use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
-use InvalidArgumentException;
+use Erpify\Tests\Support\PhpSource;
+use FilesystemIterator;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionParameter;
-use ReflectionType;
+use SplFileInfo;
 use stdClass;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -36,12 +38,12 @@ use Symfony\Component\Serializer\Serializer;
  * resolve the subclass at all — it fetches payload attributes with `ArgumentMetadata::IS_INSTANCEOF` — and the
  * union order is what stops a caller re-enabling the very thing the type exists to forbid.
  *
- * The coupling suppression is measured at 18, and it is the subject's stack rather than this class's:
+ * The coupling suppression is measured at 20, and it is the subject's stack rather than this class's:
  * asserting what a CALLER sees means driving Symfony's real `RequestPayloadValueResolver`, which cannot be
  * stood up without a Serializer, an ObjectNormalizer, an AttributeLoader, a ClassMetadataFactory and a
- * JsonEncoder — thirteen of the twenty imports are used exactly once, all of them in that assembly. The
- * alternative measured and rejected was asserting the attribute's stored `acceptFormat` value instead,
- * which passes over the only thing that matters: whether a form-encoded body is actually refused.
+ * JsonEncoder — 10 of the 22 imports are referenced by no code outside `mapPayload()`. The alternative
+ * measured and rejected was asserting the attribute's stored format value instead, which passes over the
+ * only thing that matters: whether a form-encoded body is actually refused.
  *
  * @internal
  *
@@ -99,12 +101,10 @@ final class StrictRequestPayloadTest extends TestCase
     public function itForwardsTheOptionsItDoesNotOwn(): void
     {
         $payload = new StrictRequestPayload(
-            acceptFormat: 'json',
             validationGroups: ['create'],
             type: self::class,
         );
 
-        $this->assertSame('json', $payload->acceptFormat);
         $this->assertSame(['create'], $payload->validationGroups);
         $this->assertSame(self::class, $payload->type);
     }
@@ -137,70 +137,89 @@ final class StrictRequestPayloadTest extends TestCase
 
     /**
      * The resolver gates its format check on truthiness — `if ($attribute->acceptFormat && ...)` — so a falsy
-     * argument skips the check outright instead of loosening it, and the endpoint accepts the form-encoded and
-     * multipart bodies this attribute exists to refuse.
+     * argument would not loosen the check, it would SKIP it, and the endpoint would accept the form-encoded
+     * and multipart bodies this attribute exists to refuse. There is no parameter to be falsy: the state is
+     * unrepresentable rather than rejected, and this is what keeps it that way.
      *
-     * The cases below are EXAMPLES of that predicate, never the definition of it: `'0'` is here because a
-     * guard written as a list of `null`, `[]` and `''` reads as exhaustive and admits it. The guard is one
-     * truthiness test for exactly that reason, so this provider can be short without the policy being short.
+     * A guard rejecting the value instead could only ever be as complete as its own predicate, which is the
+     * shape that has already failed twice in this repository. The absence is therefore the guarantee, and an
+     * absence needs a witness or nothing stops the parameter coming back with the guard left behind.
      *
-     * The type half is read through reflection rather than compared against a literal: a signature asserted
-     * against a copy of itself is a tautology, and the parameter is what a call site actually meets.
+     * Read through reflection rather than compared against a literal: a signature asserted against a copy of
+     * itself is a tautology, and the parameter list is what a call site actually meets.
      */
     #[Test]
-    public function itsAcceptFormatCannotBeSpelledAsNull(): void
+    public function noCallSiteCanNameTheFormatItAccepts(): void
     {
         $constructor = (new ReflectionClass(StrictRequestPayload::class))->getConstructor();
 
         $this->assertInstanceOf(ReflectionMethod::class, $constructor);
 
-        $acceptFormat = \array_find(
+        $declared = \array_map(
+            static fn (ReflectionParameter $parameter): string => $parameter->getName(),
             $constructor->getParameters(),
-            static fn (ReflectionParameter $parameter): bool => 'acceptFormat' === $parameter->getName(),
         );
 
-        $this->assertInstanceOf(
-            ReflectionParameter::class,
-            $acceptFormat,
-            'The constructor no longer declares an $acceptFormat parameter.',
-        );
-
-        $type = $acceptFormat->getType();
-
-        $this->assertInstanceOf(ReflectionType::class, $type);
-        $this->assertFalse(
-            $type->allowsNull(),
-            'acceptFormat admits null again. The parent defaults to it and the resolver treats it as falsy, '
-            . 'so the format check is skipped and a form-encoded body maps like a JSON one.',
+        $this->assertNotContains(
+            'acceptFormat',
+            $declared,
+            'The constructor declares an $acceptFormat parameter again. The parent defaults it to null and the '
+            . 'resolver reads a falsy value as "skip the format check", so a call site can reopen the '
+            . 'form-encoded and multipart bodies this attribute exists to refuse.',
         );
     }
 
     /**
-     * @param array<string>|string $acceptFormat
+     * The cost of removing the parameter, held by something other than a paragraph.
+     *
+     * `serializationContext` is the first positional parameter, so `new StrictRequestPayload(['json'])` no
+     * longer raises — it feeds a format list into the serializer context, where it changes nothing and says
+     * nothing. The strictness itself survives (the union puts the policy on the left), so the failure is
+     * silent by construction, and a docblock is exactly the control this type's own reasoning rejects as
+     * insufficient. Every construction in the tree therefore names its arguments.
+     *
+     * A text sweep, because `#[StrictRequestPayload(…)]` is an attribute and never a value this test could
+     * inspect at runtime — and it reads through {@see PhpSource::withoutComments()}, because the docblocks
+     * that explain this hazard SPELL the offending call, and a raw-byte sweep reported the two files that
+     * document it as the two files committing it.
      */
-    #[DataProvider('provideItRefusesAFalsyAcceptFormatCases')]
     #[Test]
-    public function itRefusesAFalsyAcceptFormat(array|string $acceptFormat): void
+    public function nothingConstructsItPositionally(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $offenders = [];
 
-        new StrictRequestPayload(acceptFormat: $acceptFormat);
+        foreach (['src', 'tests'] as $tree) {
+            $directory = \dirname(__DIR__, 5) . '/' . $tree;
+            $files = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
+            );
+
+            foreach ($files as $file) {
+                if (!$file instanceof SplFileInfo || 'php' !== $file->getExtension()) {
+                    continue;
+                }
+
+                $source = \file_get_contents($file->getPathname());
+
+                $this->assertIsString($source);
+
+                $source = PhpSource::withoutComments($source);
+
+                // A named argument or an empty list is the whole permitted vocabulary; anything else in the
+                // first position is a value silently landing in `serializationContext`.
+                if (1 === \preg_match('/StrictRequestPayload\(\s*(?![)\s]|\w+:)/', $source)) {
+                    $offenders[] = $file->getPathname();
+                }
+            }
+        }
+
+        $this->assertSame([], $offenders, 'A positional argument here feeds the serializer context.');
     }
 
     /**
-     * @return iterable<string, array{0: array<string>|string}>
-     */
-    public static function provideItRefusesAFalsyAcceptFormatCases(): iterable
-    {
-        yield 'the empty list' => [[]];
-        yield 'the empty string' => [''];
-        yield "the string '0'" => ['0'];
-    }
-
-    /**
-     * Runs a payload with no explicit `acceptFormat` through Symfony's own resolver, so the assertion is the
-     * status a caller receives rather than the value the constructor stored. The mapped type is immaterial:
-     * the format check runs before any denormalization.
+     * Runs the payload through Symfony's own resolver, so the assertion is the status a caller receives
+     * rather than the value the constructor stored. The mapped type is immaterial: the format check runs
+     * before any denormalization.
      */
     private function mapPayload(Request $request): mixed
     {

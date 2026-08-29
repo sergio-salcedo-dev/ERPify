@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Gate;
 
 use Erpify\Shared\Audit\Domain\AuditWriteOperation;
+use Erpify\Tests\Support\RepositoryRoot;
+use Erpify\Tests\Support\TypeScriptSource;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -65,7 +67,7 @@ final class AuditWriteOperationParityTest extends TestCase
     #[Test]
     public function thePayloadGuardIsDerivedFromTheMirroredVocabulary(): void
     {
-        $code = $this->withoutComments($this->read($this->repoRoot() . '/' . self::GUARD));
+        $code = TypeScriptSource::withoutComments($this->read($this->repoRoot() . '/' . self::GUARD));
 
         $derivations = \preg_match_all(
             '/AUDIT_WRITE_OPERATIONS\s*(?::[^=]*)?=\s*new Set\(\s*Object\.values\(\s*AuditWriteOperation\s*\)\s*\)/',
@@ -109,7 +111,7 @@ final class AuditWriteOperationParityTest extends TestCase
      */
     private function mirroredValues(): array
     {
-        $code = $this->withoutComments($this->read($this->repoRoot() . '/' . self::VOCABULARY));
+        $code = TypeScriptSource::withoutComments($this->read($this->repoRoot() . '/' . self::VOCABULARY));
 
         $declarations = \preg_match_all(
             '/const\s+AuditWriteOperation\s*=\s*\{([^}]*)\}\s*as const/',
@@ -142,39 +144,17 @@ final class AuditWriteOperationParityTest extends TestCase
     }
 
     /**
-     * Blanks TypeScript comments before anything is extracted. Without it the gate reads text that never
-     * executes — a value named in a note beside the literal joins the vocabulary, and a docblock quoting
-     * the old declaration BECOMES the single declaration once the real one stops matching.
-     */
-    private function withoutComments(string $source): string
-    {
-        $stripped = \preg_replace(['#/\*.*?\*/#s', '#//[^\n]*#'], '', $source);
-
-        $this->assertIsString($stripped);
-
-        return $stripped;
-    }
-
-    /**
-     * The PWA tree sits outside the `./api` build context, so in the container it arrives only through the
-     * read-only `./` bind mount at `/app/repo` declared in `compose.dev.yaml`. Missing it is a failure, not
-     * a skip: a parity gate that passes when it cannot see one of the two sites reports an agreement it
-     * never checked.
+     * The subject sits outside the `./api` build context, so in the container it arrives only through the
+     * read-only `./` bind mount at `/app/repo` declared in `compose.dev.yaml`. Missing it is a failure and
+     * never a skip: a gate that passes when it cannot see what it compares reports an agreement it never
+     * checked.
      */
     private function repoRoot(): string
     {
-        $apiRoot = \dirname(__DIR__, 3);
-
-        foreach ([\dirname($apiRoot), \dirname($apiRoot) . '/repo'] as $candidate) {
-            if (\is_dir($candidate . '/pwa/src')) {
-                return $candidate;
-            }
-        }
-
-        $this->fail(
-            'The PWA tree is not reachable, so this gate cannot check anything. Inside the container it '
-            . 'comes from the read-only `./` bind mount at /app/repo declared in compose.dev.yaml — '
-            . 'restore it rather than relaxing this failure into a skip.',
+        return RepositoryRoot::path() ?? $this->fail(
+            'The PWA sites of the write-operation vocabulary are unreachable, so this parity gate cannot compare '
+            . 'anything. Inside the container it comes from the read-only `./` bind mount at /app/repo declared in '
+            . 'compose.dev.yaml — restore it rather than relaxing this failure into a skip.',
         );
     }
 

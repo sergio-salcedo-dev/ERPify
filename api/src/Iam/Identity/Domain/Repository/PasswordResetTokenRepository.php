@@ -39,7 +39,15 @@ interface PasswordResetTokenRepository
      * is live (a re-request supersedes its predecessor), and by the subject erasure so no `user_id` linkage
      * outlives the identity.
      *
-     * @return int the number of rows removed
+     * **What it promises is about PERSISTED state, and read-after-delete inside one unit of work is
+     * undefined.** The removal is a bulk statement, so an implementation is free to leave an already-hydrated
+     * instance readable through {@see findById()} until the unit of work ends — the Doctrine adapter does
+     * exactly that, because a DQL bulk `DELETE` does not evict the identity map that `EntityManager::find()`
+     * consults. No caller re-reads within the same transaction, and none may start: a test asserting the row
+     * is gone before the commit would be asserting a guarantee this port deliberately does not make, and
+     * every future adapter would owe identity-map gymnastics for it.
+     *
+     * @return int the number of rows removed — this IS promised, and it is what a caller may act on
      */
     public function deleteAllForUser(string $userId): int;
 
@@ -47,7 +55,11 @@ interface PasswordResetTokenRepository
      * Retention sweep: drops every token whose `expires_at` has passed. An expired row is already dead to the
      * verifier, so keeping it buys nothing and the table would otherwise grow without bound.
      *
-     * @return int the number of rows removed
+     * Carries the same weak contract as {@see deleteAllForUser()} and for the same reason — it is the same
+     * DQL bulk `DELETE`, so an already-hydrated instance may stay readable through {@see findById()} until
+     * the unit of work ends. The count is the promise; the disappearance is not.
+     *
+     * @return int the number of rows removed — this IS promised, and it is what a caller may act on
      */
     public function deleteExpired(DateTimeImmutable $now): int;
 }
