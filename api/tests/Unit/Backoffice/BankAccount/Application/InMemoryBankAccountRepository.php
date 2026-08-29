@@ -47,6 +47,12 @@ final class InMemoryBankAccountRepository implements BankAccountRepository
     }
 
     #[Override]
+    public function findByIdForUpdate(string $id): ?BankAccount
+    {
+        return $this->account;
+    }
+
+    #[Override]
     public function countByBankId(string $bankId): int
     {
         return $this->count;

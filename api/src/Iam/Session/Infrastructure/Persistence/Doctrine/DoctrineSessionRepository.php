@@ -26,12 +26,16 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  *     expired session is never returned and caducity needs no persisted state. Caducity is decided per query;
  *     the retention sweep is a separate concern that only bounds how long a row which has already stopped
  *     being admissible keeps its `ip`/`device`;
- *   - any DBAL failure on the gate's read (a lost connection, a statement timeout, an exhausted pool — all
- *     {@see DbalException}) is converted to the domain {@see SessionStoreUnavailable} (→ 503), so a store outage
- *     lets the gate fail closed instead of leaking a raw 500. The read is a fixed PK+status+expiry SELECT with
- *     no user-supplied DQL, so a DBAL exception here is always infrastructural — a 503 (which still reaches
- *     Sentry) is the honest outcome, never masking an application bug. The bulk revocations are directed DQL
- *     UPDATEs (no aggregate hydration, no per-row event).
+ *   - any DBAL failure on any statement (a lost connection, a statement timeout, an exhausted pool — all
+ *     {@see DbalException}) is converted to the domain {@see SessionStoreUnavailable} (→ 503) by
+ *     {@see convertingStoreFailure()}, so a store outage lets the gate fail closed instead of leaking a raw
+ *     500. All six methods go through it — reads, the persist/flush, the bulk revokes and the two hard
+ *     deletes — because a single request reaches several of them: revoke-others runs a read and then an
+ *     UPDATE, and the erasure path admits through `findActiveById` and then deletes through
+ *     `deleteAllForUser`. Guarding a subset answers one outage with two different statuses. Every statement
+ *     is fixed DQL with no user-supplied fragment, so a DBAL exception here is always infrastructural — a 503
+ *     (which still reaches Sentry) is the honest outcome, never masking an application bug. The bulk
+ *     revocations are directed DQL UPDATEs (no aggregate hydration, no per-row event).
  */
 #[AsAlias(SessionRepository::class)]
 final readonly class DoctrineSessionRepository implements SessionRepository
@@ -62,14 +66,18 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     #[Override]
     public function save(Session $session): void
     {
-        $this->entityManager->persist($session);
-        $this->entityManager->flush();
+        $this->convertingStoreFailure(function () use ($session): mixed {
+            $this->entityManager->persist($session);
+            $this->entityManager->flush();
+
+            return null;
+        });
     }
 
     #[Override]
     public function findActiveById(SessionId $id): ?Session
     {
-        try {
+        $result = $this->convertingStoreFailure(function () use ($id): mixed {
             $queryBuilder = $this->entityManager->createQueryBuilder()
                 ->select('s')
                 ->from(Session::class, 's')
@@ -77,13 +85,11 @@ final readonly class DoctrineSessionRepository implements SessionRepository
                 ->setParameter('id', $id->toString())
             ;
 
-            $result = $this->andWhereAdmissibleNow($queryBuilder)
+            return $this->andWhereAdmissibleNow($queryBuilder)
                 ->getQuery()
                 ->getOneOrNullResult()
             ;
-        } catch (DbalException $dbalException) {
-            throw SessionStoreUnavailable::storeUnreachable($dbalException);
-        }
+        });
 
         return $result instanceof Session ? $result : null;
     }
@@ -91,23 +97,25 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     #[Override]
     public function findByUserId(string $userId): array
     {
-        $queryBuilder = $this->entityManager->createQueryBuilder()
-            ->select('s')
-            ->from(Session::class, 's')
-            ->where(self::USER_ID_FILTER)
-            // `created_at` is TIMESTAMP(0), so two sessions minted in the same second tie and the ordering
-            // would be whatever the plan yields. The id breaks it: UUID v7 sorts by mint time, so it agrees
-            // with "newest first" instead of merely making the sequence arbitrary-but-stable.
-            ->orderBy('s.createdAt', 'DESC')
-            ->addOrderBy('s.id', 'DESC')
-            ->setParameter('userId', $userId)
-        ;
-
         /** @phpstan-var list<Session> */
-        return $this->andWhereAdmissibleNow($queryBuilder)
-            ->getQuery()
-            ->getResult()
-        ;
+        return $this->convertingStoreFailure(function () use ($userId): mixed {
+            $queryBuilder = $this->entityManager->createQueryBuilder()
+                ->select('s')
+                ->from(Session::class, 's')
+                ->where(self::USER_ID_FILTER)
+                // `created_at` is TIMESTAMP(0), so two sessions minted in the same second tie and the ordering
+                // would be whatever the plan yields. The id breaks it: UUID v7 sorts by mint time, so it agrees
+                // with "newest first" instead of merely making the sequence arbitrary-but-stable.
+                ->orderBy('s.createdAt', 'DESC')
+                ->addOrderBy('s.id', 'DESC')
+                ->setParameter('userId', $userId)
+            ;
+
+            return $this->andWhereAdmissibleNow($queryBuilder)
+                ->getQuery()
+                ->getResult()
+            ;
+        });
     }
 
     #[Override]
@@ -125,13 +133,12 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     #[Override]
     public function deleteAllForUser(string $userId): int
     {
-        $affected = $this->entityManager->createQueryBuilder()
+        $affected = $this->convertingStoreFailure(fn (): mixed => $this->entityManager->createQueryBuilder()
             ->delete(Session::class, 's')
             ->where(self::USER_ID_FILTER)
             ->setParameter('userId', $userId)
             ->getQuery()
-            ->execute()
-        ;
+            ->execute());
 
         return \is_int($affected) ? $affected : 0;
     }
@@ -165,7 +172,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     #[Override]
     public function deleteRetired(DateTimeImmutable $revokedBefore, DateTimeImmutable $expiredBefore): int
     {
-        $affected = $this->entityManager->createQueryBuilder()
+        $affected = $this->convertingStoreFailure(fn (): mixed => $this->entityManager->createQueryBuilder()
             ->delete(Session::class, 's')
             ->where('(s.status = :revoked AND s.revokedAt < :revokedBefore)')
             ->orWhere('(s.expiresAt < :expiredBefore)')
@@ -173,8 +180,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             ->setParameter('revokedBefore', $revokedBefore)
             ->setParameter('expiredBefore', $expiredBefore)
             ->getQuery()
-            ->execute()
-        ;
+            ->execute());
 
         return \is_int($affected) ? $affected : 0;
     }
@@ -204,7 +210,40 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             $queryBuilder->andWhere('s.id != :current')->setParameter('current', $except->toString());
         }
 
-        $queryBuilder->getQuery()->execute();
+        $this->convertingStoreFailure(static fn (): mixed => $queryBuilder->getQuery()->execute());
+    }
+
+    /**
+     * Runs a statement against the store and converts any DBAL failure — a lost connection, a statement
+     * timeout, an exhausted pool, all {@see DbalException} — into the domain {@see SessionStoreUnavailable}
+     * (→ 503).
+     *
+     * EVERY statement in this adapter goes through it, so one outage cannot produce two answers. Two request
+     * shapes reach more than one: `POST /sessions/revoke-others` runs the listing read and then the UPDATE,
+     * and the identity erasure admits through `findActiveById` before `PurgeUserSessions` reaches
+     * `deleteAllForUser`. With either write unguarded, which status the caller receives for a single outage
+     * would depend on which statement the connection happened to die on — 503 from the read, a raw 500 from
+     * the write. A conversion written per method is exactly the shape somebody adds to a second statement and
+     * forgets on a third, which is what this adapter did with three of its six until the omission was read
+     * against the universal its own docblock already claimed.
+     *
+     * **It takes the whole statement as a callable rather than guarding a body from outside, because what
+     * must be guarded is the EXECUTION and nothing places it there but the caller.**
+     * `EntityManager::createQueryBuilder()` only news up a `QueryBuilder`: it opens no connection and can raise
+     * nothing this converts. The outage arises where the query runs — `getOneOrNullResult()` / `getResult()`,
+     * which reach `EntityManager::createQuery()` and then the driver — or, for `save()`, at the `flush()` and
+     * never at the `persist()`. Handing the statement in means the execution cannot end up outside the guard
+     * while the guard still looks present.
+     *
+     * @param callable(): mixed $statement
+     */
+    private function convertingStoreFailure(callable $statement): mixed
+    {
+        try {
+            return $statement();
+        } catch (DbalException $dbalException) {
+            throw SessionStoreUnavailable::storeUnreachable($dbalException);
+        }
     }
 
     /**
@@ -215,13 +254,6 @@ final readonly class DoctrineSessionRepository implements SessionRepository
      * It takes a builder rather than returning one because the two callers differ in what comes before this
      * clause: one selects by primary key, the other filters by user and imposes an order. Handing each its own
      * builder keeps that difference where it belongs and leaves this method with one job.
-     *
-     * **What must stay inside {@see findActiveById()}'s `try` is the EXECUTION, not the construction.**
-     * `EntityManager::createQueryBuilder()` only news up a `QueryBuilder`; it opens no connection and cannot
-     * raise the `DbalException` this adapter converts into the domain 503. The outage arises at
-     * `getOneOrNullResult()`. Worth stating because the unit test that pins the conversion makes
-     * `createQueryBuilder()` throw — a shape production cannot produce — so it would stay green over a
-     * refactor that moved the execution out of the `try` and turned the gate's 503 into a 500.
      *
      * The alias stays baked into the constants rather than threaded as a parameter — this adapter has exactly
      * one (`s`), which is the choice {@see USER_ID_FILTER} already encodes, and a parameter every call site

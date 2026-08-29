@@ -39,6 +39,7 @@ use stdClass;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\UnsupportedMediaTypeHttpException;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\Exception\BadCredentialsException;
@@ -62,6 +63,13 @@ final class ProblemDetailsFactoryTest extends TestCase
     private const string CID = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
 
     private const string INSTANCE = 'urn:uuid:0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
+
+    /**
+     * Statuses the Symfony bridge maps that no marker declares, so the mirror assertion below cannot
+     * reach them: `array_intersect_key` only compares the keys both maps hold. Naming them here is what
+     * keeps the mirror from degrading into a subset check that any new entry satisfies in silence.
+     */
+    private const array MARKER_FREE_BRIDGE_STATUSES = [415];
 
     /**
      * env-aware factory helper. Defaults to 'prod' so existing tests' byte-for-byte
@@ -772,8 +780,24 @@ final class ProblemDetailsFactoryTest extends TestCase
         yield '403' => [403, 'forbidden'];
         yield '404' => [404, 'not-found'];
         yield '409' => [409, 'conflict'];
+        yield '415' => [415, 'unsupported-media-type'];
         yield '422' => [422, 'invariant-violation'];
         yield '429' => [429, 'rate-limited'];
+    }
+
+    /**
+     * The 415 row exists for a producer no domain code owns: Symfony's argument resolver refuses a body
+     * whose format an endpoint does not accept, before any handler runs. Driven through that class rather
+     * than a bare `HttpException(415)` so the row stays tied to what actually reaches it.
+     */
+    public function testUnsupportedMediaTypeHttpExceptionCarriesItsOwnTypeRatherThanTheGenericBucket(): void
+    {
+        $unsupported = new UnsupportedMediaTypeHttpException('Unsupported format, expects "json", but "form" given.');
+
+        $problemDetails = $this->factoryFor()->fromThrowable($unsupported, self::CID, self::INSTANCE);
+
+        $this->assertSame(415, $problemDetails->status);
+        $this->assertSame('unsupported-media-type', $problemDetails->type);
     }
 
     public function testHttpExceptionWithUnmappedStatusFallsBackToHttpError(): void
@@ -902,7 +926,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame('Bank not found', $problemDetails->title);
     }
 
-    public function testHttpStatusTypeMapHasExactlyTheCanonicalEightEntries(): void
+    public function testHttpStatusTypeMapHasExactlyTheCanonicalNineEntries(): void
     {
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $constant = $reflectionClass->getReflectionConstant('HTTP_STATUS_TYPE_MAP');
@@ -918,6 +942,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             403 => 'forbidden',
             404 => 'not-found',
             409 => 'conflict',
+            415 => 'unsupported-media-type',
             422 => 'invariant-violation',
             429 => 'rate-limited',
             503 => 'service-unavailable',
@@ -926,7 +951,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame(
             $expected,
             $value,
-            'HTTP_STATUS_TYPE_MAP must contain exactly the eight canonical status→type entries in canonical order.',
+            'HTTP_STATUS_TYPE_MAP must contain exactly the nine canonical status→type entries in canonical order.',
         );
     }
 
@@ -971,10 +996,18 @@ final class ProblemDetailsFactoryTest extends TestCase
 
         $this->assertSame(
             $derived,
-            $httpType,
+            \array_intersect_key($httpType, $derived),
             'HTTP_STATUS_TYPE_MAP must use the same type strings as MARKER_DEFAULT_TYPE_MAP for the same status, '
             . 'so PWA `type`-only routing is uniform across DomainException markers, Security Core, '
             . 'and Symfony HttpException sources.',
+        );
+
+        $this->assertSame(
+            self::MARKER_FREE_BRIDGE_STATUSES,
+            \array_keys(\array_diff_key($httpType, $derived)),
+            'HTTP_STATUS_TYPE_MAP carries a status no marker backs and this file never declared. The mirror '
+            . 'above is blind to it by construction, so it is named in MARKER_FREE_BRIDGE_STATUSES or it '
+            . 'does not belong in the map.',
         );
     }
 

@@ -88,7 +88,7 @@ final readonly class ChangeUserStatus
 
             $user = $this->users->findByIdForUpdate($userId) ?? throw UserNotFound::withId($userId);
 
-            if (!$this->administrators->keepsAnActiveAdminWithout($userId)) {
+            if (!$this->administrators->survivesRemovalOf($userId)) {
                 throw LastActiveAdministratorProtected::forUser($userId);
             }
 

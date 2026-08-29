@@ -6,8 +6,8 @@ namespace Erpify\Iam\Identity\Domain\Repository;
 
 /**
  * Consumer-owned port over the organization's administrators, answering the two questions the write-side use
- * cases must ask before they change one: would at least one active `ADMIN` remain if this identity were
- * excluded, and does this identity carry the role at all?
+ * cases must ask before they change one: does the active-`ADMIN` set survive this identity leaving it, and
+ * does this identity carry the role at all?
  *
  * Both return a bare `bool` — no `Membership` / `User` / `Role[]` crosses the boundary. The single-tenant
  * organization is implicit. The production adapter reads the role source directly — a single-context read over
@@ -22,7 +22,7 @@ interface ActiveAdministratorDirectory
      * `identity_user` row it is about to change.
      *
      * It exists because the order those two locks are taken in is the whole invariant, and getting it wrong
-     * is silent. {@see keepsAnActiveAdminWithout()} locks the active-admin set in `id` order; a use case that
+     * is silent. {@see survivesRemovalOf()} locks the active-admin set in `id` order; a use case that
      * has already locked its target row holds one member of that set out of order — the target is a member
      * whenever it is an ACTIVE administrator, `ADMIN` alone is not enough — so two concurrent transitions on
      * administrators X and Y (`X.id < Y.id`) each hold one and wait for the other: an ABBA deadlock, surfacing
@@ -38,7 +38,7 @@ interface ActiveAdministratorDirectory
      * transition whose set statement already ran can find a lower-id member appearing under a third one. It is
      * deliberately not fixed here: that use case holds its row across a password KDF, and holding the whole
      * administrator set across a KDF trades a rare deadlock for a routine one. It also means a later
-     * {@see keepsAnActiveAdminWithout()} is not merely a re-read: it runs its own statement under a new READ
+     * {@see survivesRemovalOf()} is not merely a re-read: it runs its own statement under a new READ
      * COMMITTED snapshot, so a row that joined the set since is a genuine second acquisition.
      *
      * **Must run inside the caller's transaction**, as the first statement that touches `identity_user` — a
@@ -48,12 +48,20 @@ interface ActiveAdministratorDirectory
     public function lockActiveAdministrators(): void;
 
     /**
+     * Whether the active-`ADMIN` set survives this identity being taken OUT of it. A subject the set does not
+     * hold is removed from nothing and so survives trivially: the answer is `true` however few administrators
+     * there are, the empty set included, and only the set's sole member drains it. Read instead as "is some
+     * OTHER active administrator left", a zero-administrator organization would refuse every caller — a plain
+     * `VIEWER` whose transition has no bearing on the invariant included.
+     *
      * Authoritative only over administrators whose backing `User` both exists AND is `ACTIVE`: an identity
-     * that is absent or no longer `ACTIVE` must never keep a phantom administrator alive. Its adapter takes a
-     * `FOR UPDATE` lock over the active-admin set so concurrent transitions serialize — the invariant is
-     * set-based, so it must be read inside the caller's transaction.
+     * that is absent or no longer `ACTIVE` is not in the set, so it can neither keep a phantom administrator
+     * alive nor be drained out of it. Its adapter takes a `FOR UPDATE` lock over the active-admin set so
+     * concurrent transitions serialize — the invariant is set-based, so it must be read inside the caller's
+     * transaction, and the caller must already hold the subject's own row for the membership half of the
+     * answer to still be true at commit.
      */
-    public function keepsAnActiveAdminWithout(string $userId): bool;
+    public function survivesRemovalOf(string $userId): bool;
 
     /**
      * Whether this identity carries `ADMIN`, regardless of its status — a suspended administrator still holds

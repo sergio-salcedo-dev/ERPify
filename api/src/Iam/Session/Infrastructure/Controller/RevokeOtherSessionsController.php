@@ -10,13 +10,16 @@ use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Exception\SessionNoLongerActive;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Iam\Session\Infrastructure\Security\SessionAdmissionGate;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
  * `POST /sessions/revoke-others` — "sign out my other devices". Revokes every active session of the signed-in
  * user except the one in hand, which is never self-expelled. The subject is the current session's `userId`
- * (already validated by the gate); returns 204.
+ * (already validated by the gate); returns 204. That validated row is taken from the Request the gate
+ * published it on rather than read again, falling back to its own lookup where the gate did not run.
  *
  * It carries NO rate-limit budget, and that absence is deliberate. Every other credential-adjacent surface is
  * budgeted by an identifier an adversary can hold or guess — the identity behind a stolen session, or an email
@@ -38,7 +41,7 @@ final readonly class RevokeOtherSessionsController
     ) {
     }
 
-    public function __invoke(): Response
+    public function __invoke(Request $request): Response
     {
         $currentSessionId = $this->currentSession->get();
 
@@ -46,7 +49,8 @@ final readonly class RevokeOtherSessionsController
             throw SessionNoLongerActive::forRequest();
         }
 
-        $current = $this->sessions->findActiveById($currentSessionId);
+        $current = SessionAdmissionGate::admittedSession($request)
+            ?? $this->sessions->findActiveById($currentSessionId);
 
         if (!$current instanceof Session) {
             throw SessionNoLongerActive::forRequest();

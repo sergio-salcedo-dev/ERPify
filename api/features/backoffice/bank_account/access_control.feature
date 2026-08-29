@@ -305,6 +305,45 @@ Feature: Restrict the bank-account routes to the bank-account permission
     Then the response status code should be 403
     And the JSON node "type" should be equal to "forbidden"
 
+  # The positive counterpart to every refusal above, and the direction none of them covers: a create or
+  # update over-restricted to bankAccount.delete or bankAccount.changeStatus would keep every 403 here a
+  # 403, and the create/update features run as the default MANAGER, so nothing else in the suite would
+  # notice. The IBAN is the one the viewer/role-less create refusals send, which no fixture account holds.
+  Scenario: An editor creates a bank account — write is granted at the EDITOR tier
+    Given I am logged in as an editor
+    When I send a POST request to "/backoffice/bank-accounts" with body:
+    """
+    {
+      "bankId": "11111111-1111-7000-8000-000000000003",
+      "holderName": "Editor Created Holder",
+      "iban": "GB82WEST12345698765432",
+      "currency": "EUR"
+    }
+    """
+    Then the response status code should be 201
+    And the JSON node "data.holderName" should be equal to "Editor Created Holder"
+    And the JSON node "data.iban" should be equal to "GB82WEST12345698765432"
+    And the JSON node "data.status" should be equal to "ACTIVE"
+
+  # Seeded out-of-band on the side connection so the scenario owns a row no other scenario in this feature
+  # reads, rather than mutating one of the shared account fixtures. The unchanged IBAN keeps the update on
+  # the descriptive fields, which is what the write tier governs; status transitions elsewhere.
+  Scenario: An editor updates a bank account — write is granted at the EDITOR tier
+    Given I am logged in as an editor
+    And I execute the SQL query "INSERT INTO bank_account (id, bank_id, holder_name, iban, bic, alias, currency, status, created_at, updated_at) VALUES ('acc1ed00-0000-7000-8000-000000000003', '11111111-1111-7000-8000-000000000003', 'Editor Target Holder', 'ES9121000418450200051332', NULL, NULL, 'EUR', 'ACTIVE', NOW(), NOW())" on connection "seed"
+    When I send a PUT request to "/backoffice/bank-accounts/acc1ed00-0000-7000-8000-000000000003" with body:
+    """
+    {
+      "holderName": "Editor Updated Holder",
+      "iban": "ES9121000418450200051332",
+      "currency": "EUR"
+    }
+    """
+    Then the response status code should be 200
+    And the JSON node "data.id" should be equal to "acc1ed00-0000-7000-8000-000000000003"
+    And the JSON node "data.holderName" should be equal to "Editor Updated Holder"
+    And the JSON node "data.status" should be equal to "ACTIVE"
+
   Scenario: A granted manager reads the account collection
     When I send a "GET" request to "/backoffice/bank-accounts"
     Then the response status code should be 200

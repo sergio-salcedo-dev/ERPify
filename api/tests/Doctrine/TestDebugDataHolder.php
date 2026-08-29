@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Doctrine;
 
+use Erpify\Tests\Behat\State\FixturesChangeTracker;
 use Override;
 use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 use Symfony\Bridge\Doctrine\Middleware\Debug\Query;
@@ -40,6 +41,8 @@ class TestDebugDataHolder extends DebugDataHolder
         'DAMA\DoctrineTestBundle\Doctrine\DBAL\PostConnectEventListener',
     ];
 
+    private const string WRITE_STATEMENT_PATTERN = '/^\s*(?:INSERT|UPDATE|DELETE|TRUNCATE)\b/i';
+
     /** @var array<string, array<int, StoredQueryRecord>> */
     private static array $data = [];
 
@@ -73,6 +76,8 @@ class TestDebugDataHolder extends DebugDataHolder
     #[Override]
     public function addQuery(string $connectionName, Query $query, bool $force = false): void
     {
+        $this->markFixturesChangedOnWrite($query->getSql());
+
         $backtraces = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 
         if (!$force && $this->shouldSkip($backtraces)) {
@@ -90,6 +95,28 @@ class TestDebugDataHolder extends DebugDataHolder
 
         // array_slice(2) drops this method + DebugMiddleware's invoker frame from the trace.
         self::$backtraces[$connectionName][] = \array_slice($backtraces, 2);
+    }
+
+    /**
+     * Flags the fixtures tracker for any statement that changes the database.
+     *
+     * A raw-DBAL write raises no ORM flush, so {@see \Erpify\Tests\Behat\Doctrine\FixturesWriteListener}
+     * cannot see it and the per-feature restore is skipped over rows the scenario left behind. Every
+     * executed statement passes through here, which is the only seam that sees both kinds of write.
+     *
+     * It runs ahead of the query accounting on purpose: {@see shouldSkip()} drops statements issued from
+     * a Behat context or a fixture loader, and those change the database exactly like the ones it keeps.
+     *
+     * Matched on the LEADING keyword, so a value spelling one of the verbs inside a `SELECT` does not
+     * mark — marking on everything would restore fixtures for every scenario, which is as wrong as never
+     * marking. The price of that precision is that a data-modifying CTE (`WITH … INSERT`), a statement
+     * behind a leading comment, and DDL other than `TRUNCATE` are invisible here.
+     */
+    private function markFixturesChangedOnWrite(string $sql): void
+    {
+        if (1 === \preg_match(self::WRITE_STATEMENT_PATTERN, $sql)) {
+            FixturesChangeTracker::markChanged();
+        }
     }
 
     /**

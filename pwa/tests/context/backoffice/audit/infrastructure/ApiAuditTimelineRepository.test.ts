@@ -144,3 +144,71 @@ describe("ApiAuditTimelineRepository response guard", () => {
     expect(guard(undefined)).toBe(false);
   });
 });
+
+/**
+ * `resourceErased` is the one field of the row whose ABSENCE the guard tolerates. It identifies
+ * nothing — it drives an "erased" badge and withholds the follow-resource pivot — so a client
+ * running ahead of the API, or one meeting a rolled-back API, must not lose every row of the screen
+ * to MALFORMED_RESPONSE_ENVELOPE over it. Four states, and the guard has to separate them: missing
+ * is valid and reads as `true` — erased, the safe direction — `false`/`true` are valid, and anything
+ * else is still drift.
+ */
+describe("ApiAuditTimelineRepository resourceErased tolerance", () => {
+  /** The row as an API that does not publish the flag would send it: the key is absent, not null. */
+  function rowWithoutTheFlag(): Record<string, unknown> {
+    const row: Record<string, unknown> = { ...entry };
+    delete row.resourceErased;
+    return row;
+  }
+
+  async function guardOf(response: unknown): Promise<(value: unknown) => boolean> {
+    const httpClient = httpClientReturning(response);
+    await new ApiAuditTimelineRepository(httpClient).search(BASE_CRITERIA);
+    const [, guard] = vi.mocked(httpClient.get).mock.calls[0];
+    if (!guard) throw new Error("expected search() to pass a response guard");
+    return guard;
+  }
+
+  it("admits a row that omits the flag", async () => {
+    const envelope = { data: [rowWithoutTheFlag()], pagination };
+    const guard = await guardOf(envelope);
+
+    expect(guard(envelope)).toBe(true);
+  });
+
+  it("reads an omitted flag as erased, the safe direction, rather than as absent", async () => {
+    // The mapper is the half that decides what the UI sees, and the DIRECTION is the assertion.
+    // Admitting the row while leaving the field `undefined` pushes the absence into every consumer
+    // that reads it as a boolean; defaulting it to `false` is worse than that — it answers the
+    // privacy question with the permissive value, so the pivot is offered on a pseudonym. The
+    // sibling flag on this same row, `actorErased`, rejects an absent value outright; tolerating
+    // this one is a decision about the SCREEN surviving, never about the affordance loosening.
+    const httpClient = httpClientReturning({ data: [rowWithoutTheFlag()], pagination });
+    const page = await new ApiAuditTimelineRepository(httpClient).search(BASE_CRITERIA);
+
+    expect(page.entries[0].resourceErased).toBe(true);
+  });
+
+  it.each([false, true])("admits and carries through the flag when present (%s)", async (flag) => {
+    const envelope = { data: [{ ...entry, resourceErased: flag }], pagination };
+    const guard = await guardOf(envelope);
+    expect(guard(envelope)).toBe(true);
+
+    const page = await new ApiAuditTimelineRepository(httpClientReturning(envelope)).search(
+      BASE_CRITERIA,
+    );
+    expect(page.entries[0].resourceErased).toBe(flag);
+  });
+
+  // The tolerance is for absence, never for corruption: a present value that is not a boolean would
+  // be READ as a state — `"false"` and `42` are both truthy — so the envelope still fails.
+  it.each([
+    { label: 'the string "false"', flag: "false" as unknown },
+    { label: "null", flag: null as unknown },
+    { label: "a number", flag: 42 as unknown },
+  ])("rejects the envelope when the flag is $label", async ({ flag }) => {
+    const guard = await guardOf({ data: [entry], pagination });
+
+    expect(guard({ data: [{ ...entry, resourceErased: flag }], pagination })).toBe(false);
+  });
+});

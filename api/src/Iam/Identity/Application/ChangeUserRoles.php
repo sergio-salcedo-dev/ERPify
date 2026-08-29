@@ -183,7 +183,7 @@ final readonly class ChangeUserRoles
             return;
         }
 
-        if (!$this->administrators->keepsAnActiveAdminWithout($userId)) {
+        if (!$this->administrators->survivesRemovalOf($userId)) {
             throw LastActiveAdministratorProtected::forUser($userId);
         }
     }

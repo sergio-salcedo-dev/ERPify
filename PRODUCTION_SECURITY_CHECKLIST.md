@@ -439,13 +439,32 @@ you change anything here.
       behind the token check**: a dead accept link never pays an argon2id run (no unauthenticated KDF
       amplification). The accept is capped **per selector** (`token_action_per_selector` limiter); exhaustion
       folds into the same opaque `invalid-token`, never a per-selector 429.
-- [x] **Every payload-mapping endpoint accepts JSON only.** All eleven `#[StrictRequestPayload]` sites
-      declare `acceptFormat: ['json']`, so a form-encoded or `multipart/form-data` body is refused with
-      415 at the argument resolver, before any controller or handler runs. Uniformity is the control:
-      the API declares no `#[MapUploadedFile]` argument anywhere, and a route that silently accepted a
-      multipart body would be the seam through which a file part could re-enter. Verify with
-      `git grep -n '#\[StrictRequestPayload' -- api/src` — every attribute site must carry the format
-      list. Gate: `BankCreateAcceptsJsonOnlyFunctionalTest`.
+- [x] **Every payload-mapping endpoint accepts JSON only, and it is the type's default that says so.**
+      `StrictRequestPayload::__construct` defaults `acceptFormat` to `['json']`, so a form-encoded or
+      `multipart/form-data` body is refused with 415 at the argument resolver, before any controller or
+      handler runs — and an endpoint added tomorrow inherits the refusal by writing nothing. The thirteen
+      attribute sites carry no format list of their own; the guarantee is one line in one type rather than
+      a declaration repeated thirteen times, which is what makes an omission impossible instead of merely
+      unlikely. Uniformity is the control: the API declares no `#[MapUploadedFile]` argument anywhere, and
+      a route that silently accepted a multipart body would be the seam through which a file part could
+      re-enter. Verify the two halves separately, because no single grep sees both — the attribute's name
+      also appears in docblocks, so counting `#[StrictRequestPayload` matches prose as well as sites:
+      (1) the default holds — `git grep -n 'acceptFormat' -- api/src` names only the constructor in
+      `Shared/Http/Infrastructure/StrictRequestPayload.php`, so no call site has widened it; (2) the
+      default means what it says — `StrictRequestPayloadTest::itRefusesAFormEncodedBodyWithoutBeingAskedTo`
+      and `itAcceptsAJsonBodyWithoutBeingAskedTo` put a payload declaring no format through Symfony's own
+      resolver and assert the 415 and the 200, so the pin is the status a caller receives rather than the
+      value the constructor stored. Gate: `BankCreateAcceptsJsonOnlyFunctionalTest`.
+      **The default is no longer the only control, because it was never the whole one.** The resolver gates
+      its format check on TRUTHINESS (`RequestPayloadValueResolver:242`), so a falsy `acceptFormat` does not
+      loosen the check, it skips it — and a call site could therefore disable the refusal while leaving the
+      default untouched. The constructor now refuses a falsy value outright, mirroring that predicate rather
+      than enumerating the values satisfying it: a list of `null`, `[]` and `''` reads as exhaustive and
+      admits `'0'`, measured accepting a form-encoded body through the real resolver. **Residual:** the
+      refusal is raised while Symfony builds the attribute per request (`ArgumentMetadataFactory`), so a
+      mis-declared site is a runtime 500 on that endpoint — not a build failure, and invisible to CI. And
+      grep (1) above cannot see such a site at all, since the widening would be an attribute argument rather
+      than the string `acceptFormat`; what covers that direction is the constructor, not the recipe.
 - [ ] **Password reset (`POST /api/v1/backoffice/forgot-password` · `/reset-password`):** the credential-recovery
       surface, mirroring the invitation flow. Forgot answers a **uniform 202** for every email/identity state
       (only an `ACTIVE` identity mints a token, and that work is never observable to the anonymous requester) — no
@@ -467,7 +486,7 @@ you change anything here.
       the authorization**, and it is also the CSRF control: the endpoint carries no `#[IsGranted]` (every identity
       acts on its own — the `^/api` `IS_AUTHENTICATED_FULLY` rule plus the Session Admission Gate are the access
       decision) and no `#[IsCsrfTokenValid]`, like the other authenticated writes, because a cross-site forgery
-      does not know the current password and `#[StrictRequestPayload(acceptFormat: ['json'])]` refuses a form
+      does not know the current password and `#[StrictRequestPayload]`, JSON-only by its own default, refuses a form
       post. A wrong current password is **403 `invalid-current-password`**, never 401 — a 401 would bounce the
       caller to the login screen for a typo — and it writes nothing: no hash, no event, no revocation, no email.
       A new password equal to the stored one is **422 `new-password-must-differ`**, decided inside the
@@ -1256,6 +1275,27 @@ mitigated state. Accepting one means recording who accepted it and against which
       statement "any client can force the deployment to retain a person's identifier here" is **still true
       after the strip** — the strip removed the axis a legitimate UI drives, not the axis a hostile caller
       drives. Closing it needs a header allowlist plus a path mechanism, or no access log for `/api/*`.
+      **The accepted cost, stated rather than hidden:** the `Referer` delete is global to the site, while the
+      leak it answers is confined to the back-office documents whose own URL carries a person id — the user
+      detail route (`/backoffice/users/<uuid>`) and the audit screen's `?actorId=`/`?resourceId=`
+      (`pwa/src/app/backoffice/users/[id]`, `pwa/src/app/backoffice/audit`). Every other request on this
+      deployment — the PWA's own documents, static assets, `/.well-known/mercure`, and any `/api/*` call from
+      a screen that names no id — now records no referring URL either. What is given up is the referring URL
+      as investigative signal: an entry can no longer say which page a request came from, so a CSRF report
+      cannot be corroborated from the log, a link arriving from a phishing page or any third-party host
+      cannot be traced back to where it was published, and an incident timeline loses the navigation order it
+      would otherwise reconstruct. Per-route filtering was not taken, and the file is the reason: the site
+      declares ONE `log` block (`api/frankenphp/Caddyfile:20`) and its `format filter` carries no request
+      matcher, so every rule inside it applies to every entry that logger writes. Scoping the delete to the
+      two screens therefore means a second logger declared beside it — its own encoder and its own copy of
+      every rule — plus a directive in the matched route to send requests there; two copies of a redaction
+      rule set are free to drift, and the copy that drifts is the one nobody is reading. Weighed against a
+      signal no investigation on this deployment has yet needed, the duplication loses; it is not impossible,
+      and a deployment that comes to depend on `Referer` should reopen it rather than quietly re-add the
+      header. **Nothing gates the trade-off itself.** `CaddyfileAccessLogRedactionGateTest` asserts the
+      delete is PRESENT, which is the opposite direction — it would red on restoring the
+      signal, and can say nothing about whether losing it site-wide was the right price. This paragraph is
+      the only record.
 - [ ] **The embedded Mercure hub logs subscriber topics in clear, on a logger this site's filter does not
       govern.** Measured: `GET /.well-known/mercure?topic=<value>` produces an access line reading
       `?REDACTED` **and**, on stderr, `http.handlers.mercure … "topics": ["<value>"]`. They are separate

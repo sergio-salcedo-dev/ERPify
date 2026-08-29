@@ -42,7 +42,7 @@ final readonly class RequestPasswordResetController
 
     public function __invoke(
         Request $request,
-        #[StrictRequestPayload(acceptFormat: ['json'])]
+        #[StrictRequestPayload]
         ForgotPasswordRequest $payload,
     ): Response {
         if (!$this->throttle->allowRequest($payload->email)) {
