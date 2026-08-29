@@ -22,7 +22,7 @@ interface ActiveAdministratorDirectory
      * `identity_user` row it is about to change.
      *
      * It exists because the order those two locks are taken in is the whole invariant, and getting it wrong
-     * is silent. {@see keepsAnActiveAdminWithout()} locks the active-admin set in `id` order; a use case that
+     * is silent. {@see survivesRemovalOf()} locks the active-admin set in `id` order; a use case that
      * has already locked its target row holds one member of that set out of order — the target is a member
      * whenever it is an ACTIVE administrator, `ADMIN` alone is not enough — so two concurrent transitions on
      * administrators X and Y (`X.id < Y.id`) each hold one and wait for the other: an ABBA deadlock, surfacing
@@ -38,7 +38,7 @@ interface ActiveAdministratorDirectory
      * transition whose set statement already ran can find a lower-id member appearing under a third one. It is
      * deliberately not fixed here: that use case holds its row across a password KDF, and holding the whole
      * administrator set across a KDF trades a rare deadlock for a routine one. It also means a later
-     * {@see keepsAnActiveAdminWithout()} is not merely a re-read: it runs its own statement under a new READ
+     * {@see survivesRemovalOf()} is not merely a re-read: it runs its own statement under a new READ
      * COMMITTED snapshot, so a row that joined the set since is a genuine second acquisition.
      *
      * **Must run inside the caller's transaction**, as the first statement that touches `identity_user` — a
@@ -48,12 +48,11 @@ interface ActiveAdministratorDirectory
     public function lockActiveAdministrators(): void;
 
     /**
-     * Whether an active administrator is left once this identity is taken OUT of the set — which is not the
-     * same question as whether some active administrator other than this identity exists, and the difference
-     * is the whole contract. A subject the set does not hold is removed from nothing, so the answer is `true`
-     * however few administrators there are, the empty set included; only the set's sole member drains it.
-     * Answering the weaker question makes a zero-administrator organization refuse every caller, including a
-     * plain `VIEWER` whose transition has no bearing on the invariant at all.
+     * Whether the active-`ADMIN` set survives this identity being taken OUT of it. A subject the set does not
+     * hold is removed from nothing and so survives trivially: the answer is `true` however few administrators
+     * there are, the empty set included, and only the set's sole member drains it. Read instead as "is some
+     * OTHER active administrator left", a zero-administrator organization would refuse every caller — a plain
+     * `VIEWER` whose transition has no bearing on the invariant included.
      *
      * Authoritative only over administrators whose backing `User` both exists AND is `ACTIVE`: an identity
      * that is absent or no longer `ACTIVE` is not in the set, so it can neither keep a phantom administrator
@@ -62,7 +61,7 @@ interface ActiveAdministratorDirectory
      * transaction, and the caller must already hold the subject's own row for the membership half of the
      * answer to still be true at commit.
      */
-    public function keepsAnActiveAdminWithout(string $userId): bool;
+    public function survivesRemovalOf(string $userId): bool;
 
     /**
      * Whether this identity carries `ADMIN`, regardless of its status — a suspended administrator still holds
