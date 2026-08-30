@@ -14,6 +14,7 @@ use Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\Clock;
+use Erpify\Shared\Persistence\Infrastructure\AffectedRows;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -140,7 +141,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             ->getQuery()
             ->execute());
 
-        return \is_int($affected) ? $affected : 0;
+        return AffectedRows::from($affected);
     }
 
     /**
@@ -182,7 +183,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             ->getQuery()
             ->execute());
 
-        return \is_int($affected) ? $affected : 0;
+        return AffectedRows::from($affected);
     }
 
     /**
