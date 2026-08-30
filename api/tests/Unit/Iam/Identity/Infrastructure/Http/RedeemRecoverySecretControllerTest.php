@@ -181,6 +181,7 @@ final class RedeemRecoverySecretControllerTest extends TestCase
     {
         $generated = RecoverySecret::mint(UserMother::DEFAULT_ID, new DateTimeImmutable(self::NOW));
         $generated->secret->pullDomainEvents();
+
         $secrets->save($generated->secret);
 
         return $generated;

@@ -10,9 +10,19 @@ import { describe, expect, it } from "vitest";
  * and speaks **only when it changes**. Its `<h1>` fallback runs when `document.title` is falsy,
  * and `app/layout.tsx` fixes a static one — so on this tree that fallback is dead code. A route
  * that declares no title of its own therefore inherits the root title, the title never changes
- * between routes, and the navigation is **never announced**. That was the state of 47
- * back-office routes and, separately, all four `(auth)` routes, and nothing said so: no gate, no
- * lint rule, no failing test.
+ * between routes, and the navigation is **never announced**. Whole trees were in that state —
+ * the back office and every `(auth)` route — and nothing said so: no gate, no lint rule, no
+ * failing test.
+ *
+ * `minRoutes` is a floor against a walk that resolves nothing, and it is the one part of this
+ * gate that decays on its own: every route added leaves it further behind the tree, silently,
+ * because `>=` keeps passing. Measured on this tree it had drifted twice over — 51 declared
+ * against 59 back-office routes, and 4 against 5 `(auth)` ones — so it would have gone on
+ * passing after eight back-office deletions. Read a floor here as "at least this many existed
+ * when somebody last looked", never as the tree's size. Pinning the small trees as SETS of
+ * route paths, the way the repo's mail-surface gate does, would remove the decay for them; it
+ * is not done here because the back office churns and a set there would be a merge conflict per
+ * route.
  *
  * A title is resolved from the page's own `metadata` or from the nearest layout above it, which
  * is how a Client Component page declares one (`metadata` is server-only). Each tree's own
@@ -59,13 +69,13 @@ const ROUTE_GROUPS: readonly RouteGroup[] = [
   {
     label: "back-office",
     root: path.join(PWA_ROOT, "src", "app", "backoffice"),
-    minRoutes: 51,
+    minRoutes: 59,
     urlPrefix: "/backoffice",
   },
   {
     label: "auth",
     root: path.join(PWA_ROOT, "src", "app", "(auth)"),
-    minRoutes: 4,
+    minRoutes: 5,
     urlPrefix: "",
   },
   {
