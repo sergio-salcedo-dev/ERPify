@@ -147,11 +147,15 @@ final class EraseActorAuditTrailCommand extends Command
      * feeds the confirmation's magnitude and it is the whole point of `--dry-run`; a `--force` run does not
      * need it (the erasure's own `affectedRows` is the authoritative figure) and a run about to be refused
      * would compute it and throw it away — which is what made the exit code an existence oracle over an
-     * actor id, answering `2` for an actor with rows and `0` for one without. The refusal being an arm
-     * rather than a statement in the flow is what makes that structural: nothing on that arm can reach the
-     * count. Reading it later would cost more than it buys: the prompt would lose its magnitude, which is
-     * the only defect an operator can catch before an irreversible `UPDATE`, and a subject with nothing
-     * left to erase would be asked to confirm erasing it.
+     * actor id, answering `2` for an actor with rows and `0` for one without.
+     *
+     * **The arm closes that for the shapes {@see UnattendedRunPolicy::cannotAnswer()} can see, and only
+     * those.** A stdin that is empty but not yet READ has `\feof()` false, so the predicate admits it and
+     * the run reaches the count before the question demotes it: measured, such a run still answers `2` for
+     * an actor with rows and `0` for one without, and still reads the trail it was refused. Closing that
+     * one costs the prompt its magnitude — the only defect an operator can catch before an irreversible
+     * `UPDATE` — or asks a subject with nothing left to erase to confirm erasing it, so it is a residual
+     * this command carries knowingly rather than a hole nobody noticed.
      *
      * @return int|null the exit code to stop on, or null to proceed with the anonymisation
      */

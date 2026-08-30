@@ -97,8 +97,11 @@ mueve dentro del callback donde el valor está vivo.
   comandos ya seguían y este era el único sin ella.
 - [x] **Rule of Three:** el helper `drainedStream()` quedaba en tres copias byte-idénticas (md5
   `54649f56…`). Extraído a `api/tests/Unit/Shared/Console/Double/DrainedInputStream.php`. Motivo doble:
-  es duplicación real, y la condición `new_duplicated_lines_density < 3%` de la quality gate se mide
-  sobre ~400 líneas nuevas, así que un bloque idéntico de >12 la tumbaría.
+  es duplicación real y la Regla de Tres se cumple exacta. **La segunda razón que escribí aquí era falsa**
+  y la review la desmontó: `sonar-project.properties:23` fija
+  `sonar.cpd.exclusions=api/tests/**,pwa/tests/**`, así que la duplicación en tests no puede mover
+  `new_duplicated_lines_density`. La extracción sigue siendo correcta; la medición que la justificaba
+  apuntaba a la mitad excluida del árbol.
 
 **Acceptance Criteria:**
 - Dado el árbol resultante, cuando SonarCloud reanalice la rama, las 8 cierran como `FIXED` y no
