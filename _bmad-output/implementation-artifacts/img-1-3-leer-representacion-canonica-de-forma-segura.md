@@ -366,6 +366,70 @@ hostiles —incluida una cabecera de 1 MiB, que no es cuadrática porque el JIT 
 combinaciones de estado × condicional (idénticas con y sin `If-None-Match`), el ciclo de vida de la fixture
 Behat, y `HEAD`/`Range`/`If-Modified-Since`/`If-Match`/`OPTIONS`.
 
+**Segunda capa entregada — adversarial sin spec. Cero GRAVE**, y lo dice tras trazar la petición entera
+contra las fuentes de `vendor/`: la indistinguibilidad de los dos 404 aguanta en todos los ejes visibles al
+llamante (incluido el bloque `debug` de dev: mismos fichero, línea, mensaje y `previous_chain` vacía);
+`setNotModified()` conserva `ETag`/`Cache-Control` y `prepare()` no los quita; `AbstractSessionListener`
+recalcula `max-age` desde la respuesta, así que 3600 sobrevive y el docblock acierta; los dos bloques nuevos
+de `services.yaml` quedan POR DEBAJO del prototipo `Erpify\`, así que ninguno revierte en silencio.
+
+**SERIO — C-9: ningún escenario niega una imagen que EXISTE a un llamante anónimo, que es literalmente lo que
+la AC 1 y la AC 15 existen para afirmar.** El propio comentario del `Scenario Outline` dice «malformado,
+ausente **y una que existe de verdad**», y la tabla de Examples tiene dos filas, **ninguna con fila ni
+bytes**. No hay bytes que retener en ningún escenario anónimo. Lo agrava que los once escenarios autenticados
+abren con `Given I am logged in as an administrator` —el usuario más privilegiado— cuando `SecurityContext`
+ya sienta sesión antes de todo escenario no-`@anonymous`: un `#[IsGranted]` añadido por accidente al
+controlador dejaría la feature entera en verde. El contrato de autorización de la ruta es hoy infalsificable,
+y la matriz re-derivada tampoco lo nombra: registra «2 shapes» y como residual sólo las formas que se come el
+router.
+
+**SERIO — C-10: la mitad CORS no puede hacer lo que su comentario dice, y la razón está siete líneas más
+arriba.** `allow_credentials => false`, así que un `fetch` de origen cruzado con `credentials:'include'` ve su
+respuesta bloqueada por el navegador y, sin credenciales, la cookie de sesión no viaja y la ruta responde
+**401**. Ni `allow_headers: If-None-Match` ni `expose_headers: ETag` acercan un paso a un 200 o un 304. La
+fila de la matriz para la AC 24 dice «verificado a mano», y esa verificación no puede haber observado lo que
+afirma. *(Dos capas independientes encontraron esto — ver también C-7.)* El cambio se queda porque la AC lo
+manda; lo que hay que corregir es la afirmación, y nombrar el bloqueante real.
+
+**SERIO — C-11: es la primera ruta del árbol que devuelve un subrecurso embebible, y no lleva
+`Cross-Origin-Resource-Policy`.** Todas las demás `/api/*` devuelven JSON, que no es cargable como
+subrecurso no-CORS; ésta devuelve `image/*`, que cualquier página carga con `<img src>` sin preflight y con
+cookies adjuntas si la página es **same-site**. `cookie_samesite: lax` cierra el caso cross-site, así que lo
+que queda es un origen distinto del mismo sitio —un subdominio hostil o comprometido—, que obtiene una carga
+credenciada y un oráculo de existencia por load/error. El proyecto ya reconoce el control: `pwa/next.config.ts`
+pone `Cross-Origin-Resource-Policy: same-origin`, pero esas cabeceras las emite Next y **no cubren `/api/*`**
+(Caddy enruta los dos por separado), y nada en `api/` ni en el `Caddyfile` pone CORP, CSP ni `X-Frame-Options`.
+Arreglo de una línea junto al `nosniff`. Tampoco está entre los nueve residuales de §7.
+
+**MENOR — C-12:** el bloque de comentarios de `services.yaml` que esta historia edita sigue diciendo *"Starting
+points only: not yet validated against a memory/CPU benchmark of the real worker"* justo encima de la línea
+nueva que dice *"Measured, not chosen"*, y arrastra `(Story 1.1)` y *"see the story's Task 5"* — IDs de
+historia que la regla de higiene de comentarios prohíbe y que la regla del boy-scout obligaba a quitar al
+editar el bloque. Además `max_served_bytes` es numéricamente idéntico a `max_input_bytes` mientras su propio
+comentario argumenta que no deben acoplarse.
+
+**MENOR — C-13:** `compose.prod.yaml` corre `messenger:consume --memory-limit=256M`, que ahora es exactamente
+igual al `memory_limit` del ini, así que `StopWorkerOnMemoryLimitListener` para el worker justo donde PHP
+fatalea y el reinicio elegante es inalcanzable. Ya lo era (128M contra 256M), así que no es una regresión —
+pero esta historia convirtió `memory_limit` en una decisión del repositorio y construyó un gate para
+sostenerla contra UN número, mientras un segundo número del árbol nombra la misma magnitud.
+
+**MENOR — C-14:** `InterventionImageProcessorTestHelpers` sigue con `maxDecodedPixels = 40_000_000` frente al
+nuevo 20 MP, así que los unit del procesador ejercitan un presupuesto que el despliegue rechaza; el gate
+relaciona `services.yaml` con el ini y no sabe nada de este tercer número.
+
+**MENOR — C-15:** el docblock de `ReadFailureReporter` afirma que mantiene el identificador fuera de un
+sumidero sin TTL ni dueño de erasure, y su test sólo inspecciona el array del propio reporter. En cada fallo
+la MISMA petición escribe `/api/v1/images/<imageId>` en ese mismo sumidero dos veces — el `request_uri` de
+`ExceptionResponder` (la redacción conserva el path a propósito) y el access log de Caddy (que sólo quita la
+query). No filtra nada, porque `api/.person-reference-policy` clasifica `Image::$id => non-person`; lo que
+falla es la AFIRMACIÓN, que es la forma exacta de reclamo que las reglas de este repo existen para rechazar.
+
+**MENOR — C-16:** la forma sin comillas de `If-None-Match` no es un entity-tag legal y ningún cliente la
+emite; admitirla es una laxitud permanente justificada con un «clientes laxos» que no nombra ninguno.
+Inofensiva hoy (el valor sigue teniendo que igualar el digest), pero es la única de las cuatro formas
+aceptadas sin especificación detrás.
+
 ## Acceptance Criteria
 
 1. **Given** una petición **no autenticada** sobre un `ImageId` existente, **When** se invoca
