@@ -812,11 +812,13 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
 - [ ] El ADR `docs/adr/image-read-failure-signal-bound.md` y su entrada en `docs/index.md` van **en esta
       rama**, no en una posterior: son el artefacto que gobierna la excepción de la AC 9, y sin ellos la
       historia contradice al épico en silencio.
-- [ ] **Issue de infraestructura, sólo con autorización explícita de Sergio** (es superficie hacia fuera): el
-      sumidero del contenedor no tiene aislamiento ni routing entre el access log de Caddy, el canal por
-      defecto y `observability`. Es transversal a todos los contextos y **no** es de esta épica — deferral
-      genuino y argumentado, no la pila de diferidos que `CLAUDE.md` prohíbe alimentar desde dentro de una
-      épica.
+- [x] **Issue de infraestructura abierta: [#879](https://github.com/sergio-salcedo-dev/ERPify/issues/879)** —
+      el sumidero del contenedor no tiene aislamiento ni routing entre el access log de Caddy, el canal por
+      defecto y `observability`, que comparten un único presupuesto de retención con expulsión **por volumen,
+      no por ownership**. Es transversal a todos los contextos y **no** es de esta épica: deferral genuino y
+      argumentado, no la pila de diferidos que `CLAUDE.md` prohíbe alimentar desde dentro de una épica. Lleva
+      también el comentario desfasado del `log` de `api/frankenphp/Caddyfile`, para que se corrija con su
+      dueño en vez de aquí.
 - [ ] `docs/architecture-api.md`: bullet de la ruta en `## API design` y la ruta en el bullet de `Images/`
       (`:64`). **Corregir `:103`** (`:102` está en blanco), que afirma que los controladores con `#[Route]`
       viven bajo `Infrastructure/Controller/` cuando hay seis bajo `Iam/*/Infrastructure/Http/`.

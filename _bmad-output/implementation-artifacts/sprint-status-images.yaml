@@ -121,8 +121,8 @@ development_status:
   # redacción original para que el cambio sea auditable, AC 9 pasa de «acota» a «declara con la medición»,
   # AC 22 gana un quinto residual reencuadrado como SHARED-SINK EVICTION entre productores independientes, y
   # la medición queda acotada a coste POR EVENTO declarando que no mide frecuencia ni producción (no hay
-  # despliegue de producción). Cero código. PENDIENTE de autorización de Sergio: la issue de infraestructura
-  # por el aislamiento del sumidero, que es transversal y no de esta épica.
+  # despliegue de producción). Cero código. Issue de infraestructura abierta (#879): el aislamiento del sumidero
+  # es transversal a todos los contextos y no de esta épica.
   # img-1-1: code review (bmad-code-review, PR #862) completo 2026-08-27 — 1 decision-needed
   # resuelto (fail-closed) y 6 patch aplicados, make php.stan/php.quality/php.unit en verde.
   # img-1-2: code review (bmad-code-review, PR #873) completo 2026-08-29 — tres capas en paralelo
