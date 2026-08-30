@@ -184,6 +184,81 @@ rol (cualquier identidad ACTIVE) · forzar ≥2 administradores · el secreto en
 - Dada una identidad **sin** secreto y la contraseña correcta, la revocación sigue siendo un éxito vacío:
   la existencia de la fila no cambia ni el código ni la forma de la respuesta.
 
+### Review Findings — code review de tres capas, 2026-08-30
+
+Los hallazgos de la review, en la forma accionable que el resumen narrativo de `## Adversarial pass` no da.
+Todos aplicados salvo donde se dice. `source` indica qué capas lo encontraron: la convergencia entre capas
+independientes es la señal más fuerte que produjo esta review.
+
+**`decision-needed` (6) — resueltos contigo antes de tocar ningún `patch`:**
+
+- [x] [Review][Decision] **Compensación de la carrera revoke↔redeem** (`blind+edge`, GRAVE-adyacente) —
+      resuelto **(A)**: ampliar la compensación a las tres refusals + fila de auditoría. Se descartó revocar
+      sólo la sesión de esta petición: `reauthenticate()` devuelve `void`, la fila la inserta un listener y
+      la firma la comparten cuatro llamantes.
+- [x] [Review][Decision] **Diferencial temporal existencia/ausencia en `recordFailure()`** (`blind`) —
+      resuelto: rebajar la afirmación de `security.yaml` a lo demostrado y medir en **#881**. No se cierra
+      afirmando que el KDF lo tapa; eso es hipótesis.
+- [x] [Review][Decision] **`login(): Promise<void>` descartaba el `Session | null` que calcula** (`edge`) —
+      resuelto **(A)**: cambiar la firma. Son cuatro llamantes, no uno, y `LoginForm` tenía el mismo defecto.
+- [x] [Review][Decision] **Enlace a `/recovery` desde login** — resuelto: sólo el muro de bloqueo.
+- [x] [Review][Decision] **Reutilizar `DeleteResourceButton` para revoke** — resuelto: componente propio.
+- [x] [Review][Decision] **Colección Postman** — resuelto: las cuatro rutas + el login mínimo que las hace
+      ejecutables. Añadir rutas con sesión a una colección sin auth documenta lo inejecutable.
+
+**`patch` — SERIOUS (8):**
+
+- [x] [Review][Patch] Una revocación a media redención dejaba al canjeador con sesión viva `[api/src/Iam/Identity/Application/RedeemRecoverySecret.php:125]`
+- [x] [Review][Patch] Toda la UI anónima de canje al 0 %, con dos guardas borrables en verde `[pwa/src/app/(auth)/_components/RecoveryRedeemForm.tsx:188]`
+- [x] [Review][Patch] El falsificador que el ADR declara para D7 no existía `[pwa/src/app/backoffice/profile/_components/RecoverySecretPanel.tsx:236]`
+- [x] [Review][Patch] La única puerta a `/recovery` sin afirmar, y su test decía «two-action stack» `[pwa/tests/context/shared/error/infrastructure/ui/AccessWall.test.tsx:58]`
+- [x] [Review][Patch] `RedeemRecoverySecretController` sin ningún test; el mapeo presupuesto→400 opaco sin testigo `[api/src/Iam/Identity/Infrastructure/Http/RedeemRecoverySecretController.php:83]`
+- [x] [Review][Patch] `ApiRecoverySecretRepository`: 1 de 3 métodos, 0 de 23 ramas `[pwa/tests/context/shared/access/ApiRecoverySecretRepository.test.ts]`
+- [x] [Review][Patch] El contrato de errores decía que revoke «grades exactly like minting»; el código dice lo contrario `[docs/api-error-contract.md:174]`
+- [x] [Review][Patch] `docs/architecture-api.md` nunca actualizado: afirmaba dos rutas `/me*`, hay cinco `[docs/architecture-api.md:110]`
+
+**`patch` — MINOR, un solo patrón repetido: este PR añadió un miembro a conjuntos enumerados en prosa (8):**
+
+- [x] [Review][Patch] «Revocation takes the secret alone and no user» — toma los dos cerrojos `[api/src/Iam/Identity/Domain/Repository/RecoverySecretRepository.php:22]` (`blind+edge+auditor`)
+- [x] [Review][Patch] «las seis» rutas con dos tablas — son siete `[api/tests/Unit/Iam/Identity/Application/ErasureLockOrderTest.php:41]`
+- [x] [Review][Patch] Consumidores de `ProveCurrentPassword`: dos → tres `[api/src/Iam/Identity/Application/ProveCurrentPassword.php:14]`
+- [x] [Review][Patch] Llamantes de `reauthenticate()`: tres → cuatro, y el nuevo no tiene la ventana que el docblock alega `[api/src/Iam/Identity/Infrastructure/Security/ReauthenticateDevice.php:30]`
+- [x] [Review][Patch] Superficies de `token_action_per_selector`: dos → tres `[api/config/packages/rate_limiter.yaml:90]`
+- [x] [Review][Patch] «las dos rutas públicas» sobre una enumeración de tres, y «ambas» rutas que drenan el bucket (tres) `[PRODUCTION_SECURITY_CHECKLIST.md:649]`
+- [x] [Review][Patch] «The four spellings» sobre tres filas, y ninguna alcanzaba `verify()` `[api/features/backoffice/identity/recovery_secret_redeem.feature:79]`
+- [x] [Review][Patch] Rutas `(auth)` enumeradas por nombre, cuatro de cinco `[pwa/CLAUDE.md]`
+
+**`patch` — MINOR, otros (8):**
+
+- [x] [Review][Patch] «like the five other catches» — son seis, y la premisa que justifica el catch sin acotar es falsa (la tabla tiene una segunda constraint única) `[api/src/Iam/Identity/Infrastructure/Persistence/Doctrine/DoctrineRecoverySecretRepository.php:48]`
+- [x] [Review][Patch] «coupling sits one above the threshold / more than half» — es 13 (el umbral) y 3 de 13 `[api/src/Iam/Identity/Application/RedeemRecoverySecret.php:82]`
+- [x] [Review][Patch] «dies only by … expiry» — la caducidad no borra la fila y no hay barrido `[api/src/Iam/Identity/Domain/Entity/RecoverySecret.php:26]`
+- [x] [Review][Patch] Un comentario atribuía el rojo a la aserción equivocada `[api/features/backoffice/identity/recovery_secret_redeem.feature:54]`
+- [x] [Review][Patch] Doble envío en el diálogo de revoke: gasta dos unidades del único techo de adivinación `[pwa/src/app/backoffice/profile/_components/RecoverySecretPanel.tsx:301]`
+- [x] [Review][Patch] Un 204 perdido decía al usuario que su única credencial falló, estando ya dentro `[pwa/src/app/(auth)/_components/RecoveryRedeemForm.tsx:102]`
+- [x] [Review][Patch] La lista de puntos ciegos del gate de contrato omitía dos clases `[pwa/tests/api-endpoint-contract.test.ts:96]`
+- [x] [Review][Patch] Seis violaciones de higiene de comentarios (relativos al cambio, un `I-B`, un «step 5» colgado)
+
+**Encontrado durante la aplicación, no por las capas (3):**
+
+- [x] [Review][Patch] `## Verification` fechaba recuentos que ya eran falsos; ahora registra códigos de salida
+- [x] [Review][Patch] Los suelos `minRoutes` del gate de títulos habían derivado: 51 contra 59, y 4 contra 5 `[pwa/tests/backoffice-route-titles.test.ts:72]`
+- [x] [Review][Patch] `MintRecoverySecretController` y `GetMyRecoverySecretController` no los ejercitaba **nada** — ni unitario, ni funcional, ni Behat. Lo tapaba la atribución de `#[CoversClass]`.
+
+**`defer`: ninguno.** Todo hallazgo pertenecía al alcance de esta épica, así que nada fue a
+`deferred-work.md` — la regla de la casa es refundir, no diferir.
+
+**Residual abierto y declarado, no cerrado:** el quality gate de SonarCloud sigue **ERROR** con
+`new_coverage` en 69,8 % (era 44,2 %). Medido, el resto es **atribución**, no ausencia: ningún test declara
+`#[CoversClass]` sobre las clases al 0 %, pero se instancian en 5–6 ficheros de test cada una, y el caso de
+control lo prueba — `DbalRecoverySecretPersonReferences` es la única de la lista cuyo test la nombra, y es
+la única que no está a cero (77,8 %). Subirlo añadiendo entradas `CoversClass` sería inflar la métrica sin
+escribir una aserción, así que no se hace y el rojo se reporta tal cual.
+
+**Falsificación:** toda guarda nueva se verificó borrándola y observando el rojo, restaurando después
+reescribiendo bytes (nunca `git checkout --`). Nueve mutaciones, cada una con exactamente los rojos
+esperados y ninguno más.
+
 ## Spec Change Log
 
 - **2026-08-28 · review externa de la spec (11 hallazgos: 3 P0, 5 P1, 3 P2).** Amendado: (a) dos
