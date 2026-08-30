@@ -11,6 +11,7 @@ use Doctrine\ORM\Query;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Exception\RecoverySecretAlreadyExists;
 use Erpify\Iam\Identity\Domain\Repository\RecoverySecretRepository;
+use Erpify\Shared\Persistence\Infrastructure\AffectedRows;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -137,6 +138,6 @@ final readonly class DoctrineRecoverySecretRepository implements RecoverySecretR
             ->execute()
         ;
 
-        return \is_int($affected) ? $affected : 0;
+        return AffectedRows::from($affected);
     }
 }
