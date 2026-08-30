@@ -366,19 +366,34 @@ puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no po
    **And** la señal no incluye `ImageId`, `digest`, la storage key ni bytes, **afirmado sobre los VALORES
    serializados del contexto buscando la subcadena, nunca sobre los nombres de las claves**.
 
-9. **Given** que esta historia despierta los productores de log del camino de lectura, **When** se acota su
-   volumen, **Then** la cota cubre **los tres** productores alcanzables por un cliente, no sólo la ausencia:
-   (P1) ausencia confirmada, un `info` por petición mientras exista una fila sin bytes; (P2) raíz de storage
-   inusable, que `guardRootIsUsable()` comprueba **antes** de mirar el objeto (`FlysystemImageStorage.php:139`
-   vs `:141`), así que afecta a **cualquier** fila existente; (P3) fallo transitorio. **P2 y P3 son los
-   ruidosos**, y además producen 5xx, lo que arrastra el flush de hasta cincuenta registros del
-   `fingers_crossed` de prod
-   **And** la premisa que el épico y el defer de img-1-2 daban por buena —*"N identificadores aleatorios
-   desalojan el log"*— es **falsa** bajo el orden de resolución que la AC 12 impone, y queda corregida aquí en
-   vez de propagada: un id inexistente responde 404 desde el repositorio sin tocar storage
-   **And** el mecanismo **no** es bajar el nivel a `debug`, descartado por `ObservabilityChannelGateTest:42,85`
-   **And** la ausencia en `delete()` conserva su `info` actual, porque allí el volumen lo acota el trabajo real
-   **And** existe un test que falla si la cota desaparece.
+9. **Given** que esta historia despierta los productores de log del camino de lectura, **When** se resuelve
+   qué hacer con su volumen, **Then** la señal se deja **deliberadamente sin acotar**, y la historia
+   **declara por qué** con su medición delante — supersediendo la AC del épico que ordenaba acotarla, con la
+   excepción argumentada en
+   [`docs/adr/image-read-failure-signal-bound.md`](../../docs/adr/image-read-failure-signal-bound.md) y la
+   AC del épico enmendada para apuntar ahí, de modo que **ningún requisito del árbol sigue ordenando una cota
+   que el código no implementa**
+   **And** los tres productores quedan nombrados: (P1) ausencia confirmada, un `info` por petición mientras
+   exista una fila huérfana — y **es un estado permanente, no un incidente pasajero**, porque nace de una
+   petición de borrado nunca consumida (residual dos de `PRODUCTION_SECURITY_CHECKLIST.md` §7, *"silent and
+   permanent"*), así que cada petición posterior escribe otra línea, para siempre, directa al sumidero y sin
+   depender de ningún flush; (P2) raíz de storage inusable, que `guardRootIsUsable()` comprueba **antes** de
+   mirar el objeto (`FlysystemImageStorage.php:139` vs `:141`), así que afecta a **cualquier** fila existente;
+   (P3) fallo transitorio
+   **And** queda escrito que la premisa que el épico y el defer de img-1-2 daban por buena —*"N identificadores
+   aleatorios desalojan el log"*— es **falsa** bajo el orden que la AC 12 impone: un id inexistente responde
+   404 desde el repositorio sin tocar storage
+   **And** queda escrito por qué las cotas disponibles no sirven: están en el **punto de control equivocado**,
+   porque una petición P2/P3 escribe la línea de `observability` *y* un registro `error` en el canal por
+   defecto (`ExceptionResponder.php:293`) que activa el handler bufferizado y es inalcanzable desde este
+   módulo; que un cap por petición es un **no-op** (una lectura por petición, una línea por fallo); y que
+   `debug` está descartado por `ObservabilityChannelGateTest:42,85`
+   **And** queda escrito que el canal **no lo escucha nadie** —`stream` plano en los tres entornos, handler de
+   Sentry comentado y excluyéndolo, ningún colector externo en ningún compose—, así que estas líneas son
+   evidencia forense y **no una alarma**, y describirlas como alarma sería falso
+   **And** la ausencia en `delete()` **no se toca**: allí el volumen lo acota el trabajo real y la
+   contabilidad que img-1-2 argumentó sigue en pie
+   **And** no se añade código: lo que esta AC exige es la medición de la Task 0, el ADR y el residual.
 
 10. **Given** una petición con cabeceras de rango o condicionales que esta rebanada no implementa, **When** se
     resuelve la respuesta, **Then** `Range` se **ignora** y se devuelve el cuerpo completo con `200` — nunca
@@ -506,6 +521,14 @@ puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no po
     Un agotamiento de memoria es un error **fatal**, no un `Throwable`, así que `ExceptionResponder` no corre y
     la respuesta no es Problem Details.
     **(d) Sin auditoría de lectura.** Consciente y decidido por el épico; nada registra quién leyó qué.
+    **(e) El sumidero de log no tiene aislamiento entre productores.** El access log de Caddy, el canal por
+    defecto y `observability` compiten por **un** presupuesto de retención (`json-file`, 10m × 5) y la
+    expulsión es **por volumen, no por ownership ni TTL**, así que un fallo P2/P3 sostenido desaloja la
+    historia de subsistemas que no tienen nada que ver — y **nada alerta**, porque el canal no lo escucha
+    nadie. El encuadre correcto de este residual no es "demasiados logs" sino **shared-sink eviction entre
+    productores independientes**. La decisión de no acotarlo desde aquí está argumentada en
+    [`docs/adr/image-read-failure-signal-bound.md`](../../docs/adr/image-read-failure-signal-bound.md) D2 y
+    D4; el punto de control correcto es la propia infraestructura de logging y **no es de esta épica**.
     **And** `ImageId` no se considera nunca un mecanismo de autorización ni un secreto.
 
 23. **Given** que la épica prometió Behat contra el propio seam (`epics-images.md:486-487`) y ninguna historia
@@ -547,39 +570,40 @@ puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no po
 
 ## Tasks / Subtasks
 
-### Task 0 — GATE: decidir la cota de los productores de log del camino de lectura (AC 9). Nada empieza antes.
+### Task 0 — La señal no se acota: escribir el ADR y tomar la medición de coste por evento (AC 9, AC 22e)
 
-**Leer primero, porque la premisa cambió.** La primera redacción de esta tarea —y la AC del épico, y el
-`[Review][Defer]` de img-1-2— daban por hecho que un cliente emite una línea por petición pidiendo
-**identificadores aleatorios**. Es falso bajo el orden que la Task 3 impone: `findById()` devuelve `null` y la
-petición responde 404 **sin tocar storage**. Lo que sí es alcanzable por un cliente, y lo que hay que decidir,
-son tres productores que necesitan un fallo previo más **un** id válido (que tiene cualquiera que haya visto
-una imagen legítimamente):
+**Decisión tomada el 2026-08-30, ya no es un gate.** Se eligió **no acotar** (opción D), tras dos rondas de
+consulta externa y tres mediciones sobre el árbol. El razonamiento completo, con las cuatro alternativas
+descartadas una a una, vive en
+[`docs/adr/image-read-failure-signal-bound.md`](../../docs/adr/image-read-failure-signal-bound.md). Lo que
+queda es ejecutarlo.
 
-- **P1 — ausencia confirmada.** Fila viva, bytes ausentes. Un `info` por petición mientras esa fila exista.
-- **P2 — raíz de storage inusable.** `guardRootIsUsable()` corre **antes** de mirar el objeto
-  (`FlysystemImageStorage.php:139` vs `:141`), así que un volumen desmontado hace fallar **toda** lectura de
-  **cualquier** fila. Un `warning` por petición.
-- **P3 — fallo transitorio.** Misma forma que P2.
+Resumen de por qué, para que nadie lo reabra sin leer el ADR: la premisa era falsa (un id aleatorio no toca
+storage); `debug` es letra muerta; un cap por petición es un **no-op**; el muestreo reduce **una** línea de al
+menos dos, porque el registro `error` que dispara el handler bufferizado está en otro canal y es inalcanzable
+desde aquí; y el canal **no lo escucha nadie**, así que tampoco hay alarma que preservar. El punto de control
+correcto es el aislamiento del sumidero, que es infraestructura transversal.
 
-**P2 y P3 son los ruidosos, y la AC del épico sólo cubría P1.** Además producen 5xx, y `ExceptionResponder`
-escribe `error` en el canal por defecto, que en prod es `fingers_crossed` con `action_level: error` y
-`buffer_size: 50`: cada petición así escribe una línea de `observability` **más** el flush de hasta cincuenta
-registros bufferizados, al mismo sumidero.
-
-Opciones vivas: **(A)** muestreo 1-de-N · **(B)** contador agregado · **(C)** cota por petición (a lo sumo una
-línea por request) · **(D)** no acotar y tratar P2/P3 como alarma operacional cuyo propósito **es** ser ruidosa
-cuando el despliegue está roto. Descartada por medición: bajar a `debug`.
-
-- [ ] Medir el tamaño de la línea JSON con el formatter de prod y el umbral de desalojo. **Y decir qué
-      comparte ese presupuesto**: los 50 MB (`json-file`, 10m × 5) los comparten el handler por defecto, el
-      stream de `deprecation` y —dominante— el access log de Caddy, que escribe una línea por petición pase lo
-      que pase. El número es una **cota superior**, no "el número exacto".
-- [ ] Decir de antemano qué resultado favorecería a cada opción. Una medición que no puede cambiar la decisión
-      no es un gate, es decoración.
-- [ ] Presentar A/B/C/D con esa medición; registrar la decisión y su argumento aquí.
-- [ ] `tmp/bmad-md/consult-absence-log-bound-*.md` lleva el planteamiento ya corregido para una consulta
-      externa.
+- [ ] **Escribir el ADR** si no está ya en la rama, y comprobar que `docs/index.md` lo lista.
+- [ ] **Enmendar la AC del épico** (`epics-images.md`, el bloque de la señal de lectura) para que apunte al
+      ADR. Un requisito escrito no se reinterpreta desde la historia que lo incumple.
+- [ ] **Medir el coste POR EVENTO**, que es lo único obtenible: bytes de una línea `image_storage_failure`
+      con el formatter de prod, bytes del registro `error` correspondiente, y bytes de una línea representativa
+      del access log de Caddy. De ahí, la aritmética de contribución relativa bajo una **tasa hipotética** de
+      P2/P3.
+- [ ] **Declarar explícitamente lo que esa medición NO es**: no mide frecuencia real ni comportamiento de
+      producción, porque **no hay despliegue de producción** (`PRODUCTION_SECURITY_CHECKLIST.md:1198,1222,1458`,
+      una de ellas un *"Accepted 2026-08-18 (Sergio)"*). Es un coste unitario, nunca una observación de
+      exposición. Un número presentado como lo segundo sería exactamente el tipo de afirmación que el pase
+      adversarial de esta historia existió para cazar.
+- [ ] **Cero código**: no hay parámetro de muestreo, no hay contador, `emit()` no se toca y `delete()` menos.
+- [ ] El residual (e) de la AC 22 va a §7 en Task 13.
+- [ ] **Hallazgo en tránsito, nombrado y no arreglado aquí**: el comentario del bloque `log` de
+      `api/frankenphp/Caddyfile` afirma que *"no compose file declares a `logging:` driver, so it is the default
+      json-file driver with neither rotation nor TTL"*. Ya es **falso**: `x-logging` declara `10m × 5`. El
+      problema de aislamiento sigue siendo válido con rotación —la expulsión es por volumen, no por
+      ownership—, así que la frase está desfasada, no equivocada en su conclusión. No es fichero de esta
+      historia; corrígelo sólo si acabas editándolo por otro motivo.
 
 ### Task 1 — Montar el módulo en el router (AC 18, AC 21)
 
@@ -781,8 +805,18 @@ cuando el despliegue está roto. Descartada por medición: bajar a `debug`.
 
 ### Task 13 — Documentación y residuales (AC 22, AC 26)
 
-- [ ] `PRODUCTION_SECURITY_CHECKLIST.md` §7: **ampliar** el bloque de `:1534-1579` con los cuatro residuales
-      de la AC 22. No abras un bullet paralelo.
+- [ ] `PRODUCTION_SECURITY_CHECKLIST.md` §7: **ampliar** el bloque de `:1534-1579` con los **cinco**
+      residuales de la AC 22. No abras un bullet paralelo. El quinto —shared-sink eviction entre productores
+      independientes— cambia el encuadre del bloque: no es "demasiados logs", es que un productor puede
+      desalojar la historia de otro y **nada alerta**.
+- [ ] El ADR `docs/adr/image-read-failure-signal-bound.md` y su entrada en `docs/index.md` van **en esta
+      rama**, no en una posterior: son el artefacto que gobierna la excepción de la AC 9, y sin ellos la
+      historia contradice al épico en silencio.
+- [ ] **Issue de infraestructura, sólo con autorización explícita de Sergio** (es superficie hacia fuera): el
+      sumidero del contenedor no tiene aislamiento ni routing entre el access log de Caddy, el canal por
+      defecto y `observability`. Es transversal a todos los contextos y **no** es de esta épica — deferral
+      genuino y argumentado, no la pila de diferidos que `CLAUDE.md` prohíbe alimentar desde dentro de una
+      épica.
 - [ ] `docs/architecture-api.md`: bullet de la ruta en `## API design` y la ruta en el bullet de `Images/`
       (`:64`). **Corregir `:103`** (`:102` está en blanco), que afirma que los controladores con `#[Route]`
       viven bajo `Infrastructure/Controller/` cuando hay seis bajo `Iam/*/Infrastructure/Http/`.
@@ -1032,6 +1066,9 @@ api/tests/Unit/Shared/Images/…              (NUEVO — scan + falsabilidad + u
 api/tests/Unit/Shared/Audit/Domain/AuditPolicyTest.php  (MODIFICADO — caso shared_)
 api/tests/Functional/Shared/Images/…        (NUEVO — 304 negado)
 
+docs/adr/image-read-failure-signal-bound.md (NUEVO — la excepción argumentada de la AC 9)
+docs/index.md                               (MODIFICADO — entrada del ADR)
+_bmad-output/planning-artifacts/epics-images.md  (MODIFICADO — AC de la señal, supersedida hacia el ADR)
 docs/architecture-api.md                    (MODIFICADO — ruta nueva + corregir :103)
 api/docs/adding-endpoints.md                (MODIFICADO)
 api/docs/postman/…                          (MODIFICADO)
@@ -1061,8 +1098,13 @@ identidad · reconciliación fila↔objeto (la prohíbe NFR3) · `ContentHashUrl
   de enumeración `:860-868`; NFR9 `:297`.
 - [`docs/adr/images-vs-documents-conservation-contract.md`](../../docs/adr/images-vs-documents-conservation-contract.md)
   — D6 `:70` (las dos cláusulas que el épico anula), digest en URL `:90`, invariante 2 `:109`.
+- [`docs/adr/image-read-failure-signal-bound.md`](../../docs/adr/image-read-failure-signal-bound.md) — **la
+  decisión de la AC 9**: por qué la señal de fallo de lectura se deja sin acotar, las cuatro alternativas
+  descartadas con su razón, y qué **no** cierra. Supersede la AC del épico, que queda enmendada apuntando ahí.
 - [`docs/adr/image-deletion-signal-transport.md`](../../docs/adr/image-deletion-signal-transport.md) — D3, los
-  residuales que hereda la épica del consumidor.
+  residuales que hereda la épica del consumidor. Es también el **precedente de forma**: una story anterior
+  escribió un ADR porque un requisito escrito exigía una excepción argumentada, que es exactamente la
+  situación de la AC 9.
 - [`docs/api-error-contract.md`](../../docs/api-error-contract.md) — tabla marcador→status.
 - [`docs/rules/cqrs-naming.md`](../../docs/rules/cqrs-naming.md) — `:88`, caso de uso de lectura; categoría 6.
 - [`docs/rules/testing.md`](../../docs/rules/testing.md) — dónde vive un artifact gate; `--filter` como
@@ -1131,6 +1173,26 @@ identidad · reconciliación fila↔objeto (la prohíbe NFR3) · `ContentHashUrl
   atribuida a `api/CLAUDE.md`, cuatro rangos de línea que apuntaban a la AC contigua, un nombre de registro
   inventado (`api/.accepted-risk`) y cinco recuentos inflados. La sección `## Adversarial pass` registra la
   disposición hallazgo a hallazgo, y dice que el gate habría dado verde sobre el pase autoadministrado solo.
+
+- 2026-08-30 — **Task 0 resuelta: la señal de fallo de lectura se deja sin acotar (opción D).** Dos rondas de
+  consulta externa más tres mediciones propias. La ronda 1 recomendó D *"provided the observability sink is
+  explicitly accepted as an alarm channel"*; medido, esa condición es **falsa** —`stream` plano en los tres
+  entornos, handler de Sentry comentado y excluyendo el canal, ningún colector en ningún compose— así que el
+  argumento con el que se recomendó no se sostiene. D sobrevive por otra razón: **las cotas disponibles están
+  en el punto de control equivocado**, porque un fallo 5xx escribe además un registro `error` en el canal por
+  defecto (`ExceptionResponder.php:293`) que activa el handler bufferizado y es inalcanzable desde este
+  módulo. La ronda 2 concedió el punto y corrigió el mío: *"we cannot bound everything, therefore bound
+  nothing"* no vale como principio general, así que el argumento del término equivocado **rechaza A/B/C pero
+  no prueba D por sí solo** — hace falta además el juicio sobre coste unitario y pérdida semántica. Su
+  aportación decisiva fue de gobernanza: un requisito escrito no se reinterpreta desde la historia que lo
+  incumple, así que la excepción se gobierna con **ADR + AC del épico enmendada + residual**, y no con una
+  nota. Se añadió `docs/adr/image-read-failure-signal-bound.md` con las cuatro alternativas descartadas una a
+  una (incluido que un cap por petición es un **no-op** medido), se enmendó `epics-images.md` conservando la
+  redacción original para que el cambio sea auditable, AC 9 pasó de "acota" a "declara con la medición",
+  AC 22 ganó un quinto residual reencuadrado como **shared-sink eviction entre productores independientes**, y
+  la medición quedó acotada a **coste por evento** con la declaración explícita de que no mide frecuencia ni
+  producción, porque no hay despliegue de producción. P1 se redescribe como invariante rota **permanente** —
+  nace de una petición de borrado perdida— en vez de ruido puntual. Cero código.
 
 ## Dev Agent Record
 
