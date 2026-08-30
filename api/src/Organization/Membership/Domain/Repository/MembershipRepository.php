@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Organization\Membership\Domain\Repository;
 
 use Erpify\Organization\Membership\Domain\Entity\Membership;
+use UnexpectedValueException;
 
 /**
  * Aggregate-lifecycle port for {@see Membership}.
@@ -30,6 +31,8 @@ interface MembershipRepository
      * because the erasure that consumes it reports counts, and because the uniqueness is a schema fact this
      * port should not have to promise. Idempotent — a second pass over a user with no membership deletes
      * nothing and returns 0.
+     *
+     * @throws UnexpectedValueException when the store yields no affected-row count
      */
     public function deleteAllForUser(string $userId): int;
 

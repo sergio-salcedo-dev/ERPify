@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Membership\Domain\Exception\UserAlreadyMember;
 use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
+use Erpify\Shared\Persistence\Infrastructure\AffectedRows;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -60,7 +61,7 @@ final readonly class DoctrineMembershipRepository implements MembershipRepositor
             ->execute()
         ;
 
-        return \is_int($affected) ? $affected : 0;
+        return AffectedRows::from($affected);
     }
 
     #[Override]
