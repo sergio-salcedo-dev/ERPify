@@ -391,7 +391,7 @@ development_status:
   #
   # #602 SIGUE OPEN, y sólo se cierra cuando el caso de administrador único tenga una arista real —
   # medida y registrada en un comentario del issue, como hicieron br-4b/4c/4d.
-  br-4e-602-secreto-de-recuperacion: in-progress
+  br-4e-602-secreto-de-recuperacion: done
   br-5-ciclo-de-vida-iam-session: done
   # Medido el 2026-08-12 contra 781c75a2: TRES de los cinco issues no son código. #589 lo resolvió el arco
   # #596-#601 (el mismo de BR-1) y el gate NFR26 corre hoy con 9 tests y cero skips; #250 quedó obsoleto por
