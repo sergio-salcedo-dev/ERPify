@@ -2,7 +2,7 @@
 title: 'El cero fabricado de los adaptadores de borrado masivo'
 branch: 'fix/shared-erasure-count-silent-zero-xrfs'
 base: 'c408df9c'
-status: 'in-review'
+status: 'done'
 date: '2026-08-30'
 ---
 
