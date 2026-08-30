@@ -36,8 +36,14 @@ export interface AuthContextValue {
    * Re-resolve the session from `/me` after a successful sign-in (the 204 has
    * already set the httpOnly session cookie). Never accepts a fabricated
    * identity — the server is the single source of truth.
+   *
+   * It resolves to the session the probe produced, because the caller cannot
+   * otherwise tell an authenticated provider from one the probe never
+   * confirmed. `null` conflates "no live session" with "could not tell", and
+   * deliberately so: neither is grounds to announce a sign-in, so the caller's
+   * move is the same for both.
    */
-  login: () => Promise<void>;
+  login: () => Promise<Session | null>;
   /**
    * Sign out: revoke the current server-side session (so the server drops its
    * cookie) and clear the in-memory session. The server call is best-effort —
@@ -109,10 +115,11 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     };
   }, [resolveSession]);
 
-  const login = useCallback(async (): Promise<void> => {
+  const login = useCallback(async (): Promise<Session | null> => {
     const resolved = await resolveSession();
     setSession(resolved);
     setHydrated(true);
+    return resolved;
   }, [resolveSession]);
 
   const logout = useCallback(

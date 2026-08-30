@@ -298,10 +298,16 @@ function RevokeRecoverySecretDialog({
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useZodForm<RevokeRecoverySecretFormValues>(RevokeRecoverySecretSchema, {
     defaultValues: { currentPassword: "" },
   });
+
+  // `revoking` is the owner's flag and it is raised only once the async resolver has settled
+  // and the port has been reached; two Enter presses inside that window both arrive, and each
+  // spends a unit of the per-identity credential-proof budget that is the only ceiling on
+  // guessing this password. `isSubmitting` covers the window `revoking` cannot see.
+  const busy = isSubmitting || revoking;
 
   const close = (): void => {
     setOpen(false);
@@ -373,7 +379,7 @@ function RevokeRecoverySecretDialog({
                 <Button
                   type="button"
                   variant="ghost"
-                  disabled={revoking}
+                  disabled={busy}
                   aria-label="Keep the recovery secret"
                   title="Keep the recovery secret"
                 >
@@ -384,7 +390,7 @@ function RevokeRecoverySecretDialog({
             <Button
               type="submit"
               variant="destructive"
-              disabled={revoking}
+              disabled={busy}
               aria-label="Revoke it"
               title="Revoke it"
               data-testid="recovery-secret__revoke-confirm"

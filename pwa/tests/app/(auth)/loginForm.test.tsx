@@ -25,6 +25,7 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
 }));
 
 import { LoginForm } from "@/app/(auth)/_components/LoginForm";
+import { SIGNED_IN_SESSION } from "./_session";
 
 function signIn(): void {
   fireEvent.change(screen.getByTestId("login-form__email"), { target: { value: "a@b.com" } });
@@ -34,7 +35,8 @@ function signIn(): void {
 
 beforeEach(() => {
   push.mockClear();
-  login.mockClear();
+  login.mockReset();
+  login.mockResolvedValue(SIGNED_IN_SESSION);
   repoLogin.mockClear();
   outcome = { kind: LoginOutcomeKind.AUTHENTICATED };
   window.history.replaceState({}, "", "/login");
@@ -140,5 +142,21 @@ describe("LoginForm — access outcomes", () => {
     // The form stays mounted (no wall), and this is not the credentials error.
     expect(screen.getByTestId("login-form")).toBeInTheDocument();
     expect(screen.queryByTestId("login-form__error")).not.toBeInTheDocument();
+  });
+});
+describe("LoginForm — the session probe decides whether the sign-in happened", () => {
+  it("does not announce or navigate on a sign-in the probe could not confirm", async () => {
+    // `login()` resolves `null` both for "no live session" and for "the probe failed", and the
+    // caller's move is the same either way: navigating here hands RequireAuth an unauthenticated
+    // provider, which bounces the user straight back to this form with a success toast behind it.
+    login.mockResolvedValue(null);
+    render(<LoginForm />);
+    signIn();
+
+    const error = await screen.findByTestId("login-form__request-error");
+    expect(error).toHaveTextContent("Something went wrong. Please try again.");
+    expect(push).not.toHaveBeenCalled();
+    expect(login).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("login-form")).toBeInTheDocument();
   });
 });

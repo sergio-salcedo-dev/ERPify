@@ -13,11 +13,12 @@ import { describe, expect, it } from "vitest";
  * is no help either, because it asserts the URL the adapter called against THE ADAPTER'S OWN
  * CONSTANT: true by construction, and true again the day the constant is wrong.
  *
- * The verb half is the reason this is worth building rather than a path-only check. A path-only
- * check is GREEN on the change that motivated this file: `/me/recovery-secret` kept existing with
- * GET and POST, and what moved was which verb destroys the secret. Method drift is silent in
- * exactly the same way path drift is, and it is the more likely of the two, because a path is
- * copied once and a verb is chosen per call site.
+ * The verb half is the reason this is worth building rather than a path-only check. A path holds
+ * still while the verb under it moves: `/me/recovery-secret` answers both GET and POST, so which
+ * verb destroys the secret is a fact about that path and not about its spelling, and a path-only
+ * check is green either way. Method drift is silent in exactly the same way path drift is, and it
+ * is the more likely of the two, because a path is copied once and a verb is chosen per call
+ * site.
  *
  * ## What it reads
  *
@@ -108,6 +109,10 @@ import { describe, expect, it } from "vitest";
  *    a variable first, then handed to the client, reaches `useMercureRealtime`'s `authorize()`
  *    with the verb unchecked — the two `authorizePath` call sites are exactly that shape, and
  *    their PATHS are still checked, only not their verb;
+ *  - a verb reached through computed member access. The call-site walk matches a PROPERTY access,
+ *    so `client[verb](url, body)` yields no call site at all: not a wrong verb, an absent one,
+ *    and the path that rides with it goes unchecked too. Nothing in the tree spells a call that
+ *    way today, and nothing would say so if something started;
  *  - a path assembled by concatenation from parts that are individually clean. `"/api/" + rest`
  *    escapes the literal sweep by construction, and no AST check can close that;
  *  - a literal deliberately spelled so as not to begin `/api/` followed by an alphanumeric —
@@ -126,6 +131,12 @@ import { describe, expect, it } from "vitest";
  *    (`frankenphpHotReload.ts` reaches its path through `fetch`, not through an `HttpClient` verb,
  *    so it is not in the call-site universe at all) and it would cost something the moment a
  *    dev-only endpoint is called through the client. Nothing here would say so;
+ *  - a registry constant nobody calls. Direction 2 holds every constant to a mounted route; no
+ *    direction runs the other way over the CALL SITES, so a constant whose last caller was
+ *    deleted survives for exactly as long as its route does. This is not the "API route with no
+ *    client consumer" direction declined above: that one is declined because an unconsumed route
+ *    is legitimate and refusing it would need an allowlist, whereas an unreferenced constant is
+ *    dead client code with no such defence — it is simply not stated here;
  *  - whether the manifest itself is current. It is a generated artifact; a stale one agrees with
  *    a stale client. That direction belongs to the generator and to CI regenerating it, not here.
  *

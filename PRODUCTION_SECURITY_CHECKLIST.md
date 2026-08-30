@@ -646,9 +646,9 @@ you change anything here.
       sending the request). `json_login` validates no CSRF token; the **stateless double-submit CSRF token is now
       wired** (its first consumer is the invitation accept POST above), configured session-free via
       `framework.csrf_protection.stateless_token_ids`. CORS / Mercure are **not** broadened. **Access-control baseline:** `access_control` is **default-deny** — every `/api`
-      route requires an authenticated session except an explicit allowlist (login, the two public recovery routes
+      route requires an authenticated session except an explicit allowlist (login, the three public recovery routes
       `forgot-password` / `reset-password` / `recovery/redeem` — same-origin-guarded by `RecoveryOriginListener`, a mirror of
-      `LoginOriginListener` keyed on the reset route names — health probes, dev hot-reload). An
+      `LoginOriginListener` keyed on all three of those route names — health probes, dev hot-reload). An
       unauthenticated request to a protected route is a **401 `unauthenticated`** through the pipeline:
       `UnauthenticatedAccessListener` rewrites the firewall's `AccessDeniedException` to an `AuthenticationException` for
       anonymous callers (so 401, not 403), while an authenticated-but-under-privileged caller still gets 403 — the shape
@@ -687,9 +687,11 @@ you change anything here.
       another transaction had already replaced — a recovery-secret redemption or an administrative unlock
       clearing the lock, and this path restoring `locked_until` from a snapshot taken before it, with the
       attacker retrying continuously inside the window. An attempt the aggregate ignores still costs no write
-      and emits nothing; what it now costs is the BEGIN/COMMIT, which is bounded by an attempt that already
+      and emits nothing; what it costs is the BEGIN/COMMIT **and the row lock**, so concurrent failed attempts
+      against one already-locked address serialise on that identity's row — bounded by an attempt that already
       ran a credential verification. **An unknown address is the one path that opens no transaction at all** —
-      leaving no trace is what keeps it indistinguishable from a real one.
+      which leaves no durable trace to tell it from a real one, and makes the transaction itself an existence
+      signal whose latency cost nobody has measured (§7).
 - [ ] **A third recovery edge for the persisted lockout above: `POST /backoffice/users/{id}/unlock`**
       (`ADMIN`-only, `#[IsGranted('users.unlock')]`, `users` opts out of tier auto-grant). #602 named the two
       existing recovery edges — a successful login, a completed password reset — as both attacker-cuttable by
@@ -731,8 +733,9 @@ you change anything here.
       subject erasure — it survives a password rotation by design, and the profile screen listing it with both
       instants and a credential-gated revoke is the whole of what makes that governable. The gate costs the
       owner a wait of up to one window when they have just spent the shared budget mistyping; that residual is
-      self-inflicted only — both routes that drain the bucket require a live session, so nobody can drain it
-      from outside to keep a revoke from happening.
+      self-inflicted only — all three routes that drain the bucket require a live session, and
+      `cookie_samesite: lax` (`api/config/packages/framework.yaml`) means a cross-site form post carries no
+      session cookie, so nobody can drain it from outside to keep a revoke from happening.
       **(c)** the **selector is a denial capability**: whoever learns one can spend that selector's budget and
       hold the channel shut in silence without authenticating. It is contained by construction (it is the row's
       key, so events name the user, and it reaches no audit row, log or URL, and no DTO but the minting
@@ -1076,6 +1079,21 @@ mitigated state. Accepting one means recording who accepted it and against which
       is **ordering guidance — evict first, rotate second** — in the UI copy and the password-changed mail.
       `revoke-others` carrying no limiter is deliberate and load-bearing: it is the one edge an adversary
       cannot spend. **Do not "harden" it.**
+- [ ] **The failed-login path carries an existence signal shaped like a transaction, and its magnitude is
+      UNMEASURED.** `LoginAttemptRegistrar::recordFailure()` probes for the address on an unlocked read and
+      returns at once when it resolves to no row; an address that DOES resolve pays `BEGIN` +
+      `SELECT … FOR UPDATE` + `COMMIT` whatever the aggregate then decides. The transaction is therefore taken
+      on exactly the condition "this address exists" — where a shape that also skipped it for a locked or
+      non-`ACTIVE` identity kept "locked" and "unknown" together on this axis. **The 401 body is unaffected**
+      and stays the single normalised "Invalid credentials."; what is open is the **latency**, and the
+      plausible answer is that the equalised KDF the `UserProvider` pays on every branch is a large enough
+      constant to bury one round trip on the same connection. That is a hypothesis, not evidence — nobody has
+      run it, and "bounded by a larger constant elsewhere" is exactly the shape of claim this repo requires to
+      be measured rather than asserted. Tracked in
+      [#881](https://github.com/sergio-salcedo-dev/ERPify/issues/881), which states what the measurement must
+      produce and what each outcome obliges. Deliberately **not** tagged `@accepted-risk`: this is a gap to
+      close by measuring, not a risk accepted standing, and the tag's live-state job would red the day #881
+      closes on a successful measurement.
 - [ ] **A credential change can sign a second browser tab out of the application, and it is accepted.** Both
       flows that replace a credential from a live browser — `ChangeMyPassword` and `CompletePasswordReset` —
       revoke **every** session and mint a replacement onto the requesting tab. A request already in flight from

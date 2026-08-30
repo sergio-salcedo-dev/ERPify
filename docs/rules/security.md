@@ -42,7 +42,7 @@
   governs the cookie half and reads a header named after `cookie_name` (Symfony default `csrf-token`).
   Enabling `check_header` would make Symfony look for `csrf-token`, not `X-CSRF-Token`.
 
-## Pre-identity surfaces (login, invitation accept, forgot/reset)
+## Pre-identity surfaces (login, invitation accept, forgot/reset, recovery-secret redeem)
 - **Constant-time floor:** every pre-identity rejection pays one unit of password-hashing work through the
   shared `PreIdentityTimingFloor` port before answering, so response latency never correlates with whether an
   account exists or what state it is in. New pre-identity branches (future magic-link, MFA, …) must pay the
@@ -56,7 +56,9 @@
   silenced; token endpoints keep the opaque `invalid-token`). A per-target 429 here is an oracle over which
   accounts/selectors exist and are under attack. **The test is who is asking, not how the budget is keyed:**
   a per-target budget may answer 429 once the caller has already proved it holds the target, which is why
-  `password_change_per_identity` on `POST /me/password` refuses out loud and nothing on this surface does.
+  `password_change_per_identity` refuses out loud on each of the three routes that spend it
+  (`POST /me/password`, `POST /me/recovery-secret`, `POST /me/recovery-secret/revoke`) and nothing on this
+  surface does.
 - **Token hygiene:** a single-use token travels ONLY in the emailed link and the request body — never in a
   log — Caddy's access log carries no query string at all (it strips everything from the `?`, so a token
   cannot be there whatever it is named), and the application log redacts the `token` parameter alongside the

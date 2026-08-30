@@ -20,8 +20,10 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
  * No `#[IsGranted]`, like its siblings under `/me`: the subject is the caller's own identity.
  *
  * **This read is what makes the ten-year TTL governable rather than merely accepted.** The secret survives a
- * password change by design, is not rotated when spent, and dies only by redemption, revocation, expiry or
- * subject erasure — so holding it equals holding a recovery credential until one of those four. An owner who
+ * password change by design, is not rotated when spent, and stops being redeemable only by redemption,
+ * revocation, expiry or subject erasure — the first two and the last remove the row, while expiry merely
+ * makes it unusable and nothing sweeps it. So holding it equals holding a recovery credential until one of
+ * those four. An owner who
  * cannot see that it exists, when it was issued and when it lapses has no way to decide about any of that;
  * this endpoint and the revoke beside it are the whole of the governance.
  *

@@ -98,8 +98,12 @@ export function RecoveryRedeemForm() {
     if (outcome.kind === RedeemRecoverySecretOutcomeKind.REDEEMED) {
       // The 204 has set the httpOnly session cookie; re-probe `/me` so the AuthProvider is
       // authenticated before leaving, otherwise RequireAuth bounces the stale state straight
-      // back out.
-      await login();
+      // back out. An unconfirmed probe is reported rather than announced over: the secret is
+      // already spent, so a false "Signed in" costs the user the one credential that was left.
+      if (!(await login())) {
+        setRequestFailed(true);
+        return;
+      }
       toastNotifier.success("Signed in");
       // A static in-app destination, never one read from the URL: this page takes no
       // parameters, and a redeem is not a deep link anybody was interrupted on.

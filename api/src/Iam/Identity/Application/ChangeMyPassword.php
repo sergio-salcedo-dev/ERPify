@@ -36,8 +36,9 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  *      what keeps the aggregate's own `InvalidIdentityTransition` a defensive floor rather than the answer a
  *      caller meets, which would speak of a lifecycle transition nobody asked for.
  *   3. Refuse a wrong current password ({@see InvalidCurrentPassword}) before anything mutates, through
- *      {@see ProveCurrentPassword} — the policy shared with {@see MintRecoverySecret}, the other flow that
- *      re-proves a credential from a live session. An identity with no credential at all cannot re-prove one,
+ *      {@see ProveCurrentPassword} — the policy shared with {@see MintRecoverySecret} and
+ *      {@see RevokeRecoverySecret}, the other two flows that re-prove a credential from a live
+ *      session. An identity with no credential at all cannot re-prove one,
  *      so it takes the same refusal — a credential-less identity is `INVITED` and holds no session, so this
  *      arm is unreachable rather than an oracle.
  *   4. Refuse a new password equal to the stored one ({@see NewPasswordMustDiffer}). It has to happen here, not

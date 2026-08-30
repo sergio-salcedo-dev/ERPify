@@ -68,10 +68,10 @@ final class StatelessCsrfTokenIdGateTest extends TestCase
     /**
      * Reads BOTH spellings, and refuses a file that yields neither.
      *
-     * Reading only the `CSRF_TOKEN_ID` constant reproduced the exact failure this gate exists to refuse: a
-     * controller spelling the id inline in the attribute contributes nothing to this set, so if the id is
+     * Reading only the `CSRF_TOKEN_ID` constant would reproduce the exact failure this gate exists to refuse:
+     * a controller spelling the id inline in the attribute contributes nothing to this set, so if the id is
      * also missing from the YAML both sets stay equal, the gate is green, and every legitimate request to
-     * that endpoint answers 401. Found by an adversarial pass over the gate's own first version.
+     * that endpoint answers 401.
      *
      * `preg_match_all`, not `preg_match`: one file may carry more than one, and reading only the first
      * would leave the rest in the same silence.

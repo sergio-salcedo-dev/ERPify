@@ -63,10 +63,25 @@ final class RedeemRecoverySecretTest extends TestCase
      */
     private InMemorySessionRepository $sessions;
 
+    /**
+     * The trail the three transitions and the compensation project onto. A compensated redemption persists
+     * no consumption and publishes no event, so this row is the only durable trace it leaves.
+     */
+    private RecordingAuditLogger $auditLogger;
+
     #[Override]
     protected function setUp(): void
     {
         $this->sessions = new InMemorySessionRepository();
+        $this->auditLogger = new RecordingAuditLogger();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function auditedActions(): array
+    {
+        return \array_column($this->auditLogger->records, 'action');
     }
 
     #[Test]
@@ -97,7 +112,8 @@ final class RedeemRecoverySecretTest extends TestCase
     #[Test]
     public function theUserRowIsLockedBeforeTheSecretRow(): void
     {
-        // I-B, and it is what makes the absence of an ABBA cycle demonstrable rather than hoped for: minting
+        // The acquisition order, and it is what makes the absence of an ABBA cycle demonstrable rather than
+        // hoped for: minting
         // takes the same pair this way round, and recording a failed login takes the user row alone. No path
         // anywhere reaches the secret ahead of the user, so the wait-for graph has no cycle to close.
         $users = new InMemoryUserRepository($this->lockedUser());
@@ -159,6 +175,46 @@ final class RedeemRecoverySecretTest extends TestCase
         $this->expectException(InvalidRecoverySecret::class);
 
         $this->useCase($users, $secrets)->redeem($generated->plaintext(), $this->sessionSeam());
+    }
+
+    #[Test]
+    public function aRevocationLandingMidRedemptionTakesTheSessionTheLoginAlreadyCommitted(): void
+    {
+        // The containment half of the case above, and the reason the compensation covers the opaque refusal
+        // and not only the status walls. The login commits its `iam_session` row before the consuming
+        // transaction opens, and the admission gate reads that row and never this table — so answering the
+        // refusal while leaving the session standing would let whoever holds a leaked secret keep admitted
+        // access to an account whose owner has just destroyed that secret and been told 204. Revocation is
+        // the act of cutting a leaked recovery edge; it must not be a race retried until it lands.
+        $users = new InMemoryUserRepository($this->lockedUser());
+        $secrets = new InMemoryRecoverySecretRepository();
+        $generated = $this->mintFor($secrets, UserMother::DEFAULT_ID);
+        $eventBus = new RecordingEventBus();
+        $secrets->onLockedRead = static function () use ($secrets, $generated): void {
+            $secrets->remove($generated->secret);
+        };
+
+        $this->expectException(InvalidRecoverySecret::class);
+
+        try {
+            $this->useCase($users, $secrets, $eventBus)->redeem($generated->plaintext(), $this->sessionSeam());
+        } finally {
+            $this->assertSame([UserMother::DEFAULT_EMAIL], $this->signedIn, 'the session was never established');
+            $this->assertSame(
+                [UserMother::DEFAULT_ID],
+                $this->sessions->revokeAllCalls,
+                'the refusal was answered over a live session minted from the secret that was just revoked',
+            );
+            // No consumption persisted, so the redeemed projection is unreachable and the domain event died
+            // with the rolled-back transaction. Without the compensation row the interleaving leaves an
+            // admitted-then-revoked session that nothing in the trail attributes to this channel.
+            $this->assertSame(
+                ['RECOVERY_SECRET_REDEMPTION_COMPENSATED'],
+                $this->auditedActions(),
+                'the compensated redemption left no trace, or claimed a consumption that never persisted',
+            );
+            $this->assertSame([], $eventBus->publishedEvents, 'a redemption that consumed nothing published');
+        }
     }
 
     #[Test]
@@ -332,7 +388,7 @@ final class RedeemRecoverySecretTest extends TestCase
         return new RedeemRecoverySecret(
             $users,
             $secrets,
-            new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
+            new RecordRecoverySecretAuditBestEffort($this->auditLogger, new NullLogger()),
             new RevokeSessionsBestEffort(
                 new RevokeAllSessions(
                     $this->sessions,

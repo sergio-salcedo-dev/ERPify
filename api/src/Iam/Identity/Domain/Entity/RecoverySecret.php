@@ -23,8 +23,11 @@ use SensitiveParameter;
  * in the response that mints it, and never persisted, logged or re-shown.
  *
  * It is a SECOND CREDENTIAL, not an extension of the password. It survives a password rotation, it is not
- * rotated when it is spent, and it dies only by redemption, revocation, expiry or subject erasure — so
- * holding it is equivalent to holding a recovery credential until one of those four. The profile surface
+ * rotated when it is spent, and it stops being redeemable only by redemption, revocation, expiry or subject
+ * erasure — so holding it is equivalent to holding a recovery credential until one of those four. Three of
+ * them remove the row; **expiry does not**. Nothing sweeps a lapsed secret — no maintenance schedule member,
+ * no `deleteExpired` on the port — so a lapsed row, and the person reference it carries, outlives the
+ * capability it once granted and leaves by erasure alone. The profile surface
  * that lists it (minted at, expires at) with an explicit revoke is what makes that governable: eviction is
  * visible, never a silent side effect of some unrelated act.
  *

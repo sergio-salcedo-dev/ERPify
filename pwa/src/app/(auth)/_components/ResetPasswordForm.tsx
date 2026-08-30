@@ -86,7 +86,12 @@ export function ResetPasswordForm() {
       // The 204 has set the httpOnly session cookie; re-probe `/me` so the
       // AuthProvider is authenticated before the success CTA enters the ERP
       // (otherwise RequireAuth would bounce the stale unauthenticated state).
-      await login();
+      // An unconfirmed probe keeps the form on screen with the retryable error
+      // rather than handing the user a CTA that cannot enter.
+      if (!(await login())) {
+        setRequestFailed(true);
+        return;
+      }
       setReset(true);
       return;
     }

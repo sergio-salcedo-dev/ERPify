@@ -88,12 +88,16 @@ The consumed events today:
 | `erpify.iam.identity.password-reset-completed` | 1 | `CompletePasswordReset` (recorded by `User::resetPassword()`) | *empty* `[]` (user id in envelope — **not** PII-free: the id is the subject) | password-changed email, sent in process |
 | `erpify.iam.identity.password-changed` | 1 | `ChangeMyPassword` (recorded by `User::changePassword()`) | *empty* `[]` (same envelope shape, same subject id) | password-changed email, sent in process |
 
-Recorded, with no consumer today. They are not a lesser tier: the two recovery-secret lifecycle events in
+Recorded, with no consumer today. They are not a lesser tier: the three recovery-secret lifecycle events in
 particular are the **durable** record of their transitions, and the `audit_log` rows beside them are prunable
 projections of the same facts — `security` rows are swept at 365 days while a recovery secret is valid for
 ten years, so the projection cannot be the record. `…redeemed` is appended in the same transaction that
 deletes the secret, which is what makes "emitted only once the consumption is persisted" checkable rather
-than an ordering habit.
+than an ordering habit. One recovery-secret audit row projects no event at all —
+`RECOVERY_SECRET_REDEMPTION_COMPENSATED`, written when a redemption's session was admitted and then revoked
+because the consuming transaction refused. The event died with that rollback, so there the prunable
+projection is the *only* durable trace, and the asymmetry is the point rather than an oversight: nothing
+persisted for an event to attest.
 
 | `eventName` | ver | Producer (use case) | Payload |
 |-------------|:---:|---------------------|---------|

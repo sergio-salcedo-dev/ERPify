@@ -11,9 +11,11 @@ use Erpify\Iam\Identity\Domain\Exception\InvalidHashedPassword;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 
 /**
- * The one place an identity re-proves the credential it already holds, for the two use cases that demand it
- * from a live session: replacing the password ({@see ChangeMyPassword}) and minting a recovery secret
- * ({@see MintRecoverySecret}).
+ * The one place an identity re-proves the credential it already holds, for the three use cases that demand it
+ * from a live session: replacing the password ({@see ChangeMyPassword}), minting a recovery secret
+ * ({@see MintRecoverySecret}) and revoking one ({@see RevokeRecoverySecret}). The membership is the invariant
+ * — every act that creates, replaces or destroys a credential and is reachable from a live session re-proves
+ * it, and destroying a capability is as sensitive as granting one.
  *
  * **What is shared is a security policy, not four lines of convenience.** A stored credential that cannot be
  * read — absent, or corrupt enough that {@see User::passwordHash()} refuses it — is answered as a WRONG one

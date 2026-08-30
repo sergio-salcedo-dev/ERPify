@@ -87,11 +87,12 @@ framework:
             interval: '%env(RATE_LIMIT_RECOVERY_THROTTLE_AUDIT_INTERVAL)%'
             lock_factory: null
 
-        # `token_action_per_selector` — per-target budget on the token-consuming endpoints (reset-password,
-        # invitation accept), keyed by the selector half of the presented `<id>.<secret>` link. It caps
-        # brute-forcing the secret of one selector; exhaustion folds into the SAME opaque invalid-token wall
-        # as a dead link, because a per-selector 429 would confirm to an attacker that the selector exists.
-        # Selectors are UUIDs, so reset and accept share the namespace collision-free.
+        # `token_action_per_selector` — per-target budget on the three token-consuming endpoints
+        # (reset-password, invitation accept, recovery-secret redeem), keyed by the selector half of the
+        # presented `<id>.<secret>` link. It caps brute-forcing the secret of one selector; exhaustion folds
+        # into the SAME opaque invalid-token wall as a dead link, because a per-selector 429 would confirm to
+        # an attacker that the selector exists. Selectors are UUIDs, so the three share the namespace
+        # collision-free.
         token_action_per_selector:
             policy: 'sliding_window'
             limit: '%env(int:RATE_LIMIT_TOKEN_ACTION_LIMIT)%'

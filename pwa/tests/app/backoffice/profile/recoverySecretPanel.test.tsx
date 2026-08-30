@@ -22,6 +22,8 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
 import { RecoverySecretPanel } from "@/app/backoffice/profile/_components/RecoverySecretPanel";
 
 const PASSWORD = "correct-horse-battery";
+const MINTED_AT = "2026-08-01T09:00:00.000Z";
+const EXPIRES_AT = "2027-08-01T09:00:00.000Z";
 
 function problem(status: number, type: string, detail: string): ProblemDetails {
   return {
@@ -49,11 +51,7 @@ beforeEach(() => {
   read.mockReset();
   mint.mockReset();
   revoke.mockReset();
-  read.mockResolvedValue({
-    exists: true,
-    mintedAt: "2026-08-01T09:00:00.000Z",
-    expiresAt: "2027-08-01T09:00:00.000Z",
-  });
+  read.mockResolvedValue({ exists: true, mintedAt: MINTED_AT, expiresAt: EXPIRES_AT });
   revoke.mockResolvedValue(undefined);
 });
 
@@ -149,6 +147,36 @@ describe("<RecoverySecretPanel> — revoking asks for the current password", () 
     expect(await openRevokeDialog()).toHaveValue("");
   });
 
+  /**
+   * The owner's `revoking` flag is raised only once the async Zod resolver has settled and the
+   * port has been reached, so two presses inside that window both arrive at
+   * `POST /me/recovery-secret/revoke`. Each spends a unit of the shared per-identity
+   * credential-proof bucket, which is the only ceiling on guessing this password.
+   */
+  it("reaches the port once however fast the confirmation is pressed twice", async () => {
+    let settle: () => void = () => {};
+    revoke.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          settle = () => resolve();
+        }),
+    );
+
+    render(<RecoverySecretPanel />);
+    typePassword(await openRevokeDialog(), PASSWORD);
+
+    const confirm = screen.getByTestId("recovery-secret__revoke-confirm");
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(revoke).toHaveBeenCalledTimes(1));
+    settle();
+    await waitFor(() =>
+      expect(screen.queryByTestId("recovery-secret__revoke-dialog")).not.toBeInTheDocument(),
+    );
+    expect(revoke).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the typed password masked until the reveal toggle is pressed", async () => {
     render(<RecoverySecretPanel />);
     const field = await openRevokeDialog();
@@ -156,5 +184,41 @@ describe("<RecoverySecretPanel> — revoking asks for the current password", () 
     expect(field).toHaveAttribute("type", "password");
     fireEvent.click(screen.getByTestId("recovery-secret__revoke-password-toggle"));
     expect(screen.getByTestId("recovery-secret__revoke-password")).toHaveAttribute("type", "text");
+  });
+});
+
+/**
+ * The expiry is the one way this channel closes with nobody acting, so a holder who is never
+ * shown the date cannot plan around it — which makes the two instants part of what this panel
+ * owes, not decoration. Both are asserted by their year rather than by a formatted string: the
+ * suite pins no timezone, and each instant sits mid-year, so no real offset moves either.
+ */
+describe("<RecoverySecretPanel> — the instants that bound the secret's life", () => {
+  it("renders both instants beside a secret the account already holds", async () => {
+    render(<RecoverySecretPanel />);
+
+    const mintedAt = await screen.findByTestId("recovery-secret__minted-at");
+    const expiresAt = screen.getByTestId("recovery-secret__expires-at");
+
+    expect(mintedAt).toHaveTextContent("2026");
+    expect(expiresAt).toHaveTextContent("2027");
+    // Two slots, two values: a panel feeding one instant into both reads as correct right up
+    // to the day the expiry is the thing being read.
+    expect(mintedAt.textContent).not.toBe(expiresAt.textContent);
+  });
+
+  it("renders both instants beside the once-only reveal, where the secret is first handed over", async () => {
+    read.mockResolvedValue({ exists: false, mintedAt: null, expiresAt: null });
+    mint.mockResolvedValue({ secret: "sel.ver", mintedAt: MINTED_AT, expiresAt: EXPIRES_AT });
+
+    render(<RecoverySecretPanel />);
+    fireEvent.change(await screen.findByTestId("mint-recovery-secret__current-password"), {
+      target: { value: PASSWORD },
+    });
+    fireEvent.click(screen.getByTestId("mint-recovery-secret__submit"));
+
+    expect(await screen.findByTestId("recovery-secret__minted")).toBeInTheDocument();
+    expect(screen.getByTestId("recovery-secret__minted-at")).toHaveTextContent("2026");
+    expect(screen.getByTestId("recovery-secret__expires-at")).toHaveTextContent("2027");
   });
 });

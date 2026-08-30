@@ -18,9 +18,11 @@ use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
  *
  * The lock order is USER FIRST, THEN SECRET, on every path that takes both. Redemption resolves the selector
  * unlocked, takes the user row by the `userId` that resolution yielded, and only then locks the secret;
- * minting takes the same pair in the same order. Revocation takes the secret alone and no user, which cannot
- * close a cycle. The path that mutates the lockout from the other side — recording a failed login — takes the
- * user row and never touches this table, so no acquisition anywhere reaches the secret ahead of the user.
+ * minting and revocation take the same pair in the same order — `identity_user`, then
+ * `identity_recovery_secret` — because both re-prove the caller's current password, which means reading and
+ * holding the user row before this table is consulted at all. The path that mutates the lockout from the
+ * other side — recording a failed login — takes the user row and never touches this table, so no acquisition
+ * anywhere reaches the secret ahead of the user.
  */
 interface RecoverySecretRepository
 {

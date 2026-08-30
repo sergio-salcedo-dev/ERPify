@@ -26,8 +26,9 @@ security:
                 password_path: password
                 failure_handler: Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler
             # Throttle the only auth surface: repeated failures per (client IP + email) are rate-limited so a
-            # leaked credential list cannot be sprayed. Pairs with the timing-equalised UserProvider so neither
-            # the 401 body nor its latency leaks which accounts exist.
+            # leaked credential list cannot be sprayed. The 401 body does not distinguish which accounts exist;
+            # the latency half of that claim rests on the timing-equalised UserProvider dominating an
+            # unmeasured, transaction-shaped differential on the failure-recording path (issue #881).
             login_throttling:
                 max_attempts: 5
 

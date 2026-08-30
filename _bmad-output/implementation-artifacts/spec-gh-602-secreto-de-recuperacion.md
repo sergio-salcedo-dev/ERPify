@@ -434,6 +434,69 @@ de borrado; `findBySelector()` no bloqueando; el muro 403 inalcanzable sin posee
 y access-control del endpoint anónimo; la migración; inyección y mass assignment; el bucket compartido de
 prueba de credencial; y los gates de la PWA.
 
+### Code review de tres capas, 2026-08-30 — sobre `c408df9c..HEAD` (134 ficheros, +8310/−230)
+
+Tres capas en paralelo y con encargos ortogonales, read-only y en contexto fresco: **Blind Hunter**
+(adversarial, sin spec), **Edge Case Hunter** (enumeración exhaustiva de ramas y fronteras, reportando sólo
+las no cubiertas) y **Acceptance Auditor** (ACs, matriz AC→test, los siete registros y el récord, contra el
+árbol). A las tres se les pasaron los dos pases hostiles anteriores para que no re-reportaran lo cerrado.
+
+**GRAVE: ninguno.** Ocho SERIOUS y una veintena de MINOR.
+
+**El convergente, y el único bloqueante.** Blind Hunter y Edge Case Hunter, por separado, encontraron el
+mismo defecto: `RedeemRecoverySecret` compensaba la sesión sólo para `AccountDeactivated|AccountSuspended`.
+Si `consume()` lanzaba `InvalidRecoverySecret` porque el dueño revocó en la ventana, el atacante recibía 400
+y **conservaba la sesión viva**, sin fila de auditoría (es post-commit y no se alcanza) y sin evento (muere
+con la transacción). Es decir: un 204 de revocación no garantizaba lo que el diálogo de la UI promete —
+*«The secret you saved stops working immediately»*. El código ya había razonado esa clase exacta de peligro
+para el muro de estado y compensaba allí; la rama gemela quedó abierta.
+
+Y es más agudo que «falta un catch»: las Design Notes de abajo **aceptan explícitamente** que una sesión
+sobreviva a un canje no consumado («*como mucho un consumo persistido, no como mucho una autenticación*»).
+Ese contrato se escribió para el fallo parcial —una caída, un 503—, donde quien canjea se presume el dueño.
+Este PR añadió la segunda promesa sin reconciliarla con la primera: **dos contratos documentados que se
+contradicen**. Por eso «documentar la asimetría» no era salida — habría obligado a contradecir la UI.
+
+**Resuelto ampliando la compensación** a las tres refusals que la pasada bloqueada puede levantar, con una
+fila de auditoría nueva (`RECOVERY_SECRET_REDEMPTION_COMPENSATED`) que es la única traza durable que deja esa
+interleaving. Se descartó revocar *sólo* la sesión de esta petición: `reauthenticate()` devuelve `void`, la
+fila la inserta un listener y la firma la comparten cuatro llamantes, así que exigiría ensanchar un puerto
+compartido para un caso — lo que la Regla de Tres de este repo rechaza. El coste de la forma gruesa se paga a
+sabiendas: quien pierde una carrera canje-contra-canje también pierde su sesión, pero esa parte tiene camino
+de contraseña (el ganador ya ejecutó `clearLockout()`) y quien sólo tiene el secreto no lo tiene. Falsificado:
+revertida la ampliación, **un solo rojo**, el caso nuevo.
+
+**La cobertura era ausencia real, no artefacto de atribución.** Se midió con `vitest --coverage` local y el
+lcov reproduce el número de SonarCloud (`new_coverage` 44,2 % contra umbral 80). `RecoveryRedeemForm.tsx`
+estaba al **0 %** con dos guardas borrables dejando la suite verde: quitar `!hydrated` hace que un envío
+pre-hidratación dispare un **GET nativo** que mete `<selector>.<secret>` en la URL, el historial y el log de
+acceso del contenedor —el sumidero sin TTL ni ruta de borrado que este mismo cambio dedica tres párrafos a
+evitar—, y quitar el latch en vuelo gasta dos veces el presupuesto por selector. El falsificador que el ADR
+declara para D7 tampoco existía: `SecretInstants` se podía borrar en verde. Y la única puerta a `/recovery`
+—el muro de bloqueo— no estaba afirmada, con el título de su test diciendo todavía «*both recovery actions …
+two-action stack*» sobre tres acciones.
+
+**El patrón MINOR es uno solo, siete veces:** este PR añade un tercer/cuarto/séptimo miembro a conjuntos
+enumerados en prosa y no actualizó ninguno — consumidores de `ProveCurrentPassword` (dos→tres), llamantes de
+`reauthenticate()` (tres→cuatro), caminos con dos cerrojos (seis→siete), rutas públicas de recuperación
+(«las dos» sobre una enumeración de tres), rutas que drenan el bucket («ambas»→tres), superficies de
+`token_action_per_selector` (dos→tres) y «*the four spellings*» sobre tres filas. Los dos que más pesan
+—`RecoverySecretRepository` y `ErasureLockOrderTest`— son justo los ficheros de los que un autor futuro
+deduce el orden de adquisición, y el primero afirmaba que la revocación no toma el cerrojo del usuario, que
+es la premisa desde la que alguien reordena y cierra el ABBA. Todos corregidos con el número **medido**.
+
+**Consultada externamente y debatida** (`tmp/bmad-md/consult-pr877-review-decisions-*.md`): seis decisiones,
+de las que dos cambiaron al confrontarlas con el árbol. La recomendación inicial en la carrera era la
+granularidad fina, retirada al comprobar que el id de sesión no existe donde haría falta; y la de Postman,
+al medir que la colección no tiene **ningún** endpoint de autenticación, de modo que añadir cuatro rutas con
+sesión produciría documentación no ejecutable.
+
+**Residual no cerrado, y explícito:** el diferencial temporal existencia/ausencia en `recordFailure()`. Este
+PR movió el fast path adentro, así que una dirección existente paga `BEGIN` + cerrojo de fila y una
+desconocida no. Puede quedar por debajo del ruido del KDF equalizado — pero eso es hipótesis, no medición, y
+la regla de este repo es que una afirmación de seguridad se mide. La afirmación de `security.yaml` se rebajó
+a lo demostrado y la medición es la issue **#881**.
+
 ## Design Notes
 
 **Por qué el re-login va antes de consumir.** El flujo de reset re-autentica post-commit con un helper
@@ -481,17 +544,22 @@ root.
 
 ## Verification
 
-**Commands:** — medidos el 2026-08-29 sobre el árbol final, cada uno en ejecución fresca
+**Commands:** — cada uno en ejecución fresca, con su código de salida impreso.
+
+Se registran **códigos de salida y alcance, nunca recuentos**. Un número de tests es cierto durante una
+tarde: este bloque afirmaba «3313 tests / 15340 aserciones … sobre el árbol final» cuando ya habían entrado
+220 ficheros después de la última edición del spec, así que la frase que lo databa era exactamente la parte
+falsa. Un recuento que envejece es una afirmación falsa con retardo; el código de salida no envejece.
 
 - `make php.stan` · `php.md` · `php.cs.dry-run` · `php.cs-fixer.dry-run` · `php.rector.dry-run` -- 0
 - `make php.deptrac` -- 0
-- `make php.unit` -- 0 (3313 tests, 15340 aserciones)
-- `make php.behat` -- 0 (473 escenarios, 4399 pasos)
+- `make php.unit` -- 0
+- `make php.behat` -- 0
 - `make php.lint.route-manifest` -- 0 · `make sf.routes.manifest` -- 0, y regenerar no cambia un byte
 - `make php.lint.{bounded-context,event-bus,error-contract,step-vocabulary,audit-evidence,public-access}` -- 0
 - `make php.lint.person-reference` · `php.lint.gate-placement` -- 0
 - `make pwa.quality` · `pwa.lint.graph` -- 0
-- `make pwa.test.unit` -- 0 (252 ficheros, 1580 tests)
+- `make pwa.test.unit` -- 0
 
 **`make php.quality` NO se corre como barrida única**: muere de forma intermitente con 137 (flake conocido de
 PHPMD/OOM). Se corren los miembros en grupos pequeños, y el que CI ejecuta es `php.quality.dry-run`.

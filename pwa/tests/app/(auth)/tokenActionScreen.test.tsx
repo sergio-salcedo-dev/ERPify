@@ -32,6 +32,7 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
 }));
 
 import { TokenActionScreen } from "@/app/(auth)/_components/TokenActionScreen";
+import { SIGNED_IN_SESSION } from "./_session";
 
 const TOKEN = "0190b1c2-d3e4-7f5a-8b6c-1d2e3f4a5b60.super-secret-verifier";
 
@@ -43,7 +44,8 @@ function submitWithPassword(password: string): void {
 }
 
 beforeEach(() => {
-  login.mockClear();
+  login.mockReset();
+  login.mockResolvedValue(SIGNED_IN_SESSION);
   repoAccept.mockClear();
   outcome = { kind: AcceptInvitationOutcomeKind.ACCEPTED };
   window.history.replaceState(null, "", `/accept-invitation?token=${TOKEN}`);
@@ -134,6 +136,19 @@ describe("TokenActionScreen — accept outcomes", () => {
 
     expect(await screen.findByTestId("accept-invitation-form__error")).toBeInTheDocument();
     expect(login).not.toHaveBeenCalled();
+    expect(screen.getByTestId("accept-invitation-form")).toBeInTheDocument();
+  });
+});
+describe("TokenActionScreen — the session probe decides whether the sign-in happened", () => {
+  it("keeps the form and its retryable error when the probe cannot confirm the session", async () => {
+    // The success surface offers a CTA into the ERP. Showing it on an unconfirmed probe hands
+    // the user a door that bounces them, and hides the retry that would have worked.
+    login.mockResolvedValue(null);
+    render(<TokenActionScreen />);
+    submitWithPassword("a-strong-password");
+
+    expect(await screen.findByTestId("accept-invitation-form__error")).toBeInTheDocument();
+    expect(screen.queryByTestId("accept-invitation__success")).not.toBeInTheDocument();
     expect(screen.getByTestId("accept-invitation-form")).toBeInTheDocument();
   });
 });

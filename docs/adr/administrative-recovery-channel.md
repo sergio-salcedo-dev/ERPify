@@ -278,9 +278,9 @@ Discarded, each for a measured reason:
   refuses. Hence `POST /me/recovery-secret/revoke`, spelled as a verb like every other action sub-path here.
 
 What it costs: an owner who has just exhausted the shared budget by mistyping waits out the window before
-they can revoke a secret they believe is compromised. That residual is **self-inflicted only** — both routes
-that drain the bucket require a live session, so it cannot be induced from outside — and it is bounded and
-self-healing, against a loss that was permanent.
+they can revoke a secret they believe is compromised. That residual is **self-inflicted only** — all three
+routes that drain the bucket require a live session, so it cannot be induced from outside — and it is bounded
+and self-healing, against a loss that was permanent.
 
 A second-order consequence, named because it is the expensive one: reading the credential forces the user
 row, so revocation becomes the third path taking both locks and must take them in the order minting and

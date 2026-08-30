@@ -45,10 +45,15 @@ final readonly class DoctrineRecoverySecretRepository implements RecoverySecretR
             // caller met one situation and has one remedy, and two spellings of it is how a client ends up
             // handling only whichever it happened to see first.
             //
-            // Unbound, like the five other catches of this type in the tree. Binding it would carry the
-            // SQLSTATE into the dev debug chain and buy nothing — the only constraint on this table is the
-            // one this branch names — while the two naming gates disagree about what the variable may be
-            // called: Rector demands the type's full name and PHPMD refuses any identifier that long.
+            // Unbound, like the six other catches of this type in the tree. Binding it would carry the
+            // SQLSTATE into the dev debug chain while the two naming gates disagree about what the variable
+            // may be called: Rector demands the type's full name and PHPMD refuses any identifier that long.
+            //
+            // What the unbound catch costs is stated rather than waved past: this table carries a second
+            // unique constraint, its `PRIMARY KEY (id)`, so a selector collision would also answer "you
+            // already hold one" — the wrong answer with the wrong remedy. Selectors are UUID v7, so that
+            // branch is unreachable in practice; it is named because an unbound catch is only reviewable
+            // when the set it swallows is written down.
             throw new RecoverySecretAlreadyExists();
         }
     }

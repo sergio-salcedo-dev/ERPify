@@ -57,6 +57,8 @@ final readonly class RecordRecoverySecretAuditBestEffort
 
     private const string REVOKED_ACTION = 'RECOVERY_SECRET_REVOKED';
 
+    private const string REDEMPTION_COMPENSATED_ACTION = 'RECOVERY_SECRET_REDEMPTION_COMPENSATED';
+
     public function __construct(
         private AuditLogger $auditLogger,
         private LoggerInterface $logger,
@@ -76,6 +78,18 @@ final readonly class RecordRecoverySecretAuditBestEffort
     public function recordRevoked(string $userId): void
     {
         $this->record(self::REVOKED_ACTION, $userId);
+    }
+
+    /**
+     * A redemption authenticated and then could not consume, so its sessions were revoked to stop the refusal
+     * being answered over live access. It is the only durable trace of that interleaving: the consumption
+     * never persisted, so no `RECOVERY_SECRET_REDEEMED` row is written and the domain event died with the
+     * rolled-back transaction. Without it an admitted-then-revoked session appears in *Active sessions* with
+     * nothing anywhere attributing it to the recovery channel.
+     */
+    public function recordRedemptionCompensated(string $userId): void
+    {
+        $this->record(self::REDEMPTION_COMPENSATED_ACTION, $userId);
     }
 
     /**

@@ -59,26 +59,33 @@ use SensitiveParameter;
  *
  * **"Single use" here means at most one PERSISTED CONSUMPTION, not at most one authentication.** Steps 3 and 4
  * are not one atomic act — `RecoverySecret`, `User.lockout` and the session are three state machines and no
- * transaction spans them — so a redemption that loses the race at step 4 has already produced a session and
- * then meets the opaque refusal. That is accepted, and it is the safe direction: the alternative orders the
- * consumption first and strands the owner whenever the session mint fails.
+ * transaction spans them — so a redemption can produce a session and still fail to consume. Ordering the
+ * consumption first is the alternative, and it is worse: it strands the owner whenever the session mint fails.
  *
- * If step 4 fails after step 3 succeeded, the session is NOT rolled back — the owner has recovered access,
- * which is the objective — but the endpoint does not answer 204, and the secret stays live and re-redeemable.
- * The partial state is RETRYABLE rather than idempotent: a second redemption completes the persisted cleanup
- * without anyone having to mint a new secret.
+ * What happens to that session depends on WHY step 4 failed, and the split is the security contract:
+ *
+ *   - **Step 4 raises** — a status wall, or the opaque refusal because the row was retired under the lock.
+ *     Both mean another actor decided about this identity or this credential while the login was in flight, so
+ *     the session is COMPENSATED away and a compensation row is written. The refusal the caller receives is
+ *     then true of their access and not only of their consumption.
+ *   - **Step 4 dies for an infrastructure reason** — the transaction never reaches a verdict. The session is
+ *     NOT rolled back: the owner has recovered access, which is the objective, and there is no second actor
+ *     whose decision would be defeated by keeping it. The endpoint does not answer 204, and the secret stays
+ *     live and re-redeemable. That partial state is RETRYABLE rather than idempotent — a second redemption
+ *     completes the persisted cleanup without anyone having to mint a new secret.
  *
  * Redemption deliberately does NOT rotate the secret into the response. A lost response would otherwise spend
  * the only secret of a customer with no shell, and it would turn a one-off theft into permanent undetectable
  * access — destroying the one detection property this design has, which is that the owner sees their secret
  * disappear. The fixed point is: recover, then mint again explicitly.
  *
- * Its object coupling sits one above the default threshold. More than half of that number is the failure
- * vocabulary this flow declares — the opaque refusal and the two status walls — which is a published
- * contract rather than a hidden dependency; the rest is one collaborator per step of a single atomic act:
+ * Its object coupling is 13, which is the default threshold rather than one past it — PHPMD asks for fewer
+ * than 13, so the rule fires on equality. Three of the thirteen are the failure vocabulary this flow
+ * declares — the opaque refusal and the two status walls — which is a published contract rather than a
+ * hidden dependency. The rest is one collaborator per step of a single act that has to be described as one:
  * two repositories, the audit projection, the compensating session revoke, the event bus, the transaction
- * seam and the clock. The compensation is what pushed it over, and collapsing any of them to satisfy the
- * metric would hide a step this flow's correctness is stated in terms of.
+ * seam and the clock. Collapsing any of them to satisfy the metric would hide a step this flow's
+ * correctness is stated in terms of.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
@@ -124,23 +131,41 @@ final readonly class RedeemRecoverySecret
 
         try {
             $this->consume($userId, $selector, $secret, $now);
-        } catch (AccountDeactivated|AccountSuspended $wall) {
-            // **The session above is already committed, and the wall below cannot undo it.** The status
-            // re-read under the lock refuses the CONSUMPTION; it does not refuse the session, because
-            // `Security::login()` has already run its listeners — the `iam_session` row is inserted and
-            // committed by one of them, and the native cookie is set. So an administrator suspending this
-            // identity while the login was in flight would otherwise get a 403 body over a live, admitted
-            // session, and the admission gate reads the session row and never the identity's status, so it
-            // would keep working until it expired. Suspension is the containment against a leaked recovery
-            // secret; that must not be the race an attacker retries until it lands.
+        } catch (AccountDeactivated|AccountSuspended|InvalidRecoverySecret $failure) {
+            // **The session above is already committed, and nothing below can undo it.** `Security::login()`
+            // has already run its listeners — the `iam_session` row is inserted and committed by one of them,
+            // and the native cookie is set — while the admission gate reads that row and never the identity's
+            // status nor this table. So any refusal raised under the lock would otherwise be a body returned
+            // over a live, admitted session that keeps working until it expires. Compensating is the only
+            // close available: the two writes are in different transactions and no ordering makes them one.
             //
-            // Compensating is the only close available: the two writes are in different transactions and no
-            // ordering makes them one, so what remains is to undo the session once the wall is known. It runs
-            // best-effort — a revoke that fails may not turn the 403 into a 500 — and it revokes EVERY
-            // session of a walled identity, which is what the suspension itself would have done.
+            // The catch covers BOTH refusals the locked pass can raise, and the second one is the reason this
+            // is a containment path rather than a status check. A status wall means an administrator suspended
+            // the identity mid-flight; the opaque refusal means the row was retired mid-flight, and the caller
+            // cannot tell a rival redemption from the owner REVOKING the secret — `findBySelectorForUpdate`
+            // answers `null` to both. Revocation is the act by which an owner cuts a leaked recovery edge, so
+            // treating it like a suspension is what keeps `POST /me/recovery-secret/revoke` from being a race
+            // an attacker retries until it lands. Answering the refusal while leaving the session standing
+            // would break the promise the revoke surface makes in as many words: the secret stops working
+            // immediately.
+            //
+            // The cost is paid deliberately and it is small: a redemption that loses to a RIVAL redemption
+            // also loses its session, so the winner re-authenticates. That party has a password path — the
+            // winner's own `clearLockout()` has committed by then — while whoever holds only the secret has
+            // none, which is the asymmetry that makes the coarse revoke safe. Distinguishing the two cases
+            // would need the session's own identifier, which `Security::login()` never hands back.
+            //
+            // Best-effort, so a failing revoke may not turn a 400 or a 403 into a 500, and it revokes EVERY
+            // session of the identity, which is what a suspension or a revocation would each have done.
             $this->revokeSessions->revoke($userId);
 
-            throw $wall;
+            // The one durable trace this path leaves. The consumption never persisted, so `recordRedeemed()`
+            // below is unreachable and the domain event died with the rolled-back transaction: without this
+            // row an admitted-then-revoked session is invisible to the trail, which is the half of the defect
+            // that survives even once the containment is closed.
+            $this->audit->recordRedemptionCompensated($userId);
+
+            throw $failure;
         }
 
         // Post-commit, so the row can only describe a consumption that actually persisted — never a mere

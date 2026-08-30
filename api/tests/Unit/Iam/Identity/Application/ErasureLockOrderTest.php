@@ -38,15 +38,17 @@ use PHPUnit\Framework\TestCase;
  * either use case because it is one claim about both and a failure has to say so.
  *
  * The chain is the only path that reaches all four tables, and it is therefore the only path that can be
- * measured against the six that reach two of them. Those six already agree with each other:
+ * measured against the seven that reach two of them. Those seven already agree with each other:
  * {@see \Erpify\Iam\Invitation\Application\AcceptInvitation} and
  * {@see \Erpify\Iam\Invitation\Application\RevokeInvitation} take `iam_invitation` before `identity_user`;
  * {@see \Erpify\Iam\Identity\Application\RequestPasswordReset} and {@see CompletePasswordReset} take
  * `identity_user` before `identity_password_reset_token`;
- * {@see \Erpify\Iam\Identity\Application\MintRecoverySecret} and
- * {@see \Erpify\Iam\Identity\Application\RedeemRecoverySecret} take `identity_user` before
- * `identity_recovery_secret`. Two of them close a cycle with the chain's opposite order, and a cycle in a
- * wait-for graph is `40P01`.
+ * {@see \Erpify\Iam\Identity\Application\MintRecoverySecret},
+ * {@see \Erpify\Iam\Identity\Application\RedeemRecoverySecret} and
+ * {@see \Erpify\Iam\Identity\Application\RevokeRecoverySecret} take `identity_user` before
+ * `identity_recovery_secret` — the third because proving the current password reads the user row, which is
+ * what made revocation a two-lock path. Two of them close a cycle with the chain's opposite order, and a
+ * cycle in a wait-for graph is `40P01`.
  *
  * **The chain is the member that conforms, and the rule is not a probability estimate.** The order of a shared
  * pair is fixed by whichever path cannot move — and the two cycles pin their order for different reasons,

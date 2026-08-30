@@ -167,26 +167,39 @@ Minting (`POST /api/v1/me/recovery-secret`) is authenticated and grades per iden
 
 | Mint outcome | Wire result | Why |
 |--------------|-------------|-----|
+| Identity not `ACTIVE` | **403 `account-suspended`** / **`account-deactivated`** | `User::ensureActive()`, weighed immediately after the row lock and BEFORE the credential proof, so a walled identity pays no KDF — the same wall, the same position and the same vocabulary as the change surface below. Reachable from a live session: the admission gate reads the `iam_session` row and never the identity's status, so a suspension landing mid-session still meets an authenticated caller. |
+| The identity resolves to no row | **404 `user-not-found`** | [`UserNotFound`](../api/src/Iam/Identity/Domain/Exception/UserNotFound.php), reusing the `NotFound` marker. Narrow but real: the id is the caller's own and arrives from an admitted session, so this answers the window in which the identity is hard-deleted — which the GDPR erasure does — between the gate and the locked read. |
 | Wrong current password | **403 `invalid-current-password`** | Reuses the change surface's exception and its shared [`ProveCurrentPassword`](../api/src/Iam/Identity/Application/ProveCurrentPassword.php), so an unreadable stored credential answers as a wrong one on both routes rather than as a 500. It fires **before** the existence of a secret is consulted: answering the 409 to somebody who has not re-proved the credential would turn a stolen session into an oracle. |
 | A secret already exists | **409 `recovery-secret-already-exists`** | [`RecoverySecretAlreadyExists`](../api/src/Iam/Identity/Domain/Exception/RecoverySecretAlreadyExists.php), a `Conflict` with a `type()` of its own so the client can offer revoke-then-mint instead of reading a generic `conflict`. It answers the checked case and the RACED one alike — the unique index on `user_id` is translated into this same exception, so two concurrent mints produce one 201 and one 409 rather than a 500 for whichever lost. |
 | Budget spent | **429 `rate-limited`** | The per-identity credential-proof budget, SHARED with `POST /me/password` and `POST /me/recovery-secret/revoke`. It refuses out loud because all three routes are reachable only through an established session, so there is no existence left to disclose. |
 
-Revocation (`POST /api/v1/me/recovery-secret/revoke`) re-proves the current password and grades exactly like
-minting — 403 `invalid-current-password` on a wrong one, 429 `rate-limited` on the shared budget — and
-answers **204** whether or not a row was there. **It is a POST rather than a `DELETE` carrying a body**
-because the password must travel in a body (every request header but `Referer` reaches the container access
-log in clear) and the PWA's `HttpClient` port declares no body on `delete`; widening a shared port for one
-caller is the abstraction this repo's Rule of Three refuses. The proof fires **before** the row's existence
-is consulted, for the reason minting gives: grading on existence would hand a stolen session an oracle, and
-would make the response shape disclose what the idempotent 204 exists to hide. Why it is gated at all —
-destroying this credential removes the account's last recovery edge irreversibly — is
-[`docs/adr/administrative-recovery-channel.md`](adr/administrative-recovery-channel.md) D8.
+Revocation (`POST /api/v1/me/recovery-secret/revoke`) re-proves the current password and answers **204**
+whether or not a row was there. It shares minting's proof and minting's budget, and **diverges on the status
+wall**:
+
+| Revoke outcome | Wire result | Why |
+|----------------|-------------|-----|
+| Wrong current password | **403 `invalid-current-password`** | The same shared [`ProveCurrentPassword`](../api/src/Iam/Identity/Application/ProveCurrentPassword.php), fired **before** the row's existence is consulted: grading on existence would hand a stolen session an oracle, and would make the response shape disclose what the idempotent 204 exists to hide. |
+| The identity resolves to no row | **404 `user-not-found`** | The same `UserNotFound` and the same narrow window as minting — the locked read of the identity precedes the proof here too. |
+| Budget spent | **429 `rate-limited`** | The same per-identity credential-proof budget as minting and `POST /me/password`. |
+| Identity not `ACTIVE` | **204**, and the row is destroyed | **No status wall, unlike minting.** Walling would preserve the secret of a suspended identity who cannot redeem it anyway, which protects nothing while taking away the one act that reliably ends a credential its owner believes is compromised. |
+
+**It is a POST rather than a `DELETE` carrying a body** because the password must travel in a body (every
+request header but `Referer` reaches the container access log in clear) and the PWA's `HttpClient` port
+declares no body on `delete`; widening a shared port for one caller is the abstraction this repo's Rule of
+Three refuses. Why it is gated at all — destroying this credential removes the account's last recovery edge
+irreversibly — is [`docs/adr/administrative-recovery-channel.md`](adr/administrative-recovery-channel.md) D8.
+
+A malformed body on any of the three — a blank or oversized `currentPassword` on the mint and revoke
+surfaces, a blank or oversized `secret` on the redemption, or **any member the payload does not declare**
+(`#[StrictRequestPayload]`) — is the standard **422 `validation-failed`** with `violations[]` naming the
+offending field, raised at mapping before the use case runs.
 
 No new marker interface joins the contract — the opaque wall reuses `InvalidInput`, the status walls reuse
-`Forbidden`, the duplicate reuses `Conflict` — so the drift gate does not fire and this table is the manual
-NFR26 record. Exactly **one** new `type` is minted across all three surfaces,
-`recovery-secret-already-exists`; every other value here is an existing one reused, `invalid-token`
-deliberately so.
+`Forbidden`, the duplicate reuses `Conflict`, the absent identity reuses `NotFound` — so the drift gate does
+not fire and these three tables are the manual NFR26 record. Exactly **one** new `type` is minted across all
+three surfaces, `recovery-secret-already-exists`; every other value here is an existing one reused,
+`invalid-token` deliberately so.
 
 ### Authenticated password change (`POST /api/v1/me/password`)
 
