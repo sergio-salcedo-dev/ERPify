@@ -75,7 +75,7 @@ final readonly class RevokeMyRecoverySecretController
     public function __invoke(
         #[CurrentUser]
         SecurityUser $user,
-        #[StrictRequestPayload(acceptFormat: ['json'])]
+        #[StrictRequestPayload]
         RevokeRecoverySecretRequest $request,
     ): Response {
         $identityId = $user->id() ?? throw new LogicException('An authenticated identity must have an id.');

@@ -58,7 +58,7 @@ final readonly class MintRecoverySecretController
     public function __invoke(
         #[CurrentUser]
         SecurityUser $user,
-        #[StrictRequestPayload(acceptFormat: ['json'])]
+        #[StrictRequestPayload]
         MintRecoverySecretRequest $request,
     ): Response {
         $identityId = $user->id() ?? throw new LogicException('An authenticated identity must have an id.');

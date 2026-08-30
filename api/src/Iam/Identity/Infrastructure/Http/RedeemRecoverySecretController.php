@@ -70,7 +70,7 @@ final readonly class RedeemRecoverySecretController
     }
 
     public function __invoke(
-        #[StrictRequestPayload(acceptFormat: ['json'])]
+        #[StrictRequestPayload]
         RedeemRecoverySecretRequest $request,
     ): Response {
         // Spent on the selector half alone, before the use case resolves anything, and case-folded so one
