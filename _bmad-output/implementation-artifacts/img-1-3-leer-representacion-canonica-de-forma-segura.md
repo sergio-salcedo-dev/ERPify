@@ -4,7 +4,7 @@ baseline_commit: 202767ab7bfc865c5611774b027ec2a29b7ada84
 
 # Story 1.3: Leer la representación canónica de una imagen de forma segura
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -296,6 +296,75 @@ están en la tabla, y los seis que sí lo cambian están arriba.
 implementado — no hay código todavía. Un pase sobre el código es obligatorio antes de que la historia llegue a
 `done`, y el precedente de img-1-2 dice por qué: allí el tercer pase, ya sobre el código y con todas las
 puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no podían ver.
+
+### Pase 3 — externo, sobre el CÓDIGO, tres lecturas paralelas (2026-08-30)
+
+**En curso.** La capa de bordes ha entregado; las otras dos (adversarial sin spec, auditoría de aceptación)
+siguen corriendo y sus hallazgos se añaden aquí antes de abrir la PR. Lo de abajo es lo ya entregado y
+re-verificado a mano contra el árbol por la sesión conductora, porque la severidad de una capa es orientativa.
+
+**GRAVE — C-1: el presupuesto de servido puede dejar una imagen almacenable inservible PARA SIEMPRE, y la
+medición lo confirma peor de lo que el hallazgo suponía.** `erpify.images.max_served_bytes` (20 MiB) sólo se
+comprueba en la ruta de LECTURA; nada en la de escritura lo relaciona con nada — `ImagePreflightGuard` acota
+la ENTRADA, `max_output_dimension` acota los LADOS, e `Image::__construct` sólo exige `byteSize > 0`. El
+hallazgo lo planteaba como hipótesis sobre una PNG de paleta que se expande a truecolor; **medido contra el
+worker real**: una PNG de paleta de 4472×4472 que pesa **8,85 MiB** produce un objeto canónico de **49,23
+MiB** — 2,5× el presupuesto. `UploadImage` la almacenaría sin objeción y toda lectura posterior respondería
+`500 unhandled-exception` para siempre, indistinguible de un despliegue roto. Es una condición de ingesta
+respondida en la lectura. Latente hoy (no hay endpoint de subida en producción, medido: `UploadImage` no
+tiene llamante de producción), pero la crea esta misma historia al introducir el presupuesto.
+
+**SERIO — C-2: el tokenizador del scan de NFR6 se traga tres formas enteras, así que el gate queda ciego en
+silencio.** Medido ejecutando las clases reales sobre 23 formas; 19 se leen bien. Las tres que no:
+(a) un retorno por referencia — `public function &ref(string $path): SplFileInfo` — hace que `methodNameAt()`
+no encuentre un `T_STRING` y el método **desaparece de los dos ejes**, así que un `SplFileInfo` Y un `$path`
+pasan; (b) un nombre semi-reservado (`list`, `print`, `default`, `array`, `match`, `fn`, …) lexa como su
+propio keyword y produce la misma desaparición total; (c) un tipo DNF en un parámetro
+(`(SplFileInfo&Countable)|string $x`) deja sus miembros a profundidad 2 y el filtro `1 === $depth` los tira,
+así que `SplFileInfo` se pierde. Ninguna de las tres existe hoy en `src/Shared/Images`, así que es ceguera
+del gate y no una violación viva — y la guarda de no-vacuidad no la ve, porque pierde un método de un
+directorio que sigue rindiendo otros.
+
+**SERIO — C-3: los dos parsers de `ImagePixelBudgetGateTest` dan verde sobre despliegues equivocados.**
+Cuatro formas medidas: una clave DUPLICADA la lee el gate por la primera y el runtime por la última (medido
+en ambas direcciones — el gate lee 1 mientras el contenedor usa 40000000, y lee 256M mientras PHP usa 64M);
+`20_000_000` y `2e7` son enteros válidos para el parser YAML de Symfony y el `(\d+)` del gate lee **20** y
+**2**, pasando además la guarda `assertGreaterThan(0)` escrita para impedir exactamente eso; `256MB` son
+**256 bytes** para PHP (que cae de vuelta a 128M) y 256 MiB para el gate; y `memory_limit = -1` hace que un
+test del gate afirme «no está declarado» mientras su hermano del mismo fichero afirma que sí. Además, los
+tres ini aterrizan en el mismo directorio escaneado alfabéticamente, así que un `memory_limit` en
+`20-app.dev.ini` o `20-app.prod.ini` ganaría en runtime y es invisible al gate.
+
+**SERIO — C-4: la respuesta autenticada es cacheable una hora sin `Vary`.** Medido: nada en `src/` ni en
+`config/` emite `Vary` en ningún sitio. Con `private, max-age=3600, immutable`, durante hasta una hora tras
+una lectura con éxito el navegador sirve esos bytes **sin que ninguna petición llegue al servidor** — también
+después de cerrar sesión. El residual seis de §7 razona sobre la copia cacheada sobreviviendo a la
+ERASURE; no considera que sobreviva a la SESIÓN, que es otra frontera de confianza y la que `Vary: Cookie`
+cierra. Es el mismo argumento con el que el docblock rechaza `max-age=31536000`, aplicado a una frontera que
+el docblock no alcanza.
+
+**MENOR — C-5: `isCallerChosenLocation()` matchea subcadenas**, así que `$security` contiene `uri`, `$curl`
+contiene `url` y `$monkey` contiene `key`: un parámetro correctamente nombrado enrojece el gate. Falla en la
+dirección ruidosa, no en la silenciosa.
+
+**MENOR — C-6: una premisa rancia escrita por esta misma historia.** El comentario de `max_served_bytes` en
+`config/services.yaml` dice «the container runs at `memory_limit = 128M`» cuando el mismo cambio lo pone en
+`256M` (verificado en vivo: `php -i` reporta 256M). Es justo la frase que sostiene la cifra de 20 MB.
+
+**MENOR — C-7: la mitad CORS del cambio no compra nada hoy, y el comentario sugiere lo contrario.**
+`allow_credentials` sigue en `false` y la autenticación es cookie de sesión, así que un `fetch()` de origen
+cruzado llega sin sesión y recibe 401 tanto si `If-None-Match` sobrevive al preflight como si no. La AC 24
+manda el cambio y el cambio se queda; lo que hay que corregir es la afirmación de que hace la ruta usable.
+
+**MENOR — C-8: la frontera `>` del presupuesto no la ejercita nadie.** El test usa `maxServedBytes = 1`
+contra `byteSize = 19`, así que `byteSize === maxServedBytes` y `=== maxServedBytes + 1` quedan sin pinchar y
+un desliz `>` → `>=` es invisible.
+
+**Verificado como correcto por esta capa, y vale la pena decirlo:** el eje del `ImageId` completo (vacío,
+`%2F`, `..`, `%00`, URN, llaves, mayúsculas, newline final), el parseo de `If-None-Match` en todas sus formas
+hostiles —incluida una cabecera de 1 MiB, que no es cuadrática porque el JIT de PCRE está activo—, las doce
+combinaciones de estado × condicional (idénticas con y sin `If-None-Match`), el ciclo de vida de la fixture
+Behat, y `HEAD`/`Range`/`If-Modified-Since`/`If-Match`/`OPTIONS`.
 
 ## Acceptance Criteria
 
@@ -643,21 +712,21 @@ menos dos, porque el registro `error` que dispara el handler bufferizado está e
 desde aquí; y el canal **no lo escucha nadie**, así que tampoco hay alarma que preservar. El punto de control
 correcto es el aislamiento del sumidero, que es infraestructura transversal.
 
-- [ ] **Escribir el ADR** si no está ya en la rama, y comprobar que `docs/index.md` lo lista.
-- [ ] **Enmendar la AC del épico** (`epics-images.md`, el bloque de la señal de lectura) para que apunte al
+- [x] **Escribir el ADR** si no está ya en la rama, y comprobar que `docs/index.md` lo lista.
+- [x] **Enmendar la AC del épico** (`epics-images.md`, el bloque de la señal de lectura) para que apunte al
       ADR. Un requisito escrito no se reinterpreta desde la historia que lo incumple.
-- [ ] **Medir el coste POR EVENTO**, que es lo único obtenible: bytes de una línea `image_storage_failure`
+- [x] **Medir el coste POR EVENTO**, que es lo único obtenible: bytes de una línea `image_storage_failure`
       con el formatter de prod, bytes del registro `error` correspondiente, y bytes de una línea representativa
       del access log de Caddy. De ahí, la aritmética de contribución relativa bajo una **tasa hipotética** de
       P2/P3.
-- [ ] **Declarar explícitamente lo que esa medición NO es**: no mide frecuencia real ni comportamiento de
+- [x] **Declarar explícitamente lo que esa medición NO es**: no mide frecuencia real ni comportamiento de
       producción, porque **no hay despliegue de producción** (`PRODUCTION_SECURITY_CHECKLIST.md:1198,1222,1458`,
       una de ellas un *"Accepted 2026-08-18 (Sergio)"*). Es un coste unitario, nunca una observación de
       exposición. Un número presentado como lo segundo sería exactamente el tipo de afirmación que el pase
       adversarial de esta historia existió para cazar.
-- [ ] **Cero código**: no hay parámetro de muestreo, no hay contador, `emit()` no se toca y `delete()` menos.
-- [ ] El residual (e) de la AC 22 va a §7 en Task 13.
-- [ ] **Hallazgo en tránsito, nombrado y no arreglado aquí**: el comentario del bloque `log` de
+- [x] **Cero código**: no hay parámetro de muestreo, no hay contador, `emit()` no se toca y `delete()` menos.
+- [x] El residual (e) de la AC 22 va a §7 en Task 13.
+- [x] **Hallazgo en tránsito, nombrado y no arreglado aquí**: el comentario del bloque `log` de
       `api/frankenphp/Caddyfile` afirma que *"no compose file declares a `logging:` driver, so it is the default
       json-file driver with neither rotation nor TTL"*. Ya es **falso**: `x-logging` declara `10m × 5`. El
       problema de aislamiento sigue siendo válido con rotación —la expulsión es por volumen, no por
@@ -666,73 +735,73 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
 
 ### Task 1 — Montar el módulo en el router (AC 18, AC 21)
 
-- [ ] Añadir a `api/config/routes.yaml` un recurso de atributos que cargue **el directorio del controlador**
+- [x] Añadir a `api/config/routes.yaml` un recurso de atributos que cargue **el directorio del controlador**
       —no `../src/Shared/` entero, para que montar el router sobre el shared kernel no exponga cualquier futuro
       `#[Route]` de otro módulo compartido—, con `prefix: /api/v1` y `defaults: {_format: json}`. La forma más
       cercana es `api_v1_iam_session`. El directorio es **`src/Shared/Images/Infrastructure/Controller/`**
       (decidido; ver Dev Notes → *Directorio del controlador*).
-- [ ] `#[Route('/images/{imageId}', name: 'shared_image_get', methods: ['GET'])]` — **sin `requirements`**
+- [x] `#[Route('/images/{imageId}', name: 'shared_image_get', methods: ['GET'])]` — **sin `requirements`**
       (AC 21), **sin `_audit_resource_type` ni `_audit_canonical`** (AC 20), **sin `#[IsGranted]`** (AC 18).
-- [ ] Verificar el montaje real: `make sf c='debug:router' | grep images`. Y `make php.lint.yaml` sobre la
+- [x] Verificar el montaje real: `make sf c='debug:router' | grep images`. Y `make php.lint.yaml` sobre la
       config — **córrelo a mano**, porque ese target **no** es miembro de `php.quality` ni de
       `php.quality.dry-run`, así que CI no lo cubre.
-- [ ] Falsificar: borra el recurso de `routes.yaml` y comprueba que la feature Behat se pone **roja**.
+- [x] Falsificar: borra el recurso de `routes.yaml` y comprueba que la feature Behat se pone **roja**.
 
 ### Task 2 — Fijar el nombre de la ruta y pinchar la rama de auditoría (AC 19, AC 20)
 
-- [ ] Nombre `shared_image_get`. **Es un requisito, no un estilo**: es lo único que hace verdadera la decisión
+- [x] Nombre `shared_image_get`. **Es un requisito, no un estilo**: es lo único que hace verdadera la decisión
       de cero auditoría (`AuditPolicy.php:60-68`). El fósil `shared_stored_object_get` confirma que la
       exclusión se escribió para esta familia.
-- [ ] Añadir un caso `shared_` al data provider de rutas no auditables de `AuditPolicyTest` (hoy `:82-87`,
+- [x] Añadir un caso `shared_` al data provider de rutas no auditables de `AuditPolicyTest` (hoy `:82-87`,
       seis casos, ninguno). Falsifica borrando `AuditPolicy.php:66` y comprobando que el caso nuevo se pone
       rojo — hoy borrarla deja todo verde.
-- [ ] Prueba de extremo a extremo de que un `200` no deja filas. **No hace falta step nuevo**: el vocabulario
+- [x] Prueba de extremo a extremo de que un `200` no deja filas. **No hace falta step nuevo**: el vocabulario
       ya tiene `I execute the SQL query :query` y el contador de registros del resultado, ambos `used`.
       Cuenta antes y después.
-- [ ] Documentar en `api/docs/adding-endpoints.md` que el nombre de ruta gobierna la auditoría genérica, y
+- [x] Documentar en `api/docs/adding-endpoints.md` que el nombre de ruta gobierna la auditoría genérica, y
       añadir `Shared` a una tabla de convención que hoy sólo contempla "office".
 
 ### Task 3 — El caso de uso de lectura en `Application/` (AC 4, 5, 7, 12)
 
-- [ ] Clase nueva en `api/src/Shared/Images/Application/`. Por `docs/rules/cqrs-naming.md:88` un caso de uso de
+- [x] Clase nueva en `api/src/Shared/Images/Application/`. Por `docs/rules/cqrs-naming.md:88` un caso de uso de
       lectura es un `Finder`; propuesta `CanonicalImageFinder`. **No** dejes que el controlador hable con
       `ImageRepository` y `ImageStorage` directamente: además de saltarse la capa, dejaría el scan de NFR6 sin
       superficie que vigilar.
-- [ ] Orquestación: `findById()` → si `null`, ausencia (404) → `read()` → **verificar el digest contra
+- [x] Orquestación: `findById()` → si `null`, ausencia (404) → `read()` → **verificar el digest contra
       `Image::digest()`** → devolver. El repositorio ya garantiza que `null` es fila confirmadamente ausente y
       que un fallo de BD lanza.
-- [ ] La verificación es una línea: `hash('sha256', $bytes)` comparado con `Image::digest()`. **No reutilices
+- [x] La verificación es una línea: `hash('sha256', $bytes)` comparado con `Image::digest()`. **No reutilices
       `CanonicalImage` para esto**: medido, no tiene guardas de constructor (`:22-30`) —así que "léelas" no
       significaría nada— y construirlo obligaría a fabricar `mediaType`/`width`/`height` desde la fila para
       derivar algo que ya es una línea. Regla de Tres: no hay tercer caso.
-- [ ] Nota al copiar el patrón: `verifyStoredBytes()` justifica su `!==` sobre `hash_equals` con *"no hay parte
+- [x] Nota al copiar el patrón: `verifyStoredBytes()` justifica su `!==` sobre `hash_equals` con *"no hay parte
       remota ni oráculo de tiempo"*. En la ruta de lectura **sí hay parte remota**. La conclusión sigue
       valiendo (ambos operandos son del servidor, nada es adivinable), pero la razón escrita no se traslada —
       si copias el comentario, reescribe el argumento.
-- [ ] La firma pública no acepta ni devuelve path, URL, storage key ni tipo de transporte.
+- [x] La firma pública no acepta ni devuelve path, URL, storage key ni tipo de transporte.
 
 ### Task 4 — La traducción de fallo a status (AC 3, 5, 6)
 
-- [ ] **Mina una excepción nueva del módulo que extienda
+- [x] **Mina una excepción nueva del módulo que extienda
       `Erpify\Shared\ErrorContract\Domain\Exception\DomainException`** e implemente el marcador. Es obligatorio,
       no estilístico: `ProblemDetailsFactory` sólo consulta marcadores dentro del brazo
       `instanceof DomainException` (`:266`/`:351-357`/`:494`), así que añadir el marcador a
       `ImageStorageUnavailable` (que extiende `RuntimeException`) produciría **500**, no 503.
-- [ ] Tabla cerrada, cada rama alcanzable en un test:
+- [x] Tabla cerrada, cada rama alcanzable en un test:
       fila ausente → `404` · `ImageBytesNotFound` → `404` · desajuste de digest → `500` sin marcador ·
       `ImageStorageUnavailable` → `503` (`ServiceUnavailable`) · `ImageStorageFailed` → `500` sin marcador.
-- [ ] **No toques la superficie del puerto.** La traducción vive encima, en el borde
+- [x] **No toques la superficie del puerto.** La traducción vive encima, en el borde
       `Application`/`Infrastructure`; las tres excepciones de 1.2 se quedan como están.
-- [ ] Captura por **especificidad decreciente**; nunca `catch (\Throwable)`; nunca capturar primero la interfaz
+- [x] Captura por **especificidad decreciente**; nunca `catch (\Throwable)`; nunca capturar primero la interfaz
       `ImageStorageException` (deja ramas inalcanzables).
-- [ ] **Ningún `new JsonResponse(...)` ni `new Response('...', 404)` en el controlador.** Y que quede claro
+- [x] **Ningún `new JsonResponse(...)` ni `new Response('...', 404)` en el controlador.** Y que quede claro
       qué lo sostiene: `ErrorContractGateTest` tiene **dos mitades** —una barre **todo** `api/src` buscando
       `new JsonResponse(` **dentro de un `catch`** (`:52`, `:333-356`), y la otra, la de citación en la doc,
       está acotada a `MARKER_DIRECTORY` (`:94`)—. Un `new Response('…', 404)` fuera de un `catch` **no lo ve
       ninguna de las dos**: aquí manda la revisión, no un gate.
-- [ ] El texto de cualquier excepción nueva no lleva `ImageId`, digest ni storage key: llega a
+- [x] El texto de cualquier excepción nueva no lleva `ImageId`, digest ni storage key: llega a
       `messenger_messages` vía `ErrorDetailsStamp` y a Sentry.
-- [ ] **Los `type` se heredan del marcador** (`not-found`, `service-unavailable`): **no** se acuña
+- [x] **Los `type` se heredan del marcador** (`not-found`, `service-unavailable`): **no** se acuña
       `image-not-found`. La razón no es "no hay cliente" —el contrato de wire se estabiliza antes de que lo
       haya— sino que **no existe todavía una distinción de dominio** que justifique separarlo de un `404`
       cualquiera en esta ruta; el día que un consumidor la necesite, acuñarlo es una evolución explícita. Que
@@ -743,14 +812,14 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
 
 ### Task 5 — Observabilidad: la dimensión de integridad y la cota (AC 8, AC 9)
 
-- [ ] **No añadas un caso a `StorageFailureCategory`.** Medido: `StorageFailureVocabularyTest:50-54` itera
+- [x] **No añadas un caso a `StorageFailureCategory`.** Medido: `StorageFailureVocabularyTest:50-54` itera
       `cases()` exigiendo una clase productora del puerto por caso (más `assertCount()` en `:48`), así que el
       caso nuevo se pone rojo salvo que mines una cuarta `ImageStorageException` — y eso contradice el
       docblock del propio enum (`:13-15`: *"a verdict on the SUBSTRATE, and says nothing about the bytes at
       all"*). La integridad no es un veredicto sobre el substrato.
-- [ ] Emite la integridad **desde donde vive la comparación** (el finder de Task 3), con su propia dimensión, y
+- [x] Emite la integridad **desde donde vive la comparación** (el finder de Task 3), con su propia dimensión, y
       mantén cerrado y disjunto el universo de valores frente a los dos enums existentes.
-- [ ] **Eso trae dos consecuencias que hay que escribir, no descubrir**: (1) `BestEffortReportChannelGateTest`
+- [x] **Eso trae dos consecuencias que hay que escribir, no descubrir**: (1) `BestEffortReportChannelGateTest`
       deriva su población de cualquier clase de `api/src` con `LoggerInterface` + `$this->logger->`, así que el
       finder entra en `REPORTERS` automáticamente y queda obligado al canal `observability`; (2) deptrac
       **refusa** `#[Autowire]` en `Shared.Application` (`deptrac.yaml:302-306` admite sólo `Vendor.Psr`,
@@ -758,87 +827,87 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
       atributo. Medidos: los diez `#[Autowire(service: 'monolog.logger.observability')]` del árbol están todos
       en `Infrastructure/`. Ojo al tercer orden que el propio gate documenta: un bloque explícito colocado
       **encima** del prototipo `Erpify\` revierte la clase al canal autowired en silencio.
-- [ ] Implementar la cota decidida en Task 0 **conservando la forma que los gates exigen**: dos llamadas por
+- [x] Implementar la cota decidida en Task 0 **conservando la forma que los gates exigen**: dos llamadas por
       nivel (`->info()` / `->warning()`), nunca `log($level, …)`; el `try { … } catch (Throwable) {}` se queda.
-- [ ] La ausencia en `delete()` **conserva `info`**. La cota es sólo del camino de lectura.
-- [ ] Test de no-fuga **por valor**: serializa el contexto y busca `ImageId`, digest y key como **subcadena**.
+- [x] La ausencia en `delete()` **conserva `info`**. La cota es sólo del camino de lectura.
+- [x] Test de no-fuga **por valor**: serializa el contexto y busca `ImageId`, digest y key como **subcadena**.
       Un test por nombre de clave pasa sobre `['path' => 'images/ab/cd/01H9…']`.
-- [ ] Falsifica la cota: quítala y comprueba el rojo.
+- [x] Falsifica la cota: quítala y comprueba el rojo.
 
 ### Task 6 — Cache condicional: rescatar la política, no el helper (AC 11, AC 13)
 
-- [ ] Rescatar **`isNotModified()`** de `git show 08f8199^:api/src/Shared/Http/Infrastructure/ContentAddressedHttpCache.php`
+- [x] Rescatar **`isNotModified()`** de `git show 08f8199^:api/src/Shared/Http/Infrastructure/ContentAddressedHttpCache.php`
       (43 líneas) y su test (71). Es la política de `If-None-Match`: `*`, fuerte, débil, sin comillas.
-- [ ] **NO rescatar `applyHeaders()`**: llama `setPublic()` y fija `public, …`. Esta ruta es autenticada.
-- [ ] **Renombrar al integrarlo** (p. ej. `HttpCacheValidator`): esta épica no adopta content-addressing.
-- [ ] `ETag` **fuerte**. Para afirmar la fuerza en Behat usa `the header :name should match :regex` — el step
+- [x] **NO rescatar `applyHeaders()`**: llama `setPublic()` y fija `public, …`. Esta ruta es autenticada.
+- [x] **Renombrar al integrarlo** (p. ej. `HttpCacheValidator`): esta épica no adopta content-addressing.
+- [x] `ETag` **fuerte**. Para afirmar la fuerza en Behat usa `the header :name should match :regex` — el step
       `should be equal to` compara en minúsculas por ambos lados y **no distingue `W/"abc"` de `w/"ABC"`**.
-- [ ] **Construye el `304` sobre la respuesta que ya lleva `ETag` y `Cache-Control`**, o ponlos explícitamente:
+- [x] **Construye el `304` sobre la respuesta que ya lleva `ETag` y `Cache-Control`**, o ponlos explícitamente:
       `setNotModified()` conserva lo presente y retira `Content-Type`/`Content-Length`. Un `304` desnudo
       satisface todas las demás AC y rompe el bucle.
-- [ ] La doble puerta: la recuperabilidad la prueba la lectura verificada, **no** un `exists()` en el puerto.
+- [x] La doble puerta: la recuperabilidad la prueba la lectura verificada, **no** un `exists()` en el puerto.
       Escribe el porqué y el coste en el código.
-- [ ] **`AbstractSessionListener` se acepta** (AC 11): la respuesta sale con `must-revalidate` y `Expires`
+- [x] **`AbstractSessionListener` se acepta** (AC 11): la respuesta sale con `must-revalidate` y `Expires`
       añadidos, **sin** `NO_AUTO_CACHE_CONTROL_HEADER`. No hay contradicción con `immutable` —gobiernan fases
       distintas, fresca y stale— y eximirse no arreglaría el residual de privacidad. Escribe eso en el código;
       no lo redescubras.
 
 ### Task 7 — Las cabeceras de la respuesta (AC 4, AC 10)
 
-- [ ] `Content-Type` = `Image::mediaType()`. Nunca `finfo` sobre los bytes servidos, nunca una cabecera de la
+- [x] `Content-Type` = `Image::mediaType()`. Nunca `finfo` sobre los bytes servidos, nunca una cabecera de la
       petición.
-- [ ] `Content-Length` = `\strlen($bytes)` sobre lo que se sirve.
-- [ ] `X-Content-Type-Options: nosniff`.
-- [ ] `Range` ignorado, sin `Accept-Ranges`. `If-Modified-Since` ignorado, sin `Last-Modified`. `If-Match` no
+- [x] `Content-Length` = `\strlen($bytes)` sobre lo que se sirve.
+- [x] `X-Content-Type-Options: nosniff`.
+- [x] `Range` ignorado, sin `Accept-Ranges`. `If-Modified-Since` ignorado, sin `Last-Modified`. `If-Match` no
       evaluado. `HEAD` documentado como equivalente en coste.
-- [ ] Comprueba qué más viaja: `X-Correlation-Id` y `RateLimit-*` los ponen listeners que corren aquí también,
+- [x] Comprueba qué más viaja: `X-Correlation-Id` y `RateLimit-*` los ponen listeners que corren aquí también,
       y `AbstractSessionListener` **reescribe** `Cache-Control` (Task 6).
 
 ### Task 8 — CORS para el cache condicional (AC 24)
 
-- [ ] `api/config/packages/nelmio_cors.php`: añadir `If-None-Match` a `allow_headers` (`:19`) y `ETag` a
+- [x] `api/config/packages/nelmio_cors.php`: añadir `If-None-Match` a `allow_headers` (`:19`) y `ETag` a
       `expose_headers` (`:20`).
-- [ ] Argumentarlo en la PR: son dos cabeceras de cache HTTP, no una relajación de credenciales
+- [x] Argumentarlo en la PR: son dos cabeceras de cache HTTP, no una relajación de credenciales
       (`allow_credentials` sigue en `false`).
-- [ ] Decir en la PR que **ningún test del repo lo cubre**: Behat conduce el kernel por BrowserKit y no pasa
+- [x] Decir en la PR que **ningún test del repo lo cubre**: Behat conduce el kernel por BrowserKit y no pasa
       por Caddy ni por un navegador, así que un fallo aquí es silencioso. La verificación es manual (un
       `curl -k` con `Origin` y `Access-Control-Request-Headers`, o el navegador).
 
 ### Task 9 — El scan de NFR6 y su falsabilidad (AC 17, AC 12)
 
-- [ ] Gate nuevo bajo `api/tests/Unit/Shared/Images/`, `#[CoversNothing]`, kernel-free, motor en
+- [x] Gate nuevo bajo `api/tests/Unit/Shared/Images/`, `#[CoversNothing]`, kernel-free, motor en
       `api/tests/Support/` (**nunca** en `api/tests/Unit/Gate/Support/`, trinquete descendente).
-- [ ] **Dos ejes**, y el eje valor cubre también `Infrastructure/Http/` del módulo (AC 12).
-- [ ] Di en el docblock qué añade sobre deptrac, **medido**, en vez de implicar que deptrac no ve nada:
+- [x] **Dos ejes**, y el eje valor cubre también `Infrastructure/Http/` del módulo (AC 12).
+- [x] Di en el docblock qué añade sobre deptrac, **medido**, en vez de implicar que deptrac no ve nada:
       `Shared.Application` ya rechaza `Vendor.Symfony`, así que `UploadedFile`/`File` revientan allí. Lo que
       deptrac **no** puede: (a) hablar de `Shared/Images/Application` en particular, porque su collector es
       `src/Shared/(.*/)?Application/.*` y pliega todos los módulos compartidos; (b) el eje valor entero, porque
       un `string $path` no es una dependencia; (c) refusar `Psr\Http\Message\*`, porque `Shared.Application`
       admite `Vendor.Psr` (`^Psr\\.*`) y ahí viven tipos de transporte HTTP genuinos. (c) es el menos evidente.
-- [ ] Léelo con `token_get_all` sobre firmas, no por línea.
-- [ ] Guarda de no-vacuidad: `assertNotSame([], $sources, …)`.
-- [ ] Clasificar en `api/.artifact-gate-placement` como `mirrored :: src/Shared/Images`, siguiendo el
+- [x] Léelo con `token_get_all` sobre firmas, no por línea.
+- [x] Guarda de no-vacuidad: `assertNotSame([], $sources, …)`.
+- [x] Clasificar en `api/.artifact-gate-placement` como `mirrored :: src/Shared/Images`, siguiendo el
       precedente de `:186`.
 
 ### Task 10 — La evidencia de `#[MapUploadedFile]` (AC 16) — leer antes de escribir nada
 
-- [ ] **No construyas ninguna ruta desechable ni fixture.** El test que la AC del épico pedía **ya existe**:
+- [x] **No construyas ninguna ruta desechable ni fixture.** El test que la AC del épico pedía **ya existe**:
       `api/tests/Functional/Shared/Http/Infrastructure/TransportOnlyUploadedFileDenormalizerFunctionalTest.php`,
       que resuelve el denormalizador **del contenedor** y cuyo docblock enuncia exactamente el argumento.
-- [ ] Entiende por qué la AC del épico apuntaba mal, porque es el mismo error que casi se repite:
+- [x] Entiende por qué la AC del épico apuntaba mal, porque es el mismo error que casi se repite:
       `#[MapUploadedFile]` lo resuelve `RequestPayloadValueResolver::mapUploadedFile()` leyendo
       `$request->files->get(...)` **sin serializador** (`:273-275`); el guard es un `DenormalizerInterface` y
       sólo vive en `#[MapRequestPayload]` (`:253`). Un test sobre el primero pasa **idéntico con el guard
       borrado** — cobertura vacua.
-- [ ] Cita el test existente como la evidencia en la PR. Si la revisión encuentra un hueco real en su
+- [x] Cita el test existente como la evidencia en la PR. Si la revisión encuentra un hueco real en su
       cobertura, **amplía ese test**; no mines uno paralelo.
 
 ### Task 11 — Behat, la deuda de la épica, y la fixture que nadie tiene (AC 23)
 
-- [ ] **La fixture es la mitad difícil y no existe.** Medido: `api/tests/DataFixtures/` no contiene nada de
+- [x] **La fixture es la mitad difícil y no existe.** Medido: `api/tests/DataFixtures/` no contiene nada de
       imágenes y ninguna `.feature` del árbol las menciona. Un `200` o un `304` necesitan **dos** almacenes
       coherentes: la fila `Image` y sus bytes bajo la raíz de Flysystem, con digest que cuadre.
-- [ ] Los dos almacenes tienen ciclos de vida distintos: la BD se restaura por feature desde un template, y el
+- [x] Los dos almacenes tienen ciclos de vida distintos: la BD se restaura por feature desde un template, y el
       volumen `image_storage` **no lo toca ningún teardown** y sobrevive a `make docker.down`. Una siembra con
       id fijo va verde la primera vez y roja la segunda, porque `store()` refusa un identificador ya ocupado.
       **Mecanismo decidido: un `ImageId` nuevo por escenario**, expuesto al escenario desde el contexto para
@@ -848,44 +917,44 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
       de objeto única = independencia entre escenarios aunque el storage no tenga aislamiento**. Coste
       aceptado y dicho: el volumen acumula imágenes de test sin poda, despreciable con fixtures de cientos de
       bytes.
-- [ ] Siembra los bytes **a través del `ImageStorage` del contenedor**, no escribiendo el fichero a mano: así
+- [x] Siembra los bytes **a través del `ImageStorage` del contenedor**, no escribiendo el fichero a mano: así
       el cableado de la raíz queda ejercitado en vez de esquivado. `ImageStorageWiringTest` es el precedente de
       resolver el servicio real, y es el único test que vio el GRAVE-2 de img-1-2.
-- [ ] Feature en `api/features/shared/images/`. **La ubicación es load-bearing**: `BehatSuiteCoverageGateTest`
+- [x] Feature en `api/features/shared/images/`. **La ubicación es load-bearing**: `BehatSuiteCoverageGateTest`
       refusa un `.feature` fuera de una raíz declarada, y una feature bajo una cuarta raíz quedaría verde en
       todos los gates porque nadie la parsea.
-- [ ] Modelos: `api/features/backoffice/bank/access_control.feature` para el bloque anónimo (usa `@anonymous`),
+- [x] Modelos: `api/features/backoffice/bank/access_control.feature` para el bloque anónimo (usa `@anonymous`),
       `api/features/backoffice/users/get.feature` para el trío 200/400/404.
-- [ ] **Trampa**: `JsonErrorContext` se anuncia como validador de RFC 9457 pero sus siete steps están `idle` y
+- [x] **Trampa**: `JsonErrorContext` se anuncia como validador de RFC 9457 pero sus siete steps están `idle` y
       afirman un envelope **legacy**. Los Problem Details se afirman campo a campo con `JsonNodeContext`.
-- [ ] **Estado por escenario**: `HttpRequestContext::$headers` no se resetea entre `When`. Para "sin, con, sin"
+- [x] **Estado por escenario**: `HttpRequestContext::$headers` no se resetea entre `When`. Para "sin, con, sin"
       usa `And I remove "If-None-Match" header` (existe, `used`).
-- [ ] **Cita las cabeceras entre comillas**: el token de placeholder del gate de vocabulario es más ancho que
+- [x] **Cita las cabeceras entre comillas**: el token de placeholder del gate de vocabulario es más ancho que
       el de Behat, así que un `If-None-Match` sin comillas **matchea en el gate y queda indefinido en Behat**.
       Es la única dirección en que ese gate falla abierto, y sólo `--strict` la caza.
-- [ ] Para el `304`, **step nuevo y genérico**: `I add :name header equal to the response header :header`,
+- [x] Para el `304`, **step nuevo y genérico**: `I add :name header equal to the response header :header`,
       clasificado `used` en el mismo commit. Decidido frente al digest literal, que convertiría una propiedad
       incidental de la fixture en parte del contrato de aceptación. Genérico a nivel de mecanismo HTTP —sirve
       igual para `Location` o `Last-Modified`— pero **pequeño**: capturar un valor y reenviarlo, sin almacén
       de variables ni expresiones. **Debe preservar el valor exacto**, así que no reutilices el step de
       igualdad, que compara en minúsculas y no distingue `"abc"` de `W/"ABC"`. El análogo JSON `idle` de
       `:158` se queda como está: que exista y no se use no obliga a aprovecharlo.
-- [ ] Correr `make php.gherkin` y `make php.behat c='features/shared/images/<fichero>.feature'`.
+- [x] Correr `make php.gherkin` y `make php.behat c='features/shared/images/<fichero>.feature'`.
 
 ### Task 12 — Benchmark de límites y vetting de `intervention/gif` (AC 25)
 
-- [ ] Medir los tres límites contra el worker real con `memory_get_peak_usage`, **no** `docker stats`.
-- [ ] Registrar el vetting de `intervention/gif` (5.0.1), que decodifica bytes GIF no confiables y entró como
+- [x] Medir los tres límites contra el worker real con `memory_get_peak_usage`, **no** `docker stats`.
+- [x] Registrar el vetting de `intervention/gif` (5.0.1), que decodifica bytes GIF no confiables y entró como
       transitiva sin mención en la sección de seguridad de la PR de 1.1.
-- [ ] Decir **antes** qué resultado cambiaría un límite. Escribir el resultado aunque no cambie nada.
+- [x] Decir **antes** qué resultado cambiaría un límite. Escribir el resultado aunque no cambie nada.
 
 ### Task 13 — Documentación y residuales (AC 22, AC 26)
 
-- [ ] `PRODUCTION_SECURITY_CHECKLIST.md` §7: **ampliar** el bloque de `:1534-1579` con los **cinco**
+- [x] `PRODUCTION_SECURITY_CHECKLIST.md` §7: **ampliar** el bloque de `:1534-1579` con los **cinco**
       residuales de la AC 22. No abras un bullet paralelo. El quinto —shared-sink eviction entre productores
       independientes— cambia el encuadre del bloque: no es "demasiados logs", es que un productor puede
       desalojar la historia de otro y **nada alerta**.
-- [ ] El ADR `docs/adr/image-read-failure-signal-bound.md` y su entrada en `docs/index.md` van **en esta
+- [x] El ADR `docs/adr/image-read-failure-signal-bound.md` y su entrada en `docs/index.md` van **en esta
       rama**, no en una posterior: son el artefacto que gobierna la excepción de la AC 9, y sin ellos la
       historia contradice al épico en silencio.
 - [x] **Issue de infraestructura abierta: [#879](https://github.com/sergio-salcedo-dev/ERPify/issues/879)** —
@@ -895,39 +964,39 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
       argumentado, no la pila de diferidos que `CLAUDE.md` prohíbe alimentar desde dentro de una épica. Lleva
       también el comentario desfasado del `log` de `api/frankenphp/Caddyfile`, para que se corrija con su
       dueño en vez de aquí.
-- [ ] `docs/architecture-api.md`: bullet de la ruta en `## API design` y la ruta en el bullet de `Images/`
+- [x] `docs/architecture-api.md`: bullet de la ruta en `## API design` y la ruta en el bullet de `Images/`
       (`:64`). **Corregir `:103`** (`:102` está en blanco), que afirma que los controladores con `#[Route]`
       viven bajo `Infrastructure/Controller/` cuando hay seis bajo `Iam/*/Infrastructure/Http/`.
-- [ ] **No copies el argumento de `/api/v1/me*` (`:110`).** Su texto completo dice *"the subject is always the
+- [x] **No copies el argumento de `/api/v1/me*` (`:110`).** Su texto completo dice *"the subject is always the
       caller's own identity … and there is no resource another identity could govern"*, y las dos mitades son
       **falsas** aquí: cualquier sesión lee cualquier imagen, incluida la de otra persona. Escribe el argumento
       propio: el firewall es la frontera **provisional** de una rebanada sin consumidor, y la AC 26 lo dice.
-- [ ] `api/docs/adding-endpoints.md`: la convención de nombre para un módulo de `Shared` (Task 2).
-- [ ] `api/docs/postman/erpify-api.postman_collection.json` + su `README.md`: obligatorio en la misma PR,
+- [x] `api/docs/adding-endpoints.md`: la convención de nombre para un módulo de `Shared` (Task 2).
+- [x] `api/docs/postman/erpify-api.postman_collection.json` + su `README.md`: obligatorio en la misma PR,
       re-derivando con `make sf.routes f='api'`.
-- [ ] `docs/api-error-contract.md`: **sólo si** minas un `type` nuevo (Task 4).
-- [ ] `_bmad-output/implementation-artifacts/deferred-work.md`: la bala de mutable/inmutable **se queda
+- [x] `docs/api-error-contract.md`: **sólo si** minas un `type` nuevo (Task 4).
+- [x] `_bmad-output/implementation-artifacts/deferred-work.md`: la bala de mutable/inmutable **se queda
       intacta**. La AC 11 la roza al justificar `immutable`, pero el épico deja ese modelado
       *deliberadamente fuera* (`:374-378`), así que la salida correcta es acotar `immutable` a esta rebanada y
       decir que la pregunta de la URL de variantes sigue abierta — **no** resolverla ni borrar la bala.
-- [ ] **Cero tags `@accepted-risk` y cero issues nuevas.** Los residuales (a)–(d) viven en §7 y ya están
+- [x] **Cero tags `@accepted-risk` y cero issues nuevas.** Los residuales (a)–(d) viven en §7 y ya están
       trazados ahí; duplicarlos en issues crearía dos sitios donde olvidarlos en vez de uno donde
       encontrarlos. El único con issue propia es (e), **#879**, porque su punto de control es infraestructura
       transversal y no cabe en esta PR. El criterio que los separa está en la AC 22.
 
 ### Task 14 — Barrido y cierre
 
-- [ ] Regla del boy-scout sobre lo que toques: fuera IDs de historia/requisito y comentarios relativos al
+- [x] Regla del boy-scout sobre lo que toques: fuera IDs de historia/requisito y comentarios relativos al
       cambio.
-- [ ] `make php.stan` sobre cada fichero PHP cambiado, según avanzas.
-- [ ] Al final, con el código de salida impreso: `make php.quality` · `make php.unit` · `make php.behat` ·
+- [x] `make php.stan` sobre cada fichero PHP cambiado, según avanzas.
+- [x] Al final, con el código de salida impreso: `make php.quality` · `make php.unit` · `make php.behat` ·
       `make pwa.quality` (la PWA sí: `pwa/tests/client-minted-problem-types.test.ts` barre `api/src` buscando
       `network-error`/`request-timeout`/`malformed-response-envelope`, y un `type` nuevo que colisione rompe
       **ahí**, no en `php.quality`).
-- [ ] **PHPMD**: techo de coupling-between-objects 13 y 10 métodos públicos por clase de test. Un controlador
+- [x] **PHPMD**: techo de coupling-between-objects 13 y 10 métodos públicos por clase de test. Un controlador
       con traducción de errores, cache condicional y cabeceras va a ese techo; parte por concern desde el
       principio.
-- [ ] **El commit que lleve el código nombra la historia en el subject** (`… (img-1-3)`). El commit de
+- [x] **El commit que lleve el código nombra la historia en el subject** (`… (img-1-3)`). El commit de
       creación de esta historia es `docs(...)` y sólo toca `_bmad-output/`, así que check B de
       `make bmad.status.audit` lo descarta por diseño — si el tag no se repite en el commit de código, la
       auditoría **enmudece**.
@@ -1312,12 +1381,251 @@ identidad · reconciliación fila↔objeto (la prohíbe NFR3) · `ContentHashUrl
   falta una excepción argumentada; aquí se hace **más**, así que basta enmendar la AC del épico en línea
   conservando su redacción.
 
+- 2026-08-30 — **Implementada.** La ruta monta bajo `/api/v1` con un recurso de routing acotado al directorio
+  del controlador (hasta hoy ningún recurso cubría `src/Shared/`, así que un `#[Route]` ahí no registraba
+  nada y todo quedaba verde); `CanonicalImageFinder` orquesta `findById → cota de tamaño → read → verificación
+  de digest`; la traducción de fallo vive en tres clases nuevas de `Domain/Read/` porque el marcador sólo se
+  lee dentro del brazo `instanceof DomainException`; el `304` se cierra con la misma lectura verificada que el
+  `200` y lleva sus propias cabeceras. 14 escenarios Behat con fixture de imagen propia (id nuevo por
+  escenario, bytes sembrados a través del `ImageStorage` del contenedor), el scan de NFR6 en dos ejes con su
+  motor falsable en `tests/Support/`, el caso `shared_` que nadie pinchaba en `AuditPolicyTest`, y CORS
+  ampliado con `If-None-Match`/`ETag`. Siete falsificaciones, cada una provocada en rojo mutando el código que
+  guarda y restaurada copiando los bytes.
+
+- 2026-08-30 — **El benchmark de la AC 25 refutó los tres límites en vez de confirmarlos.** `memory_limit` no
+  lo declaraba este repositorio — era el 128M de la imagen base — así que una foto de móvil de 12 MP era un
+  error FATAL 3,3× DENTRO del techo de 40 MP configurado para aceptarla, y un fatal no es un `Throwable`: no
+  sale Problem Details y en modo worker se lleva el worker. Y a 40 MP el resultado **depende del formato**
+  (jpeg sobrevive a 253 MiB, png no), así que 40 MP no era un límite. Decidido con Sergio: subir el
+  presupuesto y fijar el techo a lo medido. Aplicado `memory_limit = 256M` y `max_decoded_pixels` 40 → 20 MP;
+  `max_input_dimension` se deja en 10000 porque un panorama de 10000×2000 son 20 MP y pica en 145 MiB, así
+  que el lado no acota nada que el número de píxeles no acote ya. `ImagePixelBudgetGateTest` mantiene juntos
+  los dos números — falsificado: con 40 MP contra 128M proyecta 397,5 MiB sobre un presupuesto de 115,2 MiB,
+  es decir habría cazado el estado que sí se envió. Verificado como CONSECUENCIA tras reconstruir la imagen:
+  el contenedor reporta 256M, 12 MP procesa a 151,9 MiB y 24 MP lo **rechaza la guarda** a 12,3 MiB sin
+  decodificar. El residual que el gate no ve — que la cota exterior es el contenedor de 1 GiB contra ~2
+  workers por core — queda en §7.
+
+- 2026-08-30 — **Dos hallazgos colaterales, ambos cerrados aquí en vez de diferidos.** `make php.lint.yaml`,
+  que la Task 1 mandaba correr a mano precisamente porque no es miembro de `php.quality` ni de CI, estaba
+  ROJO en árbol limpio: rechaza `!tagged_iterator`, un tag que el framework define y que `services.yaml` lleva
+  desde que existen los iteradores etiquetados. Arreglado con `--parse-tags` (36 ficheros válidos). Y el
+  techo de PHPMD que la Task 14 anticipaba se alcanzó: se partieron por concern `ReadFailureReporter` (fuera
+  del finder), `SignatureReader` (fuera de `PublicSignatures`), el test del guard de identidad y el de
+  traducción de fallos, más un `ImageFinderHarness` que borra el cableado repetido en cuatro clases de test.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context), `bmad-dev-story`.
+
 ### Debug Log References
+
+Worktree `.claude/worktrees/shared-images-read-route-az80`, branch `feat/shared-images-read-route-az80`,
+based on `origin/main` = `63c17130` (the commit that merged this story's own artifact, PR #880). The
+`baseline_commit` in the frontmatter is `202767ab` and is preserved: it records the tree the story's analysis
+was measured against, not the branch point.
+
+Falsifications performed, each provoked red by mutating the code it guards and restored by copying the
+pristine bytes back — never `git checkout --`:
+
+| What was mutated | What went red |
+|---|---|
+| `AuditPolicy::lacksBusinessSemantics()` — the `shared_` arm deleted | the new `AuditPolicyTest` case (before this story, deleting that arm left the whole suite green) |
+| a `?\SplFileInfo` parameter planted on `CanonicalImageFinder::find()` | `ImageTransportSurfaceGateTest`, type axis |
+| a `string $storageKey` parameter planted on `ImageGetController::__invoke()` | `ImageTransportSurfaceGateTest`, value axis |
+| the `$logger` binding removed from `services.yaml` | `BestEffortReportChannelGateTest` |
+| the `api_v1_shared_images` resource deleted from `routes.yaml` | 11 of 14 Behat scenarios (the 3 survivors are 404 assertions a router 404 also satisfies — recorded, because it shows which scenarios do and do not prove registration) |
+| `max_decoded_pixels` restored to 40 MP against `memory_limit` 128M | `ImagePixelBudgetGateTest` — 397.5 MiB projected against a 115.2 MiB budget, i.e. it would have caught the state that actually shipped |
+| the ceiling raised alone, and `memory_limit` deleted from the ini | the same gate, both directions |
 
 ### Completion Notes List
 
+**Task 0 — the per-event cost, measured.** Formatted with production's `monolog.formatter.json`, and the
+access-log line read from the file the dev stack actually writes:
+
+| record | bytes |
+|---|---|
+| `image_storage_failure` on `observability` | 225 |
+| the matching `error` on the default channel | 534 |
+| one Caddy access line for this route | 1368 |
+
+A single failed read therefore costs 759 bytes across two channels, of which this module can reach 225 —
+**29.6%**; against the whole request, which Caddy logs unconditionally whatever the outcome, 225 of 2127 is
+**10.6%**. And the 534-byte record is the one that ACTIVATES the production `fingers_crossed` handler,
+flushing up to fifty more, so the boundable share is smaller still. That is the ADR's D2 argument with
+numbers under it. **What this is not**, stated rather than left to be inferred: it measures no frequency and
+observes no production, because there is no production deployment. It is a unit cost.
+
+**AC 25 — the benchmark did not confirm the limits, it refuted them.** Measured against the real worker with
+`memory_get_peak_usage()`, generating each test image in a SEPARATE process so the harness's own frame never
+entered the reading (the first run without that separation over-reported by ~48 MiB and would have been a
+false measurement):
+
+| input | format | peak | `memory_limit` | outcome |
+|---|---|---|---|---|
+| 6.0 MP | jpeg | 78.9 MiB | 128M | ok |
+| 7.5 MP | jpeg | 108.5 MiB | 128M | ok |
+| 12.0 MP | jpeg | — | 128M | **FATAL** |
+| 12.0 MP | jpeg | 151.9 MiB | 256M | ok |
+| 20.0 MP | png / webp | 191.2 MiB | 256M | ok |
+| 24.0 MP | png | 190.7 MiB | 256M | ok |
+| 40.0 MP | jpeg | 253.2 MiB | 256M | ok |
+| 40.0 MP | png | — | 256M | **FATAL** |
+| 20.0 MP (10000x2000) | png | 145.2 MiB | 256M | ok |
+
+Two facts decided it. **`memory_limit` was never declared by this repository** — it was the base image's
+128M — so an ordinary 12 MP phone photo was a fatal error 3.3x INSIDE the 40 MP ceiling configured to accept
+it; and a fatal is not a `Throwable`, so no Problem Details response is produced and in worker mode the
+worker goes down. **And at 40 MP the outcome depends on the FORMAT** — jpeg survives at 253 MiB, png does not
+— so 40 MP is not a limit at all. Applied: `memory_limit = 256M` declared in `frankenphp/conf.d/10-app.ini`,
+`max_decoded_pixels` lowered 40 MP → 20 MP. `max_input_dimension` is deliberately LEFT at 10000: measured, a
+10000x2000 panorama is 20 MP and peaks at 145 MiB, so the side length bounds nothing the pixel count does
+not, and lowering it would refuse a legitimate shape for no measured reason. `max_input_bytes` is untouched;
+nothing came close (the largest encoded input measured was 7.4 MB). Verified as a CONSEQUENCE and not a
+precondition: after rebuilding the image, the container reports `memory_limit = 256M`, a 12 MP photo
+processes at 151.9 MiB, and a 24 MP one is `refused:ImageResourceLimitExceeded` at 12.3 MiB — the guard
+rejecting before decoding rather than the process dying. `ImagePixelBudgetGateTest` now holds the two numbers
+together; nothing in the tree related them before. The residual it cannot see — that the OUTER bound is the
+1 GiB container against roughly two workers per core, which `workers x memory_limit` overcommits — is
+recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §7 and belongs to the epic that exposes an upload endpoint.
+
+**AC 25 — the `intervention/gif` vetting.** 5.0.1, MIT, released 2026-05-03, pulled in transitively by
+`intervention/image` 4.3.1 (`requires intervention/gif ^5`). `composer audit` reports no advisory. The fact
+that makes it worth naming: `Gd/Decoders/BinaryImageDecoder:58` branches on `isGifFormat($input)` and sends
+GIF bytes to this library's own splitter instead of to `imagecreatefromstring()`, so **untrusted GIF input is
+parsed by ~4.7k lines of PHP rather than by GD's C decoder**, and `image/gif` is in the encoder allowlist so
+that path is reachable. Nothing in `api/src` names the package; the reach is entirely through
+`intervention/image`. The consolation is that this is the direction with the SMALLER blast radius — a bug in
+a PHP parser is a PHP exception, where the equivalent in GD's C decoder is a memory-safety bug — and that the
+pixel and byte guards run before it. No action taken; recorded so the next reader does not have to rediscover
+that GIF takes a different decode path from every other admitted format.
+
+**A pre-existing red found by following Task 1.** `make php.lint.yaml` — which the task said to run by hand
+because it belongs to neither `php.quality` nor CI — was failing on a CLEAN tree: it refuses
+`!tagged_iterator`, a tag the framework defines and `config/services.yaml` has carried for as long as the
+projector and person-reference iterators have existed. Fixed with `--parse-tags` (36 files valid). A lint
+target that is red on `main` is a target nobody runs; the diff that closes it is one flag, so by the repo's
+own criterion it is a commit and not an issue.
+
+**Deviations from the task text, each argued rather than silent.**
+- *Task 9 said the value axis covers `Infrastructure/Http/`; it covers `Infrastructure/Controller/` too.* That
+  sentence predates decision D1, which moved the controller to `Controller/`. Following it literally would
+  have left the controller — the thing AC 12 names explicitly — outside the scan. The scan covers `Domain/`
+  and `Application/` on both axes and adds `Infrastructure/Controller/` and `Infrastructure/Http/` on the
+  value axis. It deliberately stops before the storage adapter, whose constructor takes the deployment's
+  storage root: that is a path, and it is not a CALLER's.
+- *The matrix put the "304 refused over an absent object" case at functional level; it is a Behat scenario.*
+  The property is an HTTP one — a conditional request carrying a still-current validator — and `api/CLAUDE.md`
+  prefers Behat for HTTP behaviour. A kernel functional test cannot see headers that `kernel.response`
+  listeners add.
+- *Task 5 says "implement the bound decided in Task 0".* Task 0 decided there is NO bound (ADR option D), so
+  what was implemented is the SHAPE the gates require — two per-level calls, never `log($level, …)`, the
+  `try { … } catch (Throwable) {}` retained — and the falsification is of the channel binding rather than of
+  a bound that does not exist.
+- *Task 0's last bullet* (the stale `logging:` claim in `api/frankenphp/Caddyfile`) was left alone as
+  instructed: nothing else required editing that file, and it travels with #879.
+
+**AC 11 carries a contradiction that was resolved in favour of 3600.** Its opening clause and AC 22(b) both
+say `max-age=3600`, the 2026-08-30 change-log entry decides it, and `epics-images.md` has already been
+amended to 3600 — but one trailing clause inside AC 11 still says "the year is kept as the epic set it". That
+sentence is residue from before the last edit and is contradicted by four other statements in the same
+document; the implementation emits 3600. Flagged rather than edited, because AC text is not a section this
+workflow may modify.
+
+**AC → test matrix, RE-DERIVED against the tree after implementing** (the story asked for this because 1.2's
+matrix was written beforehand and a review found eight rows claiming what their tests could not see):
+
+| AC | Where it is actually pinned now | Honest residual |
+|---|---|---|
+| 1 | `read.feature` anonymous `Scenario Outline` (2 shapes) + the query-parameter scenario | the router-first shapes (empty id, `/` inside, non-preflight `OPTIONS`) are declared, not tested |
+| 2 | `ImageGetControllerTest` (a repository double that RAISES if reached) + `read.feature` 400 | — |
+| 3 | `read.feature` 404 + `type: not-found` | the fatal-error path is by construction, not testable |
+| 4 | `ImageGetControllerTest` (PNG magic under an `image/webp` row) + `read.feature` headers | — |
+| 5 | `read.feature` "row whose bytes are gone" + `CanonicalImageFinderTest` | — |
+| 6 | `CanonicalImageFinderTest` (all five verdicts) | **the `type` on the WIRE is pinned only for 404**: 503 and the two 500s have no scenario, because no Behat step can make the container's storage fail |
+| 7 | `CanonicalImageFinderTest` digest + oversize arms | "headers not committed first" is structural, not tested — as the AC says |
+| 8 | `CanonicalImageFinderTest`, context asserted whole and by VALUE substring | — |
+| 9 | no code; the ADR, the epic amendment and the measurement above | — |
+| 10 | `ImageGetControllerTest` + `read.feature` Range scenario | `HEAD` is not exercised by any scenario |
+| 11 | `ImageGetControllerTest` (directives, and a test that fails if `public` returns) + `read.feature` | — |
+| 12 | `ImageTransportSurfaceGateTest`, value axis, controller in scope | — |
+| 13 | `HttpCacheValidatorTest` (5 matching + 3 refusing forms) + two `read.feature` scenarios | — |
+| 14 | nothing executable — no stream exists | as the AC says |
+| 15 | `read.feature` query-parameter scenario | `?_rsc=1` is not observable: Caddy diverts it to the PWA |
+| 16 | the pre-existing `TransportOnlyUploadedFileDenormalizerFunctionalTest`, cited | — |
+| 17 | `ImageTransportSurfaceGateTest` + `PublicSignaturesTest` (9 shapes a line-oriented reader misses) | an aliased import evades the type axis, stated in the gate's docblock |
+| 18 | `ImageRouteDeclarationTest` + the 401 scenarios | — |
+| 19 | `AuditPolicyTest` new case + `read.feature` counting `audit_log` before AND after | — |
+| 20 | `ImageRouteDeclarationTest`, by EQUALITY with the expected set | — |
+| 21 | `ImageRouteDeclarationTest` (no requirements) + `read.feature` 400 | — |
+| 22 | §7, five residuals plus the ingestion-side one | documentation review only |
+| 23 | `read.feature`, 14 scenarios / 105 steps, vocabulary registry updated | — |
+| 24 | **nothing** — no test in this repository passes through Caddy or a browser | verified by hand only; stated in the config and in the PR |
+| 25 | the measurement above; `ImagePixelBudgetGateTest` holds the pair | the gate models rather than decodes |
+| 26 | the controller docblock and `docs/architecture-api.md` | documentation review only |
+| 27 | `ImageGetControllerTest` + the upper-cased `read.feature` scenario | — |
+
+Rows with no executable test that could observe their AC failing: **7 (partial), 9, 14, 22, 24, 26** — and
+**6 partially**, which the story's own matrix did not say and this re-derivation found.
+
 ### File List
+
+**New — `api/src`**
+
+- `api/src/Shared/Images/Application/CanonicalImageBytes.php`
+- `api/src/Shared/Images/Application/CanonicalImageFinder.php`
+- `api/src/Shared/Images/Application/ReadFailureReporter.php`
+- `api/src/Shared/Images/Domain/Read/ImageNotAvailable.php`
+- `api/src/Shared/Images/Domain/Read/ImageTemporarilyUnavailable.php`
+- `api/src/Shared/Images/Domain/Read/ReadFailureCategory.php`
+- `api/src/Shared/Images/Domain/Read/UnservableImage.php`
+- `api/src/Shared/Images/Infrastructure/Controller/ImageGetController.php`
+- `api/src/Shared/Images/Infrastructure/Http/HttpCacheValidator.php`
+
+**New — tests, features and support**
+
+- `api/features/shared/images/read.feature`
+- `api/tests/Behat/Context/ImageFixtureContext.php`
+- `api/tests/Functional/Shared/Images/ImageRouteDeclarationTest.php`
+- `api/tests/Support/PublicSignatures.php`
+- `api/tests/Support/SignatureReader.php`
+- `api/tests/Unit/Shared/Images/ImagePixelBudgetGateTest.php`
+- `api/tests/Unit/Shared/Images/ImageTransportSurfaceGateTest.php`
+- `api/tests/Unit/Shared/Images/Application/CanonicalImageFinderTest.php`
+- `api/tests/Unit/Shared/Images/Application/CanonicalImageFinderFailureTranslationTest.php`
+- `api/tests/Unit/Shared/Images/Application/ReadFailureReporterTest.php`
+- `api/tests/Unit/Shared/Images/Application/CorruptingImageStorage.php`
+- `api/tests/Unit/Shared/Images/Application/PermanentlyFailingImageStorage.php`
+- `api/tests/Unit/Shared/Images/Application/ImageFinderHarness.php`
+- `api/tests/Unit/Shared/Images/Infrastructure/Controller/ImageGetControllerTest.php`
+- `api/tests/Unit/Shared/Images/Infrastructure/Controller/ImageGetControllerIdentityGuardTest.php`
+- `api/tests/Unit/Shared/Images/Infrastructure/Http/HttpCacheValidatorTest.php`
+- `api/tests/Unit/Support/PublicSignaturesTest.php`
+
+**Modified — configuration and registries**
+
+- `api/config/routes.yaml` — the routing resource without which the `#[Route]` registers nothing
+- `api/config/services.yaml` — the serving budget, the pixel ceiling, and the reporter's channel
+- `api/config/packages/nelmio_cors.php` — `If-None-Match` allowed, `ETag` exposed
+- `api/frankenphp/conf.d/10-app.ini` — `memory_limit` declared by this repository for the first time
+- `api/behat.dist.php` — the image fixture context registered
+- `api/.artifact-gate-placement` — three new gates classified
+- `api/.behat-step-vocabulary` — five new patterns, plus one `idle` the feature now spends
+- `make/php-quality.mk` — `php.lint.yaml` was red on a clean tree
+
+**Modified — tests**
+
+- `api/tests/Behat/Context/HttpRequestContext.php` — the header-capture step the conditional loop needs
+- `api/tests/Unit/Gate/BestEffortReportChannelGateTest.php` — the reporter pinned to the always-on channel
+- `api/tests/Unit/Shared/Audit/Domain/AuditPolicyTest.php` — the `shared_` case nothing was exercising
+
+**Modified — documentation**
+
+- `PRODUCTION_SECURITY_CHECKLIST.md` — §7, five read-path residuals plus the ingestion-side one
+- `docs/architecture-api.md` — the route, the routing-resource rule, and Iam's recorded deviation
+- `api/docs/adding-endpoints.md` — `shared_` as a context prefix, and why the name governs the audit
+- `api/docs/postman/erpify-api.postman_collection.json`, `api/docs/postman/README.md`
+- `_bmad-output/implementation-artifacts/sprint-status-images.yaml`
+

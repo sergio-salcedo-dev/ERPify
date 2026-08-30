@@ -16,6 +16,20 @@ Route names follow `<office>_<entity>_<action>` — **entity-first, then an inte
 
 `Bank` is the canonical reference: `backoffice_bank_search` / `_get` / `_create` / `_update` / `_delete`. Route names are server-internal identifiers (clients call by path, not by name), so renaming one has zero client blast radius — but keep the suffix vocabulary stable, because operators key off suffixes like `_search` for logs / metrics / tracing.
 
+**The first segment is the bounded context, and `shared` is one of them.** `<office>` reads as "backoffice or
+frontoffice" and that was never the whole set: a capability module of the shared kernel that publishes a route
+prefixes it `shared_` — `shared_image_get` for `GET /api/v1/images/{imageId}`.
+
+**And on that prefix the first segment stops being a naming convention.** Generic activity auditing is
+opt-OUT, not opt-in: `AuditPolicy` writes an `audit_log` row for every successful `GET` under `/api/` unless
+the ROUTE NAME matches one of five non-business shapes, and `str_starts_with($route, 'shared_')` is the one
+that covers asset and object serving. So a shared-kernel route serving bytes is silent because of its name and
+for no other reason — rename it and every read starts writing a row, **with no gate going red**: the resource
+extractor answers `null` without an `_audit_resource_type` default, so `api/.audit-resource-types` never sees
+it either. Where a module's decision is "this route writes no audit row", the name is the mechanism, and its
+own test is what pins it (`AuditPolicyTest` carries the `shared_` case; `features/shared/images/read.feature`
+counts `audit_log` before and after a successful read).
+
 ## Behat feature file layout
 
 `api/features/` mirrors the `src/` bounded-context + module tree, lowercased: `src/Backoffice/BankAccount/` → `features/backoffice/bank_account/`. Path segments and `.feature` filenames are **snake_case** — multi-word module names, groupings, and file names join words with `_` (`bank_account/`, `error_contract/`, `rate_limiting/`, `access_control.feature`, `dispatch_event.feature`), never solid-concatenated. A bounded context that is already a single (compound) token stays solid: `backoffice/`, `frontoffice/`, `shared/`. The suite registers only the three context roots (`features/backoffice`, `features/frontoffice`, `features/shared`) and recurses, so subdirectory names follow this convention freely without touching `behat.dist.php`.

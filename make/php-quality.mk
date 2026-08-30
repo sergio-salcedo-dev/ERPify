@@ -56,8 +56,13 @@ php.gherkin.rules: ## Gherkinlint rules
 
 ## —— yaml-lint ——————————————————————————————————————————————————————————
 
+# `--parse-tags` is not a relaxation: without it the linter refuses `!tagged_iterator`, a tag the framework
+# itself defines and `config/services.yaml` has used for as long as the projector and person-reference
+# iterators have existed. So this target was RED on a clean tree, which is what a target nobody runs looks
+# like — and it is a member of neither `php.quality` nor CI, so nothing reported it. Syntax checking is
+# unchanged; what stops is rejecting a construct the container understands.
 php.lint.yaml: ## yaml-lint
-	@$(PHP_TEST) bin/console lint:yaml config
+	@$(PHP_TEST) bin/console lint:yaml config --parse-tags
 
 ## —— Doctrine schema validation ——————————————————————————————————————————
 # Catches drift between the ORM mapping (entities) and the database schema:

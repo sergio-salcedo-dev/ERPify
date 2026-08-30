@@ -498,6 +498,25 @@ class HttpRequestContext extends AbstractContext
     }
 
     /**
+     * Captures a header off the LAST response and sends it back on the NEXT request, which is the whole
+     * conditional-GET loop in one step.
+     *
+     * It exists rather than a literal because the value it carries — an entity tag, a `Location`, a
+     * `Last-Modified` — is a property of the fixture and not of the contract, and writing it out would pin
+     * the first into the second. And it does not reuse the equality step's comparison: that one lower-cases
+     * both sides, which cannot tell `W/"abc"` from `w/"ABC"`, while a validator has to travel byte for byte.
+     */
+    #[Then('I add :name header equal to the response header :header')]
+    public function iAddHeaderEqualToTheResponseHeader(string $name, string $header): void
+    {
+        $value = $this->getLastResponse()->headers->get($header);
+
+        self::assertNotNull($value, \sprintf('The last response carries no "%s" header to send back.', $header));
+
+        $this->headers[$name] = $value;
+    }
+
+    /**
      * Remove a header element in a request.
      */
     #[Then('I remove :name header')]

@@ -16,8 +16,16 @@ return [
             // X-CSRF-Token makes a request non-simple, so a cross-origin caller reaches the endpoint
             // only if the preflight echoes the header back. The browser default is same-origin (no
             // preflight at all); this keeps the configured cross-origin dev origins working too.
-            'allow_headers' => ['Content-Type', 'Accept', 'Authorization', 'X-CSRF-Token'],
-            'expose_headers' => ['Link'],
+            //
+            // `If-None-Match` is the conditional-GET request half. Without it a cross-origin conditional
+            // request never gets past the preflight, so the image read route's 304 path is unreachable
+            // from exactly the origins this deployment configures — and it fails SILENTLY, because Behat
+            // drives the kernel through BrowserKit and never passes through Caddy or a browser.
+            'allow_headers' => ['Content-Type', 'Accept', 'Authorization', 'X-CSRF-Token', 'If-None-Match'],
+            // `ETag` is the response half of the same loop: without exposing it, `fetch()` cannot read the
+            // validator it is meant to send back. Two HTTP cache headers, not a credentials relaxation —
+            // `allow_credentials` stays false.
+            'expose_headers' => ['Link', 'ETag'],
             'max_age' => 3600,
         ],
         'paths' => [
