@@ -75,7 +75,54 @@ development_status:
   # enrutado de la señal de borrado) y uno sobre el código en tres lecturas paralelas (2026-08-29),
   # que encontró dos GRAVE con todas las puertas en verde — la existencia indecidible un nivel por
   # encima del directorio guardado, y la raíz de almacenamiento que ningún despliegue creaba.
-  # Story 1.3 sigue en backlog (solo cortada dentro de epics-images.md, sin fichero propio todavía).
+  # img-1-3: ya tiene fichero propio
+  # (img-1-3-leer-representacion-canonica-de-forma-segura.md: bmad-create-story, 2026-08-29) — por eso pasa a
+  # ready-for-dev. Su análisis midió el árbol en 202767ab y encontró catorce desajustes con el corte del
+  # épico, cuatro capaces de dejar una decisión del épico falsa con todas las puertas en verde: la auditoría
+  # genérica se activa por defecto sobre todo GET 2xx bajo /api/ y sólo se desactiva por el NOMBRE de la ruta
+  # (`str_starts_with($route, 'shared_')`, AuditPolicy.php:66) — rama que hoy no usa ninguna ruta y no pincha
+  # ningún test, así que la decisión «cero filas de audit_log» dependía de un acoplamiento invisible; la
+  # opción «nivel debug» que el épico ofrece como una de las tres cotas del log de ausencia está descartada
+  # por ObservabilityChannelGateTest:42,85, que fija `info` en test y prod; ningún recurso de
+  # api/config/routes.yaml carga src/Shared/, así que un #[Route] ahí no registra nada y todo queda verde; y
+  # el path `GET /images/{imageId}` que escribe el épico cae fuera del `^/api` del firewall sin que
+  # php.lint.public-access lo note. Corregido además RESIDUAL-1, que describía como inexistente el limitador
+  # global anonymous_api (120 req/min por IP, aplicado sin mirar la autenticación). Queda una decisión abierta
+  # para Sergio antes de implementar (Task 0).
+  # img-1-3: pase adversarial EXTERNO completado 2026-08-30 en tres lecturas paralelas sobre el artefacto ya
+  # commiteado. CAMBIÓ el resultado, no lo confirmó: 34 hallazgos, CERO rechazados, seis GRAVE que tumbaron
+  # cuatro AC y la premisa entera de Task 0. (1) El brazo 503 de la AC 6 era mecánicamente imposible —
+  # ProblemDetailsFactory sólo lee marcadores dentro del brazo `instanceof DomainException` de su match
+  # (:266/:351-357/:494), así que marcar una clase del puerto habría dado 500, el mismo resultado que el brazo
+  # permanente que la AC decía no conflacionar. (2) La AC 16 emparejaba dos tests sobre resolvers DISJUNTOS de
+  # Symfony (MapUploadedFile no pasa por el serializador), de modo que el segundo pasaba con el guard borrado
+  # — y el test correcto YA EXISTÍA en el árbol desde antes de la épica. (3) El literal de Cache-Control de la
+  # AC 11 no es lo que sale por el cable: HeaderBag hace ksort y AbstractSessionListener añade must-revalidate
+  # y Expires. (4) El caso de integridad de la AC 8 ponía rojo StorageFailureVocabularyTest y contradecía el
+  # docblock del propio enum, sin emisor posible donde Task 5 lo ponía. (5) Task 0 colgaba de una premisa
+  # FALSA heredada del épico y del defer de img-1-2 y nunca medida: bajo el orden findById → read que la
+  # propia historia manda, un id aleatorio no toca storage y emite cero líneas; los productores reales son la
+  # raíz inusable y el fallo transitorio, más ruidosos y con flush del fingers_crossed. (6) Ninguna fixture
+  # puede sembrar una Image con bytes, así que siete filas de la matriz eran inconstruibles. Además: CORS
+  # bloquea el cache condicional que la historia entrega (AC 24 nueva), las cabeceras del propio 304 no
+  # estaban especificadas, y se corrigieron una CITA FABRICADA atribuida a api/CLAUDE.md, cuatro rangos de
+  # línea que apuntaban a la AC contigua, un registro inventado (api/.accepted-risk) y cinco recuentos
+  # inflados. El artefacto pasa de 1009 a 1143 líneas y de 26 a 27 AC.
+  # img-1-3: Task 0 RESUELTA 2026-08-30 — la señal de fallo de lectura se deja SIN ACOTAR (opción D), tras dos
+  # rondas de consulta externa y tres mediciones. La ronda 1 recomendó D condicionada a que el canal fuera una
+  # alarma; medido, NO lo es (stream plano en los tres entornos, handler de Sentry comentado y excluyéndolo,
+  # cero colectores en compose), así que la condición es falsa. D sobrevive por otra razón: las cotas
+  # disponibles están en el punto de control equivocado, porque un 5xx escribe ADEMÁS un `error` en el canal
+  # por defecto (ExceptionResponder.php:293) que activa el handler bufferizado y es inalcanzable desde el
+  # módulo. La ronda 2 corrigió mi argumento (rechaza A/B/C, no prueba D por sí solo) y aportó la gobernanza:
+  # un requisito escrito no se reinterpreta desde la historia que lo incumple. Resultado: ADR nuevo
+  # (docs/adr/image-read-failure-signal-bound.md, con las cuatro alternativas descartadas una a una, incluido
+  # que el cap por petición es un no-op MEDIDO), AC del épico enmendada apuntando al ADR y conservando su
+  # redacción original para que el cambio sea auditable, AC 9 pasa de «acota» a «declara con la medición»,
+  # AC 22 gana un quinto residual reencuadrado como SHARED-SINK EVICTION entre productores independientes, y
+  # la medición queda acotada a coste POR EVENTO declarando que no mide frecuencia ni producción (no hay
+  # despliegue de producción). Cero código. Issue de infraestructura abierta (#879): el aislamiento del sumidero
+  # es transversal a todos los contextos y no de esta épica.
   # img-1-1: code review (bmad-code-review, PR #862) completo 2026-08-27 — 1 decision-needed
   # resuelto (fail-closed) y 6 patch aplicados, make php.stan/php.quality/php.unit en verde.
   # img-1-2: code review (bmad-code-review, PR #873) completo 2026-08-29 — tres capas en paralelo
@@ -88,8 +135,18 @@ development_status:
   # normalizando en el constructor del VO. Decision-needed: el bus entero corría con el default de
   # Symfony — siete segundos de reintento — así que `async` declara ya su `retry_strategy`.
   # Gates frescos: php.quality.dry-run 0 · php.unit 0 (3333 tests) · php.md 0 · shellcheck 0.
+  # img-1-3: las seis decisiones abiertas quedan CERRADAS 2026-08-30 (D1 Infrastructure/Controller/ — medido,
+  # en Backoffice Http/ es sólo para mappers · D2 aceptar must-revalidate · D3 id por escenario · D4 step
+  # genérico · D5 CERO issues nuevas · D6 heredar not-found). Feedback de Sergio aplicado: el default es
+  # arreglar en la PR, no abrir issue — escrito como regla en CLAUDE.md y aplicado aquí, donde el residual
+  # del objeto en memoria se cerró con una guarda en la AC 7 en vez de con una issue.
+  # img-1-3: max-age baja de un año a 3600 s (2026-08-30), supersediendo el valor del épico. La inmutabilidad
+  # del IDENTIFICADOR no implica cacheabilidad indefinida de los BYTES: el módulo no reemplaza nunca una
+  # representación, pero su contrato es el borrado fiable y el borrado es otro evento de ciclo de vida. 3600
+  # queda etiquetado como PRIOR, no medición (no hay SLA ni consumidor); si el SLA fuera cero la respuesta
+  # sería no-store. Sin ADR: aquí se hace MÁS que el requisito, no menos.
   epic-images: in-progress
   img-1-1-subir-imagen-obtener-representacion-canonica: done
   img-1-2-persistir-imagen-borrado-fiable-de-bytes: done
-  img-1-3-leer-representacion-canonica-de-forma-segura: backlog
+  img-1-3-leer-representacion-canonica-de-forma-segura: ready-for-dev
   epic-images-retrospective: optional

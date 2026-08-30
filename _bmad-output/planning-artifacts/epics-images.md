@@ -791,16 +791,31 @@ lectura todavía no confirmada, para no dejar al cliente con un fichero truncado
 **Then** la señal distingue `404` (ausencia confirmada), `5xx` (fallo transitorio) e "integridad"
 (digest no coincide) como `failure_category` distintos, sin incluir `ImageId`, `digest` ni bytes
 
-**Given** una lectura autenticada sobre un `ImageId` que no existe (code review de img-1-2, 2026-08-29)
-**When** el adaptador de storage confirma la ausencia y emite su señal
-**Then** ese registro está acotado — muestreo, contador agregado o nivel `debug` para la ausencia en
-`read()` frente a `info` en `delete()` —, porque a partir de esta historia la ausencia confirmada pasa a
-ser un productor de log **disparable por el cliente y sin cota**: el canal `observability` es en prod el
-stream siempre encendido a `php://stderr`, acotado sólo por volumen (`json-file`, 10 MB × 5), así que N
-identificadores aleatorios desalojan a coste cero todo el log retenido, líneas de otros subsistemas
-incluidas. En img-1-2 el argumento contrario es correcto y se mantiene (un despliegue que responde «ya
-ausente» a todo tiene que ser contable), pero allí el volumen lo acota el trabajo real; aquí lo acota el
-cliente
+**Given** una lectura autenticada que falla en el camino de storage (code review de img-1-2, 2026-08-29;
+**AC SUPERSEDIDA el 2026-08-30 — ver [`docs/adr/image-read-failure-signal-bound.md`](../../docs/adr/image-read-failure-signal-bound.md)**)
+**When** el adaptador emite su señal
+**Then** la historia **declara por qué la señal no se acota**, con su medición de coste por evento, en vez
+de acotarla.
+
+**Redacción original, conservada porque el cambio es de requisito y no de dato**: *"ese registro está
+acotado — muestreo, contador agregado o nivel `debug` para la ausencia en `read()` frente a `info` en
+`delete()` —, porque a partir de esta historia la ausencia confirmada pasa a ser un productor de log
+disparable por el cliente y sin cota … así que N identificadores aleatorios desalojan a coste cero todo el
+log retenido"*.
+
+**Por qué se supersede.** Tres mediciones sobre el árbol, en el orden en que tumban la AC:
+(1) **la premisa es falsa** — bajo el orden `findById()` → `read()` que la propia ruta impone, un
+identificador aleatorio inexistente responde 404 desde el repositorio y **no toca storage**, así que no
+emite nada; los productores reales exigen una fila huérfana (P1) o un fallo de despliegue (P2/P3);
+(2) **el nivel `debug` que esta AC ofrecía como una de las tres salidas es letra muerta**, porque
+`ObservabilityChannelGateTest` fija el handler en `info` para `test` y `prod`;
+(3) **las cotas disponibles están en el punto de control equivocado** — una petición P2/P3 escribe la línea
+de `observability` *y* un registro `error` en el canal por defecto (`ExceptionResponder` loguea `>= 500` a
+`error`) que activa el handler bufferizado, y ese segundo registro es inalcanzable desde este módulo.
+El ADR recoge además que el canal **no lo escucha nadie** (sin colector, handler de Sentry comentado), así
+que tampoco es una alarma que preservar.
+La corrección de img-1-2 sobre `delete()` **se mantiene intacta**: allí el volumen lo acota el trabajo real
+y la ausencia sigue siendo contable a nivel `info`.
 
 **Given** una petición a `GET /images/{imageId}` que incluye la cabecera `Range`
 **When** se resuelve la respuesta (tercera lectura hostil, 2026-08-26; MEDIA-7)
@@ -810,10 +825,24 @@ de un contrato HTTP que nadie ha pedido todavía (declarado, no un olvido)
 
 **Given** una respuesta exitosa de `GET /images/{imageId}`
 **When** se construyen sus cabeceras de cache (misma lectura; MEDIA-7)
-**Then** incluye `Cache-Control: private, max-age=31536000, immutable` junto al `ETag` ya decidido —
+**Then** incluye `Cache-Control: private, **max-age=3600**, immutable` junto al `ETag` ya decidido —
 `private` porque la ruta exige autenticación y una caché compartida no debe servir la respuesta entre
 usuarios distintos; `immutable` porque esta rebanada no expone ninguna operación que reemplace los bytes
 de un `ImageId` ya creado (solo `UploadImage` y `delete`, nunca un update in-place)
+
+**Redacción original, conservada porque el cambio es de requisito**: el valor era `max-age=31536000` (un
+año). **Enmendado el 2026-08-30** a 3600 s; el argumento completo vive en la AC 11 de
+[`img-1-3-…`](../implementation-artifacts/img-1-3-leer-representacion-canonica-de-forma-segura.md).
+En corto: la inmutabilidad del **identificador** no implica cacheabilidad indefinida de los **bytes**. El
+razonamiento del épico acierta en el eje de *corrección* —no hay update in-place, así que la representación
+nunca cambia— pero el contrato del módulo **es el borrado fiable**, y el borrado es un evento de ciclo de
+vida distinto de la mutación: con un año, borrados los bytes y la fila, cada visor sigue sirviendo la imagen
+hasta un año sin que ninguna petición alcance el servidor. Indefendible en un módulo que **no puede
+distinguir un logo de un avatar** por construcción. **A diferencia de la señal de lectura, esto no lleva
+ADR**: allí la historia hacía *menos* que el requisito y hacía falta una excepción argumentada; aquí hace
+**más**, con una ventana más conservadora que la pedida. `3600` queda declarado **prior, no medición** — no
+hay SLA de borrado ni consumidor del que derivar una ventana de reuso—, y si ese SLA resultara ser cero la
+respuesta sería `no-store`, no un número menor.
 
 **Given** la implementación del controlador
 **When** resuelve la respuesta
