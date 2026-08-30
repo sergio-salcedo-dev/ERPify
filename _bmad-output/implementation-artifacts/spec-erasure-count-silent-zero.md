@@ -71,51 +71,63 @@ token vivo se le dice que está gastado; es un diagnóstico sobre el que no pued
 idéntico. Con la guarda **sigue abortando** (la propiedad «un token, un reset» se conserva entera), pero como
 un 500 diagnosticable en vez de un diagnóstico falso. Declarado en el puerto, no sólo aquí.
 
-## La puerta: por qué cuenta en vez de parsear
+## La puerta: lo que puede sostener, y nada más
 
-`BulkStatementNarrowingGateTest` (+ motor `BulkStatementNarrowing`) afirma, **por fichero**, que el número de
-sentencias masivas DQL construidas es igual al número de estrechamientos que pasan por la guarda.
+`IntNarrowingConfinementGateTest` afirma una sola cosa: **en `api/src`, `\is_int(` sólo puede aparecer en el
+fichero de `AffectedRows`**. Medido hoy: dos ocurrencias, ambas allí (una en el docblock, que se descarta).
+Cero falsos rojos, y refuta exactamente la grafía que ocurrió siete veces.
 
-- **Prohibir `is_int(` prohíbe `is_int(`.** `is_numeric()`, un cast `(int)` y un `@phpstan-var int` llegan al
-  mismo sitio equivocado. Exigir que cada sentencia esté **contabilizada** por un estrechamiento es una
-  obligación positiva: no se rodea, se cumple.
-- **Igualdad, no presencia.** Un método que estrecha una sentencia y fabrica el cero de una segunda pasaba un
-  `str_contains` — medido. Archivar-y-borrar y bloquear-y-borrar son las formas que llegan después.
-- **El universo es el DML, no la ejecución.** Nombrar `->execute(` estaba mal dos veces:
-  `AbstractQuery::getResult()` es literalmente `return $this->execute(null, $hydrationMode);` y ya es la
-  grafía de lectura de este repositorio, así que un octavo adaptador escrito así era invisible; y un SELECT
-  ejecutado con `->execute()` quedaba obligado a alcanzar una guarda cuyo único efecto sobre un array es un
-  500. El DML se reconoce por la forma que sólo el query builder tiene: `->delete(Entidad::class, …)`.
-- **Nada está exento, y eso es lo que quitó el parser.** La primera versión atribuía cada sentencia a su
-  método envolvente para poder exonerar a uno `void`. El `UPDATE` masivo de sesiones descarta su conteo y aun
-  así lo estrecha: afirmar que una sentencia masiva devolvió un conteo es significativo aunque nadie lea el
-  número, de modo que la exención no compraba nada y costaba un parser.
-- **La rejilla se genera, no se filtra del árbol.** Quince formas que el árbol no contiene, con su
-  clasificación afirmada una a una.
+**Es un suelo sobre accidentes y nada más, y hay que decirlo porque dos puertas más fuertes se construyeron y
+se midieron rotas antes.** La primera atribuía cada sentencia a su método envolvente tokenizando y casando
+llaves: seis defectos propios, entre ellos que `use function is_int;` colapsaba una clase entera en un
+registro fantasma y escondía todos sus sitios reales. La segunda contaba, por fichero, sentencias DQL contra
+estrechamientos y exigía igualdad — y falló como **idea**, no como implementación:
+
+| Forma | Veredicto |
+|---|---|
+| Guarda sobre un valor DBAL + DQL sin guardar | `1/1` **VERDE** |
+| Guardar **ambas** — la reparación correcta | `1/2` **ROJO** |
+| Un helper privado guardado para tres sentencias (DRY) | `3/1` **ROJO** |
+| `cache->delete(T::class)` junto a un borrado bien guardado | `2/1` **ROJO** |
+| `->delete(self::ENTITY, …)` con `const ENTITY = T::class` | fuera del universo |
+
+Premiaba el defecto y rechazaba la reparación, y empujaba a re-duplicar la guarda por sitio — que es el
+copy-paste que produjo los siete sitios. Un control que empuja hacia el defecto es peor que ningún control.
+Contar no puede distinguir **qué** valor estrecha una llamada a la guarda; eso es análisis de flujo.
+
+**Por qué `is_numeric` NO entra.** Hay tres sitios en `api/src` con `\is_numeric($x) ? (int) $x : 0`
+(`DbalAuditActorAnonymiser:63`, `DbalProjectionCheckpointStore:40`, `DbalBankCountReadModel:41`). Parecen el
+mismo defecto y no lo son: son `fetchOne()`, donde `false` significa «no hay fila» y el default es una
+**respuesta**. Una sentencia masiva DQL siempre devuelve un conteo, y ahí un default sólo puede ser
+**inventado**. Esa es la línea, y es la que hace que la regla se pueda enunciar sin falsos rojos.
 
 ## Verificación
+
+Ejecuciones frescas tras el rediseño, con exit code impreso.
 
 | Puerta | Resultado |
 |---|---|
 | `make php.stan` | `[OK] No errors` — exit 0 |
-| `make php.unit` | 3444 tests, 17790 aserciones, 2 skipped — exit 0 |
+| `make php.unit` | 3430 tests, 17776 aserciones, 2 skipped — exit 0 |
 | `make php.behat` | 472 escenarios, 4378 pasos — exit 0 |
-| `make php.quality` | exit 0 (Rector converge: «Rector is done!», 0 ficheros) |
+| `make php.quality` | exit 0 (0 violaciones PHPMD, 0 errores PHPCS) |
 | `make php.quality.dry-run` | exit 0 — **la que corre CI**, ejecutada aparte por eso |
-| `make php.lint.gate-placement` | 27 tests en tres suites (4 + 13 + 10) — exit 0 |
+| `make php.lint.gate-placement` | tres suites, exit 0 |
 
 `pwa.quality` / `pwa.test` no se ejecutaron: esta rama no toca `pwa/`.
 
 **Dos tiras y aflojas de herramientas, resueltos reestructurando y no suprimiendo.** Rector sube `\count()`
 fuera de la condición del bucle a un `$counter`, lo que rompía el estrechamiento de offset de PHPStan level
-max — verde en `php.stan`, rojo tras `php.quality`; irrelevante ahora que no hay bucles, pero medido. Y
-`phpdoc_align` rellena la columna de descripción de `@throws` hasta la del vecino más largo, así que una
+max — verde en `php.stan`, rojo tras `php.quality`; el código que lo sufría ya no existe, pero queda medido.
+Y `phpdoc_align` rellena la columna de descripción de `@throws` hasta la del vecino más largo, así que una
 descripción que cabía por sí sola pasaba de 120 caracteres una vez alineada bajo un FQCN de excepción.
 
 ## Matriz de falsificación
 
-Dieciséis mutaciones, cada aserción provocada roja **por su propia mutación**, restaurada por copia de bytes
-desde una pristina (nunca `git checkout --`); `diff -rq` final contra las pristinas: idénticas.
+Cada aserción provocada roja **por su propia mutación**, restaurada por copia de bytes desde una pristina
+(nunca `git checkout --`); `diff -rq` final contra las pristinas: idénticas.
+
+**El guard** (`AffectedRowsTest`, 9 casos):
 
 | # | Mutación | Rojo medido |
 |---|---|---|
@@ -124,50 +136,49 @@ desde una pristina (nunca `git checkout --`); `diff -rq` final contra las pristi
 | N3 | El guard rechaza el cero legítimo | `testKeepsTheLegitimateZero…` |
 | N4 | El guard devuelve `$result + 1` | `testPassesACountThrough` + el cero |
 | N5 | El guard deja de rechazar negativos | `testRaisesOnANegativeCount` |
-| N6 | Replantar el fallback original en `DoctrineMembershipRepository` | la puerta: «builds 1 … narrows 0» |
-| N7 | Otra grafía: cast `(int)` en Session | «builds 3 … narrows 2» |
-| N8 | La grafía `->getResult()` en Membership | «builds 1 … narrows 0» |
-| N9 | Presencia (`str_contains`) en vez de igualdad | `two statements, one narrowed` |
-| N10 | Deja de descartar el CONTENIDO de los literales | `the guard only quoted` |
-| N11 | Deja de quitar comentarios | `the guard only in a comment` |
-| N12 | El DML deja de exigir `::class` | `a collaborator delete` |
-| N13 | Deja de exigir que el fichero construya una `Query` | `a collaborator taking a class name` |
-| N14 | La barrida se vacía (raíz inexistente) | `testTheSweepStillReaches…` |
-| N15 | La barrida **ENCOGE** a un fichero | `testTheSweepStillReaches…` (lo que `assertNotEmpty` no vería) |
-| N16 | El patrón DML no compila | 15 errores: **lanza**, no se vacía en silencio |
 
-**N13 salió verde en su primera ejecución.** La comprobación de «este fichero construye una `Query`» no era
-falsable: el caso que tenía (`$this->storage->delete($id)`) ya quedaba fuera por no llevar `::class`. Se
-añadió `a collaborator taking a class name` — un colaborador cuyo argumento **sí** es un nombre de clase, en
-un fichero sin query builder — y entonces discrimina. Se registra porque es la segunda vez en esta rama que
-una guarda mía resultó decorativa hasta que su mutación lo demostró, y una matriz que sólo enumera los rojos
-que salieron a la primera no es una medición.
+**La puerta** (`IntNarrowingConfinementGateTest`, 3 tests):
+
+| # | Mutación | Rojo medido |
+|---|---|---|
+| R1 | Replantar el fallback exacto en `DoctrineMembershipRepository` | la confinación **y** la anti-vacuidad |
+| R2 | La barrida deja de descartar comentarios | `testAFileThatOnlyDOCUMENTS…` |
+| R3 | El guard deja de estrechar (se borra su `is_int`) | `testTheGuardStillExistsAndIsStillReached` |
+| R4 | Un adaptador deja de alcanzar la guarda | `testTheGuardStillExists…`, «Adapters stopped routing» |
+
+**R2 y R3 salieron VERDES en su primera ejecución, y es la tercera vez en esta rama que una guarda mía
+resulta decorativa hasta que su mutación lo demuestra.** R2 porque el fichero de la guarda está excluido del
+barrido, así que su propio docblock nunca importaba y ningún otro fichero de `api/src` nombra la grafía en un
+comentario — se cerró con un par sintético (`Documented.php` / `Committed.php`) que sí discrimina. R3 porque
+la anti-vacuidad afirmaba que la guarda se **alcanza**, no que **estreche**: «`is_int` sólo en `AffectedRows`»
+lo satisface un árbol donde `is_int` no está en ninguna parte. Se registran las tres veces porque una matriz
+que sólo enumera los rojos que salieron a la primera no es una medición.
 
 ## Lo que un verde NO prueba
 
-- Una llamada a la guarda **muerta** — un closure sin usar, una rama inalcanzable — cuadra la aritmética sin
-  estrechar nada. Ningún conteo ni barrido de texto distingue una llamada alcanzada de una escrita; la
-  revisión es el único control en esa dirección.
-- **Nunca juzga si el conteo es correcto**: una sentencia a la que le falta un predicado, una cuya
-  transacción hace rollback después, o una que cuenta la tabla equivocada devuelven un conteo perfectamente
-  bien tipado y pasan.
-- Una sentencia cuyo DQL sea una **cadena** (`createQuery('DELETE FROM …')`, o `delete('Foo\Bar', 'f')` sin
-  `::class`) es invisible: el contenido de los literales se descarta a propósito, y ese corte vale en las dos
-  direcciones. Cero sitios así hoy.
-- Un fichero que construye la sentencia y la estrecha en **otro**: los conteos son por fichero.
-- `AffectedRows` importado con **alias** es un falso ROJO. Esta regla falla hacia el ruido donde su
-  predecesora fallaba hacia el silencio.
-- La familia **DBAL** queda fuera: `Connection::executeStatement()` devuelve `int|numeric-string` y diez
-  sitios lo estrechan a mano con un cast `(int)`, `DbalKeystore::destroy()` — la lápida del crypto-shredding
-  — entre ellos. El cast **convierte** en vez de fabricar, que es por qué es residual y no el mismo defecto;
-  pero nada lo sujeta ahí. Registrado en `PRODUCTION_SECURITY_CHECKLIST.md`.
+- La puerta afirma **una grafía**. Un `(int) $x`, un `$x ?? 0`, un `if`, un `match`, o cualquier
+  estrechamiento que no deletree `is_int` pasan en verde. El octavo adaptador que fabrique por otra vía
+  envía sin que nada enrojezca, y la revisión es el único control en esa dirección.
+- Nunca juzga si el conteo es **correcto**: una sentencia a la que le falta un predicado, una cuya
+  transacción hace rollback después, o una que cuenta la tabla equivocada devuelven un `int` perfectamente
+  bien tipado y pasan. Tampoco si la respuesta de la guarda se **usa**.
+- La familia **DBAL** queda fuera: `Connection::executeStatement()` devuelve `int|numeric-string` y sus
+  llamantes estrechan a mano y de forma inconsistente — la mayoría con un cast `(int)`, que convierte en vez
+  de fabricar, pero `DbalKeystore::destroy()` (la lápida del crypto-shredding) no hace ninguna de las dos:
+  devuelve `$affected > 0` directamente sobre la unión. Es correcto para ambos miembros hoy; nada lo sujeta
+  ahí. Registrado en `PRODUCTION_SECURITY_CHECKLIST.md`.
+- El doble `UnavailableSessionRepository::deleteRetired()` diverge de su puerto y del adaptador real. Nadie
+  lo ejerce, así que se corrige la afirmación falsa de su docblock y **no** su conducta: un doble que nadie
+  llama es el sitio equivocado para cambiar comportamiento.
 
 ## Adversarial pass
 
 Tres capas hostiles en paralelo, en contextos frescos e independientes, **antes de abrir la PR**, sobre el
 commit `84e270b9`: Blind Hunter (sin spec), Edge Case Hunter (toda rama y frontera) y Acceptance Auditor (el
 registro contra el árbol). Read-only explícito en los tres prompts. **Cambió el resultado, no lo confirmó:**
-1 GRAVE, 8 SERIO y 8 MENOR tras deduplicar, y **el arreglo del gate se rehízo entero**.
+1 GRAVE, 7 SERIO y 7 MENOR tras deduplicar (recontado: los totales que esta sección declaró primero — «8 y
+8» — no se reconstruían desde sus propios epígrafes, y lo señaló la review posterior), y **el arreglo del gate
+se rehízo entero**.
 
 **GRAVE · el gate estaba verde sobre el defecto exacto que existía para refutar.** El estrechamiento se
 comprobaba con `str_contains`, así que un método que estrecha una sentencia y fabrica el cero de una segunda
@@ -191,7 +202,8 @@ intentos de tratar el `&` eran código muerto (el token entre `function` y el no
 `"$a}"` descuadraba las llaves; una clase anónima anidada se atribuía a su método envolvente y una función
 nombrada anidada al método `void` que la rodeaba. Ninguno era una propiedad de la regla. **Cerrados por
 construcción**: contar por fichero no necesita frontera de método, así que ninguna de esas formas existe para
-equivocarse. El motor pasó de 278 líneas a 146 y el VO acompañante desapareció.
+equivocarse. El motor pasó de 278 líneas a 160 y el VO acompañante desapareció. (Ese motor tampoco
+sobrevivió: la review posterior midió que contar falla como idea, y hoy no queda ni él ni su gate.)
 
 **SERIO · un SELECT quedaba obligado a alcanzar una guarda cuyo único efecto ahí es un 500**, y un método que
 lee y llama a un `execute()` de caso de uso era falso rojo sin salida. Ambos desaparecen con el universo DML.
@@ -209,14 +221,19 @@ residuales.
 
 **SERIO · la exclusión del DBAL se apoyaba en una premisa falsa.** Mi docblock decía que
 `executeStatement()` «ya devuelve `int`»; devuelve `int|numeric-string`
-(`api/vendor/doctrine/dbal/src/Connection.php:891`), que es justamente por qué diez sitios lo castean a mano
-— `DbalKeystore::destroy()`, en la ruta de evidencia del crypto-shredding, incluido. Verificado por mí contra
-el vendor. **Corregido**: la exclusión se reargumenta sobre su motivo verdadero (el cast convierte, no
-fabrica) y la familia se nombra en vez de declararse inexistente.
+(`api/vendor/doctrine/dbal/src/Connection.php:891`). Corregido — pero **la corrección introdujo su propia
+falsedad**, en documentación de seguridad: dijo «diez sitios lo castean a mano, `DbalKeystore::destroy()`
+entre ellos», y ese método no castea, compara (`return $affected > 0;` sobre la unión). El ejemplar elegido
+era un contraejemplo de la frase que lo contenía. Lo encontró la review posterior; la entrada del checklist
+enuncia ahora la **propiedad** en vez de una cifra, y nombra los dos comportamientos distintos que la familia
+tiene de verdad.
 
 **SERIO · cuatro puertos ganaron una excepción que ninguno declaraba.** `SessionRepository` es el caso agudo:
 su docblock afirma que **toda** su superficie convierte un fallo de almacén en `SessionStoreUnavailable`.
-**Corregido** en los cinco puertos, y el de `consume()` dice ahora qué significa `false` y qué no.
+Corregido en **cuatro ficheros de puerto, siete métodos**, y el de `consume()` dice ahora qué significa
+`false` y qué no. La cifra que esta sección declaró primero — «los cinco puertos» — era falsa, y además
+**dejaba fuera `revokeOthersForUser()` y `revokeAllForUser()`**, que bajan al mismo `bulkRevokeActive()` y
+ganaron el escape en este mismo cambio; los encontró la review posterior y se cerraron allí.
 
 **MENORES atendidos**: `AffectedRows::from(-1)` devolvía `-1` como conteo de filas — ahora lanza, con su
 propio caso y su mutación (N5); `testPassesACountThrough` no lo cubría ninguna mutación — ahora N4;
@@ -231,8 +248,10 @@ está renumerada N1–N16.
 **Veredicto de higiene de comentarios (regla de `CLAUDE.md`)**: el Auditor argumentó los dos casos límite en
 vez de afirmarlos. El comentario de `consume()` («…en vez de plegarlo en la comparación») nombra una
 *alternativa de diseño* descartada con su coste, no el código anterior — legítimo. El de `AffectedRows` estaba
-más cerca de la línea (pretérito sobre una grafía que ya no existe en `src`), y se ha reescrito en presente
-para que sea verificable desde el árbol para siempre. Cero IDs de story o de requisito en todo el diff.
+más cerca de la línea (pretérito sobre una grafía que ya no existe en `src`). **Esta sección afirmó haberlo
+reescrito en presente y no lo hizo** — lo midió la review posterior comparando los dos commits, y allí se
+reescribió de verdad, junto con un «The two used to be the same value» que el falsificador había ganado. Cero
+IDs de story o de requisito en todo el diff.
 
 **Lo que el pase NO pudo verificar**: ninguna capa ejecutó `php.behat` (resetea la BD) ni `php.quality`
 (aplica fixers), así que esas dos filas de la tabla son de esta sesión; ninguna reprodujo la matriz de
@@ -240,3 +259,51 @@ mutación (habría exigido editar ficheros, prohibido por su restricción read-o
 las evasiones que encontró son realistas en manos de este equipo — el propio Blind Hunter califica la de
 `getResult()` como alta y las otras dos como mecánicamente reales pero sin forma motivadora en el árbol. El
 Auditor dejó `api/config/reference.php` sucio al warmear la caché de prod; restaurado antes de commitear.
+
+## Review Findings
+
+Code review de las tres capas en paralelo sobre el diff completo (`c408df9c...c91112c4`), no sobre un commit
+intermedio. Cada afirmación cara re-verificada por mí ejecutando el motor en el contenedor.
+
+- [x] [Review][Decision] **RESUELTO — se sustituye por una regla estrecha y verdadera.** La aritmética por fichero no puede expresar el invariante — cuatro fallos medidos, del IDEA y no de su implementación** — (1) *premia el defecto y rechaza la reparación*: guarda sobre un valor DBAL + DQL sin guardar = `1/1` VERDE, y guardar **ambas** = `1/2` ROJO; (2) *enrojece la forma DRY*: un helper privado guardado para tres sentencias = `3/1` ROJO, empujando a re-duplicar la guarda por sitio, que es el copy-paste que produjo el defecto; (3) *enrojece un adaptador correcto* que invalida caché por `Entidad::class` junto a un borrado bien guardado = `2/1` ROJO; (4) *no ve* `->delete(self::ENTITY, …)` con `private const string ENTITY = T::class;` — idioma que este repo ya usa —, ni `->delete()->from(X::class)`, ni `::CLASS`, ni `$entity::class`. Añádase que `DbalAffectedRows::from(` compensa por substring y que la prosa antes de `<?php` (`T_INLINE_HTML`, no descartado) también. No es una lista de parches: es que contar no dice lo que hay que decir.
+
+- [x] [Review][Patch] `revokeOthersForUser()`/`revokeAllForUser()` no declaran la excepción que ahora escapa, y el docblock de clase queda falso [api/src/Iam/Session/Domain/Repository/SessionRepository.php:21,61,68]
+- [x] [Review][Patch] La entrada nueva del checklist es falsa en sus dos mitades: son **ocho** sitios, no diez, y `DbalKeystore::destroy()` — el ejemplar elegido — **no castea**, compara [PRODUCTION_SECURITY_CHECKLIST.md:921]
+- [x] [Review][Patch] «seven reached independently for `\is_int($affected) ? $affected : 0`» es falso: seis con esa grafía y un séptimo distinto [PRODUCTION_SECURITY_CHECKLIST.md:909, api/src/Shared/Persistence/Infrastructure/AffectedRows.php:13, api/tests/Unit/Gate/BulkStatementNarrowingGateTest.php:16]
+- [x] [Review][Patch] El suelo `KNOWN_STATEMENTS` es decorativo: el suelo de ficheros se afirma primero y aborta el método, así que ninguna de las 16 mutaciones lo alcanza [api/tests/Unit/Gate/BulkStatementNarrowingGateTest.php:83]
+- [x] [Review][Patch] El § Adversarial pass afirma haber reescrito el docblock de `AffectedRows` en presente; no ocurrió, y el test añade un comentario relativo al cambio [api/src/Shared/Persistence/Infrastructure/AffectedRows.php:13, api/tests/Unit/Shared/Persistence/Infrastructure/AffectedRowsTest.php:22]
+- [x] [Review][Patch] «el motor pasó de 278 líneas a 146» — son 160 [_bmad-output/implementation-artifacts/spec-erasure-count-silent-zero.md:194]
+- [x] [Review][Patch] Los totales «1 GRAVE, 8 SERIO y 8 MENOR» no se reconstruyen desde la propia sección
+- [x] [Review][Patch] N8, tal como está descrita, no puede ponerse roja: cambiar sólo la grafía deja el guard en su sitio
+- [x] [Review][Patch] «Quince formas que el árbol no contiene» — dos SÍ están en el árbol (`guarded` y `guarded and discarded`)
+- [x] [Review][Patch] `preg_match_all() === false` también ocurre por límite de backtracking; el mensaje nombra la causa equivocada [api/tests/Support/BulkStatementNarrowing.php:110]
+- [x] [Review][Patch] Dos aserciones más sin mutación que las cubra: el `PHP_INT_MAX` y la fila `'no query at all'`
+- [x] [Review][Patch] Docblock preexistente contradicho: `deleteRetired()` **sí** envuelve en `convertingStoreFailure` [api/tests/Functional/Iam/Session/Fixtures/UnavailableSessionRepository.php:63]
+
+### Qué cambió esta review, y por qué se corrió
+
+Se corrió porque el usuario preguntó si se había hecho `bmad-code-review`, y no: el pase adversarial anterior
+usó las tres capas escritas a mano y, sobre todo, leyó **`84e270b9`**, no el head. Las 626 inserciones de
+`c91112c4` — el motor de conteo, su gate, los cinco docblocks de puerto y la entrada del checklist — eran
+código de sustitución escrito bajo la presión de los hallazgos de ese pase y respaldado únicamente por la
+matriz de mutación de su propio autor. Ahí estaba todo.
+
+**El resultado no fue una lista de parches: fue que la puerta estaba rota por segunda vez**, y esta vez la
+idea y no la implementación. Las cinco formas de la tabla de arriba las verifiqué yo ejecutando el motor en
+el contenedor, no las tomé de las capas. La que decide es que **premiaba el defecto y rechazaba la
+reparación**, y que la forma DRY — un helper guardado para tres sentencias — enrojecía: un control que empuja
+a re-duplicar la guarda por sitio empuja hacia el copy-paste que produjo el defecto.
+
+**Un falso positivo mío, registrado porque estuvo a punto de costar caro.** Al medir el terreno para la regla
+nueva vi tres `\is_numeric($x) ? (int) $x : 0` en `api/src` y los leí como tres instancias vivas del mismo
+defecto, una de ellas en la ruta de anonimización de auditoría. Leer los call sites lo desmontó: son
+`fetchOne()`, no `execute()`, y ahí `false` («no hay fila») es un resultado alcanzable cuyo default es una
+respuesta. Iba a inflar el alcance de la PR con tres sitios correctos.
+
+**Lo que las capas no pudieron verificar**: ninguna ejecutó `php.behat` (resetea la BD) ni `php.quality`
+(aplica fixers), así que esas dos filas son de esta sesión; ninguna reprodujo ninguna matriz de mutación
+(exige editar ficheros, prohibido por su restricción read-only); y ninguna puede decir si las evasiones que
+encontró son realistas en manos de este equipo — midieron que son mecánicamente reales, y que dos de ellas
+(`self::ENTITY`, el helper DRY) son grafías que este repositorio ya usa. El Acceptance Auditor dejó
+`api/config/reference.php` sucio al warmear la caché de prod con `php.quality.dry-run`, que por tanto **no es
+read-only**; restaurado antes de commitear.

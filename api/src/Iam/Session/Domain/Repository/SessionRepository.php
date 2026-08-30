@@ -18,11 +18,16 @@ use UnexpectedValueException;
  * as directed UPDATEs (no aggregate hydration), which is why they live on the port rather than looping the
  * aggregate.
  *
- * EVERY method here converts a store-connection failure into a domain {@see
+ * EVERY method here converts a store-connection FAILURE into a domain {@see
  * \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable} (→ 503) so the gate can fail closed rather than
  * letting a raw infrastructure error surface as a 500. Universal rather than per-method because a single
  * request reaches several of them — the erasure path admits through {@see findActiveById()} and then deletes
  * through {@see deleteAllForUser()} — and one outage answered with two statuses is worse than either.
+ *
+ * A store that ANSWERS, with something that is not an affected-row count, is a different event and keeps a
+ * different status: it is not an outage, retrying changes nothing, and reporting 503 would invite a retry
+ * that fails identically. Every method whose implementation runs a bulk statement therefore also declares
+ * `\UnexpectedValueException` (→ 500) — the two `void` revocations included, because they run one too.
  */
 interface SessionRepository
 {
@@ -57,6 +62,7 @@ interface SessionRepository
      * others" action, which never self-expels the session in hand.
      *
      * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
+     * @throws UnexpectedValueException                                     when the store yields no affected-row count
      */
     public function revokeOthersForUser(string $userId, SessionId $currentSessionId): void;
 
@@ -64,6 +70,7 @@ interface SessionRepository
      * Bulk-revokes every currently-active session of the user (the reset-everywhere capability).
      *
      * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
+     * @throws UnexpectedValueException                                     when the store yields no affected-row count
      */
     public function revokeAllForUser(string $userId): void;
 

@@ -17,9 +17,9 @@ use UnexpectedValueException;
  * path and would be green whatever the narrowing did with the other shapes. Calling the guard directly is
  * what makes the branch reachable, and therefore what makes a mutation of it go red.
  *
- * **The zero case is the assertion this whole change exists for**, not a boundary swept in for completeness:
- * a bulk delete's count is read as erasure evidence, so a legitimate zero must survive untouched while a
- * fabricated one must never be mintable. The two used to be the same value.
+ * **The zero case is the assertion this class exists for**, not a boundary swept in for completeness: a bulk
+ * delete's count is read as erasure evidence, so a legitimate zero must survive untouched while a fabricated
+ * one must never be mintable. A hand-rolled narrowing cannot tell those two apart; raising is what can.
  *
  * @internal
  */

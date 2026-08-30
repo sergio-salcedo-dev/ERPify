@@ -61,11 +61,14 @@ final readonly class UnavailableSessionRepository implements SessionRepository
     }
 
     /**
-     * Raises the RAW DBAL failure rather than the domain one, unlike every other method here, because that is
-     * what the real adapter does: `deleteRetired()` is the one statement with no `try`/`DbalException`
-     * translation, since it runs off-request from a command and a tick where there is no response to fail
-     * closed on. A double promising the domain exception would invite a test to assert a 503 the port never
-     * states and production cannot produce.
+     * Raises the RAW DBAL failure rather than the domain one, unlike every other method here. This is the
+     * one method whose double diverges from its port, which declares
+     * {@see SessionStoreUnavailable} for it exactly as it does for the
+     * rest, and from the real adapter, which converts through `convertingStoreFailure()` like every other
+     * statement it runs. Nothing exercises it — the one consumer,
+     * {@see \Erpify\Tests\Functional\Iam\Session\SessionStoreUnavailableAdmissionTest}, drives the read
+     * path — so the divergence is inert rather than load-bearing, and it is recorded here instead of being
+     * repaired blind: a double nobody calls is the wrong place to change behaviour on.
      */
     #[Override]
     public function deleteRetired(DateTimeImmutable $revokedBefore, DateTimeImmutable $expiredBefore): int

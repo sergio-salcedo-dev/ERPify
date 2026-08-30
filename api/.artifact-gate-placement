@@ -129,7 +129,6 @@ tests/Unit/Gate/BestEffortReportChannelGateTest.php :: home
 tests/Unit/Gate/BoundedContainerLogRetentionGateTest.php :: home
 tests/Unit/Gate/BoundedContextGateTest.php :: home
 tests/Unit/Gate/BufferedChannelAmplificationGateTest.php :: home
-tests/Unit/Gate/BulkStatementNarrowingGateTest.php :: home
 tests/Unit/Gate/CaddyfileAccessLogRedactionGateTest.php :: home
 tests/Unit/Gate/ComposerStabilityGateTest.php :: home
 tests/Unit/Gate/ConfirmationGuardAdjacencyGateTest.php :: home
@@ -141,6 +140,7 @@ tests/Unit/Gate/DomainPresentationSeparationGateTest.php :: home
 tests/Unit/Gate/EnumWireContractGateTest.php :: home
 tests/Unit/Gate/EventDispatchGateTest.php :: home
 tests/Unit/Gate/FailedMessagePruneStatementGateTest.php :: home
+tests/Unit/Gate/IntNarrowingConfinementGateTest.php :: home
 tests/Unit/Gate/MailAssemblyBoundaryGateTest.php :: home
 tests/Unit/Gate/MigrationColumnDefaultGateTest.php :: home
 tests/Unit/Gate/MigrationColumnDefaultRulesGateTest.php :: home

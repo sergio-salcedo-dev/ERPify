@@ -10,8 +10,8 @@ use UnexpectedValueException;
  * Narrows the result of a bulk DQL statement to its affected-row count, raising when it is not one.
  *
  * **It exists because `Doctrine\ORM\AbstractQuery::execute()` is declared `mixed`**, so every adapter whose
- * port promises an `int` has to narrow that result, and the narrowing each of them reached for independently
- * was `\is_int($affected) ? $affected : 0`. That fallback mints the one value its callers read as evidence:
+ * port promises an `int` has to narrow that result, and the narrowing a hand reaches for is
+ * `\is_int($affected) ? $affected : 0`. That fallback mints the one value its callers read as evidence:
  * a bulk delete's count flows into `IdentityErasureResult` and out through `identity:gdpr:erase-subject`,
  * while `SessionRepository::deleteAllForUser()` promises that "a second pass with a subject that has no rows
  * deletes nothing and returns 0" — so a legitimate zero and a zero minted by the type fallback are
