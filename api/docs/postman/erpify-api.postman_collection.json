@@ -162,6 +162,102 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "Identity & recovery",
+          "description": "The self-service credential surface and the anonymous lockout edge. Sign in FIRST: the three /me requests carry no token of their own \u2014 the session is an httpOnly cookie the login response sets, and Postman's cookie jar replays it. Only the redemption is reachable without one. Passwords are left blank on purpose; fill them from your own stack and never commit one.",
+          "item": [
+          {
+            "name": "Sign in",
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Accept", "value": "application/json" }],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"admin@erpify.test\",\n  \"password\": \"\"\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{base_url}}/api/v1/backoffice/login",
+                "host": ["{{base_url}}"],
+                "path": ["api", "v1", "backoffice", "login"]
+              },
+              "description": "204 with the session cookie. Present so the three /me requests below can be run at all \u2014 without it they answer 401 and the folder documents a surface nobody can exercise."
+            },
+            "response": []
+          },
+          {
+            "name": "Read recovery secret",
+            "request": {
+              "method": "GET",
+              "header": [{ "key": "Accept", "value": "application/json" }],
+              "url": {
+                "raw": "{{base_url}}/api/v1/me/recovery-secret",
+                "host": ["{{base_url}}"],
+                "path": ["api", "v1", "me", "recovery-secret"]
+              },
+              "description": "Whether the caller holds one, and the two instants that bound it \u2014 never the secret itself. The plaintext is legible exactly once, in the mint response."
+            },
+            "response": []
+          },
+          {
+            "name": "Mint recovery secret",
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Accept", "value": "application/json" }],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"currentPassword\": \"\"\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{base_url}}/api/v1/me/recovery-secret",
+                "host": ["{{base_url}}"],
+                "path": ["api", "v1", "me", "recovery-secret"]
+              },
+              "description": "201 whose body is the ONLY place the plaintext ever appears. Re-proves the current password on the per-identity budget shared with the password change and the revoke. 409 recovery-secret-already-exists when one is already held; 403 invalid-current-password on a wrong one; 429 rate-limited when the shared budget is spent."
+            },
+            "response": []
+          },
+          {
+            "name": "Revoke recovery secret",
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Accept", "value": "application/json" }],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"currentPassword\": \"\"\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{base_url}}/api/v1/me/recovery-secret/revoke",
+                "host": ["{{base_url}}"],
+                "path": ["api", "v1", "me", "recovery-secret", "revoke"]
+              },
+              "description": "POST rather than DELETE because the password must travel in a body: every request header but Referer reaches the container access log in clear. Idempotent 204 whether or not a row was there, and the credential proof fires before existence is consulted so the response shape is not an oracle over whether a secret exists."
+            },
+            "response": []
+          },
+          {
+            "name": "Redeem recovery secret (anonymous)",
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Accept", "value": "application/json" }, { "key": "Origin", "value": "{{base_url}}" }, { "key": "X-CSRF-Token", "value": "postman-stateless-csrf-nonce-0000" }],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"secret\": \"<selector>.<secret>\"\n}",
+                "options": { "raw": { "language": "json" } }
+              },
+              "url": {
+                "raw": "{{base_url}}/api/v1/backoffice/recovery/redeem",
+                "host": ["{{base_url}}"],
+                "path": ["api", "v1", "backoffice", "recovery", "redeem"]
+              },
+              "description": "The one edge a locked-out sole administrator has. No session needed; same-origin is enforced and the stateless CSRF token must be present and well-formed. EVERY refusal answers one byte-identical 400 invalid-token \u2014 malformed, unknown selector, wrong secret, lapsed, budget spent \u2014 because a graded answer would tell a caller which selectors exist and are worth draining."
+            },
+            "response": []
+          }
+          ]
         }
       ]
     },
