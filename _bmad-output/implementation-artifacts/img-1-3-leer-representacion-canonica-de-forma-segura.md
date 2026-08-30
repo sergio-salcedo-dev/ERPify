@@ -182,11 +182,14 @@ Todos los hallazgos están medidos contra el árbol, con el fichero y la línea 
   steps están `idle` y afirman un envelope **legacy** `{errors:[…], meta:{requestId}}`. Incorporado como AC 23
   y Task 11.
 
-- **A-14 (MENOR) — `docs/architecture-api.md:103` ya es falso hoy, antes de esta historia.** Afirma
-  *"Attribute-only routing (`#[Route]`) on controllers under each bounded context's `Infrastructure/Controller/`"*,
-  y hay **seis** controladores con `#[Route]` bajo `Iam/*/Infrastructure/Http/`. Esta historia lo corrige por
-  regla del boy-scout, y **no puede presentarlo como algo que rompa ella**. *(La primera redacción citaba
-  `:102`, que está en blanco — corregido.)*
+- **A-14 (MENOR) — `docs/architecture-api.md:103` es falso como descripción del árbol, pero correcto como
+  regla.** Afirma *"Attribute-only routing (`#[Route]`) on controllers under each bounded context's
+  `Infrastructure/Controller/`"*, y hay **seis** controladores con `#[Route]` bajo
+  `Iam/*/Infrastructure/Http/`. **Corrección posterior, medida**: en Backoffice —la convención dominante y
+  consistente— `Infrastructure/Http/` contiene sólo mappers y listeners, así que la regla de `:103` describe
+  el reparto real y **Iam es la excepción**. La acción correcta es anotar la deriva, **no** reescribir la
+  regla para que se parezca a su incumplimiento. Esta historia no rompe nada de esto. *(La primera redacción
+  citaba `:102`, que está en blanco — corregido.)*
 
 ### Pase 2 — externo, tres lecturas paralelas sobre el artefacto commiteado (2026-08-30)
 
@@ -345,6 +348,11 @@ puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no po
    preservar. Las tres clases del árbol que llevan `ServiceUnavailable` extienden todas `DomainException`.
    **And** la superficie del puerto (`store`/`read`/`delete` y sus tres excepciones) **no se toca**: la
    traducción vive encima.
+   **And** los `type` se **heredan** de los marcadores (`not-found`, `service-unavailable`): esta historia
+   **no acuña** `image-not-found` ni ningún otro, porque no existe todavía una distinción de dominio que
+   justifique separarlo de un `404` cualquiera en esta ruta — el día que un consumidor la necesite, acuñarlo
+   es una evolución explícita del contrato. Consecuencia: NFR26 no se dispara y `docs/api-error-contract.md`
+   no se toca.
    **And** queda dicho que integridad (AC 7) y fallo permanente comparten status y `type` en el cable, y que
    eso es deliberado: se separan en el eje `failure_category` de la señal, no en el eje HTTP, porque para el
    cliente ambos son "el servidor está roto y reintentar no ayuda".
@@ -355,6 +363,13 @@ puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no po
    digest **nunca** se sirve como cuerpo **And** queda dicho que la propiedad "no se comprometen cabeceras
    antes" es **estructural**, no probada: el puerto devuelve la cadena completa, así que no existe el estado
    intermedio que haría falta para violarla. No se abre ningún camino de streaming en esta historia.
+   **And** porque el puerto devuelve la cadena completa, la lectura se **acota antes de emitirla**:
+   `Image::byteSize()` está persistido en la fila y se compara contra un límite **antes** de llamar a
+   `read()`, de modo que un objeto desproporcionado se rechaza con un fallo manejable en vez de agotar la
+   memoria. Importa porque un agotamiento de memoria es un error **fatal**, no un `Throwable`: el
+   `ExceptionResponder` no llega a correr y la respuesta no sería Problem Details, contradiciendo la AC 3.
+   Son unas pocas líneas y cierran el caso no acotado; lo que queda como residual es sólo la ventana entre
+   `byteSize` y los bytes reales, que la verificación de digest de esta misma AC cierra a su vez.
 
 8. **Given** un fallo de lectura o un desajuste de digest, **When** se emite la señal de observabilidad,
    **Then** la señal distingue ausencia confirmada, fallo transitorio, fallo permanente e **integridad**
@@ -415,10 +430,18 @@ puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no po
     `AbstractSessionListener` reescribe la cabecera en `kernel.response` añadiendo `must-revalidate` y un
     `Expires` (`:203-214`) — precedente vivo del mismo efecto en
     `api/src/Iam/Session/Infrastructure/Security/SessionAdmissionGate.php:139`
-    **And** la historia **decide** qué hacer con esa reescritura y lo escribe: o se acepta `must-revalidate`
-    junto a `immutable` (y entonces se dice que la contradicción semántica es consciente y qué gana), o se
-    marca la respuesta con `AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER` (`:41`) y se argumenta por
-    qué esta ruta puede eximirse cuando el resto de la API no
+    **And la reescritura se ACEPTA** — decidido, no abierto: la respuesta emitida lleva
+    `immutable, max-age=31536000, must-revalidate, private` más un `Expires`, y no se marca con
+    `AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER` (`:41`). Dos razones. La primera es que **no hay
+    contradicción semántica que evitar**: `immutable` (RFC 8246) gobierna la fase **fresca** —no revalides
+    mientras lo esté— y `must-revalidate` (RFC 9111 §5.2.2.2) gobierna la fase **stale** —no sirvas caducado
+    sin validar—, así que componen en vez de chocar. La segunda es que eximirse **no compra nada**: el
+    residual de privacidad de la AC 22(b) es que una copia fresca sobrevive al borrado, y quitar
+    `must-revalidate` lo empeora en vez de arreglarlo. Hay precedente vivo de aceptar este mismo listener en
+    `api/src/Iam/Session/Infrastructure/Security/SessionAdmissionGate.php:139`
+    **And** el `max-age` de un año se mantiene tal como lo fijó el épico. Acortarlo por el residual de
+    privacidad sería cambiar un requisito, y eso no es del desarrollador — queda anotado en §7 como decisión
+    de política, no reabierto aquí
     **And** existe un test que falla si la directiva vuelve a `public` — que es lo que emite el helper
     rescatable tal cual.
 
@@ -516,10 +539,13 @@ puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no po
     cliente conforme no revalida: borrados los bytes y la fila, cada visor sigue sirviendo la imagen hasta un
     año sin que ninguna petición llegue al servidor. En un módulo cuyo contrato **es** el borrado fiable, y con
     avatares como consumidor previsto, es el residual con más carga de dato personal que añade esta historia.
-    **(c) El objeto entero vive en memoria.** El puerto devuelve `string` y nada acota el tamaño del objeto
-    canónico (`max_input_bytes` acota la **entrada** del procesador, `max_output_dimension` acota **píxeles**).
-    Un agotamiento de memoria es un error **fatal**, no un `Throwable`, así que `ExceptionResponder` no corre y
-    la respuesta no es Problem Details.
+    **(c) El objeto entero vive en memoria — acotado por la AC 7, no diferido.** El puerto devuelve `string`
+    y nada acotaba el tamaño del objeto canónico (`max_input_bytes` acota la **entrada** del procesador,
+    `max_output_dimension` acota **píxeles**), y un agotamiento de memoria es un error **fatal**, no un
+    `Throwable`, así que `ExceptionResponder` no correría y la respuesta no sería Problem Details. La AC 7 lo
+    cierra con una guarda sobre `Image::byteSize()` **antes** de `read()` — unas pocas líneas, dentro de esta
+    historia, en vez de una issue. **Lo que queda como residual es sólo lo que la guarda no puede ver**: que
+    `byteSize` es lo que la fila *dice* y no lo que el objeto *pesa*.
     **(d) Sin auditoría de lectura.** Consciente y decidido por el épico; nada registra quién leyó qué.
     **(e) El sumidero de log no tiene aislamiento entre productores.** El access log de Caddy, el canal por
     defecto y `observability` compiten por **un** presupuesto de retención (`json-file`, 10m × 5) y la
@@ -530,6 +556,15 @@ puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no po
     [`docs/adr/image-read-failure-signal-bound.md`](../../docs/adr/image-read-failure-signal-bound.md) D2 y
     D4; el punto de control correcto es la propia infraestructura de logging y **no es de esta épica**.
     **And** `ImageId` no se considera nunca un mecanismo de autorización ni un secreto.
+    **And ninguno de (a)–(d) abre una issue.** §7 ya es su artefacto de traza, y duplicarlos crearía dos
+    sitios donde olvidarlos en vez de uno donde encontrarlos. El criterio, escrito aquí porque es reutilizable
+    fuera de esta historia: **una issue se gana cuando el arreglo no cabe en la PR que la encontró** — porque
+    exige una decisión que no es del desarrollador, porque toca un sistema que esa PR no tiene por qué tocar,
+    o porque es trabajo de varios días. Si el diff que la cerraría cabe en la PR abierta, **no hay issue, hay
+    commit**; si ya vive en un registro que alguien audita, tampoco. Aplicado: (c) se arregló aquí (AC 7),
+    (a) y (d) son fronteras de alcance ya decididas por el épico, (b) es una decisión de política que se
+    plantea en una línea en vez de en un tema nuevo, y sólo (e) —infraestructura transversal— se llevó issue
+    propia (**#879**).
 
 23. **Given** que la épica prometió Behat contra el propio seam (`epics-images.md:486-487`) y ninguna historia
     lo entregó, **When** se cierra esta historia, **Then** existe al menos una feature en
@@ -610,7 +645,8 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
 - [ ] Añadir a `api/config/routes.yaml` un recurso de atributos que cargue **el directorio del controlador**
       —no `../src/Shared/` entero, para que montar el router sobre el shared kernel no exponga cualquier futuro
       `#[Route]` de otro módulo compartido—, con `prefix: /api/v1` y `defaults: {_format: json}`. La forma más
-      cercana es `api_v1_iam_session`.
+      cercana es `api_v1_iam_session`. El directorio es **`src/Shared/Images/Infrastructure/Controller/`**
+      (decidido; ver Dev Notes → *Directorio del controlador*).
 - [ ] `#[Route('/images/{imageId}', name: 'shared_image_get', methods: ['GET'])]` — **sin `requirements`**
       (AC 21), **sin `_audit_resource_type` ni `_audit_canonical`** (AC 20), **sin `#[IsGranted]`** (AC 18).
 - [ ] Verificar el montaje real: `make sf c='debug:router' | grep images`. Y `make php.lint.yaml` sobre la
@@ -672,8 +708,14 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
       ninguna de las dos**: aquí manda la revisión, no un gate.
 - [ ] El texto de cualquier excepción nueva no lleva `ImageId`, digest ni storage key: llega a
       `messenger_messages` vía `ErrorDetailsStamp` y a Sentry.
-- [ ] Si minas un `type` nuevo, `docs/api-error-contract.md` es obligatorio por NFR26 — y la mitad del gate que
-      lo vigilaría no alcanza a `Shared/Images/Domain/Exception/`.
+- [ ] **Los `type` se heredan del marcador** (`not-found`, `service-unavailable`): **no** se acuña
+      `image-not-found`. La razón no es "no hay cliente" —el contrato de wire se estabiliza antes de que lo
+      haya— sino que **no existe todavía una distinción de dominio** que justifique separarlo de un `404`
+      cualquiera en esta ruta; el día que un consumidor la necesite, acuñarlo es una evolución explícita. Que
+      `bank-not-found` exista prueba que se permite, no que sea obligatorio. Consecuencia: **no hay obligación
+      NFR26 y `docs/api-error-contract.md` no se toca**. Y que la mitad del gate no alcance a
+      `Shared/Images/Domain/Exception/` **no** es el argumento — un hueco de enforcement no autoriza a
+      incumplir.
 
 ### Task 5 — Observabilidad: la dimensión de integridad y la cota (AC 8, AC 9)
 
@@ -712,8 +754,10 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
       satisface todas las demás AC y rompe el bucle.
 - [ ] La doble puerta: la recuperabilidad la prueba la lectura verificada, **no** un `exists()` en el puerto.
       Escribe el porqué y el coste en el código.
-- [ ] **Decide y escribe qué se hace con `AbstractSessionListener`** (AC 11): aceptar `must-revalidate` +
-      `Expires`, o marcar la respuesta con `NO_AUTO_CACHE_CONTROL_HEADER` y argumentar la excepción.
+- [ ] **`AbstractSessionListener` se acepta** (AC 11): la respuesta sale con `must-revalidate` y `Expires`
+      añadidos, **sin** `NO_AUTO_CACHE_CONTROL_HEADER`. No hay contradicción con `immutable` —gobiernan fases
+      distintas, fresca y stale— y eximirse no arreglaría el residual de privacidad. Escribe eso en el código;
+      no lo redescubras.
 
 ### Task 7 — Las cabeceras de la respuesta (AC 4, AC 10)
 
@@ -773,7 +817,13 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
 - [ ] Los dos almacenes tienen ciclos de vida distintos: la BD se restaura por feature desde un template, y el
       volumen `image_storage` **no lo toca ningún teardown** y sobrevive a `make docker.down`. Una siembra con
       id fijo va verde la primera vez y roja la segunda, porque `store()` refusa un identificador ya ocupado.
-      **Decide el mecanismo y escríbelo**: id por escenario, o limpieza explícita, o siembra idempotente.
+      **Mecanismo decidido: un `ImageId` nuevo por escenario**, expuesto al escenario desde el contexto para
+      que la URL no lleve un id hardcodeado. Descartados: limpieza explícita e idempotencia delete-then-store,
+      porque son mecanismos extra para un problema que la identidad única ya elimina, y la segunda además
+      puede enmascarar errores de ciclo de vida. La propiedad que lo sostiene: **aislamiento de BD + identidad
+      de objeto única = independencia entre escenarios aunque el storage no tenga aislamiento**. Coste
+      aceptado y dicho: el volumen acumula imágenes de test sin poda, despreciable con fixtures de cientos de
+      bytes.
 - [ ] Siembra los bytes **a través del `ImageStorage` del contenedor**, no escribiendo el fichero a mano: así
       el cableado de la raíz queda ejercitado en vez de esquivado. `ImageStorageWiringTest` es el precedente de
       resolver el servicio real, y es el único test que vio el GRAVE-2 de img-1-2.
@@ -789,11 +839,13 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
 - [ ] **Cita las cabeceras entre comillas**: el token de placeholder del gate de vocabulario es más ancho que
       el de Behat, así que un `If-None-Match` sin comillas **matchea en el gate y queda indefinido en Behat**.
       Es la única dirección en que ese gate falla abierto, y sólo `--strict` la caza.
-- [ ] Para el `304` hace falta reinyectar el `ETag` como `If-None-Match`. **Decide**: (a) step nuevo
-      `I add :name header equal to the response header :header` —no existe ninguno que capture una cabecera de
-      respuesta, aunque sí el análogo JSON, `idle` en `:158`— clasificado `used` en el mismo commit; o (b)
-      digest literal en la feature, viable porque la canonicalización es determinista sobre una fixture. Elige
-      y di por qué.
+- [ ] Para el `304`, **step nuevo y genérico**: `I add :name header equal to the response header :header`,
+      clasificado `used` en el mismo commit. Decidido frente al digest literal, que convertiría una propiedad
+      incidental de la fixture en parte del contrato de aceptación. Genérico a nivel de mecanismo HTTP —sirve
+      igual para `Location` o `Last-Modified`— pero **pequeño**: capturar un valor y reenviarlo, sin almacén
+      de variables ni expresiones. **Debe preservar el valor exacto**, así que no reutilices el step de
+      igualdad, que compara en minúsculas y no distingue `"abc"` de `W/"ABC"`. El análogo JSON `idle` de
+      `:158` se queda como está: que exista y no se use no obliga a aprovecharlo.
 - [ ] Correr `make php.gherkin` y `make php.behat c='features/shared/images/<fichero>.feature'`.
 
 ### Task 12 — Benchmark de límites y vetting de `intervention/gif` (AC 25)
@@ -834,9 +886,10 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
       intacta**. La AC 11 la roza al justificar `immutable`, pero el épico deja ese modelado
       *deliberadamente fuera* (`:374-378`), así que la salida correcta es acotar `immutable` a esta rebanada y
       decir que la pregunta de la URL de variantes sigue abierta — **no** resolverla ni borrar la bala.
-- [ ] Si declaras el residual de enumeración como riesgo aceptado **en código**, el tag `@accepted-risk #N`
-      exige una **issue abierta** (gate estructural en `php.quality` + workflow de estado vivo). Si se queda
-      sólo en §7, no hace falta.
+- [ ] **Cero tags `@accepted-risk` y cero issues nuevas.** Los residuales (a)–(d) viven en §7 y ya están
+      trazados ahí; duplicarlos en issues crearía dos sitios donde olvidarlos en vez de uno donde
+      encontrarlos. El único con issue propia es (e), **#879**, porque su punto de control es infraestructura
+      transversal y no cabe en esta PR. El criterio que los separa está en la AC 22.
 
 ### Task 14 — Barrido y cierre
 
@@ -868,10 +921,22 @@ Path `/api/v1/images/{imageId}`, nombre `shared_image_get`. Las tres decisiones 
 - **El nombre `shared_`** es lo que hace verdadera la decisión de cero auditoría (`AuditPolicy.php:66`). Hoy
   ninguna ruta lo usa y ningún test lo pincha.
 
-**Directorio del controlador: decisión abierta y menor, resuélvela y dilo.** El árbol tiene las dos formas, y
-`docs/architecture-api.md:103` afirma sólo una y ya es falso. Recomendación: `Infrastructure/Http/`, porque
-aquí no hay Resource DTO ni mapper (el cuerpo es binario) y `Http/` describe mejor "el adaptador HTTP del
-módulo". Lo que no vale es elegir en silencio: cambia el `resource:` y la frase de la doc.
+**Directorio del controlador: `Infrastructure/Controller/`. Cerrado, y la razón invierte el argumento
+intuitivo.** Medido: en **Backoffice**, que es la convención dominante y consistente, `Infrastructure/Http/`
+contiene **sólo** `*ResourceMapper` y listeners HTTP —`BankResourceMapper`, `BankAccountResourceMapper`,
+`AuditEventDetailResourceMapper`, `AuditTimelineResourceMapper`, `AuditTrailReadAuditListener`— y los
+controladores viven en `Infrastructure/Controller/`. Es exactamente el reparto que describen
+`docs/architecture-api.md:103-104`. **Iam es el outlier**: tiene controladores en las dos carpetas y mappers
+en `Http/`.
+
+Así que `Http/` **significa** "pieza HTTP que no es un controlador", y el argumento que parecía obvio —*"aquí
+no hay mapper, así que `Http/` describe mejor el adaptador"*— está invertido: la ausencia de mapper es un
+argumento **en contra** de `Http/`, no a favor. El controlador va a `Infrastructure/Controller/` y el
+validador de cache condicional, que no es un controlador, a `Infrastructure/Http/`.
+
+**Corolario sobre la doc**: `docs/architecture-api.md:103` es falso como *descripción del árbol* (seis
+ficheros de Iam lo incumplen) pero **correcto como regla**. No lo reescribas para que se parezca a su
+incumplimiento: anota que Iam deriva. Reescribir la regla convertiría una excepción en norma.
 
 ### Estado actual medido del módulo (`202767ab`)
 
@@ -951,7 +1016,7 @@ granularidad por módulo, el eje valor entero, ni `Psr\Http\Message\*` — que a
 | `BestEffortReportChannelGateTest` | **Sí** | El finder entra en `REPORTERS` automáticamente al loguear, y queda atado al canal por `services.yaml` (deptrac refusa el atributo en `Application/`) |
 | `pwa/tests/client-minted-problem-types.test.ts` | **Sí, indirectamente** | Barre `api/src`; un `type` nuevo que colisione rompe en `make pwa.quality` |
 | `PRODUCTION_SECURITY_CHECKLIST.md` §7 | **Sí, obligatorio** | Cambio sensible a seguridad. Ampliar `:1534-1579` |
-| `docs/api-error-contract.md` | **Sólo si minas un `type`** | La tabla marcador→status no gana fila. La mitad del gate que lo vigila está acotada a `MARKER_DIRECTORY` |
+| `docs/api-error-contract.md` | **No** | Los `type` se heredan del marcador (Task 4), así que no hay `type` nuevo y NFR26 no se dispara. La tabla marcador→status tampoco gana fila |
 | `api/.audit-resource-types` | **No** | Sin `_audit_resource_type` (AC 20), `Image` no entra en el universo |
 | `api/.person-reference-policy` | **No** | `Image::$id => non-person` ya está (`:219`), con comentario que pre-empt la pregunta (`:215-218`). **No retipes la columna** |
 | `api/.persistent-transport-policy` | **No** | `:74`. Sólo mordería si la señal se emitiera como mensaje — es un `LoggerInterface` |
@@ -960,7 +1025,7 @@ granularidad por módulo, el eje valor entero, ni `Psr\Http\Message\*` — que a
 | `api/.project-context-versions` | **No, salvo paquete nuevo** | El cache condicional es `Response::setEtag()`/`isNotModified()`, ya en el árbol |
 | `api/tools/deptrac/deptrac.yaml` | **No para el controlador** | `Shared.Infrastructure` colecciona a cualquier profundidad y admite `Vendor.Symfony`. **Sí importa para `Application/`**: ver Task 5 |
 | `api/.public-access-exemptions` · `php.lint.public-access` | **No, montando bajo `/api/v1`** | La catch-all cubre. Precisión: ese gate **sí lee las fuentes de routing** además de `security.yaml`; lo que no hace es evaluar si una ruta cae bajo la catch-all |
-| tags `@accepted-risk #N` · `php.lint.accepted-risk` | **Decide** | **No hay fichero `api/.accepted-risk`**: son tags en `src` y specs, leídos por `AcceptedRiskTagGateTest` más un workflow de estado vivo que exige la issue **abierta** |
+| tags `@accepted-risk #N` · `php.lint.accepted-risk` | **No** | Cero tags: los residuales van a §7 y sólo (e) tiene issue (#879). Para el registro: **no hay fichero `api/.accepted-risk`** — son tags en `src` y specs, leídos por `AcceptedRiskTagGateTest` más un workflow que exige la issue **abierta** |
 
 ### Naming
 
@@ -1051,8 +1116,8 @@ api/src/Shared/Images/
 ├── Domain/Exception/
 │   └── …                                 (NUEVO — traducción a DomainException + marcador, AC 6)
 └── Infrastructure/
-    ├── Http/ImageGetController.php        (NUEVO — o Controller/, decide y dilo)
-    ├── Http/HttpCacheValidator.php        (NUEVO — isNotModified() rescatado y renombrado)
+    ├── Controller/ImageGetController.php  (NUEVO — Controller/, no Http/: ver Dev Notes)
+    ├── Http/HttpCacheValidator.php        (NUEVO — isNotModified() rescatado; no es controlador, va en Http/)
     └── FlysystemImageStorage.php          (MODIFICADO — cota de los productores de lectura)
 
 api/config/routes.yaml                     (MODIFICADO — recurso del módulo, prefix /api/v1)
@@ -1195,6 +1260,19 @@ identidad · reconciliación fila↔objeto (la prohíbe NFR3) · `ContentHashUrl
   la medición quedó acotada a **coste por evento** con la declaración explícita de que no mide frecuencia ni
   producción, porque no hay despliegue de producción. P1 se redescribe como invariante rota **permanente** —
   nace de una petición de borrado perdida— en vez de ruido puntual. Cero código.
+
+- 2026-08-30 — **Las seis decisiones abiertas quedan cerradas antes de implementar**, tras una ronda de
+  consulta externa y una medición que volteó la primera. **D1 `Infrastructure/Controller/`**, no `Http/`: en
+  Backoffice —la convención dominante y consistente— `Infrastructure/Http/` contiene sólo `*ResourceMapper` y
+  listeners, así que `Http/` significa "pieza HTTP que no es un controlador" y el argumento intuitivo estaba
+  invertido; de paso, `docs/architecture-api.md:103` es falso como descripción del árbol pero **correcto como
+  regla**, así que se anota la deriva de Iam en vez de reescribir la regla. **D2** se acepta la reescritura de
+  `AbstractSessionListener`, y se corrige una imprecisión propia: `immutable` y `must-revalidate` **no** se
+  contradicen, gobiernan fases distintas (fresca y stale). **D3** un `ImageId` nuevo por escenario con hook de
+  contexto y storage real. **D4** step genérico de captura y reenvío de cabecera, preservando el valor exacto.
+  **D6** los `type` se heredan del marcador. **D5 — cero issues nuevas**, y el criterio queda escrito en la
+  AC 22: una issue se gana cuando el arreglo no cabe en la PR que la encontró. Aplicado a los residuales, eso
+  cerró (c) **dentro de esta historia** con una guarda sobre `byteSize` en la AC 7, en vez de diferirlo.
 
 ## Dev Agent Record
 
