@@ -9,6 +9,7 @@ use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Infrastructure\Cli\EraseActorAuditTrailCommand;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
+use Erpify\Tests\Unit\Shared\Console\Double\DrainedInputStream;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -113,6 +114,29 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
     }
 
     /**
+     * The precedence between the two flags, which nothing else pins. `--force` says "do not ask me"; it does
+     * not say "erase". A run passing both asked for a preview and gets one — the only reading under which
+     * `--dry-run` is safe to leave in a script that later gains `--force`.
+     */
+    public function testADryRunKeepsItsPreviewWhenForceIsPassedToo(): void
+    {
+        $anonymiser = new RecordingAuditActorAnonymiser(5);
+        $logger = new RecordingAuditLogger();
+        $tester = $this->testerFor($anonymiser, $logger);
+
+        $exitCode = $tester->execute(
+            ['actor-id' => self::ACTOR_ID, '--dry-run' => true, '--force' => true],
+            ['interactive' => false],
+        );
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringContainsString('Rows matched: 5', $tester->getDisplay());
+        $this->assertStringContainsString('Dry run', $tester->getDisplay());
+        $this->assertCount(0, $anonymiser->anonymisedActorIds);
+        $this->assertCount(0, $logger->records);
+    }
+
+    /**
      * The exit code of a refused run may not depend on what the trail holds. It used to: the count ran ahead
      * of the guards, so an unattended run without `--force` answered `2` for an actor with rows and `0` for
      * one without — an existence oracle over an actor id, readable by a caller who never sees stdout because
@@ -164,7 +188,7 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
 
         $input = new ArrayInput(['actor-id' => self::ACTOR_ID], $command->getDefinition());
         $input->setInteractive(true);
-        $input->setStream($this->drainedStream());
+        $input->setStream(DrainedInputStream::open());
 
         $output = new BufferedOutput();
 
@@ -180,21 +204,5 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
     private function testerFor(AuditActorAnonymiser $anonymiser, AuditLogger $logger): CommandTester
     {
         return new CommandTester(new EraseActorAuditTrailCommand($anonymiser, $logger));
-    }
-
-    /**
-     * @return resource a stream a read has already taken to EOF, so `feof()` is true before the question
-     */
-    private function drainedStream()
-    {
-        $stream = \fopen('php://memory', 'r+');
-        \assert(\is_resource($stream));
-        \fwrite($stream, 'y');
-        \rewind($stream);
-        \fread($stream, 1);
-        \fread($stream, 1);
-        \assert(\feof($stream));
-
-        return $stream;
     }
 }

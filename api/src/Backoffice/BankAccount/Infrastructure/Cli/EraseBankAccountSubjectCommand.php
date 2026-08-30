@@ -106,8 +106,12 @@ final class EraseBankAccountSubjectCommand extends Command
     }
 
     /**
-     * Pre-flight guards that stop before any mutation, each carrying the exit code its own outcome earns.
-     * Three outcomes, and they are not one: a dry run is the no-op the operator asked for; a confirmation
+     * The four modes a run can be in, in the order that decides between them when more than one applies.
+     * Written as a table rather than a sequence of guards because the precedence is the contract: a run
+     * that asked for a preview gets one even when it also passed <comment>--force</comment>, and a run that
+     * cannot be asked is turned away before anything reads the subject.
+     *
+     * The outcomes are not one outcome: a dry run is the no-op the operator asked for; a confirmation
      * answered "no" is a rejection the operator expressed; and a run that could never put the question is a
      * rejection nobody expressed, which is the only one that must not report success.
      *
@@ -115,32 +119,46 @@ final class EraseBankAccountSubjectCommand extends Command
      */
     private function preflight(SymfonyStyle $io, InputInterface $input): ?int
     {
-        if (true === $input->getOption('dry-run')) {
-            $io->note('Dry run: nothing was erased.');
+        return match (true) {
+            true === $input->getOption('dry-run') => $this->reportDryRun($io),
+            true === $input->getOption('force') => null,
+            UnattendedRunPolicy::cannotAnswer($input) => $this->refuseUnaskableRun($io),
+            default => $this->confirmErasure($io, $input),
+        };
+    }
 
-            return Command::SUCCESS;
-        }
+    private function reportDryRun(SymfonyStyle $io): int
+    {
+        $io->note('Dry run: nothing was erased.');
 
-        if (true === $input->getOption('force')) {
-            return null;
-        }
+        return Command::SUCCESS;
+    }
 
-        if (UnattendedRunPolicy::cannotAnswer($input)) {
-            return UnattendedRunPolicy::refuse($io, 'erase', 'the target', 'Nothing was erased.');
-        }
+    /** One sentence for both shapes of unanswered question, so neither can drift away from the other. */
+    private function refuseUnaskableRun(SymfonyStyle $io): int
+    {
+        return UnattendedRunPolicy::refuse($io, 'erase', 'the target', 'Nothing was erased.');
+    }
 
+    /**
+     * The question, and the second shape of unanswered question — the one only a re-read can see. A stdin
+     * nothing can be read from enters the question interactive and leaves it demoted: the helper answers
+     * with the default it was handed rather than raising, so reading the flag again immediately after is
+     * what separates a typed "no" from a question nobody was there to hear.
+     * {@see UnattendedRunPolicy::cannotAnswer()} covers the other two shapes and says why it cannot cover
+     * this one, which is why nothing may come between the question and the re-read.
+     *
+     * @return int|null the exit code to stop on, or null to proceed with the erasure
+     */
+    private function confirmErasure(SymfonyStyle $io, InputInterface $input): ?int
+    {
         $confirmed = $io->confirm(
             'Irreversibly erase this subject (removes the account, shreds its audit PII)?',
             false,
         );
 
-        // A stdin nothing can be read from enters the question interactive and leaves it demoted: the helper
-        // answers with the default it was handed rather than raising, so reading the flag a second time is
-        // what separates a typed "no" from a question nobody was there to hear. This is the one of the three
-        // unanswerable shapes that only a re-read can see — {@see UnattendedRunPolicy::cannotAnswer()} covers
-        // the other two and says why it cannot cover this one.
         if (!$input->isInteractive()) {
-            return UnattendedRunPolicy::refuse($io, 'erase', 'the target', 'Nothing was erased.');
+            return $this->refuseUnaskableRun($io);
         }
 
         if (!$confirmed) {
