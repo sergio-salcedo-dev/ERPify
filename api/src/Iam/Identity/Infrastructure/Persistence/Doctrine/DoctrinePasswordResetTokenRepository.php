@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
+use Erpify\Shared\Persistence\Infrastructure\AffectedRows;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -38,6 +39,11 @@ final readonly class DoctrinePasswordResetTokenRepository implements PasswordRes
         // Two concurrent completions both resolve the same live token, but this DELETE serialises on the row
         // lock — the first removes one row (true), the loser removes none (false) and aborts, so a token can
         // drive at most one reset even under a concurrent replay.
+        //
+        // The count is narrowed by {@see AffectedRows} instead of being folded into the comparison. Reading a
+        // non-int as `false` keeps the single-use property — it aborts — but it aborts saying the token was
+        // already spent, which is a diagnosis its holder cannot act on and whose retry fails identically.
+        // Raising keeps the property and drops the false explanation.
         $affected = $this->entityManager->createQueryBuilder()
             ->delete(PasswordResetToken::class, 't')
             ->where('t.id = :id')
@@ -46,7 +52,7 @@ final readonly class DoctrinePasswordResetTokenRepository implements PasswordRes
             ->execute()
         ;
 
-        return \is_int($affected) && $affected > 0;
+        return AffectedRows::from($affected) > 0;
     }
 
     #[Override]
@@ -73,7 +79,7 @@ final readonly class DoctrinePasswordResetTokenRepository implements PasswordRes
             ->execute()
         ;
 
-        return \is_int($affected) ? $affected : 0;
+        return AffectedRows::from($affected);
     }
 
     #[Override]
@@ -87,6 +93,6 @@ final readonly class DoctrinePasswordResetTokenRepository implements PasswordRes
             ->execute()
         ;
 
-        return \is_int($affected) ? $affected : 0;
+        return AffectedRows::from($affected);
     }
 }

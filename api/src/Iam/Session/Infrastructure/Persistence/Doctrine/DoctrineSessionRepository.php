@@ -14,6 +14,7 @@ use Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\Clock;
+use Erpify\Shared\Persistence\Infrastructure\AffectedRows;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -140,7 +141,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             ->getQuery()
             ->execute());
 
-        return \is_int($affected) ? $affected : 0;
+        return AffectedRows::from($affected);
     }
 
     /**
@@ -182,7 +183,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             ->getQuery()
             ->execute());
 
-        return \is_int($affected) ? $affected : 0;
+        return AffectedRows::from($affected);
     }
 
     /**
@@ -210,7 +211,12 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             $queryBuilder->andWhere('s.id != :current')->setParameter('current', $except->toString());
         }
 
-        $this->convertingStoreFailure(static fn (): mixed => $queryBuilder->getQuery()->execute());
+        // The count is discarded — the port returns void — but it is still narrowed. Asserting that a bulk
+        // statement yielded a count is meaningful whatever anyone does with the number, and exempting the
+        // one caller that ignores it is what a rule would have to grow a signature-shaped hole for.
+        AffectedRows::from(
+            $this->convertingStoreFailure(static fn (): mixed => $queryBuilder->getQuery()->execute()),
+        );
     }
 
     /**

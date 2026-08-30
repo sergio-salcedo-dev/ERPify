@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Domain\Repository;
 
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
+use UnexpectedValueException;
 
 /**
  * Aggregate-lifecycle port for {@see PasswordResetToken}.
@@ -25,6 +26,12 @@ interface PasswordResetTokenRepository
      * actually removed. It is the single-use guard — two concurrent completions serialise on the row lock, so
      * only the first deletes a row (returns `true`) and the loser sees it already gone (returns `false`) and
      * must abort. A token can therefore drive at most one reset even under a concurrent replay.
+     *
+     * `false` means the row was gone, and only that. An implementation that cannot tell how many rows it
+     * removed raises rather than answering `false`: aborting is right either way, but telling a live token's
+     * holder that it was already spent is a diagnosis they cannot act on and whose retry fails identically.
+     *
+     * @throws UnexpectedValueException when the store yields no affected-row count
      */
     public function consume(PasswordResetToken $token): bool;
 
@@ -47,6 +54,8 @@ interface PasswordResetTokenRepository
      * is gone before the commit would be asserting a guarantee this port deliberately does not make, and
      * every future adapter would owe identity-map gymnastics for it.
      *
+     * @throws UnexpectedValueException when the store yields no affected-row count
+     *
      * @return int the number of rows removed — this IS promised, and it is what a caller may act on
      */
     public function deleteAllForUser(string $userId): int;
@@ -58,6 +67,8 @@ interface PasswordResetTokenRepository
      * Carries the same weak contract as {@see deleteAllForUser()} and for the same reason — it is the same
      * DQL bulk `DELETE`, so an already-hydrated instance may stay readable through {@see findById()} until
      * the unit of work ends. The count is the promise; the disappearance is not.
+     *
+     * @throws UnexpectedValueException when the store yields no affected-row count
      *
      * @return int the number of rows removed — this IS promised, and it is what a caller may act on
      */

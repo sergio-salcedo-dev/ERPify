@@ -140,6 +140,7 @@ tests/Unit/Gate/DomainPresentationSeparationGateTest.php :: home
 tests/Unit/Gate/EnumWireContractGateTest.php :: home
 tests/Unit/Gate/EventDispatchGateTest.php :: home
 tests/Unit/Gate/FailedMessagePruneStatementGateTest.php :: home
+tests/Unit/Gate/IntNarrowingConfinementGateTest.php :: home
 tests/Unit/Gate/MailAssemblyBoundaryGateTest.php :: home
 tests/Unit/Gate/MigrationColumnDefaultGateTest.php :: home
 tests/Unit/Gate/MigrationColumnDefaultRulesGateTest.php :: home
