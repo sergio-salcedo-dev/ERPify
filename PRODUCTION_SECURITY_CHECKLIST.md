@@ -905,6 +905,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       registry states why an AST gate on the re-read alone would not have caught the defect that produced
       them; and `--dry-run` still prints the matching row count to the same caller, so what the guards close
       is the exit code as an existence oracle, never the count as information.
+- [ ] **An erasure count is read from the store, never minted by a type fallback.** Every Doctrine adapter
+      running a DQL bulk statement had to narrow `AbstractQuery::execute()`'s declared `mixed`, and seven
+      reached independently for `\is_int($affected) ? $affected : 0`. That fallback mints the one value its
+      callers read as evidence: the count flows through `IdentityErasureResult` out of
+      `identity:gdpr:erase-subject`, and `SessionRepository::deleteAllForUser()` promises a legitimate `0`
+      for a subject with no rows — so a real zero and a fabricated one were indistinguishable to every
+      caller, in the direction that looks safe. `AffectedRows::from()` narrows or raises, and refuses a
+      negative for the same reason. The password-reset single-use guard joins it: reading a non-int as
+      `false` kept the property but told a live token's holder it was spent. **Residuals, none gated:** the
+      gate counts DQL statements against narrowings per file and so cannot see a guard call that is DEAD —
+      an unused closure or an unreachable branch balances the arithmetic, and review is the only control on
+      that direction; it never judges whether the count is CORRECT, so a statement missing a predicate
+      passes; and it does not reach the DBAL family, where `Connection::executeStatement()` returns
+      `int|numeric-string` and ten sites narrow it by hand with an `(int)` cast — `DbalKeystore::destroy()`,
+      the crypto-shredding tombstone, among them. That cast converts rather than fabricates, which is why it
+      is a residual and not the same defect, but nothing holds it there.
 - [ ] **The sole active administrator cannot be erased.** Demotion is refused by the ≥1-admin
       invariant, self-erasure by its own guard, and no peer exists to erase them — so their right to
       erasure requires onboarding a second administrator first. Pre-existing and named in

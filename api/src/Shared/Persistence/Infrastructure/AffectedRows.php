@@ -47,6 +47,15 @@ final class AffectedRows
             ));
         }
 
+        // A negative is as impossible as a string and reaches the same place: this is where what may count
+        // as a count is decided, so it decides both halves rather than only the one the type system misses.
+        if ($result < 0) {
+            throw new UnexpectedValueException(\sprintf(
+                'A bulk statement must yield an affected-row count, got %d.',
+                $result,
+            ));
+        }
+
         return $result;
     }
 }

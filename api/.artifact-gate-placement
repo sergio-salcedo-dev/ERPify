@@ -129,7 +129,7 @@ tests/Unit/Gate/BestEffortReportChannelGateTest.php :: home
 tests/Unit/Gate/BoundedContainerLogRetentionGateTest.php :: home
 tests/Unit/Gate/BoundedContextGateTest.php :: home
 tests/Unit/Gate/BufferedChannelAmplificationGateTest.php :: home
-tests/Unit/Gate/BulkStatementCountNarrowingGateTest.php :: home
+tests/Unit/Gate/BulkStatementNarrowingGateTest.php :: home
 tests/Unit/Gate/CaddyfileAccessLogRedactionGateTest.php :: home
 tests/Unit/Gate/ComposerStabilityGateTest.php :: home
 tests/Unit/Gate/ConfirmationGuardAdjacencyGateTest.php :: home

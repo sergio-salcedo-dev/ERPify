@@ -7,6 +7,7 @@ namespace Erpify\Iam\Session\Domain\Repository;
 use DateTimeImmutable;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\SessionId;
+use UnexpectedValueException;
 
 /**
  * Aggregate-lifecycle port for {@see Session} backed by the server-side registry.
@@ -72,7 +73,12 @@ interface SessionRepository
      * outright: the GDPR-erasure path needs the subject's residual session PII gone, not merely marked
      * revoked. Idempotent — a second pass with a subject that has no rows deletes nothing and returns 0.
      *
+     * That zero is a fact about the store and never a stand-in for one: an implementation may not answer it
+     * because it could not tell what the store returned. This method's callers read the number as erasure
+     * evidence, so an implementation that cannot produce a count raises instead of reporting none.
+     *
      * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
+     * @throws UnexpectedValueException                                     when the store yields no affected-row count
      */
     public function deleteAllForUser(string $userId): int;
 
@@ -94,6 +100,7 @@ interface SessionRepository
      * same instant finds nothing left and returns 0.
      *
      * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
+     * @throws UnexpectedValueException                                     when the store yields no affected-row count
      *
      * @return int the number of rows removed
      */

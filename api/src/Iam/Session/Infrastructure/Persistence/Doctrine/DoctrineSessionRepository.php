@@ -211,7 +211,12 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             $queryBuilder->andWhere('s.id != :current')->setParameter('current', $except->toString());
         }
 
-        $this->convertingStoreFailure(static fn (): mixed => $queryBuilder->getQuery()->execute());
+        // The count is discarded — the port returns void — but it is still narrowed. Asserting that a bulk
+        // statement yielded a count is meaningful whatever anyone does with the number, and exempting the
+        // one caller that ignores it is what a rule would have to grow a signature-shaped hole for.
+        AffectedRows::from(
+            $this->convertingStoreFailure(static fn (): mixed => $queryBuilder->getQuery()->execute()),
+        );
     }
 
     /**

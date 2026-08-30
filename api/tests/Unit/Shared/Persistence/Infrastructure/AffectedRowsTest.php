@@ -34,6 +34,19 @@ final class AffectedRowsTest extends TestCase
     public function testPassesACountThrough(): void
     {
         $this->assertSame(3, AffectedRows::from(3));
+        $this->assertSame(PHP_INT_MAX, AffectedRows::from(PHP_INT_MAX));
+    }
+
+    /**
+     * The half the type system cannot state. A negative is as impossible as a string for a row count and
+     * reaches the same consumers, so the class that decides what may count as a count decides both.
+     */
+    public function testRaisesOnANegativeCount(): void
+    {
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessageIsOrContains('A bulk statement must yield an affected-row count, got -1.');
+
+        AffectedRows::from(-1);
     }
 
     /**
