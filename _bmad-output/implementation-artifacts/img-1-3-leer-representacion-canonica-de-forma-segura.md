@@ -423,7 +423,24 @@ puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no po
     y queda declarado que paga la lectura y el digest completos, igual que el `200`.
 
 11. **Given** una respuesta exitosa, **When** se construyen sus cabeceras de cache, **Then** están presentes
-    las directivas `private`, `max-age=31536000` e `immutable`
+    las directivas `private`, **`max-age=3600`** e `immutable`
+    **And la ventana es de una hora, no de un año — supersediendo el `max-age=31536000` del épico**, porque
+    la inmutabilidad del **identificador** no implica cacheabilidad indefinida de los **bytes**: este módulo
+    no tiene operación de reemplazo, así que la representación de un `ImageId` nunca cambia y el épico acierta
+    en ese eje — pero su contrato **es el borrado fiable**, y el borrado es un evento de ciclo de vida
+    distinto de la mutación. Con un año, borrados los bytes y la fila, cada visor sigue sirviendo la imagen
+    hasta un año sin que ninguna petición llegue al servidor que pudiera devolver 404. Es indefendible en un
+    módulo que **no puede distinguir un logo de un avatar** por construcción
+    **And 3600 es un PRIOR, no una medición, y se dice**: no existe SLA de borrado declarado ni consumidor
+    del que derivar una ventana de reuso, así que entre un año y una hora no hay hoy nada que arbitre salvo
+    la prudencia. El **disparador** para revisarlo es el primero de: un SLA de borrado declarado, o el primer
+    consumidor real con su ventana de reuso medida. **Si ese SLA resultara ser cero, la respuesta no es un
+    `max-age` más corto sino `no-store`** — ninguna ventana finita lo satisface
+    **And `no-store` se descarta hoy** porque tiraría la capacidad entera que esta historia construye sin un
+    requisito que lo exija
+    **And `immutable` se queda por su propia razón, no por la del año**: sobre `max-age` a secas sólo aporta
+    suprimir la revalidación que algunos navegadores disparan al recargar **dentro** de la ventana. Pequeño,
+    pero no cero
     **And la AC se afirma sobre las directivas presentes, nunca sobre la cadena literal**, por dos motivos
     medidos: `HeaderBag::getCacheControlHeader()` hace `ksort($this->cacheControl)` (`:259`), así que el orden
     de serialización es alfabético y no el que se escribió; y como el firewall `main` es *stateful*,
@@ -431,7 +448,7 @@ puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no po
     `Expires` (`:203-214`) — precedente vivo del mismo efecto en
     `api/src/Iam/Session/Infrastructure/Security/SessionAdmissionGate.php:139`
     **And la reescritura se ACEPTA** — decidido, no abierto: la respuesta emitida lleva
-    `immutable, max-age=31536000, must-revalidate, private` más un `Expires`, y no se marca con
+    `immutable, max-age=3600, must-revalidate, private` más un `Expires`, y no se marca con
     `AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER` (`:41`). Dos razones. La primera es que **no hay
     contradicción semántica que evitar**: `immutable` (RFC 8246) gobierna la fase **fresca** —no revalides
     mientras lo esté— y `must-revalidate` (RFC 9111 §5.2.2.2) gobierna la fase **stale** —no sirvas caducado
@@ -535,10 +552,17 @@ puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no po
     local y por despliegue —la propia config dice que un despliegue multi-worker tras balanceador necesita
     Redis compartido— y `lock_factory: null` significa que workers concurrentes *"may over- or under-count"*
     (`api/config/packages/rate_limiter.yaml:10-24`). Lo que falta es un límite **por identidad y por ruta**.
-    **(b) Una copia cacheada sobrevive a la erasure.** `immutable` con `max-age` de un año significa que un
-    cliente conforme no revalida: borrados los bytes y la fila, cada visor sigue sirviendo la imagen hasta un
-    año sin que ninguna petición llegue al servidor. En un módulo cuyo contrato **es** el borrado fiable, y con
-    avatares como consumidor previsto, es el residual con más carga de dato personal que añade esta historia.
+    **(b) Una copia cacheada sobrevive a la erasure — acotada a una hora, no cerrada.** Un cliente conforme
+    no revalida mientras la respuesta es fresca, así que borrados los bytes y la fila cada visor sigue
+    sirviendo la imagen hasta **`max-age`** sin que ninguna petición llegue al servidor. La AC 11 baja esa
+    ventana de un año a **3600 s**, lo que reduce la exposición sin convertir cada vista en una lectura
+    completa; sigue siendo el residual con más carga de dato personal que añade esta historia, y **no** es
+    borrado inmediato. Lo que la hora **no** cubre, dicho en vez de implicado: una copia descargada, una
+    captura de pantalla, una página ya abierta con los bytes en memoria, y el comportamiento *stale* de un
+    user-agent offline. Y queda anotada la ambigüedad que decide el techo: la frase del ADR *"stop being
+    retrievable by any route, **cached URLs included**"* se escribió sobre rutas de servidor y URLs de
+    variante con CDN; leerla como que gobierna la caché del navegador del visor es una **interpretación**, y
+    si esa lectura se confirma ninguna ventana finita basta — la respuesta sería `no-store`.
     **(c) El objeto entero vive en memoria — acotado por la AC 7, no diferido.** El puerto devuelve `string`
     y nada acotaba el tamaño del objeto canónico (`max_input_bytes` acota la **entrada** del procesador,
     `max_output_dimension` acota **píxeles**), y un agotamiento de memoria es un error **fatal**, no un
@@ -1273,6 +1297,20 @@ identidad · reconciliación fila↔objeto (la prohíbe NFR3) · `ContentHashUrl
   **D6** los `type` se heredan del marcador. **D5 — cero issues nuevas**, y el criterio queda escrito en la
   AC 22: una issue se gana cuando el arreglo no cabe en la PR que la encontró. Aplicado a los residuales, eso
   cerró (c) **dentro de esta historia** con una guarda sobre `byteSize` en la AC 7, en vez de diferirlo.
+
+- 2026-08-30 — **`max-age` baja de un año a 3600 s** (AC 11), supersediendo el valor del épico tras una
+  consulta externa. El argumento que lo mueve: la inmutabilidad del **identificador** no implica
+  cacheabilidad indefinida de los **bytes** — este módulo no reemplaza nunca una representación, así que el
+  épico acierta en el eje de corrección, pero su contrato es el **borrado fiable**, y el borrado es un evento
+  de ciclo de vida distinto de la mutación. Un año es indefendible en un módulo que no puede distinguir un
+  logo de un avatar. Se descartó `no-store` (tiraría la capacidad que la historia construye) y se conservó
+  `immutable` **por su propia razón** — suprime la revalidación al recargar dentro de la ventana—, no por la
+  del año. **3600 queda etiquetado como PRIOR, no como medición**: no hay SLA de borrado ni consumidor del
+  que derivar una ventana de reuso, y el disparador de revisión es el primero de los dos; si el SLA
+  resultara ser cero, la respuesta sería `no-store` y no un número menor. **Sin ADR nuevo**, a diferencia de
+  la señal de log, y la distinción es deliberada: allí se hacía **menos** que el requisito y por eso hacía
+  falta una excepción argumentada; aquí se hace **más**, así que basta enmendar la AC del épico en línea
+  conservando su redacción.
 
 ## Dev Agent Record
 

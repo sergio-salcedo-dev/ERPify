@@ -825,10 +825,24 @@ de un contrato HTTP que nadie ha pedido todavía (declarado, no un olvido)
 
 **Given** una respuesta exitosa de `GET /images/{imageId}`
 **When** se construyen sus cabeceras de cache (misma lectura; MEDIA-7)
-**Then** incluye `Cache-Control: private, max-age=31536000, immutable` junto al `ETag` ya decidido —
+**Then** incluye `Cache-Control: private, **max-age=3600**, immutable` junto al `ETag` ya decidido —
 `private` porque la ruta exige autenticación y una caché compartida no debe servir la respuesta entre
 usuarios distintos; `immutable` porque esta rebanada no expone ninguna operación que reemplace los bytes
 de un `ImageId` ya creado (solo `UploadImage` y `delete`, nunca un update in-place)
+
+**Redacción original, conservada porque el cambio es de requisito**: el valor era `max-age=31536000` (un
+año). **Enmendado el 2026-08-30** a 3600 s; el argumento completo vive en la AC 11 de
+[`img-1-3-…`](../implementation-artifacts/img-1-3-leer-representacion-canonica-de-forma-segura.md).
+En corto: la inmutabilidad del **identificador** no implica cacheabilidad indefinida de los **bytes**. El
+razonamiento del épico acierta en el eje de *corrección* —no hay update in-place, así que la representación
+nunca cambia— pero el contrato del módulo **es el borrado fiable**, y el borrado es un evento de ciclo de
+vida distinto de la mutación: con un año, borrados los bytes y la fila, cada visor sigue sirviendo la imagen
+hasta un año sin que ninguna petición alcance el servidor. Indefendible en un módulo que **no puede
+distinguir un logo de un avatar** por construcción. **A diferencia de la señal de lectura, esto no lleva
+ADR**: allí la historia hacía *menos* que el requisito y hacía falta una excepción argumentada; aquí hace
+**más**, con una ventana más conservadora que la pedida. `3600` queda declarado **prior, no medición** — no
+hay SLA de borrado ni consumidor del que derivar una ventana de reuso—, y si ese SLA resultara ser cero la
+respuesta sería `no-store`, no un número menor.
 
 **Given** la implementación del controlador
 **When** resuelve la respuesta

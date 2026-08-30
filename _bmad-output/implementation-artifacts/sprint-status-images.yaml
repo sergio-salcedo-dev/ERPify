@@ -140,6 +140,11 @@ development_status:
   # genérico · D5 CERO issues nuevas · D6 heredar not-found). Feedback de Sergio aplicado: el default es
   # arreglar en la PR, no abrir issue — escrito como regla en CLAUDE.md y aplicado aquí, donde el residual
   # del objeto en memoria se cerró con una guarda en la AC 7 en vez de con una issue.
+  # img-1-3: max-age baja de un año a 3600 s (2026-08-30), supersediendo el valor del épico. La inmutabilidad
+  # del IDENTIFICADOR no implica cacheabilidad indefinida de los BYTES: el módulo no reemplaza nunca una
+  # representación, pero su contrato es el borrado fiable y el borrado es otro evento de ciclo de vida. 3600
+  # queda etiquetado como PRIOR, no medición (no hay SLA ni consumidor); si el SLA fuera cero la respuesta
+  # sería no-store. Sin ADR: aquí se hace MÁS que el requisito, no menos.
   epic-images: in-progress
   img-1-1-subir-imagen-obtener-representacion-canonica: done
   img-1-2-persistir-imagen-borrado-fiable-de-bytes: done
