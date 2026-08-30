@@ -6,6 +6,13 @@ Feature: Bank count projection
   # Proves reproducibility: the read model tracks +1 on create / -1 on delete as the events are
   # consumed (live), and a rebuild from sequence 0 lands on the same total. The store is cleared and
   # the projection rebuilt first so the starting total is a deterministic 0.
+  # Each write is consumed before the next one is sent, and the interleaving is load-bearing rather than
+  # stylistic. The `async` transport is in-memory under test and InMemoryTransport implements
+  # ResetInterface, so Symfony's services_resetter empties it between HTTP requests: two writes followed
+  # by a single "I consume 2" reaches the worker holding only the second event. The total would still
+  # read 2, because the projection replays the persistent event_store rather than the delivered message —
+  # a green for a reason this scenario does not claim. Consuming after each write is what makes the
+  # deliveries the scenario describes the deliveries that actually happen.
   Scenario: The bank count read model tracks creations and deletions and rebuilds to the same total
     Given I add "Content-Type" header equal to "application/json"
     And I add "Accept" header equal to "application/json"
@@ -22,6 +29,8 @@ Feature: Bank count projection
     }
     """
     And the response status code should be 201
+    And I consume 1 message from the "async" transport
+    And the last run should succeed
     And I send a POST request to "/backoffice/banks" with body:
     """
     {
@@ -30,7 +39,7 @@ Feature: Bank count projection
     }
     """
     And the response status code should be 201
-    And I consume 2 messages from the "async" transport
+    And I consume 1 message from the "async" transport
     And the last run should succeed
     And I send a "GET" request to "/backoffice/banks/count"
     And the JSON node "total" should be equal to the number 2
@@ -96,6 +105,8 @@ Feature: Bank count projection
     }
     """
     And the response status code should be 201
+    And I consume 1 message from the "async" transport
+    And the last run should succeed
     And I send a POST request to "/backoffice/banks" with body:
     """
     {
@@ -104,7 +115,7 @@ Feature: Bank count projection
     }
     """
     And the response status code should be 201
-    And I consume 2 messages from the "async" transport
+    And I consume 1 message from the "async" transport
     And the last run should succeed
     And there should be 2 events stored named "erpify.backoffice.bank.created"
     And I send a "GET" request to "/backoffice/banks/count"

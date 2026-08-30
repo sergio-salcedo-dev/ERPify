@@ -29,6 +29,9 @@ use PHPUnit\Framework\TestCase;
  * a documented gap, because the green tick stops anyone looking.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") one test method per asserted direction; merging any two
+ *                                                  would hide which one went red
  */
 #[CoversNothing]
 final class PersistentTransportRoutingShapeGateTest extends TestCase
@@ -153,6 +156,17 @@ final class PersistentTransportRoutingShapeGateTest extends TestCase
         // Everything else here trusts the NAME `sync`. Redefining it to a Doctrine DSN would turn the one
         // sanctioned escape hatch into the leak, with every check still green.
         $this->assertSame([], $this->policy()->config()->misdeclaredNonPersistedTransports());
+    }
+
+    #[Test]
+    public function theDurableTransportStillHasATransactionalDsn(): void
+    {
+        // The dual of the `sync` assertion above. `async` is trusted by NAME as durable and on the caller's
+        // own connection: that is where the after-commit guarantee comes from, not from the routing entry.
+        // It also pins the test environment's in-memory substitution, which does NOT join the transaction —
+        // so a change to it goes red and the "no test here can demonstrate this" claim has to be revisited
+        // rather than silently stop being true.
+        $this->assertSame([], $this->policy()->config()->misdeclaredPersistedTransport());
     }
 
     #[Test]

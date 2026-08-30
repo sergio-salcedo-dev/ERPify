@@ -17,12 +17,17 @@ use Erpify\Iam\Session\Domain\SessionId;
  * as directed UPDATEs (no aggregate hydration), which is why they live on the port rather than looping the
  * aggregate.
  *
- * The adapter converts a store-connection failure into a domain {@see
+ * EVERY method here converts a store-connection failure into a domain {@see
  * \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable} (→ 503) so the gate can fail closed rather than
- * letting a raw infrastructure error surface as a 500.
+ * letting a raw infrastructure error surface as a 500. Universal rather than per-method because a single
+ * request reaches several of them — the erasure path admits through {@see findActiveById()} and then deletes
+ * through {@see deleteAllForUser()} — and one outage answered with two statuses is worse than either.
  */
 interface SessionRepository
 {
+    /**
+     * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
+     */
     public function save(Session $session): void;
 
     /**
@@ -40,6 +45,8 @@ interface SessionRepository
      * It is a TOTAL order — `created_at` is stored to the second, so two sessions minted within one second
      * tie and the session id settles them; without that, the list could reshuffle between two requests.
      *
+     * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
+     *
      * @return list<Session>
      */
     public function findByUserId(string $userId): array;
@@ -47,11 +54,15 @@ interface SessionRepository
     /**
      * Bulk-revokes every currently-active session of the user EXCEPT `$currentSessionId` — the "close the
      * others" action, which never self-expels the session in hand.
+     *
+     * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
      */
     public function revokeOthersForUser(string $userId, SessionId $currentSessionId): void;
 
     /**
      * Bulk-revokes every currently-active session of the user (the reset-everywhere capability).
+     *
+     * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
      */
     public function revokeAllForUser(string $userId): void;
 
@@ -60,6 +71,8 @@ interface SessionRepository
      * the revocations (which flip a status but keep the row, with its `ip`/`device`), this drops the rows
      * outright: the GDPR-erasure path needs the subject's residual session PII gone, not merely marked
      * revoked. Idempotent — a second pass with a subject that has no rows deletes nothing and returns 0.
+     *
+     * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
      */
     public function deleteAllForUser(string $userId): int;
 
@@ -79,6 +92,8 @@ interface SessionRepository
      * This is the routine retention floor and NOT the erasure path: a GDPR erasure calls
      * {@see deleteAllForUser()}, immediately and inside its own transaction. Idempotent — a second pass at the
      * same instant finds nothing left and returns 0.
+     *
+     * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
      *
      * @return int the number of rows removed
      */

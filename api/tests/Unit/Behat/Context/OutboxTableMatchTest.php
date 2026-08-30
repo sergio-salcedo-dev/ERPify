@@ -16,8 +16,9 @@ use RuntimeException;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
- * Pins the one property of the outbox table steps that no scenario above them can observe: an event
- * that does not carry the asked-for property must not match.
+ * Pins the properties of the outbox table steps that no scenario above them can observe: an event that
+ * does not carry the asked-for property must not match, and the negative form must refuse an empty
+ * queue rather than pass over it.
  *
  * The steps decide "does this event match" by running an equality assertion and catching whatever it
  * throws — the exception *is* the predicate. That makes them uniquely fragile to any change in how a
@@ -81,6 +82,25 @@ final class OutboxTableMatchTest extends TestCase
         $this->expectExceptionMessageIsOrContains(
             'An outbox event was found containing the properties that should be absent',
         );
+
+        $context->noOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['bankId', 'ACME']]));
+    }
+
+    /**
+     * An empty queue satisfies the negative claim for the wrong reason, and no scenario can see it.
+     *
+     * The loop body never runs, so the step returns having asserted nothing: "no event carried these
+     * properties" reads identically whether every event was examined and none matched or the setup
+     * produced nothing at all. Gherkin can assert that a step passes, never that it should not have —
+     * so the vacuous pass is invisible above this level, and it is exactly the one that hides a fixture
+     * that published no event.
+     */
+    public function testTheNegativeFormRefusesAnEmptyQueueRatherThanPassingVacuously(): void
+    {
+        $context = $this->contextHolding();
+
+        $this->expectException(AssertionFailedError::class);
+        $this->expectExceptionMessageIsOrContains('holds no outbox events at all');
 
         $context->noOutboxEventCreatedOnQueueContaining(self::ASYNC, new TableNode([['bankId', 'ACME']]));
     }

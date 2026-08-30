@@ -177,6 +177,11 @@ RUN <<-EOF
 	rm -rf /var/lib/apt/lists/*
 	mkdir -p /data/caddy /config/caddy
 	chown -R www-data:www-data /data /config
+	# The image-storage mount point, owned before anything mounts over it. Docker seeds a new named volume
+	# from the ownership of the directory already in the image, so without this the volume arrives owned by
+	# root and the unprivileged runtime user cannot write a single byte into it.
+	mkdir -p /app/storage
+	chown www-data:www-data /app/storage
 	# Remove setuid/setgid bits
 	find / -perm /6000 -type f -exec chmod a-s {} + 2>/dev/null || true
 EOF

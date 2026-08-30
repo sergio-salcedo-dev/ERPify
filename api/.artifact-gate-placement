@@ -120,6 +120,8 @@ tests/Unit/Gate/ArtifactGatePlacementRulesGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRegistryGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRulesGateTest.php :: home
 tests/Unit/Gate/AuditPruneStatementGateTest.php :: home
+tests/Unit/Gate/AuditRedactionSentinelParityTest.php :: home
+tests/Unit/Gate/AuditWriteOperationParityTest.php :: home
 tests/Unit/Gate/BehatStepVocabularyGateTest.php :: home
 tests/Unit/Gate/BehatSuiteCoverageGateTest.php :: home
 tests/Unit/Gate/BehatVocabularyReaderTest.php :: home
@@ -161,6 +163,7 @@ tests/Unit/Gate/ProjectContextRegistryRulesGateTest.php :: home
 tests/Unit/Gate/ProjectContextVersionGateTest.php :: home
 tests/Unit/Gate/PublicAccessExemptionGateTest.php :: home
 tests/Unit/Gate/PublicAccessExemptionRulesGateTest.php :: home
+tests/Unit/Gate/QueryBudgetExclusionMarkerGateTest.php :: home
 tests/Unit/Gate/ReadSideProjectionGateTest.php :: home
 tests/Unit/Gate/RedactionVocabularyParityTest.php :: home
 tests/Unit/Gate/ScheduleConsumptionGateTest.php :: home
@@ -181,6 +184,7 @@ tests/Unit/Gate/IbanSeparatorContractGateTest.php :: undecided :: asks a validat
 # Filed on the module whose contract they enforce.
 tests/Unit/Behat/Context/OutboxUnqualifiedStepsTest.php :: mirrored :: tests/Behat/Context
 tests/Unit/Behat/Context/SupersededRunPhrasingsTest.php :: mirrored :: tests/Behat/Context
+tests/Unit/Shared/Images/ImageLifecycleListenerGateTest.php :: mirrored :: src/Shared/Images
 tests/Unit/Iam/Session/SessionSubstitutabilitySeamTest.php :: mirrored :: src/Iam/Session
 tests/Unit/Shared/ErrorContract/Application/BannedDoctrineApisTest.php :: mirrored :: src/Shared/ErrorContract
 tests/Unit/Shared/ErrorContract/Application/ConstantTimeAuthBranchingContractTest.php :: mirrored :: src/Shared/ErrorContract
@@ -190,6 +194,9 @@ tests/Unit/Shared/ErrorContract/Application/NativeJsonEncodeContractTest.php :: 
 tests/Unit/Shared/ErrorContract/Domain/Exception/TaxonomyArchitectureTest.php :: mirrored :: src/Shared/ErrorContract
 tests/Unit/Shared/Serialization/ResourceDtoContractTest.php :: mirrored :: src/Shared/Serialization
 tests/Unit/Support/PhpSourceTest.php :: mirrored :: tests/Support
+tests/Unit/Support/RepositoryRootTest.php :: mirrored :: tests/Support
+tests/Unit/Support/ResourceResponderBuilderTest.php :: mirrored :: tests/Support
+tests/Unit/Support/TypeScriptSourceTest.php :: mirrored :: tests/Support
 
 # Kernel-free by shape, which is what the detector reads, but its subject is a RUNNING behaviour rather than
 # an artifact read as data: it sends real requests through Caddy and reads the line Caddy wrote. By the

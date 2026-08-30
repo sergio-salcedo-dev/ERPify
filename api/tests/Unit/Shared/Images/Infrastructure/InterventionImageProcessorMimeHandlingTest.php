@@ -15,9 +15,9 @@ use PHPUnit\Framework\TestCase;
 use Throwable;
 
 /**
- * AC 8 (MIME outside the allowlist), AC 13 (decoder-confusion defense) and AC 9 (library
- * exceptions never cross untranslated) — exercised at all three stages that can raise one
- * (decode, normalize, encode).
+ * A MIME outside the allowlist, the decoder-confusion defense, and the library's exceptions never
+ * crossing untranslated — the last exercised at all three stages that can raise one (decode,
+ * normalize, encode).
  *
  * @internal
  */

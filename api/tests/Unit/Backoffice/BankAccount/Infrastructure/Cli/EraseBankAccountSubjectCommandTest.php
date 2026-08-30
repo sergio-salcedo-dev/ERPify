@@ -67,7 +67,7 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
     public function itErasesTheSubjectOnConfirmation(): void
     {
         $repository = $this->createStub(BankAccountRepository::class);
-        $repository->method('findById')->willReturn(
+        $repository->method('findByIdForUpdate')->willReturn(
             BankAccount::create(self::ACCOUNT_ID, self::BANK_ID, 'Juan Pérez', 'ES9121000418450200051332'),
         );
         $encryptor = $this->createStub(EnvelopeEncryptor::class);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Gate;
 
 use Erpify\Tests\Support\ProjectContextVersions;
+use Erpify\Tests\Support\RepositoryRoot;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -167,25 +168,17 @@ final class ProjectContextVersionGateTest extends TestCase
     }
 
     /**
-     * The PWA manifest and the page both sit outside the `./api` build context, so in the container they
-     * arrive only through the read-only `./` bind mount at `/app/repo` declared in `compose.dev.yaml`.
-     * Missing it is a failure, not a skip: a gate that passes when it cannot see what it compares reports
-     * an agreement it never checked.
+     * The subject sits outside the `./api` build context, so in the container it arrives only through the
+     * read-only `./` bind mount at `/app/repo` declared in `compose.dev.yaml`. Missing it is a failure and
+     * never a skip: a gate that passes when it cannot see what it compares reports an agreement it never
+     * checked.
      */
     private function repoRoot(): string
     {
-        $apiRoot = \dirname(__DIR__, 3);
-
-        foreach ([\dirname($apiRoot), \dirname($apiRoot) . '/repo'] as $candidate) {
-            if (\is_dir($candidate . '/pwa/src')) {
-                return $candidate;
-            }
-        }
-
-        $this->fail(
-            'The repository root is not reachable, so this gate cannot check anything. Inside the container '
-            . 'it comes from the read-only `./` bind mount at /app/repo declared in compose.dev.yaml — '
-            . 'restore it rather than relaxing this failure into a skip.',
+        return RepositoryRoot::path() ?? $this->fail(
+            'docs/project-context.md and the dependency manifests are unreachable, so this gate cannot read a single '
+            . 'claim. Inside the container it comes from the read-only `./` bind mount at /app/repo declared in '
+            . 'compose.dev.yaml — restore it rather than relaxing this failure into a skip.',
         );
     }
 

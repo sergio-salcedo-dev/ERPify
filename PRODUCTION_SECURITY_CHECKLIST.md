@@ -68,6 +68,16 @@ you change anything here.
       `node`/`debian`). Never unpin.
 - [ ] Xdebug is disabled in prod images.
 
+- [ ] **Image bytes live on the `image_storage` named volume, mounted at `/app/storage` by both `php` and
+      `messenger_worker`.** It is not optional and it admits no residual: with no volume the storage adapter
+      writes into the container's writable layer, so every redeploy empties the store while every `image`
+      row survives — and nothing reports it, because this module deliberately keeps no bookkeeping that
+      could find the divergence. The prod image creates the mount point owned by `www-data` before anything
+      mounts over it, since Docker seeds a new named volume from the image's directory ownership and the
+      runtime user is unprivileged. Verify after deploy: the path is a mountpoint, it is writable by the
+      runtime user, it is not inside the source tree, it is not served by Caddy, and bytes written before a
+      `--force-recreate` are still readable after it.
+
 ## 4. Network isolation
 
 - [ ] Postgres sits on the `internal` `backend` network with **no published
@@ -429,13 +439,32 @@ you change anything here.
       behind the token check**: a dead accept link never pays an argon2id run (no unauthenticated KDF
       amplification). The accept is capped **per selector** (`token_action_per_selector` limiter); exhaustion
       folds into the same opaque `invalid-token`, never a per-selector 429.
-- [x] **Every payload-mapping endpoint accepts JSON only.** All eleven `#[StrictRequestPayload]` sites
-      declare `acceptFormat: ['json']`, so a form-encoded or `multipart/form-data` body is refused with
-      415 at the argument resolver, before any controller or handler runs. Uniformity is the control:
-      the API declares no `#[MapUploadedFile]` argument anywhere, and a route that silently accepted a
-      multipart body would be the seam through which a file part could re-enter. Verify with
-      `git grep -n '#\[StrictRequestPayload' -- api/src` — every attribute site must carry the format
-      list. Gate: `BankCreateAcceptsJsonOnlyFunctionalTest`.
+- [x] **Every payload-mapping endpoint accepts JSON only, and it is the type's default that says so.**
+      `StrictRequestPayload::__construct` defaults `acceptFormat` to `['json']`, so a form-encoded or
+      `multipart/form-data` body is refused with 415 at the argument resolver, before any controller or
+      handler runs — and an endpoint added tomorrow inherits the refusal by writing nothing. The thirteen
+      attribute sites carry no format list of their own; the guarantee is one line in one type rather than
+      a declaration repeated thirteen times, which is what makes an omission impossible instead of merely
+      unlikely. Uniformity is the control: the API declares no `#[MapUploadedFile]` argument anywhere, and
+      a route that silently accepted a multipart body would be the seam through which a file part could
+      re-enter. Verify the two halves separately, because no single grep sees both — the attribute's name
+      also appears in docblocks, so counting `#[StrictRequestPayload` matches prose as well as sites:
+      (1) the default holds — `git grep -n 'acceptFormat' -- api/src` names only the constructor in
+      `Shared/Http/Infrastructure/StrictRequestPayload.php`, so no call site has widened it; (2) the
+      default means what it says — `StrictRequestPayloadTest::itRefusesAFormEncodedBodyWithoutBeingAskedTo`
+      and `itAcceptsAJsonBodyWithoutBeingAskedTo` put a payload declaring no format through Symfony's own
+      resolver and assert the 415 and the 200, so the pin is the status a caller receives rather than the
+      value the constructor stored. Gate: `BankCreateAcceptsJsonOnlyFunctionalTest`.
+      **The default is no longer the only control, because it was never the whole one.** The resolver gates
+      its format check on TRUTHINESS (`RequestPayloadValueResolver:242`), so a falsy `acceptFormat` does not
+      loosen the check, it skips it — and a call site could therefore disable the refusal while leaving the
+      default untouched. The constructor now refuses a falsy value outright, mirroring that predicate rather
+      than enumerating the values satisfying it: a list of `null`, `[]` and `''` reads as exhaustive and
+      admits `'0'`, measured accepting a form-encoded body through the real resolver. **Residual:** the
+      refusal is raised while Symfony builds the attribute per request (`ArgumentMetadataFactory`), so a
+      mis-declared site is a runtime 500 on that endpoint — not a build failure, and invisible to CI. And
+      grep (1) above cannot see such a site at all, since the widening would be an attribute argument rather
+      than the string `acceptFormat`; what covers that direction is the constructor, not the recipe.
 - [ ] **Password reset (`POST /api/v1/backoffice/forgot-password` · `/reset-password`):** the credential-recovery
       surface, mirroring the invitation flow. Forgot answers a **uniform 202** for every email/identity state
       (only an `ACTIVE` identity mints a token, and that work is never observable to the anonymous requester) — no
@@ -457,7 +486,7 @@ you change anything here.
       the authorization**, and it is also the CSRF control: the endpoint carries no `#[IsGranted]` (every identity
       acts on its own — the `^/api` `IS_AUTHENTICATED_FULLY` rule plus the Session Admission Gate are the access
       decision) and no `#[IsCsrfTokenValid]`, like the other authenticated writes, because a cross-site forgery
-      does not know the current password and `#[StrictRequestPayload(acceptFormat: ['json'])]` refuses a form
+      does not know the current password and `#[StrictRequestPayload]`, JSON-only by its own default, refuses a form
       post. A wrong current password is **403 `invalid-current-password`**, never 401 — a 401 would bounce the
       caller to the login screen for a typo — and it writes nothing: no hash, no event, no revocation, no email.
       A new password equal to the stored one is **422 `new-password-must-differ`**, decided inside the
@@ -1295,6 +1324,27 @@ mitigated state. Accepting one means recording who accepted it and against which
       statement "any client can force the deployment to retain a person's identifier here" is **still true
       after the strip** — the strip removed the axis a legitimate UI drives, not the axis a hostile caller
       drives. Closing it needs a header allowlist plus a path mechanism, or no access log for `/api/*`.
+      **The accepted cost, stated rather than hidden:** the `Referer` delete is global to the site, while the
+      leak it answers is confined to the back-office documents whose own URL carries a person id — the user
+      detail route (`/backoffice/users/<uuid>`) and the audit screen's `?actorId=`/`?resourceId=`
+      (`pwa/src/app/backoffice/users/[id]`, `pwa/src/app/backoffice/audit`). Every other request on this
+      deployment — the PWA's own documents, static assets, `/.well-known/mercure`, and any `/api/*` call from
+      a screen that names no id — now records no referring URL either. What is given up is the referring URL
+      as investigative signal: an entry can no longer say which page a request came from, so a CSRF report
+      cannot be corroborated from the log, a link arriving from a phishing page or any third-party host
+      cannot be traced back to where it was published, and an incident timeline loses the navigation order it
+      would otherwise reconstruct. Per-route filtering was not taken, and the file is the reason: the site
+      declares ONE `log` block (`api/frankenphp/Caddyfile:20`) and its `format filter` carries no request
+      matcher, so every rule inside it applies to every entry that logger writes. Scoping the delete to the
+      two screens therefore means a second logger declared beside it — its own encoder and its own copy of
+      every rule — plus a directive in the matched route to send requests there; two copies of a redaction
+      rule set are free to drift, and the copy that drifts is the one nobody is reading. Weighed against a
+      signal no investigation on this deployment has yet needed, the duplication loses; it is not impossible,
+      and a deployment that comes to depend on `Referer` should reopen it rather than quietly re-add the
+      header. **Nothing gates the trade-off itself.** `CaddyfileAccessLogRedactionGateTest` asserts the
+      delete is PRESENT, which is the opposite direction — it would red on restoring the
+      signal, and can say nothing about whether losing it site-wide was the right price. This paragraph is
+      the only record.
 - [ ] **The embedded Mercure hub logs subscriber topics in clear, on a logger this site's filter does not
       govern.** Measured: `GET /.well-known/mercure?topic=<value>` produces an access line reading
       `?REDACTED` **and**, on stderr, `http.handlers.mercure … "topics": ["<value>"]`. They are separate
@@ -1529,6 +1579,53 @@ mitigated state. Accepting one means recording who accepted it and against which
       a name the vocabulary failed to enumerate, which is the direction that actually shipped.
       **Expiry: re-assess before the first production deployment or the first customer**, whichever
       comes first.
+
+- [ ] **Image bytes: what the storage root guarantees, and the four things it does not.** Residuals of
+      `Shared/Images`, listed together because each is invisible from the others.
+      **One — the root is provisioned by the deployment, conditionally, and that condition is the control.**
+      `compose.yaml` mounts the named volume `image_storage` at `/app/storage` for both `php` and
+      `messenger_worker`, and the entrypoint creates `<STORAGE_LOCAL_PATH>/images` **only when that path is
+      genuinely a mount point** (its device differs from its parent's). The application refuses to invent
+      the root: `flysystem.yaml` sets `lazy_root_creation: true` and the adapter guards the root's existence
+      before every operation including the write — and it is the guard, not the flag, that delivers this;
+      the flag only defers the library's own `mkdir` to the first write. Measured, that substitution is not
+      a slow leak but an immediate one: with the root absent every `delete()` answers success, so the
+      application reports erasures of bytes that are somewhere else entirely. A deployment that drops the
+      volume therefore fails loudly on every image operation instead of writing into a layer that dies with
+      the container. **What still has to be verified at deploy time is that the volume is mounted at all** —
+      nothing here reports a deployment that simply never uses images.
+      **Two — a lost deletion request is silent and permanent.** `ImageDeletionRequested` is queued; if it is
+      never consumed, or dead-letters and ages out of the 30-day `failed` retention, the bytes and the row
+      stay alive indefinitely with no monitoring on that axis. **How easily it dead-letters is the half that
+      was never measured**: no `retry_strategy` existed anywhere in `api/config`, so the whole `async`
+      transport ran on Symfony's default of three retries at 1 s, 2 s and 4 s — a storage outage longer than
+      seven seconds was enough. The transport now declares ten attempts over about three hours, which makes
+      the residual rare rather than closing it; the 30-day prune destroys the request either way, and
+      `event_store` cannot re-dispatch it because the consumer is a message handler and not a projector. There is deliberately no reconciliation
+      between rows and stored objects: the bookkeeping that would find an orphan is the same bookkeeping the
+      module refuses to build, so nothing can distinguish "never asked for" from "asked for and lost". A
+      second latent case joins it the day a consumer adds a foreign key into `image`: the row deletion would
+      then fail identically on every retry, dead-lettering with the row alive and the bytes already gone.
+      **Three — an orphaned object is the likeness itself, and nothing can ever find it again.** A store that
+      succeeded followed by a persist that did not leaves canonical bytes whose identifier was handed to no
+      caller, with no row and no reference. For an avatar those bytes are the person's picture, not an opaque
+      id — this is the residual with the strongest personal-data content of the four, and the only one that
+      is permanently unerasable **by construction** rather than by an absent control: with no bookkeeping,
+      no query can enumerate them. Bounded by the failure rate, and by nothing else. (A write the substrate
+      corrupted is *not* in this bucket: the adapter removes an object its integrity check refused.)
+      **Four — `event_store` keeps the `ImageId` for ever, and routing changes nothing.**
+      `PersistDomainEventMiddleware` appends every dispatched event with its real `aggregate_id` before
+      Messenger picks a transport; identity erasure rewrites by the value of the **subject's** identifier,
+      which an `ImageId` is not, so the row survives. Note that no registry in this repository will ever ask
+      for an owner here: `api/.person-reference-policy` classifies a column by whether it holds a natural
+      person's identifier, and an image id is not one — so a future `User::$avatarImageId` gets a
+      `non-person` line and no `PersonReferenceSource`. The obligation is the consuming epic's, and it has
+      no detective control. Recorded in
+      [`docs/adr/image-deletion-signal-transport.md`](docs/adr/image-deletion-signal-transport.md) D3, which
+      also states what classifying `Shared.Image` as `person` does **not** buy — it forced the decision into
+      a diff, and nothing more. Closing two and three is a reconciliation the consuming epic would have to
+      justify against the no-bookkeeping decision; closing four is that epic's too, since only a consumer
+      knows whether a given image denotes a person.
 
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not

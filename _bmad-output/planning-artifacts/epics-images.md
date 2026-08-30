@@ -791,6 +791,17 @@ lectura todavía no confirmada, para no dejar al cliente con un fichero truncado
 **Then** la señal distingue `404` (ausencia confirmada), `5xx` (fallo transitorio) e "integridad"
 (digest no coincide) como `failure_category` distintos, sin incluir `ImageId`, `digest` ni bytes
 
+**Given** una lectura autenticada sobre un `ImageId` que no existe (code review de img-1-2, 2026-08-29)
+**When** el adaptador de storage confirma la ausencia y emite su señal
+**Then** ese registro está acotado — muestreo, contador agregado o nivel `debug` para la ausencia en
+`read()` frente a `info` en `delete()` —, porque a partir de esta historia la ausencia confirmada pasa a
+ser un productor de log **disparable por el cliente y sin cota**: el canal `observability` es en prod el
+stream siempre encendido a `php://stderr`, acotado sólo por volumen (`json-file`, 10 MB × 5), así que N
+identificadores aleatorios desalojan a coste cero todo el log retenido, líneas de otros subsistemas
+incluidas. En img-1-2 el argumento contrario es correcto y se mantiene (un despliegue que responde «ya
+ausente» a todo tiene que ser contable), pero allí el volumen lo acota el trabajo real; aquí lo acota el
+cliente
+
 **Given** una petición a `GET /images/{imageId}` que incluye la cabecera `Range`
 **When** se resuelve la respuesta (tercera lectura hostil, 2026-08-26; MEDIA-7)
 **Then** la ruta ignora `Range` y devuelve siempre el cuerpo completo con `200` — Range requests no está

@@ -13,7 +13,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 /**
- * AC 7 / AC 12 (resource limits enforced before a full decode) and AC 11 (empty input).
+ * The resource limits, each enforced before a full decode, and the empty input.
  *
  * @internal
  */

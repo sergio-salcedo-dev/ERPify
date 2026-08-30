@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
+use Closure;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
@@ -13,6 +14,15 @@ use Override;
 /**
  * In-memory {@see PasswordResetTokenRepository} that records every mutation, so a use-case test can assert what
  * a case persists, consumes (the single-use retire) and supersedes.
+ *
+ * **Its eviction is STRONGER than the port promises, and nobody may build a witness on that.**
+ * {@see deleteAllForUser()} here removes from the index immediately, so a subsequent {@see findById()} answers
+ * `null` inside the same unit of work. The port declares that undefined and the Doctrine adapter does not
+ * provide it — its `find()` consults an identity map a DQL bulk `DELETE` never evicts. A test asserting the
+ * row has stopped being readable would therefore be green here and describe nothing production does, which is
+ * the same defect as a double with a looser read predicate, one direction over.
+ *
+ * Assert the count the port returns, or the ORDER through {@see $onSave}. Not the disappearance.
  *
  * @internal
  */
@@ -30,6 +40,17 @@ final class InMemoryPasswordResetTokenRepository implements PasswordResetTokenRe
     /** Set when a test is asserting WHERE this table's lock falls among the others. */
     public ?LockOrderJournal $lockOrderJournal = null;
 
+    /**
+     * Invoked before each {@see save()} with the token about to be written, so a test can read the store as
+     * it stands at the instant of the write. The supersede's guarantee is an ORDER — the pending token is
+     * dropped before the new one is indexed — and the end state can only witness that order by inference,
+     * through the survival of the new row and the fact that the delete is user-wide. This makes the claim
+     * directly, and it sits on the store because the store is where the ordering is observable at all.
+     *
+     * @var ?Closure(PasswordResetToken): void
+     */
+    public ?Closure $onSave = null;
+
     /** @var array<string, PasswordResetToken> */
     private array $byId = [];
 
@@ -43,6 +64,10 @@ final class InMemoryPasswordResetTokenRepository implements PasswordResetTokenRe
     #[Override]
     public function save(PasswordResetToken $token): void
     {
+        if ($this->onSave instanceof Closure) {
+            ($this->onSave)($token);
+        }
+
         $this->saved[] = $token;
         $this->index($token);
     }

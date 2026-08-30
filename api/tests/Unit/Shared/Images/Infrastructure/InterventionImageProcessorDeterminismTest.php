@@ -13,9 +13,9 @@ use ReflectionMethod;
 use ReflectionParameter;
 
 /**
- * AC 1 / AC 3 (deterministic pipeline, digest over canonical bytes) and the canonicalization
- * contract's #3 (output family = detected input family). AC 10 (no filename in the signature)
- * lives here too — it is a structural property of the same public entry point.
+ * The deterministic pipeline, the digest taken over the canonical bytes, and the canonicalization
+ * contract's output family matching the detected input family. The absence of a filename in the
+ * signature lives here too — it is a structural property of the same public entry point.
  *
  * @internal
  */

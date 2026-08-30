@@ -10,6 +10,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsResponder;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
+use Erpify\Tests\Functional\ResolvesContainerServices;
 use Erpify\Tests\Support\DeclaredFingersCrossedHandlers;
 use Erpify\Tests\Support\DeployedBufferActionLevel;
 use Erpify\Tests\Support\DeployedFingersCrossedGate;
@@ -110,6 +111,8 @@ use Throwable;
 #[CoversNothing]
 final class ApiClientErrorBufferCouplingGateTest extends KernelTestCase
 {
+    use ResolvesContainerServices;
+
     /** The listener whose record would carry a 4xx into the buffer if it were ever reached on `/api/*`. */
     private const string PREEMPTED_LISTENER = 'logKernelException';
 
@@ -413,20 +416,5 @@ final class ApiClientErrorBufferCouplingGateTest extends KernelTestCase
             'HttpKernel no longer subscribes %s, so this coupling reads a listener that is gone',
             self::PREEMPTED_LISTENER,
         ));
-    }
-
-    /**
-     * @template T of object
-     *
-     * @param class-string<T> $id
-     *
-     * @return T
-     */
-    private function service(string $id): object
-    {
-        $service = self::getContainer()->get($id);
-        $this->assertInstanceOf($id, $service);
-
-        return $service;
     }
 }

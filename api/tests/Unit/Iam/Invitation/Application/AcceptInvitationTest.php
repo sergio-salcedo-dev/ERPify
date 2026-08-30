@@ -19,6 +19,8 @@ use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
+use Throwable;
 
 /**
  * Every ineligible-token case — malformed, non-existent, wrong secret, expired, non-SENT, or pointing at a
@@ -186,6 +188,53 @@ final class AcceptInvitationTest extends TestCase
             $users,
             $eventBus,
         );
+    }
+
+    /**
+     * A write that fails AFTER the activate/accept flips. Every other rejection here is refused by a guard
+     * before anything mutates, so none of them reaches the half of the flow this one exercises.
+     *
+     * What it pins is the propagation and the silence: the store's exception reaches the caller unwrapped,
+     * and no domain event is published — no handler, projector or reactor is told an invitation was accepted
+     * by a unit of work that did not complete. What it does NOT pin is atomicity: {@see
+     * InlineTransactionManager} runs the operation by calling it, with no begin, no commit and no rollback,
+     * so both aggregates stay flipped in memory here. Undoing them is the database's job, and only a
+     * functional test against a real transaction can witness that.
+     */
+    #[Test]
+    public function itPropagatesAStoreFailureRaisedAfterTheFlipsAndAnnouncesNothing(): void
+    {
+        [$invitation, $token] = $this->sentInvitation($this->future());
+        $user = UserMother::invited(self::USER_ID);
+        $invitations = new InMemoryInvitationRepository($invitation);
+        $users = new InMemoryUserRepository($user);
+        $eventBus = new RecordingEventBus();
+
+        $storeFailure = new RuntimeException('the invitation row could not be written');
+        $invitations->onSave = static function () use ($storeFailure): never {
+            throw $storeFailure;
+        };
+
+        $thrown = null;
+
+        try {
+            $this->useCase($invitations, $users, $eventBus)->accept($token, $this->password());
+        } catch (Throwable $throwable) {
+            $thrown = $throwable;
+        }
+
+        // Identity rather than instance-of: a use case that swallowed this and raised its own opaque
+        // InvalidToken would leave a caller unable to tell a dead token from a database that is down.
+        $this->assertSame($storeFailure, $thrown);
+
+        // The failure landed past every guard, which is what makes this distinct from the rejections above:
+        // the KDF was paid, both aggregates flipped, and the identity had already been handed to its store.
+        $this->assertSame(1, $this->kdfRuns);
+        $this->assertSame(IdentityStatus::ACTIVE, $user->status());
+        $this->assertSame(InvitationStatus::ACCEPTED, $invitation->status());
+        $this->assertSame([$user], $users->saved);
+
+        $this->assertSame([], $eventBus->publishedEvents);
     }
 
     /**

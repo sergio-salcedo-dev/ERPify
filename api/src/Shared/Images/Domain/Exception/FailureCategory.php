@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Images\Domain\Exception;
 
 /**
- * The closed vocabulary NFR9's observability signal reports a failure under — fixed here so the
+ * The closed vocabulary the observability signal reports a pipeline failure under — fixed here so the
  * value is never an invented-on-the-spot string at a log call site. Every {@see ImageProcessingException}
  * maps to exactly one of these.
  */

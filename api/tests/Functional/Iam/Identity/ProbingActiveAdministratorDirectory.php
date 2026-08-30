@@ -44,9 +44,9 @@ final readonly class ProbingActiveAdministratorDirectory implements ActiveAdmini
     }
 
     #[Override]
-    public function keepsAnActiveAdminWithout(string $userId): bool
+    public function survivesRemovalOf(string $userId): bool
     {
-        return $this->inner->keepsAnActiveAdminWithout($userId);
+        return $this->inner->survivesRemovalOf($userId);
     }
 
     #[Override]

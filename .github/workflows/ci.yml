@@ -114,10 +114,24 @@ jobs:
       - name: PHP lint (check, parallel)
         run: make -j4 --output-sync=target php.quality.dry-run
 
-      # Runs the unit suite under Xdebug coverage and emits the Clover report the
-      # sonar job imports. Still the unit-test gate: failures, deprecations and
-      # notices fail it — only PHPUnit's own coverage-target warnings (inherent
-      # to coverage mode) are relaxed.
+      # The gate that decides a merge: the uninstrumented suite under
+      # PHPUNIT_MEMORY_LIMIT (make/config.mk, 512M) with PHPUnit's strictness
+      # intact — failOnWarning / failOnNotice / failOnDeprecation from
+      # api/tools/phpunit/phpunit.dist.xml, and no
+      # --do-not-fail-on-phpunit-warning. It runs BEFORE the coverage step so the
+      # ceiling CI actually enforces is this 512M one rather than coverage's 1G,
+      # and so a PHPUnit warning is red here instead of merely printed there.
+      # Until it existed, both were exercised only on a developer's machine — and
+      # that is how the suite grew past the image's 128M default with CI green.
+      - name: PHPUnit (strict gate — 512M ceiling, warnings fatal)
+        run: make php.unit
+
+      # Runs the unit suite a second time under Xdebug coverage and emits the
+      # Clover report the sonar job imports. Report generation, not the gate: the
+      # limit is raised to 1G for the instrumentation and PHPUnit's own
+      # coverage-target warnings (inherent to coverage mode) are relaxed, so a
+      # green here proves less than the step above. Failures, deprecations and
+      # notices still fail it.
       - name: PHPUnit (+ Clover coverage)
         run: make php.unit.coverage
 

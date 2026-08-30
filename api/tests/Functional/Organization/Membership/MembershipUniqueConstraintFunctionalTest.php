@@ -13,6 +13,7 @@ use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\DoctrineM
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Organization\Organization\Domain\Repository\OrganizationRepository;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -29,6 +30,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(DoctrineMembershipRepository::class)]
 final class MembershipUniqueConstraintFunctionalTest extends KernelTestCase
 {
+    use ResolvesContainerServices;
+
     private const string TRUNCATE_SQL = 'TRUNCATE membership, organization, identity_user CASCADE';
 
     private Connection $connection;
@@ -64,21 +67,6 @@ final class MembershipUniqueConstraintFunctionalTest extends KernelTestCase
         $this->expectException(UserAlreadyMember::class);
 
         $memberships->save(Membership::grant(Uuid::generate(), $userId, $this->organizationId));
-    }
-
-    /**
-     * @template T of object
-     *
-     * @param class-string<T> $id
-     *
-     * @return T
-     */
-    private function service(string $id): object
-    {
-        $service = self::getContainer()->get($id);
-        $this->assertInstanceOf($id, $service);
-
-        return $service;
     }
 
     private function truncate(): void

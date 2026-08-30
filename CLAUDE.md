@@ -139,6 +139,19 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointin
 
 Treat every task as a chance to *improve* what you touch, not merely satisfy the literal ask. **Distrust the existing design of the code in scope**: look for the real improvement toward clean architecture, Clean Code, SOLID, and DDD ([`docs/rules/clean-code.md`](docs/rules/clean-code.md), [`docs/rules/architecture.md`](docs/rules/architecture.md), [`docs/rules/php-standards.md`](docs/rules/php-standards.md)) — with **justified flexibility**: a deliberate, argued deviation beats dogma. Tie every suggestion to a concrete end — **scalability, maintainability, performance, or speed**. This lens is *orthogonal* to the Working principles above, not a loophole around them: *minimum code* and *touch only what you must* still bind.
 
+**The deciding criterion is the project's long term, never the size of the diff.** When two fixes are on
+the table, pick the one that leaves the codebase more maintainable, more scalable, more nearly right
+architecturally, and competitive with what a large engineering organisation would ship. **"It does not fit
+this story", "that touches shared infrastructure" and "it would make the PR bigger" are not arguments** —
+a larger PR is not a cost worth optimising against, and story boundaries are a planning device, not an
+engineering one. Say what you are doing and why; do not silently narrow a fix to keep a diff small.
+
+This does **not** license unrelated sweeps: it decides *which fix* to make for a problem you have actually
+found, not *how much* unrelated code to touch. The distinction is the problem, not the file count — a
+defect a review found is fixed at its real root even when that root is a shared file, while a refactor
+nobody's finding motivates still waits for the user. It also does not move the two calls that stay the
+user's: persistence strategy and aggregate boundaries.
+
 **Operating mode — propose first, never refactor unilaterally.**
 
 - Scrutinise the code **you touch**, not code you don't. The lens rides on the task in scope; it is never a pretext for repo-wide sweeps or speculative rewrites.
@@ -158,7 +171,11 @@ Treat every task as a chance to *improve* what you touch, not merely satisfy the
 - **Performance is measured, not asserted.** "Faster" needs a query plan, a benchmark, or a complexity argument — never a hunch.
 - **Persistence-strategy and aggregate-boundary calls stay user decisions** (see Architecture below) — scrutiny may *raise* them, never *settle* them unilaterally.
 
-**Scope hygiene.** Keep *improvement in scope* (do it with the task) separate from *debt found in passing* (propose it, or file a follow-up issue). Never let the second silently inflate the PR.
+**Scope hygiene.** Keep *improvement in scope* (do it with the task) separate from *debt found in passing*
+(propose it, or file a follow-up issue) — the point is that the second is **named**, never that it is
+avoided. A finding whose correct fix reaches beyond the story is still fixed here under the criterion
+above; what "hygiene" forbids is the *silent* growth, not the growth. State in the PR body which parts of
+the diff are the story and which are the fixes a review forced.
 
 ---
 
@@ -211,6 +228,32 @@ When a task decomposes into independent subtasks (different bounded contexts, di
 Example: plan → subagent A (API: domain entity + Doctrine mapping + migration in `api/`) + subagent B (PWA: route + component + Inversify wiring in `pwa/`) in parallel → verify each (`make php.stan`, `make pwa.quality`) → commit.
 
 Do **not** spawn subagents for tasks that share state mid-flight — two agents editing the same migration, the same `services.yaml`, the same Inversify container module, or both touching `api/src/Shared/`.
+
+---
+
+## Code review
+
+**Every code review runs the three layers as parallel subagents, and every `patch` finding is applied.**
+Not a menu, not one layer "if the change is small": Blind Hunter (adversarial, no spec), Edge Case Hunter
+(every branch and boundary, reporting only the unhandled ones) and Acceptance Auditor (the ACs, the AC→test
+matrix, the registries and the record, against the tree). Launch all three in a **single message** so they
+actually run concurrently.
+
+- **Read-only, stated explicitly in each prompt** — no edits, no `git` state changes, no mutating `make`
+  target, scratch files outside the repo. A subagent here once emptied the dev database.
+- **Pass the worktree's ABSOLUTE path** — a subagent defaults to the primary checkout, which is on `main`
+  and does not contain the branch under review.
+- **Tell them what was already found.** A change that has survived earlier adversarial passes carries them
+  in its story artifact; re-reporting a closed finding is noise, and the value is what those passes missed.
+- **On completion: deduplicate, re-verify the expensive claims against the tree yourself** (a layer's
+  severity is advisory — it is working under deliberate information asymmetry), **then apply every `patch`
+  without asking one by one.** The only thing that halts for the user is a `decision-needed`: a fix whose
+  correct form is genuinely ambiguous. Defer only what belongs to another epic, and never into
+  `deferred-work.md` when the finding is the current epic's own.
+
+Three independent axes are what makes this worth its cost: in #873 they found a GRAVE that three previous
+passes had not — a storage key derived from the identifier's *spelling* while its row is selected by its
+*value*, so an upper-cased id reported a confirmed erasure and stranded the bytes for ever.
 
 ---
 

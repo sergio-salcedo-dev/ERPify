@@ -29,6 +29,17 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Organization'
                 prefix: 'Erpify\Organization'
                 alias: Organization
+            # Narrow on purpose: the mapping list is an allowlist of what the ORM owns, so it points at
+            # the module's entity directory rather than at `Erpify\Shared`. A prefix covering the whole
+            # shared kernel would turn `auto_mapping: false` back into `true` for half the tree, and the
+            # contexts that deliberately persist without the ORM (crypto keystore, event store, audit log)
+            # would be adopted the moment anyone wrote an `#[ORM\Entity]` anywhere under it.
+            SharedImages:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Shared/Images/Domain/Entity'
+                prefix: 'Erpify\Shared\Images\Domain\Entity'
+                alias: SharedImages
 
 when@prod:
     doctrine:

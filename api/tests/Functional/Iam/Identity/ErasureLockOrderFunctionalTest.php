@@ -30,6 +30,7 @@ use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\ResolvesContainerServices;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -82,6 +83,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(EraseIdentitySubject::class)]
 final class ErasureLockOrderFunctionalTest extends KernelTestCase
 {
+    use ResolvesContainerServices;
+
     private const string ORGANIZATION_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b01';
 
     private string $subjectId;
@@ -313,20 +316,5 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
         }
 
         return $this->outside;
-    }
-
-    /**
-     * @template T of object
-     *
-     * @param class-string<T> $id
-     *
-     * @return T
-     */
-    private function service(string $id): object
-    {
-        $service = self::getContainer()->get($id);
-        $this->assertInstanceOf($id, $service);
-
-        return $service;
     }
 }

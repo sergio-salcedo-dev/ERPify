@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\RequestPasswordReset;
 use Erpify\Iam\Identity\Application\SendPasswordResetEmailBestEffort;
+use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -14,11 +17,19 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
 /**
+ * The coupling suppression is measured at 15. The use case orchestrates a token factory, a repository, a
+ * clock, a mailer best-effort and a logger, so a test that drives it end to end names all of them; cutting
+ * the number means testing less of the orchestration, not testing it more simply.
+ *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(RequestPasswordReset::class)]
 final class RequestPasswordResetTest extends TestCase
 {
+    private const string SUPERSEDED_TOKEN_ID = '0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e63';
+
     public function testActiveIdentitySupersedesMintsPersistsAndEmails(): void
     {
         $tokens = new InMemoryPasswordResetTokenRepository();
@@ -107,6 +118,41 @@ final class RequestPasswordResetTest extends TestCase
         $this->assertCount(1, $tokens->saved);
     }
 
+    public function testTheSupersedeDropsThePendingTokenBeforeWritingTheNewOne(): void
+    {
+        $tokens = new InMemoryPasswordResetTokenRepository($this->pendingToken());
+
+        $deletesSeenAtWriteTime = null;
+        $tokens->onSave = static function () use ($tokens, &$deletesSeenAtWriteTime): void {
+            $deletesSeenAtWriteTime = $tokens->deleteAllForUserCalls;
+        };
+
+        $this->useCase(
+            new InMemoryUserRepository(UserMother::create()),
+            $tokens,
+            new RecordingEventBus(),
+            new RecordingPasswordResetEmailSender(),
+        )->request(UserMother::DEFAULT_EMAIL);
+
+        // Deliberately NOT asserted here: that the superseded row has stopped being readable. That is
+        // read-after-delete inside one unit of work, which `PasswordResetTokenRepository::deleteAllForUser()`
+        // declares undefined — the Doctrine adapter's `find()` consults an identity map a bulk DELETE does
+        // not evict. Asserting it would pin a promise the port refuses to make and hand every future adapter
+        // the gymnastics of keeping it. What the supersede actually guarantees is the ORDER, and that is
+        // asserted below at the instant of the write.
+        $this->assertCount(1, $tokens->saved);
+        $issuedId = $tokens->saved[0]->getId();
+        $this->assertIsString($issuedId);
+
+        // The freshly issued link survived, which the reverse order could not manage: the delete is
+        // user-wide, so running it after the write would take the new row along with the old one.
+        $this->assertInstanceOf(PasswordResetToken::class, $tokens->findById($issuedId));
+
+        // Read at the instant of the write rather than afterwards, so the order is asserted rather than
+        // inferred from what the two deletions happen to leave behind.
+        $this->assertSame([UserMother::DEFAULT_ID], $deletesSeenAtWriteTime);
+    }
+
     public function testAUserGoneUnderTheLockIssuesAndEmailsNothing(): void
     {
         $users = new InMemoryUserRepository(UserMother::create());
@@ -153,6 +199,19 @@ final class RequestPasswordResetTest extends TestCase
         yield 'malformed email' => [null, '   '];
         yield 'invited' => [UserMother::invited(), UserMother::DEFAULT_EMAIL];
         yield 'suspended' => [$suspended, UserMother::DEFAULT_EMAIL];
+    }
+
+    /**
+     * A reset link already outstanding for the identity, so the supersede has something real to drop rather
+     * than an empty store in which every ordering looks alike.
+     */
+    private function pendingToken(): PasswordResetToken
+    {
+        return PasswordResetToken::issue(
+            self::SUPERSEDED_TOKEN_ID,
+            UserMother::DEFAULT_ID,
+            SingleUseToken::mint(new DateTimeImmutable('2026-07-13T12:30:00+00:00'))->token,
+        );
     }
 
     private function useCase(

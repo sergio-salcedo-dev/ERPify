@@ -123,11 +123,27 @@ const COPY: Record<AccessWallVariant, AccessWallCopy> = {
   // Same icon/status/title as INVALID_LINK on purpose: the opacity contract protects WHY the link
   // died (used/expired/unknown are one wall), not WHICH flow it belongs to — the URL already names
   // the flow. Only the exit differs: a reset link is self-service, an invitation is not.
+  //
+  // The second sentence covers the one reachable state in which this wall is the WRONG conclusion:
+  // a reset the server applied whose 204 never arrived. The client reads that as a transport
+  // failure, the retry meets a token already spent, and the user lands here believing nothing
+  // happened — while the new credential is live and sign-in would work. It stays conditional and is
+  // rendered for every dead-token reason alike, so it hints at a possibility without reporting
+  // which one occurred; the opacity contract is about disclosing the cause, not about withholding
+  // the exit from someone already locked out of it.
+  //
+  // The condition is on what the VISITOR did, not on what happened to the link, and that is
+  // load-bearing rather than a wording preference: `ResetPasswordForm` renders this same variant
+  // when the URL carries no `?token=` at all, so a mail client that broke the link lands someone
+  // here who submitted nothing. "If this link was already used" leaves that person reading a claim
+  // about a password they never set; "if you already set a new password with this link" is a
+  // question they can answer on every path that reaches this wall.
   [AccessWallVariant.INVALID_RESET_LINK]: {
     icon: Link2Off,
     status: "Invalid link",
     title: "This link is no longer valid",
-    description: "You can request a new link to reset your password.",
+    description:
+      "If you already set a new password with this link, it is active — sign in with it. Otherwise, request a new link to reset your password.",
     actions: [SIGN_IN_ACTION, REQUEST_RESET_LINK_ACTION],
   },
 };
