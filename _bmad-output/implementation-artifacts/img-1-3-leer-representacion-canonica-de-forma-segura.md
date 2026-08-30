@@ -430,6 +430,41 @@ emite; admitirla es una laxitud permanente justificada con un «clientes laxos»
 Inofensiva hoy (el valor sigue teniendo que igualar el digest), pero es la única de las cuatro formas
 aceptadas sin especificación detrás.
 
+**Tercera capa entregada — auditoría de aceptación.** Verificó como genuinamente cubiertas (el test puede
+observar el fallo de su AC) las AC 2, 3, 4, 5, 7, 11, 12, 13, 17, 18, 19, 20, 21, 22, 23, 25, 26 y 27, y
+comprobó contra `api/vendor/` **todas** las afirmaciones que los docblocks hacen sobre el framework: cada una
+es cierta. También confirmó que ninguno de los seis registros que la historia argumenta NO tocar necesitaba
+tocarse, y que no se acuña ningún `type` nuevo en ningún sitio.
+
+**SERIO — C-17: la ruta de lectura tiene ahora CINCO productores de log, y la AC 9, el ADR y el residual
+nueve de §7 nombran TRES.** `ReadFailureReporter` emite `read_object_too_large` y `read_digest_mismatch`, que
+no existían cuando se escribió la excepción argumentada. Y el de integridad tiene exactamente la propiedad
+con la que la AC 9 reencuadró P1 como permanente en vez de pasajero: un objeto corrupto sigue corrupto, así
+que **cada** petición posterior escribe otro `warning`, para siempre — y responde 500, así que además escribe
+el registro `error` del canal por defecto que activa el `fingers_crossed` de prod, que es el mecanismo sobre
+el que gira el argumento D2 del ADR. La decisión de no acotar gobierna por tanto una superficie más ancha que
+la que describe el artefacto que la gobierna. Es un hueco de gobernanza que crea esta historia.
+
+**MENOR — C-18: el test de no-fuga por valor no puede fallar.** `ReadFailureReporter::objectTooLarge()` y
+`digestMismatch()` no toman argumentos, así que ningún identificador, digest, key ni byte puede alcanzar el
+contexto por construcción. Además la AC 8 nombra cuatro valores prohibidos y el test afirma tres (falta la
+storage key). Lo que de verdad guarda la propiedad es el `assertSame` sobre el contexto entero que tiene al
+lado — así que la AC está cubierta, pero no por el test que la AC pedía.
+
+**Correcciones a afirmaciones MÍAS que esta capa desmontó, ya aplicadas arriba:** la fila 5 de la tabla de
+falsificaciones decía «11 de 14, 3 supervivientes» y lo medido fue **11 de 13 con 2 supervivientes**; cinco
+filas de la matriz re-derivada citaban la clase equivocada, lo que importa más aquí que en otro sitio porque
+el propósito declarado de esa fila era re-derivar contra el árbol; el registro de vocabulario añade **seis**
+patrones y no cinco; y el coeficiente «~9,5 B/px» no es lo que muestra la propia tabla del gate — el peor
+ratio es **12,9 B/px** (la fila de 7,5 MP), aunque el veredicto aguanta porque el modelo sólo se aplica en el
+techo, donde es conservador (proyecta 206,7 MiB contra 191,2 MiB medidos, frente a un presupuesto de 230,4).
+Queda por reconciliar que el docblock del gate dice «8 bytes por píxel» mientras `services.yaml` y el ini
+dicen «10».
+
+**Residual que esta capa nombra y nadie más:** `php.lint.yaml` está arreglado pero **sigue sin ser miembro de
+ningún agregado ni de ningún job de CI**, así que el propio diagnóstico del récord — «un target de lint rojo
+en árbol limpio es un target que nadie corre» — se le aplica igual después del arreglo.
+
 ## Acceptance Criteria
 
 1. **Given** una petición **no autenticada** sobre un `ImageId` existente, **When** se invoca
@@ -1500,7 +1535,7 @@ pristine bytes back — never `git checkout --`:
 | a `?\SplFileInfo` parameter planted on `CanonicalImageFinder::find()` | `ImageTransportSurfaceGateTest`, type axis |
 | a `string $storageKey` parameter planted on `ImageGetController::__invoke()` | `ImageTransportSurfaceGateTest`, value axis |
 | the `$logger` binding removed from `services.yaml` | `BestEffortReportChannelGateTest` |
-| the `api_v1_shared_images` resource deleted from `routes.yaml` | 11 of 14 Behat scenarios (the 3 survivors are 404 assertions a router 404 also satisfies — recorded, because it shows which scenarios do and do not prove registration) |
+| the `api_v1_shared_images` resource deleted from `routes.yaml` | 11 of the 13 Behat scenarios the feature held **at the time of that run** (the 2 survivors are 404 assertions a router 404 also satisfies — recorded, because it shows which scenarios do and do not prove registration). The feature has since grown to 14, so a re-run would be 12 of 14. **An earlier version of this row said "11 of 14" with "3 survivors"; both halves were wrong and the acceptance layer derived the correct arithmetic from the tree.** |
 | `max_decoded_pixels` restored to 40 MP against `memory_limit` 128M | `ImagePixelBudgetGateTest` — 397.5 MiB projected against a 115.2 MiB budget, i.e. it would have caught the state that actually shipped |
 | the ceiling raised alone, and `memory_limit` deleted from the ini | the same gate, both directions |
 
@@ -1604,18 +1639,18 @@ matrix was written beforehand and a review found eight rows claiming what their 
 | AC | Where it is actually pinned now | Honest residual |
 |---|---|---|
 | 1 | `read.feature` anonymous `Scenario Outline` (2 shapes) + the query-parameter scenario | the router-first shapes (empty id, `/` inside, non-preflight `OPTIONS`) are declared, not tested |
-| 2 | `ImageGetControllerTest` (a repository double that RAISES if reached) + `read.feature` 400 | — |
+| 2 | `ImageGetControllerIdentityGuardTest` (doubles that RAISE if reached) + `read.feature` 400 | — |
 | 3 | `read.feature` 404 + `type: not-found` | the fatal-error path is by construction, not testable |
 | 4 | `ImageGetControllerTest` (PNG magic under an `image/webp` row) + `read.feature` headers | — |
 | 5 | `read.feature` "row whose bytes are gone" + `CanonicalImageFinderTest` | — |
-| 6 | `CanonicalImageFinderTest` (all five verdicts) | **the `type` on the WIRE is pinned only for 404**: 503 and the two 500s have no scenario, because no Behat step can make the container's storage fail |
-| 7 | `CanonicalImageFinderTest` digest + oversize arms | "headers not committed first" is structural, not tested — as the AC says |
-| 8 | `CanonicalImageFinderTest`, context asserted whole and by VALUE substring | — |
+| 6 | `CanonicalImageFinderTest` (2 verdicts) + `CanonicalImageFinderFailureTranslationTest` (3) | **the `type` on the WIRE is pinned only for 404**: 503 and the two 500s have no scenario, because no Behat step can make the container's storage fail |
+| 7 | `CanonicalImageFinderFailureTranslationTest` digest + oversize arms | "headers not committed first" is structural, not tested — as the AC says |
+| 8 | `ReadFailureReporterTest`, context asserted whole | the by-VALUE substring test is structurally vacuous — the reporter's two methods take no arguments — so what actually guards a leak is the whole-context `assertSame` beside it |
 | 9 | no code; the ADR, the epic amendment and the measurement above | — |
 | 10 | `ImageGetControllerTest` + `read.feature` Range scenario | `HEAD` is not exercised by any scenario |
 | 11 | `ImageGetControllerTest` (directives, and a test that fails if `public` returns) + `read.feature` | — |
 | 12 | `ImageTransportSurfaceGateTest`, value axis, controller in scope | — |
-| 13 | `HttpCacheValidatorTest` (5 matching + 3 refusing forms) + two `read.feature` scenarios | — |
+| 13 | `HttpCacheValidatorTest` (5 matching + 3 refusing forms) + three `read.feature` scenarios | — |
 | 14 | nothing executable — no stream exists | as the AC says |
 | 15 | `read.feature` query-parameter scenario | `?_rsc=1` is not observable: Caddy diverts it to the PWA |
 | 16 | the pre-existing `TransportOnlyUploadedFileDenormalizerFunctionalTest`, cited | — |
@@ -1676,7 +1711,7 @@ Rows with no executable test that could observe their AC failing: **7 (partial),
 - `api/frankenphp/conf.d/10-app.ini` — `memory_limit` declared by this repository for the first time
 - `api/behat.dist.php` — the image fixture context registered
 - `api/.artifact-gate-placement` — three new gates classified
-- `api/.behat-step-vocabulary` — five new patterns, plus one `idle` the feature now spends
+- `api/.behat-step-vocabulary` — six new patterns, plus one `idle` the feature now spends
 - `make/php-quality.mk` — `php.lint.yaml` was red on a clean tree
 
 **Modified — tests**
