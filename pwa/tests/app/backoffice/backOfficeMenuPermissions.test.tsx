@@ -134,7 +134,7 @@ describe("the back-office sidebar and the permission each entry declares", () =>
 
     expect(admin).toEqual(backofficeMenuGroups);
     expect(leafNames(manager).map((sub) => sub.name)).not.toContain(GATED_ENTRY);
-    expect(leafNames(manager).length).toBe(leafNames(admin).length - 1);
+    expect(leafNames(manager)).toHaveLength(leafNames(admin).length - 1);
   });
 
   // The avatar menu renders from `accountMenuItem` and not from the groups, so it is a second surface

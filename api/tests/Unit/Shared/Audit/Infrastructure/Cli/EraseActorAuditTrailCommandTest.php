@@ -41,31 +41,66 @@ final class EraseActorAuditTrailCommandTest extends TestCase
         $this->assertCount(0, $logger->records);
     }
 
-    public function testDryRunReportsTheCountWithoutMutatingOrAuditing(): void
-    {
-        $anonymiser = new RecordingAuditActorAnonymiser(3);
+    /**
+     * Both readings of the preview, because the empty trail takes a branch of its own and says something
+     * different: an operator told "no rows were changed" over a trail that never had any learns nothing
+     * about whether the id was the one they meant. Asserting each verdict AND the absence of the other is
+     * what makes deleting that branch red — with the non-empty row alone the suite stays green.
+     */
+    #[DataProvider('provideDryRunReportsTheCountWithoutMutatingOrAuditingCases')]
+    public function testDryRunReportsTheCountWithoutMutatingOrAuditing(
+        int $matchCount,
+        string $verdict,
+        string $refuted,
+    ): void {
+        $anonymiser = new RecordingAuditActorAnonymiser($matchCount);
         $logger = new RecordingAuditLogger();
         $tester = $this->testerFor($anonymiser, $logger);
 
         $exitCode = $tester->execute(['actor-id' => self::ACTOR_ID, '--dry-run' => true]);
 
         $this->assertSame(Command::SUCCESS, $exitCode);
-        $this->assertStringContainsString('Rows matched: 3', $tester->getDisplay());
+        $this->assertStringContainsString(\sprintf('Rows matched: %d', $matchCount), $tester->getDisplay());
+        $this->assertStringContainsString($verdict, $tester->getDisplay());
+        $this->assertStringNotContainsString($refuted, $tester->getDisplay());
         $this->assertCount(0, $anonymiser->anonymisedActorIds, 'dry run never mutates');
         $this->assertCount(0, $logger->records, 'dry run never audits');
     }
 
+    /**
+     * @return iterable<string, array{int, string, string}>
+     */
+    public static function provideDryRunReportsTheCountWithoutMutatingOrAuditingCases(): iterable
+    {
+        yield 'a trail with rows' => [3, 'Dry run', 'nothing to erase'];
+        yield 'a trail with none' => [0, 'nothing to erase', 'Dry run'];
+    }
+
+    /**
+     * The operator is asked even when the trail holds nothing, because a question conditional on the subject
+     * hands a run that cannot answer it an exit code describing that subject. An affirmative answer then
+     * authorises the statement rather than a verdict taken from the preview: the count was read before the
+     * operator answered, so rows can arrive while they think, and what settles "there was nothing to erase"
+     * is `affectedRows` — beside the write, where both sibling erasures also decide it.
+     */
     public function testItDoesNothingWhenNoRowsMatch(): void
     {
         $anonymiser = new RecordingAuditActorAnonymiser(0);
         $logger = new RecordingAuditLogger();
         $tester = $this->testerFor($anonymiser, $logger);
+        $tester->setInputs(['yes']);
 
         $exitCode = $tester->execute(['actor-id' => self::ACTOR_ID]);
 
         $this->assertSame(Command::SUCCESS, $exitCode);
-        $this->assertCount(0, $anonymiser->anonymisedActorIds);
-        $this->assertCount(0, $logger->records);
+        $this->assertStringContainsString('Irreversibly anonymise 0 row(s)?', $tester->getDisplay());
+        $this->assertStringContainsString('nothing to erase', $tester->getDisplay());
+        $this->assertSame(
+            [self::ACTOR_ID],
+            $anonymiser->anonymisedActorIds,
+            'the answer authorises the statement; its own result, not the preview, decides the outcome',
+        );
+        $this->assertCount(0, $logger->records, 'an UPDATE that matched nothing is not evidence of an erasure');
     }
 
     public function testItErasesAndAuditsTheErasureWithThePseudonymNeverTheOriginalId(): void

@@ -901,10 +901,14 @@ mitigated state. Accepting one means recording who accepted it and against which
       — reachable through the console's own single-alternative prompt for a mistyped command name, which
       drains a pipe whose last byte is not a newline. `--force` is the unattended path. **Residuals, none
       gated:** a command line the console cannot *bind* raises before `execute()` and exits `1`, which no
-      guard here can reach; the guards are three copies with no gate holding them equal, and the deferred
-      registry states why an AST gate on the re-read alone would not have caught the defect that produced
-      them; and `--dry-run` still prints the matching row count to the same caller, so what the guards close
-      is the exit code as an existence oracle, never the count as information.
+      guard here can reach; and `--dry-run` still prints the matching row count to the same caller, so what
+      the guards close is the exit code as an existence oracle, never the count as information — which is
+      also why no separate record is owed for the count surviving on the confirmation path. **No longer
+      three copies:** `identity:gdpr:erase-subject` and `bank-account:gdpr:erase-subject` inherit the
+      sequence from `ConfirmedErasureCommand` and cannot order it wrong; `audit:gdpr:erase` keeps its own,
+      because it reads the row count between the refusal and the question, and
+      `ConfirmationGuardAdjacencyGateTest` holds the union of both routes to the same two guards — a text
+      sweep over the shape, which never judges the semantics.
 - [ ] **An erasure count is read from the store, never minted by a type fallback.** Every Doctrine adapter
       running a DQL bulk statement had to narrow `AbstractQuery::execute()`'s declared `mixed`, and seven
       sites across four adapters reached independently for the same fallback — six spelled

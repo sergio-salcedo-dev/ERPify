@@ -145,6 +145,26 @@ final class EraseIdentitySubjectCommandTest extends TestCase
         $this->assertFalse($users->removeCalled);
     }
 
+    /**
+     * The precedence between the two flags, which nothing else pins. `--force` says "do not ask me"; it does
+     * not say "erase". A run passing both asked for a preview and gets one — the only reading under which
+     * `--dry-run` is safe to leave in a script that later gains `--force`.
+     */
+    public function testADryRunKeepsItsNoOpWhenForceIsPassedToo(): void
+    {
+        $users = new InMemoryUserRepository(UserMother::create());
+        $tester = $this->tester($users);
+
+        $exitCode = $tester->execute(
+            ['user-id' => UserMother::DEFAULT_ID, '--dry-run' => true, '--force' => true],
+            ['interactive' => false],
+        );
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringContainsString('Dry run: nothing was erased.', $tester->getDisplay());
+        $this->assertFalse($users->removeCalled);
+    }
+
     private function tester(
         InMemoryUserRepository $users,
         ?InMemoryActiveAdministratorDirectory $directory = null,

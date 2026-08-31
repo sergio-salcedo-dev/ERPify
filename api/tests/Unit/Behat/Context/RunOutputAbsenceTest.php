@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Behat\Context;
 
 use Erpify\Tests\Behat\Context\RunOutcomeContext;
 use Erpify\Tests\Behat\Support\Execution\LastRun;
+use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
@@ -65,16 +66,30 @@ final class RunOutputAbsenceTest extends TestCase
     /**
      * The half that keeps the guard from being a refusal of everything: a run that printed a report
      * genuinely not naming the text still passes, which is the assertion the six live usages make.
+     *
+     * What is read is the step's OWN assertion count, which is what gives this case a falsifier of its
+     * own: the count is the step's claim, not this test's, so `assertTrue(true)` remains as unfalsifiable
+     * as it ever was. It is a floor rather than an equality because the number encodes PHPUnit's
+     * internals as much as the step's intent — `assertNotSame()` increments twice when both operands are
+     * bool and once otherwise, so an operand type changing under a step that still makes the same two
+     * claims would red a `=== 2`.
+     *
+     * What the floor cannot see: two assertions that are the WRONG two. A guard replaced rather than
+     * deleted keeps the count. The two refusal cases above are what cover that direction — they pin the
+     * message the non-empty guard produces, so replacing it reds them.
      */
     public function testAnAbsenceInARunThatPrintedSomethingElseStillPasses(): void
     {
         $context = $this->contextOverOutput('Roles the enum no longer knows: GHOST_ROLE');
+        $before = Assert::getCount();
 
-        // No assertion is added here on purpose. The step performs its own two — the non-empty guard
-        // and the absence itself — so the count is real, and a guard that refused everything would
-        // throw. Adding assertTrue(true) would be a claim nothing can falsify, which is the defect
-        // this very file exists to close.
         $context->theLastRunOutputShouldNotContain('MANAGER');
+
+        $this->assertGreaterThanOrEqual(
+            2,
+            Assert::getCount() - $before,
+            'the step returned green over fewer claims than the non-empty guard and the absence together',
+        );
     }
 
     /**
