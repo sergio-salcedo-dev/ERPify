@@ -10,29 +10,32 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
  * The suite may not run against the database the runtime uses. That is a stronger requirement than "the test
- * config names another database": this suite does not merely write rows, it purges the schema, clones it to
- * `<dbname>_behat_backup` and restores over it once per feature, so a connection resolving to the dev
- * database consumes whatever a developer had there — the session they were signed in with included.
+ * config names another database": a dozen functional tests `TRUNCATE` or `DELETE` in `setUp()` and nothing
+ * rolls back, so a misresolved connection does not fail — it succeeds, against a developer's data. Measured
+ * with the suffix removed: one full `make php.unit` took the dev `identity_user` from 13 rows to 1 and
+ * `iam_session` from 6 to 4, which is a signed-out developer and a 401 from the who-am-I route.
  *
- * The isolation is `dbname_suffix` in config/packages/doctrine.yaml, and it is asserted here by its
- * consequence rather than by its spelling. A gate reading that YAML would go green on a suffix the container
- * never applies, which is the shape the previous guarantee failed in: a dedicated DSN sat in .env.test while
- * Dotenv declined to overwrite the DATABASE_URL the container already exported, so the declared isolation and
- * the live connection disagreed with nothing able to report it. `current_database()` is asked of the open
- * connection, so the answer comes from the server rather than from the configuration that hoped to set it.
+ * The isolation is `dbname_suffix` in config/packages/test/doctrine.yaml. What actually STOPS a bad run is
+ * {@see \Erpify\Tests\Support\PHPUnit\RefuseRuntimeDatabaseExtension}, which reads the resolved connection
+ * parameters on the runner's first event, before any test executes. This test is the falsifiable pin beside
+ * it, and it earns its place by asking a different oracle: `current_database()` comes from the server, so it
+ * proves the connection that was actually opened, where the extension proves only what was configured.
  *
- * What it does not prove: the name is checked, not the contents. A deployment that named its runtime database
- * `<something>_test` would satisfy this while sharing one database with the suite — nothing here can tell
- * those apart, and no environment in this repository is spelled that way.
+ * Asserted as a marker rather than a terminal suffix because a lane may append its own token —
+ * `api/tests/Behat/bootstrap.php` sets `TEST_TOKEN=_behat` so the two lanes hold one database each.
+ *
+ * What it does not prove: the name is checked, not the contents. A deployment whose runtime database were
+ * itself spelled with `_test` in it would satisfy this while sharing one database with the suite; no
+ * environment in this repository is spelled that way.
  *
  * @internal
  */
 #[CoversNothing]
 final class TestDatabaseIsolationTest extends KernelTestCase
 {
-    private const string TEST_DATABASE_SUFFIX = '_test';
+    private const string TEST_DATABASE_MARKER = '_test';
 
-    public function testTheSuiteConnectsToADatabaseTheRuntimeCannotBeUsing(): void
+    public function testTheOpenConnectionNamesADatabaseTheRuntimeCannotBeUsing(): void
     {
         self::bootKernel();
 
@@ -43,16 +46,16 @@ final class TestDatabaseIsolationTest extends KernelTestCase
         $this->assertIsString($liveDatabase);
         $this->assertNotSame('', $liveDatabase);
 
-        $this->assertStringEndsWith(
-            self::TEST_DATABASE_SUFFIX,
+        $this->assertStringContainsString(
+            self::TEST_DATABASE_MARKER,
             $liveDatabase,
             \sprintf(
-                'The suite is connected to "%s", which carries no "%s" suffix and is therefore a database the '
-                . 'runtime can be using. Behat purges and restores over its connection, so this run would '
-                . 'consume the dev data. Restore the `dbname_suffix` under `when@test` in '
-                . 'config/packages/doctrine.yaml.',
+                'The suite is connected to "%s", which carries no "%s" marker and may therefore be the '
+                . 'database the runtime uses. This suite truncates and deletes without rolling back, so the '
+                . 'run would consume the dev data. Check `dbname_suffix` under '
+                . 'config/packages/test/doctrine.yaml.',
                 $liveDatabase,
-                self::TEST_DATABASE_SUFFIX,
+                self::TEST_DATABASE_MARKER,
             ),
         );
     }

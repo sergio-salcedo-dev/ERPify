@@ -59,20 +59,3 @@ when@prod:
                 doctrine.system_cache_pool:
                     adapter: cache.system
 
-when@test:
-    doctrine:
-        dbal:
-            # The suffix — not the DSN — is what keeps the suite off the dev database. The stack injects
-            # DATABASE_URL as a real container environment variable, and Symfony's Dotenv never overwrites a
-            # variable that is already set, so a DSN written in .env.test is inert under Docker and every
-            # `APP_ENV=test` process resolves whatever compose handed the container. A suffix is applied to
-            # the already-resolved connection instead, so it holds however DATABASE_URL arrives: compose,
-            # .env, a shell export, an IDE run configuration.
-            #
-            # It has to hold at that strength because the suite does not merely write to the database it
-            # connects to — FixturesContext purges it, clones it to `<dbname>_behat_backup` and restores over
-            # it once per feature, so a connection pointed at the dev database consumes the developer's data.
-            #
-            # TEST_TOKEN is ParaTest's per-process token; nothing sets it here, so it resolves to the empty
-            # string and the name stays `<dbname>_test`.
-            dbname_suffix: '_test%env(default::TEST_TOKEN)%'

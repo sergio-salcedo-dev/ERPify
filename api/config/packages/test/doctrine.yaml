@@ -5,3 +5,20 @@ doctrine:
         # for Behat's DoctrineContext.
         profiling: true
         profiling_collect_backtrace: true
+
+        # The suite's database is the runtime one plus a suffix, and the suffix — not a DSN — is what keeps
+        # it off the runtime data. Two bootstraps disagree about which file wins: api/tests/Behat/bootstrap.php
+        # calls Dotenv::overload(), which does overwrite an already-set variable, while
+        # api/tools/phpunit/bootstrap.php calls bootEnv(), which does not. So a DSN in .env.test binds the
+        # Behat lane and silently fails to bind the PHPUnit lane, which then resolves whatever compose exported
+        # — measured: with the suffix removed, one `make php.unit` takes the dev `identity_user` from 13 rows
+        # to 1 and `iam_session` from 6 to 4. A suffix is applied to the already-resolved connection, so it
+        # binds both lanes however DATABASE_URL arrives: compose, .env, a shell export, an IDE run
+        # configuration.
+        #
+        # TEST_TOKEN is the per-process token ParaTest sets; api/tests/Behat/bootstrap.php sets it to `_behat`
+        # so the two lanes keep one database each. That separation is load-bearing rather than tidy:
+        # FixturesContext DROPs and re-clones the database it connects to, so a PHPUnit run sharing it dies
+        # mid-query on `make -j php.test`, and rows PHPUnit leaves behind would otherwise be baked into the
+        # per-feature backup it restores from.
+        dbname_suffix: '_test%env(default::TEST_TOKEN)%'

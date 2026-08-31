@@ -122,20 +122,40 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointin
 - **Editing a `.sh`** → `make shell.lint`, and it must come back with **zero** findings. `make/super-lint.mk` had offered a shell validator for months and `.github/workflows/` named it nowhere, so the bar was held by hand: shellcheck reported **nine** findings against `scripts/adversarial-pass-check.sh` — the largest shell in the tree, and the most executed, since a `PreToolUse` hook runs it on every `Bash` tool call — while the three older `scripts/*.sh` reported zero. That asymmetry is what a hand-held bar looks like just before it slips. The gate is plain shellcheck in its own `shell-lint` CI job (gating through `ci-success`), not the docker-based super-linter, for two reasons: the remote session containers have no docker, so a contributor there could never self-check; and switching a broad linter on over an existing tree arrives with a baseline, which this repo refuses. **The subject is tracked *shell*, not files named `*.sh`** — the union of tracked `*.sh` and every tracked file whose first line is a sh/bash shebang, which is five more (`api/bin/sf`, `binaries/composer`, `binaries/sf` and two skill runners); selecting on the extension would have left them unlinted while the claim "the gate covers shell" quietly stopped being true, with nothing going red. `git grep` supplies the second half in ~50 ms over 7.5k tracked files. It cannot see an **untracked** script: the list comes from `git ls-files`, so a new file is linted from the commit that adds it, never before. **One invocation over the whole list, never a per-file loop** — shellcheck follows a `source` only into a file also given as input, and measured here a loop reports three findings the batch run does not (`SC1091` on each `. lib/common.sh`, plus an `SC2034` for a variable `common.sh` does use), which are artefacts of the call rather than properties of the code. No baseline: the tree is at zero, so one could only preserve future drift; a genuine false positive is answered at its line with a `# shellcheck disable=<code>` carrying its reason, which review can see. The version is the **runner's**, deliberately — a pin would be deterministic but pip is not one of the four ecosystems `.github/dependabot.yaml` watches, so it would become the tree's one unwatched pin (#763's shape); the job prints `shellcheck --version` so a red on a commit that touched no shell is diagnosable from the log. Not a member of `ci.quality`, which runs inside the php/pwa containers. Rationale in full: `make/shell.mk`.
 - **Opening a pull request** → the adversarial-pass record is on the branch *before* the PR exists, or the attempt is refused. **Two gates, blind in opposite places and neither redundant.** Locally, a `PreToolUse` hook runs `scripts/adversarial-pass-check.sh` — the only one that can witness the *order*, because it runs at creation time and reads no timestamp — with `make bmad.adversarial.check` as the same instrument by hand and `make bmad.adversarial.self-test` as its falsification (101 rows). Server-side, `.github/workflows/adversarial-pass.yml` runs the same script on `pull_request` — the only one that sees a PR **this session did not open** (the web UI, another machine, a CI job, `curl` against `POST /pulls`, which the hook cannot observe at all). The server half proves only *presence on the head, now*, never presence *before the PR opened*; it must not be read as the stronger claim, and it does **not** inherit failing-open — a base ref it cannot resolve is a red, because nothing there can wedge a branch. Both gate the form, not the substance, and both yield to a recorded `ADVERSARIAL_PASS_ACK` (an assignment prefix on the CLI, a line in the PR body on the other two surfaces — writable by anyone who can open the PR, so it records *why* a PR is unchecked, never *who* may say so). Full rationale and blind spots: *Security review on every change* → Process.
 - **Running the suite** → it connects to `<dbname>_test`, and the thing that puts it there is `dbname_suffix`
-  under `when@test` in `api/config/packages/doctrine.yaml`, never a DSN. A DSN written in `api/.env.test` binds
-  nothing under Docker: compose exports `DATABASE_URL` as a real environment variable and Symfony's Dotenv
-  declines to overwrite one already set, so the file reads as an isolation guarantee while every `APP_ENV=test`
-  process resolves whatever the container was handed. That is not a cosmetic mismatch — `FixturesContext`
-  purges the database it connects to, clones it to `<dbname>_behat_backup` and restores over it once per
-  feature — so for as long as the suffix was missing, one `make php.behat` replaced a developer's dev data with
-  the Alice fixtures and signed them out of the local stack, with `erpify_db_test` never created and nothing
-  red. A suffix applies to the already-resolved connection, so it holds however `DATABASE_URL` arrives:
-  compose, `.env`, a shell export, an IDE run configuration. Gate: `TestDatabaseIsolationTest`, which asks the
-  open connection for `current_database()` rather than reading the YAML — a config gate would go green on a
-  suffix the container never applied, which is the seam this failed in. It checks the NAME, so a runtime
-  database itself spelled `<something>_test` would satisfy it; nothing here is. `make db.test.prepare` creates
-  and migrates that database and is a prerequisite of the PHPUnit targets — Behat needs no such wiring because
-  `FixturesContext` already runs both commands itself before the first scenario.
+  under `api/config/packages/test/doctrine.yaml`, never a DSN. **Which lane a DSN in `api/.env.test` binds is
+  not uniform, and that asymmetry is the whole defect**: `api/tests/Behat/bootstrap.php` calls
+  `Dotenv::overload()`, which overwrites an already-set variable, while `api/tools/phpunit/bootstrap.php`
+  calls `bootEnv()`, which does not — so the dedicated DSN that sat in `.env.test` bound Behat and was inert
+  under PHPUnit, which resolved whatever compose had exported. The lane that consumed the dev database was
+  therefore **PHPUnit**, not Behat, and a reading that blames the Behat clone is refuted by that file. What
+  makes it destructive is that a dozen functional tests `TRUNCATE`/`DELETE` in `setUp()` and nothing rolls
+  back, so the run reports success: measured with the suffix removed, one `make php.unit` takes the dev
+  `identity_user` from 13 rows to 1 and `iam_session` from 6 to 4 — a signed-out developer and a 401 from the
+  who-am-I route. A suffix applies to the already-resolved connection, so it binds both lanes however
+  `DATABASE_URL` arrives: compose, `.env`, a shell export, an IDE run configuration.
+- **Each lane holds its own database** — `<dbname>_test` for PHPUnit, `<dbname>_test_behat` for Behat, which
+  sets `TEST_TOKEN=_behat` in its bootstrap. Not tidiness: `FixturesContext` DROPs and re-clones the database
+  it connects to, so a shared one kills an in-flight `make -j php.test` mid-query, and rows PHPUnit left
+  behind would be baked into the per-feature backup Behat restores from. `make db.test.prepare` creates and
+  migrates the PHPUnit one (a prerequisite of the PHPUnit targets; Behat self-prepares in `FixturesContext`),
+  `make db.test.reset` is the destructive counterpart for both — `db.drop`/`db.reset` run under `APP_ENV=dev`
+  and cannot reach either — and `make db.test.shell` opens psql on the test database, which `db.shell` cannot.
+- **The stop is `RefuseRuntimeDatabaseGuard`, called from `api/tools/phpunit/bootstrap.php`, and its
+  placement is a measurement rather than a preference.** Two PHPUnit extension hooks were tried first and
+  **neither stops anything**: subscribing to `ExecutionStarted` prints "Exception in third-party event
+  subscriber" and runs the suite anyway, and throwing from the extension's own `bootstrap()` prints
+  "Bootstrapping of extension … failed" and also continues — both printed the refusal and then took dev
+  `identity_user` from 13 to 1. A throwable in the file bootstrap is fatal, so that run ends with **zero
+  tests executed** and the data untouched. The guard reads the resolved connection parameters and
+  deliberately does **not** connect: CI fans out 27 `php.lint.*` gates through `bin/phpunit --filter` during
+  `php.quality.dry-run`, before `db.test.prepare` has created anything, and a connecting check would red
+  every one of them. Cost, measured with the container cached: ~20 ms per invocation. The Behat lane carries
+  its own guard in `FixturesContext::requireDbName()`, because `make php.behat` runs no PHPUnit and neither
+  does CI's `api-behat` job — refusing at the statement that destroys also covers `vendor/bin/behat` and an
+  IDE run configuration. `TestDatabaseIsolationTest` is the falsifiable pin beside both, and earns its place
+  by asking a different oracle: `current_database()` comes from the server, where the guard reads only what
+  was configured. All three check for a `_test` marker, so a runtime database itself spelled that way would
+  satisfy them; none is.
 - **Migrations** → generate via `make db.diff`. You may edit a migration created on the current feature branch; once merged into `main` it is immutable — create a new one instead.
 - **Local browser checks** → when a Playwright/browser navigation to the local HTTPS stack fails with `ERR_CERT_AUTHORITY_INVALID` (self-signed dev cert), don't silently downgrade to curl-only: say you hit it and pause — the user accepts the cert manually in the browser, then you retry the navigation. `curl -k` stays the hard gate, but the live visual check is recoverable this way, not abandoned.
 

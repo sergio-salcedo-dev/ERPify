@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Erpify\Tests\Support\Database\RefuseRuntimeDatabaseGuard;
 use Symfony\Component\Dotenv\Dotenv;
 
 $apiRoot = dirname(__DIR__, 2);
@@ -24,3 +25,9 @@ if (class_exists(Dotenv::class) && is_file($apiRoot . '/.env')) {
 if (filter_var($_SERVER['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
     umask(0000);
 }
+
+// Last thing before the runner starts: refuse a suite pointed at the runtime database. This suite truncates
+// and deletes without rolling back, so such a run reports success while consuming a developer's data. It has
+// to be here rather than in a PHPUnit extension — both extension hooks were measured reporting the refusal
+// and then running the whole suite anyway, while a throwable in this file is fatal.
+RefuseRuntimeDatabaseGuard::refuseUnlessTestDatabase();

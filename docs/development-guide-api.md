@@ -168,19 +168,29 @@ make php.unit                              # PHPUnit
 make php.unit c='--filter SomeTest'        # filter
 make php.behat                             # Behat, --strict (config: api/behat.dist.php)
 make db.test.prepare                       # create + migrate <dbname>_test (idempotent; php.unit runs it for you)
+make db.test.reset                        # drop + recreate both test databases (after editing an applied migration)
+make db.test.shell                        # psql on the test database (db.shell opens the runtime one)
 ```
 
 - **PHPUnit config**: `api/tools/phpunit/phpunit.dist.xml` (resolved by `api/bin/phpunit` unless `-c` overrides it).
 - **Behat config**: `api/behat.dist.php` (Behat 4 dropped YAML config).
 - Integration tests touching Doctrine use **real Postgres** (Compose), not SQLite.
-- The suite runs against `<dbname>_test` — `erpify_db_test` locally — never the runtime database. What puts
-  it there is `dbname_suffix` under `when@test` in `api/config/packages/doctrine.yaml`, applied to the
-  already-resolved connection, so it holds however `DATABASE_URL` arrives. A DSN in `api/.env.test` would
-  not: compose exports `DATABASE_URL` as a real environment variable and Dotenv never overwrites one that is
-  already set. The distinction is load-bearing rather than tidy — `FixturesContext` purges the database it
-  connects to, clones it to `<dbname>_behat_backup` and restores over it once per feature, so a run pointed
-  at the dev database replaces your local data with the Alice fixtures and signs you out of the stack.
-  `TestDatabaseIsolationTest` asserts it by asking the open connection, not by reading the config.
+- The suite never runs against the runtime database. Each lane holds its own: `<dbname>_test` for PHPUnit,
+  `<dbname>_test_behat` for Behat (its bootstrap sets `TEST_TOKEN=_behat`). One per lane because
+  `FixturesContext` DROPs and re-clones the database it connects to — sharing one kills an in-flight
+  `make -j php.test` and bakes PHPUnit's leftover rows into the backup every feature restores from.
+- What puts them there is `dbname_suffix` under `api/config/packages/test/doctrine.yaml`, applied to the
+  already-resolved connection, so it binds however `DATABASE_URL` arrives. **Do not "fix" this with a DSN in
+  `api/.env.test`**: `Dotenv::overload()` in Behat's bootstrap overwrites an already-set variable and
+  `bootEnv()` in PHPUnit's does not, so such a DSN binds one lane and is silently inert in the other — which
+  is exactly how PHPUnit spent four months resolving the dev database. The same applies to an untracked
+  `.env.test.local`; a `DATABASE_URL` there must name the **runtime** database, since the suffix is appended
+  on top.
+- If you run a single functional test straight from the IDE, it bypasses make: run `make db.test.prepare`
+  once first, or the run dies on a database that does not exist. `make db.test.shell` opens psql on it.
+- Guards, in the order they fire: `RefuseRuntimeDatabaseGuard` (called from `api/tools/phpunit/bootstrap.php`,
+  ends the run at zero tests), `FixturesContext::requireDbName()` (the Behat lane, which runs no PHPUnit), and
+  `TestDatabaseIsolationTest` as the pin that asks `current_database()` of the server.
 
 ## Lint / analyze
 

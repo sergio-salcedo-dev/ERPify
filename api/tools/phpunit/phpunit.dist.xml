@@ -24,6 +24,14 @@
         <server name="MERCURE_URL" value="http://127.0.0.1/.well-known/mercure" force="true" />
         <server name="MERCURE_PUBLIC_URL" value="https://localhost/.well-known/mercure" force="true" />
         <server name="MERCURE_JWT_SECRET" value="!ChangeThisMercureHubJWTSecretKey!" force="true" />
+
+        <!-- Forced for the same reason the MERCURE_* trio above is: compose exports both as real container
+             environment variables, and this lane loads .env.test through bootEnv, which never overwrites one
+             that is already set. Without these the file's own values are inert here — a test would reach
+             mailpit over SMTP rather than the null transport, and the "deterministic, non-personal"
+             recipient .env.test declares would be the maintainer's real address from compose.yaml. -->
+        <server name="MAILER_DSN" value="null://null" force="true" />
+        <server name="DEFAULT_NOTIFICATION_EMAIL" value="notifications@erpify.test" force="true" />
     </php>
 
     <testsuites>
