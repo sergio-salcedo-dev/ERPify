@@ -543,3 +543,7 @@ action_items:
     action: "DECISION: el liston de pases adversariales para una historia con superficie HTTP nueva. img-1-3 acumulo cuatro; el Pase 2 tumbo cuatro AC y la premisa de Task 0, y el Pase 4 aporto el hallazgo de las tres capas convergentes mas tres SERIOUS"
     owner: "Sergio"
     status: open
+  - epic: images
+    action: "DECISION: el check A de bmad-status-audit lee solo sprint-status.yaml, asi que la epica entera fue invisible durante toda su vida (medido: 0 ocurrencias de epic-images en el canonico de origin/main, y check A dispara aplicado al fichero scoped). Descubrir los ficheros scoped, refundir al EMPEZAR la epica, o aceptar el hueco"
+    owner: "Sergio"
+    status: open
