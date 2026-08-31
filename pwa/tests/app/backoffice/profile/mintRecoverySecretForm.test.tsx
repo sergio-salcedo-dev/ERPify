@@ -59,8 +59,8 @@ beforeEach(() => {
  * This form's field is named, so a submit React has not wired yet is a native GET carrying
  * `?currentPassword=<plaintext>` into the URL, the history entry, the `Referer` of the next
  * request and the container access log — a sink with no TTL and no erasure owner. The guard
- * that stops it is one expression, and until these cases existed it could be deleted with the
- * whole suite still green.
+ * that stops it is one expression on one line, which is why it is asserted from both sides here
+ * rather than left to review.
  */
 describe("MintRecoverySecretForm — server render, before hydration", () => {
   const html = (): string =>

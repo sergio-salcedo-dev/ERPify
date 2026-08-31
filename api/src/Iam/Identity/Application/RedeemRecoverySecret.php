@@ -149,14 +149,15 @@ final readonly class RedeemRecoverySecret
             // would break the promise the revoke surface makes in as many words: the secret stops working
             // immediately.
             //
-            // It undoes THIS request's session and no other. The coarse form — every session of the identity —
-            // was measured taking down the OWNER's: whoever holds a leaked secret starts a redemption, the
-            // owner revokes that secret from their profile, and this pass then finds the row gone and
-            // compensates over an identity whose owner is signed in and looking at it. That owner may be an
-            // administrator whose `locked_until` is still in the future, which is the exact person this
-            // channel exists for: they would be left with no secret, no session and no login.
+            // It undoes THIS request's session and no other, which is the radius rather than a detail:
+            // reaching every session of the identity would take down the OWNER's through an interleaving an
+            // attacker can provoke — they start a redemption, the owner revokes that secret from their
+            // profile, and this pass then finds the row gone and compensates over an identity whose owner is
+            // signed in and looking at it. That owner may be an administrator whose `locked_until` is still
+            // in the future, which is the exact person this channel exists for: no secret, no session, no
+            // login.
             //
-            // The narrow radius needs no widening of any shared signature. `Security::login()` returns no
+            // Naming one session needs no widening of any shared signature. `Security::login()` returns no
             // identifier, but it is not the source — `StartSession` mints the id and stashes it through
             // `CurrentSessionReference`, the same seam the admission gate reads on every request.
             //

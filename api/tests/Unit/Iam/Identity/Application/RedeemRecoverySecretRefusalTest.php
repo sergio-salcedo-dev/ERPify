@@ -104,10 +104,10 @@ final class RedeemRecoverySecretRefusalTest extends TestCase
      */
     public static function provideAValidSecretOverAnUnadmittedIdentityIsRefusedWithoutConsumingItCases(): iterable
     {
-        // The three states behind the OTHER wall. `AccountSuspended` had three cases and its twin — which
-        // covers more states than it does — had none, on any of the four endpoints. The PWA meanwhile builds
-        // a whole terminal wall for `account-deactivated` and proves it against a double, so nothing in the
-        // tree asserted that this side ever produces the type that wall is keyed on.
+        // The three states behind the OTHER wall — one refusal type covering more of them than its
+        // `AccountSuspended` sibling covers. The PWA builds a whole terminal wall for `account-deactivated`
+        // and proves it against a double, so this side is where the claim that the API produces that type at
+        // all has to be made.
         yield 'deactivated' => [static function (): User {
             $user = UserMother::create();
             $user->deactivate();
@@ -153,7 +153,7 @@ final class RedeemRecoverySecretRefusalTest extends TestCase
     #[Test]
     public function noLogRecordThisPathCanEmitCarriesTheSelector(): void
     {
-        // The fourth axis of the containment rule, and the one that had no witness. A log line has no schema
+        // The fourth axis of the containment rule, and the hardest to hold. A log line has no schema
         // to inspect and no erasure owner, and the selector is a denial capability: whoever reads one holds
         // this account's recovery channel shut without authenticating as anybody.
         //

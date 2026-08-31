@@ -19,19 +19,18 @@ use Throwable;
  * minted a session and then failed to do the thing the session was minted for, so what has to be undone is
  * that one session — the identity's other sessions were never part of the operation and predate it.
  *
- * **Why the narrow radius is load-bearing rather than tidy.** The coarse form was measured to revoke the
- * OWNER's session in a reachable interleaving: whoever holds a leaked secret starts a redemption, the owner
- * revokes that secret from their profile, and the redemption's locked pass then finds the row gone and
- * compensates — taking down every session of the identity, including the one the owner is looking at. The
- * owner may be exactly the person this whole channel exists for, an administrator whose `locked_until` is in
- * the future: they would have just destroyed their recovery secret and lost their session, leaving no
- * credential, no session and no login.
+ * **Why the radius is load-bearing rather than tidy.** Revoking every session of the identity here reaches
+ * the OWNER's, through an interleaving an attacker can provoke: whoever holds a leaked secret starts a
+ * redemption, the owner revokes that secret from their profile, and the redemption's locked pass then finds
+ * the row gone and compensates — over an identity whose owner is signed in and looking at it. That owner may
+ * be exactly the person this whole channel exists for, an administrator whose `locked_until` is in the
+ * future, who would be left with no secret, no session and no login.
  *
- * **The session identity is available, which the flow's first design assumed it was not.** `Security::login()`
- * returns no identifier, but it is not the source: {@see \Erpify\Iam\Session\Application\StartSession} mints
- * the {@see SessionId} and stashes it through {@see CurrentSessionReference}, which is the same seam
- * `SessionAdmissionGate` reads on every authenticated request. So the precise revoke needs no widening of any
- * shared signature — it reads the correlation the login already wrote.
+ * **Where the session identity comes from.** `Security::login()` returns no identifier, but it is not the
+ * source: {@see \Erpify\Iam\Session\Application\StartSession} mints the {@see SessionId} and stashes it
+ * through {@see CurrentSessionReference}, which is the same seam `SessionAdmissionGate` reads on every
+ * authenticated request. So naming one session needs no widening of any shared signature — it reads the
+ * correlation the login already wrote.
  *
  * Best-effort, for the reason its sibling is: this runs while a refusal is being raised, and a session store
  * outage may not turn that refusal into a 500 over work that already happened.
@@ -58,8 +57,8 @@ final readonly class RevokeCurrentSessionBestEffort
                 // No correlation to undo. Not reachable from a redemption whose login succeeded — the minting
                 // listener fails closed and its throw aborts the flow long before any compensation — so this
                 // is reported rather than silently treated as success, and deliberately NOT widened into a
-                // revoke of every session: falling back to the coarse radius here would reinstate the defect
-                // this class exists to remove, on the one path where nothing is known.
+                // revoke of every session: widening the radius on the one path where nothing is known is
+                // exactly where it would reach a session this request never minted.
                 $this->logger->warning('Redemption compensation found no session correlation to revoke.');
 
                 return;

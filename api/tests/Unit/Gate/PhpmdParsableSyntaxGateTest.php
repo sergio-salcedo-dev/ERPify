@@ -24,10 +24,10 @@ use SplFileInfo;
  * And the blast radius is the whole sweep: PDepend abandons the run, so every other rule over `bin`,
  * `config`, `src`, `tests`, `tools` and `public` reports nothing for as long as one file carries the form.
  *
- * **Three occurrences, three comments, nothing checking.** `ErrorContractGateTest`, `InMemorySessionRepository`
- * and `RedeemsRecoverySecrets` each carry a line at the site explaining why the parentheses are there. A note
- * at the site helps whoever edits that line and nobody else; the fourth author meets the stack trace exactly
- * as the first three did.
+ * **A note at the site cannot carry this.** The remedy is invisible until somebody writes the form, and the
+ * only reader a comment beside an existing pair of parentheses reaches is whoever edits that line. Everyone
+ * else meets the stack trace with nothing pointing at the cause, which is what makes the rule belong in a
+ * check.
  *
  * **What is refused is measured, not assumed** — each form run through the same sweep `make php.md` runs, on
  * the pinned `phpmd.phar` (2.15.0-snapshot, 2023-12-11, which predates the syntax):

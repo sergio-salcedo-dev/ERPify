@@ -123,11 +123,10 @@ export const API_ENDPOINTS = {
     // would read as an expired session and bounce to the login page.
     CHANGE_PASSWORD: `${API_PREFIX_V1}/me/password`,
     // The account's standby recovery credential, read (200). One path, two operations, two keys —
-    // the same shape `BANKS.LIST`/`BANKS.CREATE` already use, and the reason is a contract rather
-    // than taste: the verb is the fact that says which of these DESTROYS nothing and which mints a
-    // ten-year credential, and a single key serving both makes that fact unstatable. It was the one
-    // key in this registry called with two verbs, so `api-endpoint-contract` could not tell a
-    // swapped pair from a correct one.
+    // the same shape `BANKS.LIST`/`BANKS.CREATE` use, and a contract rather than taste: the verb is
+    // the fact that says which of these DESTROYS nothing and which mints a ten-year credential, and
+    // the key is what `api-endpoint-contract` identifies an operation by. One key serving both
+    // leaves that gate unable to tell a swapped pair from a correct one.
     RECOVERY_SECRET: `${API_PREFIX_V1}/me/recovery-secret`,
     // Mint it (201 — the plaintext is in that body and in no later one).
     RECOVERY_SECRET_MINT: `${API_PREFIX_V1}/me/recovery-secret`,

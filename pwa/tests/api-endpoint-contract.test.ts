@@ -23,12 +23,12 @@ import { describe, expect, it } from "vitest";
  * **The verb is compared against a DECLARATION, not against the router's union, and that is the
  * whole of it.** Asking the manifest "does this path accept this verb" answers yes for both halves
  * of a swapped pair, because the API really does accept both — measured, 6 of 34 mounted paths
- * take more than one method, and `/me/recovery-secret` is one of them, so the example this
- * paragraph uses to justify the verb check was exactly the case where the check asserted nothing.
- * What identifies the operation is the registry KEY, so each key declares the one verb it is
- * called with ({@link METHOD_BY_KEY}) and a call site is compared against that. A key called with
- * two verbs cannot state the fact and has to be split, which is the shape the rest of the registry
- * already uses — `BANKS.LIST` and `BANKS.CREATE` are two keys over one path.
+ * take more than one method, `/me/recovery-secret` among them, so on exactly the paths the verb
+ * check exists for it would assert nothing. What identifies the operation is the registry KEY, so
+ * each key declares the one verb it is called with ({@link METHOD_BY_KEY}) and a call site is
+ * compared against that. A key called with two verbs cannot state the fact and has to be split,
+ * which is the shape the rest of the registry uses — `BANKS.LIST` and `BANKS.CREATE` are two keys
+ * over one path.
  *
  * ## What it reads
  *
@@ -212,8 +212,8 @@ const METHOD_BY_KEY: Readonly<Record<string, string>> = {
   "BACKOFFICE.BANKS.DELETE": "DELETE",
   "BACKOFFICE.BANKS.DETAILS": "GET",
   "BACKOFFICE.BANKS.LIST": "GET",
-  // Reached through `useMercureRealtime`'s `authorizePath` variable, so no call site here names it
-  // — the completeness direction is what put both of these in the table at all.
+  // Reached through `useMercureRealtime`'s `authorizePath` variable, so the call-site walk cannot
+  // see either of these; only the completeness direction holds them.
   "BACKOFFICE.BANKS.REALTIME_AUTHORIZE": "GET",
   "BACKOFFICE.BANKS.UPDATE": "PUT",
   "BACKOFFICE.BANK_ACCOUNTS.CHANGE_STATUS": "PATCH",

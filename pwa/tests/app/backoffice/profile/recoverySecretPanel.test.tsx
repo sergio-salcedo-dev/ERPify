@@ -197,7 +197,7 @@ describe("<RecoverySecretPanel> — revoking asks for the current password", () 
  * A 409 means the account already holds a secret and this surface's read is simply behind. The
  * panel answers by re-reading, which swaps the mint form for the revoke-then-mint view the API
  * is describing — without it the owner is left pressing a button that can never succeed, which
- * is the outcome the branch exists to prevent and which nothing asserted.
+ * is the outcome the branch exists to prevent.
  */
 describe("<RecoverySecretPanel> — a mint refused because one already exists", () => {
   const alreadyExists = problem(

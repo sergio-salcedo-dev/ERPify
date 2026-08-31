@@ -114,8 +114,8 @@ final class MintRecoverySecretControllerTest extends TestCase
         // Both instants carry a VALUE, not a type. `expiresAt` comes from the injected clock, but `mintedAt`
         // is the aggregate's `createdAt` off the ambient {@see SystemClock}, so leaving it unasserted makes
         // the two slots interchangeable: emitting the expiry in the `mintedAt` position passes, and the owner
-        // is handed "Created 2036 / Expires 2036" for a credential minted today. This case is named for its
-        // two instants; until both are pinned it was named for one.
+        // is handed "Created 2036 / Expires 2036" for a credential minted today. Both instants are this
+        // case's subject, so both carry a value.
         $this->assertSame(self::NOW, $data['mintedAt']);
         $this->assertSame(self::LAPSES, $data['expiresAt']);
     }

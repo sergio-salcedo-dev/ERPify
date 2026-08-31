@@ -131,8 +131,8 @@ trait RedeemsRecoverySecrets
             self::ORGANIZATION_ID,
             'test-device',
             null,
-            // Parenthesised because PDepend cannot read the bare PHP 8.4 form; the argument, the measured
-            // matrix and the check now live in `PhpmdParsableSyntaxGateTest` rather than in this comment.
+            // Parenthesised because PDepend cannot read the bare PHP 8.4 form; the measured matrix and the
+            // check that refuses it are in `PhpmdParsableSyntaxGateTest`.
             (new DateTimeImmutable(self::NOW))->modify('+7 days'),
         );
         $session->pullDomainEvents();
