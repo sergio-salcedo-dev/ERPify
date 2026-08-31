@@ -401,6 +401,25 @@ anti-vacuidad con su propio mensaje), plantar un identificador en el contexto de
   compatible con I-1 pero es una decisión propia — el canal `observability` no tiene rotación, TTL ni dueño de
   borrado, que es la razón por la que este repo ya rechazó llevar allí el string de un llamante.
 
+**Un hallazgo de la propia reparación, convertido en guardarraíl.** Al parentesizar un `new` en el arnés de
+tests apareció que PDepend —el parser con el que PHPMD lee el árbol— no soporta la forma de PHP 8.4
+`new X()->m()`. **Ya había mordido dos veces**, en `ErrorContractGateTest` y en `InMemorySessionRepository`, y
+las dos se cerraron con un comentario en el sitio; la mía era la tercera. La forma en que falla es lo que lo
+hace caro: PDepend abandona la corrida entera, y el resumen dice `Found 0 violations and 1 error` sobre una
+traza de 38 marcos dentro de un `.phar` — a simple vista, una barrida limpia. Nuevo `PhpmdParsableSyntaxGateTest`,
+que lo coge en 0,15 s nombrando `fichero:línea` y el remedio. **Su regla está medida, no supuesta:** corridas
+las seis formas por la misma barrida que corre `make php.md`, `->` y `::` tras la lista de argumentos rompen el
+parser y `[0]` **no** — así que el gate no refusa el corchete, que sería refusar código válido por una
+limitación inexistente. Falsificado en tres direcciones: la forma real en el fichero real (1 rojo con su
+línea), el detector neutralizado (6 rojos, la mitad anti-tautología) y el universo vacío (el suelo del
+barrido). El `.phar` es 2.15.0-snapshot de 2023-12-11, anterior a la sintaxis; subirlo retiraría el gate y es
+decisión propia.
+
+**Advertencia metodológica que casi me cuesta el hallazgo:** las primeras seis sondas de esa matriz dieron
+«parsea» las seis, y eran **vacuas** — `phpmd.xml` excluye `*/var/*`, así que nunca se analizaron. Un control
+positivo (una violación que PHPMD debe reportar) fue lo que lo destapó, y sólo entonces la matriz dio el
+resultado correcto, que era el contrario.
+
 **Falsificación de las decisiones.** `RevokeSession` devuelto al radio grueso → **un solo rojo**, el caso
 nuevo `theCompensationTakesTheRedemptionsOwnSessionAndSparesTheOwnersLiveOne`. Y el falsificador que el
 hallazgo D3 nombraba —intercambiar `get`↔`post` en `ApiRecoverySecretRepository`— pasaba en verde antes y
@@ -785,7 +804,7 @@ fresca y con su código de salida leído, no heredado:
 - `make php.stan` -- 0
 - `make php.md` · `php.cs.dry-run` · `php.cs-fixer.dry-run` · `php.rector.dry-run` -- 0
 - `make php.deptrac` -- 0
-- `make php.unit` -- 0 (3499 tests, 18226 aserciones, 2 skipped)
+- `make php.unit` -- 0 (3513 tests, 18243 aserciones, 2 skipped)
 - `make php.behat` -- 0 (482 escenarios, 4489 pasos)
 - `make php.lint.route-manifest` -- 0
 - `make php.lint.{bounded-context,event-bus,error-contract,step-vocabulary,audit-evidence,public-access}` -- 0

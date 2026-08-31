@@ -151,6 +151,7 @@ tests/Unit/Gate/PersistentTransportRoutingShapeGateTest.php :: home
 tests/Unit/Gate/PersonAddressParameterGateTest.php :: home
 tests/Unit/Gate/PersonContainmentRuleGateTest.php :: home
 tests/Unit/Gate/PersonDataCarrierEmitterGateTest.php :: home
+tests/Unit/Gate/PhpmdParsableSyntaxGateTest.php :: home
 tests/Unit/Gate/PersonReferenceGateTest.php :: home
 tests/Unit/Gate/PersonReferenceRulesGateTest.php :: home
 tests/Unit/Gate/PersonReferenceSourceGateTest.php :: home

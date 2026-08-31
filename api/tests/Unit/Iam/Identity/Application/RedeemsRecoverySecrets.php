@@ -131,8 +131,8 @@ trait RedeemsRecoverySecrets
             self::ORGANIZATION_ID,
             'test-device',
             null,
-            // Parenthesised deliberately: PDepend cannot parse `new X()->method()`, so the unwrapped
-            // PHP 8.4 form fails `make php.md` with a parser error rather than a violation.
+            // Parenthesised because PDepend cannot read the bare PHP 8.4 form; the argument, the measured
+            // matrix and the check now live in `PhpmdParsableSyntaxGateTest` rather than in this comment.
             (new DateTimeImmutable(self::NOW))->modify('+7 days'),
         );
         $session->pullDomainEvents();
