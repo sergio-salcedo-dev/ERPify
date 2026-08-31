@@ -15,6 +15,7 @@ use Erpify\Tests\Behat\Context\EntityManagerContext;
 use Erpify\Tests\Behat\Context\EventStoreContext;
 use Erpify\Tests\Behat\Context\FixturesContext;
 use Erpify\Tests\Behat\Context\HttpRequestContext;
+use Erpify\Tests\Behat\Context\ImageFixtureContext;
 use Erpify\Tests\Behat\Context\HttpResponseContext;
 use Erpify\Tests\Behat\Context\IdentityMaintenanceContext;
 use Erpify\Tests\Behat\Context\Json\JsonErrorContext;
@@ -111,6 +112,7 @@ return (new Config())->withProfile(
                     MercureContext::class,
                     LoggerContext::class,
                     PrivacyContext::class,
+                    ImageFixtureContext::class,
                 ),
         )
         ->withExtension(new Extension(SymfonyExtension::class, [

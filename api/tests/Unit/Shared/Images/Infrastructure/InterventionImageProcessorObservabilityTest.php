@@ -78,7 +78,7 @@ final class InterventionImageProcessorObservabilityTest extends TestCase
     {
         // Observability is never load-bearing for the rejection — a failing logger must not swallow
         // or replace the original domain exception.
-        $processor = new InterventionImageProcessor(20_971_520, 40_000_000, 10_000, 4096, 85, new ThrowingLogger());
+        $processor = new InterventionImageProcessor(20_971_520, 20_000_000, 10_000, 4096, 85, new ThrowingLogger());
 
         $this->expectException(EmptyImageInput::class);
 

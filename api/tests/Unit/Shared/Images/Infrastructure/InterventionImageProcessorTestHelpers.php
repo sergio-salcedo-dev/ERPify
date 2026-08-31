@@ -30,7 +30,7 @@ trait InterventionImageProcessorTestHelpers
 
     private function processor(
         int $maxInputBytes = 20_971_520,
-        int $maxDecodedPixels = 40_000_000,
+        int $maxDecodedPixels = 20_000_000,
         int $maxInputDimension = 10_000,
         int $maxOutputDimension = 4096,
         int $encodingQuality = 85,

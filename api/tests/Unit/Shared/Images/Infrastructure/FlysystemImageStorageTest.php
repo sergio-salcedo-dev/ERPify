@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Infrastructure;
 
+use Erpify\Shared\Clock\Domain\NativeClock;
+use Erpify\Shared\Images\Application\FailureSignalWindow;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Storage\ImageBytesNotFound;
 use Erpify\Shared\Images\Domain\Storage\ImageStorage;
@@ -63,6 +65,7 @@ final class FlysystemImageStorageTest extends TestCase
             new PartiallyWritingFilesystem($this->root),
             $this->root,
             new RecordingLogger(),
+            new FailureSignalWindow(new NativeClock()),
         );
         $imageId = ImageId::generate();
 
@@ -279,6 +282,7 @@ final class FlysystemImageStorageTest extends TestCase
             new FailingAfterPartialWriteFilesystem($this->root),
             $this->root,
             new RecordingLogger(),
+            new FailureSignalWindow(new NativeClock()),
         );
 
         try {

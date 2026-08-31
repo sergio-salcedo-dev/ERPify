@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Infrastructure;
 
+use Erpify\Shared\Clock\Domain\NativeClock;
+use Erpify\Shared\Images\Application\FailureSignalWindow;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Storage\ImageStorageFailed;
 use Erpify\Shared\Images\Domain\Storage\StorageFailureCategory;
@@ -49,6 +51,7 @@ final class FlysystemImageStorageUndecidableExistenceTest extends TestCase
             new Filesystem(new LocalFilesystemAdapter($missingRoot, lazyRootCreation: true)),
             $missingRoot,
             new RecordingLogger(),
+            new FailureSignalWindow(new NativeClock()),
         );
 
         try {
@@ -81,6 +84,7 @@ final class FlysystemImageStorageUndecidableExistenceTest extends TestCase
             new Filesystem(new LocalFilesystemAdapter($missingRoot, lazyRootCreation: true)),
             $missingRoot,
             new RecordingLogger(),
+            new FailureSignalWindow(new NativeClock()),
         );
 
         try {
@@ -159,6 +163,7 @@ final class FlysystemImageStorageUndecidableExistenceTest extends TestCase
             new Filesystem(new LocalFilesystemAdapter($this->root, lazyRootCreation: true)),
             $this->root,
             new RecordingLogger(),
+            new FailureSignalWindow(new NativeClock()),
         );
         $storage->store($imageId, 'bytes that must survive');
 
@@ -214,6 +219,8 @@ final class FlysystemImageStorageUndecidableExistenceTest extends TestCase
             <?php
             require '/app/api/vendor/autoload.php';
 
+            use Erpify\Shared\Clock\Domain\NativeClock;
+            use Erpify\Shared\Images\Application\FailureSignalWindow;
             use Erpify\Shared\Images\Domain\ImageId;
             use Erpify\Shared\Images\Domain\Storage\ImageStorageException;
             use Erpify\Shared\Images\Infrastructure\FlysystemImageStorage;
@@ -227,6 +234,7 @@ final class FlysystemImageStorageUndecidableExistenceTest extends TestCase
                 new class extends \Psr\Log\AbstractLogger {
                     public function log($level, string|\Stringable $message, array $context = []): void {}
                 },
+                new FailureSignalWindow(new NativeClock()),
             );
 
             try {
