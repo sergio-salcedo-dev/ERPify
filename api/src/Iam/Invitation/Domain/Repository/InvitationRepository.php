@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Invitation\Domain\Repository;
 
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
+use UnexpectedValueException;
 
 /**
  * Aggregate-lifecycle port for {@see Invitation}.
@@ -53,6 +54,8 @@ interface InvitationRepository
      *
      * Unlike its sibling on the membership port this can remove several rows: nothing constrains a user to
      * one invitation. Idempotent — a second pass over a user with none deletes nothing and returns 0.
+     *
+     * @throws UnexpectedValueException when the store yields no affected-row count
      */
     public function deleteAllForInvitedUser(string $userId): int;
 }

@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
+use Erpify\Shared\Persistence\Infrastructure\AffectedRows;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -108,7 +109,7 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
             ->execute()
         ;
 
-        return \is_int($affected) ? $affected : 0;
+        return AffectedRows::from($affected);
     }
 
     /**

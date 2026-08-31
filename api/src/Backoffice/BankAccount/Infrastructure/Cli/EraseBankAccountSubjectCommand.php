@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\BankAccount\Infrastructure\Cli;
 
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
-use Erpify\Shared\Console\Infrastructure\UnattendedRunPolicy;
+use Erpify\Shared\Console\Infrastructure\ConfirmedErasureCommand;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -46,7 +46,7 @@ use Throwable;
     name: 'bank-account:gdpr:erase-subject',
     description: "Irreversibly erase a bank-account subject's data (GDPR right to erasure)",
 )]
-final class EraseBankAccountSubjectCommand extends Command
+final class EraseBankAccountSubjectCommand extends ConfirmedErasureCommand
 {
     public function __construct(
         private readonly EraseBankAccountSubject $eraser,
@@ -105,51 +105,10 @@ final class EraseBankAccountSubjectCommand extends Command
         return $this->eraseAndReport($io, $bankAccountId);
     }
 
-    /**
-     * Pre-flight guards that stop before any mutation, each carrying the exit code its own outcome earns.
-     * Three outcomes, and they are not one: a dry run is the no-op the operator asked for; a confirmation
-     * answered "no" is a rejection the operator expressed; and a run that could never put the question is a
-     * rejection nobody expressed, which is the only one that must not report success.
-     *
-     * @return int|null the exit code to stop on, or null to proceed with the erasure
-     */
-    private function preflight(SymfonyStyle $io, InputInterface $input): ?int
+    #[Override]
+    protected function confirmationQuestion(): string
     {
-        if (true === $input->getOption('dry-run')) {
-            $io->note('Dry run: nothing was erased.');
-
-            return Command::SUCCESS;
-        }
-
-        if (true === $input->getOption('force')) {
-            return null;
-        }
-
-        if (UnattendedRunPolicy::cannotAnswer($input)) {
-            return UnattendedRunPolicy::refuse($io, 'erase', 'the target', 'Nothing was erased.');
-        }
-
-        $confirmed = $io->confirm(
-            'Irreversibly erase this subject (removes the account, shreds its audit PII)?',
-            false,
-        );
-
-        // A stdin nothing can be read from enters the question interactive and leaves it demoted: the helper
-        // answers with the default it was handed rather than raising, so reading the flag a second time is
-        // what separates a typed "no" from a question nobody was there to hear. This is the one of the three
-        // unanswerable shapes that only a re-read can see — {@see UnattendedRunPolicy::cannotAnswer()} covers
-        // the other two and says why it cannot cover this one.
-        if (!$input->isInteractive()) {
-            return UnattendedRunPolicy::refuse($io, 'erase', 'the target', 'Nothing was erased.');
-        }
-
-        if (!$confirmed) {
-            $io->warning('Aborted — nothing was erased.');
-
-            return Command::SUCCESS;
-        }
-
-        return null;
+        return 'Irreversibly erase this subject (removes the account, shreds its audit PII)?';
     }
 
     private function eraseAndReport(SymfonyStyle $io, string $bankAccountId): int
