@@ -12,12 +12,16 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 /**
  * What makes a console run unable to answer its own confirmation, and what it is told when it cannot.
  *
- * **The policy is shared; the placement is not, and that distinction is the whole design.** A command that
- * asks before doing something irreversible has to decide where in its own flow the question belongs — the
- * audit trail erasure counts rows and returns early on zero before it ever asks, the two subject erasures do
- * not — and every defect this class exists to prevent has been a defect of ordering rather than of the test
- * itself. So nothing here calls anything: each command asks the question at its own call site and reads the
- * answer. What is centralised is only what does not vary — the predicate, and the sentence the operator gets.
+ * **The policy is shared; the placement is shared only where it does not vary, and that distinction is the
+ * whole design.** A command that asks before doing something irreversible has to decide where in its own
+ * flow the question belongs, and every defect this class exists to prevent has been a defect of ordering
+ * rather than of the test itself. So nothing here calls anything: this class is the predicate and the
+ * sentence, and it is reached from wherever the caller decides.
+ *
+ * Where the order genuinely varies, it stays in the open: the audit trail erasure counts rows and returns
+ * early on zero before it ever asks, so it keeps its own pre-flight. Where it does not vary it is inherited
+ * rather than copied — the two subject erasures had the same sequence byte for byte, and
+ * {@see ConfirmedErasureCommand} now holds it once so a third cannot copy it wrong.
  *
  * @internal
  */

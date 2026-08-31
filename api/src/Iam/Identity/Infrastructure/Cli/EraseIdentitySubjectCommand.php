@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Cli;
 
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
-use Erpify\Shared\Console\Infrastructure\UnattendedRunPolicy;
+use Erpify\Shared\Console\Infrastructure\ConfirmedErasureCommand;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -47,7 +47,7 @@ use Throwable;
     name: 'identity:gdpr:erase-subject',
     description: "Irreversibly erase an identity subject's data and audit trail (GDPR right to erasure)",
 )]
-final class EraseIdentitySubjectCommand extends Command
+final class EraseIdentitySubjectCommand extends ConfirmedErasureCommand
 {
     public function __construct(
         private readonly FulfilIdentityErasure $eraser,
@@ -111,82 +111,12 @@ final class EraseIdentitySubjectCommand extends Command
         return $this->eraseAndReport($io, $userId);
     }
 
-    /**
-     * The four modes a run can be in, in the order that decides between them when more than one applies.
-     * Written as a table rather than a sequence of guards because the precedence is the contract: a run
-     * that asked for a preview gets one even when it also passed <comment>--force</comment>, and a run that
-     * cannot be asked is turned away before anything reads the subject. The exit code carries the rest of
-     * that contract, because a compliance job reads `$?` and nothing else. Three outcomes, and they are
-     * not one:
-     *
-     * - a dry run is the no-op the operator asked for, so it succeeds;
-     * - a confirmation answered "no" is a rejection the operator expressed — they were asked, they replied,
-     *   and the command did exactly what they said, so it succeeds too;
-     * - a run that could never put the question is a rejection nobody expressed. Reporting success there is
-     *   indistinguishable from a completed erasure to every caller that is not a human reading the screen.
-     *
-     * That last one refuses with `INVALID` rather than `FAILURE`, the same reading the malformed user-id
-     * above gives it and the one {@see ReconcileErasedSubjectReferencesCommand} gives it: no erasure was
-     * attempted, so there is no half-run state to reason about and the repair belongs on the command line.
-     * `FAILURE` would send whoever reads `$?` looking for an erasure that half-ran. The shared reading is
-     * "no verdict was reached, do not act on it" rather than "nothing is broken" — the reconciler answers
-     * `INVALID` for a failed probe too, which is a fault.
-     *
-     * @return int|null the exit code to stop on, or null to proceed with the erasure
-     */
-    private function preflight(SymfonyStyle $io, InputInterface $input): ?int
+    #[Override]
+    protected function confirmationQuestion(): string
     {
-        return match (true) {
-            true === $input->getOption('dry-run') => $this->reportDryRun($io),
-            true === $input->getOption('force') => null,
-            UnattendedRunPolicy::cannotAnswer($input) => $this->refuseUnaskableRun($io),
-            default => $this->confirmErasure($io, $input),
-        };
-    }
-
-    private function reportDryRun(SymfonyStyle $io): int
-    {
-        $io->note('Dry run: nothing was erased.');
-
-        return Command::SUCCESS;
-    }
-
-    /** One sentence for both shapes of unanswered question, so neither can drift away from the other. */
-    private function refuseUnaskableRun(SymfonyStyle $io): int
-    {
-        return UnattendedRunPolicy::refuse($io, 'erase', 'the target', 'Nothing was erased.');
-    }
-
-    /**
-     * The question, and the second shape of unanswered question — the one only a re-read can see. A stdin
-     * nothing can be read from enters the question interactive and leaves it demoted: the helper answers
-     * with the default it was handed rather than raising, so reading the flag again immediately after is
-     * what separates a typed "no" from a question nobody was there to hear.
-     * {@see UnattendedRunPolicy::cannotAnswer()} covers the other two shapes and says why it cannot cover
-     * this one, which is why nothing may come between the question and the re-read.
-     *
-     * @return int|null the exit code to stop on, or null to proceed with the erasure
-     */
-    private function confirmErasure(SymfonyStyle $io, InputInterface $input): ?int
-    {
-        $confirmed = $io->confirm(
-            'Irreversibly erase this identity (removes the user and its reset tokens, anonymises its audit '
+        return 'Irreversibly erase this identity (removes the user and its reset tokens, anonymises its audit '
             . 'trail, rewrites its identifier out of the business event log, and drops its sessions, its '
-            . 'organization membership and every invitation addressed to it)?',
-            false,
-        );
-
-        if (!$input->isInteractive()) {
-            return $this->refuseUnaskableRun($io);
-        }
-
-        if (!$confirmed) {
-            $io->warning('Aborted — nothing was erased.');
-
-            return Command::SUCCESS;
-        }
-
-        return null;
+            . 'organization membership and every invitation addressed to it)?';
     }
 
     private function eraseAndReport(SymfonyStyle $io, string $userId): int
