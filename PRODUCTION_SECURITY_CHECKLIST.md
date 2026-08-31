@@ -1611,6 +1611,16 @@ mitigated state. Accepting one means recording who accepted it and against which
       multi-worker deployment behind a balancer needs a shared Redis), and with `lock_factory: null`
       concurrent workers *"may over- or under-count"*. What does not exist is a limit **per identity and per
       route**. `ImageId` is never an authorization mechanism and never a secret.
+      **What defends the frontier is now a tripwire rather than a promise.** The epic's argument for having
+      no voter is that no consumer relation exists to vote on, and its second half — that the first real
+      consumer brings its own policy — was prose that nothing enforced; an external security review named
+      the exact failure that permits, a consumer wired without an owner check turning a documented
+      provisional frontier into a silent cross-user read. `ImageConsumerAuthorizationGateTest` refuses any
+      aggregate outside `Shared/Images` holding an image reference, so that question is forced into the diff
+      that first raises it. The bot's own suggested fix — gating the route behind a permission granted to no
+      role — was measured and refused: it answers 403 to every caller, which deletes the slice rather than
+      deferring the decision. The gate matches a property NAME, so a reference under another spelling, in a
+      join table or in a JSON column is still invisible to it.
       **And the conditional request inverts the usual self-limiting.** A `304` is gated on the same verified
       read as a `200` — the full object off disk plus its SHA-256 — because the storage port exposes no
       existence predicate; the cost is declared at the controller. What is NOT declared there is that the

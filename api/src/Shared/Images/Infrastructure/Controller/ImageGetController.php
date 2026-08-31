@@ -148,6 +148,14 @@ final readonly class ImageGetController
      * compromised subdomain — which would otherwise get a credentialed load and an existence oracle from
      * load/error. The PWA sets this header in its own config; Caddy routes `/api/*` separately, so nothing
      * there reaches this response.
+     *
+     * **What leaves the process is not this CSP string, under dev and test.** `WebProfilerBundle` is
+     * registered for those two environments and its `ContentSecurityPolicyHandler` APPENDS
+     * `script-src 'unsafe-inline'` plus a nonce to whatever CSP a response carries — which re-opens on this
+     * response exactly the inline execution `default-src 'none'` closes. Production is unaffected because
+     * the bundle is not registered there, so this is a property of the toolbar rather than of the policy;
+     * it is recorded because the acceptance scenario asserts directives PRESENT rather than the whole
+     * header, and that choice would otherwise look like laxity instead of a measurement.
      */
     private function applyBodyIsolationHeaders(Response $response): void
     {

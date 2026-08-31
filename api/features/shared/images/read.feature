@@ -87,6 +87,14 @@ Feature: Serve the canonical bytes of an image by its identity
     And the header "Content-Type" should be equal to "image/webp"
     And the header "Content-Length" should be equal to "27"
     And the header "X-Content-Type-Options" should be equal to "nosniff"
+    # Directives present rather than the whole string, and for a measured reason like the Cache-Control
+    # scenario below: under dev and test the WebProfiler's ContentSecurityPolicyHandler APPENDS
+    # `script-src 'unsafe-inline'` and a nonce to every CSP it sees, which re-opens inline execution on
+    # exactly this response. `WebProfilerBundle` is registered for dev and test only, so production emits
+    # what the controller sets — but a literal match here would pin a toolbar artifact into the contract.
+    And the header "Content-Security-Policy" should contain "default-src 'none'"
+    And the header "Content-Security-Policy" should contain "sandbox"
+    And the header "Cross-Origin-Resource-Policy" should be equal to "same-origin"
 
   Scenario: The response is privately cacheable for an hour and carries a strong validator
     # Asserted as directives present rather than as a whole string, for two measured reasons: the header bag

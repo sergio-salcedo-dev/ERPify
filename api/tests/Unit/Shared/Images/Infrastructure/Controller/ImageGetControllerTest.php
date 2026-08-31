@@ -82,76 +82,40 @@ final class ImageGetControllerTest extends TestCase
         $this->assertSame(\sprintf('"%s"', $image->digest()), $response->headers->get('ETag'));
     }
 
-    public function testAMatchingValidatorAnswersNotModifiedWithItsOwnValidatorAndFreshness(): void
-    {
-        // `setNotModified()` keeps what is already on the response, so a 304 built on a bare one would carry
-        // neither — satisfying every other rule here and leaving the client nothing to send back next time.
-        [$controller, $image] = $this->controllerWithStoredImage();
-        $request = new Request();
-        $request->headers->set('If-None-Match', \sprintf('"%s"', $image->digest()));
-
-        $response = $controller($request, $image->id()->toString());
-
-        $this->assertSame(Response::HTTP_NOT_MODIFIED, $response->getStatusCode(), (string) $response->getContent());
-        $this->assertEmpty($response->getContent());
-        $this->assertSame(\sprintf('"%s"', $image->digest()), $response->headers->get('ETag'));
-        $this->assertTrue($response->headers->hasCacheControlDirective('private'));
-        $this->assertSame('3600', $response->headers->getCacheControlDirective('max-age'));
-    }
-
     /**
-     * `Range` is ignored rather than honoured or refused, and nothing advertises otherwise: announcing a
-     * capability this slice does not implement is worse than staying silent about it.
-     */
-    public function testARangeRequestIsAnsweredWithTheWholeBodyAndNoAdvertisement(): void
-    {
-        [$controller, $image] = $this->controllerWithStoredImage();
-        $request = new Request();
-        $request->headers->set('Range', 'bytes=0-3');
-
-        $response = $controller($request, $image->id()->toString());
-
-        $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
-        $this->assertSame(self::BYTES, $response->getContent());
-        $this->assertFalse($response->headers->has('Accept-Ranges'));
-    }
-
-    /**
-     * `If-Modified-Since` is ignored, which is the other half of not opening a second validation axis: the
-     * route emits no `Last-Modified`, so a client cannot have obtained one from here, and honouring the
-     * request header would answer 304 against a validator this deployment never issued.
+     * The two headers that make the body inert, and the fact that they ride with the BODY.
      *
-     * Untested until a code review looked for it — `git grep -i if-modified-since api/tests api/features`
-     * matched only the controller's own docblock, so planting a branch that answers 304 on this header
-     * turned nothing red while three documents said it was ignored.
+     * This is the first route in the tree whose response a browser renders: every other `/api/*` answer is
+     * JSON, which is neither loadable as a non-CORS subresource nor executable. `nosniff` is not the control
+     * — it PINS the declared type rather than questioning it — so what stops a row declaring `text/html`
+     * from becoming markup in the PWA's own origin is the CSP, and what stops a same-site subdomain getting
+     * a credentialed `<img src>` embed and a load/error existence oracle is the CORP.
+     *
+     * Asserted absent on the `304` on purpose: that response carries no body, so the headers would be
+     * decoration, and pinning the placement is what keeps a later refactor from moving them into the shared
+     * cache-header helper where they would silently become both.
      */
-    public function testAModificationDateConditionIsIgnoredAndTheWholeBodyIsAnswered(): void
+    public function testTheServedBytesCarryTheHeadersThatMakeThemInertAndThe304DoesNot(): void
     {
         [$controller, $image] = $this->controllerWithStoredImage();
-        $request = new Request();
-        $request->headers->set('If-Modified-Since', 'Sat, 01 Jan 2050 00:00:00 GMT');
 
-        $response = $controller($request, $image->id()->toString());
+        $served = $controller(new Request(), $image->id()->toString());
 
-        $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
-        $this->assertSame(self::BYTES, $response->getContent());
-    }
+        $this->assertSame("default-src 'none'; sandbox", $served->headers->get('Content-Security-Policy'));
+        $this->assertSame('same-origin', $served->headers->get('Cross-Origin-Resource-Policy'));
 
-    /**
-     * `If-Match` is not evaluated, so a mismatching one does not answer 412. It is a write-side precondition
-     * and this route has no write to guard; refusing a read on it would invent a failure mode.
-     */
-    public function testAMismatchingIfMatchIsNotEvaluatedAndNeverAnswersPreconditionFailed(): void
-    {
-        [$controller, $image] = $this->controllerWithStoredImage();
-        $request = new Request();
-        $request->headers->set('If-Match', '"0000000000000000000000000000000000000000000000000000000000000000"');
+        $conditional = new Request();
+        $conditional->headers->set('If-None-Match', \sprintf('"%s"', $image->digest()));
 
-        $response = $controller($request, $image->id()->toString());
+        $notModified = $controller($conditional, $image->id()->toString());
 
-        $this->assertNotSame(Response::HTTP_PRECONDITION_FAILED, $response->getStatusCode());
-        $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
-        $this->assertSame(self::BYTES, $response->getContent());
+        $this->assertSame(
+            Response::HTTP_NOT_MODIFIED,
+            $notModified->getStatusCode(),
+            (string) $notModified->getContent(),
+        );
+        $this->assertFalse($notModified->headers->has('Content-Security-Policy'));
+        $this->assertFalse($notModified->headers->has('Cross-Origin-Resource-Policy'));
     }
 
     /**

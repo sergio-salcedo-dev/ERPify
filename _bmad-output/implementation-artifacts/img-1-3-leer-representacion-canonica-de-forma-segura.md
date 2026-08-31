@@ -521,6 +521,25 @@ que no shipearon: una inserción por `str.index()` que enganchó un comentario y
 en `php.quality` y ninguna en el dry-run; y un regex no-greedy que cerró en el paréntesis de
 `RecordingLogger()` y dejó `new ReadFailureReporter(new RecordingLogger(, ...))` en tres ficheros.
 
+**Los dos hilos de review de la PR, que esta pasada NO leyó** — los encontró Sergio, y el fallo de proceso
+está ahora en `CLAUDE.md`. Se cerraron los dos, en direcciones opuestas:
+
+- **CORP (LOW)** — ya estaba aplicado: la capa Blind Hunter lo había redescubierto por su cuenta (B-1/C-11)
+  y se cerró con CORP **más** una CSP que el hallazgo no pedía. El hilo seguía abierto porque el re-review
+  on push de Strix está desactivado y su comentario queda sellado en el commit que leyó. Lo que sí faltaba
+  era que **nadie lo afirmara**: se añadieron la aserción unitaria (las dos cabeceras en el 200, y ausentes
+  en el 304, que fija la colocación deliberada) y una en Behat. Esa segunda encontró algo que el unit no
+  podía ver: bajo dev y test el `ContentSecurityPolicyHandler` del WebProfiler **añade**
+  `script-src 'unsafe-inline'` y un nonce a la CSP, reabriendo justo la ejecución inline que cierra. El
+  bundle es `['dev' => true, 'test' => true]`, así que producción emite lo que pone el controlador — pero
+  la aserción afirma directivas presentes, no la cadena entera, y el porqué está en el docblock.
+- **IDOR (MEDIUM)** — decisión cerrada del épico (decisión 3, ítem 17 del firewall), así que el parche
+  literal no se aplica; **medido, además, rompe la slice**: el permiso que sugiere no lo tiene ningún rol,
+  así que la ruta respondería 403 a todo el mundo y caerían los 16 escenarios. Pero su ARGUMENTO es válido y
+  señalaba una promesa que nada sostenía — «el primer consumidor trae su política» era prosa. Cerrado con
+  `ImageConsumerAuthorizationGateTest`, que enrojece en el diff que introduzca el primer consumidor,
+  falsificado plantando `$logoImageId` en `Bank`.
+
 **Un detalle del lenguaje que costó una iteración y vale registrar:** desde PHP 8.1 el `&` de un retorno por
 referencia **no** es el token de un carácter. El lexer decide por lo que SIGUE —`T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG`
 o `T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG`— así que llega como token array y una comparación contra la

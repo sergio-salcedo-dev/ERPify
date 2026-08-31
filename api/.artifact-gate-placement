@@ -184,6 +184,7 @@ tests/Unit/Gate/IbanSeparatorContractGateTest.php :: undecided :: asks a validat
 # Filed on the module whose contract they enforce.
 tests/Unit/Behat/Context/OutboxUnqualifiedStepsTest.php :: mirrored :: tests/Behat/Context
 tests/Unit/Behat/Context/SupersededRunPhrasingsTest.php :: mirrored :: tests/Behat/Context
+tests/Unit/Shared/Images/ImageConsumerAuthorizationGateTest.php :: mirrored :: src/Shared/Images
 tests/Unit/Shared/Images/ImageLifecycleListenerGateTest.php :: mirrored :: src/Shared/Images
 tests/Unit/Shared/Images/ImagePixelBudgetGateTest.php :: mirrored :: src/Shared/Images
 tests/Unit/Shared/Images/ImageTransportSurfaceGateTest.php :: mirrored :: src/Shared/Images
