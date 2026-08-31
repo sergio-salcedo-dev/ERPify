@@ -7,9 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Images\Infrastructure;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Infrastructure\FlysystemImageStorage;
 use FilesystemIterator;
-use League\Flysystem\Filesystem;
 use League\Flysystem\FilesystemOperator;
-use League\Flysystem\Local\LocalFilesystemAdapter;
 use Psr\Log\LoggerInterface;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -54,11 +52,7 @@ trait TemporaryImageStorage
         ?LoggerInterface $logger = null,
         ?FilesystemOperator $filesystem = null,
     ): FlysystemImageStorage {
-        return new FlysystemImageStorage(
-            $filesystem ?? new Filesystem(new LocalFilesystemAdapter($this->root, lazyRootCreation: true)),
-            $this->root,
-            $logger ?? new RecordingLogger(),
-        );
+        return LocalImageStorages::rootedAt($this->root, $filesystem, $logger);
     }
 
     /**

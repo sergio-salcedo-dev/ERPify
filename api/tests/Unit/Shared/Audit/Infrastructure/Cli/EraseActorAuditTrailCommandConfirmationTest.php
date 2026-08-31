@@ -9,6 +9,7 @@ use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Infrastructure\Cli\EraseActorAuditTrailCommand;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
+use Erpify\Tests\Unit\Shared\Console\Double\DrainedInputStream;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -70,10 +71,17 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
     /**
      * A separate path from --no-interaction: the input is still interactive when the question is put, and the
      * question helper answers it with the default rather than raising.
+     *
+     * **The exit code may not vary with the trail here either, and this is the shape where that is hard to
+     * hold.** `UnattendedRunPolicy::cannotAnswer()` cannot see an empty stdin that nothing has read yet, so
+     * the count is taken before the demotion is discovered; only a question put whatever the count says keeps
+     * both rows of the provider on one code. Returning early over an empty trail answers `0` here against `2`
+     * for an actor with rows — an existence oracle a caller reads from `$?` alone.
      */
-    public function testAConfirmationNobodyCanAnswerRefusesInsteadOfReportingSuccess(): void
+    #[DataProvider('provideAConfirmationNobodyCanAnswerRefusesWhateverTheTrailHoldsCases')]
+    public function testAConfirmationNobodyCanAnswerRefusesWhateverTheTrailHolds(int $matchCount): void
     {
-        $anonymiser = new RecordingAuditActorAnonymiser(5);
+        $anonymiser = new RecordingAuditActorAnonymiser($matchCount);
         $logger = new RecordingAuditLogger();
         $tester = $this->testerFor($anonymiser, $logger);
         $tester->setInputs([]);
@@ -92,10 +100,24 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
     }
 
     /**
+     * @return iterable<string, array{int}>
+     */
+    public static function provideAConfirmationNobodyCanAnswerRefusesWhateverTheTrailHoldsCases(): iterable
+    {
+        yield 'an actor with rows' => [5];
+        yield 'an actor with none' => [0];
+    }
+
+    /**
      * An ORDERING pin, not a regression pin: this passes with or without the unattended refusal, because the
      * dry run short-circuits before the confirmation either way. What it fixes in place is that order — the
      * dry run is the one no-op the operator did express, so it keeps its exit code where a run that was never
      * asked does not, and it keeps its preview, which is the whole reason the option exists.
+     *
+     * **The preview is asserted here, not merely named.** That a run answering nothing still publishes the
+     * count for any id is what makes the count public information rather than something the confirmation
+     * path leaks, and a test that says "it keeps its preview" while reading no display pins the exit code
+     * alone.
      */
     public function testAnUnattendedDryRunStaysSuccessful(): void
     {
@@ -109,7 +131,31 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
         );
 
         $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringContainsString('Rows matched: 5', $tester->getDisplay());
         $this->assertCount(0, $anonymiser->anonymisedActorIds);
+    }
+
+    /**
+     * The precedence between the two flags, which nothing else pins. `--force` says "do not ask me"; it does
+     * not say "erase". A run passing both asked for a preview and gets one — the only reading under which
+     * `--dry-run` is safe to leave in a script that later gains `--force`.
+     */
+    public function testADryRunKeepsItsPreviewWhenForceIsPassedToo(): void
+    {
+        $anonymiser = new RecordingAuditActorAnonymiser(5);
+        $logger = new RecordingAuditLogger();
+        $tester = $this->testerFor($anonymiser, $logger);
+
+        $exitCode = $tester->execute(
+            ['actor-id' => self::ACTOR_ID, '--dry-run' => true, '--force' => true],
+            ['interactive' => false],
+        );
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringContainsString('Rows matched: 5', $tester->getDisplay());
+        $this->assertStringContainsString('Dry run', $tester->getDisplay());
+        $this->assertCount(0, $anonymiser->anonymisedActorIds);
+        $this->assertCount(0, $logger->records);
     }
 
     /**
@@ -164,7 +210,7 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
 
         $input = new ArrayInput(['actor-id' => self::ACTOR_ID], $command->getDefinition());
         $input->setInteractive(true);
-        $input->setStream($this->drainedStream());
+        $input->setStream(DrainedInputStream::open());
 
         $output = new BufferedOutput();
 
@@ -180,21 +226,5 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
     private function testerFor(AuditActorAnonymiser $anonymiser, AuditLogger $logger): CommandTester
     {
         return new CommandTester(new EraseActorAuditTrailCommand($anonymiser, $logger));
-    }
-
-    /**
-     * @return resource a stream a read has already taken to EOF, so `feof()` is true before the question
-     */
-    private function drainedStream()
-    {
-        $stream = \fopen('php://memory', 'r+');
-        \assert(\is_resource($stream));
-        \fwrite($stream, 'y');
-        \rewind($stream);
-        \fread($stream, 1);
-        \fread($stream, 1);
-        \assert(\feof($stream));
-
-        return $stream;
     }
 }

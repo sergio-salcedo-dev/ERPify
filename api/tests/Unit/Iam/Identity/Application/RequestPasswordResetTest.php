@@ -122,9 +122,17 @@ final class RequestPasswordResetTest extends TestCase
     {
         $tokens = new InMemoryPasswordResetTokenRepository($this->pendingToken());
 
-        $deletesSeenAtWriteTime = null;
-        $tokens->onSave = static function () use ($tokens, &$deletesSeenAtWriteTime): void {
-            $deletesSeenAtWriteTime = $tokens->deleteAllForUserCalls;
+        // Read at the instant of the write rather than afterwards, so the order is asserted rather than
+        // inferred from what the two deletions happen to leave behind.
+        $asked = false;
+        $tokens->onSave = function () use ($tokens, &$asked): void {
+            $asked = true;
+
+            $this->assertSame(
+                [UserMother::DEFAULT_ID],
+                $tokens->deleteAllForUserCalls,
+                'the pending token was not dropped before the new one was written',
+            );
         };
 
         $this->useCase(
@@ -134,12 +142,17 @@ final class RequestPasswordResetTest extends TestCase
             new RecordingPasswordResetEmailSender(),
         )->request(UserMother::DEFAULT_EMAIL);
 
+        // The claim above is only made if the callback carrying it ran at all. `assertCount(1, saved)` proves
+        // `save()` ran, never that it invoked `onSave` — that is a contract of the double, and a double that
+        // quietly stopped honouring it would take the ordering claim with it in silence.
+        $this->assertTrue($asked, 'the write never put the store to the question, so no order was asserted');
+
         // Deliberately NOT asserted here: that the superseded row has stopped being readable. That is
         // read-after-delete inside one unit of work, which `PasswordResetTokenRepository::deleteAllForUser()`
         // declares undefined — the Doctrine adapter's `find()` consults an identity map a bulk DELETE does
         // not evict. Asserting it would pin a promise the port refuses to make and hand every future adapter
         // the gymnastics of keeping it. What the supersede actually guarantees is the ORDER, and that is
-        // asserted below at the instant of the write.
+        // asserted in the callback above, at the instant of the write.
         $this->assertCount(1, $tokens->saved);
         $issuedId = $tokens->saved[0]->getId();
         $this->assertIsString($issuedId);
@@ -147,10 +160,6 @@ final class RequestPasswordResetTest extends TestCase
         // The freshly issued link survived, which the reverse order could not manage: the delete is
         // user-wide, so running it after the write would take the new row along with the old one.
         $this->assertInstanceOf(PasswordResetToken::class, $tokens->findById($issuedId));
-
-        // Read at the instant of the write rather than afterwards, so the order is asserted rather than
-        // inferred from what the two deletions happen to leave behind.
-        $this->assertSame([UserMother::DEFAULT_ID], $deletesSeenAtWriteTime);
     }
 
     public function testAUserGoneUnderTheLockIssuesAndEmailsNothing(): void
