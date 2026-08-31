@@ -7,10 +7,12 @@
 # and neither named shellcheck or any super-lint target. So the capability was
 # present and the gate was not — the shape CLAUDE.md names elsewhere, where a
 # mechanism nobody performs is a paragraph rather than a control. The bar was
-# real and held by hand: shellcheck 0.11.0 reported nine findings against
-# `scripts/adversarial-pass-check.sh` before they were fixed by hand, on the
-# largest and most-executed shell in the tree (a PreToolUse hook, so it runs on
-# every Bash tool call in every session).
+# real and held by hand: shellcheck 0.11.0 reported nine findings against the
+# largest and most-executed shell then in the tree — the adversarial-pass hook,
+# which ran on every Bash tool call in every session — while the three older
+# `scripts/*.sh` reported zero. That script has since been retired, so the
+# example outlives its subject; what it still shows is the asymmetry, which is
+# what a hand-held bar looks like just before it slips.
 #
 # WHY ONE INVOCATION OVER THE WHOLE LIST, NEVER A PER-FILE LOOP
 #

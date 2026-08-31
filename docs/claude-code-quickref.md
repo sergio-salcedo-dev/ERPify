@@ -121,20 +121,6 @@ Nothing in the merge path moves a marker in `sprint-status.yaml`: a PR squash-me
 
 A `SessionStart` hook in `.claude/settings.json` runs it with `--quiet-when-clean`, so drift surfaces when a session opens and a clean tree stays silent. It never blocks: exit code is 0 unless `--strict`.
 
-### Adversarial-pass gate
-
-```bash
-make bmad.adversarial.check              # Does this branch carry its adversarial-pass record?
-make bmad.adversarial.check c='--strict' # Same, but exit 1 when the record is missing.
-make bmad.adversarial.self-test          # Prove the gate fails in both directions (75 fixtures).
-```
-
-`CLAUDE.md` requires the adversarial pass to run **and its findings to be written down** before a pull request exists. Prose enforced that for three occurrences (#616, #620, #770) and lost each time, so `scripts/adversarial-pass-check.sh` enforces it now, from a `PreToolUse` hook that fires when a PR is about to be opened — matching both the CLI invocation and the GitHub MCP server, because a remote session has no CLI installed and would otherwise be ungated on the exact surface that produced #770.
-
-The record is a `## Adversarial pass` section in an artifact **committed** on the branch, or an `Adversarial-pass:` trailer on one of its commits. Both carry a content floor, and the section must not already exist on the base — a file left in the working tree, a rename, a copy and a whitespace nudge are each refused, and each was a measured green before it was. It is checked **at** creation time rather than reconstructed afterwards: a post-hoc comparison of commit dates against the PR's `createdAt` cannot work, because `%cI` is rewritten by every rebase and `%aI` is settable (#799).
-
-It fails open on anything undeterminable — not a git repo, no base ref, no `jq` — and a determinate refusal still yields to `ADVERSARIAL_PASS_ACK="<reason>"`, which proceeds and surfaces the reason. The value is read from the command text, not the environment, because a hook does not inherit the environment of the command it gates. A green proves the record has the right shape, never that its findings are real. What it recognises as opening a pull request is a named list of spellings in command position, not a decision procedure — a floor on accidents, not a ceiling on intent.
-
 ### Dependency batches
 
 `/deps-update` (`.claude/commands/deps-update.md`; `--dry-run` inventories only) consolidates the open `chore: bump` PRs into one branch and one PR. Dependabot's one-PR-per-dependency shape cannot express a bump that spans several pin sites, so those PRs are red by construction — `github/codeql-action` covers three steps across `codeql.yml` and `ci.yml`, and none of the three passes alone (#628/#629/#630 → #632). The command classifies by the path segment after `dependabot/` rather than by substring, since `dependabot/github_actions/docker/bake-action-…` is an actions bump, not a docker one. For npm and composer it re-resolves the ranges in a single install instead of merging the branches, whose whole-lockfile rewrites conflict pairwise; expect the caret to land a patch ahead of what Dependabot pinned and peers to move packages nobody asked for. That install is not the whole batch: `npm install` moves nothing whose locked version already satisfies its range, so a bump needing no manifest edit (a PR touching only `package-lock.json`) is dropped silently and the *added: 0, removed: 0* supply-chain check passes over the gap — it proves nothing was gained, never that everything moved. Every claimed version is read back out of the resolved lock. It stops for branch authorization before creating anything, and never merges.

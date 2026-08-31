@@ -14,8 +14,8 @@ namespace Erpify\Tests\Support;
  * **The marker is a root file, never `.git`.** Measured, both directions: `.git` is a DIRECTORY in the
  * primary checkout and a regular FILE in every linked worktree. CLAUDE.md requires feature work to happen in
  * a worktree, so a probe spelled `is_dir($candidate . '/.git')` would answer in the primary and refuse in
- * exactly the place the work is done — the same shape that once made `scripts/adversarial-pass-check.sh`
- * read a worktree's basename and go silent there.
+ * exactly the place the work is done — the same shape that once made the adversarial-pass hook (since
+ * retired) read a worktree's basename and go silent there.
  *
  * **It answers `null` rather than failing, and that is the point of it being a resolver and not a guard.**
  * What is unreachable differs by caller: a parity gate cannot see one of its two sites, while
