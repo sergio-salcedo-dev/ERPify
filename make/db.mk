@@ -2,7 +2,7 @@
 # Database (Doctrine migrations, fixtures, psql).
 # =============================================================================
 
-.PHONY: db.migrate db.diff db.status db.validate db.load.fixtures db.drop db.reset db.shell db.tunnel db.tunnel.stop
+.PHONY: db.migrate db.diff db.status db.validate db.load.fixtures db.drop db.reset db.test.prepare db.shell db.tunnel db.tunnel.stop
 
 db.migrate: ## Run pending Doctrine migrations
 	@$(SYMFONY) doctrine:migrations:migrate --no-interaction --all-or-nothing
@@ -23,6 +23,20 @@ db.drop: ## Drop DB (destructive)
 	@$(SYMFONY) doctrine:schema:drop --force --full-database --no-interaction
 
 db.reset: db.drop db.migrate db.load.fixtures ## Drop DB → migrate → fixtures (destructive)
+
+# Creates and migrates the `APP_ENV=test` database — `<dbname>_test`, per the dbname_suffix in
+# config/packages/doctrine.yaml. A prerequisite of the PHPUnit targets rather than a step a developer is
+# expected to remember: WebTestCase tests build their own rows but nothing in the PHPUnit lane creates the
+# schema, so without this the first functional test dies on a database that does not exist yet.
+#
+# Behat is not wired to it because FixturesContext already runs both commands itself before the first
+# scenario, which is also the reason this one stays cheap enough to be unconditional — both are idempotent,
+# and on an already-migrated database the pair is two connections and a version query.
+#
+# It never touches the dev database: every command here runs under APP_ENV=test, so the suffix applies.
+db.test.prepare: ## Create + migrate the test database (<dbname>_test); idempotent
+	@$(PHP_TEST) php bin/console doctrine:database:create --if-not-exists --no-interaction
+	@$(PHP_TEST) php bin/console doctrine:migrations:migrate --no-interaction --all-or-nothing --allow-no-migration
 
 db.shell: ## Interactive psql shell in the database container
 	$(DOCKER_COMPOSE_EXEC) $(DB_SERVICE) \

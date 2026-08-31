@@ -167,11 +167,20 @@ make php.test                              # unit + e2e
 make php.unit                              # PHPUnit
 make php.unit c='--filter SomeTest'        # filter
 make php.behat                             # Behat, --strict (config: api/behat.dist.php)
+make db.test.prepare                       # create + migrate <dbname>_test (idempotent; php.unit runs it for you)
 ```
 
 - **PHPUnit config**: `api/tools/phpunit/phpunit.dist.xml` (resolved by `api/bin/phpunit` unless `-c` overrides it).
 - **Behat config**: `api/behat.dist.php` (Behat 4 dropped YAML config).
 - Integration tests touching Doctrine use **real Postgres** (Compose), not SQLite.
+- The suite runs against `<dbname>_test` — `erpify_db_test` locally — never the runtime database. What puts
+  it there is `dbname_suffix` under `when@test` in `api/config/packages/doctrine.yaml`, applied to the
+  already-resolved connection, so it holds however `DATABASE_URL` arrives. A DSN in `api/.env.test` would
+  not: compose exports `DATABASE_URL` as a real environment variable and Dotenv never overwrites one that is
+  already set. The distinction is load-bearing rather than tidy — `FixturesContext` purges the database it
+  connects to, clones it to `<dbname>_behat_backup` and restores over it once per feature, so a run pointed
+  at the dev database replaces your local data with the Alice fixtures and signs you out of the stack.
+  `TestDatabaseIsolationTest` asserts it by asking the open connection, not by reading the config.
 
 ## Lint / analyze
 

@@ -26,7 +26,7 @@
 # `--filter` gate peaks ~55 MB), which is why php.bench and the php.lint.* gates
 # need no flag. Raised on this invocation only: the image default keeps bounding
 # real HTTP requests. 512M is margin over the measured peak, not a measured need.
-php.unit: ## PHPUnit; pass c='…' for extra args (e.g. c='--filter SomeTest')
+php.unit: db.test.prepare ## PHPUnit; pass c='…' for extra args (e.g. c='--filter SomeTest')
 	@$(PHP_TEST) php -d memory_limit=$(PHPUNIT_MEMORY_LIMIT) bin/phpunit $(c)
 
 # Clover report for SonarCloud (sonar.php.coverage.reportPaths). Runs with
@@ -45,7 +45,7 @@ php.unit: ## PHPUnit; pass c='…' for extra args (e.g. c='--filter SomeTest')
 # whole run, on top of the suite's own footprint, and exhausts the image's
 # default 128M near the end of the suite.
 COVERAGE_CLOVER := var/coverage/clover.xml
-php.unit.coverage: ## PHPUnit with clover coverage → api/var/coverage/clover.xml (Xdebug coverage mode; report only — php.unit is the gate)
+php.unit.coverage: db.test.prepare ## PHPUnit with clover coverage → api/var/coverage/clover.xml (Xdebug coverage mode; report only — php.unit is the gate)
 	@$(PHP_TEST_COVERAGE) php -d memory_limit=1G bin/phpunit --coverage-clover $(COVERAGE_CLOVER) --do-not-fail-on-phpunit-warning $(c)
 	@sed -i 's#name="[^"]*/api/src/#name="api/src/#g' $(API_ROOT)/$(COVERAGE_CLOVER)
 
@@ -61,7 +61,7 @@ php.behat: ## Behat (strict via behat.dist.php: an undefined step fails); pass c
 
 ## —— benchmarks ——
 
-php.bench: ## Run listener performance-budget benchmarks (opt-in, default php.unit skips)
+php.bench: db.test.prepare ## Run listener performance-budget benchmarks (opt-in, default php.unit skips)
 ifeq ($(IN_CONTAINER),false)
 	@cd $(API_ROOT) && APP_ENV=test RUN_BENCHMARKS=1 bin/phpunit --group benchmark $(c)
 else
