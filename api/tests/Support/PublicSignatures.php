@@ -74,13 +74,63 @@ final class PublicSignatures
     }
 
     /**
+     * Two shapes made a method DISAPPEAR from the scan entirely rather than be read wrongly, which is the
+     * worse direction: the file still yields other methods, so the non-vacuity guard never notices.
+     *
+     * **A by-reference return.** `public function &bytes(): string` puts a literal `&` between `function`
+     * and the name, so requiring `T_STRING` immediately after found nothing.
+     *
+     * **A semi-reserved method name.** PHP allows `list`, `print`, `default`, `array`, `match`, `fn` and the
+     * rest as METHOD names, and the lexer emits each as its own keyword token — never `T_STRING`. Matched by
+     * SHAPE rather than against a list of keywords: an enumeration is a list somebody has to keep, and PHP
+     * adds keywords. Anything the lexer produced whose text is a valid identifier is a name here, which is
+     * exactly the language's own rule.
+     *
      * @param list<array{int, string, int}|string> $tokens
      */
     private static function methodNameAt(array $tokens, int $index): ?string
     {
         $next = self::nextMeaningful($tokens, $index + 1);
 
-        return \is_array($next) && T_STRING === $next[0] ? $next[1] : null;
+        if (self::isReferenceMarker($next)) {
+            $next = self::nextMeaningful($tokens, self::indexAfterReference($tokens, $index + 1));
+        }
+
+        if (!\is_array($next)) {
+            return null;
+        }
+
+        return 1 === \preg_match('/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*$/', $next[1]) ? $next[1] : null;
+    }
+
+    /**
+     * @param list<array{int, string, int}|string> $tokens
+     */
+    private static function indexAfterReference(array $tokens, int $from): int
+    {
+        $total = \count($tokens);
+
+        for ($cursor = $from; $cursor < $total; ++$cursor) {
+            if (self::isReferenceMarker($tokens[$cursor] ?? null)) {
+                return $cursor + 1;
+            }
+        }
+
+        return $from;
+    }
+
+    /**
+     * Since PHP 8.1 an `&` is not the single-character token it reads as. The lexer decides by what FOLLOWS
+     * it — `T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG` before a variable, `T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG`
+     * before anything else — so the `&` of a by-reference RETURN arrives as an array token while a matcher
+     * comparing against the string `'&'` sees nothing. Compared on the token's TEXT, which is `&` in every
+     * spelling and does not depend on which of those constants the running version emits.
+     *
+     * @param array{int, string, int}|string|null $token
+     */
+    private static function isReferenceMarker(array|string|null $token): bool
+    {
+        return '&' === (\is_array($token) ? $token[1] : $token);
     }
 
     /**

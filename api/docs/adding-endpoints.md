@@ -24,11 +24,16 @@ prefixes it `shared_` — `shared_image_get` for `GET /api/v1/images/{imageId}`.
 opt-OUT, not opt-in: `AuditPolicy` writes an `audit_log` row for every successful `GET` under `/api/` unless
 the ROUTE NAME matches one of five non-business shapes, and `str_starts_with($route, 'shared_')` is the one
 that covers asset and object serving. So a shared-kernel route serving bytes is silent because of its name and
-for no other reason — rename it and every read starts writing a row, **with no gate going red**: the resource
-extractor answers `null` without an `_audit_resource_type` default, so `api/.audit-resource-types` never sees
-it either. Where a module's decision is "this route writes no audit row", the name is the mechanism, and its
-own test is what pins it (`AuditPolicyTest` carries the `shared_` case; `features/shared/images/read.feature`
-counts `audit_log` before and after a successful read).
+for no other reason — rename it and every read starts writing a row. `api/.audit-resource-types` never sees
+it either, because the resource extractor answers `null` without an `_audit_resource_type` default.
+
+Where a module's decision is "this route writes no audit row", the name is the mechanism, and **the module's
+own artefacts are what pin it** — no general gate does. For `shared_image_get` those are
+`ImageRouteDeclarationTest`, which resolves the route by name and fails on a `null` lookup, and
+`features/shared/images/read.feature`, which counts `audit_log` before and after a successful read.
+`AuditPolicyTest` is not one of them: it carries the `shared_` case but drives the policy with a hardcoded
+string, so it pins the policy arm and not this route. A new shared-kernel route serving bytes owes itself the
+same two.
 
 ## Behat feature file layout
 

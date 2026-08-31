@@ -59,7 +59,7 @@ final class ImageTransportSurfaceGateTest extends TestCase
         'StreamInterface',
     ];
 
-    /** Fragments that make a parameter a caller-chosen LOCATION rather than a caller-supplied value. */
+    /** Words that make a parameter a caller-chosen LOCATION rather than a caller-supplied value. */
     private const array CALLER_CHOSEN_VALUE_FRAGMENTS = ['path', 'filename', 'url', 'uri', 'key', 'directory'];
 
     /** The layers where a transport type is a boundary violation by construction. */
@@ -179,13 +179,34 @@ final class ImageTransportSurfaceGateTest extends TestCase
         return \str_contains($type, 'Psr\Http\Message');
     }
 
+    /**
+     * Compared WORD by word, never as a substring of the whole name.
+     *
+     * A substring match reds a correctly named parameter for containing a fragment by accident, and the
+     * three that do it are ordinary: `$security` contains `uri`, `$curl` contains `url`, and `$monkey`
+     * contains `key`. That failure is in the noisy direction rather than the silent one, which is why it
+     * survived — but a gate that reds on a name it should accept trains a reader to reach for a rename or
+     * an exemption instead of reading the finding, and the point of this one is that its findings get read.
+     *
+     * The split handles both camelCase boundaries: `storagePath` and also `URLPath`, where no lower-case
+     * character precedes the second word and a lower-to-upper rule alone would keep it as one token.
+     */
     private function isCallerChosenLocation(string $parameter): bool
     {
-        $normalised = \strtolower($parameter);
+        $words = \preg_split(
+            '/(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[^A-Za-z0-9]+/',
+            $parameter,
+            -1,
+            PREG_SPLIT_NO_EMPTY,
+        );
 
         return \array_any(
-            self::CALLER_CHOSEN_VALUE_FRAGMENTS,
-            static fn (string $fragment): bool => \str_contains($normalised, $fragment),
+            false === $words ? [] : $words,
+            static fn (string $word): bool => \in_array(
+                \strtolower($word),
+                self::CALLER_CHOSEN_VALUE_FRAGMENTS,
+                true,
+            ),
         );
     }
 }

@@ -24,8 +24,15 @@ use Symfony\Component\Routing\Attribute\Route;
  * **The route name is load-bearing.** Generic activity auditing is opt-OUT: `AuditPolicy` records every
  * successful `GET` under `/api/` unless the route name matches one of its five non-business shapes, and
  * `shared_` is the one that fits object serving. Rename this route and every read starts writing an
- * `audit_log` row, with no gate going red — the epic's "zero audit rows" decision is a property of this
- * string.
+ * `audit_log` row — the epic's "zero audit rows" decision is a property of this string.
+ *
+ * Two artefacts refuse that rename, and it is worth naming which, because the general gates do not:
+ * `ImageRouteDeclarationTest` resolves the route by this exact name, so all four of its cases fail on a
+ * lookup that returns `null`; and `features/shared/images/read.feature` counts `audit_log` before and after
+ * a successful read, so a renamed route makes the second count 1. `AuditPolicyTest` is NOT one of them — it
+ * drives the policy with a hardcoded string and would stay green. Nor is `api/.audit-resource-types`: the
+ * resource extractor answers `null` without an `_audit_resource_type` default, so the registry never sees
+ * this route at all.
  *
  * **`{imageId}` carries no `requirements` on purpose.** Constraining it to a UUID shape would have the
  * router answer 404 for a malformed identifier, conflating "you asked wrongly" with "there is nothing
@@ -104,6 +111,7 @@ final readonly class ImageGetController
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
 
+        $this->applyBodyIsolationHeaders($response);
         $this->applyCacheHeaders($response, $image->digest);
 
         return $response;
@@ -122,6 +130,29 @@ final readonly class ImageGetController
         $response->setNotModified();
 
         return $response;
+    }
+
+    /**
+     * The three headers that keep a body nobody else may render from being rendered by somebody else.
+     *
+     * **This is the first route in the tree whose body a browser renders.** Every other `/api/*` response is
+     * JSON, which is not loadable as a non-CORS subresource and cannot execute; this one declares an image
+     * media type read verbatim off the row, on the origin that also serves the PWA. `nosniff` is not the
+     * control here — it PINS a declared type rather than questioning it — so a row declaring `text/html`
+     * would be markup executing in the PWA's own origin. `default-src 'none'; sandbox` makes the body inert
+     * whatever it turns out to be, which is a property of the response rather than of the column.
+     *
+     * `Cross-Origin-Resource-Policy` answers the other half: an image IS loadable by any page as
+     * `<img src>` with no preflight, and with cookies attached when the page is same-site. `cookie_samesite:
+     * lax` closes the cross-site case, so what remains is a different origin of the same site — a hostile or
+     * compromised subdomain — which would otherwise get a credentialed load and an existence oracle from
+     * load/error. The PWA sets this header in its own config; Caddy routes `/api/*` separately, so nothing
+     * there reaches this response.
+     */
+    private function applyBodyIsolationHeaders(Response $response): void
+    {
+        $response->headers->set('Content-Security-Policy', "default-src 'none'; sandbox");
+        $response->headers->set('Cross-Origin-Resource-Policy', 'same-origin');
     }
 
     /**
@@ -145,5 +176,12 @@ final readonly class ImageGetController
         $response->setMaxAge(self::CACHE_MAX_AGE_SECONDS);
         $response->headers->addCacheControlDirective('immutable');
         $response->setEtag($digest);
+
+        // `private` bounds WHO may hold the copy; it says nothing about WHEN the copy stops describing the
+        // request that produced it. Authentication here is a session cookie, so without this the browser
+        // serves the bytes for up to an hour to whoever holds the tab — after logout included, because no
+        // request reaches a server that could refuse. It is the argument the class docblock uses against a
+        // year, applied to a trust boundary that argument does not reach.
+        $response->setVary('Cookie', false);
     }
 }

@@ -186,6 +186,7 @@ tests/Unit/Behat/Context/SupersededRunPhrasingsTest.php :: mirrored :: tests/Beh
 tests/Unit/Shared/Images/ImageLifecycleListenerGateTest.php :: mirrored :: src/Shared/Images
 tests/Unit/Shared/Images/ImagePixelBudgetGateTest.php :: mirrored :: src/Shared/Images
 tests/Unit/Shared/Images/ImageTransportSurfaceGateTest.php :: mirrored :: src/Shared/Images
+tests/Unit/Shared/Images/ImageWriterSurfaceGateTest.php :: mirrored :: src/Shared/Images
 tests/Unit/Iam/Session/SessionSubstitutabilitySeamTest.php :: mirrored :: src/Iam/Session
 tests/Unit/Shared/ErrorContract/Application/BannedDoctrineApisTest.php :: mirrored :: src/Shared/ErrorContract
 tests/Unit/Shared/ErrorContract/Application/ConstantTimeAuthBranchingContractTest.php :: mirrored :: src/Shared/ErrorContract
@@ -197,6 +198,7 @@ tests/Unit/Shared/Serialization/ResourceDtoContractTest.php :: mirrored :: src/S
 tests/Unit/Support/PhpSourceTest.php :: mirrored :: tests/Support
 tests/Unit/Support/PublicSignaturesTest.php :: mirrored :: tests/Support
 tests/Unit/Support/RepositoryRootTest.php :: mirrored :: tests/Support
+tests/Unit/Support/SignatureReaderTest.php :: mirrored :: tests/Support
 tests/Unit/Support/ResourceResponderBuilderTest.php :: mirrored :: tests/Support
 tests/Unit/Support/TypeScriptSourceTest.php :: mirrored :: tests/Support
 

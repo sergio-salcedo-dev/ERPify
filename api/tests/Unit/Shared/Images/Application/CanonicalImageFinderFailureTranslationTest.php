@@ -10,6 +10,7 @@ use Erpify\Shared\Images\Domain\Read\ReadFailureCategory;
 use Erpify\Shared\Images\Domain\Read\UnservableImage;
 use Erpify\Shared\Images\Domain\Storage\ImageStorageFailed;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -84,5 +85,40 @@ final class CanonicalImageFinderFailureTranslationTest extends TestCase
         } catch (UnservableImage $unservableImage) {
             $this->assertSame(ReadFailureCategory::ObjectTooLarge, $unservableImage->readFailure());
         }
+    }
+
+    /**
+     * The comparison is `>`, so an object of EXACTLY the budget is servable and one byte more is not.
+     *
+     * The case above uses a budget of 1 against a row of 27, which is true whichever way the comparison is
+     * spelled — so `>` drifting to `>=` was invisible, and it would refuse an object the budget was written
+     * to admit. A boundary that nothing sits on is a boundary nothing pins.
+     */
+    #[DataProvider('provideTheBudgetBoundaryIsInclusiveCases')]
+    public function testTheBudgetBoundaryIsInclusive(int $budgetOffset, bool $servable): void
+    {
+        $repository = new InMemoryImageRepository();
+        $storage = new InMemoryImageStorage();
+        $image = ImageFinderHarness::storedImage($storage, $repository);
+
+        $finder = ImageFinderHarness::finder($repository, $storage, $image->byteSize() + $budgetOffset);
+
+        if (!$servable) {
+            $this->expectException(UnservableImage::class);
+        }
+
+        $found = $finder->find($image->id());
+
+        $this->assertSame(ImageFinderHarness::BYTES, $found->bytes);
+    }
+
+    /**
+     * @return iterable<string, array{int, bool}>
+     */
+    public static function provideTheBudgetBoundaryIsInclusiveCases(): iterable
+    {
+        yield 'one byte below the declared size' => [-1, false];
+        yield 'exactly the declared size' => [0, true];
+        yield 'one byte above the declared size' => [+1, true];
     }
 }

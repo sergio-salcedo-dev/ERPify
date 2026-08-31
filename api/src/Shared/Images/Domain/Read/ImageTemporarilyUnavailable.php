@@ -17,9 +17,19 @@ use Throwable;
  * produced 503.
  *
  * **A permanent storage failure deliberately has no counterpart here.** `ENOSPC`, a missing root or an
- * untraversable directory are not fixed by retrying, and 503 is an instruction to retry. Those propagate
- * untranslated and answer 500 `unhandled-exception` through the same pipeline, which is where a substrate
- * fault belongs — visible to the error reporter rather than dressed as a transient hiccup.
+ * untraversable directory are not fixed by retrying. Those propagate untranslated and answer 500
+ * `unhandled-exception` through the same pipeline, which is where a substrate fault belongs — visible to
+ * the error reporter rather than dressed as a transient hiccup.
+ *
+ * **What the 503 says, stated exactly, because the shorter phrasing was not true.** It signals a
+ * transient unavailability for which a client MAY retry; this API publishes no retry delay. No
+ * `ServiceUnavailable` response in this deployment carries `Retry-After` — the header is emitted in one
+ * place in the whole API, on the rate limiter's 429 — and calling the status "an instruction to retry"
+ * described a contract nothing implements. Nor is the absence an oversight to close in passing: a fixed
+ * delay is syntactically valid and operationally false without a duration this deployment can predict,
+ * and the marker is shared, so stamping one here would change the wire contract of every other exception
+ * carrying it. Publishing a delay is a decision about the `ServiceUnavailable` contract as a whole and
+ * belongs to whoever has an availability target to derive it from.
  */
 final class ImageTemporarilyUnavailable extends DomainException implements ServiceUnavailable
 {

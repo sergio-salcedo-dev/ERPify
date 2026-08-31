@@ -20,9 +20,10 @@ Feature: Serve the canonical bytes of an image by its identity
 
   @anonymous
   Scenario Outline: Knowing an identifier never substitutes for a session
-    # The three shapes an unauthenticated caller can ask about — malformed, absent, and one that really
-    # exists — must be indistinguishable. The firewall answers before anything is resolved, so none of the
-    # three reveals whether the image is there. Asserted on status and on the problem `type`/`title` rather
+    # The shapes an unauthenticated caller can ask about must be indistinguishable: malformed and absent
+    # here, and one that really exists in the scenario below, which needs a fixture and so cannot be a row
+    # of this table. The firewall answers before anything is resolved, so none of them reveals whether the
+    # image is there. Asserted on status and on the problem `type`/`title` rather
     # than on the whole body: `instance` carries the identifier that was asked for and `correlation-id` is
     # per-request, so literal equality would be unsatisfiable rather than strict.
     When I send a "GET" request to "/images/<identifier>"
@@ -35,6 +36,18 @@ Feature: Serve the canonical bytes of an image by its identity
       | identifier                           |
       | not-a-uuid                           |
       | 019831b7-0000-7000-8000-00000000dead |
+
+  @anonymous
+  Scenario: An image that really exists is withheld from a caller with no session
+    # The row above asks about identifiers with nothing behind them, so it cannot tell "the firewall refused"
+    # apart from "there was nothing to give". This one seeds the bytes first: the 401 is then a refusal to
+    # serve something that is genuinely there, which is the claim the route makes and the only shape of it
+    # that can fail. Asserted on the body too — a 401 carrying the image would still be a 401.
+    Given there is a stored image with its canonical bytes
+    When I send a "GET" request for that image
+    Then the response status code should be 401
+    And the JSON node "type" should be equal to "unauthenticated"
+    And the header "Content-Type" should not contain "image/webp"
 
   @anonymous
   Scenario: An extra query parameter does not turn the route anonymous
@@ -139,6 +152,17 @@ Feature: Serve the canonical bytes of an image by its identity
     And I add "If-None-Match" header equal to the response header "ETag"
     And I send a "GET" request for that image with an upper-cased identifier
     And the response status code should be 304
+
+  Scenario: The least privileged session reads an image exactly like the most privileged one
+    # Every other authenticated scenario here opens as an administrator, which is the one session that would
+    # satisfy an `#[IsGranted]` added by accident — so the whole feature would stay green while the route
+    # quietly stopped being readable by anybody else. The epic decides that a session is the entire
+    # authorization story for this slice; this is the row that can fail if that stops being true.
+    Given I am logged in as a viewer
+    And there is a stored image with its canonical bytes
+    When I send a "GET" request for that image
+    Then the response status code should be 200
+    And the header "Content-Type" should be equal to "image/webp"
 
   Scenario: A successful read leaves the activity trail untouched
     # The generic activity audit is opt-out and keyed on the ROUTE NAME. Counted before and after, because a

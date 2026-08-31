@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Infrastructure\Controller;
 
-use Erpify\Shared\Images\Application\CanonicalImageFinder;
-use Erpify\Shared\Images\Application\ReadFailureReporter;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Infrastructure\Controller\ImageGetController;
 use Erpify\Shared\Images\Infrastructure\Http\HttpCacheValidator;
+use Erpify\Tests\Unit\Shared\Images\Application\ImageFinderHarness;
 use Erpify\Tests\Unit\Shared\Images\Application\InMemoryImageRepository;
 use Erpify\Tests\Unit\Shared\Images\Application\InMemoryImageStorage;
-use Erpify\Tests\Unit\Shared\Images\Infrastructure\RecordingLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
@@ -119,6 +117,44 @@ final class ImageGetControllerTest extends TestCase
     }
 
     /**
+     * `If-Modified-Since` is ignored, which is the other half of not opening a second validation axis: the
+     * route emits no `Last-Modified`, so a client cannot have obtained one from here, and honouring the
+     * request header would answer 304 against a validator this deployment never issued.
+     *
+     * Untested until a code review looked for it — `git grep -i if-modified-since api/tests api/features`
+     * matched only the controller's own docblock, so planting a branch that answers 304 on this header
+     * turned nothing red while three documents said it was ignored.
+     */
+    public function testAModificationDateConditionIsIgnoredAndTheWholeBodyIsAnswered(): void
+    {
+        [$controller, $image] = $this->controllerWithStoredImage();
+        $request = new Request();
+        $request->headers->set('If-Modified-Since', 'Sat, 01 Jan 2050 00:00:00 GMT');
+
+        $response = $controller($request, $image->id()->toString());
+
+        $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(self::BYTES, $response->getContent());
+    }
+
+    /**
+     * `If-Match` is not evaluated, so a mismatching one does not answer 412. It is a write-side precondition
+     * and this route has no write to guard; refusing a read on it would invent a failure mode.
+     */
+    public function testAMismatchingIfMatchIsNotEvaluatedAndNeverAnswersPreconditionFailed(): void
+    {
+        [$controller, $image] = $this->controllerWithStoredImage();
+        $request = new Request();
+        $request->headers->set('If-Match', '"0000000000000000000000000000000000000000000000000000000000000000"');
+
+        $response = $controller($request, $image->id()->toString());
+
+        $this->assertNotSame(Response::HTTP_PRECONDITION_FAILED, $response->getStatusCode());
+        $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame(self::BYTES, $response->getContent());
+    }
+
+    /**
      * The second validation axis is deliberately not opened: `Image::createdAt()` exists, and emitting it
      * would be a second thing to keep true for nothing this slice needs.
      */
@@ -166,7 +202,7 @@ final class ImageGetControllerTest extends TestCase
         $storage->store($image->id(), self::BYTES);
 
         $controller = new ImageGetController(
-            new CanonicalImageFinder($repository, $storage, new ReadFailureReporter(new RecordingLogger()), 1_048_576),
+            ImageFinderHarness::finder($repository, $storage),
             new HttpCacheValidator(),
         );
 

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Infrastructure\Controller;
 
+use Erpify\Shared\Clock\Domain\NativeClock;
 use Erpify\Shared\Images\Application\CanonicalImageFinder;
+use Erpify\Shared\Images\Application\FailureSignalWindow;
 use Erpify\Shared\Images\Application\ReadFailureReporter;
 use Erpify\Shared\Images\Infrastructure\Controller\ImageGetController;
 use Erpify\Shared\Images\Infrastructure\Http\HttpCacheValidator;
@@ -38,7 +40,7 @@ final class ImageGetControllerIdentityGuardTest extends TestCase
             new CanonicalImageFinder(
                 new UnreadableImageRepository(),
                 new PermanentlyFailingImageStorage(),
-                new ReadFailureReporter(new RecordingLogger()),
+                new ReadFailureReporter(new RecordingLogger(), new FailureSignalWindow(new NativeClock())),
                 1_048_576,
             ),
             new HttpCacheValidator(),

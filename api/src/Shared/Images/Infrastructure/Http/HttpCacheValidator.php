@@ -15,7 +15,7 @@ use Symfony\Component\HttpFoundation\Request;
  * directive on responses this route serves only to an authenticated caller. Bringing that half back would
  * have put one user's image into any cache on the path. The freshness policy therefore lives at the call
  * site, where the reason for each directive can be read next to the response it is on, and what is reused
- * here is the part that has no policy in it: matching an entity tag against its three legal spellings.
+ * here is the part that has no policy in it: matching an entity tag against its legal spellings.
  *
  * The name drops "content-addressed" on purpose. Nothing in this module addresses content by its hash — the
  * digest is used as an ATTRIBUTE of a representation identified by its `ImageId`, never as its address —
@@ -24,10 +24,17 @@ use Symfony\Component\HttpFoundation\Request;
 final readonly class HttpCacheValidator
 {
     /**
-     * `getETags()` returns the raw comma-separated members of `If-None-Match`, so all three legal forms of
-     * a strong tag reach here — quoted, weak-prefixed and, from lenient clients, bare. A `GET` compares with
-     * the weak comparison function (RFC 9110 §13.1.2), under which `W/"x"` and `"x"` match, so accepting the
-     * weak spelling is the specification rather than leniency.
+     * `getETags()` returns the raw comma-separated members of `If-None-Match`, so both legal spellings of a
+     * strong tag reach here — quoted and weak-prefixed. A `GET` compares with the weak comparison function
+     * (RFC 9110 §13.1.2), under which `W/"x"` and `"x"` match, so accepting the weak spelling is the
+     * specification rather than leniency.
+     *
+     * **The bare, unquoted spelling is refused, and that is a decision.** An entity-tag is `DQUOTE etag
+     * *etagc DQUOTE` — the quotes are part of the grammar, not decoration — so a bare digest is not a
+     * malformed tag, it is not a tag. It was admitted here on a "lenient clients" argument that named no
+     * client, and a permanent widening of what this deployment accepts is not something a placeholder
+     * justifies. Nothing in the tree emits it; a caller that does gets a full 200, which is the correct
+     * answer to a conditional request carrying no usable condition.
      */
     public function isNotModified(Request $request, string $digest): bool
     {
@@ -41,7 +48,7 @@ final readonly class HttpCacheValidator
             return true;
         }
 
-        $matching = [\sprintf('"%s"', $digest), \sprintf('W/"%s"', $digest), $digest];
+        $matching = [\sprintf('"%s"', $digest), \sprintf('W/"%s"', $digest)];
 
         return [] !== \array_intersect($matching, $etags);
     }

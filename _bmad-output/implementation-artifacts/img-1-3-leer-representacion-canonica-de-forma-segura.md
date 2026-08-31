@@ -63,7 +63,7 @@ completa cuando el cliente ya tiene la versión vigente.
 
 ## Adversarial pass
 
-**Estado: dos pases.** El primero, **autoadministrado** sobre el borrador, es el bloque A-1..A-14 — insuficiente
+**Estado: cuatro pases.** El primero, **autoadministrado** sobre el borrador, es el bloque A-1..A-14 — insuficiente
 por sí solo, y así estaba declarado antes de que corriera el segundo. El segundo, **externo**, corrió en tres
 lecturas paralelas desde sesiones distintas de la que redactó el artefacto, sobre el artefacto ya commiteado
 en `b5817a96`, y está registrado más abajo con sus hallazgos y su disposición uno a uno. **Cambió el
@@ -299,9 +299,10 @@ puertas en verde, encontró dos GRAVE que los dos pases sobre el artefacto no po
 
 ### Pase 3 — externo, sobre el CÓDIGO, tres lecturas paralelas (2026-08-30)
 
-**En curso.** La capa de bordes ha entregado; las otras dos (adversarial sin spec, auditoría de aceptación)
-siguen corriendo y sus hallazgos se añaden aquí antes de abrir la PR. Lo de abajo es lo ya entregado y
-re-verificado a mano contra el árbol por la sesión conductora, porque la severidad de una capa es orientativa.
+**Las tres capas entregaron**, y sus hallazgos están abajo con su disposición: C-1..C-8 de la capa de
+bordes, C-9..C-16 de la adversarial sin spec, C-17 y C-18 de la auditoría de aceptación. Todo
+re-verificado a mano contra el árbol por la sesión conductora, porque la severidad de una capa es
+orientativa. **Ninguno de los dieciocho se aplicó en este pase** — se aplicaron todos en el Pase 4.
 
 **GRAVE — C-1: el presupuesto de servido puede dejar una imagen almacenable inservible PARA SIEMPRE, y la
 medición lo confirma peor de lo que el hallazgo suponía.** `erpify.images.max_served_bytes` (20 MiB) sólo se
@@ -464,6 +465,71 @@ dicen «10».
 **Residual que esta capa nombra y nadie más:** `php.lint.yaml` está arreglado pero **sigue sin ser miembro de
 ningún agregado ni de ningún job de CI**, así que el propio diagnóstico del récord — «un target de lint rojo
 en árbol limpio es un target que nadie corre» — se le aplica igual después del arreglo.
+
+### Pase 4 — code review de tarea completa, tres capas en paralelo sobre el CÓDIGO (2026-08-31)
+
+**Las tres capas corrieron en un solo mensaje, read-only explícito, con la ruta absoluta del worktree y con
+los dieciocho hallazgos del Pase 3 en el prompt para que no los repitieran.** 21 hallazgos en bruto, 17
+distintos tras deduplicar, 1 descartado. Su valor sobre lo anterior es que leen el código con tres ejes
+independientes; el resultado justifica el coste.
+
+**Lo que las tres encontraron POR SEPARADO, y es el hallazgo de la pasada.** `ImageGetController` mete
+`Image::mediaType()` —columna validada sólo como no-vacía, e hidratada por Doctrine sin pasar por el
+constructor— en un `Content-Type` que un navegador renderiza, en el origen que también sirve la PWA. Medido:
+`Content-Security-Policy`, `Cross-Origin-Resource-Policy` y `X-Frame-Options` tienen **cero ocurrencias en
+todo `api/`**, y `nosniff` no defiende de un tipo DECLARADO. Junto con C-11 no son dos hallazgos sino uno:
+ésta es la primera ruta `/api/*` que devuelve un cuerpo renderizable y el origen no lleva ninguna de las
+cabeceras que lo harían inerte. Cerrado con `default-src 'none'; sandbox` + `same-origin` junto al `nosniff`.
+
+**Los tres SERIOUS nuevos que ninguna capa anterior vio, todos re-verificados a mano contra el árbol:**
+
+- **B-2 — una ausencia de bytes descubierta por el `read()` mismo se traducía a 503 «reintenta» en vez de
+  404.** `ImageBytesNotFound` sólo se levantaba desde el pre-check `objectExists()`; el arm `UnableToReadFile`
+  pasa por `verdictFor()`, y `No such file or directory` no está en `PERMANENT_CONDITIONS`, así que caía a
+  `ImageStorageUnavailable`. Y `DeleteImage` borra los bytes ANTES que la fila: la ventana está diseñada
+  dentro del módulo. Rompía la promesa central del puerto de 1.2 —que una ausencia confirmada es
+  distinguible— y esta historia es su primer consumidor. Arreglado re-preguntando por la existencia en ese arm.
+- **B-3 — el mapeo 404/503/500 que dos clases de dominio existen para producir no lo afirmaba nada.** Los
+  tres ficheros de test que las nombran comprueban la CLASE de excepción, nunca el status; `ErrorContractGateTest`
+  tampoco las ve (su universo es `Shared/ErrorContract/Domain/Exception/`). Un `extends RuntimeException` en
+  lugar de `DomainException` dejaba todo verde mientras dos documentos seguían publicando 503. Cerrado con
+  `ReadFailureStatusMappingTest`, que afirma status y `type` a través de la factory que los decide.
+- **E-2 — `max_served_bytes` se argumentaba como decisión de memoria y no lo ataba nada.** El gate que existe
+  para mantener `max_decoded_pixels` y `memory_limit` como una decisión no leía esa clave, así que subirla
+  —la respuesta obvia a C-1— no enrojecía nada. Cerrado dentro de la decisión D1.
+
+**Cuatro decisiones se llevaron a Sergio y se consultaron con una IA externa antes de fijarse**
+(`tmp/bmad-md/consult-img-1-3-review-decisions-20260831-113844.md`). Dos de sus dudas corrigieron la
+propuesta:
+
+| | decisión | qué la corrigió |
+|---|---|---|
+| **D1** | `max_served_bytes` **derivado** de `max_output_dimension` y vigilado contra `memory_limit` por los dos extremos | 64 MiB **no era el techo**: el stream PNG pre-deflate es `d x (d x 4 + 1)` = 67 112 960 B, 4096 bytes POR ENCIMA de 64 MiB. Un literal habría reintroducido C-1 en pequeño; el gate afirma ahora la relación |
+| **D2** | cabeceras CSP + CORP · ratchet de sitios constructores · residual §7 | el artifact gate protege de la amenaza de CÓDIGO; Doctrine hidrata sin constructor, así que la amenaza de DATOS (migración, restore, fila a mano) sólo la acota la cabecera. Los dos controles se declaran por separado en vez de que uno finja cubrir al otro |
+| **D3** | ventana de supresión de 60 s por `(operation, category)` en **ambos** emisores | la D2 de la ADR descartaba el contador porque *«worker mode offers no state for free»* — **medido falso**: `import worker.Caddyfile` sin guarda, `FRANKENPHP_RESET_KERNEL` sin poner en ningún fichero, nada etiquetado `kernel.reset`. El contenedor sobrevive entre peticiones |
+| **D4** | corregir la **afirmación** documental, no la emisión | ni tocar el responder compartido (arrastraría `SessionStoreUnavailable` sin evidencia de que comparta política de retry) ni dejar residual: el defecto era el desajuste, y un `Retry-After` fijo es sintácticamente válido y operacionalmente falso sin una duración que este despliegue pueda predecir |
+
+**Un hallazgo DESCARTADO, y por qué.** E-5 («nada acota lo que `read()` devuelve») ya está registrado dos
+veces —en el docblock de `CanonicalImageFinder` y en el residual siete de §7, con el mismo razonamiento y la
+misma conclusión— y el chequeo de digest ya rechaza el subconjunto que el parche nombraría. Añadir un tercer
+veredicto, su método de reporter y su productor de log para nombrar algo ya escrito es justo lo que la regla
+de YAGNI de este repo rechaza. Su matiz de observabilidad —que truncamiento y corrupción salen bajo un solo
+veredicto— se añadió al residual siete, sin código.
+
+**Dos deslices propios, ambos cazados verificando el EFECTO y no la ejecución**, que es la única razón por la
+que no shipearon: una inserción por `str.index()` que enganchó un comentario y metió `php.lint.yaml` dos veces
+en `php.quality` y ninguna en el dry-run; y un regex no-greedy que cerró en el paréntesis de
+`RecordingLogger()` y dejó `new ReadFailureReporter(new RecordingLogger(, ...))` en tres ficheros.
+
+**Un detalle del lenguaje que costó una iteración y vale registrar:** desde PHP 8.1 el `&` de un retorno por
+referencia **no** es el token de un carácter. El lexer decide por lo que SIGUE —`T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG`
+o `T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG`— así que llega como token array y una comparación contra la
+cadena `'&'` no ve nada. Se compara por el TEXTO del token, que es `&` en las dos formas.
+
+**Y el gate NFR6 mordió una firma nueva de verdad durante la propia review**: `FailureSignalWindow::admits(string $key)`
+enrojeció el eje de valor. Tenía razón en sospechar y se equivocaba en el fondo —no es una storage key—, así
+que el arreglo fue el nombre (`$signal`), que además dice lo que es. Que un gate escrito en esta historia
+atrape la primera firma que la historia añade después es la mejor evidencia de que no es decorativo.
 
 ## Acceptance Criteria
 
@@ -1100,6 +1166,51 @@ correcto es el aislamiento del sumidero, que es infraestructura transversal.
       `make bmad.status.audit` lo descarta por diseño — si el tag no se repite en el commit de código, la
       auditoría **enmudece**.
 
+### Review Findings — Pase 4 (2026-08-31)
+
+Los dieciocho del Pase 3 más los diecisiete distintos que encontró esta pasada. Todos aplicados salvo el
+descartado; el detalle y la disposición están en `## Adversarial pass` → `Pase 4`.
+
+**Decisiones resueltas con Sergio (4)**
+
+- [x] [Review][Decision] D1 — `max_served_bytes` derivado de `max_output_dimension`, no un literal, y vigilado contra `memory_limit` por los dos extremos (C-1, E-2)
+- [x] [Review][Decision] D2 — cabeceras CSP + CORP, ratchet de sitios constructores, residual §7; sin guarda en el borde de lectura, que es lo que la AC 4 excluye (B-1, E-1, A-7, C-11)
+- [x] [Review][Decision] D3 — ventana de supresión de 60 s por `(operation, category)` en ambos emisores (E-3)
+- [x] [Review][Decision] D4 — corregida la afirmación documental sobre el 503; el responder compartido no se toca (B-4)
+
+**Parches aplicados (26)**
+
+- [x] [Review][Patch] Ausencia de bytes en carrera traducida a 404 y no a 503 [`api/src/Shared/Images/Infrastructure/FlysystemImageStorage.php`]
+- [x] [Review][Patch] Mapeo 404/503/500 afirmado a través de la factory [`api/tests/Unit/Shared/Images/Domain/ReadFailureStatusMappingTest.php`]
+- [x] [Review][Patch] `Vary: Cookie` — la copia cacheada ya no sobrevive a la sesión (C-4) [`api/src/Shared/Images/Infrastructure/Controller/ImageGetController.php`]
+- [x] [Review][Patch] Tokenizador NFR6: retorno por referencia, nombre semi-reservado y tipo DNF (C-2) [`api/tests/Support/PublicSignatures.php`, `api/tests/Support/SignatureReader.php`]
+- [x] [Review][Patch] Los dos parsers del gate de presupuesto dejan de dar verde sobre cinco despliegues equivocados (C-3) [`api/tests/Unit/Shared/Images/ImagePixelBudgetGateTest.php`]
+- [x] [Review][Patch] `isCallerChosenLocation()` compara por palabra y no por subcadena (C-5) [`api/tests/Unit/Shared/Images/ImageTransportSurfaceGateTest.php`]
+- [x] [Review][Patch] Premisa rancia de `memory_limit = 128M` y los story IDs del bloque de comentarios (C-6, C-12) [`api/config/services.yaml`]
+- [x] [Review][Patch] La mitad CORS deja de afirmar lo que no puede hacer, y nombra el bloqueante real (C-7, C-10) [`api/config/packages/nelmio_cors.php`]
+- [x] [Review][Patch] La frontera `>` del presupuesto, ejercitada por los dos lados (C-8) [`api/tests/Unit/Shared/Images/Application/CanonicalImageFinderFailureTranslationTest.php`]
+- [x] [Review][Patch] Un escenario anónimo retiene una imagen que EXISTE, y otro lee con la sesión menos privilegiada (C-9) [`api/features/shared/images/read.feature`]
+- [x] [Review][Patch] `--memory-limit` del worker por debajo del `memory_limit` del ini (C-13) [`compose.prod.yaml`]
+- [x] [Review][Patch] El techo de 40 MP obsoleto en sus DOS sitios, no uno (C-14 + B-6) [`api/tests/Unit/Shared/Images/Infrastructure/`]
+- [x] [Review][Patch] El docblock del reporter deja de afirmar una ausencia que la misma petición no entrega (C-15) [`api/src/Shared/Images/Application/ReadFailureReporter.php`]
+- [x] [Review][Patch] La forma sin comillas de `If-None-Match` deja de admitirse (C-16) [`api/src/Shared/Images/Infrastructure/Http/HttpCacheValidator.php`]
+- [x] [Review][Patch] La ADR gobierna cinco productores y no tres, y su D2 queda revertida (C-17) [`docs/adr/image-read-failure-signal-bound.md`]
+- [x] [Review][Patch] El test de no-fuga nombra el cuarto valor y dice qué sostiene de verdad la propiedad (C-18) [`api/tests/Unit/Shared/Images/Application/ReadFailureReporterTest.php`]
+- [x] [Review][Patch] Disyunción de `failure_category` afirmada sobre los TRES pares, no dos (E-4) [`api/tests/Unit/Shared/Images/Application/ReadFailureReporterTest.php`]
+- [x] [Review][Patch] `php.lint.yaml` entra en `php.quality` y en `php.quality.dry-run` (E-6) [`make/php-quality.mk`]
+- [x] [Review][Patch] La amplificación del 304 y el presupuesto por IP, en el residual cinco (B-5, E-7) [`PRODUCTION_SECURITY_CHECKLIST.md`]
+- [x] [Review][Patch] «with no gate going red» es falso: dos artefactos de esta historia enrojecen (A-1) [`api/src/Shared/Images/Infrastructure/Controller/ImageGetController.php`, `api/docs/adding-endpoints.md`]
+- [x] [Review][Patch] `If-Modified-Since` e `If-Match`, ejercitados; fila 10 de la matriz corregida (A-2) [`api/tests/Unit/Shared/Images/Infrastructure/Controller/ImageGetControllerTest.php`]
+- [x] [Review][Patch] Las líneas de estado de `## Adversarial pass` dejan de decir que dos capas siguen corriendo (A-3)
+- [x] [Review][Patch] `## File List` incluye la propia historia (A-4)
+- [x] [Review][Patch] El numeral obsoleto de la AC 22, registrado junto al de la AC 11 (A-5)
+- [x] [Review][Patch] La nota de Dev Notes sobre el universo de gate-placement, corregida (A-6)
+- [x] [Review][Patch] `## Change Log` alcanza la cabeza de la rama (A-8)
+
+**Descartado (1)**
+
+- [x] [Review][Dismiss] E-5 — «nada acota lo que `read()` devuelve» ya está registrado en el docblock de `CanonicalImageFinder` y en el residual siete de §7, y el chequeo de digest ya rechaza el subconjunto. Su matiz de observabilidad se añadió al residual, sin código
+
 ## Dev Notes
 
 ### La ruta: dónde monta, cómo se llama, y por qué el nombre es un requisito
@@ -1201,7 +1312,7 @@ granularidad por módulo, el eje valor entero, ni `Psr\Http\Message\*` — que a
 |---|---|---|
 | `api/config/routes.yaml` | **Sí, obligatorio** | Sin recurso el `#[Route]` no registra nada y todo queda verde |
 | `api/config/packages/nelmio_cors.php` | **Sí** | AC 24; sin ello el cache condicional es inutilizable desde un origen cruzado y falla en silencio |
-| `api/.artifact-gate-placement` · `php.lint.gate-placement` | **Sí** | El scan de NFR6, `mirrored :: src/Shared/Images`. Fuera del *home*, un gate con `#[CoversClass]` **no entra en el universo** y su línea se queda huérfana → rojo |
+| `api/.artifact-gate-placement` · `php.lint.gate-placement` | **Sí** | El scan de NFR6, `mirrored :: src/Shared/Images`. Fuera del *home*, un gate que acredita cobertura de una clase de **producción** no entra en el universo y su línea se queda huérfana → rojo. Un `#[CoversClass]` sobre una clase de `Erpify\Tests\` **sí** entra: `ArtifactGateSweep::creditsProductionCoverage()` resuelve cada target por su import y sólo excluye el fichero cuando resuelve FUERA de `Erpify\Tests\`, que es por lo que `tests/Unit/Support/PublicSignaturesTest.php` está registrado y debe estarlo |
 | `api/.behat-step-vocabulary` · `php.lint.step-vocabulary` | **Sí, muy probablemente** | No existe step que capture una cabecera de respuesta; y todo `idle` alcanzado pasa a `used` en el mismo commit |
 | `AuditPolicyTest` (data provider) | **Sí** | La rama `shared_` no la pincha nadie |
 | `StorageFailureVocabularyTest` | **Sí, pero no como se pensaba** | **No** por añadir un caso al enum (eso lo pone rojo, AC 8), sino porque hay que dejarlo verde |
@@ -1513,6 +1624,15 @@ identidad · reconciliación fila↔objeto (la prohíbe NFR3) · `ContentHashUrl
   del finder), `SignatureReader` (fuera de `PublicSignatures`), el test del guard de identidad y el de
   traducción de fallos, más un `ImageFinderHarness` que borra el cableado repetido en cuatro clases de test.
 
+- 2026-08-31 — **Pase adversarial 4 (code review de tarea completa) y aplicación de los treinta parches.**
+  Tres capas en paralelo sobre el código ya arreglado: 21 hallazgos en bruto, 17 distintos, 1 descartado, más
+  los dieciocho del Pase 3 que seguían sin aplicar. Cuatro decisiones se consultaron con una IA externa y dos
+  de sus dudas corrigieron la propuesta — notablemente que 64 MiB no es el techo del objeto canónico, lo que
+  convirtió `max_served_bytes` en un valor DERIVADO y vigilado en vez de un literal. La ADR
+  `image-read-failure-signal-bound.md` queda **enmendada y su D2 revertida**: la señal ya no se deja sin
+  acotar, porque la premisa que sostenía esa decisión (*worker mode no ofrece estado gratis*) resultó falsa
+  al medirla. Detalle completo y disposición uno a uno en `## Adversarial pass` → `Pase 4`.
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -1633,6 +1753,20 @@ sentence is residue from before the last edit and is contradicted by four other 
 document; the implementation emits 3600. Flagged rather than edited, because AC text is not a section this
 workflow may modify.
 
+**AC 22 carries a second stale numeral, recorded here for the same reason and beside the first so neither is
+invisible.** It announces *"y son cuatro"* and then enumerates items (a) through (e). Every other statement in
+the tree says five: AC 22 itself says *"ninguno de (a)–(d) abre una issue"* and *"sólo (e) … se llevó issue
+propia (#879)"*, the change log records that "AC 22 ganó un quinto residual", the re-derived matrix says "five
+residuals plus the ingestion-side one", and `PRODUCTION_SECURITY_CHECKLIST.md` was rewritten to 4 + 5. Only
+the AC's own word is wrong, and the fix is one token — `cuatro` → `cinco` — which the AC-text constraint
+forbids doing here. Found by the Pase 4 acceptance layer; the first flag above was found the same way, which
+is why they now sit together rather than one being documented and the other not.
+
+**A note on the §7 counts, since two of them moved after these paragraphs were first written.** The
+`Shared/Images` block now announces TEN residuals rather than nine: the tenth is the served `Content-Type`
+being a database column whose allowlist lives only at the writer. AC 22's enumeration is unchanged by that —
+it governs the residuals this story ARGUED, not the ones its own review then added.
+
 **AC → test matrix, RE-DERIVED against the tree after implementing** (the story asked for this because 1.2's
 matrix was written beforehand and a review found eight rows claiming what their tests could not see):
 
@@ -1647,7 +1781,7 @@ matrix was written beforehand and a review found eight rows claiming what their 
 | 7 | `CanonicalImageFinderFailureTranslationTest` digest + oversize arms | "headers not committed first" is structural, not tested — as the AC says |
 | 8 | `ReadFailureReporterTest`, context asserted whole | the by-VALUE substring test is structurally vacuous — the reporter's two methods take no arguments — so what actually guards a leak is the whole-context `assertSame` beside it |
 | 9 | no code; the ADR, the epic amendment and the measurement above | — |
-| 10 | `ImageGetControllerTest` + `read.feature` Range scenario | `HEAD` is not exercised by any scenario |
+| 10 | `ImageGetControllerTest` (`Range`, `If-Modified-Since`, `If-Match`, no `Last-Modified`) + `read.feature` Range scenario | `HEAD` is not exercised by any scenario |
 | 11 | `ImageGetControllerTest` (directives, and a test that fails if `public` returns) + `read.feature` | — |
 | 12 | `ImageTransportSurfaceGateTest`, value axis, controller in scope | — |
 | 13 | `HttpCacheValidatorTest` (5 matching + 3 refusing forms) + three `read.feature` scenarios | — |
@@ -1718,6 +1852,16 @@ Rows with no executable test that could observe their AC failing: **7 (partial),
 
 - `api/tests/Behat/Context/HttpRequestContext.php` — the header-capture step the conditional loop needs
 - `api/tests/Unit/Gate/BestEffortReportChannelGateTest.php` — the reporter pinned to the always-on channel
+
+**Added — code review (Pase 4)**
+
+- `api/src/Shared/Images/Application/FailureSignalWindow.php` — one signal per `(operation, category)` per window
+- `api/tests/Unit/Shared/Images/Application/FailureSignalWindowTest.php`, `.../MovableClock.php`
+- `api/tests/Unit/Shared/Images/Domain/ReadFailureStatusMappingTest.php` — the 404/503/500 mapping, asserted
+- `api/tests/Unit/Shared/Images/ImageWriterSurfaceGateTest.php` — the ratchet on `Image` construction sites
+- `api/tests/Unit/Shared/Images/Infrastructure/FlysystemImageStorageRacedDeletionTest.php`, `.../VanishingFilesystem.php`
+- `api/tests/Unit/Shared/Images/Infrastructure/LocalImageStorages.php` — the adapter's wiring in one place
+- `api/tests/Unit/Support/SignatureReaderTest.php` — split from `PublicSignaturesTest` along the production seam
 - `api/tests/Unit/Shared/Audit/Domain/AuditPolicyTest.php` — the `shared_` case nothing was exercising
 
 **Modified — documentation**
@@ -1726,5 +1870,6 @@ Rows with no executable test that could observe their AC failing: **7 (partial),
 - `docs/architecture-api.md` — the route, the routing-resource rule, and Iam's recorded deviation
 - `api/docs/adding-endpoints.md` — `shared_` as a context prefix, and why the name governs the audit
 - `api/docs/postman/erpify-api.postman_collection.json`, `api/docs/postman/README.md`
+- `_bmad-output/implementation-artifacts/img-1-3-leer-representacion-canonica-de-forma-segura.md` — esta historia
 - `_bmad-output/implementation-artifacts/sprint-status-images.yaml`
 

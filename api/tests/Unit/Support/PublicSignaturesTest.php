@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Support;
 
 use Erpify\Tests\Support\PublicSignatures;
-use Erpify\Tests\Support\SignatureReader;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -23,37 +23,8 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(PublicSignatures::class)]
-#[CoversClass(SignatureReader::class)]
 final class PublicSignaturesTest extends TestCase
 {
-    #[Test]
-    public function itReadsEveryParameterPastAParameterAttribute(): void
-    {
-        // `#[` is one T_ATTRIBUTE token rather than the bracket it opens, so a reader counting only the
-        // literal `[` sees its `]` close the parameter list and loses everything after it.
-        $signature = $this->firstSignatureIn(<<<'PHP'
-            <?php
-            final class C {
-                public function read(string $id, #[SensitiveParameter] string $bytes): void {}
-            }
-            PHP);
-
-        $this->assertSame(['id', 'bytes'], $signature['parameters']);
-    }
-
-    #[Test]
-    public function itReadsAPromotedConstructorPropertyAsAParameter(): void
-    {
-        $signature = $this->firstSignatureIn(<<<'PHP'
-            <?php
-            final class C {
-                public function __construct(private readonly string $path, public int $size) {}
-            }
-            PHP);
-
-        $this->assertSame(['path', 'size'], $signature['parameters']);
-    }
-
     #[Test]
     public function aMethodDeclaringNoVisibilityIsPublic(): void
     {
@@ -100,55 +71,6 @@ final class PublicSignaturesTest extends TestCase
     }
 
     #[Test]
-    public function aDefaultValueNeitherEndsTheListNorCountsAsAType(): void
-    {
-        $signature = $this->firstSignatureIn(<<<'PHP'
-            <?php
-            final class C {
-                public function a(
-                    array $options = ['a', 'b'],
-                    ?Clock $clock = new SystemClock(),
-                    string $id = '',
-                ): void {}
-            }
-            PHP);
-
-        $this->assertSame(['options', 'clock', 'id'], $signature['parameters']);
-        $this->assertNotContains('SystemClock', $signature['types']);
-    }
-
-    #[Test]
-    public function itReadsAParameterListBrokenOverSeveralLines(): void
-    {
-        $signature = $this->firstSignatureIn(<<<'PHP'
-            <?php
-            final class C {
-                public function a(
-                    string $id,
-                    ?SplFileInfo $handle = null,
-                ): void {
-                }
-            }
-            PHP);
-
-        $this->assertSame(['id', 'handle'], $signature['parameters']);
-        $this->assertContains('SplFileInfo', $signature['types']);
-    }
-
-    #[Test]
-    public function itReadsTheReturnTypeIncludingAUnion(): void
-    {
-        $signature = $this->firstSignatureIn(<<<'PHP'
-            <?php
-            final class C {
-                public function a(): StreamInterface|string {}
-            }
-            PHP);
-
-        $this->assertContains('StreamInterface', $signature['types']);
-    }
-
-    #[Test]
     public function aClosureInsideAMethodIsNotAMemberSignature(): void
     {
         $signatures = PublicSignatures::inSource(<<<'PHP'
@@ -163,6 +85,55 @@ final class PublicSignaturesTest extends TestCase
 
         $this->assertSame(['a'], \array_column($signatures, 'method'));
         $this->assertSame(['id'], $signatures[0]['parameters'] ?? $this->fail('the one method vanished'));
+    }
+
+    /**
+     * The failure direction here is TOTAL DISAPPEARANCE, not misreading: `&` is not a `T_STRING`, so the
+     * method yielded no name and dropped off both axes of the scan — its types and its parameter names alike.
+     */
+    #[Test]
+    public function itReadsAMethodThatReturnsByReference(): void
+    {
+        $signature = $this->firstSignatureIn(<<<'PHP'
+            <?php
+            final class C {
+                public function &borrow(SplFileInfo $handle): array { return []; }
+            }
+            PHP);
+
+        $this->assertSame('borrow', $signature['method']);
+        $this->assertSame(['handle'], $signature['parameters']);
+        $this->assertContains('SplFileInfo', $signature['types']);
+    }
+
+    /**
+     * PHP admits its own keywords as METHOD names, and the lexer emits each as its own token rather than as
+     * `T_STRING` — so the same total disappearance happened for a method called `list`, `print` or `match`.
+     * Matched by identifier SHAPE rather than against a list of keywords, because a list is a thing somebody
+     * has to maintain and PHP keeps adding to it.
+     */
+    #[Test]
+    #[DataProvider('provideItReadsAMethodNamedWithASemiReservedWordCases')]
+    public function itReadsAMethodNamedWithASemiReservedWord(string $name): void
+    {
+        $signature = $this->firstSignatureIn(\sprintf(
+            "<?php\nfinal class C {\n    public function %s(SplFileInfo \$handle): void {}\n}\n",
+            $name,
+        ));
+
+        $this->assertSame($name, $signature['method']);
+        $this->assertSame(['handle'], $signature['parameters']);
+        $this->assertContains('SplFileInfo', $signature['types']);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideItReadsAMethodNamedWithASemiReservedWordCases(): iterable
+    {
+        foreach (['list', 'print', 'default', 'array', 'match', 'fn', 'unset', 'echo'] as $name) {
+            yield $name => [$name];
+        }
     }
 
     /**

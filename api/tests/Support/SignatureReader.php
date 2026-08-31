@@ -62,6 +62,7 @@ final class SignatureReader
     {
         $slice = [];
         $depth = 0;
+        $openers = [];
         $total = \count($tokens);
 
         for ($cursor = $index; $cursor < $total; ++$cursor) {
@@ -71,14 +72,22 @@ final class SignatureReader
                 return [$slice, $cursor];
             }
 
+            if (self::opensABracket($token)) {
+                $openers[] = \is_array($token) ? 'attribute' : $token;
+            }
+
             $depth += self::depthDeltaOf($token);
 
             if (0 === $depth && self::closesABracket($token)) {
                 return [$slice, $cursor];
             }
 
-            if (1 === $depth && !self::opensABracket($token)) {
+            if (self::isCollectable($depth, $openers, $token)) {
                 $slice[] = $token;
+            }
+
+            if (self::closesABracket($token)) {
+                \array_pop($openers);
             }
         }
 
@@ -139,6 +148,32 @@ final class SignatureReader
         }
 
         return $types;
+    }
+
+    /**
+     * Depth 1 is the parameter list itself. Depth 2 is admitted for ONE shape — a `(` nested directly in the
+     * list — because that is a DNF type: `(SplFileInfo&Countable)|string $file` puts its members one level
+     * down, and dropping them lost `SplFileInfo` from a scan whose whole subject is which types cross a
+     * boundary. Everything else at depth 2 stays excluded, and an ATTRIBUTE's arguments are excluded at any
+     * depth: `#[Foo(Bar::class)]` must not contribute `Bar` as a parameter type.
+     *
+     * A default value's parentheses reach here too and are harmless — {@see self::collect()} suppresses
+     * collection from `=` to the next comma, so nothing inside one is read as a type.
+     *
+     * @param list<string>                   $openers
+     * @param array{int, string, int}|string $token
+     */
+    private static function isCollectable(int $depth, array $openers, array|string $token): bool
+    {
+        if (self::opensABracket($token) || \in_array('attribute', $openers, true)) {
+            return false;
+        }
+
+        if (1 === $depth) {
+            return true;
+        }
+
+        return 2 === $depth && '(' === ($openers[\count($openers) - 1] ?? null);
     }
 
     /**

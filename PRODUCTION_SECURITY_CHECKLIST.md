@@ -1531,9 +1531,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Expiry: re-assess before the first production deployment or the first customer**, whichever
       comes first.
 
-- [ ] **Image bytes: what the storage root guarantees, and the nine things it does not.** Residuals of
+- [ ] **Image bytes: what the storage root guarantees, and the ten things it does not.** Residuals of
       `Shared/Images`, listed together because each is invisible from the others. One to four are the
-      write and deletion paths; five to nine are opened by the authenticated read route
+      write and deletion paths; five to ten are opened by the authenticated read route
       `GET /api/v1/images/{imageId}` and are not closed by it.
       **One — the root is provisioned by the deployment, conditionally, and that condition is the control.**
       `compose.yaml` mounts the named volume `image_storage` at `/app/storage` for both `php` and
@@ -1587,6 +1587,16 @@ mitigated state. Accepting one means recording who accepted it and against which
       multi-worker deployment behind a balancer needs a shared Redis), and with `lock_factory: null`
       concurrent workers *"may over- or under-count"*. What does not exist is a limit **per identity and per
       route**. `ImageId` is never an authorization mechanism and never a secret.
+      **And the conditional request inverts the usual self-limiting.** A `304` is gated on the same verified
+      read as a `200` — the full object off disk plus its SHA-256 — because the storage port exposes no
+      existence predicate; the cost is declared at the controller. What is NOT declared there is that the
+      client stops paying: a loop of matching `If-None-Match` requests receives a couple of hundred bytes
+      each while forcing a full read and hash per request, where the same loop answered `200` would cost the
+      caller the whole body and self-limit. Nothing bounds aggregate bytes served, and the per-IP budget is
+      sized for page navigation (120/min) while this route is one request per rendered image rather than one
+      per navigation — so an office behind one NAT shares it, and a 429 arrives inside an `<img>` as a broken
+      image with no diagnosis. Latent while the route has no consumer; the epic that wires the first one
+      inherits it.
       **Six — a cached copy outlives the erasure, shortened to an hour rather than closed.** A conforming
       client does not revalidate while the response is fresh, so once the bytes and the row are gone every
       viewer keeps serving the image for up to `max-age` with no request reaching a server that could answer
@@ -1605,7 +1615,14 @@ mitigated state. Accepting one means recording who accepted it and against which
       Details at all. The read use case therefore refuses an object whose `Image::byteSize()` exceeds
       `erpify.images.max_served_bytes` **before** calling `read()`. What the guard cannot see is the whole
       residual: `byteSize` is what the row says, not what the object weighs. The digest verification closes
-      that gap after the fact, which is a detection and not a prevention.
+      that gap after the fact, which is a detection and not a prevention — and it detects it under one name:
+      an object that diverges from the row's declared size is reported as a digest mismatch, so "these bytes
+      were corrupted" and "these are not the whole object" are one verdict on the observability axis.
+      Separating them was considered and declined: it costs a third verdict, a reporter method and a log
+      producer to name a subset of a condition the digest check already refuses to serve, and nothing in the
+      tree can currently produce it. The budget itself is no longer hand-picked — it is derived from
+      `max_output_dimension` and gated against `memory_limit` at both ends by `ImagePixelBudgetGateTest`, so
+      an object the pipeline can legitimately emit can no longer be stored and then permanently unservable.
       **The INGESTION side of the same axis was measured in this story and half-closed.** The
       canonicalization pipeline peaks at roughly 10 bytes per input pixel (GD holds a truecolor frame at
       4 B/px and `ResizeModifier` clones it), and `memory_limit` was never declared by this repository at
@@ -1630,10 +1647,33 @@ mitigated state. Accepting one means recording who accepted it and against which
       this path displaces the history of subsystems that have nothing to do with it — and nothing alerts,
       because no collector reads that channel and the Sentry handler is commented out. The correct framing is
       shared-sink eviction between independent producers rather than "too many logs", and the correct control
-      point is the logging infrastructure itself, which is transverse and not this module's. Why the signal is
-      left unbounded here at all, with the four alternatives discarded one by one:
+      point is the logging infrastructure itself, which is transverse and not this module's.
+      **The read path's own contribution is now bounded, and the bound is narrower than it sounds.**
+      `FailureSignalWindow` admits one record per `(operation, category)` per 60 seconds in both emitters, so
+      a caller can no longer choose how much this deployment writes by looping one broken image. Its state is
+      process memory and FrankenPHP runs several workers, so the bound is per worker and the aggregate scales
+      with the worker count; and it covers the `observability` line only — a 5xx still writes the
+      default-channel `error` record that flushes the buffered handler, which belongs to another channel and
+      another module. What it costs is frequency: the log keeps that a permanent failure is still happening
+      and stops carrying how often it was retried. Reasoning, and the measurement that reversed the earlier
+      decision to leave it unbounded:
       [`docs/adr/image-read-failure-signal-bound.md`](docs/adr/image-read-failure-signal-bound.md) D2 and D4.
       Tracked as [#879](https://github.com/sergio-salcedo-dev/ERPify/issues/879).
+      **Ten — the served `Content-Type` is a database column, and the allowlist that closes it lives only at
+      the writer.** `ImageGetController` sets the response type verbatim from `Image::mediaType()`; the
+      entity guarantees only that the value is non-blank, and Doctrine hydrates without the constructor, so
+      even that runs at write time alone. The four-type allowlist is a `private const` on the WRITE path and
+      the read edge deliberately inherits it rather than restating it. Today exactly one production site
+      constructs an `Image` and its media type comes from `MediaTypeEncoderFactory`, and
+      `ImageWriterSurfaceGateTest` now refuses a second one appearing silently — but that gate reads CODE,
+      and the exposure is a ROW: a data migration, a restore, or a context writing SQL directly is invisible
+      to it. What bounds the consequence instead of the cause is the response, which is the first in the tree
+      to carry `Content-Security-Policy: default-src 'none'; sandbox` and
+      `Cross-Origin-Resource-Policy: same-origin` — the body is inert whatever the column says, and
+      `X-Content-Type-Options: nosniff` is not what does that, since it PINS a declared type rather than
+      questioning it. This is also the first `/api/*` route returning a browser-renderable body at all; the
+      API origin still publishes no CSP, no CORP and no `X-Frame-Options` of its own, so every other route
+      relies on returning JSON.
 
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not

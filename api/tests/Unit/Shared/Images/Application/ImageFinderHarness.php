@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Application;
 
+use Erpify\Shared\Clock\Domain\NativeClock;
 use Erpify\Shared\Images\Application\CanonicalImageFinder;
+use Erpify\Shared\Images\Application\FailureSignalWindow;
 use Erpify\Shared\Images\Application\ReadFailureReporter;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
@@ -63,7 +65,7 @@ final class ImageFinderHarness
         return new CanonicalImageFinder(
             $repository,
             $storage,
-            new ReadFailureReporter($logger ?? new RecordingLogger()),
+            new ReadFailureReporter($logger ?? new RecordingLogger(), new FailureSignalWindow(new NativeClock())),
             $maxServedBytes,
         );
     }

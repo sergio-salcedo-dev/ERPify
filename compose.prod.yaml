@@ -194,7 +194,12 @@ services:
     # (`docker compose up --scale messenger_worker=N`). The daily maintenance schedule is split
     # out to the single `scheduler_worker` below so it ticks once, not once per replica. Audit `activity`
     # rows are written synchronously on kernel.terminate, so no audit queue is consumed here.
-    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--limit=10000", "--memory-limit=256M"]
+    # Below the ini's `memory_limit` on purpose. Equal to it, `StopWorkerOnMemoryLimitListener` can
+    # only fire where PHP has already fatalled, so the graceful stop is unreachable and the worker is
+    # taken down instead of retired. 224M keeps 32 MiB below the 256M ceiling and stays above the
+    # 191 MiB peak the image pipeline measures at its configured ceiling, so an ordinary large upload
+    # retires nothing while a genuine leak still does.
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--limit=10000", "--memory-limit=224M"]
 
   # Single-replica scheduler. Symfony Scheduler derives every maintenance tick
   # (PruneHandledDomainEventsMessage, the failure-transport PruneFailedMessagesMessage, the hourly
@@ -291,7 +296,12 @@ services:
         limits:
           cpus: ${SCHEDULER_CPU_LIMIT:-0.25}
           memory: ${SCHEDULER_MEM_LIMIT:-256m}
-    command: ["php", "bin/console", "messenger:consume", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "--time-limit=3600", "--memory-limit=256M"]
+    # Below the ini's `memory_limit` on purpose. Equal to it, `StopWorkerOnMemoryLimitListener` can
+    # only fire where PHP has already fatalled, so the graceful stop is unreachable and the worker is
+    # taken down instead of retired. 224M keeps 32 MiB below the 256M ceiling and stays above the
+    # 191 MiB peak the image pipeline measures at its configured ceiling, so an ordinary large upload
+    # retires nothing while a genuine leak still does.
+    command: ["php", "bin/console", "messenger:consume", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "--time-limit=3600", "--memory-limit=224M"]
 
 # Build-time only. The Sentry auth token grants write access to the project, so
 # it rides a BuildKit secret mount rather than a build arg: an arg is recorded in

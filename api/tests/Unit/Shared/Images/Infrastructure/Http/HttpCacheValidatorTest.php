@@ -36,7 +36,6 @@ final class HttpCacheValidatorTest extends TestCase
     {
         yield 'strong' => ['"' . self::DIGEST . '"'];
         yield 'weak' => ['W/"' . self::DIGEST . '"'];
-        yield 'unquoted' => [self::DIGEST];
         yield 'wildcard' => ['*'];
         yield 'among several' => ['"other", W/"' . self::DIGEST . '"'];
     }
@@ -55,6 +54,8 @@ final class HttpCacheValidatorTest extends TestCase
         yield 'a different tag' => ['"0000000000000000000000000000000000000000000000000000000000000000"'];
         yield 'an empty header' => [''];
         yield 'a prefix of the tag' => ['"' . \substr(self::DIGEST, 0, 32) . '"'];
+        // The quotes are part of the entity-tag grammar, so this is not a malformed tag but no tag at all.
+        yield 'the right digest, unquoted' => [self::DIGEST];
     }
 
     public function testWithNoConditionalHeaderAtAllTheResponseIsAlwaysModified(): void
