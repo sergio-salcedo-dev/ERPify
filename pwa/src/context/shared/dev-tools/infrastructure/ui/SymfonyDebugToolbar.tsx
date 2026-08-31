@@ -18,7 +18,14 @@ const WDT_PATH = "/_dev/wdt-loader";
 function mountFragment(host: HTMLElement, html: string): void {
   while (host.firstChild) host.firstChild.remove();
   const parsed = new DOMParser().parseFromString(html, "text/html");
-  for (const node of Array.from(parsed.body.childNodes)) {
+  // The loader is a document fragment, not a body. Its first element is
+  // `<link rel="stylesheet" href="/_wdt/styles">`, and the HTML parser hoists a
+  // leading `<link>` — plus the empty `<script>` upstream puts after it so the
+  // parser waits for that sheet — into `<head>`, never `<body>`. Reading `body`
+  // alone therefore drops the toolbar's entire stylesheet and paints ~44 KB of
+  // unstyled markup over a viewport-wide fixed host. Head first, so the sheet
+  // still precedes the markup it styles.
+  for (const node of [...parsed.head.childNodes, ...parsed.body.childNodes]) {
     host.appendChild(reviveNode(node));
   }
 }

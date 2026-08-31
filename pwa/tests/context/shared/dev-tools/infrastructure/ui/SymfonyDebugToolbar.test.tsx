@@ -3,6 +3,23 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SymfonyDebugToolbar } from "@/context/shared/dev-tools/infrastructure/ui/SymfonyDebugToolbar";
 import { EventTargetDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/EventTargetDebugTokenObserver";
 
+/**
+ * The structure `/_dev/wdt-loader/{token}` actually returns. What matters is the
+ * order: symfony/web-profiler-bundle leads the fragment with the toolbar's
+ * stylesheet so the markup is never painted unstyled, and the HTML parser hoists
+ * that leading `<link>` — and the empty `<script>` that makes the parser wait for
+ * it — into `<head>`. A host that reads only `body` silently loses the sheet.
+ */
+const WDT_LOADER_FRAGMENT = [
+  "<!-- START of Symfony Web Debug Toolbar -->",
+  '<link rel="stylesheet" href="/_wdt/styles" />',
+  "<script> </script>",
+  '<div class="sf-toolbar sf-toolbar-opened" role="toolbar">',
+  '  <div id="sfwdt-marker">toolbar</div>',
+  "</div>",
+  "<!-- END of Symfony Web Debug Toolbar -->",
+].join("\n");
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -142,6 +159,34 @@ describe("SymfonyDebugToolbar", () => {
       ).not.toBeNull();
     });
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("mounts the stylesheet the parser hoists into <head>, not just the body markup", async () => {
+    const observer = new EventTargetDebugTokenObserver();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(WDT_LOADER_FRAGMENT, {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      }),
+    );
+
+    render(<SymfonyDebugToolbar observer={observer} />);
+    observer.publish({ token: "abc123", profilerUrl: "/_profiler/abc123" });
+
+    let host!: HTMLElement;
+    await waitFor(() => {
+      host = screen.getByTestId("dev-tools__symfony-toolbar");
+      expect(host.querySelector("#sfwdt-marker")).not.toBeNull();
+    });
+
+    const sheet = host.querySelector("link[rel='stylesheet']");
+    expect(sheet).not.toBeNull();
+    expect(sheet?.getAttribute("href")).toBe("/_wdt/styles");
+
+    // Order is the point, not mere presence: the sheet has to precede the markup
+    // it styles, which is why the head nodes mount ahead of the body ones.
+    const markup = host.querySelector("#sfwdt-marker");
+    expect(sheet!.compareDocumentPosition(markup!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("renders nothing and does not throw when the fragment fetch fails", async () => {
