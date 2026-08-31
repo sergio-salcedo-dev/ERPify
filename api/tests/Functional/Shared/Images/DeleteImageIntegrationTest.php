@@ -13,9 +13,7 @@ use Erpify\Shared\Images\Domain\Storage\ImageStorageException;
 use Erpify\Shared\Images\Infrastructure\FlysystemImageStorage;
 use Erpify\Shared\Images\Infrastructure\Persistence\Doctrine\DoctrineImageRepository;
 use Erpify\Shared\Persistence\Application\TransactionManager;
-use Erpify\Tests\Unit\Shared\Images\Infrastructure\RecordingLogger;
-use League\Flysystem\Filesystem;
-use League\Flysystem\Local\LocalFilesystemAdapter;
+use Erpify\Tests\Unit\Shared\Images\Infrastructure\LocalImageStorages;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -255,11 +253,7 @@ final class DeleteImageIntegrationTest extends KernelTestCase
 
     private function storageRootedAt(string $root): FlysystemImageStorage
     {
-        return new FlysystemImageStorage(
-            new Filesystem(new LocalFilesystemAdapter($root, lazyRootCreation: true)),
-            $root,
-            new RecordingLogger(),
-        );
+        return LocalImageStorages::rootedAt($root);
     }
 
     /**

@@ -250,6 +250,24 @@ actually run concurrently.
   correct form is genuinely ambiguous. Defer only what belongs to another epic, and never into
   `deferred-work.md` when the finding is the current epic's own.
 
+- **Read the pull request's existing review threads BEFORE launching the layers, and end every one of them
+  as applied or answered — never leave one open.** The three layers read the code; nothing in them reads the
+  PR. Measured on #899: two Strix threads sat open through an entire review — thirty patches applied, every
+  gate green, the branch ready to merge — and the *user* found them, not the review. Neither outcome
+  justified the silence, and they failed in opposite directions: the `Cross-Origin-Resource-Policy` finding
+  was independently rediscovered by the Blind Hunter layer and fixed, so the thread was **stale**, while the
+  object-level-authorization finding is a decision the epic settled (`epics-images.md`, item 17 of its
+  firewall) and needed a **reply**, not a patch — applying the bot's suggested `#[IsGranted]` would have
+  reopened a closed decision *and* broken the route, since the permission is granted to no role.
+  **An open thread is not evidence the finding is live.** Strix's re-review on push is off for this
+  repository, so its comment stays stamped `Updated for <sha>` at the commit it read and never re-runs
+  itself; a fixed finding and an unfixed one look identical. Read them with
+  `gh pr view <n> --json comments` **and** `gh api repos/{owner}/{repo}/pulls/<n>/comments` (the inline
+  threads live only on the second), pass what they already report into the layer prompts so the layers spend
+  their effort elsewhere, and close the loop at the end: a patch, or a reply naming the epic/ADR line that
+  supersedes it and where that is recorded. Silence reads as an oversight and the next reader cannot tell
+  the two apart.
+
 Three independent axes are what makes this worth its cost: in #873 they found a GRAVE that three previous
 passes had not — a storage key derived from the identifier's *spelling* while its row is selected by its
 *value*, so an upper-cased id reported a confirmed erasure and stranded the bytes for ever.
