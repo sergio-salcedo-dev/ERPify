@@ -42,9 +42,7 @@ trait JsonToolTrait
 
     public function getJsonInspector(): JsonInspector
     {
-        if (null === $this->jsonInspector) {
-            $this->jsonInspector = new JsonInspector('javascript');
-        }
+        $this->jsonInspector ??= new JsonInspector('javascript');
 
         return $this->jsonInspector;
     }
