@@ -87,10 +87,11 @@ final class PhpmdParsableSyntaxGateTest extends TestCase
     public function noSweptFileCarriesASyntaxTheSweepsOwnParserCannotRead(): void
     {
         $offenders = [];
-        $scanned = 0;
+        // Materialised rather than counted while iterating: the floor below is then a statement about the
+        // very list this loop consumed, instead of about a tally kept beside it that can drift from it.
+        $files = \iterator_to_array($this->sweptFiles(), false);
 
-        foreach ($this->sweptFiles() as $file) {
-            ++$scanned;
+        foreach ($files as $file) {
             $source = \file_get_contents($file);
 
             if (false === $source) {
@@ -104,7 +105,7 @@ final class PhpmdParsableSyntaxGateTest extends TestCase
 
         $this->assertGreaterThanOrEqual(
             self::MIN_FILES,
-            $scanned,
+            \count($files),
             'the walk found almost nothing, so a green here would be about an empty set',
         );
         $this->assertSame(
