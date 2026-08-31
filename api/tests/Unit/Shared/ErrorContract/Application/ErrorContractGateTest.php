@@ -619,7 +619,7 @@ final class ErrorContractGateTest extends TestCase
      */
     private function canonicalMarkerNames(): array
     {
-        // Two statements rather than `new X()->getConstant()`: PDepend (PHPMD) cannot parse that form.
+        // Two statements rather than a dereferenced `new`, the form `PhpmdParsableSyntaxGateTest` refuses.
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $statusMap = $reflectionClass->getConstant('MARKER_STATUS_MAP');
 

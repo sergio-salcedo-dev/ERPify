@@ -278,8 +278,7 @@ final class InMemorySessionRepository implements SessionRepository
      */
     private function flipToRevoked(Session $session, DateTimeImmutable $now): void
     {
-        // Parenthesised rather than PHP 8.4's bare `new X()->…`: PDepend, which PHPMD parses with, cannot
-        // read that form, and the repo spells it this way everywhere for the same reason.
+        // Parenthesised rather than a bare dereferenced `new`, the form `PhpmdParsableSyntaxGateTest` refuses.
         (new ReflectionProperty(Session::class, 'status'))->setValue($session, SessionStatus::REVOKED);
         (new ReflectionProperty(Session::class, 'revokedAt'))->setValue($session, $now);
         $session->setUpdatedAt($now);
