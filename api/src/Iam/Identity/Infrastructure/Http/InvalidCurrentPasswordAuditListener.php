@@ -19,7 +19,10 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * 204 of a successful change writes nothing generic, and {@see InvalidCurrentPassword} deliberately carries no
  * `AccessDeniedException` in its chain, so the sibling
  * {@see \Erpify\Shared\Audit\Infrastructure\Http\EventListener\AccessDeniedAuditListener} skips the 403 it
- * produces. Without this a sustained guessing run against `POST /me/password` is invisible to the trail.
+ * produces. Without this a sustained guessing run against any of the three routes that re-prove the current
+ * password — `POST /me/password`, `POST /me/recovery-secret` and `POST /me/recovery-secret/revoke` — is
+ * invisible to the trail. The listener matches on the throwable rather than on a route, so a fourth such
+ * route is covered the day it exists, and the route itself travels in the row's metadata.
  *
  * The row is deliberately RESOURCE-LESS. The only candidate resource is the caller's own identity, and naming
  * it would write `actor_id == resource_id` by construction — a row that is its own subject, on the
@@ -37,7 +40,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * The throwable is matched directly rather than walked down the `previous` chain: unlike the firewall's
  * `AccessDeniedException`, nothing wraps this one — it travels from the use case to the responder untouched.
  *
- * The write is only meaningful behind {@see \Erpify\Iam\Identity\Infrastructure\Security\PasswordChangeThrottle}:
+ * The write is only meaningful behind {@see \Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle}:
  * a synchronous, per-attempt row on an unbudgeted endpoint is a write amplifier handed to the attacker it is
  * meant to record.
  */

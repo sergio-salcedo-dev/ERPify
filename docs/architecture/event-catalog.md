@@ -88,6 +88,35 @@ The consumed events today:
 | `erpify.iam.identity.password-reset-completed` | 1 | `CompletePasswordReset` (recorded by `User::resetPassword()`) | *empty* `[]` (user id in envelope — **not** PII-free: the id is the subject) | password-changed email, sent in process |
 | `erpify.iam.identity.password-changed` | 1 | `ChangeMyPassword` (recorded by `User::changePassword()`) | *empty* `[]` (same envelope shape, same subject id) | password-changed email, sent in process |
 
+Recorded, with no consumer today. They are not a lesser tier: the three recovery-secret lifecycle events in
+particular are the **durable** record of their transitions, and the `audit_log` rows beside them are prunable
+projections of the same facts — `security` rows are swept at 365 days while a recovery secret is valid for
+ten years, so the projection cannot be the record. `…redeemed` is appended in the same transaction that
+deletes the secret, which is what makes "emitted only once the consumption is persisted" checkable rather
+than an ordering habit. One recovery-secret audit row projects no event at all —
+`RECOVERY_SECRET_REDEMPTION_COMPENSATED`, written when a redemption's session was admitted and then revoked
+because the consuming transaction refused. The event died with that rollback, so there the prunable
+projection is the *only* durable trace, and the asymmetry is the point rather than an oversight: nothing
+persisted for an event to attest.
+
+| `eventName` | ver | Producer (use case) | Payload |
+|-------------|:---:|---------------------|---------|
+| `erpify.iam.identity.password-reset-requested` | 1 | `RequestPasswordReset` (recorded by `PasswordResetToken::issue()`) | *empty* `[]` |
+| `erpify.iam.identity.recovery-secret-minted` | 1 | `MintRecoverySecret` (recorded by `RecoverySecret::mint()`) | *empty* `[]` |
+| `erpify.iam.identity.recovery-secret-redeemed` | 1 | `RedeemRecoverySecret` (recorded by `RecoverySecret::redeem()`) | *empty* `[]` |
+| `erpify.iam.identity.recovery-secret-revoked` | 1 | `RevokeRecoverySecret` (recorded by `RecoverySecret::revoke()`) | *empty* `[]` |
+| `erpify.iam.identity.locked` | 1 | `LoginAttemptRegistrar` (recorded by `User::recordFailedAttempt()`) | `lockedUntil` |
+| `erpify.iam.identity.suspended` | 1 | `ChangeUserStatus` (recorded by `User::suspend()`) | *empty* `[]` |
+| `erpify.iam.identity.deactivated` | 1 | `ChangeUserStatus` (recorded by `User::deactivate()`) | *empty* `[]` |
+| `erpify.iam.identity.roles-changed` | 1 | `ChangeUserRoles` (recorded by `User::changeRoles()`) | `roles` (the resulting set) |
+| `erpify.iam.identity.invitation-revoked` | 1 | `RevokeInvitation` (`Iam/Invitation`, recorded by `User::revokeInvitation()`) | *empty* `[]` |
+
+**None of the three recovery-secret events carries the selector, and that is an invariant rather than an
+omission.** The selector is the row's primary key and therefore a denial capability — whoever learns one can
+spend that selector's redemption budget and hold the channel shut in silence — so every event on that
+aggregate names the USER, following the reset convention rather than the invitation divergence
+[`administrative-recovery-channel.md`](../adr/administrative-recovery-channel.md) D1 records.
+
 Being unrouted means the handlers run inside the caller, so `RunProjectionsOnDomainEvent` joins the write
 transaction — the shape every unrouted event in the app already has. The notification is deliberately **not**
 one of those handlers: `CompletePasswordReset` sends it itself, after the commit and after the session

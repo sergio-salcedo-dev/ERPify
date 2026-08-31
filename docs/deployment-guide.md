@@ -272,15 +272,45 @@ Why it is worth doing, stated exactly, because the reasons that sound obvious ar
   subject still holding `ADMIN`, so it must be demoted first, and demotion is refused while it would leave
   the organization with no active administrator. A sole administrator therefore cannot be erased at all —
   a real obligation the day the installation has a customer.
-- **It does not protect against an administrator being locked out.** No transition lets one administrator
-  clear another's lockout, and both budgets an attacker spends are keyed per email address, so a second
-  administrator multiplies the attacker's cost by two and nothing else. Do not treat this as a mitigation
-  for [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602); see
-  [`adr/administrative-recovery-channel.md`](./adr/administrative-recovery-channel.md).
+- **It is what makes the administrative unlock reachable at all.** `POST /backoffice/users/{id}/unlock`
+  clears another identity's lockout and refuses self-unlock, so it needs a SECOND administrator to exist and
+  to be signed in. With one administrator the lever is present and unusable, which is exactly the case
+  [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602) is about.
+- **It still does not make the lockout harmless.** Both budgets an attacker spends are keyed per email
+  address, so a second administrator multiplies their cost by two and nothing else, and it does nothing at
+  all if both administrators are locked at once. The channel that does not depend on a peer is the recovery
+  secret below; see [`adr/administrative-recovery-channel.md`](./adr/administrative-recovery-channel.md).
 
 **It is a recommendation and the software does not enforce it** — deliberately. The enforced floor is *at
 least one* active administrator. Raising it to two would make erasing an administrator require a **third**,
 by the same demotion chain above, which is strictly worse than the gap it would be trying to close.
+
+### The recovery secret — mint it before it is needed, or it cannot help
+
+An installation with one administrator has no peer to unlock it, and the persisted lockout is keyed by an
+email address anyone can learn. The recovery secret is the edge that does not depend on anybody else:
+
+1. Signed in, go to **User Profile ▸ My profile** and mint one. It asks for the current password.
+2. It is displayed **exactly once**. Only its digest is stored, so nothing — no operator, no database, no
+   support request — can show it again.
+3. Store it away from the machine that runs the application, the way a root CA key or a PKI seed is stored.
+4. To use it, open `/recovery` and paste it. That establishes a session and clears the lockout, and the
+   session survives every later re-locking.
+5. To replace one, revoke it from the same screen and mint again — an account holds one at a time. Revoking
+   asks for the current password too, so that a stolen session cannot destroy the channel it exists to guard.
+
+**Say this to the customer in these words: mislaying it is permanent loss of the channel.** That is the cost
+B1 was chosen with, not an implementation shortcoming, and what follows from it — vendor rescue by writing to
+the database, or reinstallation — is a contractual question this repository does not answer.
+
+**Do it during handover, not later.** The moment it is needed is the moment the administrator cannot sign in
+to mint one, so a secret minted after a lockout does not exist. Pair it with the first password change: the
+administrator changes the password the operator chose, then mints the secret in the same sitting.
+
+Operationally there is nothing to configure and nothing to back up separately — the row lives in Postgres and
+travels with the ordinary dump. It has a **ten-year** expiry, visible on the profile screen beside its minting
+date; that is the only way it dies without anyone acting, and it is a deliberate, tracked, accepted risk
+([#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870)).
 
 ## CI/CD
 

@@ -515,6 +515,10 @@ deptrac:
             - Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort
         Erpify\Iam\Identity\Application\RevokeSessionsBestEffort:
             - Erpify\Iam\Session\Application\RevokeAllSessions
+        Erpify\Iam\Identity\Application\RevokeCurrentSessionBestEffort:
+            - Erpify\Iam\Session\Application\CurrentSessionReference
+            - Erpify\Iam\Session\Application\RevokeSession
+            - Erpify\Iam\Session\Domain\SessionId
         Erpify\Iam\Identity\Application\FulfilIdentityErasure:
             - Erpify\Iam\Session\Application\PurgeUserSessions
             - Erpify\Organization\Membership\Application\PurgeUserMembership

@@ -89,6 +89,7 @@ final class FulfilIdentityErasureAuditLockTest extends TestCase
             new EraseIdentitySubject(
                 new InMemoryUserRepository(UserMother::create()),
                 new InMemoryPasswordResetTokenRepository(),
+                new InMemoryRecoverySecretRepository(),
                 new InlineTransactionManager(),
             ),
             new OrderedAuditSubjectTrailErasure(

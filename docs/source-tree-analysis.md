@@ -74,7 +74,7 @@ ERPify/
 │   │   │   ├── globals.css         # Tailwind 4 CSS-first config (@theme / @config)
 │   │   │   ├── error.tsx / global-error.tsx / not-found.tsx / forbidden.tsx / unauthorized.tsx  # route error boundaries
 │   │   │   ├── _components/        # App-shell components (route-private)
-│   │   │   ├── (auth)/             # Auth route group (login, register, forgot/reset-password)
+│   │   │   ├── (auth)/             # Auth route group (login, accept-invitation, forgot/reset-password, recovery)
 │   │   │   ├── (errors)/           # Error/maintenance route group (offline, rate-limited, unauthenticated, …)
 │   │   │   ├── backoffice/         # Backoffice shell + 32 feature route segments (banks, users, invoices, … — many scaffolded shells)
 │   │   │   └── status/             # Public status page (reuses FrontOffice health use case)

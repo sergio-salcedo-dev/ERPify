@@ -7,7 +7,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Controller;
 use Erpify\Iam\Identity\Application\ChangeMyPassword;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Http\ChangeMyPasswordRequest;
-use Erpify\Iam\Identity\Infrastructure\Security\PasswordChangeThrottle;
+use Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
@@ -27,7 +27,7 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
  * request must carry the current password, which a cross-site forgery does not know, and the endpoint is
  * JSON-only ({@see StrictRequestPayload}) so no form post can reach it.
  *
- * {@see PasswordChangeThrottle} runs before anything else, keyed on the identity rather than the IP or the
+ * {@see CurrentPasswordProofThrottle} runs before anything else, keyed on the identity rather than the IP or the
  * session: the attacker this endpoint fears already holds a session, so a budget scoped to either of those is
  * one they renew at will. It is spent before any credential work, so a saturated identity pays no KDF — though
  * not before the payload is read: the argument resolver maps and validates the body first, so a malformed
@@ -66,7 +66,7 @@ final readonly class ChangeMyPasswordController
         private ChangeMyPassword $changeMyPassword,
         private PasswordHasher $passwordHasher,
         private ReauthenticateDeviceBestEffort $reauthenticateDevice,
-        private PasswordChangeThrottle $passwordChangeThrottle,
+        private CurrentPasswordProofThrottle $currentPasswordProofThrottle,
     ) {
     }
 
@@ -78,7 +78,7 @@ final readonly class ChangeMyPasswordController
     ): Response {
         $identityId = $user->id() ?? throw new LogicException('An authenticated identity must have an id.');
 
-        $this->passwordChangeThrottle->ensureWithinBudget($identityId);
+        $this->currentPasswordProofThrottle->ensureWithinBudget($identityId);
 
         $this->changeMyPassword->change(
             $identityId,

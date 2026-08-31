@@ -106,6 +106,7 @@ ifeq ($(IN_CONTAINER),false)
   PHP_CONT  := cd $(API_ROOT) &&
   PHP_TEST  := cd $(API_ROOT) && APP_ENV=test
   PHP_PROD  := cd $(API_ROOT) && APP_ENV=prod APP_DEBUG=0
+  PHP_PROD_CAPTURE := cd $(API_ROOT) && APP_ENV=prod APP_DEBUG=0
   PHP_TEST_COVERAGE := cd $(API_ROOT) && APP_ENV=test XDEBUG_MODE=coverage
   PHP_BEHAT := cd $(API_ROOT) && APP_ENV=test MINK_BASE_URL=$(MINK_BASE_URL)
 else
@@ -114,6 +115,11 @@ else
   # The dev image serves prod-env console runs too: only the container that gets
   # compiled differs, which is the whole point of the prod-container gate.
   PHP_PROD  := $(DOCKER_COMPOSE_EXEC) -e APP_ENV=prod -e APP_DEBUG=0 $(PHP_SERVICE)
+  # Same environment, but non-interactive: without -T, `docker compose exec` allocates a
+  # pseudo-TTY whenever make's own stdin is one and the pty translates every \n into \r\n,
+  # so a recipe that REDIRECTS the output writes a file whose bytes depend on whether a
+  # human or CI ran it. Only for recipes that capture stdout; PHP_PROD stays interactive.
+  PHP_PROD_CAPTURE := $(DOCKER_COMPOSE_EXEC) -T -e APP_ENV=prod -e APP_DEBUG=0 $(PHP_SERVICE)
   # Xdebug ships in the image with XDEBUG_MODE=off; flip it to coverage just for
   # the coverage run so the default test/lint targets keep Xdebug's overhead off.
   PHP_TEST_COVERAGE := $(DOCKER_COMPOSE_EXEC) -e APP_ENV=test -e XDEBUG_MODE=coverage $(PHP_SERVICE)
@@ -123,6 +129,14 @@ endif
 PHP       := $(PHP_CONT) php
 COMPOSER  := $(PHP_CONT) composer
 SYMFONY   := $(PHP) bin/console
+
+# —— Route manifest ————————————————————————————————————————————————————————
+# The committed inventory of the API's PRODUCTION routes, written by
+# `sf.routes.manifest` (make/symfony.mk) and re-derived by `php.lint.route-manifest`
+# (make/php-quality.mk). Two modules read it, so both names live here rather than in
+# either one. Rationale and blind spots: api/tools/route-manifest/dump.sh.
+ROUTE_MANIFEST      := $(API_ROOT)/.route-manifest.json
+ROUTE_MANIFEST_DUMP := $(PHP_PROD_CAPTURE) sh tools/route-manifest/dump.sh
 
 # —— Overrides —————————————————————————————————————————————————————————————
 MINK_BASE_URL      ?= http://php

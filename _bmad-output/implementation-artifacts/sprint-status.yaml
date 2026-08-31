@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-08-18
+last_updated: 2026-08-28
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -373,6 +373,28 @@ development_status:
   # administrador único (sin un segundo ADMIN, nadie puede invocar esta palanca) queda deliberadamente fuera,
   # registrado en el propio issue.
   br-4d-602-desbloqueo-administrativo: done
+  # Cuarta arista y el NÚCLEO que quedaba: el hueco de administrador único que br-4d dejó fuera a
+  # propósito. Mecanismo decidido contra los invariantes I-1/I-2 del ADR (no contra su coste): agregado
+  # propio, selector-verificador sobre `SingleUseToken`, acuñado desde sesión viva demostrando la
+  # contraseña actual, canjeado anónimo gastando sólo el presupuesto por selector, y el canje establece
+  # sesión ANTES de consumir la fila. Clave propia por la misma razón que br-4b/4c/4d.
+  #
+  # `done` desde f69e94f9, cuando terminó la primera review de código de la tarea completa — que es el
+  # disparador que fija este repo, no el merge. La spec (spec-gh-602-secreto-de-recuperacion.md, rama
+  # feat/iam-recovery-secret-iu9p) sigue en `in-progress` mientras una segunda review tiene decisiones
+  # abiertas. **Un `done` aquí NO es evidencia de que la rama se haya mergeado**: el marcador corre por
+  # delante del merge por diseño, así que para eso se lee git, no este fichero.
+  #
+  # Este comentario ha mentido DOS veces, y las dos por la misma razón. Decía «no existe todavía ni una
+  # línea de código de producción» cuando ya existían 3076; lo encontró un pase adversarial. Y después
+  # decía «PRIMERA clave de este fichero que no está en `done`» junto a una línea que ya ponía `done`,
+  # cuando ninguna clave del fichero estaba fuera de `done` — el commit que movió el valor no tocó las
+  # cuatro líneas que lo explicaban. Un comentario que nadie vuelve a medir es la forma en que este
+  # fichero —el primero que lee una sesión nueva— empieza a mentir.
+  #
+  # #602 SIGUE OPEN, y sólo se cierra cuando el caso de administrador único tenga una arista real —
+  # medida y registrada en un comentario del issue, como hicieron br-4b/4c/4d.
+  br-4e-602-secreto-de-recuperacion: done
   br-5-ciclo-de-vida-iam-session: done
   # Medido el 2026-08-12 contra 781c75a2: TRES de los cinco issues no son código. #589 lo resolvió el arco
   # #596-#601 (el mismo de BR-1) y el gate NFR26 corre hoy con 9 tests y cero skips; #250 quedó obsoleto por

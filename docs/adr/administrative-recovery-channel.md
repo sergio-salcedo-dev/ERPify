@@ -207,6 +207,113 @@ carries the address, and it never carries any recovery-channel identifier — th
 path. An observation keyed by the same address the attacker already consumes cannot become a channel, because
 nothing exercisable travels on it.
 
+## D7 — The mechanism built, and the four things it costs
+
+*Amendment (2026-08-28, on delivering the channel.)* B1 is what shipped, as an aggregate of its own
+(`identity_recovery_secret`, one row per identity): minted from a live session against a re-proof of the
+current password, shown in clear exactly once in the minting response, redeemed anonymously to establish a
+session and clear the lockout. **This does not promote B1 from mechanism to invariant** — D3 still stands,
+and anything satisfying I-1 and I-2 replaces it without changing a line above.
+
+How it meets the two invariants, concretely: the redemption path spends `token_action_per_selector` and
+nothing else, so no budget on it is keyed by an address or an identity (I-1); and minting is reachable only
+through an authenticated session that proves the current password, never by email and never from a terminal,
+so no vendor-held knowledge reconstructs it (I-2). The corollary is enforced by construction rather than by
+care — the selector is the row's primary key, so every event names the **user**, and it appears in no audit
+row, log line or URL, and in no DTO but the minting response, which is the delivery surface the corollary
+exempts. Two places do hold it at rest and are named rather than implied: the row itself, where it is the
+primary key, and the rate-limiter pool, which stores the bucket key for the window's duration.
+
+What it costs, none of which D1–D6 anticipated:
+
+- **The secret is valid for ten years, and that is a decision rather than a consequence.** `SingleUseToken`
+  makes "no expiry" unrepresentable, so `RECOVERY_SECRET_TTL = P10Y` is the honest spelling. A short window
+  would reintroduce by the back door the silent destruction rejected when deciding a password change leaves a
+  live secret standing — the holder is by construction someone with no shell to notice it went. Tracked as an
+  accepted risk with an open issue ([#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870)), not as
+  a note here.
+- **Possessing it equals possessing a recovery credential until one of four events.** It survives a password
+  rotation, it is not rotated when spent, and it dies only by redemption, revocation, expiry or subject
+  erasure. The profile surface that lists it — minted at, expires at, with an explicit revoke — is the whole
+  of what makes that governable, and D8 is why that revoke re-proves the credential rather than trusting the
+  session it arrives on.
+- **The selector is a denial capability, which is why the corollary is not merely hygiene.** Whoever learns
+  one can spend that selector's redemption budget and hold the channel shut in silence, without ever
+  authenticating. That denial is dominated by the cheaper email-keyed attack this ADR opens with, which is
+  what bounds it — not the selector's entropy, which is a UUID v7 and therefore not a per-id CSPRNG draw.
+- **Three state machines, no transaction spanning them.** The secret, the lockout and the session commit
+  separately, so "single use" means *at most one persisted consumption*, never *at most one authentication*.
+  The session is established BEFORE the row is retired — inverted, a failed session mint would leave the
+  secret spent and the administrator with nothing to present — so a partial failure is retryable rather than
+  terminal, and the endpoint does not promise 204 through it.
+
+## D8 — Revoking is a credential-affecting act, so it re-proves like the other two
+
+*Amendment (2026-08-29, from an adversarial pass over the delivered branch.)* Revocation initially required
+only a live session, on the argument that destroying the secret grants nothing and is the safe direction of
+the endpoint's failure. **That argument reasons about the wrong axis.** An attacker holding a stolen session
+can change nothing — the password change and the mint both re-prove — but could destroy the recovery secret
+with one request, read the owner's address from `GET /me`, and hold the account shut with the email-keyed
+lockout this whole ADR opens with. The forgot→reset detour runs on the budget that same attacker drains and
+its exhaustion is silent by contract, so the owner meets a 202 and no email. The escape hatch is gone,
+irreversibly, and the only remedy left is the vendor writing to the database.
+
+**The decision: destroying a recovery capability is as sensitive as granting one, so every authenticated act
+that creates, replaces or destroys a credential re-proves it and spends the same per-identity budget.** That
+is one invariant instead of three endpoints justifying themselves separately, and unlike an enumeration of
+exceptions it is a rule something can be built to check. Availability of the recovery edge is part of the
+security boundary here, not a usability concern beside it.
+
+Discarded, each for a measured reason:
+
+- **A budget of its own for revocation.** A second bucket doubles the guesses per window against the same
+  password, which is precisely why minting and the password change already share one.
+- **Re-proving only when a row exists.** It breaks the idempotent 204 by making the response shape disclose
+  existence, and it decides authorisation from the state of the resource it is authorising against.
+- **Keeping `DELETE /me/recovery-secret` as a deprecated alias.** An ungated path is an ungated path; the
+  route was new and unreleased, so nothing was owed compatibility.
+- **`DELETE` carrying a JSON body.** The password may not ride a header (every request header but `Referer`
+  reaches the container access log in clear) so it must be a body — but the client's shared HTTP port declares
+  no body on `delete`, and widening a shared port for a single caller is the abstraction the Rule of Three
+  refuses. Hence `POST /me/recovery-secret/revoke`, spelled as a verb like every other action sub-path here.
+
+What it costs: an owner who has just exhausted the shared budget by mistyping waits out the window before
+they can revoke a secret they believe is compromised. That residual is **self-inflicted only** — all three
+routes that drain the bucket require a live session, so it cannot be induced from outside — and it is bounded
+and self-healing, against a loss that was permanent.
+
+A second-order consequence, named because it is the expensive one: reading the credential forces the user
+row, so revocation becomes the third path taking both locks and must take them in the order minting and
+redemption already take them (`User`, then `RecoverySecret`). The ABBA argument is re-run with it inside
+rather than inherited.
+
+## D9 — Exhausting the per-selector budget writes nothing, and the silence is the decision
+
+*Amendment (2026-08-31, on a review asking where the evidence was.)*
+
+D6 gives the ADDRESS axis its `PASSWORD_RECOVERY_THROTTLED` row. The SELECTOR axis has no counterpart, and a
+review read that asymmetry as an omission. It is not: it is what I-1 costs, and the cost is worth naming
+because the obvious repair reintroduces the thing the budget exists to prevent.
+
+The redemption's limiter refuses **before** the selector is resolved, so at the moment of the refusal nothing
+is known about which identity — if any — the presentation named. An audit row naming the subject would
+therefore require resolving the selector on the refused path: a database lookup per guess, on the one endpoint
+whose threat model is "somebody is sending many of these", which is the amplification the early refusal buys.
+And a row naming the **selector** is refused outright by I-1's corollary — the selector is a denial capability,
+and `audit_log` is readable by anyone holding `auditTrail.read`.
+
+**So the budget's exhaustion is not a domain transition and produces no evidence.** Two consequences are
+accepted rather than mitigated: a sustained attack against one account's recovery channel is invisible to the
+trail, and the design's other detection property — the owner noticing their secret gone — does not apply here,
+because a refused redemption consumes nothing and the row stays live. What bounds the attack is the budget
+itself, not anybody watching.
+
+A volumetric signal (a counter carrying no selector, no identity and no reversible transformation of either)
+would be compatible with I-1 and is the shape to reach for if this ever needs observing. It is deliberately not
+built now: the `observability` stream has no rotation, no TTL and no declared owner of deletion — the same
+reason a caller's string was refused that stream elsewhere in this repository — so adding a channel there is a
+decision of its own and not a detail of this one.
+
 ## Falsification
 
 **I-1 is falsified statically, not by a scenario — and this is the correction the adversarial pass
@@ -225,5 +332,14 @@ persistent transports.
   its life without a write — including a terminal, a log, a backup or the mail relay.
 - **The mechanism** still needs its scenario: seal `locked_until` in the future with an intermediate
   `SELECT … AND locked_until > NOW()` so a failed seed cannot pass vacuously, then assert the surviving
-  transition answers `2xx` and goes red when it is removed. That scenario proves the edge exists; only
-  the static checks above prove it is keyed correctly. Both, or neither is a control.
+  transition answers `2xx`. That scenario proves the edge exists; only the static checks above prove it
+  is keyed correctly. Both, or neither is a control. **What it cannot do is attribute the unlock, and
+  that was measured rather than assumed:** deleting `clearLockout()` from the use case leaves every
+  scenario green, because `ClearLockoutOnLoginSuccess` clears the counter as an effect of the session
+  establishment the scenario already performs. The assertions only this use case can satisfy are the
+  retirement of the row and the `RECOVERY_SECRET_REDEEMED` entry conditioned on a persisted consumption;
+  the falsifier that goes red on the transition itself is `RedeemRecoverySecretTest`, which has no
+  listener in its graph.
+- **D7 dies** if any of its four costs stops being true and stops being recorded: the TTL constant moving
+  without the issue moving with it, the profile surface losing the expiry it displays, the selector reaching
+  a surface, or the session being minted after the row is retired rather than before.

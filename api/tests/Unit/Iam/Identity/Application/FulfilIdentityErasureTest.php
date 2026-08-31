@@ -8,7 +8,6 @@ use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\EraseIdentitySubject;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasureResult;
-use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Exception\AdministratorErasureRequiresDemotion;
 use Erpify\Iam\Identity\Domain\Exception\SelfErasureForbidden;
 use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
@@ -19,9 +18,9 @@ use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
-use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\PasswordResetTokenMother;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
@@ -60,10 +59,10 @@ final class FulfilIdentityErasureTest extends TestCase
 
     private const string ORGANIZATION_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50';
 
-    public function testChainsIdentityErasureTrailAnonymisationAndSessionPurgeThenSelfAuditsTheCombinedOp(): void
+    public function testChainsIdentityErasureTrailAnonymisationAndSessionPurgeThenWritesBothEntries(): void
     {
         $users = new InMemoryUserRepository(UserMother::create());
-        $tokens = new InMemoryPasswordResetTokenRepository($this->tokenFor(UserMother::DEFAULT_ID));
+        $tokens = new InMemoryPasswordResetTokenRepository(PasswordResetTokenMother::pendingFor(id: self::TOKEN_ID));
         $audit = new RecordingAuditLogger();
         $anonymiser = new RecordingAuditActorAnonymiser(matchCount: 3);
         $sessions = new InMemorySessionRepository($this->sessionFor(UserMother::DEFAULT_ID));
@@ -109,24 +108,12 @@ final class FulfilIdentityErasureTest extends TestCase
         // future refactor rebuild them apart, and the drift this guards against is exactly a compliance row
         // whose identifier the anonymise call never covers.
         $this->assertSame($audit->records[0]['resource'], $resourceAnonymiser->resources[0]);
-        // Counts only beside it — nothing identifying the subject travels in the JSON no anonymiser reaches.
-        $this->assertSame(['reset_tokens_deleted' => 1], $audit->records[0]['metadata']);
-
         $this->assertSame('GDPR_ERASURE_EXECUTED', $audit->records[1]['action']);
         $this->assertSame(AuditLevel::SECURITY, $audit->records[1]['level']);
-        // Counts and the pseudonym — never the subject id, which is what would re-link the anonymised trail.
-        // The pseudonym is this entry's contract (D4.1): it is what lets a row marked `actor_erased` be
-        // matched back to the compliance entry that erased it, and the same value the resource axis carries.
-        $this->assertSame([
-            'affected_rows' => 3,
-            'anonymized_actor_id' => $anonymiser->pseudonym,
-            'anonymized_resource_rows' => 2,
-            'anonymized_event_rows' => 0,
-            'reset_tokens_deleted' => 1,
-            'sessions_deleted' => 1,
-            'memberships_deleted' => 0,
-            'invitations_deleted' => 0,
-        ], $audit->records[1]['metadata']);
+        // What each entry's metadata CONTAINS is asserted whole in
+        // {@see FulfilIdentityErasureCredentialArtefactTest}, over the only population in which both
+        // credential-artefact counts are non-zero. Here the claim is that the chain writes the two entries,
+        // in this order, with this subject — never what they carry.
     }
 
     public function testNeitherComplianceRowCarriesTheSubjectIdInItsMetadata(): void
@@ -139,7 +126,7 @@ final class FulfilIdentityErasureTest extends TestCase
 
         $this->useCase(
             new InMemoryUserRepository(UserMother::create()),
-            new InMemoryPasswordResetTokenRepository($this->tokenFor(UserMother::DEFAULT_ID)),
+            new InMemoryPasswordResetTokenRepository(PasswordResetTokenMother::pendingFor(id: self::TOKEN_ID)),
             $audit,
             new RecordingAuditActorAnonymiser(matchCount: 3),
             new InMemorySessionRepository($this->sessionFor(UserMother::DEFAULT_ID)),
@@ -398,7 +385,12 @@ final class FulfilIdentityErasureTest extends TestCase
         ?RecordingEventStoreSubjectAnonymiser $eventAnonymiser = null,
     ): FulfilIdentityErasure {
         return new FulfilIdentityErasure(
-            new EraseIdentitySubject($users, $tokens, new InlineTransactionManager()),
+            new EraseIdentitySubject(
+                $users,
+                $tokens,
+                new InMemoryRecoverySecretRepository(),
+                new InlineTransactionManager(),
+            ),
             new OrderedAuditSubjectTrailErasure(
                 new RecordingAuditSubjectRowLock(),
                 $anonymiser,
@@ -413,13 +405,6 @@ final class FulfilIdentityErasureTest extends TestCase
             new FixedActorContextFactory($actor ?? ActorContext::forUser(self::ACTING_ADMIN_ID)),
             new InlineTransactionManager(),
         );
-    }
-
-    private function tokenFor(string $userId): PasswordResetToken
-    {
-        $generated = SingleUseToken::mint(new DateTimeImmutable('2026-07-21T13:00:00+00:00'));
-
-        return PasswordResetToken::issue(self::TOKEN_ID, $userId, $generated->token);
     }
 
     private function sessionFor(string $userId): Session

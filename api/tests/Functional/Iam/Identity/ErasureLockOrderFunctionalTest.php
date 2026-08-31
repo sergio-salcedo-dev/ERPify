@@ -16,6 +16,7 @@ use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
+use Erpify\Iam\Identity\Domain\Repository\RecoverySecretRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
@@ -226,6 +227,7 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
                     $this->service(PasswordResetTokenRepository::class),
                     $beforeResetTokenDelete(...),
                 ),
+                $this->service(RecoverySecretRepository::class),
                 $this->service(TransactionManager::class),
             ),
             $this->service(AuditSubjectTrailErasure::class),

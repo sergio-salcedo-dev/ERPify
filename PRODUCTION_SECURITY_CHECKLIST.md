@@ -476,7 +476,7 @@ you change anything here.
       whose affected-row count is the single-use guard, so a concurrent replay collapses to `invalid-token`), sets
       the credential, clears the lockout, and **revokes every session** (best-effort teardown; a store outage is
       swallowed because the credential change de-authenticates natively). A non-`ACTIVE` identity hits the
-      post-identity wall (403). Same-origin is guarded by `PasswordResetOriginListener` (mirror of the login
+      post-identity wall (403). Same-origin is guarded by `RecoveryOriginListener` (mirror of the login
       guard); session mint (auto-login + `migrate(true)` regeneration) and the stateless CSRF token id share the
       invitation wiring. The user row is re-read **under a pessimistic lock** inside the completing transaction:
       concurrent forgots serialise their supersede (only the latest token lives) and an admin suspension committed
@@ -646,9 +646,9 @@ you change anything here.
       sending the request). `json_login` validates no CSRF token; the **stateless double-submit CSRF token is now
       wired** (its first consumer is the invitation accept POST above), configured session-free via
       `framework.csrf_protection.stateless_token_ids`. CORS / Mercure are **not** broadened. **Access-control baseline:** `access_control` is **default-deny** — every `/api`
-      route requires an authenticated session except an explicit allowlist (login, the two public recovery routes
-      `forgot-password` / `reset-password` — same-origin-guarded by `PasswordResetOriginListener`, a mirror of
-      `LoginOriginListener` keyed on the reset route names — health probes, dev hot-reload). An
+      route requires an authenticated session except an explicit allowlist (login, the three public recovery routes
+      `forgot-password` / `reset-password` / `recovery/redeem` — same-origin-guarded by `RecoveryOriginListener`, a mirror of
+      `LoginOriginListener` keyed on all three of those route names — health probes, dev hot-reload). An
       unauthenticated request to a protected route is a **401 `unauthenticated`** through the pipeline:
       `UnauthenticatedAccessListener` rewrites the firewall's `AccessDeniedException` to an `AuthenticationException` for
       anonymous callers (so 401, not 403), while an authenticated-but-under-privileged caller still gets 403 — the shape
@@ -682,8 +682,16 @@ you change anything here.
       A store fault while **recording** a failed attempt is absorbed best-effort, so the failure path stays the
       uniform 401 — never a leaked **500** nor a resolved-vs-unknown status-code oracle (the increment is lost,
       tolerable during a DB incident); a store fault while **clearing** on a successful login re-maps to a
-      retryable **503 `service-unavailable`**. An attempt the aggregate ignores (a locked or non-`ACTIVE`
-      resolved identity) opens no transaction, so a sustained attack on a locked account costs no per-attempt write.
+      retryable **503 `service-unavailable`**. The identity is resolved by address under `SELECT … FOR UPDATE`
+      and the aggregate decides on THAT row: reading it unlocked let the increment be computed against state
+      another transaction had already replaced — a recovery-secret redemption or an administrative unlock
+      clearing the lock, and this path restoring `locked_until` from a snapshot taken before it, with the
+      attacker retrying continuously inside the window. An attempt the aggregate ignores still costs no write
+      and emits nothing; what it costs is the BEGIN/COMMIT **and the row lock**, so concurrent failed attempts
+      against one already-locked address serialise on that identity's row — bounded by an attempt that already
+      ran a credential verification. **An unknown address is the one path that opens no transaction at all** —
+      which leaves no durable trace to tell it from a real one, and makes the transaction itself an existence
+      signal whose latency cost nobody has measured (§7).
 - [ ] **A third recovery edge for the persisted lockout above: `POST /backoffice/users/{id}/unlock`**
       (`ADMIN`-only, `#[IsGranted('users.unlock')]`, `users` opts out of tier auto-grant). #602 named the two
       existing recovery edges — a successful login, a completed password reset — as both attacker-cuttable by
@@ -694,9 +702,53 @@ you change anything here.
       fact worth keeping. **An administrator may never unlock their own identity** (409
       `self-unlock-forbidden`, refused before any row is touched): granting that would make `users.unlock` a
       second, credential-independent path into one's own account, defeating the lockout it exists to recover
-      from. **Residual, explicitly out of scope here:** an installation with a single administrator has nobody
-      to invoke this lever if that administrator is themselves locked out — #602 stays open on that gap and on
+      from. **The residual this left — an installation with a single administrator has nobody to invoke the lever —
+      is closed by the recovery secret below**, which is the edge that depends on no peer. #602 stays open on
       the detection/notification half (`NotifyLockedIdentities`), tracked separately.
+- [ ] **The recovery secret (`identity_recovery_secret`): the lockout edge that depends on no peer.** A
+      `<selector>.<secret>` credential in its own aggregate, one row per identity (UNIQUE on `user_id`).
+      **Minted** from a live session against a re-proof of the current password and shown in clear exactly
+      once, in the minting response — only the digest is persisted, so nothing can display it again.
+      **Redeemed** anonymously at `POST /backoffice/recovery/redeem`: it establishes a session and clears the
+      lockout, and that session survives every later re-locking because the admission gate reads the session
+      row and never `locked_until`. Never delivered by email or printed by a CLI (that is what keeps it out of
+      the vendor's reach), and never in a query string. The redemption spends
+      `token_action_per_selector` and **nothing keyed by an address or an identity** — keying it either way
+      would put the recovery channel in the namespace the attack already occupies. Every death case
+      (malformed, unknown, lapsed, wrong, already consumed, budget exhausted) answers one byte-identical
+      400 `invalid-token`; a valid secret over a non-`ACTIVE` identity is the one identified 403, and the row
+      is not consumed. **Revoked** at `POST /me/recovery-secret/revoke`, which re-proves the current password like the other
+      two: a stolen session cannot change the password or mint, but an ungated revoke let it destroy the
+      channel permanently and then hold the account shut with the email-keyed lockout — the very attack this
+      credential answers. Destroying a recovery capability is as sensitive as granting one. Minting, the
+      password change and the revoke share ONE per-identity credential-proof budget
+      (`CurrentPasswordProofThrottle`) — a bucket of its own would hand a stolen session twice the guesses
+      against the same password, since none of the three feeds the persisted lockout. Full record:
+      [`docs/adr/administrative-recovery-channel.md`](docs/adr/administrative-recovery-channel.md) D7.
+      **Four residuals, each accepted rather than closed:**
+      **(a)** the secret is valid for **ten years** — `SingleUseToken` makes "no expiry" unrepresentable and a
+      short window would silently destroy the channel of somebody with no shell to notice; tracked as an
+      accepted risk with an open issue ([#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870)).
+      **(b)** possessing it equals possessing a recovery credential until redemption, revocation, expiry or
+      subject erasure — it survives a password rotation by design, and the profile screen listing it with both
+      instants and a credential-gated revoke is the whole of what makes that governable. The gate costs the
+      owner a wait of up to one window when they have just spent the shared budget mistyping; that residual is
+      self-inflicted only — all three routes that drain the bucket require a live session, and
+      `cookie_samesite: lax` (`api/config/packages/framework.yaml`) means a cross-site form post carries no
+      session cookie, so nobody can drain it from outside to keep a revoke from happening.
+      **(c)** the **selector is a denial capability**: whoever learns one can spend that selector's budget and
+      hold the channel shut in silence without authenticating. It is contained by construction (it is the row's
+      key, so events name the user, and it reaches no audit row, log or URL, and no DTO but the minting
+      response that delivers it) and bounded by the threat
+      model — that denial is dominated by the cheaper email-keyed attack #602 opens with, not by the
+      selector's entropy, which is a UUID v7 and therefore not a per-id CSPRNG draw.
+      **(d)** the secret, the lockout and the session are **three state machines no transaction spans**, so
+      single use means *at most one persisted consumption*, never *at most one authentication*. The session is
+      established BEFORE the row is retired — inverted, a failed session mint would leave the secret spent and
+      the administrator with nothing to present — so a partial failure is retryable and the endpoint does not
+      promise 204 through it.
+      **Mislaying it is permanent loss of the channel**, which is the cost B1 was chosen with; what follows
+      contractually (vendor rescue by writing to the database, or reinstallation) is not settled here.
 - [ ] **Server-side session registry & admission gate (`iam_session`):** login mints a `Session` aggregate and the
       **Session Admission Gate** re-reads it on every authenticated `/api` request, so "authenticated" means "has a
       **live, revocable** session", not merely "holds a cookie". The gate is **fail-closed**: a revoked or
@@ -784,6 +836,25 @@ mitigated state. Accepting one means recording who accepted it and against which
       whitespace cases are pinned in `pwa/tests/context/shared/navigation/domain/safeInternalPath.test.ts`,
       and the old regex reds them. **Residual:** `safeHref` is unchanged and still admits an absolute
       `https://` URL by design; it is `safeInternalPath` that a redirect target must additionally pass.
+
+- [ ] **A GDPR erasure racing a recovery-secret redemption reinserts the subject into `audit_log`,
+      on the ACTOR axis.** `RedeemRecoverySecret` compensates a redemption that authenticated and then
+      could not consume, and that compensation writes its `RECOVERY_SECRET_REDEMPTION_COMPENSATED` row
+      **post-commit** — outside any transaction, after `Security::login()` has committed the session.
+      If `identity:gdpr:erase-subject` commits inside that window the row lands after the anonymiser
+      has finished, and the subject is back in the table their erasure had just cleaned.
+      **The axis is `actor_id`, not `resource_id`, and that is what makes the obvious fix useless:**
+      `SealedAuditEntryFactory` seals the actor from `SecurityActorContextFactory`, which reads the
+      security token — by then the just-authenticated subject — so dropping the person reference from
+      the event's RESOURCE leaves the identifier one column over. A synchronous "does the identity
+      still exist" guard is a TOCTOU rather than a fix: the erasure can equally commit between that
+      read and the write. **Detection exists, repair is manual:** `audit_log.actor_id` is already
+      characterised in [`api/.person-reference-policy`](api/.person-reference-policy) as holding
+      person ids, having no entity, and being outside the coverage gate; the reconciler
+      (`identity:gdpr:reconcile-subject-references`) anti-joins it and reports the divergence on its
+      next tick. So this is an instance of a residual this repository has already argued, not a new
+      class — recorded here because the redemption is a new writer on that axis, and because the
+      window is one an operator can hit rather than a theoretical interleaving.
 
 - [ ] **The audit trail is not tamper-evident.** No hash chain, signature or checksum column exists
       in any migration; append-only is a property of the mutation paths, not cryptography. Anyone
@@ -1051,6 +1122,21 @@ mitigated state. Accepting one means recording who accepted it and against which
       is **ordering guidance — evict first, rotate second** — in the UI copy and the password-changed mail.
       `revoke-others` carrying no limiter is deliberate and load-bearing: it is the one edge an adversary
       cannot spend. **Do not "harden" it.**
+- [ ] **The failed-login path carries an existence signal shaped like a transaction, and its magnitude is
+      UNMEASURED.** `LoginAttemptRegistrar::recordFailure()` probes for the address on an unlocked read and
+      returns at once when it resolves to no row; an address that DOES resolve pays `BEGIN` +
+      `SELECT … FOR UPDATE` + `COMMIT` whatever the aggregate then decides. The transaction is therefore taken
+      on exactly the condition "this address exists" — where a shape that also skipped it for a locked or
+      non-`ACTIVE` identity kept "locked" and "unknown" together on this axis. **The 401 body is unaffected**
+      and stays the single normalised "Invalid credentials."; what is open is the **latency**, and the
+      plausible answer is that the equalised KDF the `UserProvider` pays on every branch is a large enough
+      constant to bury one round trip on the same connection. That is a hypothesis, not evidence — nobody has
+      run it, and "bounded by a larger constant elsewhere" is exactly the shape of claim this repo requires to
+      be measured rather than asserted. Tracked in
+      [#881](https://github.com/sergio-salcedo-dev/ERPify/issues/881), which states what the measurement must
+      produce and what each outcome obliges. Deliberately **not** tagged `@accepted-risk`: this is a gap to
+      close by measuring, not a risk accepted standing, and the tag's live-state job would red the day #881
+      closes on a successful measurement.
 - [ ] **A credential change can sign a second browser tab out of the application, and it is accepted.** Both
       flows that replace a credential from a live browser — `ChangeMyPassword` and `CompletePasswordReset` —
       revoke **every** session and mint a replacement onto the requesting tab. A request already in flight from

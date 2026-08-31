@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 use Closure;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\ChangeMyPassword;
+use Erpify\Iam\Identity\Application\ProveCurrentPassword;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Identity\Application\SendPasswordChangedEmailBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\User;
@@ -307,6 +308,7 @@ final class ChangeMyPasswordTest extends TestCase
 
         return new ChangeMyPassword(
             $users ?? new InMemoryUserRepository(UserMother::create()),
+            new ProveCurrentPassword(),
             new RevokeSessionsBestEffort(
                 new RevokeAllSessions(
                     $sessions ?? new InMemorySessionRepository(),

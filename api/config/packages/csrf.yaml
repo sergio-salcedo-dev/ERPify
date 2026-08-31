@@ -1,12 +1,21 @@
 # Stateless CSRF (Symfony 8): session-free, same-origin-primary double-submit token. Invitation accept is the
-# first consumer that wires it; the password reset (credential write) is the second — both a defence-in-depth
-# second layer behind their same-origin Origin check (AcceptInvitationOriginListener / PasswordResetOriginListener)
-# and their opaque single-use token, which remain the primary controls. The `check_header` browser-only
-# double-submit is deliberately left off (off-by-default) and deferred with the LoginOriginListener consolidation
-# follow-up; each token id is validated by #[IsCsrfTokenValid] on its controller. See
-# docs/adr/identity-invitation-lifecycle.md D5.
+# first consumer that wires it; the password reset (credential write) is the second and the recovery-secret
+# redemption the third — each a defence-in-depth second layer behind its same-origin Origin check
+# (AcceptInvitationOriginListener / RecoveryOriginListener) and its opaque single-use token, which remain the
+# primary controls. The `check_header` browser-only double-submit is deliberately left off (off-by-default)
+# and deferred with the LoginOriginListener consolidation follow-up; each token id is validated by
+# #[IsCsrfTokenValid] on its controller. See docs/adr/identity-invitation-lifecycle.md D5.
+#
+# EVERY PRE-IDENTITY TOKEN ID MUST BE LISTED HERE, and the failure of omitting one is total rather than
+# partial: an id absent from this list is validated by the SESSION-backed manager instead, which an anonymous
+# caller cannot satisfy by construction — so the endpoint answers 401 to every legitimate request, not just
+# to a forged one. Measured against the running stack: `recovery_redeem` with a well-formed token returned
+# 401 while `password_reset` returned the intended opaque 400 for the same shape of request. Nothing static
+# catches this — the attribute compiles, the route registers, the access-control exemption is correct, and
+# the controller is simply never reached.
 framework:
     csrf_protection:
         stateless_token_ids:
             - invitation_accept
             - password_reset
+            - recovery_redeem

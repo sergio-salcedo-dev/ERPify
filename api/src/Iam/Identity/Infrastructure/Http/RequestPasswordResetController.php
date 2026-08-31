@@ -16,7 +16,7 @@ use Symfony\Component\Routing\Attribute\Route;
  * The forgot-password endpoint. Public/pre-identity but inside the `main` firewall (mirroring login), so the
  * deferred session-mint seam can resolve the firewall later. Always answers a uniform 202 with no body: it
  * never branches on whether the account exists, so the response cannot enumerate accounts. Same-origin is the
- * primary control ({@see PasswordResetOriginListener}); the stateless CSRF token is defence-in-depth deferred
+ * primary control ({@see RecoveryOriginListener}); the stateless CSRF token is defence-in-depth deferred
  * to the surface that introduces it.
  *
  * A target whose per-email budget is exhausted gets the SAME uniform 202 with the work silenced (the use case

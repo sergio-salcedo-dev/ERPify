@@ -50,7 +50,13 @@ export function LoginForm() {
     if (outcome.kind === LoginOutcomeKind.AUTHENTICATED) {
       // The 204 has set the httpOnly session cookie; hydrate the real identity
       // from `/me` (no fabricated ADMIN) before leaving the login page.
-      await login();
+      if (!(await login())) {
+        // The probe answered with no live session, so there is no sign-in to announce:
+        // toasting and navigating here would hand RequireAuth an unauthenticated
+        // provider, which bounces the user straight back to this page.
+        setRequestFailed(true);
+        return;
+      }
       toastNotifier.success("Signed in");
       // Return to the deep link RequireAuth stashed in `?next=`, falling back to
       // the back-office root. safeInternalPath rejects any off-origin target.

@@ -8,7 +8,6 @@ use Closure;
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidCurrentPassword;
-use Erpify\Iam\Identity\Domain\Exception\InvalidHashedPassword;
 use Erpify\Iam\Identity\Domain\Exception\NewPasswordMustDiffer;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\HashedPassword;
@@ -36,9 +35,12 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  *      the same position. It sits ahead of every comparison so a walled identity pays no KDF at all, and it is
  *      what keeps the aggregate's own `InvalidIdentityTransition` a defensive floor rather than the answer a
  *      caller meets, which would speak of a lifecycle transition nobody asked for.
- *   3. Refuse a wrong current password ({@see InvalidCurrentPassword}) before anything mutates. An identity with
- *      no credential at all cannot re-prove one, so it takes the same refusal — a credential-less identity is
- *      `INVITED` and holds no session, so this arm is unreachable rather than an oracle.
+ *   3. Refuse a wrong current password ({@see InvalidCurrentPassword}) before anything mutates, through
+ *      {@see ProveCurrentPassword} — the policy shared with {@see MintRecoverySecret} and
+ *      {@see RevokeRecoverySecret}, the other two flows that re-prove a credential from a live
+ *      session. An identity with no credential at all cannot re-prove one,
+ *      so it takes the same refusal — a credential-less identity is `INVITED` and holds no session, so this
+ *      arm is unreachable rather than an oracle.
  *   4. Refuse a new password equal to the stored one ({@see NewPasswordMustDiffer}). It has to happen here, not
  *      at the wire edge: deciding it needs the stored hash. Letting it through would emit a "password changed"
  *      fact, tear down every other device and mail a security notice for a change that did not happen.
@@ -68,6 +70,7 @@ final readonly class ChangeMyPassword
 {
     public function __construct(
         private UserRepository $users,
+        private ProveCurrentPassword $proveCurrentPassword,
         private RevokeSessionsBestEffort $revokeSessions,
         private SendPasswordChangedEmailBestEffort $notifyPasswordChanged,
         private EventBus $eventBus,
@@ -100,18 +103,13 @@ final readonly class ChangeMyPassword
                 $user = $this->users->findByIdForUpdate($userId) ?? throw UserNotFound::withId($userId);
                 $user->ensureActive();
 
-                // The `??` alone never fires on a corrupt row: `passwordHash()` raises before it can, and
-                // the marker-less exception lands as a 500 where this line plainly intends a 409. An
-                // unusable stored credential is indistinguishable from a wrong one to whoever is typing.
-                try {
-                    $current = $user->passwordHash() ?? throw new InvalidCurrentPassword();
-                } catch (InvalidHashedPassword) {
-                    throw new InvalidCurrentPassword();
-                }
+                $this->proveCurrentPassword->ensure($user, $verifyCurrent);
 
-                if (!$verifyCurrent($current)) {
-                    throw new InvalidCurrentPassword();
-                }
+                // Re-read after the proof rather than reusing a value it returned: this refusal needs the
+                // stored credential too, and having the proof hand it back would make a collaborator whose
+                // job is to decide also a supplier of the thing it decided about. The `??` cannot fire here
+                // — `ensure()` has already refused a credential that is absent or unreadable.
+                $current = $user->passwordHash() ?? throw new InvalidCurrentPassword();
 
                 if ($isSameAsCurrent($current)) {
                     throw new NewPasswordMustDiffer();

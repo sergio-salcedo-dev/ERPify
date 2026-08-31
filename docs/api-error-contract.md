@@ -150,6 +150,57 @@ The forgot-password endpoint answers a **uniform 202** whatever the email (unkno
 
 No new marker interface is introduced (the dead-token case reuses `InvalidInput`, the walls reuse `Forbidden`), so the drift gate does not fire — this table is the manual NFR26 record. A malformed request body (blank/oversized `token`, malformed forgot `email`, or a `password` outside the [password policy](../api/src/Shared/Validation/Infrastructure/PasswordPolicy.php) — 8–128 **code points**, at least one non-whitespace character) is the standard **422 `validation-failed`** at `#[MapRequestPayload]` mapping, orthogonal to the opaque token check. The ceiling is worth stating because it moved: this endpoint used to accept 255 characters where the change and invitation surfaces accepted 128, so one password answered 204 here and 422 there. All three now carry the same constraint object.
 
+### Recovery secret (mint / revoke / redeem)
+
+The redemption (`POST /api/v1/backoffice/recovery/redeem`) is the pre-identity half and grades like the reset
+above, with one difference that matters: its opaque set is **wider**, because a per-selector budget refusal
+folds into it too rather than answering 429.
+
+| Recovery outcome | Wire result | Why |
+|------------------|-------------|-----|
+| Dead presentation (malformed / unknown selector / lapsed / wrong secret / already consumed / **budget exhausted**) | **400 `invalid-token`** | Six death cases, one byte-identical response — [`InvalidRecoverySecret`](../api/src/Iam/Identity/Domain/Exception/InvalidRecoverySecret.php), an `InvalidInput` `DomainException` overriding `type()` to the shared `invalid-token`. Sharing the type with a dead reset link is the point: this endpoint is anonymous and the whole channel rests on a selector buying denial and never knowledge, so a redemption failure must not even be distinguishable from a dead reset. A per-selector 429 would confirm the selector exists, which is why exhaustion joins the set instead of grading. |
+| Valid secret, identity `SUSPENDED` / `DEACTIVATED` | **403 `account-suspended`** / **`account-deactivated`** | The one IDENTIFIED refusal here. The presenter has already proven possession, so naming the wall reveals nothing they could not learn by redeeming a working secret; the row is **not** consumed and stays live for an attempt after reinstatement. |
+| Session cannot be established | **503 `service-unavailable`** | Raised by the session-minting listener as `SessionStoreUnavailable`. The re-login runs BEFORE the row is retired, so nothing is consumed and the secret is intact — the opposite ordering to the reset surface above, and deliberately: there the mutation had already committed, here it has not. |
+| Session established, the later mutation fails | **5xx**, and the secret stays redeemable | Three state machines and no transaction spanning them. The session is NOT rolled back — the owner has recovered access, which is the objective — but the endpoint does not promise 204 through it. The partial state is retryable: a second redemption completes the persisted cleanup with no fresh mint. |
+
+Minting (`POST /api/v1/me/recovery-secret`) is authenticated and grades per identity:
+
+| Mint outcome | Wire result | Why |
+|--------------|-------------|-----|
+| Identity not `ACTIVE` | **403 `account-suspended`** / **`account-deactivated`** | `User::ensureActive()`, weighed immediately after the row lock and BEFORE the credential proof, so a walled identity pays no KDF — the same wall, the same position and the same vocabulary as the change surface below. Reachable from a live session: the admission gate reads the `iam_session` row and never the identity's status, so a suspension landing mid-session still meets an authenticated caller. |
+| The identity resolves to no row | **404 `user-not-found`** | [`UserNotFound`](../api/src/Iam/Identity/Domain/Exception/UserNotFound.php), reusing the `NotFound` marker. Narrow but real: the id is the caller's own and arrives from an admitted session, so this answers the window in which the identity is hard-deleted — which the GDPR erasure does — between the gate and the locked read. |
+| Wrong current password | **403 `invalid-current-password`** | Reuses the change surface's exception and its shared [`ProveCurrentPassword`](../api/src/Iam/Identity/Application/ProveCurrentPassword.php), so an unreadable stored credential answers as a wrong one on both routes rather than as a 500. It fires **before** the existence of a secret is consulted: answering the 409 to somebody who has not re-proved the credential would turn a stolen session into an oracle. |
+| A secret already exists | **409 `recovery-secret-already-exists`** | [`RecoverySecretAlreadyExists`](../api/src/Iam/Identity/Domain/Exception/RecoverySecretAlreadyExists.php), a `Conflict` with a `type()` of its own so the client can offer revoke-then-mint instead of reading a generic `conflict`. It answers the checked case and the RACED one alike — the unique index on `user_id` is translated into this same exception, so two concurrent mints produce one 201 and one 409 rather than a 500 for whichever lost. |
+| Budget spent | **429 `rate-limited`** | The per-identity credential-proof budget, SHARED with `POST /me/password` and `POST /me/recovery-secret/revoke`. It refuses out loud because all three routes are reachable only through an established session, so there is no existence left to disclose. |
+
+Revocation (`POST /api/v1/me/recovery-secret/revoke`) re-proves the current password and answers **204**
+whether or not a row was there. It shares minting's proof and minting's budget, and **diverges on the status
+wall**:
+
+| Revoke outcome | Wire result | Why |
+|----------------|-------------|-----|
+| Wrong current password | **403 `invalid-current-password`** | The same shared [`ProveCurrentPassword`](../api/src/Iam/Identity/Application/ProveCurrentPassword.php), fired **before** the row's existence is consulted: grading on existence would hand a stolen session an oracle, and would make the response shape disclose what the idempotent 204 exists to hide. |
+| The identity resolves to no row | **404 `user-not-found`** | The same `UserNotFound` and the same narrow window as minting — the locked read of the identity precedes the proof here too. |
+| Budget spent | **429 `rate-limited`** | The same per-identity credential-proof budget as minting and `POST /me/password`. |
+| Identity not `ACTIVE` | **204**, and the row is destroyed | **No status wall, unlike minting.** Walling would preserve the secret of a suspended identity who cannot redeem it anyway, which protects nothing while taking away the one act that reliably ends a credential its owner believes is compromised. |
+
+**It is a POST rather than a `DELETE` carrying a body** because the password must travel in a body (every
+request header but `Referer` reaches the container access log in clear) and the PWA's `HttpClient` port
+declares no body on `delete`; widening a shared port for one caller is the abstraction this repo's Rule of
+Three refuses. Why it is gated at all — destroying this credential removes the account's last recovery edge
+irreversibly — is [`docs/adr/administrative-recovery-channel.md`](adr/administrative-recovery-channel.md) D8.
+
+A malformed body on any of the three — a blank or oversized `currentPassword` on the mint and revoke
+surfaces, a blank or oversized `secret` on the redemption, or **any member the payload does not declare**
+(`#[StrictRequestPayload]`) — is the standard **422 `validation-failed`** with `violations[]` naming the
+offending field, raised at mapping before the use case runs.
+
+No new marker interface joins the contract — the opaque wall reuses `InvalidInput`, the status walls reuse
+`Forbidden`, the duplicate reuses `Conflict`, the absent identity reuses `NotFound` — so the drift gate does
+not fire and these three tables are the manual NFR26 record. Exactly **one** new `type` is minted across all
+three surfaces, `recovery-secret-already-exists`; every other value here is an existing one reused,
+`invalid-token` deliberately so.
+
 ### Authenticated password change (`POST /api/v1/me/password`)
 
 The self-service credential change is post-identity by construction — the caller already holds a session — so it grades on the two things the recovery flow cannot express: whether the caller still knows the credential it is replacing, and whether the replacement is a replacement at all.
@@ -159,7 +210,7 @@ The self-service credential change is post-identity by construction — the call
 | `currentPassword` does not match         | **403 `invalid-current-password`**   | [`InvalidCurrentPassword`](../api/src/Iam/Identity/Domain/Exception/InvalidCurrentPassword.php), a `Forbidden` `DomainException` overriding `type()` (the `AccountLocked` marker-plus-`type()` pattern). **403, never 401:** the PWA's `FetchHttpClient` diverts any non-handshake 401 to `/login?reason=session-expired`, so a 401 would evict from the application someone who merely mistyped. Nothing mutates — no hash, no event, no revocation, no email. |
 | `newPassword` equals the stored credential | **422 `new-password-must-differ`**   | [`NewPasswordMustDiffer`](../api/src/Iam/Identity/Domain/Exception/NewPasswordMustDiffer.php), an `InvariantViolation` `DomainException` overriding `type()`. Not a wire-level validation: deciding it needs the stored hash, so it is raised inside the aggregate's transaction. Letting it through would publish a "password changed" fact, revoke every other device and mail a security notice for a change that did not happen. |
 | Identity not `ACTIVE`                   | **403 `account-suspended` / `account-deactivated`** | `User::ensureActive()`, weighed immediately after the row lock and before any comparison, so a walled identity pays no KDF. Same wall, same position and same vocabulary as the reset flow — the PWA already reads these two types on the login and reset surfaces, and the change form renders them through its persistent banner. The aggregate's [`InvalidIdentityTransition`](../api/src/Iam/Identity/Domain/Exception/InvalidIdentityTransition.php) (409) stays underneath as a defensive floor, exactly as it already is for `resetPassword()`: reaching it means the use case failed to wall first, not that a caller found a path. Reachable only in the degraded case where a status change did not revoke the identity's sessions. |
-| Per-identity budget spent               | **429 `rate-limited`**               | [`PasswordChangeThrottle`](../api/src/Iam/Identity/Infrastructure/Security/PasswordChangeThrottle.php) consumes the `password_change_per_identity` budget at the controller edge, keyed on the caller's identity id, before the payload is weighed — so a saturated identity pays no KDF. Reuses `RateLimitExceeded`/`RateLimited`, and the response carries `Retry-After` plus the `RateLimit-*` families describing **that** budget (see *Rate limiting* below). **The refusal is visible, and this endpoint is the only place that is legitimate:** the two recovery budgets stay silent because a per-target 429 there would answer "this account exists" to an anonymous prober, while here the caller already holds the identity the budget is keyed on. |
+| Per-identity budget spent               | **429 `rate-limited`**               | [`CurrentPasswordProofThrottle`](../api/src/Iam/Identity/Infrastructure/Security/CurrentPasswordProofThrottle.php) consumes the `password_change_per_identity` budget at the controller edge, keyed on the caller's identity id, before the payload is weighed — so a saturated identity pays no KDF. It is SHARED with `POST /me/recovery-secret` and `POST /me/recovery-secret/revoke`, the other two routes that re-prove this credential from a live session: a second bucket would hand a stolen session twice the guesses against the same password, since none of the three feeds the persisted lockout. The class is named for the question the budget answers rather than for whichever controller reached it first; the config key keeps its original name because it is deployment surface, and renaming it would leave an installation's own override silently unread. Reuses `RateLimitExceeded`/`RateLimited`, and the response carries `Retry-After` plus the `RateLimit-*` families describing **that** budget (see *Rate limiting* below). **The refusal is visible, and this endpoint is the only place that is legitimate:** the two recovery budgets stay silent because a per-target 429 there would answer "this account exists" to an anonymous prober, while here the caller already holds the identity the budget is keyed on. |
 
 Neither type introduces a marker interface (403 reuses `Forbidden`, 422 reuses `InvariantViolation`, 429 reuses `RateLimited`), so the drift gate does not fire — this table is the manual NFR26 record. A malformed body — absent/blank `currentPassword`, a `newPassword` outside the [password policy](../api/src/Shared/Validation/Infrastructure/PasswordPolicy.php) (8–128 **code points**, at least one non-whitespace character), or **any member the payload does not declare** (`#[StrictRequestPayload]`) — is the standard **422 `validation-failed`** with `violations[]` naming the offending field, raised at mapping before the use case runs.
 

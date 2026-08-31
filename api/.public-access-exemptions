@@ -75,6 +75,7 @@
 ^/api/v1/backoffice/invitations/accept$ => exact :: invitation accept, a pre-identity write; it stays inside the main firewall so the login helper can resolve it and mint the first session
 ^/api/v1/backoffice/forgot-password$ => exact :: password recovery request — a locked-out or forgotten-password user has no session by definition
 ^/api/v1/backoffice/reset-password$ => exact :: password recovery completion, same pre-identity caller
+^/api/v1/backoffice/recovery/redeem$ => exact :: recovery-secret redemption — the only edge a locked-out sole administrator has; no limiter on it may be keyed by email or identity, which is the namespace the attack already occupies
 ^/api/v1/health$ => exact :: the deploy smoke test (scripts/deploy/deploy.sh), the CI smoke steps (.github/workflows/ci.yml) and the public /status page, which mounts outside RequireAuth
 ^/api/v1/dev/frankenphp-hot-reload$ => exact :: the PWA layout's dev hot-reload poll, fired before any session exists
 ^/api/test/ => prefix :: the error-contract functional suite, which drives throwaway controllers through a real kernel :: config/routes/test.yaml

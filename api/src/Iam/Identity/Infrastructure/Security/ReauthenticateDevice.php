@@ -22,17 +22,23 @@ use Symfony\Bundle\SecurityBundle\Security;
  * cannot catch it, because it reads the session row and never the identity's status.
  *
  * `ensureActive()` restores **two** of those three arms. It matches on `IdentityStatus` alone, so a live
- * lockout is not re-applied here, and that is deliberate rather than an omission: the two callers that could
- * meet one clear it inside their own transaction (re-proving the current secret, or consuming a single-use
- * link, is stronger evidence than the lock summarises), and the third consumes a token that already proves
- * control of the mailbox. Adding the lockout arm here would refuse identities those flows just relieved.
+ * lockout is not re-applied here, and that is deliberate rather than an omission: every caller that can meet
+ * one relieves it around this call (re-proving the current secret, or consuming a single-use link, is
+ * stronger evidence than the lock summarises), and the ones that cannot consume a token already proving
+ * control of the mailbox. Adding the lockout arm would refuse identities those flows just relieved — the
+ * redemption most sharply, since it clears the lockout AFTER this call rather than before.
  *
- * The window is not microseconds wide: all three callers revoke sessions and then send a security notice on
- * an unrouted, blocking SMTP path before they get here.
+ * The window is not uniform across callers, and the difference is worth naming. Three of them — change
+ * password, complete reset, accept invitation — revoke sessions and then send a security notice on an
+ * unrouted, blocking SMTP path before they get here, so the identity has been re-read many milliseconds
+ * later than it was checked. The fourth, redeeming a recovery secret, reaches this method immediately after
+ * an unlocked `ensureActive()`, with no teardown and no mail in between; what stands in for that width is
+ * this method's own re-read plus the redemption's compensating session revoke, which undoes the login when
+ * the locked pass refuses the consumption.
  *
- * This is deliberately blind to the flow that calls it. Three of them do — change password, complete reset,
- * accept invitation — and the moment it learns which is which, it stops being one policy in one place and
- * becomes the three-way divergence it exists to prevent.
+ * This is deliberately blind to the flow that calls it. Four of them reach it, and the moment it learns
+ * which is which, it stops being one policy in one place and becomes the four-way divergence it exists to
+ * prevent.
  */
 final readonly class ReauthenticateDevice
 {

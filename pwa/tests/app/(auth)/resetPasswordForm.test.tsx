@@ -32,6 +32,7 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
 }));
 
 import { ResetPasswordForm } from "@/app/(auth)/_components/ResetPasswordForm";
+import { SIGNED_IN_SESSION } from "./_session";
 
 const TOKEN = "0190b1c2-d3e4-7f5a-8b6c-1d2e3f4a5b60.super-secret-verifier";
 
@@ -43,7 +44,8 @@ function submitWithPassword(password: string): void {
 }
 
 beforeEach(() => {
-  login.mockClear();
+  login.mockReset();
+  login.mockResolvedValue(SIGNED_IN_SESSION);
   repoReset.mockClear();
   outcome = { kind: ResetPasswordOutcomeKind.RESET };
   window.history.replaceState(null, "", `/reset-password?token=${TOKEN}`);
@@ -191,6 +193,19 @@ describe("ResetPasswordForm — reset outcomes", () => {
 
     expect(await screen.findByTestId("reset-password-form__error")).toBeInTheDocument();
     expect(login).not.toHaveBeenCalled();
+    expect(screen.getByTestId("reset-password-form")).toBeInTheDocument();
+  });
+});
+describe("ResetPasswordForm — the session probe decides whether the sign-in happened", () => {
+  it("keeps the form and its retryable error when the probe cannot confirm the session", async () => {
+    // The success surface offers a CTA into the ERP. Showing it on an unconfirmed probe hands
+    // the user a door that bounces them, and hides the retry that would have worked.
+    login.mockResolvedValue(null);
+    render(<ResetPasswordForm />);
+    submitWithPassword("a-strong-password");
+
+    expect(await screen.findByTestId("reset-password-form__error")).toBeInTheDocument();
+    expect(screen.queryByTestId("reset-password__success")).not.toBeInTheDocument();
     expect(screen.getByTestId("reset-password-form")).toBeInTheDocument();
   });
 });

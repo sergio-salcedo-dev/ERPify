@@ -174,6 +174,58 @@ final class DoctrineUserRepositoryTest extends KernelTestCase
         });
     }
 
+    public function testFindByEmailForUpdateTakesARowLevelWriteLock(): void
+    {
+        // The email-keyed twin exists because a failed login resolves its identity by ADDRESS, and deciding
+        // the lockout counter on an unlocked snapshot is what let a concurrent redemption's unlock be
+        // overwritten. The lock is therefore the whole point of the method, not an optimisation.
+        $this->inRolledBackTransaction(function (): void {
+            $this->repository->save($this->newUser('ivan@erpify.test'));
+
+            $this->repository->findByEmailForUpdate(Email::from('ivan@erpify.test'));
+
+            $rowShareLocks = $this->connection->fetchOne(
+                'SELECT count(*) FROM pg_locks l JOIN pg_class c ON c.oid = l.relation'
+                . " WHERE c.relname = 'identity_user' AND l.mode = 'RowShareLock' AND l.pid = pg_backend_pid()",
+            );
+
+            $this->assertSame(1, (int) (\is_scalar($rowShareLocks) ? $rowShareLocks : 0));
+        });
+    }
+
+    public function testFindByEmailForUpdateRefreshesAStaleManagedAggregate(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $user = $this->newUser('judy@erpify.test');
+            $this->repository->save($user);
+            // Manage it unlocked first, which is what the caller does before it decides to take the lock.
+            $this->repository->findByEmail(Email::from('judy@erpify.test'));
+
+            $this->connection->executeStatement(
+                "UPDATE identity_user SET status = 'SUSPENDED' WHERE email = :email",
+                ['email' => 'judy@erpify.test'],
+            );
+
+            $reloaded = $this->repository->findByEmailForUpdate(Email::from('judy@erpify.test'));
+
+            $this->assertInstanceOf(User::class, $reloaded);
+            $this->assertSame(IdentityStatus::SUSPENDED, $reloaded->status());
+        });
+    }
+
+    public function testFindByEmailForUpdateReturnsNullForAnUnknownAddress(): void
+    {
+        // The pre-identity path reaches this with whatever address was submitted, so an unknown one has to
+        // answer null rather than raise — a raise there would separate "no such account" from a wrong
+        // password on the one surface whose contract is that they are indistinguishable.
+        $this->inRolledBackTransaction(function (): void {
+            $this->assertNotInstanceOf(
+                User::class,
+                $this->repository->findByEmailForUpdate(Email::from('nobody@erpify.test')),
+            );
+        });
+    }
+
     public function testRemoveHardDeletesTheAggregate(): void
     {
         $this->inRolledBackTransaction(function (): void {

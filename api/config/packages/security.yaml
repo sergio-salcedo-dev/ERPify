@@ -26,8 +26,9 @@ security:
                 password_path: password
                 failure_handler: Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler
             # Throttle the only auth surface: repeated failures per (client IP + email) are rate-limited so a
-            # leaked credential list cannot be sprayed. Pairs with the timing-equalised UserProvider so neither
-            # the 401 body nor its latency leaks which accounts exist.
+            # leaked credential list cannot be sprayed. The 401 body does not distinguish which accounts exist;
+            # the latency half of that claim rests on the timing-equalised UserProvider dominating an
+            # unmeasured, transaction-shaped differential on the failure-recording path (issue #881).
             login_throttling:
                 max_attempts: 5
 
@@ -48,9 +49,13 @@ security:
         # (not a security:false firewall) so Security::login can resolve the firewall and mint the first session.
         - { path: '^/api/v1/backoffice/invitations/accept$', roles: PUBLIC_ACCESS }
         # Password recovery is pre-identity by definition: a locked-out or forgotten-password user has no
-        # session. Both endpoints are same-origin-guarded (PasswordResetOriginListener) and answer uniformly.
+        # session. All three endpoints are same-origin-guarded (RecoveryOriginListener) and answer uniformly.
         - { path: '^/api/v1/backoffice/forgot-password$', roles: PUBLIC_ACCESS }
         - { path: '^/api/v1/backoffice/reset-password$', roles: PUBLIC_ACCESS }
+        # The recovery-secret redemption: the only edge a locked-out sole administrator has, and pre-identity
+        # by construction — they hold no session, and the lockout that put them here is keyed by an address
+        # anyone can learn. Inside the main firewall like its siblings so the login seam can mint the session.
+        - { path: '^/api/v1/backoffice/recovery/redeem$', roles: PUBLIC_ACCESS }
         # The one liveness route with anonymous consumers: the deploy smoke test (scripts/deploy/deploy.sh),
         # the CI smoke steps (.github/workflows/ci.yml) and the public /status page, which mounts outside
         # RequireAuth. A static payload that probes nothing.

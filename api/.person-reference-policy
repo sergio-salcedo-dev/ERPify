@@ -65,11 +65,11 @@
 #     unrelated stream. What it lacks is a DETECTIVE half — nothing here reports a row that escaped — and the
 #     reason is measurable rather than an omission: the table has no `resource_erased` flag, so every correct
 #     erasure leaves a pseudonym that resolves to no live identity and would be reported as divergence for
-#     ever. `audit_log.metadata` holds no person id. 16 paths write a row — 15
-#     `AuditLogger->log()` call sites plus the
-#     change-data-capture listener — of which most pass a non-empty `metadata`, and exactly one of those
-#     ever held a person id: the compliance entry of the identity erasure, which now names its subject as
-#     the entry's RESOURCE instead, where the anonymiser that same erasure already runs rewrites it.
+#     ever. `audit_log.metadata` holds no person id. 21 paths write a row — 20 `AuditLogger->log()` call
+#     sites plus the change-data-capture listener — of which most pass a non-empty `metadata`, and exactly
+#     one of those ever held a person id: the compliance entry of the identity erasure, which now names its
+#     subject as the entry's RESOURCE instead, where the anonymiser that same erasure already runs rewrites
+#     it.
 #     (The count is re-derived, not incremented: it read "nine" while `git grep -c 'auditLogger->log('`
 #     already returned twelve. A number nobody re-measures is what lets an argument resting on it go stale
 #     without ever going red — the argument here does NOT rest on the count, but on each site's content.)
@@ -194,6 +194,7 @@ Erpify\Organization\Membership\Domain\Entity\Membership::$id => non-person
 Erpify\Iam\Invitation\Domain\Entity\Invitation::$id => non-person
 Erpify\Iam\Session\Domain\Entity\Session::$id => non-person
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$id => non-person
+Erpify\Iam\Identity\Domain\Entity\RecoverySecret::$id => non-person
 
 # The image aggregate's own primary key. It denotes a stored representation, never the person a picture may
 # happen to be of: this module holds no owner, no filename and no classification, and it is the CONSUMING
@@ -234,6 +235,7 @@ Erpify\Iam\Identity\Domain\Entity\User::$id => person :: src/Iam/Identity/Applic
 # References to a person held by another aggregate. Each row is deleted outright rather than scrubbed:
 # neither table has a business meaning that survives the person it is about.
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
+Erpify\Iam\Identity\Domain\Entity\RecoverySecret::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
 Erpify\Iam\Session\Domain\Entity\Session::$userId => person :: src/Iam/Session/Application/PurgeUserSessions.php
 
 # The two that cross a bounded context. NO column anywhere in the schema references `identity_user` — the

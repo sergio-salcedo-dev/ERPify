@@ -121,6 +121,19 @@ src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\
 # (teardown) direction the AllSessionsRevoked event's own docblock names as its consumer.
 src/Iam/Identity/Application/RevokeSessionsBestEffort.php => Erpify\Iam\Session\Application\RevokeAllSessions
 
+# Recovery-secret redemption → revoke the session THIS request minted. RevokeCurrentSessionBestEffort
+# (Iam/Identity Application) is the compensating counterpart of the teardown above, and the radius is the
+# difference: a credential change makes every session of the identity stale, while a redemption that failed to
+# consume has to undo one session and leave the others — measured, the coarse form took down the OWNER's
+# session in a reachable interleaving, on an identity whose owner may be locked out and have just destroyed
+# their only recovery secret. It consumes the published RevokeSession use case and reads the correlation the
+# login already wrote through CurrentSessionReference, which is the same seam SessionAdmissionGate reads on
+# every authenticated request — so the precise revoke widens no shared signature. SessionId rides along as the
+# value the two exchange.
+src/Iam/Identity/Application/RevokeCurrentSessionBestEffort.php => Erpify\Iam\Session\Application\CurrentSessionReference
+src/Iam/Identity/Application/RevokeCurrentSessionBestEffort.php => Erpify\Iam\Session\Application\RevokeSession
+src/Iam/Identity/Application/RevokeCurrentSessionBestEffort.php => Erpify\Iam\Session\Domain\SessionId
+
 # GDPR erasure → hard-delete every session. FulfilIdentityErasure (Iam/Identity Application) consumes the
 # published PurgeUserSessions use case (Iam/Session) to hard-delete the erased subject's sessions inside the same
 # transaction, leaving no residual session PII. Distinct from the reset teardown above: that soft-revokes (keeps

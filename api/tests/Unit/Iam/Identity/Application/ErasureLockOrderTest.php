@@ -7,7 +7,6 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\EraseIdentitySubject;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
-use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Exception\AdministratorErasureRequiresDemotion;
 use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
@@ -17,6 +16,8 @@ use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\PasswordResetTokenMother;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\RecoverySecretMother;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
@@ -33,16 +34,21 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The order in which the erasure chain acquires its three row locks, kept apart from the behaviour tests of
+ * The order in which the erasure chain acquires its four row locks, kept apart from the behaviour tests of
  * either use case because it is one claim about both and a failure has to say so.
  *
- * The chain is the only path that reaches all three tables, and it is therefore the only path that can be
- * measured against the four that reach two of them. Those four already agree with each other:
+ * The chain is the only path that reaches all four tables, and it is therefore the only path that can be
+ * measured against the seven that reach two of them. Those seven already agree with each other:
  * {@see \Erpify\Iam\Invitation\Application\AcceptInvitation} and
  * {@see \Erpify\Iam\Invitation\Application\RevokeInvitation} take `iam_invitation` before `identity_user`;
  * {@see \Erpify\Iam\Identity\Application\RequestPasswordReset} and {@see CompletePasswordReset} take
- * `identity_user` before `identity_password_reset_token`. Two of them close a cycle with the chain's opposite
- * order, and a cycle in a wait-for graph is `40P01`.
+ * `identity_user` before `identity_password_reset_token`;
+ * {@see \Erpify\Iam\Identity\Application\MintRecoverySecret},
+ * {@see \Erpify\Iam\Identity\Application\RedeemRecoverySecret} and
+ * {@see \Erpify\Iam\Identity\Application\RevokeRecoverySecret} take `identity_user` before
+ * `identity_recovery_secret` — the third because proving the current password reads the user row, which is
+ * what made revocation a two-lock path. Two of them close a cycle with the chain's opposite order, and a
+ * cycle in a wait-for graph is `40P01`.
  *
  * **The chain is the member that conforms, and the rule is not a probability estimate.** The order of a shared
  * pair is fixed by whichever path cannot move — and the two cycles pin their order for different reasons,
@@ -51,7 +57,10 @@ use PHPUnit\Framework\TestCase;
  * freedom at all. In the second, all three participants know both ids up front, and what pins the reset paths
  * is their own correctness — the user row lock is the supersede mutex the forgot path needs before its
  * delete+insert, and the status re-read under it is what walls a completion an administrator has just
- * suspended. {@see FulfilIdentityErasure} is pinned by neither, so it is the one that conforms.
+ * suspended. The recovery-secret pair is pinned the first way: a redemption arrives holding only the
+ * presented credential and learns which identity to lock from the row its selector resolves, so it has no
+ * freedom to take the user first by choice — it takes it first because that is the only id it has.
+ * {@see FulfilIdentityErasure} is pinned by none of them, so it is the one that conforms.
  *
  * What is asserted is therefore a POSITION — the whole sequence — and not that each statement ran. A lock
  * taken second orders nothing that has not already happened, so a test counting calls would pass over the
@@ -80,32 +89,37 @@ final class ErasureLockOrderTest extends TestCase
     {
         $journal = new LockOrderJournal();
         $invitations = new InMemoryInvitationRepository($this->invitationFor(UserMother::DEFAULT_ID));
-        $tokens = new InMemoryPasswordResetTokenRepository($this->resetTokenFor(UserMother::DEFAULT_ID));
+        $tokens = new InMemoryPasswordResetTokenRepository(PasswordResetTokenMother::pendingFor());
+        $secrets = new InMemoryRecoverySecretRepository(RecoverySecretMother::mintedFor());
         $users = new InMemoryUserRepository(UserMother::create());
 
-        $result = $this->useCase($users, $tokens, $invitations, $journal)->execute(UserMother::DEFAULT_ID);
+        $result = $this->useCase($users, $tokens, $secrets, $invitations, $journal)
+            ->execute(UserMother::DEFAULT_ID)
+        ;
 
         // Not decoration: a statement that matches no row takes no lock, so a chain measured over an empty
         // store would record its sequence and prove nothing about the locks that sequence is about.
         $this->assertTrue($result->identityErased);
         $this->assertSame(1, $result->invitationsDeleted);
         $this->assertSame(1, $result->resetTokensDeleted);
+        $this->assertSame(1, $result->recoverySecretsDeleted);
 
         $this->assertSame(
             [
                 LockOrderJournal::IAM_INVITATION,
                 LockOrderJournal::IDENTITY_USER,
                 LockOrderJournal::PASSWORD_RESET_TOKEN,
+                LockOrderJournal::RECOVERY_SECRET,
             ],
             $journal->crossTableOrder(),
-            'The erasure chain no longer acquires in the order the accept, revoke and reset paths agree on. '
-            . 'Swapping any adjacent pair re-opens an ABBA deadlock with a path that cannot reorder itself, '
-            . 'and the deadlock surfaces as a 503 with nothing in the code to explain it.',
+            'The erasure chain no longer acquires in the order the accept, revoke, reset and recovery-secret '
+            . 'paths agree on. Swapping any adjacent pair re-opens an ABBA deadlock with a path that cannot '
+            . 'reorder itself, and the deadlock surfaces as a 503 with nothing in the code to explain it.',
         );
     }
 
     #[Test]
-    public function anAdministratorIsRefusedBeforeAnyOfTheThreeTablesIsReachedFor(): void
+    public function anAdministratorIsRefusedBeforeAnyOfTheFourTablesIsReachedFor(): void
     {
         // The UNLOCKED guard is a precondition and belongs ahead of every acquisition — including the
         // invitation purge, whose position is immediately after it. Moving the purge one statement earlier
@@ -117,7 +131,8 @@ final class ErasureLockOrderTest extends TestCase
         // administrator, still costs no write lock at all.
         $journal = new LockOrderJournal();
         $invitations = new InMemoryInvitationRepository($this->invitationFor(UserMother::DEFAULT_ID));
-        $tokens = new InMemoryPasswordResetTokenRepository($this->resetTokenFor(UserMother::DEFAULT_ID));
+        $tokens = new InMemoryPasswordResetTokenRepository(PasswordResetTokenMother::pendingFor());
+        $secrets = new InMemoryRecoverySecretRepository(RecoverySecretMother::mintedFor());
         $users = new InMemoryUserRepository(UserMother::create());
 
         // Caught rather than declared with expectException + finally: on the mutation this exists to catch the
@@ -125,7 +140,7 @@ final class ErasureLockOrderTest extends TestCase
         // and PHPUnit would report "not an instance of AdministratorErasureRequiresDemotion" — red for the
         // right reason but naming the wrong one.
         try {
-            $this->useCase($users, $tokens, $invitations, $journal, administrators: [
+            $this->useCase($users, $tokens, $secrets, $invitations, $journal, administrators: [
                 UserMother::DEFAULT_ID => true,
                 self::ACTING_ADMIN_ID => true,
             ])->execute(UserMother::DEFAULT_ID);
@@ -149,18 +164,20 @@ final class ErasureLockOrderTest extends TestCase
     private function useCase(
         InMemoryUserRepository $users,
         InMemoryPasswordResetTokenRepository $tokens,
+        InMemoryRecoverySecretRepository $secrets,
         InMemoryInvitationRepository $invitations,
         LockOrderJournal $journal,
         array $administrators = [self::ACTING_ADMIN_ID => true],
     ): FulfilIdentityErasure {
         $users->lockOrderJournal = $journal;
         $tokens->lockOrderJournal = $journal;
+        $secrets->lockOrderJournal = $journal;
         $invitations->lockOrderJournal = $journal;
         $administratorDirectory = new InMemoryActiveAdministratorDirectory($administrators);
         $administratorDirectory->lockOrderJournal = $journal;
 
         return new FulfilIdentityErasure(
-            new EraseIdentitySubject($users, $tokens, new InlineTransactionManager()),
+            new EraseIdentitySubject($users, $tokens, $secrets, new InlineTransactionManager()),
             new OrderedAuditSubjectTrailErasure(
                 new RecordingAuditSubjectRowLock(),
                 new RecordingAuditActorAnonymiser(matchCount: 0),
@@ -184,14 +201,5 @@ final class ErasureLockOrderTest extends TestCase
         $invitation->pullDomainEvents();
 
         return $invitation;
-    }
-
-    private function resetTokenFor(string $userId): PasswordResetToken
-    {
-        $generated = SingleUseToken::mint(new DateTimeImmutable('2026-08-07T13:00:00+00:00'));
-        $token = PasswordResetToken::issue(Uuid::generate(), $userId, $generated->token);
-        $token->pullDomainEvents();
-
-        return $token;
     }
 }

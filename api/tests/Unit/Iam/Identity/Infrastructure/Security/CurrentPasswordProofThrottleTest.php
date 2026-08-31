@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
-use Erpify\Iam\Identity\Infrastructure\Security\PasswordChangeThrottle;
+use Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\RateLimitSnapshot;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -17,8 +17,8 @@ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 /**
  * @internal
  */
-#[CoversClass(PasswordChangeThrottle::class)]
-final class PasswordChangeThrottleTest extends TestCase
+#[CoversClass(CurrentPasswordProofThrottle::class)]
+final class CurrentPasswordProofThrottleTest extends TestCase
 {
     private const string IDENTITY_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b';
 
@@ -105,13 +105,13 @@ final class PasswordChangeThrottleTest extends TestCase
         $throttle->ensureWithinBudget(self::IDENTITY_ID);
     }
 
-    private function throttle(int $limit, ?RequestStack $requestStack = null): PasswordChangeThrottle
+    private function throttle(int $limit, ?RequestStack $requestStack = null): CurrentPasswordProofThrottle
     {
         $factory = new RateLimiterFactory(
             ['id' => 'per_identity', 'policy' => 'sliding_window', 'limit' => $limit, 'interval' => '15 minutes'],
             new InMemoryStorage(),
         );
 
-        return new PasswordChangeThrottle($factory, $requestStack ?? new RequestStack());
+        return new CurrentPasswordProofThrottle($factory, $requestStack ?? new RequestStack());
     }
 }

@@ -88,14 +88,14 @@ Feature: Erase an identity (GDPR right to erasure)
     # every assertion above while destroying the trace this table exists to keep.
     And I execute the SQL query "SELECT event_id FROM event_store WHERE (event_id = '0190f200-0000-7000-8000-00000000ea01' AND event_name = 'erpify.iam.identity.suspended' AND aggregate_version = 1) OR (event_id = '0190f200-0000-7000-8000-00000000ea02' AND event_name = 'erpify.iam.invitation.created' AND jsonb_exists(payload, 'invitedUserId')) OR (event_id = '0190f200-0000-7000-8000-00000000ea03' AND event_name = 'erpify.iam.invitation.accepted' AND jsonb_exists(metadata, 'actor'))"
     And there should have 3 records in SQL result
-    # Budget canary (21 on "default"). In one transaction (+2 BEGIN/COMMIT), in acquisition order: the
+    # Budget canary (22 on "default"). In one transaction (+2 BEGIN/COMMIT), in acquisition order: the
     # unlocked administrator-role EXISTS probe, the invitation ordered row lock and its delete, the LOCKED
     # administrator-role reading, the identity find and
-    # delete, the reset-token delete, the two-axis row lock, the actor-axis
+    # delete, the reset-token delete, the recovery-secret delete, the two-axis row lock, the actor-axis
     # anonymisation UPDATE, the
     # GDPR_SUBJECT_ERASED insert, the resource-axis anonymisation UPDATE, the event-store anonymisation UPDATE,
     # the session delete, the membership delete and the GDPR_ERASURE_EXECUTED insert
-    # (= 17). There are TWO administrator readings and their positions are the point: the unlocked one refuses
+    # (= 18). There are TWO administrator readings and their positions are the point: the unlocked one refuses
     # early and takes no write lock, and the locked one — which is the one that decides — cannot run before
     # the invitation lock without inverting the order the accept path is unable to reverse. Its round trip is
     # the price of the refusal holding at commit rather than only at the instant it was asked. The three table-touching deletes are listed in the order they run because that order is itself an
@@ -117,8 +117,11 @@ Feature: Erase an identity (GDPR right to erasure)
     # go through executeStatement() and are counted like any other round trip. The total is measured; this
     # decomposition is a reading aid, so check it against a real run before trusting any single term. The two reference deletes are one directed DELETE each, which is why they cost
     # exactly one round trip apiece and not one per row. A shift means an added round trip — re-measure,
-    # don't just bump the number.
-    And 21 requests got executed for doctrine connection "default"
+    # don't just bump the number. The recovery-secret delete is the most recent term and was measured, not
+    # assumed: it is one directed DELETE beside the reset-token one, it costs +1 whether it matches a row or
+    # none, and it sits last among the identity module's own deletes because nothing else reaches both that
+    # table and the reset tokens — its only fixed constraint is that it follows the identity row.
+    And 22 requests got executed for doctrine connection "default"
 
   Scenario: Erasure forgets the subject where the trail NAMES them, not only where they acted
     # The crosswalk row: the subject is both actor and resource, which is what a self-service role change

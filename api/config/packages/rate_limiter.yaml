@@ -87,19 +87,31 @@ framework:
             interval: '%env(RATE_LIMIT_RECOVERY_THROTTLE_AUDIT_INTERVAL)%'
             lock_factory: null
 
-        # `token_action_per_selector` — per-target budget on the token-consuming endpoints (reset-password,
-        # invitation accept), keyed by the selector half of the presented `<id>.<secret>` link. It caps
-        # brute-forcing the secret of one selector; exhaustion folds into the SAME opaque invalid-token wall
-        # as a dead link, because a per-selector 429 would confirm to an attacker that the selector exists.
-        # Selectors are UUIDs, so reset and accept share the namespace collision-free.
+        # `token_action_per_selector` — per-target budget on the three token-consuming endpoints
+        # (reset-password, invitation accept, recovery-secret redeem), keyed by the selector half of the
+        # presented `<id>.<secret>` link. It caps brute-forcing the secret of one selector; exhaustion folds
+        # into the SAME opaque invalid-token wall as a dead link, because a per-selector 429 would confirm to
+        # an attacker that the selector exists. Selectors are UUIDs, so the three share the namespace
+        # collision-free.
         token_action_per_selector:
             policy: 'sliding_window'
             limit: '%env(int:RATE_LIMIT_TOKEN_ACTION_LIMIT)%'
             interval: '%env(RATE_LIMIT_TOKEN_ACTION_INTERVAL)%'
             lock_factory: null
 
-        # `password_change_per_identity` — per-identity budget on POST /me/password, keyed by the signed-in
-        # identity's id. Exhaustion is a VISIBLE 429, which is the deliberate difference from the two budgets
+        # `password_change_per_identity` — per-identity budget on the routes that require the caller to
+        # RE-PROVE the current password from a live session: POST /me/password, POST /me/recovery-secret and
+        # POST /me/recovery-secret/revoke. Keyed by the signed-in identity's id, and shared between them on
+        # purpose — see the paragraph on drift below, which is the reason the consuming class is named
+        # CurrentPasswordProofThrottle rather than after whichever controller reached it first.
+        #
+        # THE KEY KEEPS ITS ORIGINAL NAME while the abstraction's did not, and that asymmetry is deliberate:
+        # this one is deployment surface. Its value arrives through RATE_LIMIT_PASSWORD_CHANGE_PER_IDENTITY_*,
+        # so renaming it would leave any deployment's own override silently unread and the budget silently
+        # back at the committed default — a failure with no red anywhere. A misleading class name is a lie a
+        # reader can see; a renamed env var is a lie only production discovers.
+        #
+        # Exhaustion is a VISIBLE 429, which is the deliberate difference from the two budgets
         # above: they sit on PRE-identity surfaces where a per-target 429 would answer "this account exists",
         # while this endpoint is reached only through an established session, so the caller already knows the
         # identity exists — it is their own. There is nothing left to leak.
@@ -109,7 +121,7 @@ framework:
         # listening". Reusing it is the point: a wrong `currentPassword` here does NOT feed that counter (by
         # decision — marking failures from a route reachable only with a live session would turn a stolen
         # session into a lockout DoS against the owner), so this limiter is the ONLY per-identity budget on
-        # the route and inventing a second number for the same question is how the two drift apart.
+        # these routes and inventing a second number for the same question is how the two drift apart.
         #
         # What it does and does not buy: an attacker holding the session is delayed, not stopped — the budget
         # lives in the cache pool, so a deploy or a second worker resets or splits it, and `lock_factory: null`

@@ -7,7 +7,9 @@ namespace Erpify\Iam\Identity\Application;
 /**
  * Outcome of {@see FulfilIdentityErasure}: what the chained erasure actually removed across the identity,
  * the trail, the reproducible business log, the sessions, the organization membership and the invitations
- * addressed to the subject. `identityErased` is the surface-neutral fact each caller reads differently — the
+ * addressed to the subject. The two credential-recovery counts are reported apart for the reason
+ * {@see IdentityErasureResult} gives: one table lapses within the hour, the other holds a decade.
+ * `identityErased` is the surface-neutral fact each caller reads differently — the
  * HTTP controller turns `false` into a 404, the CLI turns it into an idempotent "nothing to erase" — while
  * the counts feed the operator's report and the compliance self-audit.
  *
@@ -29,6 +31,7 @@ final readonly class FulfilIdentityErasureResult
     public function __construct(
         public bool $identityErased,
         public int $resetTokensDeleted,
+        public int $recoverySecretsDeleted,
         public int $anonymizedAuditRows,
         public int $anonymizedResourceRows,
         public int $anonymizedEventRows,
@@ -42,6 +45,7 @@ final readonly class FulfilIdentityErasureResult
     {
         return $this->identityErased
             || $this->resetTokensDeleted > 0
+            || $this->recoverySecretsDeleted > 0
             || $this->anonymizedAuditRows > 0
             || $this->anonymizedResourceRows > 0
             || $this->anonymizedEventRows > 0

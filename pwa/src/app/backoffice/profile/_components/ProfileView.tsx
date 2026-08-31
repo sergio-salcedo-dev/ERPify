@@ -6,6 +6,7 @@ import { useSession } from "@/context/shared/access/application/useSession";
 import { CopyButton, StatusBadge } from "@/components/erpify";
 import { cn } from "@/components/cn";
 import { ChangePasswordForm } from "./ChangePasswordForm";
+import { RecoverySecretPanel } from "./RecoverySecretPanel";
 
 /**
  * The signed-in user's own account view. It renders exactly what `/me` carries —
@@ -36,7 +37,8 @@ export function ProfileView() {
           My profile
         </h1>
         <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">
-          Your account as the server sees it, and the place to change your password.
+          Your account as the server sees it, and where you keep the two credentials that get you
+          into it.
         </p>
       </header>
 
@@ -114,6 +116,8 @@ export function ProfileView() {
         </p>
         <ChangePasswordForm />
       </section>
+
+      <RecoverySecretPanel />
     </div>
   );
 }

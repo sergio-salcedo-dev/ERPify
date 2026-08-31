@@ -51,6 +51,12 @@ export const API_ENDPOINTS = {
     // Reset the password with the emailed token (204 on success, httpOnly session
     // cookie). Dead token → 400 `invalid-token`; suspended/forbidden → 403.
     RESET_PASSWORD: `${BACKOFFICE_PREFIX}/reset-password`,
+    // Redeem a recovery secret the user types in (204 on success, httpOnly session cookie).
+    // Every way the presentation can die — malformed, unknown, expired, already spent, budget
+    // exhausted — answers the one opaque 400 `invalid-token`, so the client has nothing finer
+    // to branch on; a non-active account answers 403. Needs an `X-CSRF-Token` header, like the
+    // other two unauthenticated credential endpoints.
+    RECOVERY_REDEEM: `${BACKOFFICE_PREFIX}/recovery/redeem`,
     INVITATIONS: {
       // Accept an invitation: set the credential, activate the account (204 on
       // success, httpOnly session cookie). Dead token → 400 `invalid-token`.
@@ -116,6 +122,22 @@ export const API_ENDPOINTS = {
     // password answers 403 `invalid-current-password` — never 401, which the transport
     // would read as an expired session and bounce to the login page.
     CHANGE_PASSWORD: `${API_PREFIX_V1}/me/password`,
+    // The account's standby recovery credential, read (200). One path, two operations, two keys —
+    // the same shape `BANKS.LIST`/`BANKS.CREATE` use, and a contract rather than taste: the verb is
+    // the fact that says which of these DESTROYS nothing and which mints a ten-year credential, and
+    // the key is what `api-endpoint-contract` identifies an operation by. One key serving both
+    // leaves that gate unable to tell a swapped pair from a correct one.
+    RECOVERY_SECRET: `${API_PREFIX_V1}/me/recovery-secret`,
+    // Mint it (201 — the plaintext is in that body and in no later one).
+    RECOVERY_SECRET_MINT: `${API_PREFIX_V1}/me/recovery-secret`,
+    // Destroy the account's recovery credential (204). Both writes prove ownership with the
+    // current password, so a stolen session on its own can neither create this account's way
+    // back in nor destroy it; that proof is also why neither needs a CSRF token beyond the
+    // same-origin session cookie, and both answer 403 `invalid-current-password` rather than
+    // a 401 the transport would read as an expired session. The revoke is a POST on a
+    // path of its own because the proof travels in a body, and the shared `HttpClient` port's
+    // `delete` carries none.
+    RECOVERY_SECRET_REVOKE: `${API_PREFIX_V1}/me/recovery-secret/revoke`,
     SESSIONS: `${API_PREFIX_V1}/sessions`,
     SESSIONS_REVOKE_OTHERS: `${API_PREFIX_V1}/sessions/revoke-others`,
     SESSIONS_REVOKE_CURRENT: `${API_PREFIX_V1}/sessions/revoke-current`,

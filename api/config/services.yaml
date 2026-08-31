@@ -78,12 +78,14 @@ services:
         arguments:
             $personReferenceSources: !tagged_iterator erpify.person_reference_source
 
-    # These three swallow a failed `security` audit projection and report it, and the report is worth nothing
-    # on the default channel: in prod that is a `fingers_crossed` handler which discards the buffer unless the
-    # response is a 5xx. Two of them run on a request that answers 202/401 by design; the third runs from a
-    # scheduled tick with no response to protect at all — swallowing is the point either way, so a lost
-    # projection never turns a login refusal or a maintenance sweep into a 500. `observability` is the
-    # always-on stream, excluded from the buffered handler by name.
+    # Each of these swallows a failed `security` audit projection and reports it, and the report is worth
+    # nothing on the default channel: in prod that is a `fingers_crossed` handler which discards the buffer
+    # unless a record at `error` or above fires it. Not one of these paths produces such a record — they end
+    # in a 201, a 202, a 204, an opaque 400, a 401, or in a scheduled tick with no response at all — because
+    # swallowing is the whole point: a lost projection must never turn a login refusal, a maintenance sweep or
+    # a committed recovery-secret write into a 500. `observability` is the always-on stream, excluded from the
+    # buffered handler by name. The membership is deliberately described by that rule rather than counted: a
+    # tally here is a claim that goes stale the next time one is added, silently, with every gate green.
     #
     # Bound here rather than with `#[Autowire]` at the parameter, which is how their `Infrastructure` sibling
     # `SymfonyAuditLogger` does it: these are `Application` classes, and deptrac refuses that layer a
@@ -101,6 +103,10 @@ services:
         arguments:
             $logger: '@monolog.logger.observability'
 
+    Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
     # Same rule, same reason, for the rest of the `Application` best-effort reporters: each swallows a failure
     # its caller must survive — a revoked session, a mail that did not go out — and the report is the only
     # trace it leaves. On the default channel prod discards it, because `fingers_crossed` activates on the
@@ -111,6 +117,10 @@ services:
     # its answers are wrong — below `error` the line is discarded, at `error` it arrives by flushing the
     # request's other records.
     Erpify\Iam\Identity\Application\RevokeSessionsBestEffort:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    Erpify\Iam\Identity\Application\RevokeCurrentSessionBestEffort:
         arguments:
             $logger: '@monolog.logger.observability'
 
