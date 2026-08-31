@@ -49,6 +49,12 @@ This is not hypothetical hygiene. It shipped twice:
 - A seed written `INSERT … SELECT … FROM organization LIMIT 1` inserted **zero rows** — the test database is migrated and never provisioned — so the phantom row under test never existed and both assertions were already true without it.
 - An erasure `UPDATE` ran over **zero rows**, leaving its acceptance criteria unproven and its control unfalsifiable, while a `17 → 18` query counter was read as confirmation. **+1 is also what an `UPDATE` that matches nothing costs.**
 
+The empty seed is one member of a family, and naming only that member let the family recur. **The general rule is that a test must fail when the mechanism it names is removed** — so falsify it by deleting the guard, not by trusting that the assertion reads well. Three shapes that passed every gate here, none of them a seed problem:
+
+- **Asserting the exception class where the acceptance criterion promises a status.** Two domain classes existed to produce 404/503/500; all three test files that named them checked `instanceof`, so swapping their base class for `RuntimeException` left every test green while two documents kept publishing the old status.
+- **Pairing the test with a different mechanism than the one under test.** An assertion about `#[MapUploadedFile]` was paired with a serializer test — disjoint Symfony resolvers — so it passed with the guard deleted, and the test that really covered it already existed elsewhere in the tree.
+- **A setup that restores exactly the level the guard covers.** An existence probe was guarded only at the containing directory; the test for that branch restored the intermediate shard to `0755` before probing, exercising the one level that was already defended and never the hole.
+
 The same trap in its other shapes: a `--filter` that selects a strict subset still exits 0 (verify with `--list-tests`, do not reason about it), and a gate whose source file is missing must **fail rather than skip**.
 
 Corollary — **a control that has never been seen red is not a control.** Prove the red by sabotage: break the thing the test defends, watch it fail, and restore the bytes **by copy**, never with `git checkout --` (it reverts your uncommitted work along with the probe).
