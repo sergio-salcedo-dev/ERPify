@@ -528,22 +528,30 @@ action_items:
     owner: "Sergio"
     status: done
   - epic: images
-    action: "Generalizar la regla del test vacuo a la asercion que no puede fallar: falsifica el test retirando el mecanismo que dice proteger. Tres modos medidos en la epica — status vs clase de excepcion, resolver disjunto, setup que restaura el nivel guardado"
+    action: "Generalizar la regla del test vacuo a la asercion que no puede fallar: un test debe fallar cuando se retira el mecanismo que nombra. Tres modos medidos — status vs clase de excepcion, resolver disjunto, setup que restaura el nivel guardado"
     owner: "Sergio"
-    status: open
+    status: done
   - epic: images
-    action: "Refrescar las dos balas de Shared/Images en deferred-work.md contra el arbol de hoy: ninguna esta cerrada, pero ambas describen un Image y un borde de borrado que ya no son los que hay"
+    action: "Verificar y fechar las dos balas de Shared/Images en deferred-work.md: ninguna cerrada (sus disparadores no han llegado) pero ambas redactadas contra un arbol que la epica movio"
     owner: "Sergio"
-    status: open
+    status: done
   - epic: images
-    action: "DECISION: el objetivo de ~30 ficheros por story/PR del corte se erro por 1,6x-3,2x (49/95/67) y nadie lo midio en curso. Corregirlo, retirarlo, o aceptar que el corte por guarantee-axis produce PRs de este tamano"
+    action: "DECISION: el objetivo de ficheros por story/PR se corrige a ~70 (medido 49/95/67, mediana 67) y una historia proyectada por encima de ~100 es senal de corte malo. No se retira: el corte por guarantee-axis produce PRs de este tamano"
     owner: "Sergio"
-    status: open
+    status: done
   - epic: images
-    action: "DECISION: el liston de pases adversariales para una historia con superficie HTTP nueva. img-1-3 acumulo cuatro; el Pase 2 tumbo cuatro AC y la premisa de Task 0, y el Pase 4 aporto el hallazgo de las tres capas convergentes mas tres SERIOUS"
+    action: "DECISION: las tres capas de code review se deben a TODA historia, y la deuda es por historia y no por PR — pueden repartirse en PRs, ventanas y sesiones distintas, y el artefacto dice donde corrio cada una. Escrito en CLAUDE.md"
     owner: "Sergio"
-    status: open
+    status: done
   - epic: images
-    action: "DECISION: el check A de bmad-status-audit lee solo sprint-status.yaml, asi que la epica entera fue invisible durante toda su vida (medido: 0 ocurrencias de epic-images en el canonico de origin/main, y check A dispara aplicado al fichero scoped). Descubrir los ficheros scoped, refundir al EMPEZAR la epica, o aceptar el hueco"
+    action: "DECISION: un diferido que aparece implementando una historia se aplica en la PR que lo encontro; si es de envergadura, historia nueva al final de la epica. Nunca deferred-work.md, nunca una issue. Escrito en CLAUDE.md"
+    owner: "Sergio"
+    status: done
+  - epic: images
+    action: "DECISION: bmad-status-audit descubre los ficheros sprint-status-<slug>.yaml por glob con nullglob, y su linea de exito deja de afirmar un cotejo que nunca hace. Falsificado con el control dentro de scripts/, shell.lint verde"
+    owner: "Sergio"
+    status: done
+  - epic: images
+    action: "ABIERTA: sigue haciendo falta el check automatico del pase adversarial? La regla ha fallado cuatro veces documentadas (#616, #620, #770, img-1-2) y en las cuatro el autor sabia que tenia que hacerlo, que es la condicion bajo la que se propone retirarlo"
     owner: "Sergio"
     status: open

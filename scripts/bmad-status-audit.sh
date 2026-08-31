@@ -10,6 +10,19 @@
 # rbac epic read `in-progress` for 11 days after its last story merged, and
 # rm-3/rm-4/rm-6 each sat at `review` while already in main.
 #
+# The subject is every sprint-status file, not just the canonical one. Epics are
+# tracked per-epic in `sprint-status-<slug>.yaml` by preference, and pinning this
+# to `sprint-status.yaml` made those boards invisible to check A for as long as
+# they lived: the Shared/Images epic sat `in-progress` with all three stories
+# `done` from 2026-08-31 until the retrospective folded it into the canonical
+# file, and this audit — which runs from a SessionStart hook — reported clean at
+# every start. Measured: `epic-images` had zero occurrences in the canonical file
+# on origin/main, and check A fires the moment it is applied to the scoped board.
+#
+# Discovery, not a list, for the reason every registry here is derived: a scoped
+# file is created by whoever starts an epic, and a name they have to remember to
+# add somewhere is a name that will be missing exactly when it matters.
+#
 # Two checks, both offline (no network, no gh, no YAML parser):
 #
 #   A. Epic consistency  — an epic marked `in-progress` whose stories are all
@@ -49,7 +62,15 @@ set -uo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 readonly SCRIPT_DIR REPO_ROOT
-readonly STATUS_FILE="${REPO_ROOT}/_bmad-output/implementation-artifacts/sprint-status.yaml"
+readonly ARTIFACTS_DIR="${REPO_ROOT}/_bmad-output/implementation-artifacts"
+
+# The canonical file first so its drift is reported first; the scoped boards in
+# name order after it. `nullglob` so an absent glob contributes nothing rather
+# than a literal path that no file backs.
+shopt -s nullglob
+STATUS_FILES=("${ARTIFACTS_DIR}/sprint-status.yaml" "${ARTIFACTS_DIR}"/sprint-status-*.yaml)
+shopt -u nullglob
+readonly STATUS_FILES
 
 STRICT=false
 QUIET_WHEN_CLEAN=false
@@ -77,8 +98,13 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-if [[ ! -f "$STATUS_FILE" ]]; then
-	echo "bmad-status-audit: no sprint-status.yaml at ${STATUS_FILE} — nothing to audit" >&2
+present_files=()
+for candidate_file in "${STATUS_FILES[@]}"; do
+	[[ -f "$candidate_file" ]] && present_files+=("$candidate_file")
+done
+
+if (( ${#present_files[@]} == 0 )); then
+	echo "bmad-status-audit: no sprint-status file under ${ARTIFACTS_DIR#"${REPO_ROOT}/"} — nothing to audit" >&2
 	exit 0
 fi
 
@@ -91,6 +117,23 @@ if [[ -z "$BASE_REF" ]]; then
 		fi
 	done
 fi
+
+# --- Drift accumulates across every sprint-status file ------------------------
+# Check B's scan of the base branch is file-independent, so it runs once and is
+# shared: the single cheap pass this needs to stay is a property of the scan, not
+# of how many boards read it.
+
+epic_drift=()
+story_drift=()
+unchecked=()
+
+commits=""
+if [[ -n "$BASE_REF" ]]; then
+	commits="$(git -C "$REPO_ROOT" log --format=$'%H\t%s' "$BASE_REF" 2>/dev/null)"
+fi
+
+for STATUS_FILE in "${present_files[@]}"; do
+status_rel="${STATUS_FILE#"${REPO_ROOT}/"}"
 
 # --- Read development_status into ordered parallel arrays ---------------------
 # File order is load-bearing: stories are grouped under the epic key that
@@ -110,13 +153,12 @@ while IFS= read -r line; do
 done < <(sed -n '/^development_status:/,$p' "$STATUS_FILE")
 
 if [[ ${#keys[@]} -eq 0 ]]; then
-	echo "bmad-status-audit: development_status block is empty or unparseable" >&2
-	exit 0
+	echo "bmad-status-audit: development_status block of ${status_rel} is empty or unparseable" >&2
+	continue
 fi
 
 # --- Check A: epic marked in-progress while every one of its stories is done --
 
-epic_drift=()
 current_epic=""
 current_epic_status=""
 group_total=0
@@ -126,7 +168,7 @@ flush_group() {
 	[[ -z "$current_epic" ]] && return
 	(( group_total == 0 )) && return
 	if [[ "$current_epic_status" != "done" ]] && (( group_done == group_total )); then
-		epic_drift+=("${current_epic}|${current_epic_status}|${group_total}")
+		epic_drift+=("${status_rel}|${current_epic}|${current_epic_status}|${group_total}")
 	fi
 }
 
@@ -152,14 +194,6 @@ done
 flush_group
 
 # --- Check B: story not done, yet its tag is already on the base branch -------
-
-story_drift=()
-unchecked=()
-
-commits=""
-if [[ -n "$BASE_REF" ]]; then
-	commits="$(git -C "$REPO_ROOT" log --format=$'%H\t%s' "$BASE_REF" 2>/dev/null)"
-fi
 
 # Whether a path is documentation rather than something that ships.
 is_documentation_path() {
@@ -208,7 +242,7 @@ for i in "${!keys[@]}"; do
 
 	tag="$(story_tag "$key")"
 	if [[ -z "$tag" ]]; then
-		unchecked+=("${key}|${status}")
+		unchecked+=("${status_rel}|${key}|${status}")
 		continue
 	fi
 
@@ -222,46 +256,69 @@ for i in "${!keys[@]}"; do
 
 	while IFS=$'\t' read -r sha subject; do
 		commit_touches_code "$sha" || continue
-		story_drift+=("${key}|${status}|${tag}|${subject}")
+		story_drift+=("${status_rel}|${key}|${status}|${tag}|${subject}")
 		break
 	done <<<"$candidates"
+done
+
 done
 
 # --- Report -------------------------------------------------------------------
 
 drift_count=$(( ${#epic_drift[@]} + ${#story_drift[@]} ))
 
+# The clean line says what was read and what was checked. It used to read
+# "sprint-status.yaml matches origin/main", which claims a comparison this never
+# performs: nothing here diffs a file against the base ref, the two checks look
+# for drift and the ref is only where check B scans for shipped tags. A line that
+# overstates its own subject is how a green gets cited as a guarantee nobody wrote.
 if (( drift_count == 0 )); then
 	if [[ "$QUIET_WHEN_CLEAN" == false ]]; then
-		echo "✓ bmad-status-audit: sprint-status.yaml matches ${BASE_REF:-<no base ref>}"
+		echo "✓ bmad-status-audit: no stale markers in ${#present_files[@]} sprint-status file(s), checked against ${BASE_REF:-<no base ref>}"
 		(( ${#unchecked[@]} > 0 )) && echo "  (${#unchecked[@]} story key(s) carry no commit tag and were not checked)"
 	fi
 	exit 0
 fi
 
-echo "⚠ bmad-status-audit: ${drift_count} stale marker(s) in sprint-status.yaml"
+echo "⚠ bmad-status-audit: ${drift_count} stale marker(s)"
 echo
 
+drift_files=()
+note_drift_file() {
+	local candidate="$1" seen
+	for seen in ${drift_files[@]+"${drift_files[@]}"}; do
+		[[ "$seen" == "$candidate" ]] && return
+	done
+	drift_files+=("$candidate")
+}
+
 for entry in "${epic_drift[@]}"; do
-	IFS='|' read -r epic status total <<<"$entry"
+	IFS='|' read -r file epic status total <<<"$entry"
+	note_drift_file "$file"
 	echo "  epic  ${epic}: ${status} — all ${total} stories are done"
+	echo "        ${file}"
 done
 
 for entry in "${story_drift[@]}"; do
-	IFS='|' read -r key status tag subject <<<"$entry"
+	IFS='|' read -r file key status tag subject <<<"$entry"
+	note_drift_file "$file"
 	echo "  story ${key}: ${status} — ${tag} already shipped on ${BASE_REF}"
 	echo "        ${subject}"
+	echo "        ${file}"
 done
 
 echo
-echo "  Fix: set the affected keys to 'done' in ${STATUS_FILE#"${REPO_ROOT}/"}"
+echo "  Fix: set the affected keys to 'done' in:"
+for file in "${drift_files[@]}"; do
+	echo "    ${file}"
+done
 
 if (( ${#unchecked[@]} > 0 )); then
 	echo
 	echo "  Not checked (no commit tag derivable from the key):"
 	for entry in "${unchecked[@]}"; do
-		IFS='|' read -r key status <<<"$entry"
-		echo "    ${key}: ${status}"
+		IFS='|' read -r file key status <<<"$entry"
+		echo "    ${key}: ${status}  (${file})"
 	done
 fi
 
