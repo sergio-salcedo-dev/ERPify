@@ -220,14 +220,33 @@ cuerpo de la PR mantenía en su sección de seguridad un A/B de 1024 casos con �
 commit contradice a propósito; y la entrada del Change Log no nombraba la restricción congelada que deroga,
 rompiendo la convención que la entrada anterior había fijado.
 
-**Un `decision-needed` sin cerrar**, y va como pregunta al usuario en vez de como issue: la equivalencia que
-cuatro documentos afirman entre `--no-interaction`, `--quiet`, `--silent` y un `SHELL_VERBOSITY` negativo no
-la mide nada. Es una propiedad de `Application::configureIO()` (`vendor/symfony/console/Application.php:1031`)
-y `CommandTester` no la ejecuta: llama directo a `Command::run()`. Todos los tests llegan a la
-no-interactividad por `['interactive' => false]`, o sea el mecanismo 1 y sólo ese. Además
-`api/tools/phpunit/phpunit.dist.xml:23` fija `SHELL_VERBOSITY=-1` para toda la suite, así que un test movido
-por un `Application` real pasaría en vacío si no fija la variable por caso. Preexistente, y afecta a los
-tres comandos.
+**El `decision-needed`, preguntado y cerrado: medirlo.** La equivalencia que cuatro documentos afirman entre
+`--no-interaction`, `--quiet`, `--silent` y un `SHELL_VERBOSITY` negativo no la medía nada. Es una propiedad
+de `Application::configureIO()` — verificada en `vendor`: `--silent` mapea a `-2`, `--quiet` a `-1`, y la
+línea 1030 es `if (0 > $shellVerbosity || $input->hasParameterOption(['--no-interaction', '-n'], true))` — y
+`CommandTester` no la ejecuta: llama directo a `Command::run()`. Todos los tests llegaban por
+`['interactive' => false]`, o sea el mecanismo 1 y sólo ese. Nace `UnattendedRunPolicyTest`, en la política
+compartida y no en un comando, porque cubre los tres de una vez.
+
+Tres cosas de su diseño son decisiones medidas, no estilo:
+
+- **Cada fila es un delta de UNA bandera contra la fila contestable.** La suite corre bajo
+  `SHELL_VERBOSITY=-1` (`api/tools/phpunit/phpunit.dist.xml:23`), que `configureIO()` lee como default y que
+  degrada el run *antes* de mirar bandera alguna: una fila `--quiet` sobre esa base sería no contestable con
+  o sin la bandera. `-v` resuelve por delante del entorno en el mismo `match`, así que fija la base en
+  positivo por caso. La única fila sin `-v` es justamente la del `SHELL_VERBOSITY` heredado, cuyo sujeto
+  **es** ese default — y que enrojece, en vez de enmudecer, si el runner deja de fijarlo.
+- **Aislamiento de proceso.** `configureIO()` reescribe la verbosidad resuelta en `putenv`, `$_ENV` y
+  `$_SERVER`, así que en un solo proceso las filas se decidirían la base unas a otras y la heredada leería el
+  residuo de la anterior. Además evita que esta clase fije la verbosidad de todo lo que corra después.
+- **Sin superglobales, y esa restricción cambió el diseño.** La primera versión salvaba y restauraba
+  `$_ENV`/`$_SERVER`; PHPMD —que aquí no tiene baseline y cuya única exclusión es `vendor`/`var`— dio 12
+  violaciones, y no hay un solo precedente de acceso a superglobales bajo `api/tests`. Añadir una exclusión
+  habría sido la primera del repo, por un test propio. Neutralizar por bandera lo resuelve sin tocar la regla.
+
+Falsado en las dos direcciones: borrar la mitad de la bandera del predicado enrojece exactamente las cuatro
+filas no contestables; quitarle el `-v` a la fila contestable la enrojece a ella, que es la prueba de que la
+base ambiental de `-1` es real y de que `-v` es lo que la neutraliza.
 
 ## Spec Change Log
 
