@@ -16,7 +16,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 
 /**
  * Which identities the redemption admits, what every death case looks like from outside, and what a refusal
@@ -71,7 +70,7 @@ final class RedeemRecoverySecretRefusalTest extends TestCase
             // Refused BEFORE the login runs, so there is no session to compensate for — and asserting that
             // is what keeps this case distinct from its sibling below, where the wall arrives too late.
             $this->assertSame([], $this->signedIn);
-            $this->assertSame([], $this->sessions->revokeAllCalls);
+            $this->assertSame([], $this->sessions->saved, 'a refusal before the login touched the session store');
         }
     }
 
@@ -96,7 +95,7 @@ final class RedeemRecoverySecretRefusalTest extends TestCase
             // no committed session to compensate for.
             $this->assertSame([], $secrets->removed);
             $this->assertSame([], $this->signedIn);
-            $this->assertSame([], $this->sessions->revokeAllCalls);
+            $this->assertSame([], $this->sessions->saved, 'a refusal before the login touched the session store');
         }
     }
 
@@ -158,12 +157,9 @@ final class RedeemRecoverySecretRefusalTest extends TestCase
         // to inspect and no erasure owner, and the selector is a denial capability: whoever reads one holds
         // this account's recovery channel shut without authenticating as anybody.
         //
-        // Both best-effort collaborators are driven to their `catch`, because a logger nothing reaches proves
-        // nothing — the record count is asserted first for exactly that reason.
+        // Both best-effort collaborators are driven to a reporting branch, because a logger nothing reaches
+        // proves nothing — the record count is asserted first for exactly that reason.
         $this->auditLogger->failOnLog = true;
-        $this->sessions->onRevokeAll = static function (): never {
-            throw new RuntimeException('Session store unavailable.');
-        };
 
         $users = new InMemoryUserRepository($this->lockedUser());
         $secrets = new InMemoryRecoverySecretRepository();
@@ -177,7 +173,9 @@ final class RedeemRecoverySecretRefusalTest extends TestCase
         $this->expectException(InvalidRecoverySecret::class);
 
         try {
-            $this->useCase($users, $secrets)->redeem($generated->plaintext(), $this->sessionSeam());
+            $this->useCase($users, $secrets)
+                ->redeem($generated->plaintext(), $this->sessionSeamWithoutCorrelation())
+            ;
         } finally {
             $this->assertCount(
                 2,

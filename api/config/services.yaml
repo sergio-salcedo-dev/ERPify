@@ -92,6 +92,10 @@ services:
         arguments:
             $logger: '@monolog.logger.observability'
 
+    Erpify\Iam\Identity\Application\RevokeCurrentSessionBestEffort:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
     Erpify\Iam\Identity\Application\SendAccountLockedEmailBestEffort:
         arguments:
             $logger: '@monolog.logger.observability'

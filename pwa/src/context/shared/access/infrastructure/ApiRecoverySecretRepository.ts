@@ -90,7 +90,7 @@ export class ApiRecoverySecretRepository implements RecoverySecretRepository {
     const { data } = await this.httpClient.post<
       MintRecoverySecretRequest,
       MintedRecoverySecretEnvelope
-    >(API_ENDPOINTS.IDENTITY.RECOVERY_SECRET, { currentPassword }, isMintedEnvelope);
+    >(API_ENDPOINTS.IDENTITY.RECOVERY_SECRET_MINT, { currentPassword }, isMintedEnvelope);
     return data;
   }
 

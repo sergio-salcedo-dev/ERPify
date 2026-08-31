@@ -8,13 +8,16 @@ use Closure;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort;
 use Erpify\Iam\Identity\Application\RedeemRecoverySecret;
-use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
+use Erpify\Iam\Identity\Application\RevokeCurrentSessionBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\GeneratedRecoverySecret;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Entity\User;
-use Erpify\Iam\Session\Application\RevokeAllSessions;
+use Erpify\Iam\Session\Application\RevokeSession;
+use Erpify\Iam\Session\Domain\Entity\Session;
+use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingLogger;
 
@@ -30,6 +33,8 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingLogger;
 trait RedeemsRecoverySecrets
 {
     private const string NOW = '2026-08-28T12:00:00+00:00';
+
+    private const string ORGANIZATION_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4001';
 
     /**
      * Whatever the use case handed the session seam, in order. Every case reads it — the ones that assert
@@ -58,12 +63,20 @@ trait RedeemsRecoverySecrets
      */
     private RecordingLogger $logger;
 
+    /**
+     * The correlation the login writes and the compensation reads back. Seeded per case rather than left null,
+     * because the compensation's whole point is that it undoes THIS request's session and not the identity's
+     * others — a null correlation would make every case pass by revoking nothing.
+     */
+    private RecordingCurrentSessionReference $currentSession;
+
     private function initialiseHarness(): void
     {
         $this->signedIn = [];
         $this->sessions = new InMemorySessionRepository();
         $this->auditLogger = new RecordingAuditLogger();
         $this->logger = new RecordingLogger();
+        $this->currentSession = new RecordingCurrentSessionReference();
     }
 
     /**
@@ -85,7 +98,64 @@ trait RedeemsRecoverySecrets
     {
         return function (string $email): void {
             $this->signedIn[] = $email;
+            $this->mintSession(UserMother::DEFAULT_ID);
         };
+    }
+
+    /**
+     * The same seam with the correlation left unwritten — a login that admitted the device while the session
+     * registry stashed nothing. It drives the compensation's other reporting branch, which is a real log site
+     * and therefore part of what the containment rule has to hold over.
+     *
+     * @return Closure(string): void
+     */
+    private function sessionSeamWithoutCorrelation(): Closure
+    {
+        return function (string $email): void {
+            $this->signedIn[] = $email;
+        };
+    }
+
+    /**
+     * What `SessionMintingSuccessListener` does after a successful login: persist the row and stash its id as
+     * the request's correlation. The seam models it because the compensation reads that correlation back — a
+     * double that only recorded the email would leave every "which session died" claim asserting over a store
+     * the login never wrote to.
+     */
+    private function mintSession(string $userId): SessionId
+    {
+        $sessionId = SessionId::generate();
+        $session = Session::start(
+            $sessionId->toString(),
+            $userId,
+            self::ORGANIZATION_ID,
+            'test-device',
+            null,
+            // Parenthesised deliberately: PDepend cannot parse `new X()->method()`, so the unwrapped
+            // PHP 8.4 form fails `make php.md` with a parser error rather than a violation.
+            (new DateTimeImmutable(self::NOW))->modify('+7 days'),
+        );
+        $session->pullDomainEvents();
+
+        $this->sessions->save($session);
+        $this->currentSession->set($sessionId);
+
+        return $sessionId;
+    }
+
+    /**
+     * The ids still admissible for this user. The compensation's whole claim is about WHICH of these survive,
+     * so a case asserts the set rather than a call count: a count cannot tell a precise revoke from a coarse
+     * one that happened to run once.
+     *
+     * @return list<string>
+     */
+    private function activeSessionIds(string $userId): array
+    {
+        return \array_map(
+            static fn (Session $session): string => $session->getId() ?? '',
+            $this->sessions->findByUserId($userId),
+        );
     }
 
     private function useCase(
@@ -97,12 +167,12 @@ trait RedeemsRecoverySecrets
             $users,
             $secrets,
             new RecordRecoverySecretAuditBestEffort($this->auditLogger, $this->logger),
-            new RevokeSessionsBestEffort(
-                new RevokeAllSessions(
+            new RevokeCurrentSessionBestEffort(
+                $this->currentSession,
+                new RevokeSession(
                     $this->sessions,
                     new RecordingEventBus(),
                     new InlineTransactionManager(),
-                    FixedClock::at(self::NOW),
                 ),
                 $this->logger,
             ),

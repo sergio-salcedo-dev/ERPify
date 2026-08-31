@@ -7,7 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Http;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort;
 use Erpify\Iam\Identity\Application\RedeemRecoverySecret;
-use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
+use Erpify\Iam\Identity\Application\RevokeCurrentSessionBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\GeneratedRecoverySecret;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Exception\InvalidRecoverySecret;
@@ -15,7 +15,7 @@ use Erpify\Iam\Identity\Infrastructure\Http\RedeemRecoverySecretController;
 use Erpify\Iam\Identity\Infrastructure\Http\RedeemRecoverySecretRequest;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordRecoveryThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice;
-use Erpify\Iam\Session\Application\RevokeAllSessions;
+use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Tests\Unit\Iam\Identity\Application\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
@@ -23,6 +23,7 @@ use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -197,12 +198,12 @@ final class RedeemRecoverySecretControllerTest extends TestCase
             $users,
             $secrets,
             new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
-            new RevokeSessionsBestEffort(
-                new RevokeAllSessions(
+            new RevokeCurrentSessionBestEffort(
+                new RecordingCurrentSessionReference(),
+                new RevokeSession(
                     new InMemorySessionRepository(),
                     new RecordingEventBus(),
                     new InlineTransactionManager(),
-                    FixedClock::at(self::NOW),
                 ),
                 new NullLogger(),
             ),

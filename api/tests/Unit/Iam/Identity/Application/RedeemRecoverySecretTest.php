@@ -164,8 +164,8 @@ final class RedeemRecoverySecretTest extends TestCase
         } finally {
             $this->assertSame([UserMother::DEFAULT_EMAIL], $this->signedIn, 'the session was never established');
             $this->assertSame(
-                [UserMother::DEFAULT_ID],
-                $this->sessions->revokeAllCalls,
+                [],
+                $this->activeSessionIds(UserMother::DEFAULT_ID),
                 'the refusal was answered over a live session minted from the secret that was just revoked',
             );
             // No consumption persisted, so the redeemed projection is unreachable and the domain event died
@@ -177,6 +177,44 @@ final class RedeemRecoverySecretTest extends TestCase
                 'the compensated redemption left no trace, or claimed a consumption that never persisted',
             );
             $this->assertSame([], $eventBus->publishedEvents, 'a redemption that consumed nothing published');
+        }
+    }
+
+    /**
+     * The property the coarse compensation did not have, and the reason it was replaced.
+     *
+     * The owner is signed in and — this is the part that makes it sharp — LOCKED OUT, which is the state this
+     * whole channel exists for. They revoke a leaked secret from their profile while the holder's redemption is
+     * mid-flight. The holder's locked pass then finds the row gone and compensates. Under a revoke of every
+     * session of the identity, the owner loses their session too: no secret, no session, and no login, because
+     * `locked_until` is still in the future.
+     */
+    #[Test]
+    public function theCompensationTakesTheRedemptionsOwnSessionAndSparesTheOwnersLiveOne(): void
+    {
+        $users = new InMemoryUserRepository($this->lockedUser());
+        $secrets = new InMemoryRecoverySecretRepository();
+        $generated = $this->mintFor($secrets, UserMother::DEFAULT_ID);
+
+        // The owner's session, minted before the redemption starts and never part of it.
+        $ownersSession = $this->mintSession(UserMother::DEFAULT_ID);
+
+        $secrets->onLockedRead = static function () use ($secrets, $generated): void {
+            $secrets->remove($generated->secret);
+        };
+
+        $this->expectException(InvalidRecoverySecret::class);
+
+        try {
+            $this->useCase($users, $secrets)->redeem($generated->plaintext(), $this->sessionSeam());
+        } finally {
+            // Exactly one survivor, and it is the owner's. Asserting the SET rather than a call count is what
+            // separates a precise revoke from a coarse one that happened to run once.
+            $this->assertSame(
+                [$ownersSession->toString()],
+                $this->activeSessionIds(UserMother::DEFAULT_ID),
+                'the compensation reached past its own session and signed the owner out',
+            );
         }
     }
 
@@ -264,8 +302,8 @@ final class RedeemRecoverySecretTest extends TestCase
             $this->assertSame([UserMother::DEFAULT_EMAIL], $this->signedIn, 'the session was never established');
             $this->assertSame([], $secrets->removed, 'the walled redemption consumed the secret');
             $this->assertSame(
-                [UserMother::DEFAULT_ID],
-                $this->sessions->revokeAllCalls,
+                [],
+                $this->activeSessionIds(UserMother::DEFAULT_ID),
                 'the walled identity kept the session the redemption had already established',
             );
         }

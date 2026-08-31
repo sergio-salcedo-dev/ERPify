@@ -95,7 +95,7 @@ final readonly class RedeemRecoverySecret
         private UserRepository $users,
         private RecoverySecretRepository $secrets,
         private RecordRecoverySecretAuditBestEffort $audit,
-        private RevokeSessionsBestEffort $revokeSessions,
+        private RevokeCurrentSessionBestEffort $revokeSessions,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,
@@ -149,15 +149,19 @@ final readonly class RedeemRecoverySecret
             // would break the promise the revoke surface makes in as many words: the secret stops working
             // immediately.
             //
-            // The cost is paid deliberately and it is small: a redemption that loses to a RIVAL redemption
-            // also loses its session, so the winner re-authenticates. That party has a password path — the
-            // winner's own `clearLockout()` has committed by then — while whoever holds only the secret has
-            // none, which is the asymmetry that makes the coarse revoke safe. Distinguishing the two cases
-            // would need the session's own identifier, which `Security::login()` never hands back.
+            // It undoes THIS request's session and no other. The coarse form — every session of the identity —
+            // was measured taking down the OWNER's: whoever holds a leaked secret starts a redemption, the
+            // owner revokes that secret from their profile, and this pass then finds the row gone and
+            // compensates over an identity whose owner is signed in and looking at it. That owner may be an
+            // administrator whose `locked_until` is still in the future, which is the exact person this
+            // channel exists for: they would be left with no secret, no session and no login.
             //
-            // Best-effort, so a failing revoke may not turn a 400 or a 403 into a 500, and it revokes EVERY
-            // session of the identity, which is what a suspension or a revocation would each have done.
-            $this->revokeSessions->revoke($userId);
+            // The narrow radius needs no widening of any shared signature. `Security::login()` returns no
+            // identifier, but it is not the source — `StartSession` mints the id and stashes it through
+            // `CurrentSessionReference`, the same seam the admission gate reads on every request.
+            //
+            // Best-effort, so a failing revoke may not turn a 400 or a 403 into a 500.
+            $this->revokeSessions->revoke();
 
             // The one durable trace this path leaves. The consumption never persisted, so `recordRedeemed()`
             // below is unreachable and the domain event died with the rolled-back transaction: without this

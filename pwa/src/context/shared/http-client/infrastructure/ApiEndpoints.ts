@@ -122,9 +122,15 @@ export const API_ENDPOINTS = {
     // password answers 403 `invalid-current-password` — never 401, which the transport
     // would read as an expired session and bounce to the login page.
     CHANGE_PASSWORD: `${API_PREFIX_V1}/me/password`,
-    // The account's standby recovery credential: read it (200) and mint it (201 — the
-    // plaintext is in that body and in no later one).
+    // The account's standby recovery credential, read (200). One path, two operations, two keys —
+    // the same shape `BANKS.LIST`/`BANKS.CREATE` already use, and the reason is a contract rather
+    // than taste: the verb is the fact that says which of these DESTROYS nothing and which mints a
+    // ten-year credential, and a single key serving both makes that fact unstatable. It was the one
+    // key in this registry called with two verbs, so `api-endpoint-contract` could not tell a
+    // swapped pair from a correct one.
     RECOVERY_SECRET: `${API_PREFIX_V1}/me/recovery-secret`,
+    // Mint it (201 — the plaintext is in that body and in no later one).
+    RECOVERY_SECRET_MINT: `${API_PREFIX_V1}/me/recovery-secret`,
     // Destroy the account's recovery credential (204). Both writes prove ownership with the
     // current password, so a stolen session on its own can neither create this account's way
     // back in nor destroy it; that proof is also why neither needs a CSRF token beyond the

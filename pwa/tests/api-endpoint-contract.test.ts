@@ -20,6 +20,16 @@ import { describe, expect, it } from "vitest";
  * is the more likely of the two, because a path is copied once and a verb is chosen per call
  * site.
  *
+ * **The verb is compared against a DECLARATION, not against the router's union, and that is the
+ * whole of it.** Asking the manifest "does this path accept this verb" answers yes for both halves
+ * of a swapped pair, because the API really does accept both — measured, 6 of 34 mounted paths
+ * take more than one method, and `/me/recovery-secret` is one of them, so the example this
+ * paragraph uses to justify the verb check was exactly the case where the check asserted nothing.
+ * What identifies the operation is the registry KEY, so each key declares the one verb it is
+ * called with ({@link METHOD_BY_KEY}) and a call site is compared against that. A key called with
+ * two verbs cannot state the fact and has to be split, which is the shape the rest of the registry
+ * already uses — `BANKS.LIST` and `BANKS.CREATE` are two keys over one path.
+ *
  * ## What it reads
  *
  * `api/.route-manifest.json`, generated from Symfony's own router — the routes the application
@@ -183,6 +193,61 @@ const MIN_ROUTES = 30;
 const MIN_SOURCE_FILES = 100;
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
+
+/**
+ * The verb each registry key is called with — one per key, declared rather than derived.
+ *
+ * Derived from usage it would be a tautology (whatever the client sends becomes what the client is
+ * allowed to send), and derived from the router it would be the union that let a swapped pair pass.
+ * So it is a hand-kept classification with a completeness gate on both sides, the shape this
+ * repository already uses for its api-root registries: a key with no verb here fails, and a verb
+ * here for a key the registry dropped fails too.
+ */
+const METHOD_BY_KEY: Readonly<Record<string, string>> = {
+  "BACKOFFICE.AUDIT.EVENT_DETAIL": "GET",
+  "BACKOFFICE.AUDIT.TIMELINE": "GET",
+  "BACKOFFICE.BANKS.ACCOUNTS": "GET",
+  "BACKOFFICE.BANKS.COUNT": "GET",
+  "BACKOFFICE.BANKS.CREATE": "POST",
+  "BACKOFFICE.BANKS.DELETE": "DELETE",
+  "BACKOFFICE.BANKS.DETAILS": "GET",
+  "BACKOFFICE.BANKS.LIST": "GET",
+  // Reached through `useMercureRealtime`'s `authorizePath` variable, so no call site here names it
+  // — the completeness direction is what put both of these in the table at all.
+  "BACKOFFICE.BANKS.REALTIME_AUTHORIZE": "GET",
+  "BACKOFFICE.BANKS.UPDATE": "PUT",
+  "BACKOFFICE.BANK_ACCOUNTS.CHANGE_STATUS": "PATCH",
+  "BACKOFFICE.BANK_ACCOUNTS.CREATE": "POST",
+  "BACKOFFICE.BANK_ACCOUNTS.DELETE": "DELETE",
+  "BACKOFFICE.BANK_ACCOUNTS.DETAILS": "GET",
+  "BACKOFFICE.BANK_ACCOUNTS.IBAN_LOOKUP": "POST",
+  "BACKOFFICE.BANK_ACCOUNTS.LIST": "GET",
+  "BACKOFFICE.BANK_ACCOUNTS.REALTIME_AUTHORIZE": "GET",
+  "BACKOFFICE.BANK_ACCOUNTS.UPDATE": "PUT",
+  "BACKOFFICE.FORGOT_PASSWORD": "POST",
+  "BACKOFFICE.HEALTH": "GET",
+  "BACKOFFICE.HEALTH_DATABASE": "GET",
+  "BACKOFFICE.INVITATIONS.ACCEPT": "POST",
+  "BACKOFFICE.INVITATIONS.CREATE": "POST",
+  "BACKOFFICE.LOGIN": "POST",
+  "BACKOFFICE.RECOVERY_REDEEM": "POST",
+  "BACKOFFICE.RESET_PASSWORD": "POST",
+  "BACKOFFICE.USERS.CHANGE_ROLES": "PATCH",
+  "BACKOFFICE.USERS.CHANGE_STATUS": "PATCH",
+  "BACKOFFICE.USERS.DETAILS": "GET",
+  "BACKOFFICE.USERS.ERASE": "DELETE",
+  "BACKOFFICE.USERS.LIST": "GET",
+  "BACKOFFICE.USERS.REVOKE_INVITATION": "DELETE",
+  "FRONTOFFICE.HEALTH": "GET",
+  "IDENTITY.CHANGE_PASSWORD": "POST",
+  "IDENTITY.ME": "GET",
+  "IDENTITY.RECOVERY_SECRET": "GET",
+  "IDENTITY.RECOVERY_SECRET_MINT": "POST",
+  "IDENTITY.RECOVERY_SECRET_REVOKE": "POST",
+  "IDENTITY.SESSIONS": "GET",
+  "IDENTITY.SESSIONS_REVOKE_CURRENT": "POST",
+  "IDENTITY.SESSIONS_REVOKE_OTHERS": "POST",
+};
 
 interface ManifestRoute {
   path: string;
@@ -645,17 +710,60 @@ describe("every client call site", () => {
     expect(callSites.length).toBeGreaterThanOrEqual(MIN_CALL_SITES);
   });
 
-  it("uses a verb the path it calls accepts", () => {
+  it("declares a verb for every endpoint the registry carries", () => {
+    // Completeness. Without it a new endpoint arrives with no declaration, its call sites are
+    // filtered out by the `undefined` guard above, and the verb check silently stops covering it.
+    const undeclared = endpoints
+      .filter((endpoint) => !isDevOnly(endpoint.key) && METHOD_BY_KEY[endpoint.key] === undefined)
+      .map(
+        (endpoint) =>
+          `${REGISTRY_EXPORT}.${endpoint.key} (ApiEndpoints.ts:${endpoint.line}) declares no verb in METHOD_BY_KEY`,
+      );
+
+    expect(undeclared).toEqual([]);
+  });
+
+  it("declares a verb for nothing the registry has dropped", () => {
+    // Staleness, the other direction. A leftover row is a rule with no subject, and it is how a
+    // table like this stops describing the tree without anything going red.
+    const known = new Set(endpoints.map((endpoint) => endpoint.key));
+    const orphaned = Object.keys(METHOD_BY_KEY).filter((key) => !known.has(key));
+
+    expect(orphaned).toEqual([]);
+  });
+
+  it("declares only verbs the router actually mounts on that path", () => {
+    // The third direction, and the one that keeps the declaration honest against the API rather
+    // than merely self-consistent: a key may declare POST only if a POST route exists on its path.
     const routes = manifest();
+    const unmounted = endpoints
+      .filter((endpoint) => !isDevOnly(endpoint.key))
+      .filter((endpoint) => {
+        const declared = METHOD_BY_KEY[endpoint.key];
+        const methods = routes.get(endpoint.path);
+        return declared !== undefined && methods !== undefined && !methods.has(declared);
+      })
+      .map((endpoint) => {
+        const allowed = [...(routes.get(endpoint.path) ?? [])].sort().join(", ");
+        return `${REGISTRY_EXPORT}.${endpoint.key} is declared ${METHOD_BY_KEY[endpoint.key]}, but ${endpoint.path} accepts ${allowed}`;
+      });
+
+    expect(unmounted).toEqual([]);
+  });
+
+  it("uses the verb its registry key declares", () => {
+    // Against the DECLARATION, never the router's union: `/me/recovery-secret` mounts a GET route
+    // and a POST route, so asking the manifest whether the path accepts the verb answers yes for
+    // both halves of a swapped pair. The key is what names the operation.
     const wrong = callSites
       .filter((site) => {
-        const methods = routes.get(site.path);
-        return methods !== undefined && !methods.has(site.method);
+        const declared = METHOD_BY_KEY[site.key];
+        return declared !== undefined && declared !== site.method;
       })
-      .map((site) => {
-        const allowed = [...(routes.get(site.path) ?? [])].sort().join(", ");
-        return `${site.file}:${site.line} sends ${site.method} to ${site.path} (${REGISTRY_EXPORT}.${site.key}), which accepts ${allowed}`;
-      });
+      .map(
+        (site) =>
+          `${site.file}:${site.line} sends ${site.method} to ${REGISTRY_EXPORT}.${site.key}, which is declared ${METHOD_BY_KEY[site.key]}`,
+      );
 
     // A path with no route at all is the previous describe's finding, not this one's — reporting
     // it twice would make one fix look like two.

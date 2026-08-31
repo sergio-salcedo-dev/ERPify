@@ -287,6 +287,33 @@ row, so revocation becomes the third path taking both locks and must take them i
 redemption already take them (`User`, then `RecoverySecret`). The ABBA argument is re-run with it inside
 rather than inherited.
 
+## D9 — Exhausting the per-selector budget writes nothing, and the silence is the decision
+
+*Amendment (2026-08-31, on a review asking where the evidence was.)*
+
+D6 gives the ADDRESS axis its `PASSWORD_RECOVERY_THROTTLED` row. The SELECTOR axis has no counterpart, and a
+review read that asymmetry as an omission. It is not: it is what I-1 costs, and the cost is worth naming
+because the obvious repair reintroduces the thing the budget exists to prevent.
+
+The redemption's limiter refuses **before** the selector is resolved, so at the moment of the refusal nothing
+is known about which identity — if any — the presentation named. An audit row naming the subject would
+therefore require resolving the selector on the refused path: a database lookup per guess, on the one endpoint
+whose threat model is "somebody is sending many of these", which is the amplification the early refusal buys.
+And a row naming the **selector** is refused outright by I-1's corollary — the selector is a denial capability,
+and `audit_log` is readable by anyone holding `auditTrail.read`.
+
+**So the budget's exhaustion is not a domain transition and produces no evidence.** Two consequences are
+accepted rather than mitigated: a sustained attack against one account's recovery channel is invisible to the
+trail, and the design's other detection property — the owner noticing their secret gone — does not apply here,
+because a refused redemption consumes nothing and the row stays live. What bounds the attack is the budget
+itself, not anybody watching.
+
+A volumetric signal (a counter carrying no selector, no identity and no reversible transformation of either)
+would be compatible with I-1 and is the shape to reach for if this ever needs observing. It is deliberately not
+built now: the `observability` stream has no rotation, no TTL and no declared owner of deletion — the same
+reason a caller's string was refused that stream elsewhere in this repository — so adding a channel there is a
+decision of its own and not a detail of this one.
+
 ## Falsification
 
 **I-1 is falsified statically, not by a scenario — and this is the correction the adversarial pass

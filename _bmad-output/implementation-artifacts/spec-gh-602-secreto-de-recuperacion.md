@@ -274,10 +274,12 @@ entraron `5c1d9a6a`, `9878af16` (+368 líneas de test), `e3c7b5c5` y el merge `2
 **GRAVE: ninguno** en las tres capas. Ninguna encontró dato personal sobreviviendo a su borrado por un camino
 alcanzable, ni hueco explotable sin poseer el secreto.
 
-**`decision-needed` (4)** — las cuatro fueron a consulta externa antes de tocarse; el prompt es
-`tmp/bmad-md/consult-pr877-review-decisions-20260831-114040.md`:
+**`decision-needed` (4) — resueltas, y la consulta externa cambió el resultado en dos.** Las cuatro fueron a
+un modelo externo antes de tocarse (`tmp/bmad-md/consult-pr877-review-decisions-20260831-114040.md`). Su
+respuesta se debatió contra el árbol, no se aplicó: **dos de sus cuatro recomendaciones no sobreviven a la
+medición**, y una tercera resultó mucho más barata de lo que suponía.
 
-- [ ] [Review][Decision] **La compensación del canje cierra también la sesión del DUEÑO, y la premisa sobre la
+- [x] [Review][Decision] **La compensación del canje cierra también la sesión del DUEÑO, y la premisa sobre la
       que se decidió la forma gruesa es falsa en el caso que importa** (`blind`) — `RevokeSessionsBestEffort::revoke($userId)`
       → `revokeAllForUser($userId)`, sin exclusión. Interleaving: el atacante establece sesión (paso 3), el
       dueño revoca el secreto desde su perfil, el atacante entra en `consume()`, `findBySelectorForUpdate`
@@ -287,13 +289,13 @@ alcanzable, ni hueco explotable sin poseer el secreto.
       es falsa cuando el perdedor es un dueño **con `locked_until` en el futuro**, que es precisamente el
       usuario para el que existe este canal: acaba de destruir su secreto y se queda sin sesión y sin login.
       `[api/src/Iam/Identity/Application/RedeemRecoverySecret.php:159]`
-- [ ] [Review][Decision] **El borrado GDPR cruzando la compensación reinserta un id de persona en `audit_log`**
+- [x] [Review][Decision] **El borrado GDPR cruzando la compensación reinserta un id de persona en `audit_log`**
       (`edge`) — si `identity:gdpr:erase-subject` commitea entre `$establishSession()` (`:130`) y
       `findByIdForUpdate($userId)` (`:199`), la compensación escribe `AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId)`
       **después** de que el anonimizador haya cerrado su transacción. El reconciliador lo detecta (es el
       colaborador hardcodeado de `audit_log.resource_id`), pero la reparación es manual y el tick posterior.
       Ventana estrechísima; la forma del arreglo es la decisión. `[api/src/Iam/Identity/Application/RedeemRecoverySecret.php:199]`
-- [ ] [Review][Decision] **La mitad del verbo de `api-endpoint-contract` es inerte, y justo en el ejemplo con
+- [x] [Review][Decision] **La mitad del verbo de `api-endpoint-contract` es inerte, y justo en el ejemplo con
       el que se justifica** (`blind`) — `manifest()` construye la **unión de métodos por path**, así que
       `methods.has(site.method)` pasa con cualquiera de los dos. Medido: **6 de 34** paths son multi-método
       (`banks`, `banks/{id}`, `bank-accounts`, `bank-accounts/{id}`, `users/{id}` y `/me/recovery-secret`), y el
@@ -301,7 +303,7 @@ alcanzable, ni hueco explotable sin poseer el secreto.
       en `ApiRecoverySecretRepository` deja el gate verde: la pantalla de perfil acuñaría un secreto en cada
       carga. La clase no está en la lista de puntos ciegos del propio fichero. `[pwa/tests/api-endpoint-contract.test.ts:16]`
 
-- [ ] [Review][Decision] **Agotar el presupuesto por selector no deja rastro en ninguna parte** (`edge`) —
+- [x] [Review][Decision] **Agotar el presupuesto por selector no deja rastro en ninguna parte** (`edge`) —
       el limitador refusa antes de cualquier lectura, así que no se escribe fila de auditoría y
       `AccessLogAuditListener` sólo admite peticiones con éxito. Reclasificado de `patch` a `decision` al
       escribir el arreglo: proyectar «sobre el usuario que resuelve el selector» exige **resolver el
@@ -363,6 +365,46 @@ emitir `expiresAt` en la ranura de `mintedAt` en los dos controladores (2, uno p
 `ensureActive()` del mint (3, las tres filas del proveedor), dejar vacío el sumidero de logs (1, el suelo
 anti-vacuidad con su propio mensaje), plantar un identificador en el contexto del log (1), fijar el rótulo
 `Active` (1) e invertir `hasLapsed` (2, la dirección que un test de un solo lado deja abierta).
+
+**Cómo se resolvió cada una, y qué dijo la medición:**
+
+- **D1 — el radio de la compensación. Resuelto (A): revocar sólo la sesión del canje.** La consulta lo marcó
+  bloqueante y acertó, pero predijo que costaría cambiar `ReauthenticateDevice` y sus cuatro consumidores.
+  **No cuesta nada de eso.** Medido: `StartSession::start()` **devuelve** un `SessionId`, lo deja en el bag a
+  través de `CurrentSessionReference::set()`, y `SessionAdmissionGate` lo lee en cada petición autenticada por
+  el mismo puerto. `RevokeSession::revoke(SessionId)` y `RevokeCurrentSessionController` ya existían. Así que
+  la premisa sobre la que se aceptó el radio grueso el 30-ago —«exigiría el identificador de sesión, que
+  `Security::login()` nunca devuelve»— es **cierta de `Security::login()` y falsa del sistema**. Nuevo
+  colaborador `RevokeCurrentSessionBestEffort`, seam declarado en `.bounded-context-allowlist` y espejado en
+  deptrac. Efecto lateral que no hubo que escribir: `RevokeSessionsBestEffort` vuelve a tener **cuatro**
+  llamantes, todos de cambio de credencial, así que su docblock y su mensaje de log vuelven a ser ciertos por
+  construcción — las dos afirmaciones falsas que la review encontró mueren con el quinto llamante.
+- **D2 — el cruce GDPR. Resuelto (B): registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7, con el encuadre
+  corregido.** La consulta propuso que el evento no llevara referencia a persona. **Medido, eso no cierra
+  nada:** `SealedAuditEntryFactory` sella el actor desde `SecurityActorContextFactory`, que lee
+  `tokenStorage->getToken()?->getUser()` — y la compensación corre **después** del login, así que la fila lleva
+  el id en `actor_id` con recurso o sin él. El eje es el actor, no el recurso, y
+  `.person-reference-policy:134` ya declara ese eje fuera del control con su residual argumentado. Su objeción
+  al TOCTOU sí es correcta y descartó también mi propia opción (A).
+- **D3 — el gate de verbo. Resuelto (A): el verbo se declara por operación.** La consulta propuso comparar
+  `(path, method)` contra el manifiesto. **Eso no enrojece:** el manifiesto declara
+  `iam_me_get_recovery_secret` (GET) e `iam_me_mint_recovery_secret` (POST) como rutas nombradas sobre el mismo
+  path, así que los dos pares existen y el intercambio pasa las dos búsquedas. La unión no era el bug — es fiel
+  a la API. El hueco era que el gate no sabe qué **operación** es cada call site. Medido con la extracción del
+  propio gate: de **38** claves, exactamente **una** se usaba con dos verbos (`IDENTITY.RECOVERY_SECRET`), y el
+  resto del registro ya está indexado por operación. Se parte en `RECOVERY_SECRET` / `RECOVERY_SECRET_MINT`,
+  se declara el verbo por clave y se afirma en cuatro direcciones. La dirección de completitud encontró de
+  paso **dos endpoints que el gate nunca cubría** — las autorizaciones de Mercure, llamadas por variable.
+- **D4 — el presupuesto por selector. Resuelto (A): la ausencia se escribe como decisión.** Coincidimos los
+  tres. Nueva `D9` en el ADR: el agotamiento no es transición de dominio, resolver el selector en el camino
+  refusado reintroduce la amplificación que el rechazo temprano compra, y una métrica agregada sería
+  compatible con I-1 pero es una decisión propia — el canal `observability` no tiene rotación, TTL ni dueño de
+  borrado, que es la razón por la que este repo ya rechazó llevar allí el string de un llamante.
+
+**Falsificación de las decisiones.** `RevokeSession` devuelto al radio grueso → **un solo rojo**, el caso
+nuevo `theCompensationTakesTheRedemptionsOwnSessionAndSparesTheOwnersLiveOne`. Y el falsificador que el
+hallazgo D3 nombraba —intercambiar `get`↔`post` en `ApiRecoverySecretRepository`— pasaba en verde antes y
+ahora enrojece nombrando **las dos** mitades.
 
 ## Spec Change Log
 
@@ -737,20 +779,20 @@ siguiente (`e3c7b5c5`) dice en su propio mensaje que *«only base+head is red»*
 como `make php.unit -- 0` certificaba un estado que el commit de al lado declaraba rojo. Por eso la corrida
 lleva ahora el árbol sobre el que se hizo: sin él, «0» es una afirmación sin sujeto.
 
-**Corrida sobre `e3c7b5c5` + los patches de la review del 2026-08-31**, cada una fresca y con su código de
-salida leído, no heredado:
+**Corrida sobre `e3c7b5c5` + los 21 patches y las cuatro decisiones de la review del 2026-08-31**, cada una
+fresca y con su código de salida leído, no heredado:
 
 - `make php.stan` -- 0
 - `make php.md` · `php.cs.dry-run` · `php.cs-fixer.dry-run` · `php.rector.dry-run` -- 0
 - `make php.deptrac` -- 0
-- `make php.unit` -- 0 (3498 tests, 18220 aserciones, 2 skipped)
+- `make php.unit` -- 0 (3499 tests, 18226 aserciones, 2 skipped)
 - `make php.behat` -- 0 (482 escenarios, 4489 pasos)
 - `make php.lint.route-manifest` -- 0
 - `make php.lint.{bounded-context,event-bus,error-contract,step-vocabulary,audit-evidence,public-access}` -- 0
 - `make php.lint.person-reference` · `php.lint.gate-placement` -- 0
 - `make php.lint.{persistent-transport,schedule-consumption,prod-container}` -- 0
 - `make pwa.quality` -- 0 · `make pwa.lint.graph` -- 0
-- `make pwa.test.unit` -- 0 (256 ficheros, 1682 tests)
+- `make pwa.test.unit` -- 0 (256 ficheros, 1685 tests)
 
 **Lo que esta lista NO cubre**, dicho en vez de implicado: `make pwa.test.e2e` no se corrió (exige el stack
 vivo), y `make shell.lint` no se corrió porque esta review no tocó ningún fichero de shell.
