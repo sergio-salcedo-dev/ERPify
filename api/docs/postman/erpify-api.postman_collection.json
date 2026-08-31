@@ -300,6 +300,47 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Shared",
+      "description": "Capability modules of the shared kernel that publish a route",
+      "item": [
+        {
+          "name": "Images",
+          "description": "Shared/Images read surface — canonical bytes addressed by identity alone",
+          "item": [
+            {
+              "name": "Get image bytes",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Accept", "value": "image/*, application/problem+json" },
+                  {
+                    "key": "If-None-Match",
+                    "value": "",
+                    "description": "Optional. Echo a previous response's ETag to get a 304 instead of the body. The strong (\"<digest>\"), weak (W/\"<digest>\") and unquoted forms are all accepted, as is *.",
+                    "disabled": true
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/images/:imageId",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "images", ":imageId"],
+                  "variable": [
+                    {
+                      "key": "imageId",
+                      "value": "",
+                      "description": "Image UUID v7. Case-insensitive: the module normalises it."
+                    }
+                  ]
+                },
+                "description": "Canonical bytes of an image, addressed by identity alone. Requires a session like the rest of /api (401 without one, decided before anything is resolved) and grants nothing beyond it: any authenticated caller may read any image, because the module holds no owner. 200 carries the row's own Content-Type, a strong ETag derived from the digest, and Cache-Control: private, max-age=3600, immutable. 304 when If-None-Match still matches AND the object is still retrievable. 400 invalid-uuid for a malformed identifier; 404 not-found for an absent row or absent bytes; 503 service-unavailable for a retryable storage failure. Range is ignored (always the full body, never 206/416) and neither Accept-Ranges nor Last-Modified is emitted."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
     }
   ]
 }

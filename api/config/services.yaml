@@ -9,16 +9,44 @@
 parameters:
     api.name: erpify
 
-    # Shared/Images canonicalization pipeline (Story 1.1) — deployment defaults, not domain
-    # requirements. Starting points only: not yet validated against a memory/CPU benchmark of the
-    # real worker (see the story's Task 5 for the reasoning: pixel count alone does not fix the
-    # memory cost, which also depends on bytes-per-pixel and the decoder's own intermediate
-    # buffers).
+    # Shared/Images canonicalization pipeline — deployment defaults, not domain requirements. The
+    # pixel ceiling and `memory_limit` were benchmarked together against the real worker and are now
+    # ONE decision, held by `ImagePixelBudgetGateTest`; the other three are still starting points.
+    # Pixel count alone does not fix the memory cost — it also depends on bytes-per-pixel and on the
+    # decoder's own intermediate buffers, which is why the two numbers are gated as a pair rather
+    # than reasoned about separately.
     erpify.images.max_input_bytes: 20971520 # ~20 MB, strlen($bytes) received by ImageProcessor
-    erpify.images.max_decoded_pixels: 40000000 # ~40 megapixels (e.g. 8000x5000), declared width*height
+    # Measured, not chosen: the pipeline peaks at roughly 10 bytes per INPUT pixel (GD holds a truecolor
+    # frame at 4 B/px and `ResizeModifier` clones it), so this ceiling and `memory_limit` are ONE decision.
+    # At 20 MP the worst measured format peaks at 191 MiB against the 256 MiB budget; at 40 MP a PNG is a
+    # FATAL error, which in worker mode takes the worker down and produces no Problem Details at all. 20 MP
+    # covers every phone camera, and the canonical output is capped at 4096 px per side regardless.
+    erpify.images.max_decoded_pixels: 20000000 # ~20 megapixels (e.g. 5000x4000), declared width*height
+    # Deliberately NOT lowered alongside the pixel ceiling: measured, a 10000x2000 panorama is 20 MP and
+    # peaks at 145 MiB, so the side length bounds nothing the pixel count does not already bound. Lowering it
+    # would refuse a legitimate shape for no measured reason.
     erpify.images.max_input_dimension: 10000 # px, either declared side
     erpify.images.max_output_dimension: 4096 # px, either side of the canonical output
     erpify.images.encoding_quality: 85 # 0-100, jpeg/webp encoders only
+
+    # The read path's serving budget: the largest object `CanonicalImageFinder` will materialise, checked
+    # against the size the row declares BEFORE any byte is fetched. Separate from `max_input_bytes`, which
+    # bounds untrusted input to the processor: the two govern different risks, and coupling them would make
+    # lowering the upload limit silently unservable every image already stored above the new value.
+    #
+    # DERIVED, not chosen, and it has to be. It must admit everything the pipeline can legitimately emit or
+    # an image becomes storable and then permanently unservable — 500 for ever, indistinguishable from a
+    # broken deployment, and created at ingest but answered at read where nothing can act on it. A hand-
+    # picked 20 MB did exactly that: measured, a palette PNG of 4472x4472 weighing 8.85 MiB canonicalises to
+    # 49.23 MiB. The floor is `max_output_dimension x (max_output_dimension x 4 + 1)` — 4 bytes per pixel
+    # plus PNG's filter byte per scanline, with deflate adding rather than removing on incompressible data —
+    # which is 64.0 MiB at 4096 px and, note, slightly ABOVE a round 64 MiB rather than equal to it.
+    #
+    # The ceiling is `memory_limit`: the port returns the whole object as one string, and exhausting the
+    # limit is a FATAL error rather than a `Throwable`, so the RFC 9457 pipeline never runs and the response
+    # is not Problem Details at all. `ImagePixelBudgetGateTest` holds both ends and refuses a commit that
+    # moves this, `max_output_dimension` or `memory_limit` without the others still fitting.
+    erpify.images.max_served_bytes: 71303168 # 68 MiB, Image::byteSize() of the stored canonical object
 
 services:
     _defaults:
@@ -111,6 +139,21 @@ services:
     Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort:
         arguments:
             $logger: '@monolog.logger.observability'
+
+    # Same rule again, and this one reports on a path that answers 5xx as well as one that answers 2xx. The
+    # channel is what makes both arrive: the 5xx case would flush the buffered handler anyway, but the
+    # oversize refusal and the digest mismatch must be readable on their own, not as a side effect of
+    # whatever else the request happened to log.
+    Erpify\Shared\Images\Application\ReadFailureReporter:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    # Bound here rather than with `#[Autowire(param: …)]` for the reason its `Infrastructure` siblings can
+    # use the attribute and this class cannot: deptrac refuses `Application` a dependency on the container's
+    # attributes. Wiring is configuration, so it lives in configuration.
+    Erpify\Shared\Images\Application\CanonicalImageFinder:
+        arguments:
+            $maxServedBytes: '%erpify.images.max_served_bytes%'
 
     # The dead-letter reader inspects the failure transport; bind the concrete `failed` transport
     # (autowiring cannot pick one receiver among many).

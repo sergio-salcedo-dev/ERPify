@@ -1,5 +1,5 @@
 # generated: 2026-08-24
-# last_updated: 2026-08-29
+# last_updated: 2026-08-31
 # project: ERPify
 # project_key: NOKEY
 # tracking_system: file-system
@@ -51,7 +51,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-08-24
-last_updated: 2026-08-29
+last_updated: 2026-08-31
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -148,5 +148,10 @@ development_status:
   epic-images: in-progress
   img-1-1-subir-imagen-obtener-representacion-canonica: done
   img-1-2-persistir-imagen-borrado-fiable-de-bytes: done
-  img-1-3-leer-representacion-canonica-de-forma-segura: ready-for-dev
+  # img-1-3: code review de tarea completa hecha 2026-08-31 — tres capas en paralelo sobre el código, 17
+  # hallazgos nuevos distintos más los 18 del Pase 3, todos aplicados salvo uno descartado por estar ya
+  # registrado. Cuatro decisiones resueltas con Sergio tras consulta externa; la ADR del bound de la señal
+  # queda ENMENDADA y su D2 revertida. El marcador pasa a `done` porque esa review es el último paso que
+  # lee la tarea entera; NO es evidencia de que la rama haya mergeado — para eso, git.
+  img-1-3-leer-representacion-canonica-de-forma-segura: done
   epic-images-retrospective: optional

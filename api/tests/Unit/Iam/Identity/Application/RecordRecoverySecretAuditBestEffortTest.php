@@ -34,23 +34,6 @@ use RuntimeException;
 #[CoversTrait(ReportsAuditFailureSafely::class)]
 final class RecordRecoverySecretAuditBestEffortTest extends TestCase
 {
-    /**
-     * The four transitions and the token each projects. Declared as data rather than as four near-identical
-     * cases so a fifth cannot be added with its action left unasserted.
-     *
-     * @return iterable<string, array{string, string}>
-     */
-    public static function transitions(): iterable
-    {
-        yield 'minted' => ['recordMinted', 'RECOVERY_SECRET_MINTED'];
-        yield 'redeemed' => ['recordRedeemed', 'RECOVERY_SECRET_REDEEMED'];
-        yield 'revoked' => ['recordRevoked', 'RECOVERY_SECRET_REVOKED'];
-        yield 'redemption compensated' => [
-            'recordRedemptionCompensated',
-            'RECOVERY_SECRET_REDEMPTION_COMPENSATED',
-        ];
-    }
-
     #[Test]
     #[DataProvider('transitions')]
     public function eachTransitionProjectsItsActionOntoTheSubject(string $method, string $action): void
@@ -87,7 +70,8 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
         $logger = new RecordingLogger();
 
         (new RecordRecoverySecretAuditBestEffort(new FailingAuditLogger($failure), $logger))
-            ->{$method}(Uuid::generate());
+            ->{$method}(Uuid::generate())
+        ;
 
         $this->assertCount(1, $logger->records, 'a swallowed failure that logs nothing did not happen at all');
         $this->assertSame('error', $logger->records[0]['level']);
@@ -116,5 +100,22 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
         // And the action still is there, so this is asserting an absence beside a presence rather than over
         // a record that carries nothing at all.
         $this->assertStringContainsString($action, $encoded);
+    }
+
+    /**
+     * The four transitions and the token each projects. Declared as data rather than as four near-identical
+     * cases so a fifth cannot be added with its action left unasserted.
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    public static function transitions(): iterable
+    {
+        yield 'minted' => ['recordMinted', 'RECOVERY_SECRET_MINTED'];
+        yield 'redeemed' => ['recordRedeemed', 'RECOVERY_SECRET_REDEEMED'];
+        yield 'revoked' => ['recordRevoked', 'RECOVERY_SECRET_REVOKED'];
+        yield 'redemption compensated' => [
+            'recordRedemptionCompensated',
+            'RECOVERY_SECRET_REDEMPTION_COMPENSATED',
+        ];
     }
 }

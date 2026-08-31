@@ -85,6 +85,9 @@ final class AuditPolicyTest extends TestCase
         yield 'bank realtime authorize' => ['backoffice_bank_realtime_authorize', 'GET'];
         yield 'dev hot reload' => ['frontoffice_dev_frankenphp_hot_reload', 'GET'];
         yield 'bank count helper' => ['backoffice_bank_count', 'GET'];
+        // The `shared_` arm, which until this line no case reached: deleting the branch it guards left the
+        // whole suite green while every successful image read started writing an `audit_log` row.
+        yield 'shared image serving' => ['shared_image_get', 'GET'];
     }
 
     #[DataProvider('provideDoesNotAuditWritesViaTheGenericPathCases')]

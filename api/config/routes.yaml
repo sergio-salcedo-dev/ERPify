@@ -47,6 +47,20 @@ api_v1_iam_session:
     defaults:
         _format: json
 
+# Shared/Images read surface. Scoped to the module's Controller dir rather than to `../src/Shared/`:
+# the shared kernel is where every cross-context module lives, so mounting the router over it would
+# register any future `#[Route]` a shared module happens to declare, without its author choosing to
+# publish one. Until this resource existed no resource covered `src/Shared/` at all, which means a
+# `#[Route]` there registered nothing and every gate stayed green over a route that did not exist.
+# The `/api/v1` prefix is what puts it under the firewall's `^/api` catch-all, so it needs no
+# `access_control` line and no `api/.public-access-exemptions` entry.
+api_v1_shared_images:
+    resource: ../src/Shared/Images/Infrastructure/Controller/
+    type: attribute
+    prefix: /api/v1
+    defaults:
+        _format: json
+
 api_v1_front_office:
     resource: ../src/Frontoffice/
     type: attribute

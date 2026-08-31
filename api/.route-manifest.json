@@ -40,5 +40,6 @@
   "identity_forgot_password": { "path": "/api/v1/backoffice/forgot-password", "methods": ["POST"] },
   "identity_login": { "path": "/api/v1/backoffice/login", "methods": ["POST"] },
   "identity_redeem_recovery_secret": { "path": "/api/v1/backoffice/recovery/redeem", "methods": ["POST"] },
-  "identity_reset_password": { "path": "/api/v1/backoffice/reset-password", "methods": ["POST"] }
+  "identity_reset_password": { "path": "/api/v1/backoffice/reset-password", "methods": ["POST"] },
+  "shared_image_get": { "path": "/api/v1/images/{imageId}", "methods": ["GET"] }
 }

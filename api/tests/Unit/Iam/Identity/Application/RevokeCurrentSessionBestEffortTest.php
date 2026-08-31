@@ -144,6 +144,7 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
             (new DateTimeImmutable(self::NOW))->modify('+7 days'),
         );
         $session->pullDomainEvents();
+
         $sessions->save($session);
 
         return $sessionId;

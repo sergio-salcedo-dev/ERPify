@@ -972,10 +972,14 @@ mitigated state. Accepting one means recording who accepted it and against which
       — reachable through the console's own single-alternative prompt for a mistyped command name, which
       drains a pipe whose last byte is not a newline. `--force` is the unattended path. **Residuals, none
       gated:** a command line the console cannot *bind* raises before `execute()` and exits `1`, which no
-      guard here can reach; the guards are three copies with no gate holding them equal, and the deferred
-      registry states why an AST gate on the re-read alone would not have caught the defect that produced
-      them; and `--dry-run` still prints the matching row count to the same caller, so what the guards close
-      is the exit code as an existence oracle, never the count as information.
+      guard here can reach; and `--dry-run` still prints the matching row count to the same caller, so what
+      the guards close is the exit code as an existence oracle, never the count as information — which is
+      also why no separate record is owed for the count surviving on the confirmation path. **No longer
+      three copies:** `identity:gdpr:erase-subject` and `bank-account:gdpr:erase-subject` inherit the
+      sequence from `ConfirmedErasureCommand` and cannot order it wrong; `audit:gdpr:erase` keeps its own,
+      because it reads the row count between the refusal and the question, and
+      `ConfirmationGuardAdjacencyGateTest` holds the union of both routes to the same two guards — a text
+      sweep over the shape, which never judges the semantics.
 - [ ] **An erasure count is read from the store, never minted by a type fallback.** Every Doctrine adapter
       running a DQL bulk statement had to narrow `AbstractQuery::execute()`'s declared `mixed`, and seven
       sites across four adapters reached independently for the same fallback — six spelled
@@ -1637,8 +1641,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Expiry: re-assess before the first production deployment or the first customer**, whichever
       comes first.
 
-- [ ] **Image bytes: what the storage root guarantees, and the four things it does not.** Residuals of
-      `Shared/Images`, listed together because each is invisible from the others.
+- [ ] **Image bytes: what the storage root guarantees, and the ten things it does not.** Residuals of
+      `Shared/Images`, listed together because each is invisible from the others. One to four are the
+      write and deletion paths; five to ten are opened by the authenticated read route
+      `GET /api/v1/images/{imageId}` and are not closed by it.
       **One — the root is provisioned by the deployment, conditionally, and that condition is the control.**
       `compose.yaml` mounts the named volume `image_storage` at `/app/storage` for both `php` and
       `messenger_worker`, and the entrypoint creates `<STORAGE_LOCAL_PATH>/images` **only when that path is
@@ -1683,6 +1689,111 @@ mitigated state. Accepting one means recording who accepted it and against which
       a diff, and nothing more. Closing two and three is a reconciliation the consuming epic would have to
       justify against the no-bookkeeping decision; closing four is that epic's too, since only a consumer
       knows whether a given image denotes a person.
+      **Five — enumeration is bounded by an IP-keyed limiter and by nothing sharper.** An `ImageId` is
+      UUIDv7, so it is time-ordered and cheaper to enumerate within a window than a v4 would be, and any
+      authenticated session may read any image. A global limiter does apply — `RateLimitListener` gates every
+      `/api/*` request that is not an `OPTIONS`, without consulting authentication — but its bound is softer
+      than its number suggests: the pool is local to a deployment (the configuration itself says a
+      multi-worker deployment behind a balancer needs a shared Redis), and with `lock_factory: null`
+      concurrent workers *"may over- or under-count"*. What does not exist is a limit **per identity and per
+      route**. `ImageId` is never an authorization mechanism and never a secret.
+      **What defends the frontier is now a tripwire rather than a promise.** The epic's argument for having
+      no voter is that no consumer relation exists to vote on, and its second half — that the first real
+      consumer brings its own policy — was prose that nothing enforced; an external security review named
+      the exact failure that permits, a consumer wired without an owner check turning a documented
+      provisional frontier into a silent cross-user read. `ImageConsumerAuthorizationGateTest` refuses any
+      aggregate outside `Shared/Images` holding an image reference, so that question is forced into the diff
+      that first raises it. The bot's own suggested fix — gating the route behind a permission granted to no
+      role — was measured and refused: it answers 403 to every caller, which deletes the slice rather than
+      deferring the decision. The gate matches a property NAME, so a reference under another spelling, in a
+      join table or in a JSON column is still invisible to it.
+      **And the conditional request inverts the usual self-limiting.** A `304` is gated on the same verified
+      read as a `200` — the full object off disk plus its SHA-256 — because the storage port exposes no
+      existence predicate; the cost is declared at the controller. What is NOT declared there is that the
+      client stops paying: a loop of matching `If-None-Match` requests receives a couple of hundred bytes
+      each while forcing a full read and hash per request, where the same loop answered `200` would cost the
+      caller the whole body and self-limit. Nothing bounds aggregate bytes served, and the per-IP budget is
+      sized for page navigation (120/min) while this route is one request per rendered image rather than one
+      per navigation — so an office behind one NAT shares it, and a 429 arrives inside an `<img>` as a broken
+      image with no diagnosis. Latent while the route has no consumer; the epic that wires the first one
+      inherits it.
+      **Six — a cached copy outlives the erasure, shortened to an hour rather than closed.** A conforming
+      client does not revalidate while the response is fresh, so once the bytes and the row are gone every
+      viewer keeps serving the image for up to `max-age` with no request reaching a server that could answer
+      404. The route emits `max-age=3600` rather than the year the epic wrote, which shortens the exposure
+      without turning every view into a full read; it is still the residual with the most personal-data
+      content this route adds, and it is not immediate deletion. What the hour does **not** cover, said
+      rather than implied: a copy the viewer downloaded, a screenshot, a page already open with the bytes in
+      memory, and the stale behaviour of an offline user agent. And the ambiguity that decides the ceiling is
+      recorded rather than resolved: the conservation ADR's *"stop being retrievable by any route, cached
+      URLs included"* was written about server routes and CDN-fronted variant URLs, and reading it as
+      governing the viewer's own browser cache is an INTERPRETATION — if that reading is confirmed, no finite
+      window satisfies it and the answer is `no-store`.
+      **Seven — the object is materialised whole in one process, bounded by what the row DECLARES.** The
+      storage port returns the canonical object as a single string, and a memory exhaustion is a fatal error
+      rather than a `Throwable`: the RFC 9457 pipeline would not run and the response would not be Problem
+      Details at all. The read use case therefore refuses an object whose `Image::byteSize()` exceeds
+      `erpify.images.max_served_bytes` **before** calling `read()`. What the guard cannot see is the whole
+      residual: `byteSize` is what the row says, not what the object weighs. The digest verification closes
+      that gap after the fact, which is a detection and not a prevention — and it detects it under one name:
+      an object that diverges from the row's declared size is reported as a digest mismatch, so "these bytes
+      were corrupted" and "these are not the whole object" are one verdict on the observability axis.
+      Separating them was considered and declined: it costs a third verdict, a reporter method and a log
+      producer to name a subset of a condition the digest check already refuses to serve, and nothing in the
+      tree can currently produce it. The budget itself is no longer hand-picked — it is derived from
+      `max_output_dimension` and gated against `memory_limit` at both ends by `ImagePixelBudgetGateTest`, so
+      an object the pipeline can legitimately emit can no longer be stored and then permanently unservable.
+      **The INGESTION side of the same axis was measured in this story and half-closed.** The
+      canonicalization pipeline peaks at roughly 10 bytes per input pixel (GD holds a truecolor frame at
+      4 B/px and `ResizeModifier` clones it), and `memory_limit` was never declared by this repository at
+      all — it was the base image's 128M. Measured, that made an ordinary 12 MP phone photo a FATAL error
+      3.3x inside the 40 MP ceiling configured to accept it, and a fatal is not a `Throwable`: no Problem
+      Details response is produced and in worker mode the worker itself goes down. The budget is now
+      declared (`256M`) and the ceiling lowered to 20 MP to match, with `ImagePixelBudgetGateTest` refusing
+      a commit that moves either without the other. **What stays open is the OUTER bound, which is the
+      container rather than the ini**: prod caps the php service at 1 GiB and FrankenPHP runs about two
+      workers per core, so `workers x memory_limit` overcommits and a concurrent burst of large uploads is
+      bounded by `PHP_MEM_LIMIT` — where an overrun is an OOM-kill of the container, not of one request.
+      Nothing sizes that today, and nothing can until an upload endpoint exists to generate the load; it
+      belongs to the epic that exposes one.
+      **Eight — nothing records who read what.** Deliberate and decided by the epic: the route name begins
+      `shared_`, which is the one exclusion of the generic activity audit that fits object serving, so a
+      successful read writes no `audit_log` row. A single `resource_type` cannot be both person-denoting (an
+      avatar) and not (a logo), and there is no consumer relation to vote on yet. It is a scope boundary, not
+      an oversight — and it means this route has no forensic record of access at all.
+      **Nine — the container log has no isolation between producers, so a read failure can evict unrelated
+      history.** Caddy's access log, the default channel and `observability` share one retention budget
+      (`json-file`, 10m x 5) and eviction is **by volume, not by ownership or age**, so a sustained failure on
+      this path displaces the history of subsystems that have nothing to do with it — and nothing alerts,
+      because no collector reads that channel and the Sentry handler is commented out. The correct framing is
+      shared-sink eviction between independent producers rather than "too many logs", and the correct control
+      point is the logging infrastructure itself, which is transverse and not this module's.
+      **The read path's own contribution is now bounded, and the bound is narrower than it sounds.**
+      `FailureSignalWindow` admits one record per `(operation, category)` per 60 seconds in both emitters, so
+      a caller can no longer choose how much this deployment writes by looping one broken image. Its state is
+      process memory and FrankenPHP runs several workers, so the bound is per worker and the aggregate scales
+      with the worker count; and it covers the `observability` line only — a 5xx still writes the
+      default-channel `error` record that flushes the buffered handler, which belongs to another channel and
+      another module. What it costs is frequency: the log keeps that a permanent failure is still happening
+      and stops carrying how often it was retried. Reasoning, and the measurement that reversed the earlier
+      decision to leave it unbounded:
+      [`docs/adr/image-read-failure-signal-bound.md`](docs/adr/image-read-failure-signal-bound.md) D2 and D4.
+      Tracked as [#879](https://github.com/sergio-salcedo-dev/ERPify/issues/879).
+      **Ten — the served `Content-Type` is a database column, and the allowlist that closes it lives only at
+      the writer.** `ImageGetController` sets the response type verbatim from `Image::mediaType()`; the
+      entity guarantees only that the value is non-blank, and Doctrine hydrates without the constructor, so
+      even that runs at write time alone. The four-type allowlist is a `private const` on the WRITE path and
+      the read edge deliberately inherits it rather than restating it. Today exactly one production site
+      constructs an `Image` and its media type comes from `MediaTypeEncoderFactory`, and
+      `ImageWriterSurfaceGateTest` now refuses a second one appearing silently — but that gate reads CODE,
+      and the exposure is a ROW: a data migration, a restore, or a context writing SQL directly is invisible
+      to it. What bounds the consequence instead of the cause is the response, which is the first in the tree
+      to carry `Content-Security-Policy: default-src 'none'; sandbox` and
+      `Cross-Origin-Resource-Policy: same-origin` — the body is inert whatever the column says, and
+      `X-Content-Type-Options: nosniff` is not what does that, since it PINS a declared type rather than
+      questioning it. This is also the first `/api/*` route returning a browser-renderable body at all; the
+      API origin still publishes no CSP, no CORP and no `X-Frame-Options` of its own, so every other route
+      relies on returning JSON.
 
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not

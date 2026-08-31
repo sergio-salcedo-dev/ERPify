@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Images\Infrastructure;
 
+use Erpify\Shared\Images\Application\FailureSignalWindow;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Storage\ImageBytesNotFound;
 use Erpify\Shared\Images\Domain\Storage\ImageStorage;
@@ -100,6 +101,7 @@ final readonly class FlysystemImageStorage implements ImageStorage
         private string $root,
         #[Autowire(service: 'monolog.logger.observability')]
         private LoggerInterface $logger,
+        private FailureSignalWindow $window,
     ) {
     }
 
@@ -145,6 +147,18 @@ final readonly class FlysystemImageStorage implements ImageStorage
         try {
             return $this->filesystem->read($key);
         } catch (UnableToReadFile $refusal) {
+            // Reached when the object stopped existing BETWEEN the check above and this read, and that
+            // window is designed into the module rather than incidental to it: `DeleteImage` unlinks the
+            // bytes before deleting the row, precisely so a crash can never leave a row promising bytes that
+            // are gone. The library reports it with PHP's own `No such file or directory`, which matches no
+            // `PERMANENT_CONDITIONS` entry, so `verdictFor()` would call it retryable — telling a caller to
+            // retry a deletion, and pointing an operator at a substrate fault that does not exist. Asking
+            // again is what distinguishes the two, and it costs a `posix_access` only on a path that has
+            // already failed.
+            if (!$this->objectExists($key, StorageOperation::Read)) {
+                throw $this->report(new ImageBytesNotFound());
+            }
+
             throw $this->report($this->verdictFor($refusal->reason(), StorageOperation::Read));
         } catch (FilesystemException) {
             throw $this->report(new ImageStorageUnavailable(StorageOperation::Read));
@@ -381,12 +395,20 @@ final readonly class FlysystemImageStorage implements ImageStorage
     /**
      * Emits the signal, and never lets it become load-bearing for whatever it is reporting.
      *
+     * Gated by {@see FailureSignalWindow}, which this class needs for the same reason its read-path sibling
+     * does and did not need before: until a route served bytes, nothing here was reachable from a client at
+     * all, so the rate was bounded by what the application itself did.
+     *
      * Spelled as two per-level calls rather than one `log($level, …)`: the carrier gate that reads which
      * channels can reach the container log classifies by the level in the method NAME, and refuses the
      * PSR-3 form precisely because no matcher can classify it.
      */
     private function emit(StorageOperation $operation, StorageFailureCategory $verdict): void
     {
+        if (!$this->window->admits($operation->value . '|' . $verdict->value)) {
+            return;
+        }
+
         $context = [
             'operation' => $operation->value,
             'failure_category' => $verdict->value,

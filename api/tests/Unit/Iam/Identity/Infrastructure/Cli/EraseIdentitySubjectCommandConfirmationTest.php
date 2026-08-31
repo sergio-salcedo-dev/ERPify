@@ -26,6 +26,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnon
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
+use Erpify\Tests\Unit\Shared\Console\Double\DrainedInputStream;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -120,7 +121,7 @@ final class EraseIdentitySubjectCommandConfirmationTest extends TestCase
 
         $input = new ArrayInput(['user-id' => UserMother::DEFAULT_ID], $command->getDefinition());
         $input->setInteractive(true);
-        $input->setStream($this->drainedStream());
+        $input->setStream(DrainedInputStream::open());
 
         $output = new BufferedOutput();
 
@@ -165,21 +166,5 @@ final class EraseIdentitySubjectCommandConfirmationTest extends TestCase
             new FixedActorContextFactory(ActorContext::system()),
             new InlineTransactionManager(),
         ));
-    }
-
-    /**
-     * @return resource a stream a read has already taken to EOF, so `feof()` is true before the question
-     */
-    private function drainedStream()
-    {
-        $stream = \fopen('php://memory', 'r+');
-        \assert(\is_resource($stream));
-        \fwrite($stream, 'y');
-        \rewind($stream);
-        \fread($stream, 1);
-        \fread($stream, 1);
-        \assert(\feof($stream));
-
-        return $stream;
     }
 }
