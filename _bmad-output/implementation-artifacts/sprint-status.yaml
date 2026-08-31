@@ -1,5 +1,5 @@
 # generated: 2026-06-23
-# last_updated: 2026-08-06
+# last_updated: 2026-08-31
 # project: ERPify
 # project_key: NOKEY
 # tracking_system: file-system
@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-23
-last_updated: 2026-08-28
+last_updated: 2026-08-31
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -429,6 +429,26 @@ development_status:
   # rama haya entrado: el marcador va por delante del merge por diseño — para eso está git.
   br-9-contrato-endpoints-salud: done
 
+  # Épica Shared/Images — seam compartido de subida y servido de representaciones fungibles (logos,
+  # avatares, miniaturas). ADR docs/adr/images-vs-documents-conservation-contract.md (D6) +
+  # _bmad-output/planning-artifacts/epics-images.md. Distinta del contexto Documents (evidencia, #268).
+  # Refundida aquí desde `sprint-status-images.yaml`, que es el tablero propio de la épica y sigue vivo:
+  # esta es la vista canónica que la tooling BMAD resuelve, no un reemplazo de aquél.
+  # Primera rebanada por decisión del corte: SIN consumidor real cableado (Bank.logoImageId y
+  # User.avatarImageId no existen), así que casi ninguna garantía tiene quien la ejercite — de ahí que los
+  # cinco gates de artefacto del módulo existan para enrojecer en el diff que las haga necesarias.
+  # `ImageConsumerAuthorizationGateTest` es el que fuerza la decisión de autorización que esta slice dejó
+  # provisional (IS_AUTHENTICATED_FULLY), y enrojece en el primer diff de la épica de consumidor.
+  # Retrospectiva 2026-08-31: 5/5 action items de gdpr-hardening cerrados y verificados contra el árbol;
+  # cero entradas nuevas en deferred-work.md; el modo de fallo titular de la retro anterior RECURRIÓ con
+  # otra cara (la aserción que no puede fallar, no ya la siembra vacía). Detalle en
+  # epic-images-retro-2026-08-31.md.
+  epic-images: done
+  img-1-1-subir-imagen-obtener-representacion-canonica: done
+  img-1-2-persistir-imagen-borrado-fiable-de-bytes: done
+  img-1-3-leer-representacion-canonica-de-forma-segura: done
+  epic-images-retrospective: done
+
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.
 # NOTA: 5 items resultaron deuda FANTASMA / ya-resuelta (verificado en main) y se removieron: FetchHttpClient
@@ -507,3 +527,19 @@ action_items:
     action: "La promesa de conjunto cerrado de D12 y su gemelo de audit_log se ablanda: cerrado por revision, no por gate, con el trigger del gate explicito"
     owner: "Sergio"
     status: done
+  - epic: images
+    action: "Generalizar la regla del test vacuo a la asercion que no puede fallar: falsifica el test retirando el mecanismo que dice proteger. Tres modos medidos en la epica — status vs clase de excepcion, resolver disjunto, setup que restaura el nivel guardado"
+    owner: "Sergio"
+    status: open
+  - epic: images
+    action: "Refrescar las dos balas de Shared/Images en deferred-work.md contra el arbol de hoy: ninguna esta cerrada, pero ambas describen un Image y un borde de borrado que ya no son los que hay"
+    owner: "Sergio"
+    status: open
+  - epic: images
+    action: "DECISION: el objetivo de ~30 ficheros por story/PR del corte se erro por 1,6x-3,2x (49/95/67) y nadie lo midio en curso. Corregirlo, retirarlo, o aceptar que el corte por guarantee-axis produce PRs de este tamano"
+    owner: "Sergio"
+    status: open
+  - epic: images
+    action: "DECISION: el liston de pases adversariales para una historia con superficie HTTP nueva. img-1-3 acumulo cuatro; el Pase 2 tumbo cuatro AC y la premisa de Task 0, y el Pase 4 aporto el hallazgo de las tres capas convergentes mas tres SERIOUS"
+    owner: "Sergio"
+    status: open
