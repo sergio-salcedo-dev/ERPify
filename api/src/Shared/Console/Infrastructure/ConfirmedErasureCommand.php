@@ -15,10 +15,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *
  * **Why the question lives here and not at each call site.** {@see UnattendedRunPolicy} centralises what
  * does not vary and leaves what does at the call site, and the deciding question is which of the two the
- * PLACEMENT is. For a subject erasure it does not vary: the two commands that erase one subject had this
- * sequence byte for byte, 147 identical code tokens across 50-odd lines, and a copy is where the next
- * ordering defect comes from. Inheriting the sequence is stronger than copying it — a command that extends
- * this one cannot get the order wrong, where one that copies it can.
+ * PLACEMENT is. Erasing one subject does not vary it: every such command asks the same sentence in the same
+ * position, and a copy is where the next ordering defect comes from. A command that inherits this sequence
+ * cannot get the order wrong; one that copies it can.
  *
  * **Why the audit-trail erasure does NOT extend this, and that exclusion is the same principle.** Its
  * order genuinely differs: it reads a row count between refusing an unanswerable run and putting the

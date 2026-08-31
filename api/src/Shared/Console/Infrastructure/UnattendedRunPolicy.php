@@ -18,10 +18,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * rather than of the test itself. So nothing here calls anything: this class is the predicate and the
  * sentence, and it is reached from wherever the caller decides.
  *
- * Where the order genuinely varies, it stays in the open: the audit trail erasure counts rows and returns
- * early on zero before it ever asks, so it keeps its own pre-flight. Where it does not vary it is inherited
- * rather than copied — the two subject erasures had the same sequence byte for byte, and
- * {@see ConfirmedErasureCommand} now holds it once so a third cannot copy it wrong.
+ * Where the order genuinely varies it stays in the open: the audit trail erasure counts rows and returns
+ * early on zero before it ever asks, so it holds its own pre-flight. Where it does not vary it is inherited
+ * — {@see ConfirmedErasureCommand} holds the subject-erasure sequence once, so a command taking that route
+ * cannot copy the order wrong.
  *
  * @internal
  */

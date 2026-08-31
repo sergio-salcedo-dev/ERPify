@@ -149,13 +149,9 @@ final class EraseActorAuditTrailCommand extends Command
      * would compute it and throw it away — which is what made the exit code an existence oracle over an
      * actor id, answering `2` for an actor with rows and `0` for one without.
      *
-     * **The arm closes that for the shapes {@see UnattendedRunPolicy::cannotAnswer()} can see, and only
-     * those.** A stdin that is empty but not yet READ has `\feof()` false, so the predicate admits it and
-     * the run reaches the count before the question demotes it: measured, such a run still answers `2` for
-     * an actor with rows and `0` for one without, and still reads the trail it was refused. Closing that
-     * one costs the prompt its magnitude — the only defect an operator can catch before an irreversible
-     * `UPDATE` — or asks a subject with nothing left to erase to confirm erasing it, so it is a residual
-     * this command carries knowingly rather than a hole nobody noticed.
+     * **The arm reaches the shapes {@see UnattendedRunPolicy::cannotAnswer()} can see, and only those.** A
+     * stdin that is empty but not yet read has `\feof()` false, so the predicate admits it and the run
+     * reads the count before the question demotes the input.
      *
      * @return int|null the exit code to stop on, or null to proceed with the anonymisation
      */
