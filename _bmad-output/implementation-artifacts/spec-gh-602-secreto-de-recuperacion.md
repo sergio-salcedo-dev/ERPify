@@ -119,9 +119,13 @@ rol (cualquier identidad ACTIVE) · forzar ≥2 administradores · el secreto en
 - [x] `api/src/Iam/Identity/Application/RedeemRecoverySecret.php` -- resuelve opaco → `ensureActive()` →
       `Security::login()` → **luego** transacción: limpia cerrojo + retira fila.
 - [x] `api/src/Iam/Identity/Application/RevokeRecoverySecret.php` -- borrado explícito por el dueño.
-- [x] Controladores en `api/src/Iam/Identity/Infrastructure/Http/` -- `POST /me/recovery-secret`,
-      `DELETE /me/recovery-secret`, `GET /me/recovery-secret` (metadatos: existe y desde cuándo, **nunca**
-      el selector), `POST /recovery/redeem` (anónimo, guarda same-origin, presupuesto por selector).
+- [x] Controladores -- `POST /me/recovery-secret`, `GET /me/recovery-secret` (metadatos: existe y desde
+      cuándo, **nunca** el selector) y `POST /me/recovery-secret/revoke` en
+      `api/src/Iam/Identity/Infrastructure/Controller/`; `POST /recovery/redeem` (anónimo, guarda
+      same-origin, presupuesto por selector) en `api/src/Iam/Identity/Infrastructure/Http/`. **El directorio
+      decide la URL** — `routes.yaml` aplica el prefijo por directorio — así que los dos no son
+      intercambiables: montar las tres de `/me` bajo `Http/` las colgaría de
+      `/api/v1/backoffice/me/...`.
 - [x] `api/config/packages/security.yaml` + `api/.public-access-exemptions` -- exención `exact` del canje.
 - [x] `api/.person-reference-policy` -- `$id => non-person`, `$userId => person :: …EraseIdentitySubject.php`.
 - [x] `api/src/Iam/Identity/Application/EraseIdentitySubject.php` + `Dbal…RecoverySecretPersonReferences.php`
@@ -258,6 +262,107 @@ escribir una aserción, así que no se hace y el rojo se reporta tal cual.
 **Falsificación:** toda guarda nueva se verificó borrándola y observando el rojo, restaurando después
 reescribiendo bytes (nunca `git checkout --`). Nueve mutaciones, cada una con exactamente los rojos
 esperados y ninguno más.
+
+### Review Findings — code review de tres capas, 2026-08-31 (sobre `ad0183b3..e3c7b5c5`, 154 ficheros, +10196/−269)
+
+Segunda review de tres capas, con las mismas capas ortogonales y en contexto fresco, a las que se les pasó
+el registro completo de los dos pases hostiles **y** de la review del 2026-08-30 para que no re-reportaran lo
+cerrado. Prioridad explícita sobre el delta que la review anterior no vio: cerró en `f69e94f9`, y después
+entraron `5c1d9a6a`, `9878af16` (+368 líneas de test), `e3c7b5c5` y el merge `29e25619` (que trae
+`AffectedRows` e `IntNarrowingConfinementGateTest` de #882).
+
+**GRAVE: ninguno** en las tres capas. Ninguna encontró dato personal sobreviviendo a su borrado por un camino
+alcanzable, ni hueco explotable sin poseer el secreto.
+
+**`decision-needed` (4)** — las cuatro fueron a consulta externa antes de tocarse; el prompt es
+`tmp/bmad-md/consult-pr877-review-decisions-20260831-114040.md`:
+
+- [ ] [Review][Decision] **La compensación del canje cierra también la sesión del DUEÑO, y la premisa sobre la
+      que se decidió la forma gruesa es falsa en el caso que importa** (`blind`) — `RevokeSessionsBestEffort::revoke($userId)`
+      → `revokeAllForUser($userId)`, sin exclusión. Interleaving: el atacante establece sesión (paso 3), el
+      dueño revoca el secreto desde su perfil, el atacante entra en `consume()`, `findBySelectorForUpdate`
+      responde `null`, y la compensación revoca **todas** las sesiones de la identidad, la del dueño incluida.
+      La decisión del 2026-08-30 aceptó el radio grueso sobre la premisa «*quien pierde una carrera
+      canje-contra-canje también pierde su sesión, pero esa parte tiene camino de contraseña*» — y esa premisa
+      es falsa cuando el perdedor es un dueño **con `locked_until` en el futuro**, que es precisamente el
+      usuario para el que existe este canal: acaba de destruir su secreto y se queda sin sesión y sin login.
+      `[api/src/Iam/Identity/Application/RedeemRecoverySecret.php:159]`
+- [ ] [Review][Decision] **El borrado GDPR cruzando la compensación reinserta un id de persona en `audit_log`**
+      (`edge`) — si `identity:gdpr:erase-subject` commitea entre `$establishSession()` (`:130`) y
+      `findByIdForUpdate($userId)` (`:199`), la compensación escribe `AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId)`
+      **después** de que el anonimizador haya cerrado su transacción. El reconciliador lo detecta (es el
+      colaborador hardcodeado de `audit_log.resource_id`), pero la reparación es manual y el tick posterior.
+      Ventana estrechísima; la forma del arreglo es la decisión. `[api/src/Iam/Identity/Application/RedeemRecoverySecret.php:199]`
+- [ ] [Review][Decision] **La mitad del verbo de `api-endpoint-contract` es inerte, y justo en el ejemplo con
+      el que se justifica** (`blind`) — `manifest()` construye la **unión de métodos por path**, así que
+      `methods.has(site.method)` pasa con cualquiera de los dos. Medido: **6 de 34** paths son multi-método
+      (`banks`, `banks/{id}`, `bank-accounts`, `bank-accounts/{id}`, `users/{id}` y `/me/recovery-secret`), y el
+      docblock elige exactamente ése para argumentar por qué el verbo merece la pena. Intercambiar `get`↔`post`
+      en `ApiRecoverySecretRepository` deja el gate verde: la pantalla de perfil acuñaría un secreto en cada
+      carga. La clase no está en la lista de puntos ciegos del propio fichero. `[pwa/tests/api-endpoint-contract.test.ts:16]`
+
+- [ ] [Review][Decision] **Agotar el presupuesto por selector no deja rastro en ninguna parte** (`edge`) —
+      el limitador refusa antes de cualquier lectura, así que no se escribe fila de auditoría y
+      `AccessLogAuditListener` sólo admite peticiones con éxito. Reclasificado de `patch` a `decision` al
+      escribir el arreglo: proyectar «sobre el usuario que resuelve el selector» exige **resolver el
+      selector** en el camino refusado, que es exactamente la amplificación que el limitador existe para
+      evitar. `[api/src/Iam/Identity/Infrastructure/Http/RedeemRecoverySecretController.php:83]`
+
+**`patch` — SERIOUS (8):**
+
+- [x] [Review][Patch] La guarda de hidratación del formulario de acuñación es borrable en verde, y ese formulario lleva la contraseña `[pwa/src/app/backoffice/profile/_components/MintRecoverySecretForm.tsx:125]` (`edge`)
+- [x] [Review][Patch] El formulario de acuñación no tiene pestillo en vuelo: el doble envío gasta dos unidades del único techo de adivinación `[pwa/src/app/backoffice/profile/_components/MintRecoverySecretForm.tsx:125]` (`edge`)
+- [x] [Review][Patch] `mintedAt` escapa al puerto `Clock` y las dos pruebas nuevas se degradan a un chequeo de tipo `[api/tests/Unit/Iam/Identity/Infrastructure/Controller/GetMyRecoverySecretControllerTest.php:59]` (`blind`)
+- [x] [Review][Patch] `theEmittedPayloadNeverCarriesTheSelector` dice buscar «the whole serialised body» y busca una reconstrucción de tres claves `[api/tests/Unit/Iam/Identity/Infrastructure/Controller/GetMyRecoverySecretControllerTest.php:72]` (`blind+auditor`)
+- [x] [Review][Patch] Tras un canje consumado con sonda `/me` fallida, «Please try again» es un callejón sin salida; el flujo hermano ya trata esa clase `[pwa/src/app/(auth)/_components/RecoveryRedeemForm.tsx:103]` (`blind`)
+- [x] [Review][Patch] `AccountDeactivated` no se ejercita en ninguno de los cuatro endpoints, y cubre 3 de los 5 estados; el 403 tampoco se ejerce por el cable `[api/tests/Unit/Iam/Identity/Application/RedeemRecoverySecretTest.php:279]` (`edge+auditor`)
+- [x] [Review][Patch] `sprint-status.yaml` vuelve a mentir, en el bloque que registra la vez anterior que mintió `[_bmad-output/implementation-artifacts/sprint-status.yaml:382]` (`auditor`)
+- [x] [Review][Patch] `## Verification` certifica un árbol que no es el HEAD, y en el intervalo la rama estuvo roja `[_bmad-output/implementation-artifacts/spec-gh-602-secreto-de-recuperacion.md:620]` (`auditor`)
+
+**`patch` — MINOR (10):**
+
+- [x] [Review][Patch] Un secreto caducado se rotula «Active» y bloquea la acuñación; nada filtra `expires_at` `[pwa/src/app/backoffice/profile/_components/RecoverySecretPanel.tsx:235]` (`edge`)
+- [x] [Review][Patch] El ADR sigue exigiendo una falsificación que esta rama midió imposible `[docs/adr/administrative-recovery-channel.md:306]` (`auditor`)
+- [x] [Review][Patch] `RecordRecoverySecretAuditBestEffort` enumera tres transiciones y escribe cuatro — octavo caso del patrón, en el fichero que su propio arreglo tocó `[api/src/Iam/Identity/Application/RecordRecoverySecretAuditBestEffort.php:14]` (`blind+auditor`)
+- [x] [Review][Patch] La rama 409 → `reload()` no la ejercita nada, y el literal `recovery-secret-already-exists` no lo concilia nadie `[pwa/src/app/backoffice/profile/_components/RecoverySecretPanel.tsx:79]` (`blind+edge`)
+- [x] [Review][Patch] AC6 exige prueba sobre cuatro sumideros y el eje `log` no tiene ninguna `[api/tests/Unit/Iam/Identity/Domain/Entity/RecoverySecretSelectorContainmentTest.php]` (`auditor`)
+- [x] [Review][Patch] `MintRecoverySecret::UserNotFound` sin ningún testigo `[api/src/Iam/Identity/Application/MintRecoverySecret.php:90]` (`edge`)
+- [x] [Review][Patch] `load()`/`reload()` sin token de secuencia: gana la respuesta que resuelve última `[pwa/src/context/shared/access/application/useRecoverySecret.ts:74]` (`edge`)
+- [x] [Review][Patch] `.person-reference-policy:68` afirma 16 paths / 15 call sites; medido con su propio instrumento son 21 / 20 `[api/.person-reference-policy:68]` (`edge`)
+- [x] [Review][Patch] La casilla de controladores manda a `Infrastructure/Http/` (son `Infrastructure/Controller/`, y el prefijo se aplica por directorio) y sigue listando el `DELETE` que ya no existe `[_bmad-output/implementation-artifacts/spec-gh-602-secreto-de-recuperacion.md:122]` (`auditor`)
+- [x] [Review][Patch] `docs/rules/security.md:45` mete el canje en el conjunto cuya primera viñeta afirma que toda refusal paga `PreIdentityTimingFloor`, y el canje no lo toca `[docs/rules/security.md:45]` (`auditor`)
+
+**`patch` — trivial (3):**
+
+- [x] [Review][Patch] El fichero declara «una guarda que no puede fallar no es una guarda» y añade tres a continuación `[api/tests/Unit/Iam/Identity/Infrastructure/Controller/MintRecoverySecretControllerTest.php:89]` (`blind`)
+- [x] [Review][Patch] `RECOVERY_SECRET_REDEMPTION_COMPENSATED` rompe la alineación y el orden alfabético del registro `[api/.audit-evidence-actions:80]` (`auditor`)
+- [x] [Review][Patch] El trailer `Adversarial-pass:` de `be8268f5` es inerte: una línea en blanco lo separa del bloque final, y `git interpret-trailers` devuelve vacío `[commit be8268f5]` (`auditor`)
+
+**`defer`: ninguno.** Todo hallazgo pertenece al alcance de esta épica.
+
+**Ángulos que las tres declararon limpios:** el consumo de `AffectedRows` (5 llamantes / 9 estrechamientos
+contra suelos 4 y 8; cero `is_int(` fuera de la guarda) · los suelos `minRoutes` re-asentados por `5c1d9a6a`
+(59 / 5 / 6, contados contra el árbol) · el orden de cerrojos I-B en los tres caminos, con sondas NOWAIT
+reales · la presentación malformada del secreto · los seis registros `api/.*` línea a línea · el manifiesto
+de 42 rutas · `RecoveryOriginListener` sobre sus tres rutas · las entradas «Never» una a una · y que los dos
+tests de `9878af16` **sí** pueden ponerse en rojo.
+
+**Aplicados: 21 de 21 `patch`.** Todo lo demás sigue abierto a la espera de las cuatro decisiones.
+
+**Forzado por la reparación, y nombrado en vez de escondido:** `RedeemRecoverySecretTest` quedaba en 13
+métodos públicos y 489 líneas, sobre umbrales de 10 y 400 (`make php.md`). No se suprimió el aviso: la
+clase declara en su propio docblock ser sobre *orden y concurrencia*, y los casos añadidos son de
+**admisión** y **contención**, que no son eso. Se parte en `RedeemRecoverySecretRefusalTest` (8 métodos /
+284 líneas y 4 / 204), con el arnés compartido en el trait `RedeemsRecoverySecrets` — trait y no clase base
+porque es lo único que comparten.
+
+**Falsificación.** Nueve mutaciones, cada una restaurada reescribiendo bytes (nunca `git checkout --`), y
+cada una con exactamente los rojos esperados y ninguno más: quitar `!hydrated` del formulario de acuñación
+(1 rojo), quitar su pestillo en vuelo (1), borrar su `data-hydrated` (1), quitar el `reload()` del 409 (1),
+emitir `expiresAt` en la ranura de `mintedAt` en los dos controladores (2, uno por fichero), quitar
+`ensureActive()` del mint (3, las tres filas del proveedor), dejar vacío el sumidero de logs (1, el suelo
+anti-vacuidad con su propio mensaje), plantar un identificador en el contexto del log (1), fijar el rótulo
+`Active` (1) e invertir `hasLapsed` (2, la dirección que un test de un solo lado deja abierta).
 
 ## Spec Change Log
 
@@ -626,15 +731,29 @@ tarde: este bloque afirmaba «3313 tests / 15340 aserciones … sobre el árbol 
 220 ficheros después de la última edición del spec, así que la frase que lo databa era exactamente la parte
 falsa. Un recuento que envejece es una afirmación falsa con retardo; el código de salida no envejece.
 
-- `make php.stan` · `php.md` · `php.cs.dry-run` · `php.cs-fixer.dry-run` · `php.rector.dry-run` -- 0
+**Un código de salida también envejece — envejece por ÁRBOL, no por calendario.** Este bloque se escribió una
+vez en `be8268f5` y se quedó ahí mientras entraban siete commits, el merge de `main` incluido; el commit
+siguiente (`e3c7b5c5`) dice en su propio mensaje que *«only base+head is red»*, así que lo que estaba escrito
+como `make php.unit -- 0` certificaba un estado que el commit de al lado declaraba rojo. Por eso la corrida
+lleva ahora el árbol sobre el que se hizo: sin él, «0» es una afirmación sin sujeto.
+
+**Corrida sobre `e3c7b5c5` + los patches de la review del 2026-08-31**, cada una fresca y con su código de
+salida leído, no heredado:
+
+- `make php.stan` -- 0
+- `make php.md` · `php.cs.dry-run` · `php.cs-fixer.dry-run` · `php.rector.dry-run` -- 0
 - `make php.deptrac` -- 0
-- `make php.unit` -- 0
-- `make php.behat` -- 0
-- `make php.lint.route-manifest` -- 0 · `make sf.routes.manifest` -- 0, y regenerar no cambia un byte
+- `make php.unit` -- 0 (3498 tests, 18220 aserciones, 2 skipped)
+- `make php.behat` -- 0 (482 escenarios, 4489 pasos)
+- `make php.lint.route-manifest` -- 0
 - `make php.lint.{bounded-context,event-bus,error-contract,step-vocabulary,audit-evidence,public-access}` -- 0
 - `make php.lint.person-reference` · `php.lint.gate-placement` -- 0
-- `make pwa.quality` · `pwa.lint.graph` -- 0
-- `make pwa.test.unit` -- 0
+- `make php.lint.{persistent-transport,schedule-consumption,prod-container}` -- 0
+- `make pwa.quality` -- 0 · `make pwa.lint.graph` -- 0
+- `make pwa.test.unit` -- 0 (256 ficheros, 1682 tests)
+
+**Lo que esta lista NO cubre**, dicho en vez de implicado: `make pwa.test.e2e` no se corrió (exige el stack
+vivo), y `make shell.lint` no se corrió porque esta review no tocó ningún fichero de shell.
 
 **`make php.quality` NO se corre como barrida única**: muere de forma intermitente con 137 (flake conocido de
 PHPMD/OOM). Se corren los miembros en grupos pequeños, y el que CI ejecuta es `php.quality.dry-run`.

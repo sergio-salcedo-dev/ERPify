@@ -56,6 +56,10 @@ export function RecoveryRedeemForm() {
   const [wall, setWall] = useState<AccessWallVariant | null>(null);
   const [invalidSecret, setInvalidSecret] = useState(false);
   const [requestFailed, setRequestFailed] = useState(false);
+  // The redemption COMMITTED and the confirming probe did not. Distinct from `requestFailed`
+  // because the recovery is the opposite one: the secret is spent and un-presentable, so
+  // "try again" walks the user into the opaque refusal for a credential that already worked.
+  const [sessionUnconfirmed, setSessionUnconfirmed] = useState(false);
 
   // Until React wires the submit handler, a native submit performs a GET that would put the
   // secret in the URL, the history entry and the access log — the one place this flow exists to
@@ -84,6 +88,7 @@ export function RecoveryRedeemForm() {
   const submitRedeem = handleSubmit(async (values) => {
     setInvalidSecret(false);
     setRequestFailed(false);
+    setSessionUnconfirmed(false);
     const repo = container.get<RedeemRecoverySecretRepository>(REDEEM_REPOSITORY_KEY);
     let outcome: RedeemRecoverySecretOutcome;
     try {
@@ -101,7 +106,13 @@ export function RecoveryRedeemForm() {
       // back out. An unconfirmed probe is reported rather than announced over: the secret is
       // already spent, so a false "Signed in" costs the user the one credential that was left.
       if (!(await login())) {
-        setRequestFailed(true);
+        // `login()` answers `null` for any probe failure, transport included — so this branch is
+        // reached with the session cookie already set and the one-use secret already spent.
+        // Reporting it as a retryable failure sends the account's only credential holder back to
+        // a field that can now only produce the opaque refusal, while they are one navigation
+        // away from being inside. The sibling reset flow states this same class in `AccessWall`;
+        // here the consequence is worse, because the credential cannot be presented twice.
+        setSessionUnconfirmed(true);
         return;
       }
       toastNotifier.success("Signed in");
@@ -167,6 +178,26 @@ export function RecoveryRedeemForm() {
           data-testid="recovery-redeem-form__error"
         >
           Something went wrong. Please try again.
+        </p>
+      ) : null}
+      {sessionUnconfirmed ? (
+        <p
+          role="alert"
+          className="text-warning-strong text-sm"
+          data-testid="recovery-redeem-form__unconfirmed"
+        >
+          Your recovery secret was accepted and has now been used, but we could not confirm the
+          session. Do not re-enter it — it only works once. Open the back office to continue.{" "}
+          <button
+            type="button"
+            className="underline underline-offset-2"
+            onClick={() => router.push(safeHref(Routes.BACKOFFICE))}
+            aria-label="Open the back office"
+            title="Open the back office"
+            data-testid="recovery-redeem-form__continue"
+          >
+            Open the back office
+          </button>
         </p>
       ) : null}
       <FormField

@@ -215,7 +215,15 @@ function MintedSecretNotice({
   );
 }
 
-/** The account holds a secret: what is known about it, and the only action left — destroying it. */
+/**
+ * The account holds a secret: what is known about it, and the only action left — destroying it.
+ *
+ * **The badge is derived, not fixed.** Expiry does not delete the row and no sweep does either, so
+ * a lapsed secret is still what the read returns and still what blocks a second mint. Labelling it
+ * `Active` unconditionally tells the one person who depends on this channel that they hold a way
+ * back in when they hold nothing, and leaves the way out — revoke, then create another —
+ * unmentioned on the surface that is supposed to state it.
+ */
 function ExistingSecret({
   mintedAt,
   expiresAt,
@@ -227,20 +235,38 @@ function ExistingSecret({
   revoking: boolean;
   onRevoke: (currentPassword: string) => Promise<void>;
 }>) {
+  const lapsed = hasLapsed(expiresAt);
+
   return (
     <div
       className="recovery-secret__existing border-border bg-card space-y-3 rounded-lg border p-4"
       data-testid="recovery-secret__existing"
     >
-      <StatusBadge variant="success" label="Active" testId="recovery-secret__state" />
+      <StatusBadge
+        variant={lapsed ? "danger" : "success"}
+        label={lapsed ? "Expired" : "Active"}
+        testId="recovery-secret__state"
+      />
       <SecretInstants mintedAt={mintedAt} expiresAt={expiresAt} />
       <p className="text-muted-foreground text-sm leading-relaxed">
-        An account holds one recovery secret at a time. To replace this one, revoke it first and
-        then create another.
+        {lapsed
+          ? "This recovery secret has expired and will no longer sign you in. Revoke it and create another, which is the only way to replace it."
+          : "An account holds one recovery secret at a time. To replace this one, revoke it first and then create another."}
       </p>
       <RevokeRecoverySecretDialog revoking={revoking} onRevoke={onRevoke} />
     </div>
   );
+}
+
+/**
+ * Whether the expiry the API reported is already behind us. An unparseable instant reads as NOT
+ * lapsed: the row is the API's to judge, and claiming "Expired" from a date this surface could not
+ * read would be the same false confidence in the other direction.
+ */
+function hasLapsed(expiresAt: string): boolean {
+  const lapsesAt = Date.parse(expiresAt);
+
+  return !Number.isNaN(lapsesAt) && lapsesAt <= Date.now();
 }
 
 /**

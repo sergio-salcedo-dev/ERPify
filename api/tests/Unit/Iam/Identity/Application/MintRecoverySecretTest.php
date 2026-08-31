@@ -10,14 +10,18 @@ use Erpify\Iam\Identity\Application\MintRecoverySecret;
 use Erpify\Iam\Identity\Application\ProveCurrentPassword;
 use Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
+use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Event\RecoverySecretMinted;
+use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
 use Erpify\Iam\Identity\Domain\Exception\InvalidCurrentPassword;
 use Erpify\Iam\Identity\Domain\Exception\RecoverySecretAlreadyExists;
+use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -113,6 +117,64 @@ final class MintRecoverySecretTest extends TestCase
             $this->assertSame([], $secrets->saved);
             $this->assertSame([], $secrets->removed, 'the existing secret was destroyed by a refused mint');
         }
+    }
+
+    #[Test]
+    public function anIdentityThatResolvedToNoRowIsRefusedRatherThanMintingForNobody(): void
+    {
+        // A live session whose identity was erased or removed between admission and this transaction. The
+        // 404 is the honest answer, and the assertion that matters is the absence: minting here would write a
+        // ten-year credential keyed to a `user_id` no row backs, which no erasure path would ever revisit.
+        $secrets = new InMemoryRecoverySecretRepository();
+
+        $this->expectException(UserNotFound::class);
+
+        try {
+            $this->useCase(new InMemoryUserRepository(), $secrets)
+                ->mint(UserMother::DEFAULT_ID, $this->acceptsTheCurrentPassword())
+            ;
+        } finally {
+            $this->assertSame([], $secrets->saved);
+        }
+    }
+
+    /**
+     * @param Closure(): User $identity
+     */
+    #[Test]
+    #[DataProvider('provideAnUnadmittedIdentityCannotMintAndIsWalledBeforeItsCredentialIsReadCases')]
+    public function anUnadmittedIdentityCannotMintAndIsWalledBeforeItsCredentialIsRead(Closure $identity): void
+    {
+        // The state wall fires ahead of the credential proof, so an unadmitted identity is refused without
+        // this endpoint becoming a password oracle for one. The refusal type is the one the PWA builds its
+        // terminal wall around, and until this case nothing on the API side produced it.
+        $secrets = new InMemoryRecoverySecretRepository();
+
+        $this->expectException(AccountDeactivated::class);
+
+        try {
+            $this->useCase(new InMemoryUserRepository($identity()), $secrets)
+                ->mint(UserMother::DEFAULT_ID, $this->refusesTheCurrentPassword())
+            ;
+        } finally {
+            $this->assertSame([], $secrets->saved);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{Closure(): User}>
+     */
+    public static function provideAnUnadmittedIdentityCannotMintAndIsWalledBeforeItsCredentialIsReadCases(): iterable
+    {
+        yield 'deactivated' => [static function (): User {
+            $user = UserMother::create();
+            $user->deactivate();
+            $user->pullDomainEvents();
+
+            return $user;
+        }];
+        yield 'invited, never activated' => [static fn (): User => UserMother::invited()];
+        yield 'invitation revoked' => [static fn (): User => UserMother::revoked()];
     }
 
     #[Test]

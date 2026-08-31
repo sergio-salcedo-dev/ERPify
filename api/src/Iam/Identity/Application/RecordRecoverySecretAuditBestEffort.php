@@ -11,15 +11,17 @@ use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
- * Projects the three transitions of a recovery secret onto the operator's `security` surface. Every one runs
+ * Projects the four transitions of a recovery secret onto the operator's `security` surface. Every one runs
  * POST-COMMIT and swallows its own failure, and both halves are decisions rather than caution.
  *
- * Post-commit, because each of the three has already destroyed or created something the caller cannot get
- * back by retrying: the mint's plaintext exists exactly once and is in the response being built, and a
- * redemption or a revocation has already retired the row. Writing inside the transaction would let a failing
- * `audit_log` INSERT roll back the very thing the row exists to attest — and for the mint it would be worse
- * than a lost row, because the identity would keep the committed secret while its owner never saw the
- * plaintext and now meets a 409 on every attempt to mint another.
+ * Post-commit, for two different reasons. Three of the four have already destroyed or created something the
+ * caller cannot get back by retrying: the mint's plaintext exists exactly once and is in the response being
+ * built, and a redemption or a revocation has already retired the row. Writing inside the transaction would
+ * let a failing `audit_log` INSERT roll back the very thing the row exists to attest — and for the mint it
+ * would be worse than a lost row, because the identity would keep the committed secret while its owner never
+ * saw the plaintext and now meets a 409 on every attempt to mint another. The fourth is the opposite case and
+ * has no transaction to be written inside: a compensated redemption rolled ITS transaction back and destroyed
+ * nothing, so what the row attests is the committed session that survived it.
  *
  * Swallowed, for the same reason: `AuditLevel::SECURITY` propagates by design inside
  * {@see \Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger}, so without this catch a trail outage would
@@ -30,7 +32,7 @@ use Throwable;
  * **The rows carry the SUBJECT, and never the secret.** The resource is the user — the type reached through
  * {@see FulfilIdentityErasure}'s constant, so the erasure chain that anonymises that axis reaches these rows
  * like every other one, and no new classification joins the audit-resource registry. The selector is absent
- * from all three by hard requirement: it is the row's primary key and therefore a denial capability, so
+ * from all four by hard requirement: it is the row's primary key and therefore a denial capability, so
  * whoever could read the trail would be able to close the channel in silence. The consequence is stated
  * rather than hidden — the owner sees THAT a secret of theirs was redeemed, never WHICH, and with one secret
  * per identity that distinction only starts to matter if the one-row invariant is ever relaxed.
@@ -93,7 +95,7 @@ final readonly class RecordRecoverySecretAuditBestEffort
     }
 
     /**
-     * The report names the action in its CONTEXT rather than in three separate messages: the token is a
+     * The report names the action in its CONTEXT rather than in four separate messages: the token is a
      * closed constant of this class, so it identifies which transition lost its row without becoming a
      * per-transition sentence somebody has to keep in step. Nothing else is put there — the user id is
      * deliberately absent, since a line asserting that a person's audit row went missing may not answer by

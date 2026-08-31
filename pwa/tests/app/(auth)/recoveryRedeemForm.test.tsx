@@ -234,9 +234,37 @@ describe("RecoveryRedeemForm — refusals", () => {
     render(<RecoveryRedeemForm />);
     submit();
 
-    expect(await screen.findByTestId("recovery-redeem-form__error")).toBeInTheDocument();
+    expect(await screen.findByTestId("recovery-redeem-form__unconfirmed")).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
+  it("tells the unconfirmed user not to re-present a secret that is already spent", async () => {
+    // The redemption COMMITTED here — cookie set, row retired — so the neutral retryable error is
+    // the wrong report: it sends the account's only credential holder back to a field that can
+    // now answer nothing but the opaque refusal. It has to be distinguishable from the request
+    // that never landed, which is the case above it.
+    login.mockResolvedValue(null);
+    render(<RecoveryRedeemForm />);
+    submit();
+
+    const notice = await screen.findByTestId("recovery-redeem-form__unconfirmed");
+
+    expect(notice).toHaveTextContent("it only works once");
+    expect(screen.queryByTestId("recovery-redeem-form__error")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("recovery-redeem-form__invalid")).not.toBeInTheDocument();
+  });
+
+  it("offers the way in the spent secret can no longer provide", async () => {
+    // Without a route out of this state the user is stranded holding a valid session cookie one
+    // navigation away from being inside — which is the whole defect, not the wording.
+    login.mockResolvedValue(null);
+    render(<RecoveryRedeemForm />);
+    submit();
+
+    fireEvent.click(await screen.findByTestId("recovery-redeem-form__continue"));
+
+    expect(push).toHaveBeenCalledWith("/backoffice");
   });
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { type FormEvent, useRef, useState, useSyncExternalStore } from "react";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import type { RecoverySecretRepository } from "@/context/shared/access/domain/RecoverySecretRepository";
 import type { MintedRecoverySecret } from "@/context/shared/access/domain/RecoverySecret";
@@ -61,6 +61,12 @@ export function MintRecoverySecretForm({
     () => false,
   );
 
+  // In-flight latch: `disabled` lands on the next React commit, so holding Enter in the password
+  // field presents the same password twice before the button ever greys out. The second attempt
+  // spends another unit of `password_change_per_identity` — the only ceiling on guessing this
+  // password from a live session, and one that does not feed the persisted lockout.
+  const submitting = useRef(false);
+
   const {
     register,
     handleSubmit,
@@ -70,7 +76,7 @@ export function MintRecoverySecretForm({
     defaultValues: { currentPassword: "" },
   });
 
-  const onSubmit = handleSubmit(async (values) => {
+  const submitMint = handleSubmit(async (values) => {
     try {
       const secrets = container.get<RecoverySecretRepository>(RECOVERY_SECRET_REPOSITORY_KEY);
       onMinted(await secrets.mint(values.currentPassword));
@@ -91,6 +97,19 @@ export function MintRecoverySecretForm({
       onProblem(problem);
     }
   });
+
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (submitting.current) {
+      event.preventDefault();
+      return;
+    }
+    submitting.current = true;
+    // `handleSubmit`'s promise settles after a validation reject too, so releasing the latch here
+    // rather than inside the async body also frees a submit that never reached the port.
+    return submitMint(event).finally(() => {
+      submitting.current = false;
+    });
+  };
 
   if (fatal !== null) throw fatal;
 

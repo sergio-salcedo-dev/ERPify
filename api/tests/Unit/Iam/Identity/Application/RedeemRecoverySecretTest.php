@@ -4,27 +4,19 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
-use Closure;
 use DateTimeImmutable;
-use Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort;
 use Erpify\Iam\Identity\Application\RedeemRecoverySecret;
-use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
-use Erpify\Iam\Identity\Domain\Entity\GeneratedRecoverySecret;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Event\RecoverySecretRedeemed;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidRecoverySecret;
-use Erpify\Iam\Session\Application\RevokeAllSessions;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
-use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
-use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\NullLogger;
 use RuntimeException;
 
 /**
@@ -47,41 +39,12 @@ use RuntimeException;
 #[CoversClass(RedeemRecoverySecret::class)]
 final class RedeemRecoverySecretTest extends TestCase
 {
-    private const string NOW = '2026-08-28T12:00:00+00:00';
-
-    /**
-     * Whatever the use case handed the session seam, in order. Every case reads it — the ones that assert
-     * a session WAS established, and the ones whose point is that it was not.
-     *
-     * @var list<string>
-     */
-    private array $signedIn = [];
-
-    /**
-     * The session store the compensating revoke reaches. A walled identity must not walk away with the
-     * session the login already committed, so the cases below assert on what this recorded.
-     */
-    private InMemorySessionRepository $sessions;
-
-    /**
-     * The trail the three transitions and the compensation project onto. A compensated redemption persists
-     * no consumption and publishes no event, so this row is the only durable trace it leaves.
-     */
-    private RecordingAuditLogger $auditLogger;
+    use RedeemsRecoverySecrets;
 
     #[Override]
     protected function setUp(): void
     {
-        $this->sessions = new InMemorySessionRepository();
-        $this->auditLogger = new RecordingAuditLogger();
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function auditedActions(): array
-    {
-        return \array_column($this->auditLogger->records, 'action');
+        $this->initialiseHarness();
     }
 
     #[Test]
@@ -276,33 +239,6 @@ final class RedeemRecoverySecretTest extends TestCase
     }
 
     #[Test]
-    public function aValidSecretOverAWalledIdentityIsRefusedWithoutConsumingIt(): void
-    {
-        // The one IDENTIFIED refusal on this endpoint. The presenter has already proven possession, so
-        // telling them the account is suspended reveals nothing they could not learn by redeeming a working
-        // one — and the row stays live for an attempt after the account is reinstated.
-        $user = UserMother::create();
-        $user->suspend();
-        $user->pullDomainEvents();
-
-        $users = new InMemoryUserRepository($user);
-        $secrets = new InMemoryRecoverySecretRepository();
-        $generated = $this->mintFor($secrets, UserMother::DEFAULT_ID);
-
-        $this->expectException(AccountSuspended::class);
-
-        try {
-            $this->useCase($users, $secrets)->redeem($generated->plaintext(), $this->sessionSeam());
-        } finally {
-            $this->assertSame([], $secrets->removed);
-            // Refused BEFORE the login runs, so there is no session to compensate for — and asserting that
-            // is what keeps this case distinct from its sibling below, where the wall arrives too late.
-            $this->assertSame([], $this->signedIn);
-            $this->assertSame([], $this->sessions->revokeAllCalls);
-        }
-    }
-
-    #[Test]
     public function anIdentityWalledUNDERTheLockLosesTheSessionTheLoginAlreadyCommitted(): void
     {
         // The race the pre-login check cannot see: the identity is admissible when the session is minted and
@@ -333,100 +269,5 @@ final class RedeemRecoverySecretTest extends TestCase
                 'the walled identity kept the session the redemption had already established',
             );
         }
-    }
-
-    #[Test]
-    public function everyDeathCaseRaisesTheSameRefusal(): void
-    {
-        $users = new InMemoryUserRepository($this->lockedUser());
-        $secrets = new InMemoryRecoverySecretRepository();
-        $generated = $this->mintFor($secrets, UserMother::DEFAULT_ID);
-        $selector = $generated->secret->getId() ?? '';
-
-        foreach (
-            [
-                'no separator' => 'not-a-presentation',
-                'empty selector' => '.secret',
-                'empty secret' => $selector . '.',
-                'malformed selector' => 'not-a-uuid.secret',
-                'unknown selector' => '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4aaa.secret',
-                'wrong secret' => $selector . '.wrong',
-            ] as $case => $presented
-        ) {
-            try {
-                $this->useCase($users, $secrets)->redeem($presented, $this->sessionSeam());
-                $this->fail(\sprintf('"%s" was not refused.', $case));
-            } catch (InvalidRecoverySecret $refusal) {
-                // One class, and one title: the reason never travels, so a dead link and a wrong secret are
-                // byte-identical on the wire.
-                $this->assertSame('invalid-token', $refusal->type(), $case);
-            }
-        }
-
-        $this->assertSame([], $secrets->removed, 'a death case consumed a row');
-    }
-
-    /**
-     * The seam the HTTP adapter fills with `Security::login()`. It records rather than ignores, so a case
-     * whose point is that no session was minted can assert that instead of trusting the absence of a
-     * side effect it never observed.
-     *
-     * @return Closure(string): void
-     */
-    private function sessionSeam(): Closure
-    {
-        return function (string $email): void {
-            $this->signedIn[] = $email;
-        };
-    }
-
-    private function useCase(
-        InMemoryUserRepository $users,
-        InMemoryRecoverySecretRepository $secrets,
-        ?RecordingEventBus $eventBus = null,
-    ): RedeemRecoverySecret {
-        return new RedeemRecoverySecret(
-            $users,
-            $secrets,
-            new RecordRecoverySecretAuditBestEffort($this->auditLogger, new NullLogger()),
-            new RevokeSessionsBestEffort(
-                new RevokeAllSessions(
-                    $this->sessions,
-                    new RecordingEventBus(),
-                    new InlineTransactionManager(),
-                    FixedClock::at(self::NOW),
-                ),
-                new NullLogger(),
-            ),
-            $eventBus ?? new RecordingEventBus(),
-            new InlineTransactionManager(),
-            FixedClock::at(self::NOW),
-        );
-    }
-
-    private function mintFor(
-        InMemoryRecoverySecretRepository $secrets,
-        string $userId,
-    ): GeneratedRecoverySecret {
-        $generated = RecoverySecret::mint($userId, new DateTimeImmutable(self::NOW));
-        $generated->secret->pullDomainEvents();
-
-        $secrets->save($generated->secret);
-
-        return $generated;
-    }
-
-    private function lockedUser(): User
-    {
-        $user = UserMother::create();
-        $now = new DateTimeImmutable(self::NOW);
-
-        for ($attempt = 0; $attempt < User::MAX_FAILED_ATTEMPTS; ++$attempt) {
-            $user->recordFailedAttempt($now);
-        }
-
-        $user->pullDomainEvents();
-
-        return $user;
     }
 }

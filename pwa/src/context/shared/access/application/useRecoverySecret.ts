@@ -63,6 +63,12 @@ export function useRecoverySecret(): RecoverySecretState {
   const [revoking, setRevoking] = useState(false);
   const [revokeProblem, setRevokeProblem] = useState<ProblemDetails | null>(null);
 
+  // Monotonic request token. `mountedRef` answers "is this component still here"; it says nothing
+  // about ORDER, so with two reads in flight — a retry pressed twice, or the 409's `reload()`
+  // overtaking the mount's own read — whichever RESOLVES last wins, not whichever was ISSUED last.
+  // A stale answer can then reinstate `exists: true` over a state the user has already moved past.
+  const requestRef = useRef(0);
+
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -72,17 +78,18 @@ export function useRecoverySecret(): RecoverySecretState {
   }, []);
 
   const load = useCallback(async () => {
+    const token = ++requestRef.current;
     setState(ViewStatus.LOADING);
     setProblem(null);
     try {
       const result = await repository().read();
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || token !== requestRef.current) return;
       setStatus(result);
       // "No secret yet" is a state this surface renders (it offers the mint), never an empty
       // state — an `EmptyState` here would replace the one control the user came for.
       setState(ViewStatus.READY);
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || token !== requestRef.current) return;
       setProblem(toProblem(error));
       setState(ViewStatus.ERROR);
     }

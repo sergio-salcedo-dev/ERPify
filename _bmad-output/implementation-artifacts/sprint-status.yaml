@@ -379,15 +379,18 @@ development_status:
   # contraseña actual, canjeado anónimo gastando sólo el presupuesto por selector, y el canje establece
   # sesión ANTES de consumir la fila. Clave propia por la misma razón que br-4b/4c/4d.
   #
-  # PRIMERA clave de este fichero que no está en `done`, y es deliberado. La spec está en `in-progress`
-  # (spec-gh-602-secreto-de-recuperacion.md, rama feat/iam-recovery-secret-iu9p) y el código de producción
-  # está escrito: agregado, casos de uso, cuatro endpoints, borrado GDPR, las dos pantallas PWA. Pasa a
-  # `done` cuando la review de código de la tarea completa termine, no al mergear — marcarla antes sería
-  # exactamente la deriva que el resto de comentarios de este bloque vigilan.
+  # `done` desde f69e94f9, cuando terminó la primera review de código de la tarea completa — que es el
+  # disparador que fija este repo, no el merge. La spec (spec-gh-602-secreto-de-recuperacion.md, rama
+  # feat/iam-recovery-secret-iu9p) sigue en `in-progress` mientras una segunda review tiene decisiones
+  # abiertas. **Un `done` aquí NO es evidencia de que la rama se haya mergeado**: el marcador corre por
+  # delante del merge por diseño, así que para eso se lee git, no este fichero.
   #
-  # Este comentario decía «no existe todavía ni una línea de código de producción» mucho después de que
-  # existieran 3076. Lo encontró un pase adversarial, no una relectura: un comentario que nadie vuelve a
-  # medir es la forma en que este fichero —el primero que lee una sesión nueva— empieza a mentir.
+  # Este comentario ha mentido DOS veces, y las dos por la misma razón. Decía «no existe todavía ni una
+  # línea de código de producción» cuando ya existían 3076; lo encontró un pase adversarial. Y después
+  # decía «PRIMERA clave de este fichero que no está en `done`» junto a una línea que ya ponía `done`,
+  # cuando ninguna clave del fichero estaba fuera de `done` — el commit que movió el valor no tocó las
+  # cuatro líneas que lo explicaban. Un comentario que nadie vuelve a medir es la forma en que este
+  # fichero —el primero que lee una sesión nueva— empieza a mentir.
   #
   # #602 SIGUE OPEN, y sólo se cierra cuando el caso de administrador único tenga una arista real —
   # medida y registrada en un comentario del issue, como hicieron br-4b/4c/4d.

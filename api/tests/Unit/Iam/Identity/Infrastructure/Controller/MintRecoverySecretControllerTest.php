@@ -19,6 +19,7 @@ use Erpify\Iam\Identity\Infrastructure\Http\MintRecoverySecretRequest;
 use Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
 use Erpify\Tests\Support\ResourceResponderBuilder;
 use Erpify\Tests\Unit\Iam\Identity\Application\FixedClock;
@@ -68,6 +69,9 @@ final class MintRecoverySecretControllerTest extends TestCase
 
     private const string NOW = '2026-08-28T12:00:00+00:00';
 
+    /** The mint's own TTL away from {@see NOW}: the value the owner plans around. */
+    private const string LAPSES = '2036-08-28T12:00:00+00:00';
+
     #[Test]
     public function theRightPasswordAnswers201WithAUsableSecretAndItsTwoInstants(): void
     {
@@ -79,7 +83,10 @@ final class MintRecoverySecretControllerTest extends TestCase
         $this->assertSame(Response::HTTP_CREATED, $response->getStatusCode(), (string) $response->getContent());
 
         // Narrowed by assertions rather than by a PHPDoc shape: annotating the decoded body would make the
-        // key-set check below provably true, and a guard that cannot fail is not a guard.
+        // key-set check below provably true, and a guard that cannot fail is not a guard. The
+        // `assertArrayHasKey` pair under it is the opposite case and is meant to be unfalsifiable here — it
+        // is the step that THROWS, so the reads after it are typed; a PHPDoc would have narrowed the key-set
+        // check itself, which is the one that has to keep its teeth.
         $body = \json_decode((string) $response->getContent(), true, 512, JSON_THROW_ON_ERROR);
         $this->assertIsArray($body);
         $this->assertArrayHasKey('data', $body);
@@ -88,6 +95,7 @@ final class MintRecoverySecretControllerTest extends TestCase
         $this->assertIsArray($data);
         $this->assertSame(['secret', 'mintedAt', 'expiresAt'], \array_keys($data));
         $this->assertArrayHasKey('secret', $data);
+        $this->assertArrayHasKey('mintedAt', $data);
         $this->assertArrayHasKey('expiresAt', $data);
 
         $presented = $data['secret'];
@@ -103,7 +111,13 @@ final class MintRecoverySecretControllerTest extends TestCase
             $secrets->saved[0]->verify($halves[1], new DateTimeImmutable(self::NOW)),
             'the 201 carried a secret that does not open the row it minted',
         );
-        $this->assertSame('2036-08-28T12:00:00+00:00', $data['expiresAt']);
+        // Both instants carry a VALUE, not a type. `expiresAt` comes from the injected clock, but `mintedAt`
+        // is the aggregate's `createdAt` off the ambient {@see SystemClock}, so leaving it unasserted makes
+        // the two slots interchangeable: emitting the expiry in the `mintedAt` position passes, and the owner
+        // is handed "Created 2036 / Expires 2036" for a credential minted today. This case is named for its
+        // two instants; until both are pinned it was named for one.
+        $this->assertSame(self::NOW, $data['mintedAt']);
+        $this->assertSame(self::LAPSES, $data['expiresAt']);
     }
 
     #[Test]
@@ -202,6 +216,10 @@ final class MintRecoverySecretControllerTest extends TestCase
         $users = new InMemoryUserRepository(
             $user ?? UserMother::create(password: HashedPassword::fromHash(self::PASSWORD)),
         );
+
+        // The aggregate stamps its own `createdAt` from the ambient clock, which no constructor argument
+        // reaches. `ResetSystemClockExtension` unfreezes it after each case.
+        SystemClock::set(FixedClock::at(self::NOW));
 
         $useCase = new MintRecoverySecret(
             $users,

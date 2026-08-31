@@ -193,6 +193,123 @@ describe("<RecoverySecretPanel> — revoking asks for the current password", () 
  * owes, not decoration. Both are asserted by their year rather than by a formatted string: the
  * suite pins no timezone, and each instant sits mid-year, so no real offset moves either.
  */
+/**
+ * A 409 means the account already holds a secret and this surface's read is simply behind. The
+ * panel answers by re-reading, which swaps the mint form for the revoke-then-mint view the API
+ * is describing — without it the owner is left pressing a button that can never succeed, which
+ * is the outcome the branch exists to prevent and which nothing asserted.
+ */
+describe("<RecoverySecretPanel> — a mint refused because one already exists", () => {
+  const alreadyExists = problem(
+    HttpStatus.CONFLICT,
+    "recovery-secret-already-exists",
+    "This account already holds a recovery secret.",
+  );
+
+  it("re-reads, so the surface stops offering a mint the API will keep refusing", async () => {
+    read
+      .mockResolvedValueOnce({ exists: false, mintedAt: null, expiresAt: null })
+      .mockResolvedValue({ exists: true, mintedAt: MINTED_AT, expiresAt: EXPIRES_AT });
+    mint.mockRejectedValue(new HttpError(alreadyExists));
+
+    render(<RecoverySecretPanel />);
+    fireEvent.change(await screen.findByTestId("mint-recovery-secret__current-password"), {
+      target: { value: PASSWORD },
+    });
+    fireEvent.submit(screen.getByTestId("mint-recovery-secret"));
+
+    expect(await screen.findByTestId("recovery-secret__existing")).toBeInTheDocument();
+    expect(screen.queryByTestId("mint-recovery-secret")).not.toBeInTheDocument();
+    // Two reads, not one: the mount's and the one the refusal forced.
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the refusal on screen, so the swap is explained rather than silent", async () => {
+    read
+      .mockResolvedValueOnce({ exists: false, mintedAt: null, expiresAt: null })
+      .mockResolvedValue({ exists: true, mintedAt: MINTED_AT, expiresAt: EXPIRES_AT });
+    mint.mockRejectedValue(new HttpError(alreadyExists));
+
+    render(<RecoverySecretPanel />);
+    fireEvent.change(await screen.findByTestId("mint-recovery-secret__current-password"), {
+      target: { value: PASSWORD },
+    });
+    fireEvent.submit(screen.getByTestId("mint-recovery-secret"));
+
+    expect(
+      await screen.findByText("This account already holds a recovery secret."),
+    ).toBeInTheDocument();
+  });
+
+  it("does not re-read for a refusal that says nothing about what the account holds", async () => {
+    read.mockResolvedValue({ exists: false, mintedAt: null, expiresAt: null });
+    mint.mockRejectedValue(
+      new HttpError(
+        problem(HttpStatus.TOO_MANY_REQUESTS, "rate-limited", "Too many attempts. Try later."),
+      ),
+    );
+
+    render(<RecoverySecretPanel />);
+    fireEvent.change(await screen.findByTestId("mint-recovery-secret__current-password"), {
+      target: { value: PASSWORD },
+    });
+    fireEvent.submit(screen.getByTestId("mint-recovery-secret"));
+
+    expect(await screen.findByText("Too many attempts. Try later.")).toBeInTheDocument();
+    // The mount's read and no other: re-reading on every refusal would spend a request per
+    // wrong password, and the state it would re-read has not changed.
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Expiry does not delete the row and no sweep does either — the feature file seeds exactly that
+ * state to prove the redemption refuses it without consuming it. So the read keeps answering
+ * `exists: true` for a credential that no longer signs anybody in, and a fixed `Active` badge
+ * tells the one person who depends on this channel that they hold a way back in.
+ */
+describe("<RecoverySecretPanel> — a secret that has already lapsed", () => {
+  const LAPSED_AT = "2020-01-01T00:00:00.000Z";
+
+  it("says Expired rather than Active, and names the only way to replace it", async () => {
+    read.mockResolvedValue({ exists: true, mintedAt: MINTED_AT, expiresAt: LAPSED_AT });
+
+    render(<RecoverySecretPanel />);
+
+    expect(await screen.findByTestId("recovery-secret__state")).toHaveTextContent("Expired");
+    expect(screen.getByText(/expired and will no longer sign you in/i)).toBeInTheDocument();
+  });
+
+  it("still says Active while the expiry is ahead, so the badge is derived and not inverted", async () => {
+    // The other direction, and the half a one-sided assertion would leave open: a `lapsed` that
+    // was always true would satisfy the case above while labelling every live secret Expired.
+    read.mockResolvedValue({ exists: true, mintedAt: MINTED_AT, expiresAt: EXPIRES_AT });
+
+    render(<RecoverySecretPanel />);
+
+    expect(await screen.findByTestId("recovery-secret__state")).toHaveTextContent("Active");
+  });
+
+  it("does not claim Expired from an instant it could not read", async () => {
+    // The row is the API's to judge. Reading "Expired" out of an unparseable date would be the
+    // same false confidence pointed the other way, on the surface that decides whether the owner
+    // thinks they still have a way in.
+    read.mockResolvedValue({ exists: true, mintedAt: MINTED_AT, expiresAt: "not-a-date" });
+
+    render(<RecoverySecretPanel />);
+
+    expect(await screen.findByTestId("recovery-secret__state")).toHaveTextContent("Active");
+  });
+
+  it("keeps offering the revoke, which is the action that clears the way to a new one", async () => {
+    read.mockResolvedValue({ exists: true, mintedAt: MINTED_AT, expiresAt: LAPSED_AT });
+
+    render(<RecoverySecretPanel />);
+
+    expect(await screen.findByTestId("recovery-secret__revoke")).toBeInTheDocument();
+  });
+});
+
 describe("<RecoverySecretPanel> — the instants that bound the secret's life", () => {
   it("renders both instants beside a secret the account already holds", async () => {
     render(<RecoverySecretPanel />);

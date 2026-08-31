@@ -305,8 +305,14 @@ persistent transports.
   its life without a write — including a terminal, a log, a backup or the mail relay.
 - **The mechanism** still needs its scenario: seal `locked_until` in the future with an intermediate
   `SELECT … AND locked_until > NOW()` so a failed seed cannot pass vacuously, then assert the surviving
-  transition answers `2xx` and goes red when it is removed. That scenario proves the edge exists; only
-  the static checks above prove it is keyed correctly. Both, or neither is a control.
+  transition answers `2xx`. That scenario proves the edge exists; only the static checks above prove it
+  is keyed correctly. Both, or neither is a control. **What it cannot do is attribute the unlock, and
+  that was measured rather than assumed:** deleting `clearLockout()` from the use case leaves every
+  scenario green, because `ClearLockoutOnLoginSuccess` clears the counter as an effect of the session
+  establishment the scenario already performs. The assertions only this use case can satisfy are the
+  retirement of the row and the `RECOVERY_SECRET_REDEEMED` entry conditioned on a persisted consumption;
+  the falsifier that goes red on the transition itself is `RedeemRecoverySecretTest`, which has no
+  listener in its graph.
 - **D7 dies** if any of its four costs stops being true and stops being recorded: the TTL constant moving
   without the issue moving with it, the profile surface losing the expiry it displays, the selector reaching
   a surface, or the session being minted after the row is retired rather than before.

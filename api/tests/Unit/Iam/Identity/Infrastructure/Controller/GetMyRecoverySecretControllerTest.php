@@ -8,7 +8,9 @@ use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Infrastructure\Controller\GetMyRecoverySecretController;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Support\ResourceResponderBuilder;
+use Erpify\Tests\Unit\Iam\Identity\Application\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
@@ -38,6 +40,9 @@ final class GetMyRecoverySecretControllerTest extends TestCase
 {
     private const string NOW = '2026-08-28T12:00:00+00:00';
 
+    /** The mint's own TTL away from {@see NOW}: the value the owner plans around. */
+    private const string LAPSES = '2036-08-28T12:00:00+00:00';
+
     #[Test]
     public function anAccountHoldingNoSecretIsToldSoWithBothInstantsNull(): void
     {
@@ -56,22 +61,30 @@ final class GetMyRecoverySecretControllerTest extends TestCase
         $payload = $this->emit(new InMemoryRecoverySecretRepository($this->secret()));
 
         $this->assertTrue($payload['exists']);
-        $this->assertIsString($payload['mintedAt']);
-        $this->assertSame('2036-08-28T12:00:00+00:00', $payload['expiresAt']);
+        // Both instants are pinned to a VALUE, not to a type. `expiresAt` comes from the injected clock, but
+        // `mintedAt` is the aggregate's `createdAt`, taken from the ambient {@see SystemClock} — so asserting
+        // only `assertIsString` here leaves the two slots interchangeable: feeding `expiresAt` into the
+        // `mintedAt` position passes, and the owner reads "Created 2036 / Expires 2036" over a credential
+        // minted today. Freezing the ambient clock is what makes the value assertable at all.
+        $this->assertSame(self::NOW, $payload['mintedAt']);
+        $this->assertSame(self::LAPSES, $payload['expiresAt']);
     }
 
     #[Test]
     public function theEmittedPayloadNeverCarriesTheSelector(): void
     {
         // The closed key set is asserted for every case inside `emit()`, which refuses a field a future DTO
-        // grows. This case is the other direction and the one with teeth: the selector must not reach the
-        // wire under ANY spelling, so the whole serialised body is searched rather than a named field.
+        // grows INSIDE `data`. This case is the other direction and the one with teeth: the selector must not
+        // reach the wire under ANY spelling, so the RESPONSE BODY is searched — the bytes the client receives,
+        // not a re-encoding of the three values `emit()` narrowed out of them. The distinction is the whole
+        // assertion: a selector riding in an envelope block beside `data` is invisible to a reconstruction of
+        // `data`'s own fields, and so is one reaching the wire under a `#[SerializedName]`.
         $secret = $this->secret();
-        $payload = $this->emit(new InMemoryRecoverySecretRepository($secret));
+        $content = (string) $this->respond(new InMemoryRecoverySecretRepository($secret))->getContent();
 
         $this->assertStringNotContainsString(
             (string) $secret->getId(),
-            \json_encode($payload, JSON_THROW_ON_ERROR),
+            $content,
             'the selector reached the wire, and whoever reads it can hold the channel shut in silence',
         );
     }
@@ -93,10 +106,23 @@ final class GetMyRecoverySecretControllerTest extends TestCase
 
     private function secret(): RecoverySecret
     {
+        // The aggregate stamps its own `createdAt` from the ambient clock, which no constructor argument
+        // reaches; freezing it is what turns `mintedAt` from a type into a value this test can assert.
+        // `ResetSystemClockExtension` unfreezes it after the case, so nothing leaks into the next one.
+        SystemClock::set(FixedClock::at(self::NOW));
+
         $generated = RecoverySecret::mint(UserMother::DEFAULT_ID, new DateTimeImmutable(self::NOW));
         $generated->secret->pullDomainEvents();
 
         return $generated->secret;
+    }
+
+    /** The endpoint driven end to end, handing back the response so a case can read the bytes it emits. */
+    private function respond(InMemoryRecoverySecretRepository $secrets): Response
+    {
+        $controller = new GetMyRecoverySecretController($secrets, ResourceResponderBuilder::wired());
+
+        return $controller(new SecurityUser(UserMother::create()));
     }
 
     /**
@@ -106,14 +132,18 @@ final class GetMyRecoverySecretControllerTest extends TestCase
      * key-set assertion below provably true, so the one check that refuses a field the DTO grows would stop
      * being able to fail. The narrowing has to come from something that throws.
      *
+     * That is also what the `assertArrayHasKey` trio is — the step that throws, so the reads under it are
+     * typed. They are deliberately unfalsifiable once the key set above has passed, and that is not the same
+     * defect: a PHPDoc would narrow the KEY-SET CHECK itself into a tautology, while these narrow only the
+     * reads that follow it. The check that has to keep its teeth still has them.
+     *
      * The closed set lives here rather than in one case, so every case pays it.
      *
      * @return array{exists: bool, mintedAt: string|null, expiresAt: string|null}
      */
     private function emit(InMemoryRecoverySecretRepository $secrets): array
     {
-        $controller = new GetMyRecoverySecretController($secrets, ResourceResponderBuilder::wired());
-        $response = $controller(new SecurityUser(UserMother::create()));
+        $response = $this->respond($secrets);
 
         $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
 

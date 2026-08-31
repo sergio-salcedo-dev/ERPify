@@ -43,11 +43,18 @@
   Enabling `check_header` would make Symfony look for `csrf-token`, not `X-CSRF-Token`.
 
 ## Pre-identity surfaces (login, invitation accept, forgot/reset, recovery-secret redeem)
-- **Constant-time floor:** every pre-identity rejection pays one unit of password-hashing work through the
-  shared `PreIdentityTimingFloor` port before answering, so response latency never correlates with whether an
-  account exists or what state it is in. New pre-identity branches (future magic-link, MFA, …) must pay the
-  same floor. The proof is always a STRUCTURAL test (the work is invoked on every branch) — wall-clock timing
-  assertions are banned as flaky.
+- **Constant-time floor, on the IDENTITY-KEYED surfaces:** a rejection keyed by something the caller claims
+  about an account — an email address at login or at forgot — pays one unit of password-hashing work through
+  the shared `PreIdentityTimingFloor` port before answering, so response latency never correlates with whether
+  an account exists or what state it is in. Measured, the port is reached from exactly three places:
+  `UserProvider` and `UserChecker` (login) and `RequestPasswordReset` (forgot). New identity-keyed branches
+  (future magic-link, MFA, …) must pay the same floor. The proof is always a STRUCTURAL test (the work is
+  invoked on every branch) — wall-clock timing assertions are banned as flaky.
+- **The token-consuming surfaces do NOT pay it, and that is the next bullet rather than an omission.** Reset
+  complete, invitation accept and recovery-secret redeem are keyed by a secret the caller either holds or does
+  not, so there is no account-existence oracle for a floor to flatten; paying one would mean hashing for a
+  dead token, which is precisely the amplification vector below. Their uniformity comes from the opaque
+  refusal instead: every death case answers the same body and the same status.
 - **No KDF for dead tokens:** on token-consuming endpoints, hash the submitted password only AFTER the token
   resolves live (a deferred closure built in the HTTP adapter), or a garbage POST becomes an unauthenticated
   argon2id amplification vector.
