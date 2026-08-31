@@ -64,6 +64,13 @@ breakdown):**
    relacionado en vez de fragmentar por guarantee-axis. Estructura candidata para step-02: (1) dominio +
    pipeline de procesamiento, (2) storage + frontera de persistencia/outbox + seguridad de transporte,
    (3) ruta de lectura canonical-only + caching HTTP.
+   > **La cifra quedó superada, y se conserva su redacción original para que el cambio sea auditable.**
+   > Medido al cerrar la épica: 49 / 95 / 67 ficheros, mediana 67 y media 70, contra el ~30 escrito arriba
+   > — un factor de 1,6× a 3,2×. La decisión (Sergio, 2026-08-31) es **corregir el número, no retirarlo**:
+   > el corte por guarantee-axis sí produce PRs de este tamaño, y una cifra que nadie puede cumplir deja de
+   > leerse. El objetivo para la épica de consumidor es **~70 ficheros por story/PR**, y una historia que se
+   > proyecte por encima de ~100 es señal de que el corte está mal, no de que la historia sea grande.
+   > Detalle en `_bmad-output/implementation-artifacts/epic-images-retro-2026-08-31.md`.
 
 ## Adversarial pass
 
@@ -501,6 +508,8 @@ que rediseñar nada de lo aquí decidido (ver el guardrail al final de Additiona
    `#[MapUploadedFile]`.
 
 ~25-30 ficheros por story, consistente con la preferencia de PRs grandes / pocas stories.
+*(Superado por la medición de cierre — ver la nota del punto 5 del Overview: real 49 / 95 / 67, objetivo
+corregido a ~70 para la épica de consumidor.)*
 
 ## Epic 1: Shared/Images — subida y lectura de representaciones fungibles (primera rebanada)
 

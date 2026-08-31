@@ -10,7 +10,7 @@ ADVERSARIAL_PASS_CHECK := scripts/adversarial-pass-check.sh
 
 ## —— BMad ——
 
-bmad.status.audit: ## Report sprint-status.yaml markers left behind by merged work
+bmad.status.audit: ## Report stale markers across every sprint-status board (canonical + scoped)
 	@$(BMAD_STATUS_AUDIT) $(c)
 
 # The same instrument the PreToolUse hook runs when a pull request is about to

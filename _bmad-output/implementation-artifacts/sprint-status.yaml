@@ -548,7 +548,7 @@ action_items:
     owner: "Sergio"
     status: done
   - epic: images
-    action: "DECISION: bmad-status-audit descubre los ficheros sprint-status-<slug>.yaml por glob con nullglob, y su linea de exito deja de afirmar un cotejo que nunca hace. Falsificado con el control dentro de scripts/, shell.lint verde"
+    action: "DECISION: bmad-status-audit descubre los ficheros sprint-status-<slug>.yaml por glob, y su linea de exito deja de afirmar un cotejo que nunca hace. Cierra UN consumidor de cuatro: bmad-sprint-planning, bmad-sprint-status y bmad-dev-story siguen resolviendo solo el canonico por convencion fija de skill"
     owner: "Sergio"
     status: done
   - epic: images

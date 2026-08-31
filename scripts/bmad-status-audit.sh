@@ -13,11 +13,14 @@
 # The subject is every sprint-status file, not just the canonical one. Epics are
 # tracked per-epic in `sprint-status-<slug>.yaml` by preference, and pinning this
 # to `sprint-status.yaml` made those boards invisible to check A for as long as
-# they lived: the Shared/Images epic sat `in-progress` with all three stories
-# `done` from 2026-08-31 until the retrospective folded it into the canonical
-# file, and this audit — which runs from a SessionStart hook — reported clean at
-# every start. Measured: `epic-images` had zero occurrences in the canonical file
-# on origin/main, and check A fires the moment it is applied to the scoped board.
+# they lived: no `img-*` key was ever written to the canonical file, so from the
+# epic's first story on 2026-08-26 to its fold on 2026-08-31 this audit — which
+# runs from a SessionStart hook — had nothing of that epic to look at and reported
+# clean at every start. Measured: `epic-images` had zero occurrences in the
+# canonical file on origin/main, and check A fires the moment it is applied to the
+# scoped board. (The window in which check A would have FIRED is narrower — the
+# 2h54m between the last story turning `done` and the fold; the blindness is the
+# durable half and is what this reads.)
 #
 # Discovery, not a list, for the reason every registry here is derived: a scoped
 # file is created by whoever starts an epic, and a name they have to remember to
@@ -54,8 +57,9 @@
 # shipped as a single PR with no per-story tag at all. Those are reported as
 # unchecked rather than silently passed.
 #
-# Exit codes: 0 always, unless --strict (then 1 on drift). Advisory by design:
-# it runs from a SessionStart hook and must never block a session.
+# Exit codes: 0 on every audit outcome, so drift never blocks a session — 1 only
+# under --strict, and 2 on a malformed command line, which is the caller's bug and
+# not an audit result. Advisory by design: it runs from a SessionStart hook.
 
 set -uo pipefail
 
@@ -64,12 +68,22 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 readonly SCRIPT_DIR REPO_ROOT
 readonly ARTIFACTS_DIR="${REPO_ROOT}/_bmad-output/implementation-artifacts"
 
+# Drift records are joined strings, and one of their fields is now a PATH. `|` was
+# the separator until a path containing one shifted every field after it — and the
+# path is the FIRST field, so everything shifts. ASCII unit separator instead: it
+# is the one byte a filename, a status and a commit subject all cannot hold.
+readonly REC_SEP=$'\x1f'
+
 # The canonical file first so its drift is reported first; the scoped boards in
 # name order after it. `nullglob` so an absent glob contributes nothing rather
-# than a literal path that no file backs.
+# than a literal path that no file backs, and restored rather than unset, so the
+# setting survives if this is ever sourced instead of executed. `y*ml` because
+# `.yml` is a legal spelling and an extension someone has to remember is exactly
+# the kind of name this discovery exists to stop depending on.
+status_files_nullglob_was="$(shopt -p nullglob)"
 shopt -s nullglob
-STATUS_FILES=("${ARTIFACTS_DIR}/sprint-status.yaml" "${ARTIFACTS_DIR}"/sprint-status-*.yaml)
-shopt -u nullglob
+STATUS_FILES=("${ARTIFACTS_DIR}/sprint-status.yaml" "${ARTIFACTS_DIR}"/sprint-status-*.y*ml)
+eval "$status_files_nullglob_was"
 readonly STATUS_FILES
 
 STRICT=false
@@ -92,7 +106,17 @@ while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--strict) STRICT=true; shift ;;
 		--quiet-when-clean) QUIET_WHEN_CLEAN=true; shift ;;
-		--base-ref) BASE_REF="${2:-}"; shift 2 ;;
+		# `shift 2` with one argument left shifts nothing and returns 1, and with no
+		# `set -e` the loop then spins for ever — measured at 100% CPU, which for a
+		# SessionStart hook is the worst outcome the script has. A value that is
+		# itself a flag is the quieter half of the same bug: `--base-ref --strict`
+		# swallowed the flag, left STRICT false, and reported clean over real drift.
+		--base-ref)
+			if [[ $# -lt 2 || "${2}" == -* ]]; then
+				echo "bmad-status-audit: --base-ref needs a ref, got '${2-}'" >&2
+				exit 2
+			fi
+			BASE_REF="$2"; shift 2 ;;
 		-h|--help) usage; exit 0 ;;
 		*) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
 	esac
@@ -126,6 +150,8 @@ fi
 epic_drift=()
 story_drift=()
 unchecked=()
+skipped_files=()
+parsed_count=0
 
 commits=""
 if [[ -n "$BASE_REF" ]]; then
@@ -150,12 +176,23 @@ while IFS= read -r line; do
 		keys+=("${BASH_REMATCH[1]}")
 		statuses+=("${BASH_REMATCH[2]}")
 	fi
-done < <(sed -n '/^development_status:/,$p' "$STATUS_FILE")
+#
+# The range stops at the next TOP-LEVEL key rather than running to EOF. Running to
+# EOF was safe only because of how this tree happens to indent its `action_items:`
+# list: written in the other legal block style (`- epic:` at column 0, fields at
+# two spaces) the same YAML injects phantom `status`/`owner` keys, they attach to
+# the last epic in the file as if they were its stories, and check A can never
+# fire for that epic again. Measured on a `yaml.dump` round-trip of this very
+# file: a planted `epic-images: in-progress` with 3/3 done reported `no stale
+# markers`, exit 0. An indentation style is not a thing to depend on.
+done < <(awk '/^development_status:/{inblock=1; next} inblock && /^[^[:space:]#]/{exit} inblock' "$STATUS_FILE")
 
 if [[ ${#keys[@]} -eq 0 ]]; then
-	echo "bmad-status-audit: development_status block of ${status_rel} is empty or unparseable" >&2
+	skipped_files+=("$status_rel")
 	continue
 fi
+
+parsed_count=$(( parsed_count + 1 ))
 
 # --- Check A: epic marked in-progress while every one of its stories is done --
 
@@ -168,7 +205,7 @@ flush_group() {
 	[[ -z "$current_epic" ]] && return
 	(( group_total == 0 )) && return
 	if [[ "$current_epic_status" != "done" ]] && (( group_done == group_total )); then
-		epic_drift+=("${status_rel}|${current_epic}|${current_epic_status}|${group_total}")
+		epic_drift+=("${status_rel}${REC_SEP}${current_epic}${REC_SEP}${current_epic_status}${REC_SEP}${group_total}")
 	fi
 }
 
@@ -242,7 +279,7 @@ for i in "${!keys[@]}"; do
 
 	tag="$(story_tag "$key")"
 	if [[ -z "$tag" ]]; then
-		unchecked+=("${status_rel}|${key}|${status}")
+		unchecked+=("${status_rel}${REC_SEP}${key}${REC_SEP}${status}")
 		continue
 	fi
 
@@ -256,7 +293,7 @@ for i in "${!keys[@]}"; do
 
 	while IFS=$'\t' read -r sha subject; do
 		commit_touches_code "$sha" || continue
-		story_drift+=("${status_rel}|${key}|${status}|${tag}|${subject}")
+		story_drift+=("${status_rel}${REC_SEP}${key}${REC_SEP}${status}${REC_SEP}${tag}${REC_SEP}${subject}")
 		break
 	done <<<"$candidates"
 done
@@ -267,20 +304,44 @@ done
 
 drift_count=$(( ${#epic_drift[@]} + ${#story_drift[@]} ))
 
-# The clean line says what was read and what was checked. It used to read
-# "sprint-status.yaml matches origin/main", which claims a comparison this never
-# performs: nothing here diffs a file against the base ref, the two checks look
-# for drift and the ref is only where check B scans for shipped tags. A line that
-# overstates its own subject is how a green gets cited as a guarantee nobody wrote.
+# The clean line says what was read and what was checked, and it counts files it
+# actually PARSED — not files it found. It used to read "sprint-status.yaml matches
+# origin/main", which claims a comparison this never performs: nothing here diffs a
+# file against the base ref, the two checks look for drift and the ref is only where
+# check B scans for shipped tags. Counting `present_files` reintroduced the same
+# defect one clause over — an unreadable or blockless board contributed nothing and
+# was still counted as checked, and with every board unparseable the line asserted a
+# clean audit of files it had not read. A line that overstates its own subject is how
+# a green gets cited as a guarantee nobody wrote, so a skipped board is named here and
+# a run that parsed nothing gets no ✓ at all.
+#
+# `base_label` says `<unresolved>` when a ref was given that git cannot resolve: check
+# B is then silently dead for every story, and naming the ref would claim a scan that
+# ran zero comparisons.
+base_label="${BASE_REF:-<no base ref>}"
+if [[ -n "$BASE_REF" && -z "$commits" ]]; then
+	base_label="${BASE_REF} <unresolved: check B did not run>"
+fi
+
 if (( drift_count == 0 )); then
 	if [[ "$QUIET_WHEN_CLEAN" == false ]]; then
-		echo "✓ bmad-status-audit: no stale markers in ${#present_files[@]} sprint-status file(s), checked against ${BASE_REF:-<no base ref>}"
-		(( ${#unchecked[@]} > 0 )) && echo "  (${#unchecked[@]} story key(s) carry no commit tag and were not checked)"
+		if (( parsed_count == 0 )); then
+			echo "⚠ bmad-status-audit: parsed no sprint-status file; nothing was checked"
+		else
+			echo "✓ bmad-status-audit: no stale markers in ${parsed_count} sprint-status file(s), checked against ${base_label}"
+			(( ${#unchecked[@]} > 0 )) && echo "  (${#unchecked[@]} story key(s) carry no commit tag and were not checked)"
+		fi
+		for file in ${skipped_files[@]+"${skipped_files[@]}"}; do
+			echo "  skipped (no parseable development_status block): ${file}"
+		done
 	fi
 	exit 0
 fi
 
 echo "⚠ bmad-status-audit: ${drift_count} stale marker(s)"
+for file in ${skipped_files[@]+"${skipped_files[@]}"}; do
+	echo "  skipped (no parseable development_status block): ${file}"
+done
 echo
 
 drift_files=()
@@ -293,16 +354,16 @@ note_drift_file() {
 }
 
 for entry in "${epic_drift[@]}"; do
-	IFS='|' read -r file epic status total <<<"$entry"
+	IFS="$REC_SEP" read -r file epic status total <<<"$entry"
 	note_drift_file "$file"
 	echo "  epic  ${epic}: ${status} — all ${total} stories are done"
 	echo "        ${file}"
 done
 
 for entry in "${story_drift[@]}"; do
-	IFS='|' read -r file key status tag subject <<<"$entry"
+	IFS="$REC_SEP" read -r file key status tag subject <<<"$entry"
 	note_drift_file "$file"
-	echo "  story ${key}: ${status} — ${tag} already shipped on ${BASE_REF}"
+	echo "  story ${key}: ${status} — ${tag} already shipped on ${base_label}"
 	echo "        ${subject}"
 	echo "        ${file}"
 done
@@ -317,7 +378,7 @@ if (( ${#unchecked[@]} > 0 )); then
 	echo
 	echo "  Not checked (no commit tag derivable from the key):"
 	for entry in "${unchecked[@]}"; do
-		IFS='|' read -r file key status <<<"$entry"
+		IFS="$REC_SEP" read -r file key status <<<"$entry"
 		echo "    ${key}: ${status}  (${file})"
 	done
 fi

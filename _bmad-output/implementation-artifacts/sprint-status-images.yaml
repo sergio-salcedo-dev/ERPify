@@ -13,15 +13,24 @@
 # branch-point (E1-E3 audit trail, auth-foundation, RBAC model, identity-invitation
 # lifecycle, users-admin, gdpr-hardening, backlog-resolution) — that history is not
 # repeated here so this board stays a clean, single-purpose view of the active work.
-# It is a SEPARATE file from sprint-status.yaml on purpose: it is not the canonical
-# tracker any BMAD tooling (bmad-dev-story, bmad-dev-auto, `make bmad.status.audit`)
-# resolves against by default, and it must not be confused with it.
+# It is a SEPARATE file from sprint-status.yaml on purpose: `bmad-dev-story` and
+# `bmad-dev-auto` do not resolve against it, and it must not be confused with the
+# canonical tracker. `make bmad.status.audit` is no longer in that list — it globs
+# `sprint-status-*.y*ml` and reads this board too, a change this epic's own
+# retrospective forced after measuring check A blind to the epic for its whole life.
 #
 # THE FOLD IS DONE. `epic-images` and its three stories are appended after
-# epic-backlog-resolution in the canonical sprint-status.yaml, which is the vista the
-# tooling resolves; this file stays as the epic's own board and as the place its
-# 4400-line planning record lives. Neither is a copy of the other: the canonical file
-# carries the keys and the action items, this one carries the epic's history.
+# epic-backlog-resolution in the canonical sprint-status.yaml.
+#
+# THE FIVE KEYS ARE DELIBERATELY IN BOTH FILES, AND THE CANONICAL ONE IS AUTHORITATIVE.
+# Saying "neither is a copy of the other" was simply false — both carry the same five
+# `development_status` keys with the same values, and nothing reconciles them. What
+# keeps that from rotting is that this board is FROZEN at the shipped state: the epic
+# is done, every key here is `done`, and no marker moves again. Should one ever need
+# to, move it in the canonical file; the audit now reads both, so a divergence surfaces
+# as a duplicated report rather than silently. The prose above and below the keys is
+# what this file is for now — the epic's own history. The ~4400-line planning record
+# is NOT here: it is the three `img-1-*.md` artifacts (895 + 1606 + 1894 lines).
 
 # STATUS DEFINITIONS:
 # ==================
@@ -159,6 +168,8 @@ development_status:
   epic-images-retrospective: done
 
 # Los action items de la retrospectiva de esta épica NO viven aquí: viven en el `action_items:` del
-# `sprint-status.yaml` canónico, junto a los de gdpr-hardening. Es el fichero que `bmad-sprint-status` y
-# `make bmad.status.audit` resuelven por convención fija, y tenerlos en dos sitios es tenerlos derivando.
+# `sprint-status.yaml` canónico, junto a los de gdpr-hardening. La razón NO es el audit — su parser sólo
+# lee pares `key: value` a dos espacios bajo `development_status:` y nunca ha leído `action_items`. Es
+# `bmad-sprint-status`, que resuelve el canónico por convención fija de skill; y que tenerlos en dos
+# sitios es tenerlos derivando.
 # Retrospectiva: `epic-images-retro-2026-08-31.md`.

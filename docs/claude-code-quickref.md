@@ -108,7 +108,7 @@ make super-lint.slim                # SuperLinter on changed files only (slim im
 ### BMad artifacts
 
 ```bash
-make bmad.status.audit              # Report sprint-status.yaml markers left behind by merged work.
+make bmad.status.audit              # Report stale markers across every sprint-status board (canonical + sprint-status-*.yaml).
 make bmad.status.audit c='--strict' # Same, but exit 1 on drift (for a gate).
 ```
 
