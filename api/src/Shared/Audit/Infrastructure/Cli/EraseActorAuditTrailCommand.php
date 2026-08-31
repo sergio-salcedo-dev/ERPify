@@ -145,13 +145,14 @@ final class EraseActorAuditTrailCommand extends Command
      *
      * **The row count is read only on the paths that consume it, and the table is what keeps that true.** It
      * feeds the confirmation's magnitude and it is the whole point of `--dry-run`; a `--force` run does not
-     * need it (the erasure's own `affectedRows` is the authoritative figure) and a run about to be refused
-     * would compute it and throw it away — which is what made the exit code an existence oracle over an
-     * actor id, answering `2` for an actor with rows and `0` for one without.
+     * need it (the erasure's own `affectedRows` is the authoritative figure) and a run the predicate can
+     * already refuse must not compute it at all, because a refusal that reads the subject first is a refusal
+     * that reports on it.
      *
      * **The arm reaches the shapes {@see UnattendedRunPolicy::cannotAnswer()} can see, and only those.** A
-     * stdin that is empty but not yet read has `\feof()` false, so the predicate admits it and the run
-     * reads the count before the question demotes the input.
+     * stdin that is empty but not yet read has `\feof()` false, so the predicate admits it and the count is
+     * taken before the question finds out. What keeps that harmless is that {@see self::confirmMatchedRows()}
+     * puts the question whatever the count says.
      *
      * @return int|null the exit code to stop on, or null to proceed with the anonymisation
      */
@@ -190,8 +191,15 @@ final class EraseActorAuditTrailCommand extends Command
     }
 
     /**
-     * The magnitude the operator is about to act on, and the two readings that leave nothing to ask about:
-     * a trail that could not be counted, and a subject whose rows are already gone.
+     * The magnitude the operator is about to act on, and the one reading that leaves nothing to ask about: a
+     * trail that could not be counted at all.
+     *
+     * **The question is put whatever the count says, and that is what keeps the exit code independent of the
+     * trail.** A run whose stdin is empty but unread arrives here looking answerable — `\feof()` is false
+     * until something has read — and only the re-read after `confirm()` finds out otherwise. An early return
+     * on an empty trail would hand that run an exit code decided by a count it never answered for: `SUCCESS`
+     * for an actor with no rows against `INVALID` for one with them, which is an existence oracle over an
+     * actor id and readable by a caller that discards stdout.
      *
      * @return int|null the exit code to stop on, or null to proceed with the anonymisation
      */
@@ -203,23 +211,26 @@ final class EraseActorAuditTrailCommand extends Command
             return Command::FAILURE;
         }
 
-        if (0 === $matched) {
-            return $this->reportNothingToErase($io);
-        }
-
         return $this->confirmAnonymisationOf($io, $input, $matched);
     }
 
     /**
-     * The question, and the two ways it can go unanswered. A "no" the operator typed is a rejection they
-     * expressed, so it succeeds; a question this run could never put is a rejection nobody expressed, and
-     * reporting success there is indistinguishable from a completed erasure to a caller reading `$?`.
+     * The question and the outcomes it can produce, as a table because the order between them is the contract.
      *
-     * That second shape is the one only a re-read can see: a stdin nothing can be read from enters the
-     * question interactive and leaves it demoted, because the helper answers with the default it was handed
-     * rather than raising. Reading the flag again immediately after is what separates a typed "no" from a
-     * question nobody was there to hear — {@see UnattendedRunPolicy::cannotAnswer()} covers the other two
-     * shapes and says why it cannot cover this one, which is why nothing may come between the two.
+     * The demotion is read first and that arm cannot be moved: when the helper answers with its own default,
+     * `$confirmed` is `false`, so any arm above it would report a rejection the operator expressed for a
+     * question nobody heard. A "no" they did type is such a rejection, so it succeeds; a question this run
+     * could never put is not, and reporting success there is indistinguishable from a completed erasure to a
+     * caller reading `$?`.
+     *
+     * An affirmative answer over a trail that holds nothing stops here rather than reaching the `UPDATE`: a
+     * statement that can match nothing is not an erasure, and the run has already said so on the line above
+     * the question.
+     *
+     * The demotion is the shape only a re-read can see: a stdin nothing can be read from enters the question
+     * interactive and leaves it demoted, because the helper answers with the default it was handed rather
+     * than raising. {@see UnattendedRunPolicy::cannotAnswer()} covers the other two shapes and says why it
+     * cannot cover this one, which is why nothing may come between the question and the re-read.
      *
      * @return int|null the exit code to stop on, or null to proceed with the anonymisation
      */
@@ -227,17 +238,20 @@ final class EraseActorAuditTrailCommand extends Command
     {
         $confirmed = $io->confirm(\sprintf('Irreversibly anonymise %d row(s)?', $matched), false);
 
-        if (!$input->isInteractive()) {
-            return $this->refuseUnaskableRun($io);
-        }
+        return match (true) {
+            !$input->isInteractive() => $this->refuseUnaskableRun($io),
+            !$confirmed => $this->reportAbortedByOperator($io),
+            0 === $matched => $this->reportNothingToErase($io),
+            default => null,
+        };
+    }
 
-        if (!$confirmed) {
-            $io->warning('Aborted — no rows were changed.');
+    /** The rejection the operator expressed, which is the no-op they asked for rather than a failure. */
+    private function reportAbortedByOperator(SymfonyStyle $io): int
+    {
+        $io->warning('Aborted — no rows were changed.');
 
-            return Command::SUCCESS;
-        }
-
-        return null;
+        return Command::SUCCESS;
     }
 
     /**

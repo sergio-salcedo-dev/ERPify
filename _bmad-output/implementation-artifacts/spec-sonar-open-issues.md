@@ -215,6 +215,53 @@ Descartadas, con su razón: deshacer la extracción en uno de los dos (juega con
 la precedencia posicional); `sonar.cpd.exclusions` (apaga la señal justo donde acertó); mergear en rojo (en
 una PR cuyo objetivo entero es higiene de Sonar).
 
+**2026-08-31 — el oráculo de existencia se cierra en esta PR, y el intercambio que lo decidió no era el que
+parecía.**
+
+El residuo declarado en el punto 2 de la revisión adversarial (`cannotAnswer()` no ve un stdin vacío **sin
+leer** — `\feof()` es falso hasta que algo lee — así que ese run alcanzaba el conteo antes de que la pregunta
+degradase la entrada) queda cerrado en vez de aceptado. Decisión del usuario: cerrarlo, no registrarlo.
+
+**Dos salidas, y al derivarlas para implementar resultó que no cierran lo mismo.** El oráculo tiene dos
+canales: el exit code (`2` con filas contra `0` sin ellas) y stdout (`Rows matched: N`). Preguntar también
+con 0 filas cierra el primero; contar después de confirmar cierra los dos y además ahorra el `SELECT` de un
+run que se va a rechazar. Debajo hay una **imposibilidad**: no se puede enseñar la magnitud al operador antes
+de que conteste y a la vez ocultársela a un run que resulta no poder contestar, porque no se sabe que no
+puede hasta después de habérsela enseñado. La magnitud en el prompt *es* la fuga.
+
+**La premisa que decidía entre las dos era falsa, y medirla la desmontó.** `--dry-run` es el primer brazo del
+`match`, antes de `cannotAnswer()`, así que cualquiera que pueda invocar el comando obtiene `Rows matched: N`
+para cualquier id sin contestar nada y saliendo `0` — lo fija `testAnUnattendedDryRunStaysSuccessful`, con
+`interactive => false`. El conteo por id es una **función documentada** del comando, no un secreto; cerrar ese
+canal en la ruta de confirmación mientras `--dry-run` sigue ahí sería teatro. Contar después de confirmar no
+compraba «un canal más»: compraba sólo el `SELECT` sobrante, y lo pagaba con una aprobación **a ciegas** de un
+`UPDATE` irreversible — la única ocasión que tiene el operador de cazar un id mal tecleado antes de destruir
+filas.
+
+Consultado a un arquitecto externo, que recomendó lo mismo por un camino distinto y aportó la distinción que
+faltaba: la severidad de confidencialidad aquí es débil (quien alcanza el comando ya tiene shell en el
+contenedor, y por tanto la BD), pero **la corrección del protocolo no lo es** — un exit code que varía con
+datos que el run nunca contestó es un defecto aunque no exista atacante. Se le corrigió un caso: su tabla
+daba «respuesta afirmativa → procede la mutación», que con 0 filas significa lanzar un `UPDATE` que no puede
+tocar nada.
+
+Salida implementada: `confirmMatchedRows()` deja de retornar temprano con 0 filas y la pregunta se pone
+siempre; `confirmAnonymisationOf()` pasa a tabla `match (true)` con cuatro brazos — democión, «no» tecleado,
+trail vacío, proceder — porque con el cuarto resultado la forma de guardas habría subido a 4 returns, que es
+el mismo `S1142` que esta rama existe para cerrar. La democión va **primera** y no es movible: cuando el
+helper contesta con su propio default, `$confirmed` es `false`, así que cualquier brazo por encima reportaría
+como rechazo del operador una pregunta que nadie oyó.
+
+Propiedad de diseño que se gana, más allá del canal: la pregunta deja de estar **condicionada a una propiedad
+del sujeto**, así que ninguna propiedad del sujeto puede filtrarse por la forma del flujo de control. Es el
+mismo principio que sostiene el resto de la rama — estructural, no posicional.
+
+Descartadas, con su medición: `stream_select` con timeout cero (no distingue «legible por EOF» de «legible
+por datos pendientes» sin consumir); `stream_isatty` rechazando cualquier stdin que no sea terminal (cerraría
+todo estructuralmente, pero `CommandTester` inyecta un `php://memory`, así que toda la suite de confirmación
+tomaría el brazo de rechazo — y Symfony retiró un chequeo equivalente de `configureIO()` por lo mismo); leer
+un byte y devolverlo al stream (PHP no ofrece un un-read fiable para pipes); y una pregunta en dos fases.
+
 ## Design Notes
 
 `match (true)` evalúa los brazos en orden y cortocircuita: la precedencia deja de ser una secuencia de
@@ -248,6 +295,9 @@ los fixers) y confirmar que el `match` sobrevivió.
 | Borrar la relectura de `isInteractive()` | rojo, `ConfirmationGuardAdjacencyGateTest` |
 | Borrar el brazo `cannotAnswer()` | rojo, `ConfirmationGuardAdjacencyGateTest` |
 | Invertir el orden delete/save en `RequestPasswordReset` | rojo, `the pending token was not dropped before the new one was written` |
+| Reinstaurar el retorno temprano con 0 filas en `confirmMatchedRows()` | rojo, 2 fallos, y **sólo** la fila `an actor with none` del provider — que es exactamente la forma del oráculo: un código con filas, otro sin ellas |
+| Quitar el brazo `0 === $matched` de `confirmAnonymisationOf()` | rojo, `an affirmative answer over an empty trail reaches no UPDATE`, `actual size 1 matches expected size 0` |
+| Interponer una sentencia entre `confirm()` y la relectura, con el `match` ya puesto | rojo, `ConfirmationGuardAdjacencyGateTest` nombra el fichero — la adyacencia sigue **viéndose** en la forma de tabla, no pasa por accidente |
 
 **Límites de lo medido, declarados en vez de implícitos:**
 

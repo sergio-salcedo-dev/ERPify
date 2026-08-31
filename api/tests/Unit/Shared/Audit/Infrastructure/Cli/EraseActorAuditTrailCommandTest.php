@@ -55,16 +55,28 @@ final class EraseActorAuditTrailCommandTest extends TestCase
         $this->assertCount(0, $logger->records, 'dry run never audits');
     }
 
+    /**
+     * The operator is asked even when the trail holds nothing, because a question conditional on the subject
+     * hands a run that cannot answer it an exit code describing that subject. What an affirmative answer buys
+     * here is the report and not the `UPDATE`: a statement that can match nothing is not an erasure.
+     */
     public function testItDoesNothingWhenNoRowsMatch(): void
     {
         $anonymiser = new RecordingAuditActorAnonymiser(0);
         $logger = new RecordingAuditLogger();
         $tester = $this->testerFor($anonymiser, $logger);
+        $tester->setInputs(['yes']);
 
         $exitCode = $tester->execute(['actor-id' => self::ACTOR_ID]);
 
         $this->assertSame(Command::SUCCESS, $exitCode);
-        $this->assertCount(0, $anonymiser->anonymisedActorIds);
+        $this->assertStringContainsString('Irreversibly anonymise 0 row(s)?', $tester->getDisplay());
+        $this->assertStringContainsString('nothing to erase', $tester->getDisplay());
+        $this->assertCount(
+            0,
+            $anonymiser->anonymisedActorIds,
+            'an affirmative answer over an empty trail reaches no UPDATE',
+        );
         $this->assertCount(0, $logger->records);
     }
 

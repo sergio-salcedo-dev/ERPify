@@ -71,10 +71,17 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
     /**
      * A separate path from --no-interaction: the input is still interactive when the question is put, and the
      * question helper answers it with the default rather than raising.
+     *
+     * **The exit code may not vary with the trail here either, and this is the shape where that is hard to
+     * hold.** `UnattendedRunPolicy::cannotAnswer()` cannot see an empty stdin that nothing has read yet, so
+     * the count is taken before the demotion is discovered; only a question put whatever the count says keeps
+     * both rows of the provider on one code. Returning early over an empty trail answers `0` here against `2`
+     * for an actor with rows — an existence oracle a caller reads from `$?` alone.
      */
-    public function testAConfirmationNobodyCanAnswerRefusesInsteadOfReportingSuccess(): void
+    #[DataProvider('provideAConfirmationNobodyCanAnswerRefusesWhateverTheTrailHoldsCases')]
+    public function testAConfirmationNobodyCanAnswerRefusesWhateverTheTrailHolds(int $matchCount): void
     {
-        $anonymiser = new RecordingAuditActorAnonymiser(5);
+        $anonymiser = new RecordingAuditActorAnonymiser($matchCount);
         $logger = new RecordingAuditLogger();
         $tester = $this->testerFor($anonymiser, $logger);
         $tester->setInputs([]);
@@ -90,6 +97,15 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
         // re-read afterwards. Copying the `countForCalls === 0` assertion into this test would assert the
         // command skipped a preview it was right to take.
         $this->assertSame(1, $anonymiser->countForCalls, 'a question that was put needs its magnitude first');
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function provideAConfirmationNobodyCanAnswerRefusesWhateverTheTrailHoldsCases(): iterable
+    {
+        yield 'an actor with rows' => [5];
+        yield 'an actor with none' => [0];
     }
 
     /**
