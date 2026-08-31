@@ -35,7 +35,9 @@ use PHPUnit\Framework\TestCase;
  * file contains `confirm(` at all, and a floor over those files passes at zero having proved nothing.
  *
  * **What a green does not prove.** It never judges whether the refusal is CORRECT — a command may re-read the
- * flag adjacently and then ignore the result, and this reads the shape rather than the semantics. It sees
+ * flag adjacently and then ignore the result, and this reads the shape rather than the semantics. It reads
+ * the shape through two boundaries — the statement and the `match` arm — and a third spelling of "something
+ * ran here" would be invisible again, so a green bounds the interposition it has been taught to see. It sees
  * only the spellings below, so a re-read reached through a differently named helper is invisible; it cannot
  * see a `confirm()` reached through a variable holding a `SymfonyStyle`; and it says nothing about the
  * failures a `try` cannot reach at all — an unknown option, a wrong arity, a mistyped name — which raise
@@ -62,6 +64,10 @@ final class ConfirmationGuardAdjacencyGateTest extends TestCase
      * Statements allowed between the question and the re-read. One: the assignment that captures the answer.
      * Counted as `;` over the token stream rather than as lines, because a line window is a proxy for the
      * thing that matters and this is the thing itself.
+     *
+     * A `match` arm ends in `,` and carries no `;` at all, so a table of arms reads as ONE statement to that
+     * counter and any number of them could sit above the re-read unseen — which is why an arm separator
+     * reached after the capture statement has ended counts as a boundary of its own.
      */
     private const int MAX_STATEMENTS_BETWEEN = 1;
 
@@ -301,6 +307,13 @@ final class ConfirmationGuardAdjacencyGateTest extends TestCase
             }
 
             if (';' === $token[1] && ++$statements > self::MAX_STATEMENTS_BETWEEN) {
+                return false;
+            }
+
+            // The arm boundary, counted apart from `;` rather than folded into the same counter: a `=>`
+            // reached BEFORE the capture statement ends is an array key inside the question's own
+            // arguments, and refusing that would red a call site that interposes nothing at all.
+            if ($statements >= 1 && T_DOUBLE_ARROW === $token[0]) {
                 return false;
             }
         }

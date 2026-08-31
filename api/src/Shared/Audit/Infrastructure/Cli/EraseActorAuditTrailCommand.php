@@ -31,8 +31,9 @@ use Throwable;
  * original id), so the act of forgetting is provable for compliance without re-identifying the person.
  *
  * **Exit codes are this command's contract with an unattended caller**, which reads `$?` and never the screen.
- * `SUCCESS` means the trail is anonymised, or that a no-op happened — no matching rows, `--dry-run`, or a
- * confirmation answered "no". `FAILURE` means the erasure did not complete: either the count failed, so
+ * `SUCCESS` means the trail is anonymised, or that a no-op happened on a run that could answer — no
+ * matching rows, `--dry-run`, or a confirmation answered "no"; a run that could not put its confirmation
+ * answers `INVALID` whatever the trail holds. `FAILURE` means the erasure did not complete: either the count failed, so
  * nothing was attempted, or the `UPDATE` failed, so the rows may or may not have changed — a connection lost
  * mid-statement can commit without acknowledging — which is why the message says how far it got and only the
  * first is unconditionally safe to repeat. {@see ERASED_UNRECORDED} is the opposite outcome and carries its
@@ -94,13 +95,13 @@ final class EraseActorAuditTrailCommand extends Command
                 beside the fresh pseudonym. Use <info>identity:gdpr:erase-subject</info> for an identity —
                 it erases both axes in one transaction.
 
-                Exit codes: <comment>0</comment> anonymised, or the no-op you asked for (including an
-                actor with no matching rows); <comment>1</comment> the erasure did not complete — read the
-                message, which says how far it got, since only a failed row count is unconditionally safe to
-                repeat; <comment>3</comment> the rows WERE anonymised and the compliance entry recording it
-                was not — do not retry, record the erasure by hand; <comment>2</comment> nothing was
-                attempted and the command line needs fixing — a
-                malformed id, or a confirmation this run could not put. Do not retry on <comment>2</comment>.
+                Exit codes: <comment>0</comment> anonymised, or the no-op you asked for on a run that
+                could answer (including an actor with no matching rows); <comment>1</comment> the erasure
+                did not complete — read the message, which says how far it got, since only a failed row
+                count is unconditionally safe to repeat; <comment>3</comment> the rows WERE anonymised and
+                the compliance entry recording it was not — do not retry, record the erasure by hand;
+                <comment>2</comment> nothing was attempted and the command line needs fixing — a malformed
+                id, or a confirmation this run could not put. Do not retry on <comment>2</comment>.
                 A run that cannot be asked (<comment>--no-interaction</comment>, a closed or already-exhausted
                 stdin, <comment>--quiet</comment>, <comment>--silent</comment>, or a negative
                 <comment>SHELL_VERBOSITY</comment>) needs <comment>--force</comment> to erase.
@@ -215,17 +216,18 @@ final class EraseActorAuditTrailCommand extends Command
     }
 
     /**
-     * The question and the outcomes it can produce, as a table because the order between them is the contract.
+     * The question and the outcomes it can produce, as a table because the demotion's precedence over every
+     * other outcome is the contract: when the helper answers with its own default, `$confirmed` is `false`,
+     * so an arm above it would report a rejection the operator expressed for a question nobody heard. A "no"
+     * they did type is such a rejection, so it succeeds; a question this run could never put is not, and
+     * reporting success there is indistinguishable from a completed erasure to a caller reading `$?`.
      *
-     * The demotion is read first and that arm cannot be moved: when the helper answers with its own default,
-     * `$confirmed` is `false`, so any arm above it would report a rejection the operator expressed for a
-     * question nobody heard. A "no" they did type is such a rejection, so it succeeds; a question this run
-     * could never put is not, and reporting success there is indistinguishable from a completed erasure to a
-     * caller reading `$?`.
-     *
-     * An affirmative answer over a trail that holds nothing stops here rather than reaching the `UPDATE`: a
-     * statement that can match nothing is not an erasure, and the run has already said so on the line above
-     * the question.
+     * **What an affirmative answer authorises is the statement, never a decision taken from the preview.**
+     * The count was read before the operator answered and an operator takes as long as they take, so rows
+     * can arrive in between; deciding here that there is nothing left would skip the `UPDATE` on a figure
+     * that has since gone stale, and report success over rows the operator had just agreed to destroy.
+     * {@see self::recordErasure()} owns that decision, from `affectedRows` — the same figure the two sibling
+     * erasures decide it from, and in the same place: beside the write it defends.
      *
      * The demotion is the shape only a re-read can see: a stdin nothing can be read from enters the question
      * interactive and leaves it demoted, because the helper answers with the default it was handed rather
@@ -241,7 +243,6 @@ final class EraseActorAuditTrailCommand extends Command
         return match (true) {
             !$input->isInteractive() => $this->refuseUnaskableRun($io),
             !$confirmed => $this->reportAbortedByOperator($io),
-            0 === $matched => $this->reportNothingToErase($io),
             default => null,
         };
     }
@@ -330,7 +331,9 @@ final class EraseActorAuditTrailCommand extends Command
         // An UPDATE that matched nothing is not an erasure, and saying so before the self-audit is what
         // keeps the evidence honest: `AuditErasureEvidence` exempts this action from the retention prune
         // for ever, so a row written here for a subject that was already anonymised is an immortal claim
-        // that an erasure happened. Reachable only from `--force`, which skips the preview by design.
+        // that an erasure happened. Reached from `--force`, which takes no preview, and from a confirmed
+        // run whose rows were pruned or anonymised between the count and the statement — a preview is
+        // only ever approximate by the time the statement runs.
         if (0 === $result->affectedRows) {
             return $this->reportNothingToErase($io);
         }

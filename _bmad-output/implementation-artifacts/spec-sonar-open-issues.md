@@ -168,6 +168,67 @@ describen la estructura interna de estos comandos; barrido de comentarios limpio
 entre los dos comandos gemelos pasaba de 95 a 147 tokens contra un default de CPD de 100. Se materializó
 como 13,7 %, y su cierre es la entrada del Spec Change Log.
 
+### Revisión de código de tres capas sobre el cierre del oráculo (2026-08-31)
+
+Tres capas en paralelo sobre `git diff 3b8ded1a..82184d51`, contexto fresco, sólo lectura, contra la ruta
+absoluta del worktree, y con las pasadas previas declaradas para que no las repitiesen: Blind Hunter (ciega
+al expediente, por diseño), Edge Case Hunter (matriz completa de celdas) y Acceptance Auditor (las
+afirmaciones contra el árbol).
+
+**Convergen dos capas en el hallazgo de más valor, y me corrige a mí:** el `match` retiró en silencio la
+única cobertura sobre el orden de brazos que el propio docblock llamaba «el contrato». `rereadFollows()`
+cuenta `;` y los brazos de un `match` se separan por `,`, así que toda la tabla contaba como una sentencia:
+bajar el brazo de la democión por debajo del «no» tecleado quedaba **verde**. Con la forma de guardas
+anterior esa misma mutación enrojecía (el `$io->warning(...);` del primer `if` era el segundo `;`). Mi
+falsación no lo vio porque probé *interponer*, no *reordenar*. El gate ahora cuenta también el separador de
+brazo, y deliberadamente **aparte** del contador de `;`: un `=>` alcanzado antes de que termine la sentencia
+de captura es una clave de array dentro de los argumentos de la propia pregunta, y rechazarlo enrojecería un
+call site que no interpone nada.
+
+**Segundo hallazgo, también convergente (las tres capas, GRAVE para una):** dos docblocks de otros ficheros
+quedaron afirmando la conducta que este cambio borró — `UnattendedRunPolicy` decía que la erasure de
+auditoría «returns early on zero before it ever asks» y `ConfirmedErasureCommand` que «its confirmation is
+gated on there being anything left to erase». El agravante es la historia: el commit inmediatamente
+anterior, `3b8ded1a docs(shared): keep the docblocks to the current design`, existe para esto y tocó los dos
+ficheros. Corregidos; el «barrido de comentarios limpio» de la pasada anterior no se había vuelto a correr.
+
+**Tercero, y es una corrección a mi propio criterio: el arquitecto externo tenía razón donde dije que se
+equivocaba.** Yo mantuve un brazo `0 === $matched` que decidía si lanzar el `UPDATE` desde un conteo tomado
+**antes** de que el operador contestase, y entre los dos hay una espera humana. Escenario: `Rows matched: 0`,
+el operador se aparta cinco minutos, la sesión aún válida del sujeto escribe filas de `audit_log`, el
+operador vuelve y teclea «sí» — el comando reportaba «nothing to erase» y salía `0` sin borrarlas. Tres
+hechos del árbol lo condenan y los tres se verificaron: la guarda autoritativa `0 === $result->affectedRows`
+ya existe en `recordErasure()` y produce el mismo mensaje y el mismo código; el propio fichero declara que
+esa guarda «lives HERE, in the same method as the write it defends, rather than in the caller»; y los dos
+hermanos deciden por `$result->erasedAnything()` **después** de escribir (`EraseIdentitySubjectCommand:132`,
+`EraseBankAccountSubjectCommand:124`). El brazo era una tercera copia, más rancia, en el sitio que el
+fichero dice que no. Borrado — y con él se disuelve el hallazgo sobre el orden entre los brazos 2 y 3, que
+ya no existe.
+
+**Aplicados también:** el comentario de `recordErasure()` decía «Reachable only from `--force`», que era
+falso ya antes (el propio puerto documenta el conteo como aproximado) y lo es más ahora; las tres
+declaraciones del contrato de exit codes (docblock de clase, `setHelp`, `docs/architecture-api.md`) seguían
+prometiendo `SUCCESS` para un trail vacío sin decir que eso vale sólo en un run que **pueda** contestar; el
+`--dry-run` sobre 0 filas no tenía falsador (borrar su rama dejaba la suite verde); y
+`testAnUnattendedDryRunStaysSuccessful` decía en su docblock «it keeps its preview» sin leer el display —
+justo la cita en la que se apoya la decisión de no contar después de confirmar, así que se le añadió la
+aserción en vez de mover la cita a otro test.
+
+**Registros corregidos, que era donde estaba el grueso de lo que fallaba:** `PRODUCTION_SECURITY_CHECKLIST.md`
+§7 afirmaba que las guardas «son tres copias sin ningún gate que las iguale», falso desde `816f0ea5`; el
+cuerpo de la PR mantenía en su sección de seguridad un A/B de 1024 casos con «cero diferencias» que este
+commit contradice a propósito; y la entrada del Change Log no nombraba la restricción congelada que deroga,
+rompiendo la convención que la entrada anterior había fijado.
+
+**Un `decision-needed` sin cerrar**, y va como pregunta al usuario en vez de como issue: la equivalencia que
+cuatro documentos afirman entre `--no-interaction`, `--quiet`, `--silent` y un `SHELL_VERBOSITY` negativo no
+la mide nada. Es una propiedad de `Application::configureIO()` (`vendor/symfony/console/Application.php:1031`)
+y `CommandTester` no la ejecuta: llama directo a `Command::run()`. Todos los tests llegan a la
+no-interactividad por `['interactive' => false]`, o sea el mecanismo 1 y sólo ese. Además
+`api/tools/phpunit/phpunit.dist.xml:23` fija `SHELL_VERBOSITY=-1` para toda la suite, así que un test movido
+por un `Application` real pasaría en vacío si no fija la variable por caso. Preexistente, y afecta a los
+tres comandos.
+
 ## Spec Change Log
 
 **2026-08-31 — la quality gate salió roja, y su arreglo deroga dos restricciones del bloque congelado.**
@@ -221,6 +282,13 @@ parecía.**
 El residuo declarado en el punto 2 de la revisión adversarial (`cannotAnswer()` no ve un stdin vacío **sin
 leer** — `\feof()` es falso hasta que algo lee — así que ese run alcanzaba el conteo antes de que la pregunta
 degradase la entrada) queda cerrado en vez de aceptado. Decisión del usuario: cerrarlo, no registrarlo.
+
+**Restricción congelada que esta salida deroga**, con la misma convención que la entrada anterior (queda
+escrita arriba sin tocar, porque el bloque es suyo): *«mismos exit codes, mismos mensajes»* para el comando
+de auditoría. Un run degradado sobre un trail vacío pasa de `0` a `2` —que es justamente el arreglo—, y un
+«no» tecleado sobre un trail vacío cambia de mensaje. Las otras dos cláusulas de esa viñeta siguen en pie:
+la precedencia de flags no se toca, y el rechazo de un run no preguntable sigue ocurriendo **antes** de leer
+el conteo.
 
 **Dos salidas, y al derivarlas para implementar resultó que no cierran lo mismo.** El oráculo tiene dos
 canales: el exit code (`2` con filas contra `0` sin ellas) y stdout (`Rows matched: N`). Preguntar también
@@ -298,6 +366,9 @@ los fixers) y confirmar que el `match` sobrevivió.
 | Reinstaurar el retorno temprano con 0 filas en `confirmMatchedRows()` | rojo, 2 fallos, y **sólo** la fila `an actor with none` del provider — que es exactamente la forma del oráculo: un código con filas, otro sin ellas |
 | Quitar el brazo `0 === $matched` de `confirmAnonymisationOf()` | rojo, `an affirmative answer over an empty trail reaches no UPDATE`, `actual size 1 matches expected size 0` |
 | Interponer una sentencia entre `confirm()` y la relectura, con el `match` ya puesto | rojo, `ConfirmationGuardAdjacencyGateTest` nombra el fichero — la adyacencia sigue **viéndose** en la forma de tabla, no pasa por accidente |
+| **Bajar el brazo de la democión por debajo del «no» tecleado** (con el gate ya ensanchado) | rojo, `ConfirmationGuardAdjacencyGateTest`. Antes de ensancharlo era **verde**: los brazos de un `match` no llevan `;` |
+| Borrar la rama de trail vacío del `--dry-run` | rojo, y **sólo** la fila `a trail with none` del provider nuevo |
+| Reinstaurar el veredicto tomado del preview rancio (`0 === $matched` como brazo) | rojo, `the answer authorises the statement; its own result, not the preview, decides the outcome` |
 
 **Límites de lo medido, declarados en vez de implícitos:**
 

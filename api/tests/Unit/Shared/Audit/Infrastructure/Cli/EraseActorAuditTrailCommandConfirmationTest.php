@@ -113,6 +113,11 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
      * dry run short-circuits before the confirmation either way. What it fixes in place is that order — the
      * dry run is the one no-op the operator did express, so it keeps its exit code where a run that was never
      * asked does not, and it keeps its preview, which is the whole reason the option exists.
+     *
+     * **The preview is asserted here, not merely named.** That a run answering nothing still publishes the
+     * count for any id is what makes the count public information rather than something the confirmation
+     * path leaks, and a test that says "it keeps its preview" while reading no display pins the exit code
+     * alone.
      */
     public function testAnUnattendedDryRunStaysSuccessful(): void
     {
@@ -126,6 +131,7 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
         );
 
         $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringContainsString('Rows matched: 5', $tester->getDisplay());
         $this->assertCount(0, $anonymiser->anonymisedActorIds);
     }
 

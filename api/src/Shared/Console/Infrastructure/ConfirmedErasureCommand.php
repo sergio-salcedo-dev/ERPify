@@ -21,9 +21,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *
  * **Why the audit-trail erasure does NOT extend this, and that exclusion is the same principle.** Its
  * order genuinely differs: it reads a row count between refusing an unanswerable run and putting the
- * question, so its preview carries a magnitude and its confirmation is gated on there being anything left
- * to erase. Expressing that as a hook would move a real ordering decision behind a contract between parent
- * and child — and ordering is precisely where every defect this protocol exists to prevent has lived. It
+ * question, so its prompt carries a magnitude no command taking this route can offer. Expressing that as a
+ * hook would move a real ordering decision behind a contract between parent and child — and ordering is
+ * precisely where every defect this protocol exists to prevent has lived. It
  * keeps its own pre-flight, in the open, and the confirmation gate holds it to the same two guards.
  *
  * A subclass supplies the sentence it asks and nothing else; the exit code each outcome earns is fixed
