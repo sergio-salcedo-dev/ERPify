@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\MintRecoverySecret;
 use Erpify\Iam\Identity\Application\ProveCurrentPassword;
 use Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort;
+use Erpify\Iam\Identity\Application\Resource\MintedRecoverySecretResource;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
@@ -63,6 +64,8 @@ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
  * objects, which a double would answer for itself.
  */
 #[CoversClass(MintRecoverySecretController::class)]
+#[CoversClass(MintRecoverySecretRequest::class)]
+#[CoversClass(MintedRecoverySecretResource::class)]
 final class MintRecoverySecretControllerTest extends TestCase
 {
     private const string PASSWORD = 'the-current-password';

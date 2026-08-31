@@ -57,6 +57,7 @@ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
  * one of the properties below is stated in terms of. Mocking them would buy the metric and lose the ordering.
  */
 #[CoversClass(RedeemRecoverySecretController::class)]
+#[CoversClass(RedeemRecoverySecretRequest::class)]
 final class RedeemRecoverySecretControllerTest extends TestCase
 {
     private const string NOW = '2026-08-28T12:00:00+00:00';

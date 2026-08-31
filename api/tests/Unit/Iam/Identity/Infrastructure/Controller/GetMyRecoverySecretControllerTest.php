@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Controller;
 
 use DateTimeImmutable;
+use Erpify\Iam\Identity\Application\Resource\RecoverySecretResource;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Infrastructure\Controller\GetMyRecoverySecretController;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
@@ -36,6 +37,7 @@ use Symfony\Component\HttpFoundation\Response;
  * @internal
  */
 #[CoversClass(GetMyRecoverySecretController::class)]
+#[CoversClass(RecoverySecretResource::class)]
 final class GetMyRecoverySecretControllerTest extends TestCase
 {
     private const string NOW = '2026-08-28T12:00:00+00:00';
