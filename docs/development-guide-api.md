@@ -168,8 +168,8 @@ make php.unit                              # PHPUnit
 make php.unit c='--filter SomeTest'        # filter
 make php.behat                             # Behat, --strict (config: api/behat.dist.php)
 make db.test.prepare                       # create + migrate <dbname>_test (idempotent; php.unit runs it for you)
-make db.test.reset                        # drop + recreate both test databases (after editing an applied migration)
-make db.test.shell                        # psql on the test database (db.shell opens the runtime one)
+make db.test.reset                         # drop every <dbname>_test*, recreate the PHPUnit one (destructive)
+make db.test.shell                         # psql on the test database (db.shell opens the runtime one)
 ```
 
 - **PHPUnit config**: `api/tools/phpunit/phpunit.dist.xml` (resolved by `api/bin/phpunit` unless `-c` overrides it).
@@ -188,9 +188,12 @@ make db.test.shell                        # psql on the test database (db.shell 
   on top.
 - If you run a single functional test straight from the IDE, it bypasses make: run `make db.test.prepare`
   once first, or the run dies on a database that does not exist. `make db.test.shell` opens psql on it.
-- Guards, in the order they fire: `RefuseRuntimeDatabaseGuard` (called from `api/tools/phpunit/bootstrap.php`,
-  ends the run at zero tests), `FixturesContext::requireDbName()` (the Behat lane, which runs no PHPUnit), and
-  `TestDatabaseIsolationTest` as the pin that asks `current_database()` of the server.
+- Guards, one per lane plus a pin — they never all fire in one run. `RefuseRuntimeDatabaseGuard` covers the
+  PHPUnit lane from `api/tools/phpunit/bootstrap.php` (and `db.test.prepare` runs it before its migrate, since
+  a make prerequisite executes ahead of the bootstrap), ending the run at zero tests;
+  `FixturesContext::requireDbName()` covers the Behat lane, which runs no PHPUnit, from the top of its
+  `#[BeforeScenario]` hook; and `TestDatabaseIsolationTest` is the pin that asks `current_database()` of the
+  server rather than trusting what was declared.
 
 ## Lint / analyze
 

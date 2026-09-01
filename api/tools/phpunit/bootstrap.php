@@ -29,5 +29,11 @@ if (filter_var($_SERVER['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
 // Last thing before the runner starts: refuse a suite pointed at the runtime database. This suite truncates
 // and deletes without rolling back, so such a run reports success while consuming a developer's data. It has
 // to be here rather than in a PHPUnit extension — both extension hooks were measured reporting the refusal
-// and then running the whole suite anyway, while a throwable in this file is fatal.
-RefuseRuntimeDatabaseGuard::refuseUnlessTestDatabase();
+// and then running the whole suite anyway, while a throwable in a file bootstrap makes PHPUnit abort the run
+// before it builds a test. The three inputs are read here, at file scope, so the guard itself stays free of
+// superglobals and can be driven from a unit test.
+RefuseRuntimeDatabaseGuard::refuseUnlessTestDatabase(
+    $_SERVER['DATABASE_URL'] ?? $_ENV['DATABASE_URL'] ?? null,
+    $apiRoot . '/config/packages/test/doctrine.yaml',
+    $_SERVER['TEST_TOKEN'] ?? $_ENV['TEST_TOKEN'] ?? null,
+);

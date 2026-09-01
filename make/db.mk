@@ -32,11 +32,13 @@ db.reset: db.drop db.migrate db.load.fixtures ## Drop DB → migrate → fixture
 # Behat is not wired to it because FixturesContext already runs both commands itself before the first
 # scenario, and it prepares a different database — that lane sets TEST_TOKEN=_behat, so the two hold one each.
 #
-# It stays off the runtime database for as long as the suffix holds, and nothing in this target verifies that:
-# without it, the first thing to touch the dev data would be this migrate, before any test or guard runs.
-# `RefuseRuntimeDatabaseExtension` is what refuses, on the runner's first event.
+# The guard runs first, and it has to: this target is a PREREQUISITE of the PHPUnit targets, so make runs it
+# before `bin/phpunit` ever loads the bootstrap that checks. Its second command is a migrate, so with the
+# suffix broken a feature branch's new migration would land on the runtime database — a committed schema
+# change — and the suite would refuse only afterwards.
 db.test.prepare: ## Create + migrate the test database (<dbname>_test); idempotent
 	$(call guard_var_writable,db.test.prepare)
+	@$(PHP_TEST) php tools/phpunit/assert-test-database.php
 	@$(PHP_TEST) bin/console doctrine:database:create --if-not-exists --no-interaction
 	@$(PHP_TEST) bin/console doctrine:migrations:migrate --no-interaction --all-or-nothing --allow-no-migration
 
@@ -48,16 +50,31 @@ db.test.prepare: ## Create + migrate the test database (<dbname>_test); idempote
 # Swept by prefix rather than by naming the two lanes, because the set is open: PHPUnit holds `<dbname>_test`,
 # Behat holds `<dbname>_test_behat` plus the `_behat_backup` clone FixturesContext leaves behind, and a
 # ParaTest token would add one per process. `bin/console doctrine:database:drop` cannot do it — the lane
-# suffix comes from each lane's own bootstrap, not from the console. `starts_with` rather than LIKE so the
-# `_` in `_test` stays a literal instead of a single-character wildcard, and `%I` quotes each identifier;
-# the prefix contains `_test`, so the runtime database can never be in the result set.
-db.test.reset: ## Drop every <dbname>_test* database (both lanes + clones), then recreate the PHPUnit one
+# suffix comes from each lane's own bootstrap, not from the console.
+#
+# The subshell around the exec is load-bearing: DOCKER_COMPOSE_EXEC expands to `cd <dir> && docker …`, so
+# without it the pipe feeds `cd`, psql reads nothing, and the target drops nothing while exiting 0 —
+# measured. Grouping makes stdin reach the exec.
+#
+# `\gexec` runs the generated statements inside the same psql, so there is no second process whose failure a
+# pipeline would swallow, and `ON_ERROR_STOP=1` makes a failed DROP a non-zero exit instead of a silent
+# survivor — a reset that dropped nothing while reporting success is the exact shape this target exists to
+# rule out. The database name is bound with `-v` and read as `:'db'`, which psql quotes as a literal, so no
+# value is interpolated into SQL. `starts_with` rather than LIKE keeps the `_` in `_test` literal instead of
+# a single-character wildcard, and `%I` quotes each identifier; the prefix contains `_test`, so the runtime
+# database can never be in the result set.
+#
+# The name comes from POSTGRES_DB as make's shell sees it, which is the same source `db.shell` has always
+# used — not from DATABASE_URL. A per-developer override in api/.env.local or api/.env.test.local moves the
+# suite's database without moving this, and the sweep then matches nothing. Container-only, like `db.shell`.
+db.test.reset: ## Drop every <dbname>_test* database (both lanes + clones), then recreate the PHPUnit one (destructive; test DBs only)
 	$(call guard_var_writable,db.test.reset)
-	@$(DOCKER_COMPOSE_EXEC) -T $(DB_SERVICE) sh -c "psql --username=$${POSTGRES_USER:-erpify_user} \
-		--dbname=postgres --quiet --tuples-only --no-align \
-		-c \"select format('DROP DATABASE IF EXISTS %I WITH (FORCE);', datname) from pg_database \
-		where starts_with(datname, '$${POSTGRES_DB:-erpify_db}_test')\" \
-		| psql --username=$${POSTGRES_USER:-erpify_user} --dbname=postgres --quiet -f -"
+	@printf '%s\n' \
+		"select format('DROP DATABASE IF EXISTS %I WITH (FORCE);', datname) from pg_database where starts_with(datname, :'db' || '_test')" \
+		"\\gexec" \
+		| ( $(DOCKER_COMPOSE_EXEC) -T $(DB_SERVICE) \
+			psql -v ON_ERROR_STOP=1 -v db=$${POSTGRES_DB:-erpify_db} \
+			--username=$${POSTGRES_USER:-erpify_user} --dbname=postgres --quiet -f - )
 	@$(MAKE) db.test.prepare
 
 # psql against the PHPUnit lane's database. `db.shell` opens the runtime one, so without this there is no

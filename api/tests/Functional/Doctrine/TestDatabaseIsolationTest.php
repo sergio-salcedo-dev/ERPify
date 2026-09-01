@@ -16,10 +16,11 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * `iam_session` from 6 to 4, which is a signed-out developer and a 401 from the who-am-I route.
  *
  * The isolation is `dbname_suffix` in config/packages/test/doctrine.yaml. What actually STOPS a bad run is
- * {@see \Erpify\Tests\Support\PHPUnit\RefuseRuntimeDatabaseExtension}, which reads the resolved connection
- * parameters on the runner's first event, before any test executes. This test is the falsifiable pin beside
- * it, and it earns its place by asking a different oracle: `current_database()` comes from the server, so it
- * proves the connection that was actually opened, where the extension proves only what was configured.
+ * {@see \Erpify\Tests\Support\Database\RefuseRuntimeDatabaseGuard}, called from
+ * api/tools/phpunit/bootstrap.php, which composes the name from the DSN and that config before any test
+ * executes. This test is the falsifiable pin beside it, and it earns its place by asking a different oracle:
+ * `current_database()` comes from the server, so it proves the connection that was actually opened, where the
+ * guard proves only what the sources declare.
  *
  * Asserted as a marker rather than a terminal suffix because a lane may append its own token —
  * `api/tests/Behat/bootstrap.php` sets `TEST_TOKEN=_behat` so the two lanes hold one database each.

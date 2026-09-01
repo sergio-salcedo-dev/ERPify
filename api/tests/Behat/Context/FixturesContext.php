@@ -60,6 +60,14 @@ final class FixturesContext implements Context
     #[BeforeScenario]
     public function prepareOrReloadIfChanged(BeforeScenarioScope $scope): void
     {
+        // Before anything else, and before every scenario. The destructive calls are not only the DROP in
+        // cloneDatabase(): loadFixtures() purges with truncate and truncates the event-store tables outright,
+        // and it runs first. Checking inside backupDatabase() alone left those three statements to execute
+        // against whatever the connection resolved to and refuse afterwards — measured with a sentinel row
+        // absent from the fixtures, which a purge-and-reload deletes while leaving the row COUNTS identical,
+        // so a count is not an oracle that can see this.
+        $this->requireDbName($this->entityManager->getConnection()->getParams());
+
         $featureFile = $scope->getFeature()->getFile();
 
         if (!self::$databasePrepared) {
@@ -211,7 +219,8 @@ final class FixturesContext implements Context
     private function cloneDatabase(Connection $connection, string $sourceDb, string $targetDb): void
     {
         // Identifiers can't be parameter-bound; both names come from the resolved connection plus a
-        // hard-coded suffix, never user input, and requireDbName refuses a name this suite may not own.
+        // hard-coded suffix, never user input; prepareOrReloadIfChanged has already refused a name this
+        // suite may not own, before the first destructive statement of the scenario.
         // This lane is the only writer on its own database — config/packages/test/doctrine.yaml suffixes
         // it per lane, so PHPUnit is on a different one — which is why `WITH (FORCE)` is sufficient and no
         // other session has to be terminated explicitly.

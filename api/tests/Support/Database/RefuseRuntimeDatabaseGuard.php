@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Support\Database;
 
-use Doctrine\DBAL\Connection;
-use Erpify\Kernel;
-use Psr\Container\ContainerInterface;
 use RuntimeException;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Refuses to let a suite start against the database the runtime uses.
@@ -18,88 +16,117 @@ use RuntimeException;
  * data. Measured with `dbname_suffix` removed: one `make php.unit` took the dev `identity_user` from 13 rows
  * to 1 and `iam_session` from 6 to 4, which is a signed-out developer and a 401 from the who-am-I route.
  *
- * **It is called from api/tools/phpunit/bootstrap.php, and that placement is the whole point.** Two earlier
- * homes were measured and both failed to stop anything: as a `PHPUnit\Runner\Extension` subscribing to
- * `ExecutionStarted`, the runner catches the throwable ("Exception in third-party event subscriber") and runs
- * the suite anyway; throwing from the extension's own `bootstrap()` is reported as "Bootstrapping of
- * extension … failed" and also continues. Both printed the refusal and then destroyed the data anyway — dev
- * `identity_user` 13 → 1 in each case. The file bootstrap is executed by `require` before the runner exists,
- * so a throwable there is fatal, which is the only behaviour worth having here.
+ * **Called from api/tools/phpunit/bootstrap.php, and that placement is what makes it a stop rather than a
+ * report.** Two plausible placements do not work, and both were measured: a `PHPUnit\Runner\Extension`
+ * subscribing to `ExecutionStarted` prints "Exception in third-party event subscriber" and runs the suite
+ * anyway, and throwing from such an extension's own `bootstrap()` prints "Bootstrapping of extension … failed"
+ * and also continues — each printed the refusal and then took dev `identity_user` from 13 rows to 1. The file
+ * bootstrap is different: PHPUnit's `BootstrapLoader` wraps a throwable there in a `BootstrapScriptException`
+ * and `Application` exits with `Result::EXCEPTION` before a single test is built.
  *
- * **It deliberately does not connect.** `dbname_suffix` is applied by Doctrine's `ConnectionFactory` while
- * assembling the parameters, so the resolved name is readable from `getParams()` without opening a socket.
- * That matters beyond speed: CI fans out 27 `php.lint.*` gates through `bin/phpunit --filter` during
- * `php.quality.dry-run`, which runs before `db.test.prepare` has created anything, and every one of those
- * gates is kernel-free by design. A connecting check would turn each of them into a red on a database nobody
- * had asked for yet. {@see \Erpify\Tests\Functional\Doctrine\TestDatabaseIsolationTest} asks the server
- * instead, and is the pin that this mechanism is live.
+ * **It resolves the name from the sources rather than from a booted kernel, and that is deliberate.** Booting
+ * one costs three separate defects. A non-debug kernel reuses a compiled container that Symfony never
+ * freshness-checks (`KernelTrait::initializeContainer()` short-circuits on `!$this->debug`), so the guard
+ * reads a stale `dbname_suffix` and passes on the exact mutation it exists to catch — measured: with the
+ * suffix deleted and the container warm, the guard raised nothing. A debug kernel fixes that by warming the
+ * very container the suite is about to use, which is what `Erpify\Kernel::getCacheDir()` gives PHPUnit a
+ * private cache directory to prevent: a warm container means PHPUnit never autoloads the service classes,
+ * never sees their file-scope deprecations, and reports green with `failOnDeprecation="true"` set. And either
+ * one turns every kernel-free `php.lint.*` gate into a container compile, fanned out under CI's `-j4`.
  *
- * A container that will not boot, or a connection naming no database, throws rather than passing: a check
- * that quietly stops running is the failure mode the suffix exists to end.
+ * Reading the two sources costs no cache, no container and no socket, so it is also the only shape that
+ * leaves the 32 filtered gate invocations exactly as they were.
+ *
+ * The cost is a second source of truth: this composes the name the way doctrine-bundle's
+ * `ConnectionFactory::addDatabaseSuffix()` does, so a change to that mechanism would need a change here.
+ * For a guard that is a feature rather than a defect — the two disagreeing is a red, and
+ * {@see \Erpify\Tests\Functional\Doctrine\TestDatabaseIsolationTest} asks the server what actually happened.
  */
 final class RefuseRuntimeDatabaseGuard
 {
     /**
-     * The segment `dbname_suffix` appends under `APP_ENV=test` (`config/packages/test/doctrine.yaml`).
-     * Matched as a substring, not as a terminal suffix: a lane may append its own token after it, as
-     * `api/tests/Behat/bootstrap.php` does with `TEST_TOKEN=_behat`.
+     * The segment the suffix must carry. Matched as a substring, not as a terminal suffix: a lane appends its
+     * own token after it, as `api/tests/Behat/bootstrap.php` does with `TEST_TOKEN=_behat`.
      */
     private const string TEST_DATABASE_MARKER = '_test';
 
-    public static function refuseUnlessTestDatabase(): void
-    {
-        $databaseName = self::resolveDatabaseName();
+    /**
+     * @param string|null $databaseUrl        the DSN as the process received it, before any suffix
+     * @param string      $testDoctrineConfig path to the env-scoped Doctrine config declaring `dbname_suffix`
+     * @param string|null $testToken          the per-process token a lane appends after the suffix
+     */
+    public static function refuseUnlessTestDatabase(
+        ?string $databaseUrl,
+        string $testDoctrineConfig,
+        ?string $testToken,
+    ): void {
+        $resolved = self::resolveDatabaseName($databaseUrl, $testDoctrineConfig, $testToken);
 
-        if (!\str_contains($databaseName, self::TEST_DATABASE_MARKER)) {
+        if (!\str_contains($resolved, self::TEST_DATABASE_MARKER)) {
             throw new RuntimeException(\sprintf(
                 'Refusing to run the suite against "%s": the name carries no "%s" marker, so it may be the '
                 . 'database the runtime uses, and this suite truncates and deletes without rolling back. '
-                . 'Check `dbname_suffix` under config/packages/test/doctrine.yaml.',
-                $databaseName,
+                . 'Check `dbname_suffix` in %s.',
+                $resolved,
                 self::TEST_DATABASE_MARKER,
+                $testDoctrineConfig,
             ));
         }
     }
 
-    private static function resolveDatabaseName(): string
+    private static function resolveDatabaseName(
+        ?string $databaseUrl,
+        string $testDoctrineConfig,
+        ?string $testToken,
+    ): string {
+        return self::databaseFromDsn($databaseUrl)
+            . self::suffixFromConfig($testDoctrineConfig)
+            . ($testToken ?? '');
+    }
+
+    private static function databaseFromDsn(?string $databaseUrl): string
     {
-        $kernel = new Kernel('test', false);
-        $kernel->boot();
-
-        try {
-            // The DBAL connection is a private service; under `framework.test` the kernel publishes
-            // `test.service_container` to reach those. Absent it, the check cannot be made, and saying so is
-            // the point — a silent fallback is how an isolation check stops running without anyone noticing.
-            $container = $kernel->getContainer();
-
-            if (!$container->has('test.service_container')) {
-                throw new RuntimeException(
-                    'The test service container is unavailable, so the resolved database cannot be read. '
-                    . 'Check that `framework.test` is enabled under APP_ENV=test.',
-                );
-            }
-
-            $testContainer = $container->get('test.service_container');
-
-            if (!$testContainer instanceof ContainerInterface) {
-                throw new RuntimeException('`test.service_container` is not a container; cannot verify isolation.');
-            }
-
-            $connection = $testContainer->get(Connection::class);
-
-            if (!$connection instanceof Connection) {
-                throw new RuntimeException('The test container holds no Doctrine connection to check.');
-            }
-
-            $databaseName = $connection->getParams()['dbname'] ?? null;
-
-            if (!\is_string($databaseName) || '' === $databaseName) {
-                throw new RuntimeException('The Doctrine connection names no database; cannot verify isolation.');
-            }
-
-            return $databaseName;
-        } finally {
-            $kernel->shutdown();
+        if (null === $databaseUrl || '' === $databaseUrl) {
+            throw new RuntimeException(
+                'DATABASE_URL is unset, so the database this run would connect to cannot be determined.',
+            );
         }
+
+        $path = \parse_url($databaseUrl, PHP_URL_PATH);
+
+        if (!\is_string($path) || '' === \ltrim($path, '/')) {
+            throw new RuntimeException('DATABASE_URL names no database, so isolation cannot be verified.');
+        }
+
+        return \ltrim($path, '/');
+    }
+
+    /**
+     * The suffix as declared, with any `%env(...)%` placeholder stripped — the token is supplied separately,
+     * and a placeholder left in place would make every name match the marker by accident.
+     */
+    private static function suffixFromConfig(string $testDoctrineConfig): string
+    {
+        if (!\is_file($testDoctrineConfig)) {
+            throw new RuntimeException(\sprintf(
+                'No Doctrine test config at %s, so `dbname_suffix` cannot be read.',
+                $testDoctrineConfig,
+            ));
+        }
+
+        $parsed = Yaml::parseFile($testDoctrineConfig);
+        $doctrine = \is_array($parsed) ? ($parsed['doctrine'] ?? null) : null;
+        $dbal = \is_array($doctrine) ? ($doctrine['dbal'] ?? null) : null;
+        $suffix = \is_array($dbal) ? ($dbal['dbname_suffix'] ?? null) : null;
+
+        if (!\is_string($suffix)) {
+            throw new RuntimeException(\sprintf(
+                'No `doctrine.dbal.dbname_suffix` in %s. Without it every APP_ENV=test process resolves the '
+                . 'runtime database, and this suite would truncate it.',
+                $testDoctrineConfig,
+            ));
+        }
+
+        return (string) \preg_replace('/%env\([^)]*\)%/', '', $suffix);
     }
 }

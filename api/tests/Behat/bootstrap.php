@@ -37,7 +37,7 @@ if (is_file($apiRoot . '/.env')) {
 
     // bootEnv populates immutably, so a variable compose already exported wins over .env.test and the file
     // binds nothing. Re-load it with override semantics so this lane actually gets the values it declares —
-    // MAILER_DSN, RATE_LIMIT_*, DEFAULT_NOTIFICATION_EMAIL and MERCURE_*, each of which compose also exports.
+    // MAILER_DSN, DEFAULT_NOTIFICATION_EMAIL and MERCURE_*, each of which compose also exports.
     // The database is NOT among them: it comes from dbname_suffix, which applies to the resolved connection
     // whatever the DSN says. This asymmetry with api/tools/phpunit/bootstrap.php (bootEnv, no overload) is
     // why a DSN in .env.test bound this lane and silently failed to bind that one.
