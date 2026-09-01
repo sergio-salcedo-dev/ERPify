@@ -1807,12 +1807,16 @@ mitigated state. Accepting one means recording who accepted it and against which
       enforces it.** Retired by decision on 2026-08-31 (PR #903): the `PreToolUse` hook, the
       `pull_request` workflow, the script and its make targets are all deleted, and `CLAUDE.md`'s
       requirement became a recommendation. This is a **consciously accepted** removal of a control, not
-      an oversight, and it is recorded here because it is the kind of thing a reader of this file must
-      not have to infer from a diff. What it costs, measured rather than supposed: the rule it replaced
-      existed because prose alone lost four times with the author knowing it each time (#616 and #620
-      merged with their pass arriving in a later PR, and that later pass found a GRAVE; #770's record
-      landed nine minutes after the PR opened under a body claiming otherwise; `img-1-2` opened ahead of
-      its pass by explicit instruction). What it does **not** cost: the gate only ever proved the *form*
+      an oversight. **Accepted 2026-08-31 (Sergio)**, on the basis that a developer who knows the rule
+      does not need a machine to hold them to it; recorded here because it is the kind of thing a reader
+      of this file must not have to infer from a diff. What it costs, measured rather than supposed: the
+      gate existed because prose alone lost **three** times with the author knowing it each time (#616
+      merged with its pass arriving in #618, which then merged without its own — and that follow-up pass
+      found a GRAVE; #770's fix and record landed nine and ten minutes after the PR opened, under a body
+      claiming otherwise; and BR-2/#650 earlier, under a weaker wording, returned three GRAVE from a pass
+      that ran after the PR opened). A **fourth** case, `img-1-2`, happened with the gate live and is the
+      one that matters most here: it opened ahead of its external pass by explicit instruction, carrying
+      a self-administered record that satisfied the form the gate measured. What it does **not** cost: the gate only ever proved the *form*
       — a record present on the branch — and never whether the read was hostile, whether the findings
       were real, or whether anyone but the author was involved. The surviving control is the three-layer
       code review, which `CLAUDE.md` still owes to every story. **Re-assess before the first customer**:
