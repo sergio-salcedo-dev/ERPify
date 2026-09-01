@@ -15,19 +15,50 @@ const WDT_PATH = "/_dev/wdt-loader";
  * inert by spec). Avoids `innerHTML` / `dangerouslySetInnerHTML`: the loader is
  * dev-only, same-origin, trusted Symfony output.
  */
-function mountFragment(host: HTMLElement, html: string): void {
+function mountFragment(host: HTMLElement, html: string): number {
   while (host.firstChild) host.firstChild.remove();
   const parsed = new DOMParser().parseFromString(html, "text/html");
-  // The loader is a document fragment, not a body. Its first element is
-  // `<link rel="stylesheet" href="/_wdt/styles">`, and the HTML parser hoists a
-  // leading `<link>` — plus the empty `<script>` upstream puts after it so the
-  // parser waits for that sheet — into `<head>`, never `<body>`. Reading `body`
-  // alone therefore drops the toolbar's entire stylesheet and paints ~44 KB of
-  // unstyled markup over a viewport-wide fixed host. Head first, so the sheet
-  // still precedes the markup it styles.
+  // The loader is a document fragment, not a body: it leads with the toolbar's
+  // `<link rel="stylesheet">`, and the HTML parser hoists a leading `<link>` —
+  // plus the empty `<script>` upstream emits beside it — into `<head>`, never
+  // `<body>`. Reading `body` alone therefore drops the toolbar's entire
+  // stylesheet and paints its raw markup over a viewport-wide fixed host. Head
+  // then body is the fragment back in the order upstream sent it.
+  //
+  // That empty `<script>` is upstream's way of making the PARSER block on the
+  // sheet, and it is inert here: nothing on this path parses, and a `<link>` its
+  // node document's parser did not create is not render-blocking. So the markup
+  // can paint for one round trip before the sheet resolves. Ordering the nodes
+  // does not claim to close that window — it only keeps the source order.
+  let mountedElements = 0;
   for (const node of [...parsed.head.childNodes, ...parsed.body.childNodes]) {
-    host.appendChild(reviveNode(node));
+    const revived = reviveNode(node);
+    watchStylesheetFailure(revived);
+    host.appendChild(revived);
+    if (node.nodeType === Node.ELEMENT_NODE) mountedElements += 1;
   }
+  return mountedElements;
+}
+
+/**
+ * Reports a mounted stylesheet that never loads. The toolbar's sheet is served by
+ * a controller that refuses when the profiler is disabled, while the loader that
+ * names it renders without consulting the profiler — so a 200 loader can carry a
+ * link whose target 404s, which reproduces the unstyled toolbar with no signal at
+ * all. Silence is what made that state expensive to diagnose the first time.
+ */
+function watchStylesheetFailure(node: Node): void {
+  if (!(node instanceof HTMLLinkElement) || node.rel !== "stylesheet") return;
+  node.addEventListener(
+    "error",
+    () => {
+      telemetry.warn("The Symfony debug toolbar stylesheet failed to load", {
+        scope: apiScope("wdt"),
+        cause: node.href,
+      });
+    },
+    { once: true },
+  );
 }
 
 function reviveNode(node: Node): Node {
@@ -88,7 +119,16 @@ export function SymfonyDebugToolbar({
       })
       .then((html) => {
         if (cancelled || mountedRef.current || !hostRef.current) return;
-        mountFragment(hostRef.current, html);
+        // Latch on a mount that produced something. A 200 carrying an empty or
+        // non-HTML body parses to zero elements, and latching on it would discard
+        // every later token for the rest of the session — the toolbar gone, with
+        // no retry and nothing logged.
+        if (mountFragment(hostRef.current, html) === 0) {
+          telemetry.warn("The Symfony debug toolbar loader returned no elements", {
+            scope: apiScope("wdt"),
+          });
+          return;
+        }
         mountedRef.current = true;
       })
       .catch((cause: unknown) => {

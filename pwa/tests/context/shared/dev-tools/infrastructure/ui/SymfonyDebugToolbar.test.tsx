@@ -4,16 +4,24 @@ import { SymfonyDebugToolbar } from "@/context/shared/dev-tools/infrastructure/u
 import { EventTargetDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/EventTargetDebugTokenObserver";
 
 /**
+ * The toolbar loader's stylesheet href is absolute: the template writes it with
+ * Twig's `url()`, which generates `ABSOLUTE_URL`. Pinning the real spelling keeps
+ * the assertion below about what the endpoint emits rather than about a
+ * root-relative path this file invented.
+ */
+const WDT_STYLESHEET_HREF = "https://localhost/_wdt/styles";
+
+/**
  * The structure `/_dev/wdt-loader/{token}` actually returns. What matters is the
  * order: symfony/web-profiler-bundle leads the fragment with the toolbar's
- * stylesheet so the markup is never painted unstyled, and the HTML parser hoists
- * that leading `<link>` — and the empty `<script>` that makes the parser wait for
- * it — into `<head>`. A host that reads only `body` silently loses the sheet.
+ * stylesheet, and the HTML parser hoists that leading `<link>` — and the empty
+ * `<script>` beside it — into `<head>`. A host that reads only `body` silently
+ * loses the sheet.
  */
 const WDT_LOADER_FRAGMENT = [
   "<!-- START of Symfony Web Debug Toolbar -->",
-  '<link rel="stylesheet" href="/_wdt/styles" />',
-  "<script> </script>",
+  `<link rel="stylesheet" href="${WDT_STYLESHEET_HREF}" />`,
+  '<script id="sfwdt-head-script"> </script>',
   '<div class="sf-toolbar sf-toolbar-opened" role="toolbar">',
   '  <div id="sfwdt-marker">toolbar</div>',
   "</div>",
@@ -162,6 +170,15 @@ describe("SymfonyDebugToolbar", () => {
   });
 
   it("mounts the stylesheet the parser hoists into <head>, not just the body markup", async () => {
+    // The precondition this case rests on, asserted rather than assumed: the
+    // parser must actually hoist the fixture's link. Hoisting stops at the first
+    // non-whitespace character, so a stray edit ahead of the `<link>` leaves it
+    // in `body` — where a body-only mount, the very defect this refuses, also
+    // reaches it, and every assertion below then passes over the bug.
+    const parsedFixture = new DOMParser().parseFromString(WDT_LOADER_FRAGMENT, "text/html");
+    expect(parsedFixture.head.querySelector("link[rel='stylesheet']")).not.toBeNull();
+    expect(parsedFixture.body.querySelector("link[rel='stylesheet']")).toBeNull();
+
     const observer = new EventTargetDebugTokenObserver();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(WDT_LOADER_FRAGMENT, {
@@ -179,14 +196,19 @@ describe("SymfonyDebugToolbar", () => {
       expect(host.querySelector("#sfwdt-marker")).not.toBeNull();
     });
 
+    // Identity, not presence. `querySelector` returns the first link in tree
+    // order wherever it sits, so it is satisfied by a link the BODY carried —
+    // which is exactly the arrangement a body-only mount produces. Asserting the
+    // sheet is the host's first element pins hoisting, ordering and identity at
+    // once.
     const sheet = host.querySelector("link[rel='stylesheet']");
-    expect(sheet).not.toBeNull();
-    expect(sheet?.getAttribute("href")).toBe("/_wdt/styles");
+    expect(host.firstElementChild).toBe(sheet);
+    expect(sheet?.getAttribute("href")).toBe(WDT_STYLESHEET_HREF);
 
-    // Order is the point, not mere presence: the sheet has to precede the markup
-    // it styles, which is why the head nodes mount ahead of the body ones.
-    const markup = host.querySelector("#sfwdt-marker");
-    expect(sheet!.compareDocumentPosition(markup!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The head's `<script>` is revived alongside the sheet. Narrowing the head
+    // mount to `link` alone would satisfy every other case in this file while
+    // silently killing a loader that boots Sfjs from a leading script.
+    expect(host.querySelector("#sfwdt-head-script")).not.toBeNull();
   });
 
   it("renders nothing and does not throw when the fragment fetch fails", async () => {

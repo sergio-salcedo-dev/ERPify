@@ -30,5 +30,14 @@ final class WebDebugToolbarLoaderFunctionalTest extends WebTestCase
         $this->assertStringContainsString("Sfjs.loadToolbar('" . $token . "')", $body);
         $this->assertStringContainsString('Sfjs', $body);
         $this->assertStringContainsString('/_wdt/', $body);
+
+        // The PWA host mounts this fragment's head nodes because the stylesheet arrives as a
+        // LEADING <link>, which the HTML parser hoists out of the body. That coupling lives in
+        // the vendor template, so it is asserted here against the real render rather than
+        // against a transcription in the PWA suite. Read what it buys honestly: it reds when
+        // upstream REMOVES or renames the sheet, never when upstream adds one — the direction
+        // that produced the defect in the first place.
+        $this->assertStringContainsString('rel="stylesheet"', $body);
+        $this->assertStringContainsString('/_wdt/styles', $body);
     }
 }
