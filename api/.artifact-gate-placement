@@ -112,6 +112,7 @@
 # ---------------------------------------------------------------------------------------------------------
 
 tests/Unit/Gate/AcceptedRiskTagGateTest.php :: home
+tests/Unit/Gate/TestDatabaseGuardGateTest.php :: home
 tests/Unit/Gate/AcceptedRiskTagRulesGateTest.php :: home
 tests/Unit/Gate/AdministratorSetLockStatementGateTest.php :: home
 tests/Unit/Gate/ArtifactGateDetectionRulesGateTest.php :: home

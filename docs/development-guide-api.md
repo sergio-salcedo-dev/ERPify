@@ -167,11 +167,33 @@ make php.test                              # unit + e2e
 make php.unit                              # PHPUnit
 make php.unit c='--filter SomeTest'        # filter
 make php.behat                             # Behat, --strict (config: api/behat.dist.php)
+make db.test.prepare                       # create + migrate <dbname>_test (idempotent; php.unit runs it for you)
+make db.test.reset                         # drop every <dbname>_test*, recreate the PHPUnit one (destructive)
+make db.test.shell                         # psql on the test database (db.shell opens the runtime one)
 ```
 
 - **PHPUnit config**: `api/tools/phpunit/phpunit.dist.xml` (resolved by `api/bin/phpunit` unless `-c` overrides it).
 - **Behat config**: `api/behat.dist.php` (Behat 4 dropped YAML config).
 - Integration tests touching Doctrine use **real Postgres** (Compose), not SQLite.
+- The suite never runs against the runtime database. Each lane holds its own: `<dbname>_test` for PHPUnit,
+  `<dbname>_test_behat` for Behat (its bootstrap sets `TEST_TOKEN=_behat`). One per lane because
+  `FixturesContext` DROPs and re-clones the database it connects to — sharing one kills an in-flight
+  `make -j php.test` and bakes PHPUnit's leftover rows into the backup every feature restores from.
+- What puts them there is `dbname_suffix` under `api/config/packages/test/doctrine.yaml`, applied to the
+  already-resolved connection, so it binds however `DATABASE_URL` arrives. **Do not "fix" this with a DSN in
+  `api/.env.test`**: `Dotenv::overload()` in Behat's bootstrap overwrites an already-set variable and
+  `bootEnv()` in PHPUnit's does not, so such a DSN binds one lane and is silently inert in the other — which
+  is exactly how PHPUnit spent four months resolving the dev database. The same applies to an untracked
+  `.env.test.local`; a `DATABASE_URL` there must name the **runtime** database, since the suffix is appended
+  on top.
+- If you run a single functional test straight from the IDE, it bypasses make: run `make db.test.prepare`
+  once first, or the run dies on a database that does not exist. `make db.test.shell` opens psql on it.
+- Guards, one per lane plus a pin — they never all fire in one run. `RefuseRuntimeDatabaseGuard` covers the
+  PHPUnit lane from `api/tools/phpunit/bootstrap.php` (and `db.test.prepare` runs it before its migrate, since
+  a make prerequisite executes ahead of the bootstrap), ending the run at zero tests;
+  `FixturesContext::requireDbName()` covers the Behat lane, which runs no PHPUnit, from the top of its
+  `#[BeforeScenario]` hook; and `TestDatabaseIsolationTest` is the pin that asks `current_database()` of the
+  server rather than trusting what was declared.
 
 ## Lint / analyze
 

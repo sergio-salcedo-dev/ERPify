@@ -41,6 +41,12 @@ use UnexpectedValueException;
  */
 final class FixturesContext implements Context
 {
+    /**
+     * The segment `dbname_suffix` appends under `APP_ENV=test`. Matched as a substring rather than as a
+     * terminal suffix because this lane appends its own token after it (`<dbname>_test_behat`).
+     */
+    private const string TEST_DATABASE_MARKER = '_test';
+
     private static bool $databasePrepared = false;
 
     private static ?string $lastFeatureFile = null;
@@ -54,6 +60,14 @@ final class FixturesContext implements Context
     #[BeforeScenario]
     public function prepareOrReloadIfChanged(BeforeScenarioScope $scope): void
     {
+        // Before anything else, and before every scenario. The destructive calls are not only the DROP in
+        // cloneDatabase(): loadFixtures() purges with truncate and truncates the event-store tables outright,
+        // and it runs first. Checking inside backupDatabase() alone left those three statements to execute
+        // against whatever the connection resolved to and refuse afterwards — measured with a sentinel row
+        // absent from the fixtures, which a purge-and-reload deletes while leaving the row COUNTS identical,
+        // so a count is not an oracle that can see this.
+        $this->requireDbName($this->entityManager->getConnection()->getParams());
+
         $featureFile = $scope->getFeature()->getFile();
 
         if (!self::$databasePrepared) {
@@ -204,11 +218,12 @@ final class FixturesContext implements Context
 
     private function cloneDatabase(Connection $connection, string $sourceDb, string $targetDb): void
     {
-        // Identifiers can't be parameter-bound; both names come from the
-        // test DSN plus a hard-coded suffix, never user input.
-        // The behat process is the only writer on the test DB (separate
-        // from dev's `erpify_db`), so `WITH (FORCE)` is sufficient — no
-        // need to terminate other sessions explicitly.
+        // Identifiers can't be parameter-bound; both names come from the resolved connection plus a
+        // hard-coded suffix, never user input; prepareOrReloadIfChanged has already refused a name this
+        // suite may not own, before the first destructive statement of the scenario.
+        // This lane is the only writer on its own database — config/packages/test/doctrine.yaml suffixes
+        // it per lane, so PHPUnit is on a different one — which is why `WITH (FORCE)` is sufficient and no
+        // other session has to be terminated explicitly.
         $connection->executeStatement(\sprintf('DROP DATABASE IF EXISTS "%s" WITH (FORCE)', $targetDb));
         $connection->executeStatement(\sprintf('CREATE DATABASE "%s" WITH TEMPLATE "%s"', $targetDb, $sourceDb));
     }
@@ -222,6 +237,21 @@ final class FixturesContext implements Context
 
         if (!\is_string($dbName) || '' === $dbName) {
             throw new InvalidArgumentException('Doctrine connection has no dbname; cannot manage test database.');
+        }
+
+        // The only thing standing between this class and a developer's data is that the resolved name
+        // carries the test suffix, and nothing else in this lane checks it: `make php.behat` runs no PHPUnit,
+        // so the suite's own isolation test never executes here, and neither does CI's behat job. Refusing at
+        // the statement that destroys covers `vendor/bin/behat` and an IDE run configuration too. Measured on
+        // the sibling lane: with the suffix gone, one full run took the dev `identity_user` from 13 rows to 1.
+        if (!\str_contains($dbName, self::TEST_DATABASE_MARKER)) {
+            throw new InvalidArgumentException(\sprintf(
+                'Refusing to purge and re-clone "%s": this context DROPs and recreates the database it is '
+                . 'connected to, and that name carries no "%s" marker, so it may be the runtime database. '
+                . 'Check `dbname_suffix` under config/packages/test/doctrine.yaml.',
+                $dbName,
+                self::TEST_DATABASE_MARKER,
+            ));
         }
 
         return $dbName;
