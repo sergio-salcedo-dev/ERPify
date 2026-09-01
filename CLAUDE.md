@@ -284,6 +284,16 @@ across separate PRs, windows and sessions, so a story delivered in three PRs can
 What closes the debt is that the story has had all three before it is `done` — and where each ran is stated
 in its artifact, because a layer nobody can point at did not run.
 
+**A change touching security, GDPR or audit surface owes the three layers even when it is not a story**, and
+then the debt is per pull request, because there is no story for it to attach to. A chore, a hotfix, a
+dependency batch that step 3C turned source-touching, a docs PR over auth or erasure code: none of these has
+an artifact or a `sprint-status` key, and under a purely per-story reading each would carry no review
+obligation at all. That gap is not hypothetical — **the PR that retired the adversarial-pass gate was itself
+a `chore/` with no story**, so the one change in this repo's history that removed a security control would
+have been the first to owe nothing. It ran the three layers anyway, and they returned two GRAVE plus a gate
+that could not fail, which is the measurement this paragraph rests on rather than a principle. Where it ran
+is stated in the pull request body, since a non-story change has nowhere else to put it.
+
 **These three layers are the surviving control, and that is a change of load rather than of wording.** The adversarial-pass gate on opening a PR was retired on 2026-08-31, so nothing mechanical now checks that a hostile read happened before a branch merges — which makes the per-story debt above the thing that has to hold on its own. See *Security review on every change* → Process for what the retired gate did and did not buy.
 
 - **Read-only, stated explicitly in each prompt** — no edits, no `git` state changes, no mutating `make`

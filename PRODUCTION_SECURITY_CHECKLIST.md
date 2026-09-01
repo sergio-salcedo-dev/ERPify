@@ -1819,7 +1819,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       a self-administered record that satisfied the form the gate measured. What it does **not** cost: the gate only ever proved the *form*
       — a record present on the branch — and never whether the read was hostile, whether the findings
       were real, or whether anyone but the author was involved. The surviving control is the three-layer
-      code review, which `CLAUDE.md` still owes to every story. **Re-assess before the first customer**:
+      code review, which `CLAUDE.md` owes to every story **and, since 2026-09-01, to any change touching
+      security, GDPR or audit surface even when it is not a story** — the gap that extension closes is that
+      a chore, a hotfix or a docs PR over auth code has no story to attach a debt to, and the PR that
+      retired the gate was itself exactly that shape. **Re-assess before the first customer**:
       decide whether an unenforced convention is the control you want over auth, erasure and audit code.
 
 ## 8. Deploy & verify
