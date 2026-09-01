@@ -1,6 +1,6 @@
 ---
 title: Test-suite database isolation
-status: in-review
+status: done
 branch: fix/api-test-db-isolation-q6sw
 ---
 
