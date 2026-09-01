@@ -14,6 +14,18 @@ const WDT_PATH = "/_dev/wdt-loader";
  * freshly-created element so the browser executes it (parsed/cloned scripts are
  * inert by spec). Avoids `innerHTML` / `dangerouslySetInnerHTML`: the loader is
  * dev-only, same-origin, trusted Symfony output.
+ *
+ * The fragment is mounted whole. That is a decision rather than an oversight: a
+ * node filter here would read as closed while the dominant channel stays open by
+ * design. Measured — a fragment carrying no `<base>` at all moves
+ * `document.baseURI` in three lines of its own JS, and `parsed.head` is not "the
+ * document-scoped nodes" but "whatever arrived before the parser left head mode",
+ * so a `<base>` after the first `<div>` lands nested in `body` where no head-side
+ * filter would see it. What upstream's template leads with is watched instead, at
+ * the integration point, by the `<base>` canary in
+ * `WebDebugToolbarLoaderFunctionalTest`. It detects; it does not contain — an
+ * executed script can still take document-wide authority, which is the standing
+ * price of executing them at all.
  */
 function mountFragment(host: HTMLElement, html: string): number {
   while (host.firstChild) host.firstChild.remove();

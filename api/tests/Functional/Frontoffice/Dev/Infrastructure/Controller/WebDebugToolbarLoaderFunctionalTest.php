@@ -39,5 +39,15 @@ final class WebDebugToolbarLoaderFunctionalTest extends WebTestCase
         // that produced the defect in the first place.
         $this->assertStringContainsString('rel="stylesheet"', $body);
         $this->assertStringContainsString('/_wdt/styles', $body);
+
+        // Contract canary, not a sanitizer. The PWA appends this fragment's nodes into the live
+        // document, and a <base> is the one element upstream could lead with that re-resolves every
+        // relative URL in the app — measured, it moves document.baseURI even nested inside <body>,
+        // and CSP base-uri 'self' does not bound it because the whole effect is same-origin.
+        // Upstream emits none today, so this reds at the dependabot bump that introduces one,
+        // before the markup ever reaches a browser. Its scope, stated so nobody reads it as
+        // containment: it watches the TEMPLATE. It proves nothing about what the toolbar's own
+        // scripts do, and those are executed on purpose.
+        $this->assertStringNotContainsString('<base', $body);
     }
 }

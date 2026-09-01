@@ -173,7 +173,38 @@ la conclusión**, y la discrepancia se deja aireada en vez de resuelta por mí:
 Ambos coinciden en que la opción 3 tal como yo la enuncié es incoherente: sin filtro, un test que
 afirme `document.baseURI` invariante enrojece en el commit que lo introduce.
 
-**Estado: sin decidir.** Escalado a un tercer criterio externo antes de tocar producción.
+**Resuelto: A + D** — sin filtro en producción, más un canario del disparador en el functional test
+que ya renderiza el twig real, más el comentario que nombra el vector.
+
+Consultado el tercer criterio externo, que en la primera vuelta recomendó **B** y en la segunda,
+ante la medición, se movió a **A + D**. Lo que movió la decisión no fue el recuento de opiniones —
+dos de tres decían B — sino dos mediciones que refutaban la premisa que los tres compartían:
+
+- **B costaba más de lo tasado.** El filtro top-level que se escribe de primeras **deja pasar** un
+  `<base>` anidado (medido). Cubrir el árbol obliga a `reviveNode` con retorno nullable, guarda en
+  el caller y dos tests. La única de las tres voces que había escrito el código lo tasó bien y
+  quedó en minoría.
+- **El contrato de B no era la línea limpia que se vendía.** «Montamos recursos, nunca declaraciones
+  del documento» no separa categorías: el `<link rel="stylesheet">` que montamos *a propósito* tiene
+  efecto de documento, y sólo está acotado porque upstream nombra sus selectores `.sf-*` — convención
+  suya, no mecanismo nuestro (medido: cero selectores sin acotar en 18 KB de CSS).
+- **D dejó de costar un gate nuevo.** `WebDebugToolbarLoaderFunctionalTest` ya existe, ya renderiza
+  el twig real y ya corre en CI; el canario es una aserción más. La objeción de que `api/vendor/`
+  gitignored impide correrlo en CI es cierta para `git ls-files` y falsa para el runtime — ese test
+  renderiza ese mismo twig y pasa.
+
+**El coste aceptado, dicho y no escondido: D detecta, B contiene.** Si upstream introduce un `<base>`
+y alguien mergea por encima de un CI rojo, surte efecto. Se compra esa diferencia porque el aviso
+llega en el bump, cuando una persona puede decidir, en vez de descartar en silencio para siempre un
+elemento que upstream podría llegar a necesitar legítimamente.
+
+El canario afirma sobre `<base` y **no** sobre `<title`: medido, `<title` aparece hoy dentro de un
+comentario JavaScript de Sfjs, así que esa aserción enrojecería sin defecto. Falsificado
+sustituyendo `<base` por `<script`: rojo contra el cuerpo real, luego no pasa en vacío.
+
+Lo que **no** cubre, escrito en el comentario del fuente para que nadie lo lea como contención: un
+script ejecutado puede tomar autoridad sobre el documento, y ése es el precio permanente de
+ejecutarlos.
 
 ### Límites de este pase
 
