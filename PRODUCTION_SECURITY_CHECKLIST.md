@@ -1803,6 +1803,28 @@ mitigated state. Accepting one means recording who accepted it and against which
       before the first customer or any public deployment**, whichever comes first: decide per item
       whether it stays public, and remember that redaction after indexing is not retroactive.
 
+- [ ] **The adversarial pass on security, GDPR and audit-surface work is no longer required, and nothing
+      enforces it.** Retired by decision on 2026-08-31 (PR #903): the `PreToolUse` hook, the
+      `pull_request` workflow, the script and its make targets are all deleted, and `CLAUDE.md`'s
+      requirement became a recommendation. This is a **consciously accepted** removal of a control, not
+      an oversight. **Accepted 2026-08-31 (Sergio)**, on the basis that a developer who knows the rule
+      does not need a machine to hold them to it; recorded here because it is the kind of thing a reader
+      of this file must not have to infer from a diff. What it costs, measured rather than supposed: the
+      gate existed because prose alone lost **three** times with the author knowing it each time (#616
+      merged with its pass arriving in #618, which then merged without its own — and that follow-up pass
+      found a GRAVE; #770's fix and record landed nine and ten minutes after the PR opened, under a body
+      claiming otherwise; and BR-2/#650 earlier, under a weaker wording, returned three GRAVE from a pass
+      that ran after the PR opened). A **fourth** case, `img-1-2`, happened with the gate live and is the
+      one that matters most here: it opened ahead of its external pass by explicit instruction, carrying
+      a self-administered record that satisfied the form the gate measured. What it does **not** cost: the gate only ever proved the *form*
+      — a record present on the branch — and never whether the read was hostile, whether the findings
+      were real, or whether anyone but the author was involved. The surviving control is the three-layer
+      code review, which `CLAUDE.md` owes to every story **and, since 2026-09-01, to any change touching
+      security, GDPR or audit surface even when it is not a story** — the gap that extension closes is that
+      a chore, a hotfix or a docs PR over auth code has no story to attach a debt to, and the PR that
+      retired the gate was itself exactly that shape. **Re-assess before the first customer**:
+      decide whether an unenforced convention is the control you want over auth, erasure and audit code.
+
 ## 8. Deploy & verify
 
 - [ ] `make deploy.local` (or `scripts/deploy/deploy-local.sh`) reaches a 200 on

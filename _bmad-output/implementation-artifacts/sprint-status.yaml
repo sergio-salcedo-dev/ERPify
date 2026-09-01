@@ -552,6 +552,6 @@ action_items:
     owner: "Sergio"
     status: done
   - epic: images
-    action: "ABIERTA: sigue haciendo falta el check automatico del pase adversarial? La regla ha fallado cuatro veces documentadas (#616, #620, #770, img-1-2) y en las cuatro el autor sabia que tenia que hacerlo, que es la condicion bajo la que se propone retirarlo"
+    action: "DECISION: se retira el pase adversarial entero — automatizacion Y regla (PR #903). Pasa a practica recomendada; nada lo hace cumplir. La retro dejo el item abierto con el argumento en contra delante y la decision se tomo igual, que es lo que un registro debe poder mostrar"
     owner: "Sergio"
-    status: open
+    status: done

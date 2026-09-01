@@ -73,7 +73,7 @@ baseline_commit: '4c830d699a9bac36601673c3bbd34ca43bf36666'
 - [x] `make/php-quality.mk` + `php.quality` -- add and wire `php.lint.accepted-risk`
 - [x] `api/.artifact-gate-placement` -- classify both Gate test files
 - [x] `NotifyLockedIdentities.php` -- add `@accepted-risk #860` inline within the existing paragraph (not its own line -- see Design Notes)
-- [x] `spec-fix-adversarial-pass-hook-cwd.md` -- add `@accepted-risk #861` + narrative reference inside the "third vector" paragraph
+- [x] `spec-fix-adversarial-pass-hook-cwd.md` -- add an `@accepted-risk` tag for #861 + narrative reference inside the "third vector" paragraph
 - [x] `.github/workflows/accepted-risk-live-state.yml` -- independent live-state job, last
 
 **Acceptance Criteria:**

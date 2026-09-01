@@ -37,7 +37,8 @@ use Throwable;
  * trace an arbitrary `string $foo` to "becomes a person's address three calls later" without false-negating
  * real sites or false-positiving every other string parameter in the tree. So the string-typed population in
  * the registry is not, and cannot be, mechanically complete — it is what a human adversarial pass found
- * (the same control `../CLAUDE.md`'s security-review process already mandates for this class of change), and
+ * (what `../CLAUDE.md`'s security-review process recommends for this class of change — it
+ * required it until 2026-08-31), and
  * this gate's job is to keep what was found from rotting, not to find the next one by itself.
  *
  * Four directions, all mechanical:

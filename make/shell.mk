@@ -7,10 +7,22 @@
 # and neither named shellcheck or any super-lint target. So the capability was
 # present and the gate was not — the shape CLAUDE.md names elsewhere, where a
 # mechanism nobody performs is a paragraph rather than a control. The bar was
-# real and held by hand: shellcheck 0.11.0 reported nine findings against
-# `scripts/adversarial-pass-check.sh` before they were fixed by hand, on the
-# largest and most-executed shell in the tree (a PreToolUse hook, so it runs on
-# every Bash tool call in every session).
+# real and held by hand: shellcheck 0.11.0 reported nine findings against the
+# largest and most-executed shell then in the tree — the adversarial-pass hook,
+# which ran on every Bash tool call in every session — while the three older
+# `scripts/*.sh` reported zero. That script has since been retired, so the
+# example outlives its subject; what it still shows is the asymmetry, which is
+# what a hand-held bar looks like just before it slips.
+#
+# WHY THE INVOCATION IS GUARDED RATHER THAN FOLLOWED BY AN ECHO
+#
+# `cmd; echo "✓ …"` makes the recipe line's exit status the ECHO's, so shellcheck
+# could print a finding, exit 1, and the target would still print its success line
+# and exit 0 — measured with a stub that emits a finding and exits 1: the ✓ printed
+# and `make shell.lint` returned 0. CI runs this exact target and `shell-lint` gates
+# through `ci-success`, so the masking reached the merge button. A gate that cannot
+# express a red is the shape this file was written to install, arrived at one
+# character of shell punctuation.
 #
 # WHY ONE INVOCATION OVER THE WHOLE LIST, NEVER A PER-FILE LOOP
 #
@@ -30,7 +42,7 @@
 #
 # THE ENTRY CRITERION IS ZERO, WITH NO BASELINE
 #
-# At default severity the 15 tracked scripts report zero findings, so a baseline
+# At default severity the tracked scripts report zero findings, so a baseline
 # could only ever preserve future drift. A genuine false positive is answered at
 # its line with a `# shellcheck disable=<code>` carrying the reason it is one —
 # visible in review, unlike a baseline file nobody reads. Two live in
@@ -102,5 +114,8 @@ shell.lint: ## shellcheck every tracked shell script in ONE pass (zero findings,
 		echo "✗ shell.lint: shell.files discovered zero tracked shell scripts -- the check did not run"; \
 		exit 1; \
 	fi; \
-	printf '%s\n' "$$files" | tr '\n' '\0' | xargs -0 shellcheck -f gcc; \
+	if ! printf '%s\n' "$$files" | tr '\n' '\0' | xargs -0 shellcheck -f gcc; then \
+		echo "✗ shell.lint: findings above, across $$count tracked shell scripts"; \
+		exit 1; \
+	fi; \
 	echo "✓ shell.lint: no findings across $$count tracked shell scripts"

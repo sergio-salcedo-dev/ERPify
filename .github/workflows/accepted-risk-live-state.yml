@@ -8,10 +8,8 @@ name: Accepted-risk live state
 #
 # Deliberately NOT scoped to the pull request's own diff: an issue can close well after the pull request
 # that introduced its tag has already merged, and the count is tiny (2 known references at introduction) --
-# the whole tree is scanned on every run instead. Deliberately NOT a clone of
-# scripts/adversarial-pass-check.sh: that script intercepts a `gh pr create` invocation, which has nothing
-# to do with this job's question, and this is the first workflow in this repo to call the GitHub API for
-# live state -- no existing workflow calls `gh issue`/`gh api`/`gh pr`/Octokit/github-script.
+# the whole tree is scanned on every run instead. It is the first workflow in this repo to call the GitHub
+# API for live state -- no other workflow calls `gh issue`/`gh api`/`gh pr`/Octokit/github-script.
 #
 # Also runs on a daily `schedule`, not `pull_request` alone: an issue can close with no new pull request
 # ever touching the tree again, which `pull_request`-only would never notice -- the exact failure mode

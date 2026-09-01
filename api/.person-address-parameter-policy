@@ -44,8 +44,9 @@
 #     trace an arbitrary `string $foo` to "this becomes a person's address three calls later" without either
 #     false-negating real sites or false-positiving every other `string` parameter in the tree. The two
 #     comments on #769 that produced most of this file's population were found by a human reading call graphs,
-#     which is the same control `../CLAUDE.md`'s "No security, GDPR, or audit-surface work opens a PR without a
-#     recorded adversarial pass" already mandates for exactly this class of change. This file is where that
+#     which is what `../CLAUDE.md`'s security-review process still RECOMMENDS for this class of change —
+#     it required it until 2026-08-31 and now does not, so the coverage argued here rests on a convention
+#     rather than on a control, and that is the honest statement of it. This file is where that
 #     review's findings get a permanent, reviewable, gated home instead of living only in an issue thread — it
 #     is not a replacement for the review that finds them.
 #   - IT CANNOT JUDGE THE CLASSIFICATION, and the two directions of error are not symmetric here either.
