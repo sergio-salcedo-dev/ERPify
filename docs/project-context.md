@@ -177,7 +177,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 - Use attributes, not doc-comments: `#[Test]`, `#[DataProvider(...)]`, `#[Group('slow')]`.
 - `declare(strict_types=1);` in every test file. Typed fixtures.
 - Prefer in-memory repositories implementing domain interfaces over PHPUnit mock builders for domain collaborators.
-- Integration tests touching Doctrine use a **real Postgres** test DB (Compose), not SQLite. Wrap each test in a transaction or reset via migrations/fixtures.
+- Integration tests touching Doctrine use a **real Postgres** test DB, not SQLite: `<dbname>_test` for PHPUnit and `<dbname>_test_behat` for Behat, from `dbname_suffix` in `api/config/packages/test/doctrine.yaml`. **Nothing wraps a test in a transaction** — there is no rollback bundle; WebTestCase tests build their own rows and `TRUNCATE` what they need, and Behat purges and re-clones per feature. That is why the suite must never resolve the runtime database, and why `RefuseRuntimeDatabaseGuard` ends the run when it would.
 - Never commit tests that hit the network. Mock the HTTP client at the transport level.
 
 #### PHP — Behat (api/)

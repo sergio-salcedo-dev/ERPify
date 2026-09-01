@@ -185,6 +185,45 @@ quickref sentence given its own paragraph instead of being concatenated onto the
   verified. The narrower true statement, which one layer added: `make php.unit c='--filter SomeTest'`, the
   documented invocation, now does require a reachable database.
 
+### Review Findings
+
+Three parallel layers, 25 findings after deduplication, 0 dismissed as noise. Severity is this workflow's,
+not the layers' — they run under deliberate information asymmetry. Every `patch` was applied and verified.
+
+- [x] [Review][Patch] Behat guard fired after the purge it exists to prevent [api/tests/Behat/Context/FixturesContext.php:66] — high
+- [x] [Review][Patch] Guard read a container Symfony never freshness-checks [api/tests/Support/Database/RefuseRuntimeDatabaseGuard.php] — high
+- [x] [Review][Patch] Booting a kernel in the bootstrap silenced failOnDeprecation [api/tools/phpunit/bootstrap.php:33] — high
+- [x] [Review][Patch] db.test.prepare migrated ahead of every guard [make/db.mk:38] — high
+- [x] [Review][Patch] db.test.reset could not fail, then could not work [make/db.mk:56] — high
+- [x] [Review][Patch] Guard had no falsification and an unpinned call site [api/tests/Unit/Gate/TestDatabaseGuardGateTest.php] — medium
+- [x] [Review][Patch] 32 kernel-free gate invocations would each compile a container under -j4 — medium
+- [x] [Review][Patch] Two references to a class that never existed [make/db.mk:37, api/tests/Functional/Doctrine/TestDatabaseIsolationTest.php:19] — medium
+- [x] [Review][Patch] "27 gates" was 32 invocations across 20 targets [CLAUDE.md, docs/claude-code-quickref.md] — medium
+- [x] [Review][Patch] Test-database name derived from POSTGRES_DB as make's shell sees it [make/db.mk:59] — medium
+- [x] [Review][Patch] project-context.md claimed tests wrap in a transaction; nothing does [docs/project-context.md:180] — medium
+- [x] [Review][Patch] "under when@test" — the file is env-scoped by its directory [CLAUDE.md:124] — low
+- [x] [Review][Patch] db.test.reset described three different ways — low
+- [x] [Review][Patch] POSTGRES_DB interpolated into SQL rather than bound [make/db.mk:59] — low
+- [x] [Review][Patch] Stray blank line [api/config/packages/doctrine.yaml] — low
+- [x] [Review][Patch] RATE_LIMIT_* listed as compose-exported; it is not [api/tests/Behat/bootstrap.php:40] — low
+- [x] [Review][Patch] Missing `(destructive)` per make/CONVENTIONS.md §9 [make/db.mk:54] — low
+- [x] [Review][Patch] "a throwable is fatal" — PHPUnit aborts via BootstrapScriptException — low
+- [x] [Review][Patch] Quickref sentence concatenated onto the "Individual linters:" paragraph — low
+- [x] [Review][Patch] "in the order they fire" — the guards are per-lane and never all fire — low
+- [x] [Review][Patch] Comment column misaligned [docs/development-guide-api.md:171] — low
+- [x] [Review][Patch] Change-relative phrasing in a docblock ("Two earlier homes") — low
+- [x] [Review][Patch] db.test.reset / db.test.shell are container-only; stated in the recipe — low
+- [x] [Review][Patch] Dismissal #2 narrower than stated; `make php.unit c='--filter …'` does need a database — low
+- [x] [Review][Defer] FixturesContext's explicit TRUNCATE omits dek_keystore and messenger_messages — deferred, pre-existing
+
+**On the deferred item, and why it is not in `deferred-work.md`.** Both tables are raw DBAL with no ORM
+entity, so rows Behat writes reach its clone — but that has been true since Behat owned its own database in
+July, and this branch neither causes nor worsens it. Widening the statement would be an unrelated fix riding a
+database-isolation change, and `messenger_messages` may be created lazily by the transport rather than by a
+migration, which would make it fail on a fresh database. It is argued and closed here rather than added to the
+pending registry, per `CLAUDE.md` — a residual already recorded in a live artifact does not need a second
+place to be forgotten.
+
 ## Residual, not closed
 
 - All three guards check the database **name** for a `_test` marker. A runtime database itself spelled that
