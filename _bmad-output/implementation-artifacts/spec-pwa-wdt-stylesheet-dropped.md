@@ -32,7 +32,12 @@ no infle los locators de e2e. La superficie no tenía a nadie mirándola.
 
 **No es una story.** No existe artefacto previo: la issue #262 y las PRs #294/#311 son el historial
 cerrado de haber construido este componente. Este spec se crea para llevar el registro del pase
-adversarial, que es lo que la PR necesita en la rama antes de abrirse.
+adversarial y los hallazgos del code review, que es donde viven.
+
+**Nota sobre el gate:** este artefacto se creó cuando `CLAUDE.md` exigía el registro en la rama antes
+de `gh pr create`. Esa regla, su hook y su workflow fueron retirados en #903 (`71b84151`), sobre el
+que esta rama está rebasada. El artefacto se queda igualmente: lo que contiene son los hallazgos de
+un review que encontró once cosas, y su valor nunca fue satisfacer al gate.
 
 </frozen-after-approval>
 
@@ -69,7 +74,7 @@ adversarial, que es lo que la PR necesita en la rama antes de abrirse.
 ## Adversarial pass
 
 Tres capas en paralelo (Blind Hunter · Edge Case Hunter · Acceptance Auditor), read-only, sobre el
-worktree `pwa-wdt-stylesheet-dropped-kawe`, antes de abrir la PR. **Un pase que no encuentra nada
+worktree `pwa-wdt-stylesheet-dropped-kawe`, antes de abrir la PR y con el trabajo aún modificable. **Un pase que no encuentra nada
 también cuenta; éste encontró once cosas, y la más grave iba contra el propio guardián de la
 corrección.** Las severidades de las capas se descartaron y se reasignaron leyendo el código, como
 manda el proceso: una capa trabaja con asimetría de información deliberada.
