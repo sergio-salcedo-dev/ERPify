@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { LoginOutcomeKind, type LoginOutcome } from "@/context/backoffice/user/domain/LoginOutcome";
+import type { LoginCredentials } from "@/context/backoffice/user/domain/LoginCredentials";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -19,13 +20,17 @@ vi.mock("@/context/shared/access/application/useSession", () => ({
 // The login port outcome is driven per-test via `outcome`; the form resolves the
 // repository from the (mocked) DI container.
 let outcome: LoginOutcome = { kind: LoginOutcomeKind.AUTHENTICATED };
-const repoLogin = vi.fn(async (): Promise<LoginOutcome> => outcome);
+// The credentials are forwarded rather than dropped: what the user typed reaching the port
+// intact is the only thing that distinguishes a wired field from a merely present one.
+const repoLogin = vi.fn(async (_credentials: LoginCredentials): Promise<LoginOutcome> => outcome);
 vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => ({
-  container: { get: () => ({ login: () => repoLogin() }) },
+  container: { get: () => ({ login: (credentials: LoginCredentials) => repoLogin(credentials) }) },
 }));
 
 import { LoginForm } from "@/app/(auth)/_components/LoginForm";
 import { SIGNED_IN_SESSION } from "./_session";
+
+const TOGGLE_NAME = "Show/hide password";
 
 function signIn(): void {
   fireEvent.change(screen.getByTestId("login-form__email"), { target: { value: "a@b.com" } });
@@ -158,5 +163,79 @@ describe("LoginForm — the session probe decides whether the sign-in happened",
     expect(push).not.toHaveBeenCalled();
     expect(login).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("login-form")).toBeInTheDocument();
+  });
+});
+
+describe("LoginForm — the password field", () => {
+  it("starts masked, reveals on demand, and hands the typed value to the port intact", async () => {
+    render(<LoginForm />);
+
+    const password = screen.getByTestId("login-form__password");
+    const toggle = screen.getByTestId("login-form__password-toggle");
+    expect(password).toHaveAttribute("type", "password");
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(toggle).toHaveAccessibleName(TOGGLE_NAME);
+
+    fireEvent.change(screen.getByTestId("login-form__email"), { target: { value: "a@b.com" } });
+    fireEvent.change(password, { target: { value: "secret123" } });
+
+    fireEvent.click(toggle);
+    expect(password).toHaveAttribute("type", "text");
+    expect(password).toHaveValue("secret123");
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(toggle).toHaveAccessibleName(TOGGLE_NAME);
+    // Stated rather than incidental: the toggle mutates `type` on the same node. A composition
+    // that rendered two branches instead would clear the visible field while RHF kept the value,
+    // and the port assertion below would stay green over it.
+    expect(screen.getByTestId("login-form__password")).toBe(password);
+
+    fireEvent.click(toggle);
+    expect(password).toHaveAttribute("type", "password");
+    expect(password).toHaveValue("secret123");
+
+    fireEvent.click(screen.getByTestId("login-form__submit"));
+
+    await waitFor(() =>
+      expect(repoLogin).toHaveBeenCalledWith({ email: "a@b.com", password: "secret123" }),
+    );
+  });
+
+  it("submits the value the user can see, when they leave the field revealed", async () => {
+    render(<LoginForm />);
+
+    fireEvent.change(screen.getByTestId("login-form__email"), { target: { value: "a@b.com" } });
+    fireEvent.change(screen.getByTestId("login-form__password"), {
+      target: { value: "secret123" },
+    });
+    fireEvent.click(screen.getByTestId("login-form__password-toggle"));
+    expect(screen.getByTestId("login-form__password")).toHaveAttribute("type", "text");
+
+    fireEvent.click(screen.getByTestId("login-form__submit"));
+
+    await waitFor(() =>
+      expect(repoLogin).toHaveBeenCalledWith({ email: "a@b.com", password: "secret123" }),
+    );
+    // The submitted secret does not stay in plain sight for the life of the tab.
+    expect(screen.getByTestId("login-form__password")).toHaveAttribute("type", "password");
+    expect(screen.getByTestId("login-form__password-toggle")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("re-masks even when the credentials are rejected, so a retry does not sit in the clear", async () => {
+    outcome = { kind: LoginOutcomeKind.INVALID_CREDENTIALS };
+    render(<LoginForm />);
+
+    fireEvent.change(screen.getByTestId("login-form__email"), { target: { value: "a@b.com" } });
+    fireEvent.change(screen.getByTestId("login-form__password"), {
+      target: { value: "secret123" },
+    });
+    fireEvent.click(screen.getByTestId("login-form__password-toggle"));
+    fireEvent.click(screen.getByTestId("login-form__submit"));
+
+    await screen.findByTestId("login-form__error");
+    expect(screen.getByTestId("login-form__password")).toHaveAttribute("type", "password");
+    expect(screen.getByTestId("login-form__password")).toHaveValue("secret123");
   });
 });

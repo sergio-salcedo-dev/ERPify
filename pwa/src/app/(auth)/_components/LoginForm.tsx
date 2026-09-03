@@ -14,6 +14,7 @@ import { LoginOutcomeKind, type LoginOutcome } from "@/context/backoffice/user/d
 import { FormField } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { AccessWall, AccessWallVariant } from "@/context/shared/error/infrastructure/ui";
 import { useSession } from "@/context/shared/access/application/useSession";
 import { Routes } from "@/context/shared/routing/domain/Routes";
@@ -115,9 +116,10 @@ export function LoginForm() {
         />
       </FormField>
       <FormField name="password" label="Password" required error={errors.password?.message}>
-        <Input
-          type="password"
+        <PasswordInput
           autoComplete="current-password"
+          defaultRevealed={false}
+          toggleTestId="login-form__password-toggle"
           {...register("password")}
           data-testid="login-form__password"
         />
