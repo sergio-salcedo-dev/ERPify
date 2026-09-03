@@ -167,6 +167,10 @@ describe("LoginForm — the session probe decides whether the sign-in happened",
 });
 
 describe("LoginForm — the password field", () => {
+  // Not a plain word: a value carrying quotes, a backslash, angle brackets and an accent proves
+  // the string survives literally rather than being re-encoded anywhere along the way.
+  const AWKWARD_PASSWORD = `p@ssw0rd'"\\<> &é`;
+
   it("starts masked, reveals on demand, and hands the typed value to the port intact", async () => {
     render(<LoginForm />);
 
@@ -177,11 +181,11 @@ describe("LoginForm — the password field", () => {
     expect(toggle).toHaveAccessibleName(TOGGLE_NAME);
 
     fireEvent.change(screen.getByTestId("login-form__email"), { target: { value: "a@b.com" } });
-    fireEvent.change(password, { target: { value: "secret123" } });
+    fireEvent.change(password, { target: { value: AWKWARD_PASSWORD } });
 
     fireEvent.click(toggle);
     expect(password).toHaveAttribute("type", "text");
-    expect(password).toHaveValue("secret123");
+    expect(password).toHaveValue(AWKWARD_PASSWORD);
     expect(toggle).toHaveAttribute("aria-pressed", "true");
     expect(toggle).toHaveAccessibleName(TOGGLE_NAME);
     // Stated rather than incidental: the toggle mutates `type` on the same node. A composition
@@ -191,12 +195,12 @@ describe("LoginForm — the password field", () => {
 
     fireEvent.click(toggle);
     expect(password).toHaveAttribute("type", "password");
-    expect(password).toHaveValue("secret123");
+    expect(password).toHaveValue(AWKWARD_PASSWORD);
 
     fireEvent.click(screen.getByTestId("login-form__submit"));
 
     await waitFor(() =>
-      expect(repoLogin).toHaveBeenCalledWith({ email: "a@b.com", password: "secret123" }),
+      expect(repoLogin).toHaveBeenCalledWith({ email: "a@b.com", password: AWKWARD_PASSWORD }),
     );
   });
 

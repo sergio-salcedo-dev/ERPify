@@ -66,9 +66,17 @@ describe("PasswordInput", () => {
     expect(input).toHaveAttribute("autocapitalize", "none");
   });
 
-  it("lets a caller override the text-assist defaults", () => {
-    render(<PasswordInput data-testid="pw" spellCheck />);
-    expect(screen.getByTestId("pw")).toHaveAttribute("spellcheck", "true");
+  // The defaults sit ahead of the spread, which is behaviour and not formatting: a caller that
+  // needs the browser's help — a recovery secret typed from a printed card — must be able to win.
+  it("lets a caller override every text-assist default", () => {
+    render(
+      <PasswordInput data-testid="pw" spellCheck autoCorrect="on" autoCapitalize="sentences" />,
+    );
+
+    const input = screen.getByTestId("pw");
+    expect(input).toHaveAttribute("spellcheck", "true");
+    expect(input).toHaveAttribute("autocorrect", "on");
+    expect(input).toHaveAttribute("autocapitalize", "sentences");
   });
 
   it("honours defaultRevealed (starts revealed for the flows that ask for it)", () => {
@@ -90,6 +98,34 @@ describe("PasswordInput", () => {
     fireEvent.click(screen.getByTestId("pw-submit"));
 
     expect(screen.getByTestId("pw")).toHaveAttribute("type", "password");
+  });
+
+  // jsdom implements no implicit submission (measured: Enter in a field fires no submit event),
+  // so the button click above cannot stand for Enter. Listening on the event rather than on a
+  // button is what makes every origin equivalent, and this asserts exactly that.
+  it("re-masks on the form's submit event whatever caused it", () => {
+    render(
+      <form data-testid="pw-form" onSubmit={(event) => event.preventDefault()}>
+        <PasswordInput data-testid="pw" defaultRevealed />
+      </form>,
+    );
+
+    fireEvent.submit(screen.getByTestId("pw-form"));
+
+    expect(screen.getByTestId("pw")).toHaveAttribute("type", "password");
+  });
+
+  it("detaches its listener when it leaves the page", () => {
+    const { unmount } = render(
+      <form data-testid="pw-form" onSubmit={(event) => event.preventDefault()}>
+        <PasswordInput data-testid="pw" defaultRevealed />
+      </form>,
+    );
+    const form = screen.getByTestId("pw-form");
+
+    unmount();
+
+    expect(() => fireEvent.submit(form)).not.toThrow();
   });
 
   it("stays masked across a submit it was already masked for", () => {

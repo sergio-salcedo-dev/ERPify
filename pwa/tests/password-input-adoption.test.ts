@@ -11,10 +11,13 @@ import { describe, expect, it } from "vitest";
  * every gate green. A convention that lives only in prose is rediscovered one form at a time;
  * this makes it a property the suite can refute.
  *
- * **What is detected, stated precisely.** For every JSX attribute named `type`, and for a `type`
- * property inside an inline spread object (`{...{ type: "password" }}`), the walk searches the
- * value subtree for a string literal — or a template literal with no substitutions — whose text
- * is `password` in any case. `type` is an ASCII-case-insensitive enumerated attribute, so
+ * **What is detected, stated precisely.** Two shapes, and nothing else. (1) A JSX attribute named
+ * `type`. (2) A `type` property of an object literal *written inside* a JSX spread — at any depth
+ * of that expression, so `{...{ type: "password" }}` and `{...(cond && { type: "password" })}`
+ * both count, while `const p = { type: "password" }; <Input {...p} />` does not, because that
+ * needs the variable resolved. In both shapes the walk then searches the value subtree for a
+ * string literal — or a template literal with no substitutions — whose text is `password` in any
+ * case. `type` is an ASCII-case-insensitive enumerated attribute, so
  * `type="Password"` renders a masked field and is a declaration like any other. It reads the AST
  * rather than the text, so `password` inside a comment, an identifier or an unrelated `const`
  * never competes with an attribute value.
@@ -28,13 +31,14 @@ import { describe, expect, it } from "vitest";
  * deliberately declared `type="text"`, or any file outside `src/` or outside the four source
  * extensions below.
  *
- * **It over-matches too, and that direction had no record until a review pointed at it.** The
- * subtree search accepts a literal anywhere under the value, so `type={kind === "password" ?
- * "text" : "email"}` is reported although `password` can never be the resulting value, and so is
- * a domain-valued `type` prop on something that is not an input (`<Notification
- * type="password">`). Both fail safe, and the tree holds zero of either today — but a developer
- * who hits one gets a red they cannot act on by fixing their code, and the answer then is to
- * narrow this walk, not to add an exemption.
+ * **This is a literal search, not an evaluator, and the difference is the point.** It reports any
+ * `password` literal in the value's subtree even when that literal can never be the resulting
+ * value: `type={kind === "password" ? "text" : "email"}` is flagged, and so is a domain-valued
+ * `type` prop on something that is not an input (`<Notification type="password">`). Read it as
+ * "this file writes the word `password` where a `type` is decided", never as "this file renders
+ * a password input". Both directions fail safe, and the tree holds zero of either today — but a
+ * developer who hits one gets a red they cannot act on by fixing their code, and the answer then
+ * is to narrow this walk, not to add an exemption.
  *
  * The two invariants are asserted separately, and the universe is measured independently of the
  * positives. A non-empty check derived from the same walk can only notice the universe going
@@ -47,13 +51,24 @@ const SRC_ROOT = path.join(PWA_ROOT, "src");
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 const PASSWORD_TYPE = "password";
 
+/** Paths are compared in one spelling, so a separator never decides a verdict. */
+const toPosix = (file: string): string => file.split(path.sep).join("/");
+
 /** The single file allowed to declare a password-typed input, relative to `pwa/`. */
-const OWNER = path.join("src", "components", "ui", "PasswordInput.tsx");
+const OWNER = "src/components/ui/PasswordInput.tsx";
 
-/** The walk must reach the route tree, not just the component folder the owner sits in. */
-const FORM_TREE = path.join("src", "app");
+/**
+ * A file the walk must reach, deliberately far from the owner's folder and deliberately
+ * concrete. If it legitimately moves, update this constant — that is the whole remedy.
+ */
+const SENTINEL = "src/app/(auth)/_components/LoginForm.tsx";
 
-/** A floor on the walked file count, far below today's 496 and far above any one subtree. */
+/**
+ * A floor on the walked file count, far below today's 496 and far above any one subtree. It is
+ * not sufficient on its own, which is why the sentinel above exists: measured, a `walk()` that
+ * skips `src/app` still reaches 303 files and clears this floor, while the whole route tree —
+ * every form this gate polices — goes unread.
+ */
 const MIN_WALKED_FILES = 300;
 
 interface Declaration {
@@ -93,7 +108,23 @@ function isTypeNamed(name: ts.Node): boolean {
   return (ts.isIdentifier(name) || ts.isStringLiteral(name)) && name.text === "type";
 }
 
-/** `type={…}` written as an attribute, or as a property of an inline spread object. */
+/** A `type: "password"` property of any object literal written inside the given expression. */
+function hasPasswordTypeProperty(node: ts.Node): boolean {
+  if (
+    ts.isObjectLiteralExpression(node) &&
+    node.properties.some(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        isTypeNamed(property.name) &&
+        subtreeHasPasswordLiteral(property.initializer),
+    )
+  ) {
+    return true;
+  }
+  return ts.forEachChild(node, hasPasswordTypeProperty) ?? false;
+}
+
+/** `type={…}` written as an attribute, or as a property of an object literal in a spread. */
 function declaresPasswordType(node: ts.Node): boolean {
   if (ts.isJsxAttribute(node)) {
     return (
@@ -102,13 +133,8 @@ function declaresPasswordType(node: ts.Node): boolean {
       subtreeHasPasswordLiteral(node.initializer)
     );
   }
-  if (ts.isJsxSpreadAttribute(node) && ts.isObjectLiteralExpression(node.expression)) {
-    return node.expression.properties.some(
-      (property) =>
-        ts.isPropertyAssignment(property) &&
-        isTypeNamed(property.name) &&
-        subtreeHasPasswordLiteral(property.initializer),
-    );
+  if (ts.isJsxSpreadAttribute(node)) {
+    return hasPasswordTypeProperty(node.expression);
   }
   return false;
 }
@@ -137,7 +163,7 @@ function collectFromTree(): { files: string[]; declarations: Declaration[] } {
   const files: string[] = [];
   const declarations: Declaration[] = [];
   for (const absolute of walk(SRC_ROOT)) {
-    const file = path.relative(PWA_ROOT, absolute);
+    const file = toPosix(path.relative(PWA_ROOT, absolute));
     files.push(file);
     declarations.push(
       ...collectPasswordTypeDeclarations(parse(readFileSync(absolute, "utf8"), file), file),
@@ -160,9 +186,10 @@ describe("password input adoption", () => {
     ).toBeGreaterThan(MIN_WALKED_FILES);
 
     expect(
-      files.some((file) => file.startsWith(FORM_TREE + path.sep)),
-      `The walk never reached ${FORM_TREE}/, where the forms this gate polices live.`,
-    ).toBe(true);
+      files,
+      `The walk never reached ${SENTINEL}, a file far from the owner's folder. Either the walk ` +
+        `was narrowed, or that file moved — in which case update SENTINEL.`,
+    ).toContain(SENTINEL);
   });
 
   it(`still finds a password input — ${OWNER} must keep declaring one`, () => {
@@ -198,7 +225,12 @@ describe("the collector's contract", () => {
     { form: "type={`password`}", code: "<Input type={`password`} />;" },
     { form: "conditional", code: '<Input type={revealed ? "text" : "password"} />;' },
     { form: "logical and", code: '<Input type={locked && "password"} />;' },
+    { form: 'type="PASSWORD"', code: '<input type="PASSWORD" />;' },
     { form: "inline spread object", code: '<Input {...{ type: "password" }} />;' },
+    {
+      form: "object literal inside a guarded spread",
+      code: '<Input {...(locked && { type: "password" })} />;',
+    },
   ])("detects $form", ({ code }) => {
     expect(collectPasswordTypeDeclarations(parse(code, "fixture.tsx"), "fixture.tsx")).toHaveLength(
       1,

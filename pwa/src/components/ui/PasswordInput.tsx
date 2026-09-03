@@ -65,11 +65,13 @@ export function PasswordInput({
     [ref],
   );
 
-  // A reveal ends when the value is submitted. Without this the secret stays in plain sight for
-  // the life of the tab: a rejected sign-in re-renders the form but nothing resets local state,
-  // so the password the user revealed to check a typo survives that attempt and every retry
-  // after it. The listener sits on the enclosing form, which is the only place that knows a
-  // submission was attempted, and it is attached only while something is actually revealed.
+  // A revealed value is masked again when its owning form submits — by any route, since the
+  // listener is on the event rather than on a button, so Enter and `requestSubmit()` count too.
+  // It is attached only while something is revealed, to the form the input belongs to then; an
+  // input that changed forms mid-reveal would keep the old listener, which nothing in this tree
+  // does. Local reveal state otherwise outlives the attempt: a rejected sign-in re-renders the
+  // form and resets nothing, so a value revealed to check a typo stays on screen for that
+  // attempt, every retry after it, and the life of the tab.
   useEffect(() => {
     if (!revealed) {
       return;
