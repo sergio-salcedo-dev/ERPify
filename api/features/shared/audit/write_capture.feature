@@ -10,13 +10,12 @@ Feature: Capture every write of an audited aggregate as a regulatory change row
   Scenario: Creating a bank records a BANK_CREATED change row carrying the field diff
     Given I add "Content-Type" header equal to "application/json"
     And I add "Accept" header equal to "application/json"
-    And I add "X-Correlation-Id" header equal to "0190ffff-0000-7abc-8def-00aabbccddee"
     When I send a POST request to "/backoffice/banks" with body:
     """
     {"name": "Audited Bank", "shortName": "AUD"}
     """
     Then the response status code should be 201
-    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, metadata->'changes'->'name'->>'new' AS new_name FROM audit_log WHERE level = 'change' AND correlation_id = '0190ffff-0000-7abc-8def-00aabbccddee'"
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, metadata->'changes'->'name'->>'new' AS new_name FROM audit_log WHERE level = 'change' AND correlation_id = '<correlationId>'"
     And the SQL result as JSON should be:
     """
     [

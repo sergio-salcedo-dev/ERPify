@@ -227,6 +227,8 @@ const CONTENT_WORDS = [
   "pagos",
   "hora",
   "sin",
+  "entrada",
+  "entradas",
 ];
 const CONTENT_WORD_RE = new RegExp(
   `(?<![\\p{L}])(?:${CONTENT_WORDS.join("|")})(?![\\p{L}])`,
@@ -360,6 +362,10 @@ describe("rendered copy speaks the language the document declares", () => {
       "Sin metadata",
       "Ordenar por hora",
       "Recibir y enviar eventos a sistemas externos (webhooks).",
+      // The plural of an audit journey's entry count, green here through a whole review of the
+      // audit surface: one word, no diacritic, and nothing in the lexicon to match.
+      "entrada",
+      "entradas",
     ];
 
     expect(missed.filter((text) => spanishReason(text) === null)).toEqual([]);

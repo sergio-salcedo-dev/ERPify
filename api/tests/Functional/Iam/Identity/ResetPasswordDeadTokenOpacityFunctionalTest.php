@@ -58,13 +58,6 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
 
     private const string CSRF_TOKEN = 'a-32-char-stateless-csrf-nonce!!';
 
-    /**
-     * A canonical lowercase UUIDv7, which is the only shape the correlation listener echoes back. Fixing it
-     * pins the body's `correlation-id` across the four requests, so the one member left free to vary is
-     * `instance` — and that one varies by contract rather than by accident.
-     */
-    private const string CORRELATION_ID = '0190a1de-0602-7abc-8def-000000000063';
-
     private const string SUBMITTED_PASSWORD = 'a-brand-new-strong-password';
 
     private const string EXPIRED_CASE = 'a token whose window has lapsed';
@@ -139,7 +132,7 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
     public function testTheFourDeadLinksAnswerOneIndistinguishableResponse(): void
     {
         $answers = [];
-        $instances = [];
+        $perOccurrence = [];
 
         foreach ($this->deadTokens() as $case => $deadToken) {
             $this->post($deadToken);
@@ -149,8 +142,8 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
 
             $this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode(), $case . ': ' . $raw);
 
-            [$body, $instance] = $this->comparableRefusal($raw, $case);
-            $instances[] = $instance;
+            [$body, $members] = $this->comparableRefusal($raw, $case);
+            $perOccurrence[] = $members;
 
             $answers[$case] = [
                 'content-type' => $response->headers->get('Content-Type'),
@@ -171,7 +164,7 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
         $this->assertSame('invalid-token', $reference['body']['type']);
         $this->assertStringContainsString('application/problem+json', (string) $reference['content-type']);
 
-        $this->assertRefusalsAreIndistinguishable($answers, $instances);
+        $this->assertRefusalsAreIndistinguishable($answers, $perOccurrence);
     }
 
     /**
@@ -196,7 +189,6 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
                 'HTTP_ACCEPT' => 'application/json',
                 'HTTP_ORIGIN' => self::ORIGIN,
                 'HTTP_X_CSRF_TOKEN' => self::CSRF_TOKEN,
-                'HTTP_X_CORRELATION_ID' => self::CORRELATION_ID,
             ],
             content: (string) \json_encode([
                 'token' => $token,

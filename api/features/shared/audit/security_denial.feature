@@ -9,9 +9,8 @@ Feature: Audit permission denials as durable security entries
   # returned, with no transport to consume. The throw route is reached by an absolute URL to bypass the
   # default /api/v1 base prefix (same as the error-contract suite).
   Scenario: A denied request records exactly one security audit row sealed with the request context
-    Given I add "X-Correlation-Id" header equal to "0190dead-beef-7abc-8def-001122334455"
     When I send a "GET" request to "http://localhost/api/test/_throw-security-access-denied"
-    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, correlation_id, metadata FROM audit_log WHERE action = 'ACCESS_DENIED' AND correlation_id = '0190dead-beef-7abc-8def-001122334455'"
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, correlation_id, metadata FROM audit_log WHERE action = 'ACCESS_DENIED' AND correlation_id = '<correlationId>'"
     Then the response status code should be 403
     And the SQL result as JSON should be:
     """
@@ -23,7 +22,7 @@ Feature: Audit permission denials as durable security entries
         "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
         "resource_type": null,
         "resource_id": null,
-        "correlation_id": "0190dead-beef-7abc-8def-001122334455",
+        "correlation_id": "<correlationId>",
         "metadata": "{\"route\": \"test_throw_security_access_denied\"}"
       }
     ]

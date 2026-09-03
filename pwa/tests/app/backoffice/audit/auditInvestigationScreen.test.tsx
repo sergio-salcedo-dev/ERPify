@@ -104,7 +104,7 @@ describe("AuditInvestigationScreen", () => {
     render(<AuditInvestigationScreen />);
     // Journey is now reachable (no hint) and the session header summarises the correlation.
     expect(screen.queryByTestId("audit-view-toggle__hint")).toBeNull();
-    expect(screen.getByText(/1 entrada/)).toBeInTheDocument();
+    expect(screen.getByText(/1 entry/)).toBeInTheDocument();
     expect(screen.getByTestId(`audit-timeline__row-${ENTRY.id}`)).toBeInTheDocument();
   });
 

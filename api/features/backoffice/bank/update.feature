@@ -53,7 +53,6 @@ Feature: Update a bank
   Scenario: A redundant update to the stored values is an idempotent no-op with no event
     Given I add "Content-Type" header equal to "application/json"
     And I add "Accept" header equal to "application/json"
-    And I add "X-Correlation-Id" header equal to "0190ffff-0000-7abc-8def-00bb00bb00bb"
     And I execute the SQL query "INSERT INTO bank (id, name, name_normalized, short_name, created_at, updated_at) VALUES ('ed17ed00-0000-7000-8000-000000000002', 'Steady Bank', 'steady bank', 'SB', '2026-01-01 10:00:00', '2026-01-01 10:00:00')" on connection "seed"
     When I send a PUT request to "/backoffice/banks/ed17ed00-0000-7000-8000-000000000002" with body:
     """
@@ -78,7 +77,7 @@ Feature: Update a bank
       }
     ]
     """
-    And I execute the SQL query "SELECT action FROM audit_log WHERE level = 'change' AND correlation_id = '0190ffff-0000-7abc-8def-00bb00bb00bb'"
+    And I execute the SQL query "SELECT action FROM audit_log WHERE level = 'change' AND correlation_id = '<correlationId>'"
     And the SQL result as JSON should be:
     """
     []

@@ -8,6 +8,7 @@ use Erpify\Shared\Http\Infrastructure\CorrelationIdListener;
 use LogicException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
@@ -77,195 +78,9 @@ final class CorrelationIdListenerTest extends TestCase
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
     }
 
-    public function testWellFormedUuidV7InboundHeaderPropagatesVerbatim(): void
+    public function testCanonicalInboundHeaderIsIgnoredAndAFreshUuidV7IsMinted(): void
     {
         $request = Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7]);
-        $requestEvent = $this->makeMainRequestEvent($request);
-
-        (new CorrelationIdListener())($requestEvent);
-
-        $this->assertSame(self::VALID_UUID_V7, $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY));
-    }
-
-    public function testWellFormedUuidV7InUppercaseIsRejectedAndFreshIdIsMinted(): void
-    {
-        $uppercase = '0190E9C2-7B5A-7D40-9C8F-2F9B5D3E1A2C';
-        $request = Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => $uppercase]);
-        $requestEvent = $this->makeMainRequestEvent($request);
-
-        (new CorrelationIdListener())($requestEvent);
-
-        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
-        $this->assertIsString($stored);
-        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame(
-            $uppercase,
-            $stored,
-            'Uppercase UUIDv7 must NOT be propagated verbatim — defense-in-depth.',
-        );
-    }
-
-    public function testEmptyStringInboundHeaderIsRejectedAndFreshIdIsMinted(): void
-    {
-        $request = Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => '']);
-        $requestEvent = $this->makeMainRequestEvent($request);
-
-        (new CorrelationIdListener())($requestEvent);
-
-        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
-        $this->assertIsString($stored);
-        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame('', $stored);
-    }
-
-    public function testMalformedInboundHeaderWithWrongVersionBitsIsRejected(): void
-    {
-        // UUIDv4: version-nibble `4`, not `7`.
-        $uuidV4 = '0190e9c2-7b5a-4d40-9c8f-2f9b5d3e1a2c';
-        $request = Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => $uuidV4]);
-        $requestEvent = $this->makeMainRequestEvent($request);
-
-        (new CorrelationIdListener())($requestEvent);
-
-        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
-        $this->assertIsString($stored);
-        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame($uuidV4, $stored);
-    }
-
-    public function testMalformedInboundHeaderWithWrongVariantBitsIsRejected(): void
-    {
-        // Variant-nibble `7` instead of `[89ab]`.
-        $bad = '0190e9c2-7b5a-7d40-7c8f-2f9b5d3e1a2c';
-        $request = Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => $bad]);
-        $requestEvent = $this->makeMainRequestEvent($request);
-
-        (new CorrelationIdListener())($requestEvent);
-
-        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
-        $this->assertIsString($stored);
-        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame($bad, $stored);
-    }
-
-    public function testMalformedInboundHeaderWithExtraGarbageIsRejected(): void
-    {
-        $bad = self::VALID_UUID_V7 . '<script>alert(1)</script>';
-        $request = Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => $bad]);
-        $requestEvent = $this->makeMainRequestEvent($request);
-
-        (new CorrelationIdListener())($requestEvent);
-
-        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
-        $this->assertIsString($stored);
-        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame($bad, $stored);
-    }
-
-    public function testMalformedInboundHeaderWithEmbeddedNewlineIsRejected(): void
-    {
-        $bad = self::VALID_UUID_V7 . "\nX-Forwarded-For: evil";
-        $request = Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => $bad]);
-        $requestEvent = $this->makeMainRequestEvent($request);
-
-        (new CorrelationIdListener())($requestEvent);
-
-        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
-        $this->assertIsString($stored);
-        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame($bad, $stored);
-        $this->assertStringNotContainsString(
-            "\n",
-            $stored,
-            'Stored value must not contain newlines — HTTP response-splitting defense.',
-        );
-    }
-
-    public function testMalformedInboundHeaderWithLengthMismatchIsRejected(): void
-    {
-        // 35 chars — missing trailing nibble.
-        $short = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2';
-        $request = Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => $short]);
-        $requestEvent = $this->makeMainRequestEvent($request);
-
-        (new CorrelationIdListener())($requestEvent);
-
-        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
-        $this->assertIsString($stored);
-        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame($short, $stored);
-    }
-
-    public function testMalformedInboundHeaderWithLoneTrailingNewlineIsRejected(): void
-    {
-        // PHP's default `$` matches before a final `\n`; the listener uses `\A…\z` to forbid it.
-        // Pin: a value of exactly `<valid-uuidv7>\n` must be rejected.
-        $bad = self::VALID_UUID_V7 . "\n";
-        $request = Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => $bad]);
-        $requestEvent = $this->makeMainRequestEvent($request);
-
-        (new CorrelationIdListener())($requestEvent);
-
-        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
-        $this->assertIsString($stored);
-        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame($bad, $stored);
-        $this->assertStringNotContainsString("\n", $stored);
-    }
-
-    public function testMalformedInboundHeaderWithLeadingWhitespaceIsRejected(): void
-    {
-        $bad = ' ' . self::VALID_UUID_V7;
-        $request = Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => $bad]);
-        $requestEvent = $this->makeMainRequestEvent($request);
-
-        (new CorrelationIdListener())($requestEvent);
-
-        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
-        $this->assertIsString($stored);
-        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame($bad, $stored);
-    }
-
-    public function testMalformedInboundHeaderWithTrailingTabIsRejected(): void
-    {
-        $bad = self::VALID_UUID_V7 . "\t";
-        $request = Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => $bad]);
-        $requestEvent = $this->makeMainRequestEvent($request);
-
-        (new CorrelationIdListener())($requestEvent);
-
-        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
-        $this->assertIsString($stored);
-        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame($bad, $stored);
-    }
-
-    public function testMalformedInboundHeaderWithEmbeddedNulByteIsRejected(): void
-    {
-        $bad = self::VALID_UUID_V7 . "\0";
-        $request = Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => $bad]);
-        $requestEvent = $this->makeMainRequestEvent($request);
-
-        (new CorrelationIdListener())($requestEvent);
-
-        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
-        $this->assertIsString($stored);
-        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame($bad, $stored);
-        $this->assertStringNotContainsString("\0", $stored);
-    }
-
-    public function testMultipleInboundHeadersAreRejectedAndFreshIdIsMinted(): void
-    {
-        // HTTP allows duplicate header names; the listener must treat any non-singleton list
-        // as malformed and mint fresh — defense-in-depth. Even when both values are
-        // individually well-formed, the ambiguity of "which one wins?" is rejected at the door.
-        $request = Request::create('/api/anything');
-        $request->headers->set(
-            CorrelationIdListener::HEADER_NAME,
-            [self::VALID_UUID_V7, '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2d'],
-        );
         $requestEvent = $this->makeMainRequestEvent($request);
 
         (new CorrelationIdListener())($requestEvent);
@@ -276,9 +91,63 @@ final class CorrelationIdListenerTest extends TestCase
         $this->assertNotSame(
             self::VALID_UUID_V7,
             $stored,
-            'Multi-value inbound must mint fresh, never echo a candidate.',
+            'The canonical value is the one an attacker sends — the malformed shapes never were the risk. '
+            . 'Adopting it hands the caller the column the audit trail is grouped by, and no check applied '
+            . 'to one request can tell a reused id from a fresh one.',
         );
-        $this->assertNotSame('0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2d', $stored);
+    }
+
+    /**
+     * The hostile shapes are kept as data rather than deleted along with the branch that used to tell
+     * them apart: each was measured once against a listener that had to, and the property they pin now is
+     * the stronger one — nothing is read, so nothing reaches the attribute, the canonical value included.
+     *
+     * @param string|list<string> $inbound
+     */
+    #[DataProvider('provideNoInboundHeaderShapeReachesTheCorrelationAttributeCases')]
+    public function testNoInboundHeaderShapeReachesTheCorrelationAttribute(array|string $inbound): void
+    {
+        $request = \is_array($inbound)
+            ? Request::create('/api/anything')
+            : Request::create('/api/anything', server: ['HTTP_X_CORRELATION_ID' => $inbound]);
+
+        if (\is_array($inbound)) {
+            $request->headers->set(CorrelationIdListener::HEADER_NAME, $inbound);
+        }
+
+        (new CorrelationIdListener())($this->makeMainRequestEvent($request));
+
+        $stored = $request->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
+        $this->assertIsString($stored);
+        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
+
+        foreach ((array) $inbound as $candidate) {
+            $this->assertNotSame($candidate, $stored, 'An inbound value reached the correlation attribute.');
+        }
+    }
+
+    /**
+     * @return iterable<string, array{0: string|list<string>}>
+     */
+    public static function provideNoInboundHeaderShapeReachesTheCorrelationAttributeCases(): iterable
+    {
+        yield 'canonical lowercase UUIDv7' => [self::VALID_UUID_V7];
+        yield 'uppercase' => ['0190E9C2-7B5A-7D40-9C8F-2F9B5D3E1A2C'];
+        yield 'empty string' => [''];
+        // UUIDv4: version-nibble `4`, not `7`.
+        yield 'wrong version bits' => ['0190e9c2-7b5a-4d40-9c8f-2f9b5d3e1a2c'];
+        // Variant-nibble `7` instead of `[89ab]`.
+        yield 'wrong variant bits' => ['0190e9c2-7b5a-7d40-7c8f-2f9b5d3e1a2c'];
+        yield 'extra garbage' => [self::VALID_UUID_V7 . '<script>alert(1)</script>'];
+        yield 'embedded newline' => [self::VALID_UUID_V7 . "\nX-Forwarded-For: evil"];
+        // 35 chars — missing trailing nibble.
+        yield 'length mismatch' => ['0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2'];
+        yield 'lone trailing newline' => [self::VALID_UUID_V7 . "\n"];
+        yield 'leading whitespace' => [' ' . self::VALID_UUID_V7];
+        yield 'trailing tab' => [self::VALID_UUID_V7 . "\t"];
+        yield 'embedded NUL byte' => [self::VALID_UUID_V7 . "\0"];
+        // HTTP allows duplicate header names; both values here are individually well-formed.
+        yield 'multiple headers' => [[self::VALID_UUID_V7, '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2d']];
     }
 
     public function testSubRequestIsIgnoredAndAttributeIsNotSet(): void

@@ -2,7 +2,7 @@ Feature: X-Correlation-Id response header on every API response
     As an on-call engineer
     In order to recover the correlation-id from any captured response
     I need every /api/* response (success and error) to carry an X-Correlation-Id header
-    echoing the per-request UUIDv7 minted by CorrelationIdListener.
+    holding the per-request UUIDv7 the server minted — never a value the caller supplied.
 
   # The default Behat suite's HttpRequestContext is constructor-bound to baseUrl=/api/v1
   # (see api/behat.dist.php). Routes under /api/test/_throw-* are reached via
@@ -24,31 +24,22 @@ Feature: X-Correlation-Id response header on every API response
     And the header "X-Correlation-Id" should be a valid UUID
     And 0 requests got executed across all doctrine connections
 
-  Scenario: A valid inbound X-Correlation-Id header is echoed verbatim on a 2xx
+  # The value a caller sends is dropped whatever its shape, so the canonical one is the only case worth
+  # a wire scenario: a malformed value and a well-formed one now take the same path, and the shapes that
+  # used to be told apart are pinned as data in CorrelationIdListenerTest. What a caller could otherwise
+  # buy with a well-formed value is the id the audit trail groups by.
+  Scenario: An inbound X-Correlation-Id header is ignored on a 2xx
     Given I add "X-Correlation-Id" header equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
     When I send a "GET" request to "/health"
     Then the response status code should be 200
-    And the header "X-Correlation-Id" should be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
+    And the header "X-Correlation-Id" should be a valid UUID
+    And the header "X-Correlation-Id" should not be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
     And 0 requests got executed across all doctrine connections
 
-  Scenario: A valid inbound X-Correlation-Id header is echoed verbatim on a 4xx
+  Scenario: An inbound X-Correlation-Id header is ignored on a 4xx
     Given I add "X-Correlation-Id" header equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
     When I send a "GET" request to "http://localhost/api/test/_throw-not-found"
     Then the response status code should be 404
-    And the header "X-Correlation-Id" should be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
-    And 0 requests got executed across all doctrine connections
-
-  Scenario: A malformed inbound X-Correlation-Id header is replaced with a freshly-minted UUIDv7
-    Given I add "X-Correlation-Id" header equal to "not-a-uuid"
-    When I send a "GET" request to "/health"
-    Then the response status code should be 200
     And the header "X-Correlation-Id" should be a valid UUID
-    And 0 requests got executed across all doctrine connections
-
-  Scenario: An uppercase well-formed UUIDv7 inbound header is replaced with a fresh lowercase UUIDv7
-    Given I add "X-Correlation-Id" header equal to "0190E9C2-7B5A-7D40-9C8F-2F9B5D3E1A2C"
-    When I send a "GET" request to "/health"
-    Then the response status code should be 200
-    And the header "X-Correlation-Id" should be a valid UUID
-    And the header "X-Correlation-Id" should not be equal to "0190E9C2-7B5A-7D40-9C8F-2F9B5D3E1A2C"
+    And the header "X-Correlation-Id" should not be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
     And 0 requests got executed across all doctrine connections

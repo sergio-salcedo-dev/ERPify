@@ -25,8 +25,6 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
 {
     private const string UUID_V7_REGEX = '/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/';
 
-    private const string VALID_UUID_V7 = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
-
     private const string THROW_NOT_FOUND_URI = '/api/test/_throw-not-found';
 
     private const string THROW_RUNTIME_URI = '/api/test/_throw-runtime';
@@ -129,11 +127,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
-        $kernelBrowser->request(
-            Request::METHOD_GET,
-            self::THROW_NOT_FOUND_URI,
-            server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
-        );
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
 
         $response = $kernelBrowser->getResponse();
         $this->assertSame(
@@ -144,7 +138,8 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $this->assertSame(self::PROBLEM_JSON_CONTENT_TYPE, $response->headers->get('Content-Type'));
 
         $headerValue = $response->headers->get('X-Correlation-Id');
-        $this->assertSame(self::VALID_UUID_V7, $headerValue);
+        $this->assertIsString($headerValue);
+        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $headerValue);
 
         $body = $this->decodeBody($response->getContent());
         $this->assertBodyEquals($headerValue, $body, 'correlation-id');
@@ -181,40 +176,37 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $this->assertBodyEquals($headerValue, $body, 'correlation-id');
     }
 
-    public function testTwoSequentialFailingRequestsWithSameInboundReceiveDistinctInstanceValues(): void
+    public function testTwoSequentialFailingRequestsReceiveDistinctInstanceAndCorrelationValues(): void
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
 
-        $kernelBrowser->request(
-            Request::METHOD_GET,
-            self::THROW_NOT_FOUND_URI,
-            server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
-        );
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
+
         $responseA = $kernelBrowser->getResponse();
         $this->assertSame(
             \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
             $responseA->getStatusCode(),
             (string) $responseA->getContent(),
         );
-        $this->assertSame(self::VALID_UUID_V7, $responseA->headers->get('X-Correlation-Id'));
+        $correlationA = $responseA->headers->get('X-Correlation-Id');
+        $this->assertIsString($correlationA);
         $bodyA = $this->decodeBody($responseA->getContent());
-        $this->assertBodyEquals(self::VALID_UUID_V7, $bodyA, 'correlation-id');
+        $this->assertBodyEquals($correlationA, $bodyA, 'correlation-id');
 
-        $kernelBrowser->request(
-            Request::METHOD_GET,
-            self::THROW_NOT_FOUND_URI,
-            server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
-        );
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
         $responseB = $kernelBrowser->getResponse();
         $this->assertSame(
             \Symfony\Component\HttpFoundation\Response::HTTP_NOT_FOUND,
             $responseB->getStatusCode(),
             (string) $responseB->getContent(),
         );
-        $this->assertSame(self::VALID_UUID_V7, $responseB->headers->get('X-Correlation-Id'));
+        $correlationB = $responseB->headers->get('X-Correlation-Id');
+        $this->assertIsString($correlationB);
         $bodyB = $this->decodeBody($responseB->getContent());
-        $this->assertBodyEquals(self::VALID_UUID_V7, $bodyB, 'correlation-id');
+        $this->assertBodyEquals($correlationB, $bodyB, 'correlation-id');
+
+        $this->assertNotSame($correlationA, $correlationB, 'Each request must mint its own correlation id.');
 
         $this->assertArrayHasKey('instance', $bodyA);
         $this->assertArrayHasKey('instance', $bodyB);
@@ -331,11 +323,7 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $bufferingLogger = $this->bufferingLogger();
         $this->assertCount(0, $bufferingLogger->cleanLogs(), self::BUFFER_NOT_EMPTY_MESSAGE);
 
-        $kernelBrowser->request(
-            Request::METHOD_GET,
-            self::THROW_NOT_FOUND_URI,
-            server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
-        );
+        $kernelBrowser->request(Request::METHOD_GET, self::THROW_NOT_FOUND_URI);
 
         $response = $kernelBrowser->getResponse();
         $this->assertSame(
@@ -345,6 +333,8 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         );
 
         $headerValue = $response->headers->get('X-Correlation-Id');
+        $this->assertIsString($headerValue);
+        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $headerValue);
         $body = $this->decodeBody($response->getContent());
 
         $logRecord = $this->singleLogRecord($bufferingLogger);
@@ -352,7 +342,6 @@ final class ExceptionResponderFunctionalTest extends WebTestCase
         $logInstance = $logRecord['context']['instance'] ?? null;
 
         $this->assertSame(LogLevel::WARNING, $logRecord['level']);
-        $this->assertSame(self::VALID_UUID_V7, $logCorrelationId);
         $this->assertSame($headerValue, $logCorrelationId);
         $this->assertSame($body['correlation-id'] ?? null, $logCorrelationId);
         $this->assertSame($body['instance'] ?? null, $logInstance);
