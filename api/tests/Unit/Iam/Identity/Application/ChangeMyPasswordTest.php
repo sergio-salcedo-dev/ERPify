@@ -328,12 +328,6 @@ final class ChangeMyPasswordTest extends TestCase
     }
 
     /**
-     * Answers "yes" by actually comparing against the mother's credential, so the trio of closures also pins
-     * that what the use case hands them is the STORED hash and not some other value.
-     *
-     * @return Closure(HashedPassword): bool
-     */
-    /**
      * One instant for the whole fixture. The lockout arithmetic and the clock the revoke path runs on are
      * independent today; a literal repeated at both is how a pair stops being deliberately independent and
      * starts being accidentally equal.
@@ -343,6 +337,12 @@ final class ChangeMyPasswordTest extends TestCase
         return new DateTimeImmutable('2026-08-04T12:00:00+00:00');
     }
 
+    /**
+     * Answers "yes" by actually comparing against the mother's credential, so the trio of closures also pins
+     * that what the use case hands them is the STORED hash and not some other value.
+     *
+     * @return Closure(HashedPassword): bool
+     */
     private function credentialMatches(): Closure
     {
         return static fn (HashedPassword $stored): bool => UserMother::DEFAULT_HASH === $stored->toString();

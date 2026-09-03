@@ -425,8 +425,7 @@ trait JsonToolTrait
      * `new DateTime()` rejects a string it cannot parse with a `DateMalformedStringException`, which
      * is not an `AssertionFailedError`: a node holding `true`, `0` or "n/a" would abort the scenario
      * with a raw error where the step's whole subject is that the value is not the date expected.
-     */
-    /**
+     *
      * `new DateTime('')` does not throw: it answers *now*. An empty node would therefore compare equal
      * to `"now"` and land inside the tolerance below, so the guard that exists to reject a non-date
      * would never fire for the one value most likely to arrive by accident.
