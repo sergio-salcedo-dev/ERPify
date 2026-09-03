@@ -14,13 +14,63 @@ const WDT_PATH = "/_dev/wdt-loader";
  * freshly-created element so the browser executes it (parsed/cloned scripts are
  * inert by spec). Avoids `innerHTML` / `dangerouslySetInnerHTML`: the loader is
  * dev-only, same-origin, trusted Symfony output.
+ *
+ * The fragment is mounted whole. That is a decision rather than an oversight: a
+ * node filter here would read as closed while the dominant channel stays open by
+ * design. Measured — a fragment carrying no `<base>` at all moves
+ * `document.baseURI` in three lines of its own JS, and `parsed.head` is not "the
+ * document-scoped nodes" but "whatever arrived before the parser left head mode",
+ * so a `<base>` after the first `<div>` lands nested in `body` where no head-side
+ * filter would see it. What upstream's template leads with is watched instead, at
+ * the integration point, by the `<base>` canary in
+ * `WebDebugToolbarLoaderFunctionalTest`. It detects; it does not contain — an
+ * executed script can still take document-wide authority, which is the standing
+ * price of executing them at all.
  */
-function mountFragment(host: HTMLElement, html: string): void {
+function mountFragment(host: HTMLElement, html: string): number {
   while (host.firstChild) host.firstChild.remove();
   const parsed = new DOMParser().parseFromString(html, "text/html");
-  for (const node of Array.from(parsed.body.childNodes)) {
-    host.appendChild(reviveNode(node));
+  // The loader is a document fragment, not a body: it leads with the toolbar's
+  // `<link rel="stylesheet">`, and the HTML parser hoists a leading `<link>` —
+  // plus the empty `<script>` upstream emits beside it — into `<head>`, never
+  // `<body>`. Reading `body` alone therefore drops the toolbar's entire
+  // stylesheet and paints its raw markup over a viewport-wide fixed host. Head
+  // then body is the fragment back in the order upstream sent it.
+  //
+  // That empty `<script>` is upstream's way of making the PARSER block on the
+  // sheet, and it is inert here: nothing on this path parses, and a `<link>` its
+  // node document's parser did not create is not render-blocking. So the markup
+  // can paint for one round trip before the sheet resolves. Ordering the nodes
+  // does not claim to close that window — it only keeps the source order.
+  let mountedElements = 0;
+  for (const node of [...parsed.head.childNodes, ...parsed.body.childNodes]) {
+    const revived = reviveNode(node);
+    watchStylesheetFailure(revived);
+    host.appendChild(revived);
+    if (node.nodeType === Node.ELEMENT_NODE) mountedElements += 1;
   }
+  return mountedElements;
+}
+
+/**
+ * Reports a mounted stylesheet that never loads. The toolbar's sheet is served by
+ * a controller that refuses when the profiler is disabled, while the loader that
+ * names it renders without consulting the profiler — so a 200 loader can carry a
+ * link whose target 404s, which reproduces the unstyled toolbar with no signal at
+ * all. Silence is what made that state expensive to diagnose the first time.
+ */
+function watchStylesheetFailure(node: Node): void {
+  if (!(node instanceof HTMLLinkElement) || node.rel !== "stylesheet") return;
+  node.addEventListener(
+    "error",
+    () => {
+      telemetry.warn("The Symfony debug toolbar stylesheet failed to load", {
+        scope: apiScope("wdt"),
+        cause: node.href,
+      });
+    },
+    { once: true },
+  );
 }
 
 function reviveNode(node: Node): Node {
@@ -81,7 +131,16 @@ export function SymfonyDebugToolbar({
       })
       .then((html) => {
         if (cancelled || mountedRef.current || !hostRef.current) return;
-        mountFragment(hostRef.current, html);
+        // Latch on a mount that produced something. A 200 carrying an empty or
+        // non-HTML body parses to zero elements, and latching on it would discard
+        // every later token for the rest of the session — the toolbar gone, with
+        // no retry and nothing logged.
+        if (mountFragment(hostRef.current, html) === 0) {
+          telemetry.warn("The Symfony debug toolbar loader returned no elements", {
+            scope: apiScope("wdt"),
+          });
+          return;
+        }
         mountedRef.current = true;
       })
       .catch((cause: unknown) => {
