@@ -152,7 +152,7 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointin
   the very mutation it exists to catch; a debug kernel fixes that by warming the container the suite is about
   to use, which is exactly what `Erpify\Kernel::getCacheDir()` gives PHPUnit a private cache directory to
   prevent (a warm container means `failOnDeprecation` never sees a file-scope deprecation); and either one
-  turns all 32 kernel-free `bin/phpunit --filter` invocations, across 20 `php.lint.*` targets, into container
+  turns every kernel-free `bin/phpunit --filter` invocation, across every `php.lint.*` target, into a container
   compiles under CI's `-j4`. Reading the two sources costs no cache, no container and no socket.
   `db.test.prepare` runs the same guard through `api/tools/phpunit/assert-test-database.php` **before** its
   migrate, because it is a make prerequisite and would otherwise apply a branch's new migration to the runtime
@@ -387,6 +387,8 @@ A comment must explain the non-obvious *why* of the **current** code, standing o
 
 - **Change-relative comments** — never describe the change or what was there before ("previously…", "replaces the old X", "now uses Y instead of…"). A month later the "before" doesn't exist and the comment is unverifiable noise. Git history and the PR carry that record.
 - **Story / requirement IDs** — `Story 1.7`, `NFR4`, AC numbers, ticket refs. Fine as scaffolding *while* developing a task, but sweep your own diff and delete them before the final commit; traceability lives in the PR, commit messages, and spec artifacts.
+
+- **A docblock another docblock supersedes** — PHP binds only the LAST doc comment before a declaration, so an earlier one documents nothing while reading as if it did, and a `@return` on it is a type statement over a declaration it does not describe. Found by hand once, fixed, verified across the five files sharing its shape, and shipped again into a sixth two months later — so it is gated rather than remembered: `make php.lint.stacked-docblock`. Fix per site rather than by rule; merging the two blocks, moving one to the declaration it describes, and deleting it have each been the right answer here.
 
 No mass cleanup of existing files. Instead apply the **boy scout rule**: when editing a file for any reason, also remove this kind of stale comment you find in it — leave the file better than you found it.
 
