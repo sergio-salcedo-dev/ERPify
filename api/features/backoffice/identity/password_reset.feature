@@ -193,11 +193,11 @@ Feature: Reset a forgotten password uniformly
   # audit budget is reset by the same sweep. It is pinned where it can be — `RequestPasswordResetControllerTest`
   # drives eight invocations against one persistent `InMemoryStorage` and asserts a single row.
   #
-  # Isolated by a fixed X-Correlation-Id rather than by truncating audit_log: the table is emptied once per
-  # suite, and every request here writes through it.
+  # Isolated by the correlation id the server minted for this request and returned on the response, rather
+  # than by truncating audit_log: the table is emptied once per suite, and every request here writes
+  # through it.
   Scenario: An exhausted recovery budget is projected as one security row naming the target
-    Given I add "X-Correlation-Id" header equal to "0190a1de-0602-7abc-8def-000000000101"
-    And the password-recovery budget is exhausted for email "nora@erpify.test"
+    Given the password-recovery budget is exhausted for email "nora@erpify.test"
     # Primed in lower case and requested in another casing, so this single request also pins that the two
     # budgets share ONE bucket through the real HTTP path: `RecoveryBudgetKey` end to end, not by unit test.
     When I send a POST request to "/backoffice/forgot-password" with body:
@@ -206,7 +206,7 @@ Feature: Reset a forgotten password uniformly
     """
     Then the response status code should be 202
     And the response should be empty
-    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id FROM audit_log WHERE correlation_id = '0190a1de-0602-7abc-8def-000000000101' AND action = 'PASSWORD_RECOVERY_THROTTLED'"
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'PASSWORD_RECOVERY_THROTTLED'"
     And the SQL result as JSON should be:
     """
     [
@@ -225,15 +225,14 @@ Feature: Reset a forgotten password uniformly
   # would carry the same existence bit in its absence while losing the signal of a sweep against addresses
   # that match no identity.
   Scenario: An exhausted budget for an address that names nobody is still recorded, without a resource
-    Given I add "X-Correlation-Id" header equal to "0190a1de-0602-7abc-8def-000000000102"
-    And the password-recovery budget is exhausted for email "ghost@erpify.test"
+    Given the password-recovery budget is exhausted for email "ghost@erpify.test"
     When I send a POST request to "/backoffice/forgot-password" with body:
     """
     { "email": "ghost@erpify.test" }
     """
     Then the response status code should be 202
     And the response should be empty
-    And I execute the SQL query "SELECT action, level, resource_type, resource_id FROM audit_log WHERE correlation_id = '0190a1de-0602-7abc-8def-000000000102' AND action = 'PASSWORD_RECOVERY_THROTTLED'"
+    And I execute the SQL query "SELECT action, level, resource_type, resource_id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'PASSWORD_RECOVERY_THROTTLED'"
     And the SQL result as JSON should be:
     """
     [
@@ -249,8 +248,7 @@ Feature: Reset a forgotten password uniformly
   # A `security` entry propagates by design, so without the swallow this refusal answers 500 and the uniform
   # 202 — the whole control — is broken by its own observability.
   Scenario: The uniform 202 survives its own audit projection failing
-    Given I add "X-Correlation-Id" header equal to "0190a1de-0602-7abc-8def-000000000103"
-    And the password-recovery budget is exhausted for email "outage@erpify.test"
+    Given the password-recovery budget is exhausted for email "outage@erpify.test"
     And I execute the SQL query "ALTER TABLE audit_log RENAME TO audit_log_unavailable" on connection "seed"
     When I send a POST request to "/backoffice/forgot-password" with body:
     """
@@ -261,7 +259,7 @@ Feature: Reset a forgotten password uniformly
     And the response should be empty
     # Completeness, not falsification: an empty result is also what a projection that never ran would give.
     # The falsifiable half is the 202 above — narrowing the swallow turns this scenario, and only it, into 500.
-    And I execute the SQL query "SELECT action FROM audit_log WHERE correlation_id = '0190a1de-0602-7abc-8def-000000000103'" on connection "seed"
+    And I execute the SQL query "SELECT action FROM audit_log WHERE correlation_id = '<correlationId>'" on connection "seed"
     And the SQL result as JSON should be:
     """
     []

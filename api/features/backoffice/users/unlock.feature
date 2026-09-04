@@ -17,7 +17,6 @@ Feature: Unlock an identity's persisted lockout (administrative recovery)
   Scenario: An administrator unlocks a genuinely locked identity
     Given I am logged in as an administrator
     And I execute the SQL query "UPDATE identity_user SET failed_attempts = 10, locked_until = '2099-01-01 00:00:00' WHERE email = 'leo@erpify.test'"
-    And I add "X-Correlation-Id" header equal to "0190f300-0000-7000-8000-000000000001"
     When I send a "POST" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a64/unlock"
     Then the response status code should be 200
     And the JSON node "data.id" should be equal to "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a64"
@@ -26,7 +25,7 @@ Feature: Unlock an identity's persisted lockout (administrative recovery)
     # The counter and the expiry are both cleared, not merely the one the login wall reads.
     And I execute the SQL query "SELECT id FROM identity_user WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a64' AND failed_attempts = 0 AND locked_until IS NULL"
     And there should have 1 records in SQL result
-    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id FROM audit_log WHERE correlation_id = '0190f300-0000-7000-8000-000000000001' AND action = 'ACCOUNT_UNLOCKED_BY_ADMIN'"
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'ACCOUNT_UNLOCKED_BY_ADMIN'"
     And the SQL result as JSON should be:
     """
     [
@@ -40,12 +39,11 @@ Feature: Unlock an identity's persisted lockout (administrative recovery)
       }
     ]
     """
-    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '0190f300-0000-7000-8000-000000000001' AND action = 'ACCOUNT_UNLOCKED_BY_ADMIN' AND metadata = jsonb_build_object('unlocked', true)"
+    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'ACCOUNT_UNLOCKED_BY_ADMIN' AND metadata = jsonb_build_object('unlocked', true)"
     And there should have 1 records in SQL result
 
   Scenario: An administrator unlocks an already-unlocked identity — reports no mutation, still audits the call
     Given I am logged in as an administrator
-    And I add "X-Correlation-Id" header equal to "0190f300-0000-7000-8000-000000000002"
     When I send a "POST" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d/unlock"
     Then the response status code should be 200
     And the JSON node "data.id" should be equal to "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d"
@@ -53,7 +51,7 @@ Feature: Unlock an identity's persisted lockout (administrative recovery)
     # The lever was invoked and is worth recording regardless of effect — an administrator reaching for
     # `users.unlock` against an account that turns out not to be locked is exactly the use this trail exists
     # to make reviewable, not only a successful recovery.
-    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '0190f300-0000-7000-8000-000000000002' AND action = 'ACCOUNT_UNLOCKED_BY_ADMIN' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d' AND metadata = jsonb_build_object('unlocked', false)"
+    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'ACCOUNT_UNLOCKED_BY_ADMIN' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d' AND metadata = jsonb_build_object('unlocked', false)"
     And there should have 1 records in SQL result
 
   @anonymous

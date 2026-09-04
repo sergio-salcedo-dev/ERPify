@@ -26,13 +26,15 @@ Feature: Per-error `instance` UUIDv7 and body↔header correlation-id reconcilia
     And the JSON node "correlation-id" should be equal to the response header "X-Correlation-Id"
     And 0 requests got executed across all doctrine connections
 
-  Scenario: A 4xx error body's `correlation-id` equals the inbound X-Correlation-Id verbatim
+  # A canonical inbound value is the interesting one: it is what a caller sends to join someone else's
+  # trail, and the shape it arrives in is the only thing a single request could ever check.
+  Scenario: An inbound X-Correlation-Id reaches neither the response header nor the error body
     Given I add "X-Correlation-Id" header equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
     When I send a "GET" request to "http://localhost/api/test/_throw-not-found"
     Then the response status code should be 404
-    And the JSON node "correlation-id" should be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
-    And the header "X-Correlation-Id" should be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
-    And the JSON node "instance" should not be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
+    And the header "X-Correlation-Id" should not be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
+    And the JSON node "correlation-id" should not be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
+    And the JSON node "correlation-id" should be equal to the response header "X-Correlation-Id"
     And 0 requests got executed across all doctrine connections
 
   Scenario: A 5xx unhandled-exception body carries a fresh UUIDv7 `instance` and reconciled `correlation-id`

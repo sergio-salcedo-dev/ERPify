@@ -20,7 +20,7 @@ export function JourneySessionHeader({ group }: Readonly<{ group: AuditJourneyGr
         {localHourMinute(group.startIso)}–{localHourMinute(group.endIso)}
       </span>
       <span className="text-text-subtle text-xs">
-        · {group.count} {group.count === 1 ? "entrada" : "entradas"}
+        · {group.count} {group.count === 1 ? "entry" : "entries"}
       </span>
     </span>
   );

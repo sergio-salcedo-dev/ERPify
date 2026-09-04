@@ -29,7 +29,6 @@ Feature: Erase an identity (GDPR right to erasure)
     And I execute the SQL query "SELECT event_id FROM event_store WHERE event_id IN ('0190f200-0000-7000-8000-00000000ea01', '0190f200-0000-7000-8000-00000000ea02', '0190f200-0000-7000-8000-00000000ea03')" on connection "seed"
     And there should have 3 records in SQL result
     And I am logged in as an administrator
-    And I add "X-Correlation-Id" header equal to "0190f200-0000-7000-8000-00000000ee51"
     When I send a "DELETE" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c"
     Then the response status code should be 204
     # Identity hard-deleted.
@@ -43,9 +42,9 @@ Feature: Erase an identity (GDPR right to erasure)
     And I execute the SQL query "SELECT id FROM audit_log WHERE id = '0190f200-0000-7000-8000-00000000ee21' AND actor_erased = TRUE"
     And there should have 1 records in SQL result
     # The two compliance rows survive, attributed to the acting admin (0190…a66), never the subject.
-    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '0190f200-0000-7000-8000-00000000ee51' AND action = 'GDPR_SUBJECT_ERASED' AND actor_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
+    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'GDPR_SUBJECT_ERASED' AND actor_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
     And there should have 1 records in SQL result
-    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '0190f200-0000-7000-8000-00000000ee51' AND action = 'GDPR_ERASURE_EXECUTED' AND actor_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
+    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'GDPR_ERASURE_EXECUTED' AND actor_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
     And there should have 1 records in SQL result
     # The subject's real id survives in NO metadata of any row. Matched over the whole column as text, not by
     # key name: a key holding the id under a different name is the same defect, and `metadata` is `[]` — an
@@ -69,7 +68,7 @@ Feature: Erase an identity (GDPR right to erasure)
     # than about this erasure, and goes red the day a second scenario erases anybody before this one runs.
     # What the pseudonym buys is a LINK, not an attribution — `audit_log` does not answer WHICH person by
     # design (D4 bans the crosswalk), and the link itself is only as long-lived as the trail it points into.
-    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '0190f200-0000-7000-8000-00000000ee51' AND action = 'GDPR_SUBJECT_ERASED' AND resource_type = 'User' AND resource_erased = TRUE AND resource_id <> '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c'"
+    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'GDPR_SUBJECT_ERASED' AND resource_type = 'User' AND resource_erased = TRUE AND resource_id <> '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c'"
     And there should have 1 records in SQL result
     # The evidence is LINKED to the trail it explains: the pseudonym on the compliance row is the same one the
     # subject's anonymised audit row carries. One person, one anonymous identity — which is what makes the

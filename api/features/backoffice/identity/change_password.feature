@@ -57,7 +57,6 @@ Feature: Change my own password from a live session
 
   Scenario: A wrong current password is a 403 that changes nothing, evicts nobody and leaves a forensic row
     Given the stored events are cleared
-    And I add "X-Correlation-Id" header equal to "0190dead-beef-7abc-8def-00112233c0de"
     When I send a POST request to "/me/password" with body:
     """
     { "currentPassword": "not-alices-password", "newPassword": "brand-new-strong-password" }
@@ -72,7 +71,7 @@ Feature: Change my own password from a live session
     # identity, which `actor_id` already seals — naming it again would write actor_id == resource_id by
     # construction, onto the person axis of `audit_log.resource_id`. The row survives the refusal because the
     # use case rolls its transaction back before the exception reaches the listener.
-    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, metadata FROM audit_log WHERE action = 'INVALID_CURRENT_PASSWORD' AND correlation_id = '0190dead-beef-7abc-8def-00112233c0de'"
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, metadata FROM audit_log WHERE action = 'INVALID_CURRENT_PASSWORD' AND correlation_id = '<correlationId>'"
     And the SQL result as JSON should be:
     """
     [

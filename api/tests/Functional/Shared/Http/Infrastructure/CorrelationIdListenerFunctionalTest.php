@@ -42,7 +42,7 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
     }
 
-    public function testRequestWithValidInboundHeaderPropagatesItVerbatim(): void
+    public function testRequestWithInboundHeaderStillCarriesAMintedCorrelationId(): void
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
@@ -52,27 +52,11 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
             server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
         );
 
-        $this->assertSame(
-            self::VALID_UUID_V7,
-            $kernelBrowser->getRequest()->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY),
-        );
-    }
-
-    public function testRequestWithMalformedInboundHeaderHasFreshlyMintedCorrelationId(): void
-    {
-        $kernelBrowser = self::createClient();
-        $kernelBrowser->catchExceptions(true);
-        $kernelBrowser->request(
-            method: Request::METHOD_GET,
-            uri: self::THROW_NOT_FOUND_URI,
-            server: ['HTTP_X_CORRELATION_ID' => 'not-a-uuid'],
-        );
-
         $stored = $kernelBrowser->getRequest()->attributes->get(CorrelationIdListener::ATTRIBUTE_KEY);
 
         $this->assertIsString($stored);
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $stored);
-        $this->assertNotSame('not-a-uuid', $stored);
+        $this->assertNotSame(self::VALID_UUID_V7, $stored);
     }
 
     public function testListenerIsRegisteredOnKernelRequestWithExpectedPriority(): void
@@ -116,7 +100,7 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $headerValue);
     }
 
-    public function testResponseEchoesValidInboundXCorrelationIdHeaderVerbatim(): void
+    public function testResponseDoesNotEchoAnInboundXCorrelationIdHeader(): void
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->catchExceptions(true);
@@ -126,27 +110,11 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
             server: ['HTTP_X_CORRELATION_ID' => self::VALID_UUID_V7],
         );
 
-        $this->assertSame(
-            self::VALID_UUID_V7,
-            $kernelBrowser->getResponse()->headers->get(CorrelationIdListener::HEADER_NAME),
-        );
-    }
-
-    public function testResponseHasFreshlyMintedXCorrelationIdHeaderWhenInboundIsMalformed(): void
-    {
-        $kernelBrowser = self::createClient();
-        $kernelBrowser->catchExceptions(true);
-        $kernelBrowser->request(
-            method: Request::METHOD_GET,
-            uri: self::THROW_NOT_FOUND_URI,
-            server: ['HTTP_X_CORRELATION_ID' => 'not-a-uuid'],
-        );
-
         $headerValue = $kernelBrowser->getResponse()->headers->get(CorrelationIdListener::HEADER_NAME);
 
         $this->assertIsString($headerValue);
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $headerValue);
-        $this->assertNotSame('not-a-uuid', $headerValue);
+        $this->assertNotSame(self::VALID_UUID_V7, $headerValue);
     }
 
     public function testTwoXxResponseCarriesXCorrelationIdHeader(): void
@@ -165,7 +133,7 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
         $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $headerValue);
     }
 
-    public function testTwoXxResponseEchoesValidInboundHeaderVerbatim(): void
+    public function testTwoXxResponseDoesNotEchoAnInboundHeader(): void
     {
         $kernelBrowser = self::createClient();
         $kernelBrowser->request(
@@ -179,10 +147,11 @@ final class CorrelationIdListenerFunctionalTest extends WebTestCase
             $kernelBrowser->getResponse()->getStatusCode(),
             (string) $kernelBrowser->getResponse()->getContent(),
         );
-        $this->assertSame(
-            self::VALID_UUID_V7,
-            $kernelBrowser->getResponse()->headers->get(CorrelationIdListener::HEADER_NAME),
-        );
+        $headerValue = $kernelBrowser->getResponse()->headers->get(CorrelationIdListener::HEADER_NAME);
+
+        $this->assertIsString($headerValue);
+        $this->assertMatchesRegularExpression(self::UUID_V7_REGEX, $headerValue);
+        $this->assertNotSame(self::VALID_UUID_V7, $headerValue);
     }
 
     public function testResponseListenerIsRegisteredOnKernelResponseWithExpectedPriority(): void
