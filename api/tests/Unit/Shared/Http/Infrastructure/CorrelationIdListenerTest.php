@@ -98,9 +98,9 @@ final class CorrelationIdListenerTest extends TestCase
     }
 
     /**
-     * The hostile shapes are kept as data rather than deleted along with the branch that used to tell
-     * them apart: each was measured once against a listener that had to, and the property they pin now is
-     * the stronger one — nothing is read, so nothing reaches the attribute, the canonical value included.
+     * The hostile shapes are data because the property they pin is the strong one: nothing is read, so
+     * nothing reaches the attribute — the canonical value included. Each was measured once against a
+     * listener that had to tell them apart, and they cost nothing to keep.
      *
      * @param string|list<string> $inbound
      */

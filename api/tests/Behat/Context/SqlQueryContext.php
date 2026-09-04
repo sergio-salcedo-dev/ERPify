@@ -24,11 +24,10 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
  * Query text and expected JSON both go through {@see resolveTokens()}, which substitutes
  * {@see CORRELATION_TOKEN} with the correlation id of the last HTTP response. That token is how a
  * scenario isolates the rows its own request wrote: `audit_log` is restored per feature and not per
- * scenario, so a bare `WHERE action = …` reads every scenario's rows in the file. It used to isolate by
- * sending a fixed `X-Correlation-Id` and selecting on it, which stopped working when the server took
- * ownership of that value — and was the weaker oracle anyway, asserting that a row carries the id the
- * scenario itself supplied, which on that axis cannot fail. Reading it back off the response asserts
- * what the id is for: that the row and the response the caller holds name the same request.
+ * scenario, so a bare `WHERE action = …` reads every scenario's rows in the file. Reading the id back
+ * off the response is also what makes the assertion mean something — it reconciles the row with the
+ * response the caller holds, where selecting on a value the scenario itself supplied cannot fail on
+ * that axis.
  */
 class SqlQueryContext extends AbstractContext
 {

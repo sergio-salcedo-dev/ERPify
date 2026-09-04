@@ -14,25 +14,24 @@ Feature: X-Correlation-Id response header on every API response
   Scenario: A 2xx response carries a freshly-minted X-Correlation-Id header
     When I send a "GET" request to "/health"
     Then the response status code should be 200
-    And the header "X-Correlation-Id" should be a valid UUID
+    And the header "X-Correlation-Id" should be a valid UUID version 7
     And 0 requests got executed across all doctrine connections
 
   Scenario: A 4xx response carries a freshly-minted X-Correlation-Id header
     When I send a "GET" request to "http://localhost/api/test/_throw-not-found"
     Then the response status code should be 404
     And the header "Content-Type" should be equal to "application/problem+json"
-    And the header "X-Correlation-Id" should be a valid UUID
+    And the header "X-Correlation-Id" should be a valid UUID version 7
     And 0 requests got executed across all doctrine connections
 
-  # The value a caller sends is dropped whatever its shape, so the canonical one is the only case worth
-  # a wire scenario: a malformed value and a well-formed one now take the same path, and the shapes that
-  # used to be told apart are pinned as data in CorrelationIdListenerTest. What a caller could otherwise
-  # buy with a well-formed value is the id the audit trail groups by.
+  # A caller's value is dropped whatever its shape, so the canonical one is the only case worth a wire
+  # scenario; the individual shapes are pinned as data in CorrelationIdListenerTest. What a caller would
+  # otherwise buy with a well-formed value is the id the audit trail groups by.
   Scenario: An inbound X-Correlation-Id header is ignored on a 2xx
     Given I add "X-Correlation-Id" header equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
     When I send a "GET" request to "/health"
     Then the response status code should be 200
-    And the header "X-Correlation-Id" should be a valid UUID
+    And the header "X-Correlation-Id" should be a valid UUID version 7
     And the header "X-Correlation-Id" should not be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
     And 0 requests got executed across all doctrine connections
 
@@ -40,6 +39,6 @@ Feature: X-Correlation-Id response header on every API response
     Given I add "X-Correlation-Id" header equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
     When I send a "GET" request to "http://localhost/api/test/_throw-not-found"
     Then the response status code should be 404
-    And the header "X-Correlation-Id" should be a valid UUID
+    And the header "X-Correlation-Id" should be a valid UUID version 7
     And the header "X-Correlation-Id" should not be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c"
     And 0 requests got executed across all doctrine connections

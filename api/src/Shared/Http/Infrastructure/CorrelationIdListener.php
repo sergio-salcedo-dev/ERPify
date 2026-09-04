@@ -75,7 +75,7 @@ final readonly class CorrelationIdListener
     /**
      * Whether `$value` is a canonical lowercase UUIDv7 (RFC 9562 §6.10). The single definition of the
      * correlation-id format, so every consumer that must validate it shares this anchor instead of
-     * carrying a second regex that could drift from the one used to mint and propagate the value.
+     * carrying a second regex that could drift from the one used to mint it.
      */
     public static function isCanonical(string $value): bool
     {

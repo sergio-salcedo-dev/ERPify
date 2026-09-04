@@ -21,22 +21,42 @@ use PHPUnit\Framework\TestCase;
  *
  * **Why a static gate beside the behavioural ones.** `CorrelationIdListenerTest` proves the listener
  * ignores an inbound header, and it is the instrument that actually demonstrates the property — but it
- * reads one class. The way this regresses is not that the listener changes its mind; it is that a
+ * reads one class. The regression this catches is not that the listener changes its mind; it is that a
  * SECOND site appears, reading the caller's header and writing the attribute from somewhere the
- * behavioural test never looks. That direction has no other reader: the change would be green under
- * PHPStan, deptrac, the suites and every `php.lint.*` target, exactly as the shape-only check it
- * replaces was green for months.
+ * behavioural test never looks. That direction has no other reader: such a change is green under
+ * PHPStan, deptrac, the suites and every `php.lint.*` target, and a shape-only check on one request is
+ * green over its effect by construction.
  *
- * The two assertions are the two halves of the same invariant and neither implies the other. A file can
- * read the inbound header without writing the attribute (feeding it to a log line, a response body, a
- * projection — the value is caller-chosen wherever it lands), and a file can write the attribute
- * without reading the header (deriving it from a query string, a cookie, a payload field).
+ * **It matches the NAME, never the call, and that is a measurement rather than a preference.** Matching
+ * call shapes — `attributes->set(…::ATTRIBUTE_KEY`, `headers->get(…::HEADER_NAME` — was measured
+ * evadable in six spellings, each of them ordinary PHP: a constant aliased into the using class (which
+ * {@see \Erpify\Shared\Search\Infrastructure\Http\EventListener\SearchObservabilityListener} does for
+ * this very constant, so the precedent is in the tree), `attributes->add([…])`,
+ * `attributes->replace([…])`, a double-quoted literal, `server->get('HTTP_X_CORRELATION_ID')` — the
+ * spelling the functional tests themselves use — and `headers->all()['x-correlation-id'][0]`. Widening
+ * the patterns answers those six and leaves the seventh, which is the failure mode this repository has
+ * recorded twice (Caddy's `query` filter by parameter name; #389/#803). Membership has no seventh: a
+ * file cannot use this identifier without naming it, whatever it then does with it.
  *
- * **What a green proves:** in `api/src`, one file writes the correlation attribute and none reads the
- * inbound header by name. Not that the listener mints — that is the behavioural pin's job. It is blind
- * to a read spelled dynamically (`$request->headers->get($name)` with the name computed), to anything
- * outside `api/src` (a Caddy directive copying the header onto another one would be invisible here),
- * and to a caller-chosen value arriving through any header this gate does not name.
+ * The two lists differ because the two names differ in kind. **The header is the listener's alone** —
+ * it is the wire spelling, so every inbound read must go through it and a single owner makes any reader
+ * anywhere red. The **attribute** is the in-process value three collaborators legitimately read, so
+ * that list has four members and carries a third assertion: none of the readers writes a request
+ * attribute at all, and the listener writes exactly one.
+ *
+ * **What a green proves:** in `api/src`, one file names the correlation header, four name the
+ * attribute, only the listener writes it, and no reader writes any request attribute. **What it does
+ * not prove:** that the listener mints — that is the behavioural pin's job, and this gate is equally
+ * green over a listener stamping a constant; that a name composed at runtime is absent (`'X-' .
+ * 'Correlation-Id'`, or one read from configuration), which no text rule can reach; or anything at all
+ * outside `api/src`, where the value is also handled — Caddy's access log records this header like
+ * every other request header, a residual carried in `PRODUCTION_SECURITY_CHECKLIST.md` §7 rather than
+ * closed here.
+ *
+ * **Its declared cost**, so it is not met as a surprise: a collaborator with a legitimate reason to
+ * name either identifier — a diagnostic route re-reading the response header, a second reader of the
+ * attribute — is red until it is added to the list with its reason. That is the point rather than a
+ * defect; the list is where review looks.
  *
  * @internal
  */
@@ -46,86 +66,105 @@ final class CorrelationIdOwnershipGateTest extends TestCase
     private const string LISTENER = 'Shared/Http/Infrastructure/CorrelationIdListener.php';
 
     /**
-     * A write from OUTSIDE the listener: the attribute can only be named there by the qualified constant or
-     * by the literal. A bare `self::ATTRIBUTE_KEY` is deliberately absent — in another class it is that
-     * class's own key, and `RateLimitSnapshot` declares one, so admitting it would report a false writer.
+     * Every file in `api/src` allowed to name the correlation ATTRIBUTE, sorted by path. The three
+     * besides the listener are readers: the audit factory seals it onto the row, the error responder
+     * puts it in the problem body, and the search listener logs it on the `observability` channel.
      */
-    private const string FOREIGN_WRITE = '/attributes\s*->\s*set\s*\(\s*(?:'
-        . '[A-Za-z\\\]*CorrelationIdListener::ATTRIBUTE_KEY'
-        . "|'_correlation_id'"
-        . ')/';
+    private const array MAY_NAME_THE_ATTRIBUTE = [
+        'Shared/Audit/Infrastructure/SealedAuditEntryFactory.php',
+        'Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php',
+        'Shared/Http/Infrastructure/CorrelationIdListener.php',
+        'Shared/Search/Infrastructure/Http/EventListener/SearchObservabilityListener.php',
+    ];
 
-    /** The listener's own write, which is the one spelling no other class can use to mean this attribute. */
-    private const string OWN_WRITE = '/attributes\\s*->\\s*set\\s*\\(\\s*self::ATTRIBUTE_KEY/';
+    /** The attribute, by constant or by literal in either quoting. */
+    private const string NAMES_THE_ATTRIBUTE = '/CorrelationIdListener::ATTRIBUTE_KEY|[\'"]_correlation_id[\'"]/';
 
     /**
-     * A READ of the inbound header: `get`, `has` or `all` against a header bag, named by the constant or
-     * by the literal in any case (HTTP header names are case-insensitive and Symfony's bag normalises,
-     * so `x-correlation-id` reaches the same value). `set` is deliberately absent — the listener's own
-     * response write is a `set`, and it is the one legitimate mention of the name.
+     * The header, in the three spellings a reader can reach it by: the constant, the wire name (case
+     * insensitively — HTTP header names are, and Symfony's bag normalises), and the CGI-ised form the
+     * server bag answers to, which is how a reader bypasses the header bag entirely.
      */
-    private const string READS_THE_INBOUND_HEADER = '/headers\s*->\s*(?:get|has|all)\s*\(\s*(?:'
-        . '[A-Za-z\\\]*CorrelationIdListener::HEADER_NAME'
-        . '|self::HEADER_NAME'
-        . "|'X-Correlation-Id'"
-        . ')/i';
+    private const string NAMES_THE_HEADER = '/CorrelationIdListener::HEADER_NAME'
+        . '|[\'"]X-Correlation-Id[\'"]'
+        . '|HTTP_X_CORRELATION_ID/i';
+
+    /** Any write to the request's attribute bag, through whichever of the three bag methods. */
+    private const string WRITES_AN_ATTRIBUTE = '/attributes\s*->\s*(?:set|add|replace)\s*\(/';
+
+    /** Any READ of a header bag. The listener only ever writes one, on the response. */
+    private const string READS_A_HEADER = '/headers\s*->\s*(?:get|has|all)\s*\(/';
 
     #[Test]
-    public function srcWritesTheCorrelationAttributeInExactlyOnePlace(): void
+    public function onlyTheListenerNamesTheCorrelationHeader(): void
     {
-        $foreign = $this->filesMatching(self::FOREIGN_WRITE);
-        unset($foreign[self::LISTENER]);
+        $namers = \array_keys($this->filesMatching(self::NAMES_THE_HEADER));
 
-        $this->assertSame([], \array_keys($foreign), \sprintf(
-            'Only the listener may write the `_correlation_id` request attribute. Found: %s. A second writer '
-            . 'is how a caller-chosen value re-enters the audit trail without the listener changing at all — '
-            . 'and it is the shape no behavioural test of the listener can see.',
-            \implode(', ', \array_keys($foreign)),
+        $this->assertSame([self::LISTENER], $namers, \sprintf(
+            'Only the listener may name `X-Correlation-Id` in src. Found: %s. Every inbound read has to '
+            . 'name the header somehow, so one owner is what makes any reader red — and the header is '
+            . 'ignored by construction rather than validated, because a shape check cannot detect a value '
+            . 'reused across unrelated requests, which is what collapses their audit rows into one '
+            . 'apparent journey. A caller needing distributed tracing needs an identifier of its own.',
+            \implode(', ', $namers),
         ));
+    }
 
+    #[Test]
+    public function onlyReviewedFilesNameTheCorrelationAttribute(): void
+    {
+        $namers = \array_keys($this->filesMatching(self::NAMES_THE_ATTRIBUTE));
+
+        $this->assertSame(self::MAY_NAME_THE_ATTRIBUTE, $namers, \sprintf(
+            'The files naming the `_correlation_id` attribute have changed. Found: %s. Adding one is a '
+            . 'review decision rather than a detail: a file that can name it can write it, and a second '
+            . 'writer is how a caller-chosen value re-enters the audit trail with the listener untouched.',
+            \implode(', ', $namers),
+        ));
+    }
+
+    #[Test]
+    public function onlyTheListenerWritesARequestAttribute(): void
+    {
+        foreach (self::MAY_NAME_THE_ATTRIBUTE as $file) {
+            $writes = \preg_match_all(self::WRITES_AN_ATTRIBUTE, $this->sourceOf($file));
+
+            $this->assertSame(self::LISTENER === $file ? 1 : 0, $writes, \sprintf(
+                'The listener must write exactly one request attribute and the three readers none; `%s` '
+                . 'writes %d. A reader that starts writing is the second writer this list exists to make '
+                . 'visible, and it would do it while naming an attribute it already legitimately names.',
+                $file,
+                (int) $writes,
+            ));
+        }
+    }
+
+    /**
+     * The header list makes any OTHER file red for reading the header; this is the half that covers the
+     * listener itself, which is the one file allowed to name it. The listener never needs to read a
+     * header bag — it writes one, on the response — so a read appearing inside it is the whole defect
+     * returning to the file it was removed from, and the membership assertions above are blind to that
+     * by construction.
+     */
+    #[Test]
+    public function theListenerReadsNoHeaderBag(): void
+    {
         $this->assertSame(
-            1,
-            \preg_match_all(self::OWN_WRITE, PhpSource::withoutComments($this->listenerSource())),
-            'The listener must write the correlation attribute exactly once. None means this gate is '
-            . 'asserting over a class that no longer mints; more than one means two writes that can drift, '
-            . 'and only one of them is the mint.',
+            0,
+            \preg_match_all(self::READS_A_HEADER, $this->sourceOf(self::LISTENER)),
+            'The listener reads a header bag. It has no reason to: it writes `X-Correlation-Id` on the '
+            . 'response and reads nothing from the request, so a read here is the caller regaining the '
+            . 'id the audit trail groups by — and the membership lists cannot see it, because this is '
+            . 'the one file entitled to name the header.',
         );
     }
 
-    #[Test]
-    public function srcNeverReadsTheInboundCorrelationHeader(): void
-    {
-        $readers = $this->filesMatching(self::READS_THE_INBOUND_HEADER);
-
-        $this->assertSame([], \array_keys($readers), \sprintf(
-            'No class in src may read an inbound `X-Correlation-Id`. Found: %s. The header is dropped by '
-            . 'construction rather than validated, because a shape check cannot detect a value reused '
-            . 'across unrelated requests — which is what collapses their audit rows into one apparent '
-            . 'journey. A caller that needs distributed tracing needs an identifier of its own, not '
-            . 'authority over this one.',
-            \implode(', ', \array_keys($readers)),
-        ));
-    }
-
-    private function listenerSource(): string
-    {
-        $path = \realpath(ApiSourceFiles::root() . '/' . self::LISTENER);
-
-        $this->assertIsString($path, 'The listener this gate reads has moved; the gate is asserting nothing.');
-
-        $source = \file_get_contents($path);
-
-        $this->assertIsString($source, 'The listener this gate reads could not be read.');
-
-        return $source;
-    }
-
     /**
-     * Comments are stripped first, so the listener's own docblock — which quotes the header name while
-     * explaining why it is ignored — is not counted as a use of it. That is not a hypothetical: this
+     * Comments are stripped, so the listener's own docblock — which quotes both names while explaining
+     * why the header is ignored — is not counted as a use of them. That is not a hypothetical: this
      * gate's subject is a class whose documentation necessarily names what it refuses.
      *
-     * @return array<string, int> relative path => number of matches, in tree order
+     * @return array<string, int> relative path => number of matches, sorted by path
      */
     private function filesMatching(string $pattern): array
     {
@@ -140,8 +179,8 @@ final class CorrelationIdOwnershipGateTest extends TestCase
 
             $matches = \preg_match_all($pattern, PhpSource::withoutComments($source));
 
-            // A `false` here is a broken pattern, not an absence of matches, and counting it as zero would
-            // turn this gate green on the day someone edits one of the two regexes above into a syntax error.
+            // A `false` here is a broken pattern, not an absence of matches, and counting it as zero
+            // would turn this gate green the day someone edits one of the regexes into a syntax error.
             $this->assertIsInt($matches, 'The gate pattern failed to compile, so it matched nothing.');
 
             if (0 === $matches) {
@@ -154,5 +193,18 @@ final class CorrelationIdOwnershipGateTest extends TestCase
         \ksort($found);
 
         return $found;
+    }
+
+    private function sourceOf(string $relativePath): string
+    {
+        $path = \realpath(ApiSourceFiles::root() . '/' . $relativePath);
+
+        $this->assertIsString($path, $relativePath . ' has moved; this gate asserts nothing about it.');
+
+        $source = \file_get_contents($path);
+
+        $this->assertIsString($source, $relativePath . ' could not be read.');
+
+        return PhpSource::withoutComments($source);
     }
 }

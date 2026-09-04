@@ -253,7 +253,7 @@ Every non-2xx response from `/api/*` carries a uniform [RFC 9457](https://www.rf
 
 Pipeline:
 
-1. `Shared/Http/Infrastructure/CorrelationIdListener` (request priority `1024` / response priority `-1024`) mints or propagates a per-request UUIDv7 `correlation-id` and writes `X-Correlation-Id` on **every** main response.
+1. `Shared/Http/Infrastructure/CorrelationIdListener` (request priority `1024` / response priority `-1024`) **mints** a per-request UUIDv7 `correlation-id` — an inbound `X-Correlation-Id` is ignored, not validated — and writes it as `X-Correlation-Id` on **every** main response, overwriting any pre-existing value.
 2. `Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder` (path-scoped to `/api/*`) mints a per-error UUIDv7 `instance`, delegates marker→status resolution to `Shared/ErrorContract/Application/ProblemDetailsFactory`, and emits exactly one tiered PSR-3 log line. Level: `critical` for `\LogicException` (programmer / platform error, pinned ahead of marker matching) or unhandled; `error` for ≥500; `warning` for 4xx. Each line carries an `exception_category` field (`programmer_error` / `runtime_error` / `domain_error` / `engine_error` / `unknown`) that lets SRE route on-call alerts without parsing FQCNs — see [`api-error-contract.md`](./api-error-contract.md).
 3. `Shared/ErrorContract/Infrastructure/Http/ProblemDetailsResponder` adapts the `ProblemDetails` value object to a Symfony `Response`.
 

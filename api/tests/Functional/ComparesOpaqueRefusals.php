@@ -10,7 +10,8 @@ namespace Erpify\Tests\Functional;
  *
  * A test asserting that two refusals are indistinguishable can only compare the WHOLE body — naming the
  * members by hand is how a `detail`, an extension, or a reordered payload diverges with every named
- * assertion still green. But three members always differ or always may, and none reveals a cause:
+ * assertion still green. Three members are set aside: two that vary per occurrence, and one that names
+ * the cause and is therefore dropped rather than substituted.
  *
  * - `instance` is a fresh UUIDv7 minted per error occurrence (`ExceptionResponder`), not anything derived
  *   from the request, so it differs even between two identical calls.

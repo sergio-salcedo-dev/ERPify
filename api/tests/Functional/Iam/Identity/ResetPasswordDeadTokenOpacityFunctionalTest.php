@@ -36,10 +36,11 @@ use Symfony\Component\HttpFoundation\Response;
  * one value instead — narrower than "whole responses", since every other header stays outside the
  * comparison and a path that came to touch the session would add three of them.
  *
- * Two members are set aside, and only two. `instance` is minted per error occurrence, so it MUST differ (that
- * it differs is asserted). The `debug` extension exists to name the cause and is emitted under `dev`/`test`
- * only — `prod` omits it entirely — so comparing it would assert the opposite of its own contract; here it
- * would also be the loudest divergence of all, since the four refusals are raised from four different lines.
+ * Three members are set aside, and only three. `instance` and `correlation-id` are minted per occurrence
+ * and per request, so both MUST differ (that they do is asserted). The `debug` extension exists to name
+ * the cause and is emitted under `dev`/`test` only — `prod` omits it entirely — so comparing it would
+ * assert the opposite of its own contract; here it would also be the loudest divergence of all, since the
+ * four refusals are raised from four different lines.
  *
  * @internal
  *
