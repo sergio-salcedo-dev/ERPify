@@ -51,7 +51,7 @@
     "tailwind-merge": "^3.6.0",
     "uuid": "^14.0.2",
     "vitest": "^4.1.7",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.0",
