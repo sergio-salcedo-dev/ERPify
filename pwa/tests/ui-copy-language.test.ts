@@ -362,8 +362,8 @@ describe("rendered copy speaks the language the document declares", () => {
       "Sin metadata",
       "Ordenar por hora",
       "Recibir y enviar eventos a sistemas externos (webhooks).",
-      // The plural of an audit journey's entry count, green here through a whole review of the
-      // audit surface: one word, no diacritic, and nothing in the lexicon to match.
+      // An entry count's singular and plural, green here through a whole review of the audit
+      // surface: one word, no diacritic, and nothing in the lexicon to match.
       "entrada",
       "entradas",
     ];
