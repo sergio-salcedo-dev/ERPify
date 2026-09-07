@@ -11,9 +11,10 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
 /**
- * Five gates read their subject through this resolver, and every one of them fails when it answers `null`.
- * That makes a wrong marker a way for all five to stop checking at once, loudly in CI and silently nowhere
- * — so what is worth pinning is the marker itself.
+ * Every gate that reads its subject through this resolver fails when it answers `null`. That makes a wrong
+ * marker a way for all of them to stop checking at once, loudly in CI and silently nowhere — so what is
+ * worth pinning is the marker itself. The population is deliberately left unnumbered: a count written here
+ * is one nothing recomputes, so it states the blast radius correctly only until the next gate adopts this.
  *
  * **`.git` is the marker that must never come back.** Measured in this tree: it is a DIRECTORY in the
  * primary checkout and a regular FILE in every linked worktree. CLAUDE.md requires feature work to happen
@@ -38,13 +39,13 @@ final class RepositoryRootTest extends TestCase
 
         $this->assertIsString(
             $root,
-            'No candidate carried a marker, so all five gates reading through this would fail at once. '
+            'No candidate carried a marker, so every gate reading through this would fail at once. '
             . 'Inside the container the root comes from the read-only `./` bind mount at /app/repo.',
         );
         // `compose.dev.yaml` and not `api/composer.json`: measured inside the container, the api tree and
         // `docs/` exist under BOTH candidates, so asserting on either would pass while `path()` answered the
-        // wrong one — the five gates would then fail blaming the bind mount. This is the file that tells the
-        // two apart.
+        // wrong one — every gate reading through this would then fail blaming the bind mount. This is the
+        // file that tells the two apart.
         $this->assertFileExists(
             $root . '/compose.dev.yaml',
             'The resolved directory is not the root of THIS repository. A marker matching some other '

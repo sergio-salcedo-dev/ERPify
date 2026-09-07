@@ -143,8 +143,7 @@ final class EmailAddressRedactionTest extends TestCase
      * The result is asserted as well as the time, and asserting it UNCHANGED is what proves the pattern itself
      * ran: had it failed outright, the fallback would have collapsed this single `@`-bearing token to the
      * sentinel just as quickly and satisfied a bound on its own.
-     */
-    /**
+     *
      * **In its own process, and that attribute is load-bearing.** PCRE bakes the JIT decision into the
      * compiled-pattern cache entry, so `ini_set('pcre.jit', '0')` reaches a pattern this process has not
      * compiled yet and nothing else. Measured on this subject: 4.973 ms when the ini is lowered before the
