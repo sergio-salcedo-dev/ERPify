@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 
@@ -115,17 +115,50 @@ describe("PasswordInput", () => {
     expect(screen.getByTestId("pw")).toHaveAttribute("type", "password");
   });
 
-  it("detaches its listener when it leaves the page", () => {
+  // Symmetry, not just absence of a crash: the handler removed has to be the one added, or the
+  // form keeps a listener belonging to a component that no longer exists.
+  it("removes exactly the listener it added when it unmounts", () => {
+    const addSpy = vi.spyOn(HTMLFormElement.prototype, "addEventListener");
+    const removeSpy = vi.spyOn(HTMLFormElement.prototype, "removeEventListener");
+
     const { unmount } = render(
       <form data-testid="pw-form" onSubmit={(event) => event.preventDefault()}>
         <PasswordInput data-testid="pw" defaultRevealed />
       </form>,
     );
-    const form = screen.getByTestId("pw-form");
+    const added = addSpy.mock.calls.filter(([type]) => type === "submit");
+    expect(added).toHaveLength(1);
 
     unmount();
 
-    expect(() => fireEvent.submit(form)).not.toThrow();
+    const removed = removeSpy.mock.calls.filter(([type]) => type === "submit");
+    expect(removed).toHaveLength(1);
+    expect(removed[0]?.[1]).toBe(added[0]?.[1]);
+
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
+  });
+
+  it("detaches from the old form and attaches to the one it is remounted in", () => {
+    const { unmount } = render(
+      <form data-testid="pw-form-a" onSubmit={(event) => event.preventDefault()}>
+        <PasswordInput data-testid="pw-a" defaultRevealed />
+      </form>,
+    );
+    const formA = screen.getByTestId("pw-form-a");
+    unmount();
+    expect(() => fireEvent.submit(formA)).not.toThrow();
+
+    render(
+      <form data-testid="pw-form-b" onSubmit={(event) => event.preventDefault()}>
+        <PasswordInput data-testid="pw-b" defaultRevealed />
+      </form>,
+    );
+    expect(screen.getByTestId("pw-b")).toHaveAttribute("type", "text");
+
+    fireEvent.submit(screen.getByTestId("pw-form-b"));
+
+    expect(screen.getByTestId("pw-b")).toHaveAttribute("type", "password");
   });
 
   it("stays masked across a submit it was already masked for", () => {

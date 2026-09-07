@@ -40,11 +40,19 @@ import { describe, expect, it } from "vitest";
  * developer who hits one gets a red they cannot act on by fixing their code, and the answer then
  * is to narrow this walk, not to add an exemption.
  *
- * The two invariants are asserted separately, and the universe is measured independently of the
- * positives. A non-empty check derived from the same walk can only notice the universe going
- * *empty*, never it *shrinking to the owner*: measured, pointing `SRC_ROOT` at `src/components`
- * leaves both the count and the ownership assertions green while covering 43 of 496 files and
- * none of the forms this gate exists to police.
+ * The invariants are asserted separately, and the universe is *identified* rather than merely
+ * *counted* — because counting is the classic way a gate like this becomes decorative. Two
+ * different failures need two different instruments:
+ *
+ * - A skip or a filter inside `walk()` hides a subtree while every count stays plausible. That is
+ *   caught by comparing the walked set against a universe the runtime enumerates itself
+ *   (`readdirSync(..., { recursive: true })`), which shares no line of traversal logic with
+ *   `walk()`. The extension set is shared on purpose: it is the definition of the universe, not
+ *   the traversal that failed.
+ * - A moved `SRC_ROOT` narrows *both* sides at once, so the comparison above stays green. That is
+ *   what the file floor and the sentinel are for: measured, pointing `SRC_ROOT` at
+ *   `src/components` leaves the ownership assertions green over 43 of 496 files, and a `walk()`
+ *   that skips `src/app` still clears the floor at 303.
  */
 const PWA_ROOT = path.resolve(__dirname, "..");
 const SRC_ROOT = path.join(PWA_ROOT, "src");
@@ -159,6 +167,16 @@ function parse(code: string, fileName: string): ts.SourceFile {
   return ts.createSourceFile(fileName, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 }
 
+/**
+ * The universe as the runtime enumerates it. Deliberately not built on `walk()`: a `continue`
+ * added there must show up as a difference, and it cannot if both sides share the traversal.
+ */
+function expectedSourceFiles(): string[] {
+  return readdirSync(SRC_ROOT, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name)))
+    .map((entry) => toPosix(path.relative(PWA_ROOT, path.join(entry.parentPath, entry.name))));
+}
+
 function collectFromTree(): { files: string[]; declarations: Declaration[] } {
   const files: string[] = [];
   const declarations: Declaration[] = [];
@@ -176,6 +194,25 @@ const format = ({ file, line }: Declaration): string => `${file}:${line}`;
 
 describe("password input adoption", () => {
   const { files, declarations } = collectFromTree();
+
+  it("walks every source file the runtime can see under src/", () => {
+    const walked = new Set(files);
+    const expected = expectedSourceFiles();
+    const missed = expected.filter((file) => !walked.has(file));
+
+    expect(
+      missed,
+      `The walk skipped ${missed.length} file(s) the runtime finds under src/. A gate that ` +
+        `counts its coverage cannot tell a complete walk from one that quietly drops a subtree; ` +
+        `this comparison is what identifies it. Missed:\n${missed.slice(0, 20).join("\n")}`,
+    ).toEqual([]);
+
+    const expectedSet = new Set(expected);
+    expect(
+      files.filter((file) => !expectedSet.has(file)),
+      `The walk visited files the runtime's own enumeration does not report.`,
+    ).toEqual([]);
+  });
 
   it("walks a universe wide enough to be worth asserting over", () => {
     expect(
