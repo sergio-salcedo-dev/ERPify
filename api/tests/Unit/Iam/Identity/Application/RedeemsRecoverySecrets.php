@@ -157,6 +157,14 @@ trait RedeemsRecoverySecrets
         $this->sessions->save($session);
         $this->currentSession->set($sessionId);
 
+        // The arrange refutes itself: an already-expired seed makes every surviving-set assertion in
+        // this harness vacuous, and it says so here rather than as an empty array further down.
+        $this->assertNotSame(
+            [],
+            $this->sessions->findByUserId($userId),
+            'the seeded session is already expired, so every assertion over this store is vacuous',
+        );
+
         return $sessionId;
     }
 

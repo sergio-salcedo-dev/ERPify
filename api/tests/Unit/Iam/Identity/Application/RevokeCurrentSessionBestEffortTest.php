@@ -44,6 +44,9 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
 
     private const string NOW = '2026-08-28T12:00:00+00:00';
 
+    private const string SEED_EXPIRED
+        = 'the seeded session is already expired, so every assertion over this store is vacuous';
+
     #[Override]
     protected function setUp(): void
     {
@@ -164,6 +167,10 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
         $session->pullDomainEvents();
 
         $sessions->save($session);
+
+        // The arrange refutes itself: a seed that is already expired makes every assertion over this
+        // store vacuous, and it fails here with its own name rather than as an empty array assertions below.
+        $this->assertNotSame([], $sessions->findByUserId(self::USER_ID), self::SEED_EXPIRED);
 
         return $sessionId;
     }

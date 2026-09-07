@@ -27,7 +27,15 @@ import { describe, expect, it } from "vitest";
 const PWA_ROOT = path.resolve(__dirname, "..");
 const SRC_ROOT = path.join(PWA_ROOT, "src");
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
-const STATIC_TESTID_RE = /data-testid\s*=\s*"([^"]+)"/g;
+/**
+ * `toggleTestId` is matched alongside `data-testid` because it is a complete QA address that
+ * reaches the DOM as one (`<PasswordInput>` spells it `data-testid={toggleTestId}`), so a
+ * duplicate lands as exactly the strict-mode failure described above. `testId`/`testIdPrefix`
+ * stay out deliberately: measured over `src/`, they carry SURFACE prefixes that several
+ * components of one surface share on purpose — `banks-list` across its bulk bar, its view
+ * toggle and its page, five such values in all — so uniqueness by value is not their invariant.
+ */
+const STATIC_TESTID_RE = /(?:data-testid|toggleTestId)\s*=\s*"([^"]+)"/g;
 
 function* walk(dir: string): Generator<string> {
   for (const entry of readdirSync(dir)) {
