@@ -10,9 +10,11 @@ use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingLogger;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -41,6 +43,20 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
     private const string ORGANIZATION_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4001';
 
     private const string NOW = '2026-08-28T12:00:00+00:00';
+
+    private const string SEED_EXPIRED
+        = 'the seeded session is already expired, so every assertion over this store is vacuous';
+
+    #[Override]
+    protected function setUp(): void
+    {
+        // The seeded sessions expire at `NOW + 7 days` and the double answers its active-only reads
+        // through the ambient clock, so writer and reader have to agree on "now". Left to the host
+        // clock they drift apart on a fixed calendar date, every surviving set collapses to `[]`, and
+        // the assertions stop being able to fail. Frozen as a class precondition rather than inside
+        // `seed()`: the reader needs the instant as much as the writer does.
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     #[Test]
     public function itRevokesTheSessionTheCorrelationNames(): void
@@ -146,6 +162,10 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
         $session->pullDomainEvents();
 
         $sessions->save($session);
+
+        // The arrange refutes itself: a seed that is already expired makes every assertion over this
+        // store vacuous, and it fails here with its own name rather than as an empty array assertions below.
+        $this->assertNotSame([], $sessions->findByUserId(self::USER_ID), self::SEED_EXPIRED);
 
         return $sessionId;
     }

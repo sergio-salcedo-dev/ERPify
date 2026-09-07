@@ -15,6 +15,7 @@ use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;
@@ -72,6 +73,13 @@ trait RedeemsRecoverySecrets
 
     private function initialiseHarness(): void
     {
+        // Writer and reader must share one instant: the harness mints sessions expiring at
+        // `NOW + 7 days` while the double answers its active-only reads through the ambient clock.
+        // On the host clock the two drift apart on a fixed calendar date and every surviving-set
+        // assertion silently starts asserting over the empty set. `ResetSystemClockExtension`
+        // unfreezes it around each case, so nothing leaks into the next.
+        SystemClock::set(FixedClock::at(self::NOW));
+
         $this->signedIn = [];
         $this->sessions = new InMemorySessionRepository();
         $this->auditLogger = new RecordingAuditLogger();
@@ -139,6 +147,14 @@ trait RedeemsRecoverySecrets
 
         $this->sessions->save($session);
         $this->currentSession->set($sessionId);
+
+        // The arrange refutes itself: an already-expired seed makes every surviving-set assertion in
+        // this harness vacuous, and it says so here rather than as an empty array further down.
+        $this->assertNotSame(
+            [],
+            $this->sessions->findByUserId($userId),
+            'the seeded session is already expired, so every assertion over this store is vacuous',
+        );
 
         return $sessionId;
     }
