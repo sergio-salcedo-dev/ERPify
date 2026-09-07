@@ -12,17 +12,34 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Doctrine\DBAL\Result;
 use Doctrine\ORM\EntityManagerInterface;
+use Erpify\Shared\Http\Infrastructure\CorrelationIdListener;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
+use Erpify\Tests\Behat\State\HttpResponseContainer;
 use Erpify\Tests\Behat\Support\PostProcess\ArrayToolTrait;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * Executes raw SQL queries against the database and asserts on their results for Behat scenarios.
+ *
+ * Query text and expected JSON both go through {@see resolveTokens()}, which substitutes
+ * {@see CORRELATION_TOKEN} with the correlation id of the last HTTP response. That token is how a
+ * scenario isolates the rows its own request wrote: `audit_log` is restored per feature and not per
+ * scenario, so a bare `WHERE action = …` reads every scenario's rows in the file. Reading the id back
+ * off the response is also what makes the assertion mean something — it reconciles the row with the
+ * response the caller holds, where selecting on a value the scenario itself supplied cannot fail on
+ * that axis.
  */
 class SqlQueryContext extends AbstractContext
 {
     use ArrayToolTrait;
 
     private const string NO_SQL_RESULT_MESSAGE = 'No sqlResult available to test';
+
+    /**
+     * Substituted wherever it appears in a query or an expected JSON body. Absent, nothing is read and
+     * no HTTP response is required — a scenario that never made a request is unaffected.
+     */
+    private const string CORRELATION_TOKEN = '<correlationId>';
 
     /** @var array<string, Connection> */
     public array $connections = [];
@@ -33,6 +50,7 @@ class SqlQueryContext extends AbstractContext
 
     public function __construct(
         protected readonly EntityManagerInterface $entityManager,
+        private readonly HttpResponseContainer $httpResponseContainer,
     ) {
     }
 
@@ -81,7 +99,7 @@ class SqlQueryContext extends AbstractContext
             );
         }
 
-        $this->result = $this->connections[$name]->executeQuery($query);
+        $this->result = $this->connections[$name]->executeQuery($this->resolveTokens($query));
         $this->lastSqlError = null;
     }
 
@@ -89,7 +107,7 @@ class SqlQueryContext extends AbstractContext
     public function iWannaExecuteTheSQLQuery(string $query): void
     {
         try {
-            $this->result = $this->entityManager->getConnection()->executeQuery($query);
+            $this->result = $this->entityManager->getConnection()->executeQuery($this->resolveTokens($query));
             $this->lastSqlError = null;
         } catch (Exception $exception) {
             $this->result = null;
@@ -111,7 +129,7 @@ class SqlQueryContext extends AbstractContext
     #[Then('/^the SQL result as JSON should be:$/')]
     public function theSQLResultAsJSONShouldBe(PyStringNode $string): void
     {
-        $expected = \json_decode($string->getRaw(), true);
+        $expected = \json_decode($this->resolveTokens($string->getRaw()), true);
         self::assertNotNull($this->result, self::NO_SQL_RESULT_MESSAGE);
         $this->arrayAreTheSame($expected, $this->result->fetchAllAssociative(), true);
     }
@@ -119,7 +137,7 @@ class SqlQueryContext extends AbstractContext
     #[Then('/^the SQL result as JSON without sorting should be:$/')]
     public function theSQLResultAsJSONWithoutSortingShouldBe(PyStringNode $string): void
     {
-        $expected = \json_decode($string->getRaw(), true);
+        $expected = \json_decode($this->resolveTokens($string->getRaw()), true);
         self::assertNotNull($this->result, self::NO_SQL_RESULT_MESSAGE);
         $this->arrayAreTheSame($expected, $this->result->fetchAllAssociative());
     }
@@ -129,5 +147,37 @@ class SqlQueryContext extends AbstractContext
     {
         self::assertNotNull($this->result, self::NO_SQL_RESULT_MESSAGE);
         self::assertCount($recordCount, $this->result->fetchAllAssociative());
+    }
+
+    /**
+     * Resolves {@see CORRELATION_TOKEN} against the last HTTP response, and fails loudly when it cannot:
+     * an unresolvable token would otherwise reach Postgres as the literal `<correlationId>`, match no row,
+     * and leave the scenario asserting an empty result — green, and measuring nothing. A scenario using
+     * the token without having made a request is a mistake, not a case to degrade for.
+     */
+    private function resolveTokens(string $text): string
+    {
+        if (!\str_contains($text, self::CORRELATION_TOKEN)) {
+            return $text;
+        }
+
+        $lastResult = $this->httpResponseContainer->getResult();
+        self::assertNotNull($lastResult, 'No HTTP call was made, so there is no correlation id to join.');
+
+        $response = $lastResult->getValue();
+        self::assertInstanceOf(
+            SymfonyResponse::class,
+            $response,
+            'The correlation token reads a response header, which needs a Symfony Response.',
+        );
+
+        $correlationId = $response->headers->get(CorrelationIdListener::HEADER_NAME);
+        self::assertNotNull($correlationId, \sprintf(
+            'The last response carries no %s header. Every /api response is meant to; a scenario reaching '
+            . 'a route that does not cannot isolate its rows this way.',
+            CorrelationIdListener::HEADER_NAME,
+        ));
+
+        return \str_replace(self::CORRELATION_TOKEN, $correlationId, $text);
     }
 }
