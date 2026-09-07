@@ -160,7 +160,7 @@ function AuditEntryDrawerBody({
             </span>
           </span>
         </Field>
-        <Field label="Id de entrada">
+        <Field label="Entry id">
           <span className="inline-flex items-center gap-1">
             <code className="font-mono text-xs">{entry.id}</code>
             <CopyButton

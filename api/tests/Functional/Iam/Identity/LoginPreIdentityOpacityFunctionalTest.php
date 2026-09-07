@@ -40,10 +40,11 @@ use Symfony\Component\HttpFoundation\Response;
  * pre-identity oracle this test stays green over. Widening it means naming a free list (`Date`, the
  * profiler headers, the correlation id), which is a decision rather than an omission.
  *
- * Two members are set aside, and only two. `instance` is minted per error occurrence, so it MUST differ (that
- * it differs is asserted). The `debug` extension exists to name the cause and is emitted under `dev`/`test`
- * only — `prod` omits it entirely — so comparing it would assert the opposite of its own contract; every other
- * member, and the order they are spelled in, is compared as a whole.
+ * Three members are set aside, and only three. `instance` and `correlation-id` are minted per occurrence and
+ * per request, so both MUST differ (that they differ is asserted). The `debug` extension exists to name the
+ * cause and is emitted under `dev`/`test` only — `prod` omits it entirely — so comparing it would assert the
+ * opposite of its own contract; every other member, and the order they are spelled in, is compared as a
+ * whole.
  *
  * Three identities' worth of setup against the real graph is inherent to driving the firewall end to end.
  *
@@ -62,13 +63,6 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
     private const string LOGIN_PATH = '/api/v1/backoffice/login';
 
     private const string ORIGIN = 'http://localhost';
-
-    /**
-     * A canonical lowercase UUIDv7, which is the only shape the correlation listener echoes back. Fixing it
-     * pins the body's `correlation-id` across the three requests, so the one member left free to vary is
-     * `instance` — and that one varies by contract rather than by accident.
-     */
-    private const string CORRELATION_ID = '0190a1de-0602-7abc-8def-000000000055';
 
     private const string REGISTERED_PASSWORD = 'the-registered-password';
 
@@ -133,7 +127,7 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
     public function testTheThreePreIdentityFailuresAnswerOneIndistinguishableResponse(): void
     {
         $answers = [];
-        $instances = [];
+        $perOccurrence = [];
 
         foreach ($this->preIdentityFailures() as $case => [$email, $password]) {
             $this->post($email, $password);
@@ -143,8 +137,8 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
 
             $this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode(), $case . ': ' . $raw);
 
-            [$body, $instance] = $this->comparableRefusal($raw, $case);
-            $instances[] = $instance;
+            [$body, $members] = $this->comparableRefusal($raw, $case);
+            $perOccurrence[] = $members;
 
             $answers[$case] = [
                 'content-type' => $response->headers->get('Content-Type'),
@@ -162,7 +156,7 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
 
         $this->assertStringContainsString('application/problem+json', (string) $reference['content-type']);
 
-        $this->assertRefusalsAreIndistinguishable($answers, $instances);
+        $this->assertRefusalsAreIndistinguishable($answers, $perOccurrence);
     }
 
     /**
@@ -185,7 +179,6 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
                 'CONTENT_TYPE' => 'application/json',
                 'HTTP_ACCEPT' => 'application/json',
                 'HTTP_ORIGIN' => self::ORIGIN,
-                'HTTP_X_CORRELATION_ID' => self::CORRELATION_ID,
             ],
             content: (string) \json_encode(['email' => $email, 'password' => $password]),
         );

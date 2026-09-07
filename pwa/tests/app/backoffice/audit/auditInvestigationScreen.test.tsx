@@ -104,8 +104,22 @@ describe("AuditInvestigationScreen", () => {
     render(<AuditInvestigationScreen />);
     // Journey is now reachable (no hint) and the session header summarises the correlation.
     expect(screen.queryByTestId("audit-view-toggle__hint")).toBeNull();
-    expect(screen.getByText(/1 entrada/)).toBeInTheDocument();
+    expect(screen.getByText(/1 entry/)).toBeInTheDocument();
     expect(screen.getByTestId(`audit-timeline__row-${ENTRY.id}`)).toBeInTheDocument();
+  });
+
+  it("counts a multi-row session in the plural", () => {
+    // The session header's count is the one place the grouping's size is stated, and its singular and
+    // its plural are different branches: a fixture of one row exercises only half of it.
+    const sibling: AuditEntry = {
+      ...ENTRY,
+      id: "019f0691-2b5b-731e-9509-000000000002",
+      occurredOn: "2026-06-12T12:00:01.000000+00:00",
+    };
+    searchParamsStr = `actorType=api_key&actorId=${ENTRY.actorId}&view=journey`;
+    timelineState = stateWith({ entries: [ENTRY, sibling] });
+    render(<AuditInvestigationScreen />);
+    expect(screen.getByText(/2 entries/)).toBeInTheDocument();
   });
 
   it("renders an error panel with a retry action", () => {
