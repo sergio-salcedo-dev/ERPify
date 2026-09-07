@@ -13,22 +13,30 @@ use Symfony\Component\Uid\Uuid;
 /**
  * Mints a UUIDv7 `correlation-id` per main request (kernel.request, priority `PRIORITY = 1024`)
  * and writes the same value back as the `X-Correlation-Id` response header on every main
- * response (kernel.response, priority `RESPONSE_PRIORITY = -1024`). The value flows end to end:
- * inbound `X-Correlation-Id` (when canonical lowercase UUIDv7) → `_correlation_id` request
- * attribute → `X-Correlation-Id` response header.
+ * response (kernel.response, priority `RESPONSE_PRIORITY = -1024`). The value flows one way:
+ * minted here → `_correlation_id` request attribute → `X-Correlation-Id` response header.
  *
- * Inbound headers are propagated verbatim only when (a) the header is sent exactly once and
- * (b) the value matches a strict lowercase UUIDv7 pattern (RFC 9562 §6.10). Any other shape —
- * uppercase, wrong version bits, wrong variant bits, extra garbage, embedded CRLF, lone
- * trailing `\n`, leading/trailing whitespace, embedded NUL byte, length mismatch, empty string,
- * or multiple `X-Correlation-Id` headers — is rejected and a fresh UUIDv7 is minted. The
- * pattern uses `\A…\z` anchors (not `^…$`) so PHP's default `$`-before-final-`\n` semantics
- * cannot leak a trailing newline through.
+ * **The server owns this value; an inbound `X-Correlation-Id` is ignored, not validated.** The
+ * id is the column `audit_log` rows are grouped by, so whoever can choose it can choose how the
+ * forensic trail reads: send one value on N unrelated requests and their rows collapse into one
+ * apparent journey; send another actor's value and rows join under an identity that is not
+ * theirs. No check on a single request can separate a reused id from a fresh one — a shape test
+ * proves the value looks like a UUIDv7, never that its bearer minted it — so the only property
+ * that holds is the one taken here: nothing outside the process can name it. The header is
+ * dropped silently rather than logged, because logging it would move the same caller-chosen
+ * string into a sink with no TTL and no erasure owner.
  *
- * On the response side, the request attribute is **re-validated** with the same regex before
- * being written to the header — defense-in-depth against any listener that may have tampered
- * with `_correlation_id` between kernel.request and kernel.response. The header write
- * overwrites any pre-existing value.
+ * What that forecloses is inbound trace propagation: a caller cannot ask for its request to
+ * join an existing correlation. Nothing does — the PWA only reads the value off the response —
+ * and when a second service or a gateway needs distributed tracing, it needs an identifier of
+ * its own rather than authority over this one.
+ *
+ * On the response side, the request attribute is **re-validated** against a strict lowercase
+ * UUIDv7 pattern (RFC 9562 §6.10) before being written to the header — defense-in-depth against
+ * any listener that may have tampered with `_correlation_id` between kernel.request and
+ * kernel.response. The pattern uses `\A…\z` anchors (not `^…$`) so PHP's default
+ * `$`-before-final-`\n` semantics cannot leak a trailing newline through. The header write
+ * overwrites any pre-existing value, so a caller's own header never survives onto the response.
  *
  * Sub-requests (ESI fragments, forwards) are skipped on both events — only the main request
  * mints, only the main response carries the header.
@@ -61,21 +69,13 @@ final readonly class CorrelationIdListener
             return;
         }
 
-        $request = $event->getRequest();
-        $inboundAll = $request->headers->all(self::HEADER_NAME);
-        $inbound = (1 === \count($inboundAll)) ? $inboundAll[0] : null;
-
-        $resolved = (\is_string($inbound) && self::isCanonical($inbound))
-            ? $inbound
-            : Uuid::v7()->toRfc4122();
-
-        $request->attributes->set(self::ATTRIBUTE_KEY, $resolved);
+        $event->getRequest()->attributes->set(self::ATTRIBUTE_KEY, Uuid::v7()->toRfc4122());
     }
 
     /**
      * Whether `$value` is a canonical lowercase UUIDv7 (RFC 9562 §6.10). The single definition of the
      * correlation-id format, so every consumer that must validate it shares this anchor instead of
-     * carrying a second regex that could drift from the one used to mint and propagate the value.
+     * carrying a second regex that could drift from the one used to mint it.
      */
     public static function isCanonical(string $value): bool
     {

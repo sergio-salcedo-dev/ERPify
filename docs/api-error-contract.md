@@ -26,7 +26,7 @@ The wire body is a JSON object owned by [`ProblemDetails`](../api/src/Shared/Err
 | `status`         | yes      | Equals the HTTP status line                                                     |
 | `detail`         | no       | Optional human-readable detail                                                  |
 | `instance`       | yes      | Per-error UUIDv7, minted by `ExceptionResponder`                                |
-| `correlation-id` | yes      | Per-request UUIDv7, minted/propagated by `CorrelationIdListener`                |
+| `correlation-id` | yes      | Per-request UUIDv7, minted by `CorrelationIdListener` (never caller-supplied)   |
 | `<extensions>`   | varies   | Type-specific (e.g. `violations` for `validation-failed`, `debug` outside prod) |
 
 `detail` is the only optional core field — when `null`, it is OMITTED from the wire body (see `ProblemDetails::toArray()`). `extensions` carries per-type members appended after the core fields. Reserved keys (`type, title, status, detail, instance, correlation-id, violations, debug`) are stripped from `DomainException::context()` before serialization so domain code cannot accidentally clobber wire fields.
@@ -35,7 +35,7 @@ The wire body is a JSON object owned by [`ProblemDetails`](../api/src/Shared/Err
 
 - `Content-Type: application/problem+json` (RFC 9457 §3 — no `charset` parameter; the media type mandates UTF-8).
 - `Cache-Control: no-store` (NFR — error responses MUST NOT be cached by proxies / CDNs).
-- `X-Correlation-Id: <uuidv7>` — per-request UUIDv7, mirrors body `correlation-id`. Written on **every** main response (not just errors) by `CorrelationIdListener::onResponse` (`kernel.response`, priority `-1024`).
+- `X-Correlation-Id: <uuidv7>` — per-request UUIDv7, mirrors body `correlation-id`. Written on **every** main response (not just errors) by `CorrelationIdListener::onResponse` (`kernel.response`, priority `-1024`), and it overwrites any pre-existing value, so an inbound header is never reflected back.
 - `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (IETF `draft-ietf-httpapi-ratelimit-headers`) and the legacy de-facto `X-RateLimit-*` aliases — written on **every** main `/api/*` response by `RateLimitListener::onResponse` (`kernel.response`, priority `-128`). `Retry-After` is ALSO written on the rejected (429) path (RFC 9110 §10.2.3). Values are derived from the per-request snapshot stamped on `kernel.request` and use delta-seconds (not epoch).
 
 Encoding: `\json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)`. Symfony `Response` (not `JsonResponse`) is used so `Content-Type` and the encoding pipeline stay under `ProblemDetailsResponder` control.
@@ -379,7 +379,7 @@ The denylist is applied AFTER the reserved-key `unset()` layer and BEFORE the wh
 |--------------------------------|----------------------|------------------------------------------------------------------|
 | `RedactionDenylist::KEYS`      | substring, ci        | secrets — `?token=<id>.<secret>`, Mercure's `?authorization=`     |
 | `actorId`, `resourceId`        | exact, ci            | person ids; the audit screen filters by them                      |
-| `correlationId`                | exact, ci            | not a person id — the trail of one reconstructs a session         |
+| `correlationId`                | exact, ci            | not a person id — one names a single request                      |
 | `filters[N][value]`, `…[value][]` | pattern           | the positional search grammar carries the same ids to the API     |
 
 **Sentinel (`REDACTED`), not strip** — the opposite of the map denylist, deliberately: a URI's diagnostic value is its shape, so `filters[0][field]=actorId` survives while its value does not, and an operator can still tell a filtered request from an unfiltered one. The access log no longer participates in this vocabulary — it keeps no query string at all — so the sentinel's job here is entirely to keep the per-error line readable.
@@ -426,7 +426,7 @@ Anonymous-class FQCNs are sanitised (`\0/path:line$N` suffix stripped) so the em
 Two UUIDv7 identifiers, two different scopes — distinguishing them is the difference between debugging one failure and tracing one request.
 
 - **`instance`** — UUIDv7 minted per **ERROR**. One per failure event. Source: `ExceptionResponder::__invoke` mints it fresh every time it builds a body. Use it to **grep the single log line for that one failure**. End users can cite it from a PWA toast (Journey 3 — Priya's 3am pager) so support can find the exact server-side record.
-- **`correlation-id`** — UUIDv7 minted per **REQUEST**. Source: `CorrelationIdListener::__invoke` (`kernel.request`, priority `1024`). Either propagated from a strict-validated inbound `X-Correlation-Id` header or freshly minted. Mirrored in the body's `correlation-id` field, written to the `X-Correlation-Id` response header, and emitted in every PSR-3 log line for the request's lifetime. Use it to **trace the full request lifecycle across logs / traces / metrics** (ingress → controller → Messenger → DB).
+- **`correlation-id`** — UUIDv7 minted per **REQUEST**. Source: `CorrelationIdListener::__invoke` (`kernel.request`, priority `1024`). **Always minted by the server: an inbound `X-Correlation-Id` is ignored, not validated.** The same value becomes the `correlation_id` column of every `audit_log` row the request writes, and the back office groups the forensic trail by it — so a caller able to choose it could collapse unrelated rows into one apparent journey, and no check applied to a single request can tell a reused id from a fresh one. Mirrored in the body's `correlation-id` field and written to the `X-Correlation-Id` response header. In the logs it reaches only the emitters that put it there — `ExceptionResponder`'s error line and `SearchObservabilityListener`'s `observability` lines — because **no Monolog processor injects it**; the full trail of a request is in `audit_log`, grouped by this same column. A caller needing distributed tracing needs an identifier of its own rather than authority over this one.
 
 Per-error log line context (one PSR-3 write per error, default `app` channel):
 
@@ -579,7 +579,7 @@ The bench is **not** CI-blocking. The contract tests above are CI-blocking (NFR4
 | `ConstraintMessageValueGateTest`                                                                  | no constraint message interpolates the value it rejected |
 | `ExceptionResponderValidationRedactionTest`                                                       | `exception_message` carries no violation value, on either emission path and through the mapping wrapper |
 
-Behat features under `api/features/shared/error_contract/` pin the wire contract end-to-end (correlation-id propagation, instance UUIDv7, violations extension).
+Behat features under `api/features/shared/error_contract/` pin the wire contract end-to-end (correlation-id ownership, instance UUIDv7, violations extension).
 
 ## Review checklist
 

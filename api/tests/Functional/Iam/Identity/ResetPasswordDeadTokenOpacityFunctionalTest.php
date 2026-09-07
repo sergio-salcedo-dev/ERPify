@@ -36,10 +36,11 @@ use Symfony\Component\HttpFoundation\Response;
  * one value instead — narrower than "whole responses", since every other header stays outside the
  * comparison and a path that came to touch the session would add three of them.
  *
- * Two members are set aside, and only two. `instance` is minted per error occurrence, so it MUST differ (that
- * it differs is asserted). The `debug` extension exists to name the cause and is emitted under `dev`/`test`
- * only — `prod` omits it entirely — so comparing it would assert the opposite of its own contract; here it
- * would also be the loudest divergence of all, since the four refusals are raised from four different lines.
+ * Three members are set aside, and only three. `instance` and `correlation-id` are minted per occurrence
+ * and per request, so both MUST differ (that they do is asserted). The `debug` extension exists to name
+ * the cause and is emitted under `dev`/`test` only — `prod` omits it entirely — so comparing it would
+ * assert the opposite of its own contract; here it would also be the loudest divergence of all, since the
+ * four refusals are raised from four different lines.
  *
  * @internal
  *
@@ -57,13 +58,6 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
     private const string ORIGIN = 'http://localhost';
 
     private const string CSRF_TOKEN = 'a-32-char-stateless-csrf-nonce!!';
-
-    /**
-     * A canonical lowercase UUIDv7, which is the only shape the correlation listener echoes back. Fixing it
-     * pins the body's `correlation-id` across the four requests, so the one member left free to vary is
-     * `instance` — and that one varies by contract rather than by accident.
-     */
-    private const string CORRELATION_ID = '0190a1de-0602-7abc-8def-000000000063';
 
     private const string SUBMITTED_PASSWORD = 'a-brand-new-strong-password';
 
@@ -139,7 +133,7 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
     public function testTheFourDeadLinksAnswerOneIndistinguishableResponse(): void
     {
         $answers = [];
-        $instances = [];
+        $perOccurrence = [];
 
         foreach ($this->deadTokens() as $case => $deadToken) {
             $this->post($deadToken);
@@ -149,8 +143,8 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
 
             $this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode(), $case . ': ' . $raw);
 
-            [$body, $instance] = $this->comparableRefusal($raw, $case);
-            $instances[] = $instance;
+            [$body, $members] = $this->comparableRefusal($raw, $case);
+            $perOccurrence[] = $members;
 
             $answers[$case] = [
                 'content-type' => $response->headers->get('Content-Type'),
@@ -171,7 +165,7 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
         $this->assertSame('invalid-token', $reference['body']['type']);
         $this->assertStringContainsString('application/problem+json', (string) $reference['content-type']);
 
-        $this->assertRefusalsAreIndistinguishable($answers, $instances);
+        $this->assertRefusalsAreIndistinguishable($answers, $perOccurrence);
     }
 
     /**
@@ -196,7 +190,6 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
                 'HTTP_ACCEPT' => 'application/json',
                 'HTTP_ORIGIN' => self::ORIGIN,
                 'HTTP_X_CSRF_TOKEN' => self::CSRF_TOKEN,
-                'HTTP_X_CORRELATION_ID' => self::CORRELATION_ID,
             ],
             content: (string) \json_encode([
                 'token' => $token,
