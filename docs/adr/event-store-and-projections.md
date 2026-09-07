@@ -422,6 +422,75 @@ aguas arriba **no** se propaga a un sumidero ya replicado. Nótese que (b) no ex
 sustituto: el eje de `payload` se fuga igual, así que un relay necesita su propio dueño de borrado en ambos
 mundos.
 
+### D13 — La siembra de fixtures escribe el log, y lo hace **appendiendo, nunca publicando**
+
+Las fixtures construyen los agregados por su **factoría de dominio** (`Bank::create(...)`), así que el agregado
+*registra* el mismo `DomainEvent` que registraría uno creado por la aplicación. El loader lo persistía por ORM y
+nadie hacía `pullDomainEvents()`, de modo que el evento se descartaba: 31 filas en `bank` y cero eventos en
+`event_store`, con `bank_count` reportando `0` — correcto respecto al log y falso para quien lo lee. Y no era
+reparable con `event:projection:rebuild`: un rebuild reproduce el log, y el log estaba vacío.
+
+Tres piezas, y ninguna es prescindible:
+
+1. `EventBackbonePurger` (decorador de `PurgerFactoryInterface`) extiende el purgado a `event_store`,
+   `projection_checkpoint`, `handled_domain_event` y `messenger_messages`; los read models **no se enumeran**,
+   se resetean por `Projector::reset()`, de modo que un proyector nuevo queda cubierto por estar registrado.
+   El purgador de Hautelook es el del ORM y sólo trunca tablas de entidad; éstas son DBAL crudo. Sin esto cada
+   recarga miente al alza: `eventId` se genera fresco por construcción, así que el `ON CONFLICT (event_id) DO
+   NOTHING` de `DbalEventStore::append()` no puede absorber una resiembra y dos cargas dejan 62 creaciones
+   sobre 31 filas. `messenger_messages` está por una razón distinta y menos evidente: un evento de banco aún
+   encolado en el momento de la siembra se entrega después, `PersistDomainEventMiddleware` lo vuelve a
+   appendear, y la fila de `event_store` que antes lo absorbía por `ON CONFLICT` acaba de ser truncada — así
+   que inserta una creación fantasma para un banco que el purgado destruyó y el total supera al conteo de
+   filas. `audit_log` queda fuera a propósito: `FixturesContext` lo limpia por sus propias razones y ampliar
+   un purgado de dev al rastro de auditoría es una decisión aparte.
+2. `RecordSeededDomainEventsProcessor` (`ProcessorInterface::postProcess`) appendea al `EventStore` lo que el
+   agregado registró. **Appendea, no publica**, y ésa es la decisión: publicar por el `EventBus` convertiría la
+   carga de fixtures en una operación con efectos — filas de outbox, entregas `async`, difusiones realtime y todo
+   handler en proceso. Además cierra un riesgo en vez de esquivarlo: encolar un evento sobre una persona en un
+   transporte persistente está prohibido aquí (D12, SI-21), y una siembra que publicase empezaría a encolar ids de
+   persona el día que alguien enrutase uno, en silencio. Sin despacho, ninguna decisión de routing la alcanza. El
+   `event_store` sí es terreno admisible para ese dato, porque tiene camino de borrado y las tablas de cola no
+   — con la precisión que los registros ya hacen y que conviene no perder aquí: `DbalEventStoreSubjectAnonymiser`
+   reescribe **identificadores** (por valor, sólo para un sujeto cuya identidad estuvo viva, y sin mitad
+   detectiva detrás), no PII en general. La siembra pasa a escribir identificadores de las personas-fixture en
+   `event_store` donde antes no escribía ninguno; el dato es sintético y sólo dev/test, pero la frase honesta
+   no es «no hay PII nueva».
+3. El replay explícito (`event:projection:rebuild --all` en `make db.load.fixtures`). El catch-up vivo lo dispara
+   la **entrega** de un mensaje (`RunProjectionsOnDomainEvent` es un `#[AsMessageHandler]`), así que sin despacho
+   no hay catch-up: sin esta línea el log queda sembrado y toda proyección conserva su valor previo. Gate:
+   `SeededProjectionRebuildGateTest`, que también exige el orden — replicar antes de cargar reconstruye desde el
+   log de la ejecución ANTERIOR, y el purgado de la carga trunca acto seguido el read model recién reconstruido,
+   así que el total acaba en cero igualmente.
+
+**Alcance: todo agregado, no sólo los proyectados.** Acotarlo a lo que algún proyector consume hoy
+(derivándolo de `subscribedTo()`) reproduciría este mismo defecto para el siguiente proyector escrito, y dejaría
+un log sembrado parcial que nada anuncia.
+
+**Alternativa descartada:** sembrar `bank_count` a `COUNT(*)` tras las fixtures. Es barata y de radio cero, y
+`event:projection:rebuild` —un comando soportado y documentado— la **deshace en silencio** volviendo a cero.
+Una reparación que una operación de recuperación normal destruye legítimamente no es una reparación.
+
+**Lo que esto no toca:** el escenario de selectividad de `count.feature` sigue insertando un banco por SQL crudo
+y afirmando que el total no lo cuenta. Ese contrato es correcto y se conserva: la proyección cuenta eventos, no
+filas. Lo que cambia es que una fixture deje de ser una fila sin historia.
+
+**El sembrado garantiza presencia, no orden.** `occurred_on` se estampa al construir y `sequence` se asigna en
+el orden en que el loader post-procesa los objetos, así que en una base sembrada las dos no son necesariamente
+co-monótonas — en el camino vivo sí lo son, porque el append ocurre en el despacho. Hoy no afecta a nadie
+(`BankCountProjector` es insensible al orden), y ordenar costaría un sort por un consumidor que no existe.
+
+**Trigger de revisita:** (a) el primer proyector cuya corrección dependa del orden entre agregados, o (b) que
+alguna lista de tablas del backbone vuelva a enumerarse a mano en dos sitios — hoy queda una,
+`FixturesContext`, que mantiene su propio truncado post-carga y añade `audit_log`; nada compara las dos, y esa
+divergencia es el mecanismo por el que este defecto regresa.
+
+**Coste declarado:** la lane de aceptación no ejerce esta composición. `FixturesContext` trunca el backbone
+*después* de cargar (por sus propias razones: la copia de respaldo por feature no debe arrastrar eventos entre
+ejecuciones), así que en Behat los eventos sembrados se borran y los escenarios siguen fijando su propia línea
+base. La composición extremo a extremo está **medida** (tres cargas seguidas: 31 filas, 31 eventos, total 31;
+`GET /backoffice/banks/count` → `{"total":31}`), no gateada.
+
 ## Flujo completo
 
 ```
@@ -438,7 +507,7 @@ ENTREGA VIVA (Messenger worker)                 LOG PERMANENTE (event_store, por
   RunProjectionsOnDomainEvent → dispara catchUp   relay futuro → BI / DW / CRM / API pública (por `sequence`)
 ```
 
-## Qué entra en esta PR (todo, sin fases)
+## Alcance de la decisión original (todo, sin fases)
 
 Backbone `Shared/Event/{Domain,Application,Infrastructure}` (contrato `DomainEvent` endurecido + mapper +
 serializer/deserializer + upcaster + `EventStore` raw-DBAL + schema listener) · **historial de migraciones

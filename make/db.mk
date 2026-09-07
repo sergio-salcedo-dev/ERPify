@@ -16,8 +16,15 @@ db.status: ## Migration status
 db.validate: ## Validate ORM mapping against the database
 	@$(SYMFONY) doctrine:schema:validate
 
-db.load.fixtures: ## Load Hautelook Alice fixtures (purge first)
+# The rebuild is not a tidy-up, it is what makes the load complete. Fixtures build aggregates through
+# their domain factories, so each records a domain event; `RecordSeededDomainEventsProcessor` appends
+# those to `event_store` as the rows land. Nothing is dispatched, and projection catch-up is triggered
+# by message DELIVERY (`RunProjectionsOnDomainEvent` is a message handler) — so without this line the
+# log is seeded and every projection still reads its pre-seed value. That is the exact shape of the bug
+# this replaces: a banks list header reading "0 banks total" above 31 seeded rows.
+db.load.fixtures: ## Load Hautelook Alice fixtures (purge first), then replay projections over the seeded event log
 	@$(SYMFONY) hautelook:fixtures:load --no-interaction --purge-with-truncate
+	@$(SYMFONY) event:projection:rebuild --all
 
 db.drop: ## Drop DB (destructive)
 	@$(SYMFONY) doctrine:schema:drop --force --full-database --no-interaction

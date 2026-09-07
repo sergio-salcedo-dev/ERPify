@@ -15,8 +15,12 @@ use LogicException;
  * Alice fixture factory for a SENT {@see Invitation} with a KNOWN token digest, so a feature can present a
  * matching `<invitationId>.<secret>` and drive the accept flow deterministically. The digest is a precomputed
  * `sha256(secret)` (the aggregate rehydrates it via {@see SingleUseToken::fromHash()}); the raw secret lives
- * only in the feature file, never here. The setup events are discarded — the invitation arrives as if minted in
- * an earlier transaction.
+ * only in the feature file, never here.
+ *
+ * The setup events stay on the aggregate for {@see Processor\RecordSeededDomainEventsProcessor}
+ * to append: the invitation arrives as if minted in an earlier transaction, and an earlier transaction would
+ * have left its events in the log. Draining them here instead is what silently exempted this aggregate from
+ * the seeded history — a partial log nothing announces, which is the failure the seed exists to prevent.
  */
 final class InvitationFixtureFactory
 {
@@ -33,7 +37,6 @@ final class InvitationFixtureFactory
         $token = SingleUseToken::fromHash($tokenHash, new DateTimeImmutable($expiresAt));
         $invitation = Invitation::create($id, $organizationId, $invitedUserId, $token);
         $invitation->markSent();
-        $invitation->pullDomainEvents();
 
         return $invitation;
     }
