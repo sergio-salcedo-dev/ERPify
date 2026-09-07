@@ -154,7 +154,7 @@ make composer.check.all               # composer-unused + composer-require-check
 | Generate diff migration      | `make db.diff`          | From Doctrine schema changes            |
 | Migration status             | `make db.status`        |                                         |
 | Validate schema              | `make db.validate`      |                                         |
-| Load fixtures                | `make db.load.fixtures` | Hautelook Alice                         |
+| Load fixtures                | `make db.load.fixtures` | Hautelook Alice + projection replay     |
 | **Destructive** — full reset | `make db.reset`         | Drop → migrate → fixtures. Dev/CI only. |
 | psql shell                   | `make db.shell`         |                                         |
 

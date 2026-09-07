@@ -95,7 +95,8 @@ Golden rule: *contexts reference each other's identities and react to each other
 - **Fixtures**: Hautelook Alice — `make db.load.fixtures`; destructive reset via `make db.reset` (drop → migrate → fixtures).
   Seeding is three pieces, because a fixture aggregate is built through its domain factory and therefore *records*
   the same domain events an application-created one does. `EventBackbonePurger` resets the raw-DBAL tables the ORM
-  purge cannot see (`event_store`, `projection_checkpoint`, the read models); `RecordSeededDomainEventsProcessor`
+  purge cannot see (`event_store`, `projection_checkpoint`, `handled_domain_event` and `messenger_messages`) and
+  clears read models through `Projector::reset()` rather than naming them; `RecordSeededDomainEventsProcessor`
   appends those recorded events — **appending only, never publishing**, so the seed stays free of outbox rows,
   `async` deliveries and in-process handlers; and the target then replays (`event:projection:rebuild --all`),
   because catch-up is triggered by message *delivery* and nothing was dispatched. Drop any one of the three and a

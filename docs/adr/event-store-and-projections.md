@@ -433,23 +433,35 @@ reparable con `event:projection:rebuild`: un rebuild reproduce el log, y el log 
 Tres piezas, y ninguna es prescindible:
 
 1. `EventBackbonePurger` (decorador de `PurgerFactoryInterface`) extiende el purgado a `event_store`,
-   `projection_checkpoint` y los read models. El purgador de Hautelook es el del ORM y sólo trunca tablas de
-   entidad; estas son DBAL crudo. Sin esto cada recarga mintiendo al alza: `eventId` se genera fresco por
-   construcción, así que el `ON CONFLICT (event_id) DO NOTHING` de `DbalEventStore::append()` no puede absorber
-   una resiembra y dos cargas dejan 62 creaciones sobre 31 filas.
+   `projection_checkpoint`, `handled_domain_event` y `messenger_messages`; los read models **no se enumeran**,
+   se resetean por `Projector::reset()`, de modo que un proyector nuevo queda cubierto por estar registrado.
+   El purgador de Hautelook es el del ORM y sólo trunca tablas de entidad; éstas son DBAL crudo. Sin esto cada
+   recarga miente al alza: `eventId` se genera fresco por construcción, así que el `ON CONFLICT (event_id) DO
+   NOTHING` de `DbalEventStore::append()` no puede absorber una resiembra y dos cargas dejan 62 creaciones
+   sobre 31 filas. `messenger_messages` está por una razón distinta y menos evidente: un evento de banco aún
+   encolado en el momento de la siembra se entrega después, `PersistDomainEventMiddleware` lo vuelve a
+   appendear, y la fila de `event_store` que antes lo absorbía por `ON CONFLICT` acaba de ser truncada — así
+   que inserta una creación fantasma para un banco que el purgado destruyó y el total supera al conteo de
+   filas. `audit_log` queda fuera a propósito: `FixturesContext` lo limpia por sus propias razones y ampliar
+   un purgado de dev al rastro de auditoría es una decisión aparte.
 2. `RecordSeededDomainEventsProcessor` (`ProcessorInterface::postProcess`) appendea al `EventStore` lo que el
    agregado registró. **Appendea, no publica**, y ésa es la decisión: publicar por el `EventBus` convertiría la
    carga de fixtures en una operación con efectos — filas de outbox, entregas `async`, difusiones realtime y todo
    handler en proceso. Además cierra un riesgo en vez de esquivarlo: encolar un evento sobre una persona en un
    transporte persistente está prohibido aquí (D12, SI-21), y una siembra que publicase empezaría a encolar ids de
    persona el día que alguien enrutase uno, en silencio. Sin despacho, ninguna decisión de routing la alcanza. El
-   `event_store` sí es terreno admisible para ese dato, porque tiene camino de borrado
-   (`DbalEventStoreSubjectAnonymiser`) y las tablas de cola no.
+   `event_store` sí es terreno admisible para ese dato, porque tiene camino de borrado y las tablas de cola no
+   — con la precisión que los registros ya hacen y que conviene no perder aquí: `DbalEventStoreSubjectAnonymiser`
+   reescribe **identificadores** (por valor, sólo para un sujeto cuya identidad estuvo viva, y sin mitad
+   detectiva detrás), no PII en general. La siembra pasa a escribir identificadores de las personas-fixture en
+   `event_store` donde antes no escribía ninguno; el dato es sintético y sólo dev/test, pero la frase honesta
+   no es «no hay PII nueva».
 3. El replay explícito (`event:projection:rebuild --all` en `make db.load.fixtures`). El catch-up vivo lo dispara
    la **entrega** de un mensaje (`RunProjectionsOnDomainEvent` es un `#[AsMessageHandler]`), así que sin despacho
    no hay catch-up: sin esta línea el log queda sembrado y toda proyección conserva su valor previo. Gate:
-   `SeededProjectionRebuildGateTest`, que también exige el orden — replicar antes de cargar reproduce el log que
-   el purgado acaba de vaciar y aterriza en cero.
+   `SeededProjectionRebuildGateTest`, que también exige el orden — replicar antes de cargar reconstruye desde el
+   log de la ejecución ANTERIOR, y el purgado de la carga trunca acto seguido el read model recién reconstruido,
+   así que el total acaba en cero igualmente.
 
 **Alcance: todo agregado, no sólo los proyectados.** Acotarlo a lo que algún proyector consume hoy
 (derivándolo de `subscribedTo()`) reproduciría este mismo defecto para el siguiente proyector escrito, y dejaría
@@ -462,6 +474,16 @@ Una reparación que una operación de recuperación normal destruye legítimamen
 **Lo que esto no toca:** el escenario de selectividad de `count.feature` sigue insertando un banco por SQL crudo
 y afirmando que el total no lo cuenta. Ese contrato es correcto y se conserva: la proyección cuenta eventos, no
 filas. Lo que cambia es que una fixture deje de ser una fila sin historia.
+
+**El sembrado garantiza presencia, no orden.** `occurred_on` se estampa al construir y `sequence` se asigna en
+el orden en que el loader post-procesa los objetos, así que en una base sembrada las dos no son necesariamente
+co-monótonas — en el camino vivo sí lo son, porque el append ocurre en el despacho. Hoy no afecta a nadie
+(`BankCountProjector` es insensible al orden), y ordenar costaría un sort por un consumidor que no existe.
+
+**Trigger de revisita:** (a) el primer proyector cuya corrección dependa del orden entre agregados, o (b) que
+alguna lista de tablas del backbone vuelva a enumerarse a mano en dos sitios — hoy queda una,
+`FixturesContext`, que mantiene su propio truncado post-carga y añade `audit_log`; nada compara las dos, y esa
+divergencia es el mecanismo por el que este defecto regresa.
 
 **Coste declarado:** la lane de aceptación no ejerce esta composición. `FixturesContext` trunca el backbone
 *después* de cargar (por sus propias razones: la copia de respaldo por feature no debe arrastrar eventos entre
@@ -485,7 +507,7 @@ ENTREGA VIVA (Messenger worker)                 LOG PERMANENTE (event_store, por
   RunProjectionsOnDomainEvent → dispara catchUp   relay futuro → BI / DW / CRM / API pública (por `sequence`)
 ```
 
-## Qué entra en esta PR (todo, sin fases)
+## Alcance de la decisión original (todo, sin fases)
 
 Backbone `Shared/Event/{Domain,Application,Infrastructure}` (contrato `DomainEvent` endurecido + mapper +
 serializer/deserializer + upcaster + `EventStore` raw-DBAL + schema listener) · **historial de migraciones

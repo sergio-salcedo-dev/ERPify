@@ -7,7 +7,7 @@ services:
         resource: '../tests/DataFixtures/*'
         # EventBackbonePurger is constructed by its factory, never resolved from the container: its
         # `$inner` is the purger the bundle just created for a given purge mode, so autowiring it as a
-        # service asks for a PurgerInterface no service provides. Left in, `lint:container` fails —
-        # while a plain fixture load passes, because an unused private service is removed before the
-        # check that would have complained.
+        # service asks for a PurgerInterface no service provides. Left in, any command that boots the
+        # dev kernel dies in `DefinitionErrorExceptionPass` — `make php.lint.yaml` is where it surfaces,
+        # since that target runs `bin/console lint:yaml` and compiling the container precedes it.
         exclude: '../tests/DataFixtures/Purger/EventBackbonePurger.php'

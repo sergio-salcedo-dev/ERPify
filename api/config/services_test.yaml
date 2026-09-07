@@ -7,7 +7,9 @@ services:
     Erpify\Tests\DataFixtures\:
         resource: '../tests/DataFixtures/*'
         # See the identical exclusion in services_dev.yaml: the purger is the factory's product, not a
-        # service, and `public: true` here would keep it from being removed as unused.
+        # service. `public: true` in this file makes the exclusion load-bearing rather than defensive —
+        # a public definition survives RemoveUnusedDefinitionsPass, so every kernel-booting test would
+        # die compiling the container.
         exclude: '../tests/DataFixtures/Purger/EventBackbonePurger.php'
 
     Erpify\Tests\Doctrine\TestDebugDataHolder: ~

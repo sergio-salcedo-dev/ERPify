@@ -48,21 +48,18 @@ describe("BanksListPage — header total", () => {
     searchRun.mockResolvedValue(searchPage([ACME]));
   });
 
-  it("renders the total from the count projection", async () => {
-    countRun.mockResolvedValue(12);
+  // Zero is in the table on purpose: it is the value the header must keep STATING, so that omitting
+  // the total on an unavailable read (below) cannot be satisfied by omitting it on a real zero too.
+  it.each([
+    { total: 12, expected: "12 banks total", shape: "plural" },
+    { total: 1, expected: "1 bank total", shape: "singular for exactly one" },
+    { total: 0, expected: "0 banks total", shape: "a genuine zero, which is not unknown" },
+  ])("states $expected — $shape", async ({ total, expected }) => {
+    countRun.mockResolvedValue(total);
     render(<BanksListPage />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("banks-list__count")).toHaveTextContent("12 banks total");
-    });
-  });
-
-  it("uses the singular noun for exactly one bank", async () => {
-    countRun.mockResolvedValue(1);
-    render(<BanksListPage />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("banks-list__count")).toHaveTextContent("1 bank total");
+      expect(screen.getByTestId("banks-list__count")).toHaveTextContent(expected);
     });
   });
 
@@ -77,15 +74,6 @@ describe("BanksListPage — header total", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("banks-list__count")).toHaveTextContent("4 banks total");
-    });
-  });
-
-  it("states a genuine zero", async () => {
-    countRun.mockResolvedValue(0);
-    render(<BanksListPage />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("banks-list__count")).toHaveTextContent("0 banks total");
     });
   });
 
