@@ -15,11 +15,13 @@ use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingLogger;
+use Override;
 
 /**
  * The arrange every redemption case needs, shared by the two classes that make claims about this use case:
@@ -72,11 +74,26 @@ trait RedeemsRecoverySecrets
 
     private function initialiseHarness(): void
     {
+        // The seeded sessions carry an absolute expiry derived from `NOW`, and the survival assertions read
+        // admissibility back through `InMemorySessionRepository::findByUserId`, which asks the ambient clock.
+        // Left on the host clock the two drift apart: once wall time passes `NOW` the fixture is expired, every
+        // "this session survived" assertion reads an empty set, and the cases asserting an EMPTY set go on
+        // passing for the wrong reason. Freezing both ends on the same instant is what keeps them comparable.
+        SystemClock::set(FixedClock::at(self::NOW));
+
         $this->signedIn = [];
         $this->sessions = new InMemorySessionRepository();
         $this->auditLogger = new RecordingAuditLogger();
         $this->logger = new RecordingLogger();
         $this->currentSession = new RecordingCurrentSessionReference();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        SystemClock::reset();
+
+        parent::tearDown();
     }
 
     /**

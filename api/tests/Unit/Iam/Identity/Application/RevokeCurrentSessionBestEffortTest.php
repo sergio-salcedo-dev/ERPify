@@ -10,9 +10,11 @@ use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingLogger;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -41,6 +43,22 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
     private const string ORGANIZATION_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4001';
 
     private const string NOW = '2026-08-28T12:00:00+00:00';
+
+    #[Override]
+    protected function setUp(): void
+    {
+        // `seed()` gives each session an absolute expiry relative to `NOW`, while `activeIds()` reads
+        // admissibility back through a repository double that asks the ambient clock. Unfrozen, the two ends
+        // drift: past `NOW` the fixture is expired, the surviving-session assertions read an empty set, and
+        // the case that expects an EMPTY set keeps passing for the wrong reason.
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
+
+    protected function tearDown(): void
+    {
+        SystemClock::reset();
+        parent::tearDown();
+    }
 
     #[Test]
     public function itRevokesTheSessionTheCorrelationNames(): void
