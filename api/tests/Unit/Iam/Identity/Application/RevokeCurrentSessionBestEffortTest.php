@@ -50,12 +50,17 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
     #[Override]
     protected function setUp(): void
     {
-        // The seeded sessions expire at `NOW + 7 days` and the double answers its active-only reads
-        // through the ambient clock, so writer and reader have to agree on "now". Left to the host
-        // clock they drift apart on a fixed calendar date, every surviving set collapses to `[]`, and
-        // the assertions stop being able to fail. Frozen as a class precondition rather than inside
-        // `seed()`: the reader needs the instant as much as the writer does.
+        // `seed()` gives each session an absolute expiry relative to `NOW`, while `activeIds()` reads
+        // admissibility back through a repository double that asks the ambient clock. Unfrozen, the two ends
+        // drift: past `NOW` the fixture is expired, the surviving-session assertions read an empty set, and
+        // the case that expects an EMPTY set keeps passing for the wrong reason.
         SystemClock::set(FixedClock::at(self::NOW));
+    }
+
+    protected function tearDown(): void
+    {
+        SystemClock::reset();
+        parent::tearDown();
     }
 
     #[Test]

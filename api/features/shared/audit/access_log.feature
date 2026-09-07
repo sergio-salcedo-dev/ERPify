@@ -6,11 +6,10 @@ Feature: Audit generic backoffice navigation via the kernel.terminate access-log
   # The access-log hook runs on kernel.terminate (after the response is sent), classifies the
   # interaction through AuditPolicy and writes a route-derived `activity` action via the AuditLogger
   # seam. terminate runs after the request leaves the RequestStack, so the row only proves the hook
-  # re-established the request context if its correlation_id matches the request header and its actor
+  # re-established the request context if its correlation_id matches the correlation id the server returned on the response and its actor
   # is the authenticated user (a real request) rather than `system` (off-request). The bank list has no
   # explicit instrumentation, so the generic ROUTE_* action is the only row it produces.
   Scenario: Listing banks records one generic activity audit row sealed with the request context
-    Given I add "X-Correlation-Id" header equal to "0190abcd-1234-7abc-8def-001122334455"
     When I send a "GET" request to "/backoffice/banks?limit=10"
     And I execute the SQL query "SELECT action, level, actor_type, actor_id, correlation_id FROM audit_log WHERE action = 'ROUTE_BACKOFFICE_BANK_SEARCH'"
     Then the response status code should be 200
@@ -22,7 +21,7 @@ Feature: Audit generic backoffice navigation via the kernel.terminate access-log
         "level": "activity",
         "actor_type": "user",
         "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
-        "correlation_id": "0190abcd-1234-7abc-8def-001122334455"
+        "correlation_id": "<correlationId>"
       }
     ]
     """
@@ -43,9 +42,8 @@ Feature: Audit generic backoffice navigation via the kernel.terminate access-log
   # generic activity row that otherwise stored resource_type/resource_id as null. The row is written
   # synchronously on terminate, like every generic activity capture.
   Scenario: Viewing a specific bank records which bank was accessed
-    Given I add "X-Correlation-Id" header equal to "0190dcba-4321-7abc-8def-554433221100"
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000001"
-    And I execute the SQL query "SELECT action, level, resource_type, resource_id, correlation_id FROM audit_log WHERE action = 'ROUTE_BACKOFFICE_BANK_GET' AND correlation_id = '0190dcba-4321-7abc-8def-554433221100'"
+    And I execute the SQL query "SELECT action, level, resource_type, resource_id, correlation_id FROM audit_log WHERE action = 'ROUTE_BACKOFFICE_BANK_GET' AND correlation_id = '<correlationId>'"
     Then the response status code should be 200
     And the SQL result as JSON should be:
     """
@@ -55,7 +53,7 @@ Feature: Audit generic backoffice navigation via the kernel.terminate access-log
         "level": "activity",
         "resource_type": "Bank",
         "resource_id": "11111111-1111-7000-8000-000000000001",
-        "correlation_id": "0190dcba-4321-7abc-8def-554433221100"
+        "correlation_id": "<correlationId>"
       }
     ]
     """

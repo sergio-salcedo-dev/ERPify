@@ -136,6 +136,7 @@ tests/Unit/Gate/ConfirmationGuardAdjacencyGateTest.php :: home
 tests/Unit/Gate/ConsoleCommandCarrierGateTest.php :: home
 tests/Unit/Gate/ConstraintMessageValueGateTest.php :: home
 tests/Unit/Gate/ConstraintValidatorResolutionGateTest.php :: home
+tests/Unit/Gate/CorrelationIdOwnershipGateTest.php :: home
 tests/Unit/Gate/DeptracSeamSyncGateTest.php :: home
 tests/Unit/Gate/DomainPresentationSeparationGateTest.php :: home
 tests/Unit/Gate/EnumWireContractGateTest.php :: home

@@ -202,10 +202,10 @@ Feature: Log in through the session firewall
     And there should be 1 event stored named "erpify.iam.identity.locked"
     And there should be 1 event stored for aggregate "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a63" named "erpify.iam.identity.locked"
 
-  # Isolated by a fixed X-Correlation-Id rather than by truncating audit_log: the table is emptied once per
-  # suite, and the request that trips this lock writes its own access-log row through the same table.
+  # Isolated by the correlation id the server minted for this request and returned on the response, rather
+  # than by truncating audit_log: the table is emptied once per suite, and the request that trips this lock
+  # writes its own access-log row through the same table.
   Scenario: The tripped lockout is projected as one security audit row naming the subject and no actor
-    Given I add "X-Correlation-Id" header equal to "0190a1de-0602-7abc-8def-000000000001"
     When I execute the SQL query "UPDATE identity_user SET failed_attempts = 9, locked_until = NULL WHERE email = 'nora@erpify.test'"
     And I send a POST request to "/backoffice/login" with body:
     """
@@ -215,7 +215,7 @@ Feature: Log in through the session firewall
     }
     """
     Then the response status code should be 401
-    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id FROM audit_log WHERE correlation_id = '0190a1de-0602-7abc-8def-000000000001' AND action = 'USER_LOCKED'"
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'USER_LOCKED'"
     And the SQL result as JSON should be:
     """
     [
@@ -241,7 +241,6 @@ Feature: Log in through the session firewall
   Scenario: The lockout survives its own audit projection failing
     Given the stored events are cleared
     And I execute the SQL query "UPDATE identity_user SET failed_attempts = 9, locked_until = NULL WHERE email = 'nora@erpify.test'" on connection "seed"
-    And I add "X-Correlation-Id" header equal to "0190a1de-0602-7abc-8def-000000000002"
     And I execute the SQL query "ALTER TABLE audit_log RENAME TO audit_log_unavailable" on connection "seed"
     When I send a POST request to "/backoffice/login" with body:
     """
@@ -262,7 +261,7 @@ Feature: Log in through the session firewall
       }
     ]
     """
-    And I execute the SQL query "SELECT action FROM audit_log WHERE correlation_id = '0190a1de-0602-7abc-8def-000000000002' AND action = 'USER_LOCKED'" on connection "seed"
+    And I execute the SQL query "SELECT action FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'USER_LOCKED'" on connection "seed"
     And the SQL result as JSON should be:
     """
     []

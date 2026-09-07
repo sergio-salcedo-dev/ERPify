@@ -59,13 +59,6 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
 
     private const string CSRF_TOKEN = 'a-32-char-stateless-csrf-nonce!!';
 
-    /**
-     * A canonical lowercase UUIDv7, the only shape the correlation listener echoes back. Without it the
-     * listener mints one per request, so the six refusals would carry six different `correlation-id` values
-     * and the whole-body comparison below would fail on a member that says nothing about the cause.
-     */
-    private const string CORRELATION_ID = '0190a1de-0602-7abc-8def-000000000071';
-
     private const string TRUNCATE_SQL
         = 'TRUNCATE iam_invitation, iam_session, membership, organization, identity_user, event_store CASCADE';
 
@@ -121,13 +114,13 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
     public function testAllSixDeadTokenCasesReturnOneUniformInvalidToken(): void
     {
         $answers = [];
-        $instances = [];
+        $perOccurrence = [];
 
         $deadTokens = $this->deadTokens();
 
         // Distinct tokens, asserted rather than counted: two cases collapsing onto the same token would leave
         // six answers agreeing trivially while five causes are exercised, and nothing would go red — neither
-        // the count nor the instances, which are minted per occurrence rather than per cause.
+        // the count nor the per-occurrence members, which vary per occurrence rather than per cause.
         $this->assertCount(6, $deadTokens);
         $this->assertCount(6, \array_unique($deadTokens));
 
@@ -139,8 +132,8 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
 
             $this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode(), $case . ': ' . $raw);
 
-            [$body, $instance] = $this->comparableRefusal($raw, $case);
-            $instances[] = $instance;
+            [$body, $members] = $this->comparableRefusal($raw, $case);
+            $perOccurrence[] = $members;
 
             // The six are raised from four different lines of the use case, so anything that carried that
             // provenance onto the wire — an extension, a differing `detail`, a reordered payload — diverges.
@@ -162,7 +155,7 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
         $this->assertSame('invalid-token', $reference['body']['type']);
         $this->assertStringContainsString('application/problem+json', (string) $reference['content-type']);
 
-        $this->assertRefusalsAreIndistinguishable($answers, $instances);
+        $this->assertRefusalsAreIndistinguishable($answers, $perOccurrence);
     }
 
     public function testACrossSitePostIsRejectedWithoutMutating(): void
@@ -190,7 +183,6 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
                 'CONTENT_TYPE' => 'application/json',
                 'HTTP_ORIGIN' => $origin,
                 'HTTP_X_CSRF_TOKEN' => self::CSRF_TOKEN,
-                'HTTP_X_CORRELATION_ID' => self::CORRELATION_ID,
             ],
             content: (string) \json_encode([
                 'token' => $token,
