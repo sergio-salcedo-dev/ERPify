@@ -16,7 +16,7 @@ See [`README.md`](../README.md) and [`docs/deployment-guide.md`](./deployment-gu
 cp api/.env.example api/.env         # edit as needed
 make docker.up                        # full stack (api + pwa + postgres + mercure)
 make db.migrate                       # apply Doctrine migrations
-make db.load.fixtures                 # Hautelook Alice fixtures (dev only)
+make db.load.fixtures                 # Hautelook Alice fixtures + projection replay (dev only)
 ```
 
 ### Logging in (dev)

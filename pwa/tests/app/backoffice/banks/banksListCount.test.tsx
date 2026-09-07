@@ -80,12 +80,23 @@ describe("BanksListPage — header total", () => {
     });
   });
 
-  it("keeps the default total when the count fetch fails (auxiliary read)", async () => {
+  it("states a genuine zero", async () => {
+    countRun.mockResolvedValue(0);
+    render(<BanksListPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("banks-list__count")).toHaveTextContent("0 banks total");
+    });
+  });
+
+  it("makes no claim about the total when the count read fails (auxiliary read)", async () => {
     countRun.mockRejectedValue(new Error("network"));
     render(<BanksListPage />);
 
-    // The list still renders; the header falls back to 0 rather than crashing.
+    // The list still renders — the count is auxiliary and must never block it. What it must not do
+    // is fall back to a number: "0 banks total" above a populated table is a falsehood stated with
+    // the same confidence as a true total, and an unavailable count is not a count of zero.
     await screen.findByTestId(`banks-table__row-${ACME.id}`);
-    expect(screen.getByTestId("banks-list__count")).toHaveTextContent("0 banks total");
+    expect(screen.queryByTestId("banks-list__count")).toBeNull();
   });
 });

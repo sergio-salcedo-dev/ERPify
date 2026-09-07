@@ -5,3 +5,9 @@ services:
 
     Erpify\Tests\DataFixtures\:
         resource: '../tests/DataFixtures/*'
+        # EventBackbonePurger is constructed by its factory, never resolved from the container: its
+        # `$inner` is the purger the bundle just created for a given purge mode, so autowiring it as a
+        # service asks for a PurgerInterface no service provides. Left in, `lint:container` fails —
+        # while a plain fixture load passes, because an unused private service is removed before the
+        # check that would have complained.
+        exclude: '../tests/DataFixtures/Purger/EventBackbonePurger.php'

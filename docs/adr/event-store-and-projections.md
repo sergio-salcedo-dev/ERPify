@@ -422,6 +422,53 @@ aguas arriba **no** se propaga a un sumidero ya replicado. Nótese que (b) no ex
 sustituto: el eje de `payload` se fuga igual, así que un relay necesita su propio dueño de borrado en ambos
 mundos.
 
+### D13 — La siembra de fixtures escribe el log, y lo hace **appendiendo, nunca publicando**
+
+Las fixtures construyen los agregados por su **factoría de dominio** (`Bank::create(...)`), así que el agregado
+*registra* el mismo `DomainEvent` que registraría uno creado por la aplicación. El loader lo persistía por ORM y
+nadie hacía `pullDomainEvents()`, de modo que el evento se descartaba: 31 filas en `bank` y cero eventos en
+`event_store`, con `bank_count` reportando `0` — correcto respecto al log y falso para quien lo lee. Y no era
+reparable con `event:projection:rebuild`: un rebuild reproduce el log, y el log estaba vacío.
+
+Tres piezas, y ninguna es prescindible:
+
+1. `EventBackbonePurger` (decorador de `PurgerFactoryInterface`) extiende el purgado a `event_store`,
+   `projection_checkpoint` y los read models. El purgador de Hautelook es el del ORM y sólo trunca tablas de
+   entidad; estas son DBAL crudo. Sin esto cada recarga mintiendo al alza: `eventId` se genera fresco por
+   construcción, así que el `ON CONFLICT (event_id) DO NOTHING` de `DbalEventStore::append()` no puede absorber
+   una resiembra y dos cargas dejan 62 creaciones sobre 31 filas.
+2. `RecordSeededDomainEventsProcessor` (`ProcessorInterface::postProcess`) appendea al `EventStore` lo que el
+   agregado registró. **Appendea, no publica**, y ésa es la decisión: publicar por el `EventBus` convertiría la
+   carga de fixtures en una operación con efectos — filas de outbox, entregas `async`, difusiones realtime y todo
+   handler en proceso. Además cierra un riesgo en vez de esquivarlo: encolar un evento sobre una persona en un
+   transporte persistente está prohibido aquí (D12, SI-21), y una siembra que publicase empezaría a encolar ids de
+   persona el día que alguien enrutase uno, en silencio. Sin despacho, ninguna decisión de routing la alcanza. El
+   `event_store` sí es terreno admisible para ese dato, porque tiene camino de borrado
+   (`DbalEventStoreSubjectAnonymiser`) y las tablas de cola no.
+3. El replay explícito (`event:projection:rebuild --all` en `make db.load.fixtures`). El catch-up vivo lo dispara
+   la **entrega** de un mensaje (`RunProjectionsOnDomainEvent` es un `#[AsMessageHandler]`), así que sin despacho
+   no hay catch-up: sin esta línea el log queda sembrado y toda proyección conserva su valor previo. Gate:
+   `SeededProjectionRebuildGateTest`, que también exige el orden — replicar antes de cargar reproduce el log que
+   el purgado acaba de vaciar y aterriza en cero.
+
+**Alcance: todo agregado, no sólo los proyectados.** Acotarlo a lo que algún proyector consume hoy
+(derivándolo de `subscribedTo()`) reproduciría este mismo defecto para el siguiente proyector escrito, y dejaría
+un log sembrado parcial que nada anuncia.
+
+**Alternativa descartada:** sembrar `bank_count` a `COUNT(*)` tras las fixtures. Es barata y de radio cero, y
+`event:projection:rebuild` —un comando soportado y documentado— la **deshace en silencio** volviendo a cero.
+Una reparación que una operación de recuperación normal destruye legítimamente no es una reparación.
+
+**Lo que esto no toca:** el escenario de selectividad de `count.feature` sigue insertando un banco por SQL crudo
+y afirmando que el total no lo cuenta. Ese contrato es correcto y se conserva: la proyección cuenta eventos, no
+filas. Lo que cambia es que una fixture deje de ser una fila sin historia.
+
+**Coste declarado:** la lane de aceptación no ejerce esta composición. `FixturesContext` trunca el backbone
+*después* de cargar (por sus propias razones: la copia de respaldo por feature no debe arrastrar eventos entre
+ejecuciones), así que en Behat los eventos sembrados se borran y los escenarios siguen fijando su propia línea
+base. La composición extremo a extremo está **medida** (tres cargas seguidas: 31 filas, 31 eventos, total 31;
+`GET /backoffice/banks/count` → `{"total":31}`), no gateada.
+
 ## Flujo completo
 
 ```
