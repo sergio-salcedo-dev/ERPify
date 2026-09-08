@@ -17,6 +17,17 @@ import {
 
 const FILTER_DEBOUNCE_MS = 250;
 
+/**
+ * The toggle's accessible name. The badge beside it counts only what the collapsed panel hides — its
+ * documented contract — but whether ANYTHING is filtering is a different question, and this is what
+ * answers it: the correlation axis has no panel control (the row pivot is its only entry point), so a
+ * name derived from the panel count alone announces a filtered list as a plain "Filters".
+ */
+function filterToggleLabel(panelCount: number, filtering: boolean): string {
+  if (panelCount > 0) return `Filters, ${panelCount} active`;
+  return filtering ? "Filters, active" : "Filters";
+}
+
 /** The debounced text axes (id/text inputs); level and actorType push immediately (click/select). */
 interface TextDraft {
   from: string;
@@ -116,13 +127,7 @@ export function AuditFilterBar({
   };
 
   const canReset = hasActiveAuditFilter(filter);
-
-  // The badge counts only what the collapsed panel hides — its documented contract. Whether ANYTHING
-  // is filtering is a different question, and the accessible label has to answer that one: the
-  // correlation axis has no panel control (the row pivot is its only entry point), so a label tied to
-  // the panel count alone announces a filtered list as a plain "Filters".
-  const toggleLabel =
-    panelCount > 0 ? `Filters, ${panelCount} active` : canReset ? "Filters, active" : "Filters";
+  const toggleLabel = filterToggleLabel(panelCount, canReset);
 
   return (
     <section className="audit-filter-bar" aria-label="Audit filters" data-testid="audit-filter-bar">
