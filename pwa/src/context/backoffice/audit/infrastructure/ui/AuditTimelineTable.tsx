@@ -29,7 +29,12 @@ function isFromInteractiveControl(target: EventTarget | null, row: Element): boo
   return control != null && !control.contains(row);
 }
 
-/** A rendered group of rows under one header (a day divider). */
+/**
+ * A rendered group of rows under one header (a day divider today, its only producer). The shape stays
+ * local to this component rather than collapsing onto `AuditDayGroup`: that type lives under
+ * `app/backoffice/audit/_lib/`, so importing it here would put a `context/ → app/` edge back into the
+ * graph — the inversion this table's own layer is meant not to have.
+ */
 export interface AuditTimelineGroup {
   key: string;
   header: ReactNode;
@@ -49,7 +54,8 @@ interface AuditTimelineTableProps extends AuditPivotHandlers {
 /**
  * The dense investigation timeline, driven by precomputed groups (per-day dividers). A real
  * `<table>`: each group is a `<tbody>` (implicit `rowgroup`) labelled by a `<th scope="rowgroup">`
- * header, so a screen reader announces the day as group context. One roving tabindex spans the page (no
+ * header, so a screen reader announces the day as group context. One roving tabindex spans the page
+ * (no
  * `div role=button` per row — a native table sidesteps the `jsx-a11y` S6847 antipattern): `↑`/`↓`
  * move focus, `Enter` opens the drawer, a click anywhere off an in-row control opens it too.
  * `security` and `change` rows carry a 2px lateral accent — a second channel beside the badge, each a

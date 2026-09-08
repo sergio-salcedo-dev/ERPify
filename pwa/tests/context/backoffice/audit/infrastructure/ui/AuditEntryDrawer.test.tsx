@@ -136,7 +136,7 @@ describe("AuditEntryDrawer", () => {
     // Suppressing the pivot is not enough on its own: the field still rendered the pseudonym in a
     // `<code>` beside a copy button, so the id an operator pastes into a ticket denotes nobody.
     render(<AuditEntryDrawer entry={{ ...ENTRY, resourceErased: true }} open onClose={vi.fn()} />);
-    expect(screen.getByText("anonimizado (GDPR)")).toBeInTheDocument();
+    expect(screen.getByText("anonymized (GDPR)")).toBeInTheDocument();
     expect(screen.queryByText(ENTRY.resourceId as string)).toBeNull();
     expect(screen.queryByTitle("Copy resource id")).toBeNull();
   });

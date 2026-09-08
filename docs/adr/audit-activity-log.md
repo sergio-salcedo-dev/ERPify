@@ -531,7 +531,8 @@ sigue sin implementarse como job — lo que existe es la clave sobre la que cons
 **Naming.** El campo se llama `actor_erased` (no `anonymized`) para no colisionar con
 `actor_type = anonymous` (D7) — un actor **nunca identificado** (ruta pública), categóricamente
 distinto de uno **identificado y luego borrado**. La columna nombra la *causa/ciclo de vida*; la UI
-rotula el *estado legal resultante* («anonimizado (GDPR) · no identificable») y **nunca** muestra el
+rotula el *estado legal resultante* («anonymized (GDPR) · not identifiable», en inglés como toda la
+copia renderizada) y **nunca** muestra el
 UUID nuevo como un id.
 
 **No es PII.** El flag es un booleano: por eso viaja en la fila esbelta del timeline sin necesidad de
@@ -576,8 +577,10 @@ Esto es lo que habilita la "reconstrucción de jornada" sin tabla de sesión: `a
 
 Descartado **hoy**: tabla `audit_session` con ciclo de vida propio (¿cuándo cierra una sesión?) —
 especulativo, sin flujo que lo pida (CLAUDE.md: "nada especulativo"). **Trigger de revisita**:
-cuando exista auth con sesiones y un caso de investigación que exija correlación de sesión explícita
-más allá de la agregación por `actor_id` + ventana temporal.
+un caso de investigación que exija correlación de sesión explícita más allá de lo entregado —
+`correlation_id` por fila, un eje de filtrado propio sobre esa columna, y la consulta por `actor_id`
++ rango de `occurred_on`. La primera condición que este trigger pedía (auth con sesiones) ya se
+cumple: `iam_session` existe. Nunca hubo agregación por ventana temporal contra la que medir.
 
 ### D7 — `ActorContext` tipado: `actor_type` obligatorio, `actor_id` nullable según el tipo
 

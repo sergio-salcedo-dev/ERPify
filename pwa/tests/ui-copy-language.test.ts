@@ -229,6 +229,8 @@ const CONTENT_WORDS = [
   "sin",
   "entrada",
   "entradas",
+  "anonimizado",
+  "identificable",
 ];
 const CONTENT_WORD_RE = new RegExp(
   `(?<![\\p{L}])(?:${CONTENT_WORDS.join("|")})(?![\\p{L}])`,
@@ -362,10 +364,16 @@ describe("rendered copy speaks the language the document declares", () => {
       "Sin metadata",
       "Ordenar por hora",
       "Recibir y enviar eventos a sistemas externos (webhooks).",
-      // An entry count's singular and plural, green here through a whole review of the audit
-      // surface: one word, no diacritic, and nothing in the lexicon to match.
+      // Detector fixtures rather than observed copy: neither word has ever been rendered in
+      // `pwa/src`. They pin the third signal against words of exactly this shape — one word, no
+      // diacritic — which is the shape the first two signals cannot see.
       "entrada",
       "entradas",
+      // Rendered on the audit surface for months while every signal stayed green, which is what the
+      // lexicon is a floor against. They are pinned here AND admitted as lexicon members, so the
+      // fixture proves the member is live rather than decorative.
+      "anonimizado",
+      "identificable",
     ];
 
     expect(missed.filter((text) => spanishReason(text) === null)).toEqual([]);

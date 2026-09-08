@@ -129,7 +129,7 @@ describe("AuditTimelineTable", () => {
     // The pseudonym left on the column is a fresh UUID denoting nobody: showing it as an id — or
     // letting it be copied into a ticket — fabricates a reference. Same decision the actor axis takes.
     renderTable({ groups: groupsOf([{ ...SECURITY, resourceErased: true }]) });
-    expect(screen.getByText("anonimizado (GDPR)")).toBeInTheDocument();
+    expect(screen.getByText("anonymized (GDPR)")).toBeInTheDocument();
     expect(screen.queryByText(/019f0360/)).toBeNull();
     expect(screen.queryByTitle("Copy resource id")).toBeNull();
   });

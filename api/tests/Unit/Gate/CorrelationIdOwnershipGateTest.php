@@ -14,9 +14,10 @@ use PHPUnit\Framework\TestCase;
  * Static gate over who may name a request's correlation id.
  *
  * The value stamped on `_correlation_id` becomes the `correlation_id` column of every `audit_log` row
- * written during the request, and the back office groups the forensic trail by that column. So whoever
- * can choose it can choose how the trail reads — and no check applied to a single request can tell a
- * reused id from a fresh one: a shape test proves the value looks like a UUIDv7, never that its bearer
+ * written during the request, and the back office renders that column per row and pivots the forensic
+ * trail on it. So whoever can choose it can choose how the trail reads — and no check applied to a
+ * single request can tell a reused id from a fresh one: a shape test proves the value looks like a
+ * UUIDv7, never that its bearer
  * minted it. The property that holds is structural: nothing outside the process names it.
  *
  * **Why a static gate beside the behavioural ones.** `CorrelationIdListenerTest` proves the listener
@@ -104,8 +105,8 @@ final class CorrelationIdOwnershipGateTest extends TestCase
             'Only the listener may name `X-Correlation-Id` in src. Found: %s. Every inbound read has to '
             . 'name the header somehow, so one owner is what makes any reader red — and the header is '
             . 'ignored by construction rather than validated, because a shape check cannot detect a value '
-            . 'reused across unrelated requests, which is what collapses their audit rows into one '
-            . 'apparent journey. A caller needing distributed tracing needs an identifier of its own.',
+            . 'reused across unrelated requests, which is what makes a pivot on it return unrelated audit '
+            . 'rows as one. A caller needing distributed tracing needs an identifier of its own.',
             \implode(', ', $namers),
         ));
     }

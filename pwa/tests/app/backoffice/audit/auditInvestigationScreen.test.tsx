@@ -4,6 +4,7 @@ import { AuditInvestigationScreen } from "@/app/backoffice/audit/_components/Aud
 import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import type { AuditEntry } from "@/context/backoffice/audit/domain/AuditEntry";
 import type { AuditTimelineState } from "@/context/backoffice/audit/application/useAuditTimeline";
+import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 
 const replaceMock = vi.fn();
 let searchParamsStr = "";
@@ -96,10 +97,28 @@ describe("AuditInvestigationScreen", () => {
     timelineState = stateWith({});
     render(<AuditInvestigationScreen />);
 
-    expect(screen.getByTestId(`audit-timeline__row-${ENTRY.id}`)).toBeInTheDocument();
+    // The day divider is what distinguishes the surviving mode: the row rendered under BOTH
+    // groupings, so asserting the row alone would stay green over a restored correlation grouping.
+    expect(
+      screen.getByText(dateTimeProvider.formatIsoToLongDate(ENTRY.occurredOn)),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId(`audit-timeline__row-${ENTRY.id}`));
+    expect(replaceMock).toHaveBeenCalledTimes(1);
     expect(replaceMock.mock.calls[0][0]).not.toContain("view=");
+  });
+
+  it("writes the toggled sort direction rather than the current one", () => {
+    // `commit()` takes the direction positionally, and `setDirection` passing the CURRENT `direction`
+    // instead of the toggled `next` type-checks cleanly while leaving the header inert. From the DESC
+    // default that bug writes no `dir` at all, because DESC is the omitted default.
+    timelineState = stateWith({});
+    render(<AuditInvestigationScreen />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Time" }));
+
+    expect(replaceMock).toHaveBeenCalledTimes(1);
+    expect(replaceMock.mock.calls[0][0]).toContain("dir=asc");
   });
 
   it("renders an error panel with a retry action", () => {

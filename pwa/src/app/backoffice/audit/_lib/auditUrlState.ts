@@ -57,8 +57,8 @@ export interface AuditUrlState {
  * person id in a URL path.
  *
  * Reads decode the params; writes re-serialize the whole decoded state, so a stale param can never
- * linger. Defaults (empty filters, DESC, no open entry) are omitted from the URL to
- * keep it minimal and the memo key stable — the latter matters because the timeline hook resets its
+ * linger. Defaults (empty filters, DESC, no open entry) are omitted from the URL to keep it minimal
+ * and the memo key stable — the latter matters because the timeline hook resets its
  * keyset cursor whenever the filter value changes, so a flapping identity would thrash pagination.
  */
 export function useAuditUrlState(): AuditUrlState {
