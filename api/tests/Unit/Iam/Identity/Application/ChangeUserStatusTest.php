@@ -12,6 +12,7 @@ use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use PHPUnit\Framework\Attributes\CoversClass;

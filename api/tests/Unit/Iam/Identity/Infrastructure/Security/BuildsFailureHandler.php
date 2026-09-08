@@ -10,7 +10,7 @@ use Erpify\Iam\Identity\Application\LoginAttemptRegistrar;
 use Erpify\Iam\Identity\Application\RecordLockoutAuditBestEffort;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler;
-use Erpify\Tests\Unit\Iam\Identity\Application\FixedClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;

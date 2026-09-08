@@ -16,6 +16,7 @@ use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;

@@ -9,6 +9,7 @@ use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Application\NotifyLockedIdentities;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FailingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;

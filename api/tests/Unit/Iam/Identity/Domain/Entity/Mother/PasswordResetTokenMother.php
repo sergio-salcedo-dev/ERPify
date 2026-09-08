@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother;
 
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
@@ -17,17 +18,27 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  */
 final class PasswordResetTokenMother
 {
-    public const string DEFAULT_EXPIRES_AT = '2030-01-01T00:00:00+00:00';
+    /**
+     * The default window is measured FROM the clock the test is running on, mirroring the `+1 hour` ceiling
+     * {@see \Erpify\Iam\Identity\Application\RequestPasswordReset} issues with — which is what the
+     * paragraph above claims and an absolute `2030-01-01` literal did not deliver. Pass `expiresAt` to place
+     * the row on either side of the boundary.
+     */
+    public const string DEFAULT_TTL = '+1 hour';
 
     public static function pendingFor(
         string $userId = UserMother::DEFAULT_ID,
-        string $expiresAt = self::DEFAULT_EXPIRES_AT,
+        ?string $expiresAt = null,
         ?string $id = null,
     ): PasswordResetToken {
+        $expiry = null === $expiresAt
+            ? SystemClock::now()->modify(self::DEFAULT_TTL)
+            : new DateTimeImmutable($expiresAt);
+
         return PasswordResetToken::issue(
             $id ?? Uuid::generate(),
             $userId,
-            SingleUseToken::mint(new DateTimeImmutable($expiresAt))->token,
+            SingleUseToken::mint($expiry)->token,
         );
     }
 }

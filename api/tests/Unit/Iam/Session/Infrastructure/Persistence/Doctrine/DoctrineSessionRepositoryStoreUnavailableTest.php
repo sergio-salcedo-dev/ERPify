@@ -10,7 +10,7 @@ use Doctrine\ORM\QueryBuilder;
 use Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Iam\Session\Infrastructure\Persistence\Doctrine\DoctrineSessionRepository;
-use Erpify\Tests\Unit\Iam\Session\Application\FixedClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Infrastructure\Persistence\Doctrine\Fixtures\DbalStoreFailure;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Domain;
 
-use DateTimeImmutable;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use InvalidArgumentException;
@@ -34,7 +34,10 @@ final class ImageTest extends TestCase
         $this->assertSame(32, $image->width());
         $this->assertSame(24, $image->height());
         $this->assertSame(12345, $image->byteSize());
-        $this->assertLessThanOrEqual(new DateTimeImmutable(), $image->createdAt());
+        // Against the clock the aggregate actually read, not a second one: comparing to a bare
+        // `new DateTimeImmutable()` passed only while the suite's pinned instant happened to sit in the
+        // wall clock's past, and was the one test that failed when that instant was moved forward.
+        $this->assertSame(SystemClock::now(), $image->createdAt());
     }
 
     public function testRejectsADigestShorterThanSixtyFourHexCharacters(): void

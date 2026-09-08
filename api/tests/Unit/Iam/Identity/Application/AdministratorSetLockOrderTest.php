@@ -10,6 +10,7 @@ use Erpify\Iam\Identity\Application\ChangeUserStatus;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;

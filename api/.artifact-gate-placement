@@ -203,6 +203,7 @@ tests/Unit/Shared/ErrorContract/Application/LoggerInterfaceContractTest.php :: m
 tests/Unit/Shared/ErrorContract/Application/NativeJsonEncodeContractTest.php :: mirrored :: src/Shared/ErrorContract
 tests/Unit/Shared/ErrorContract/Domain/Exception/TaxonomyArchitectureTest.php :: mirrored :: src/Shared/ErrorContract
 tests/Unit/Shared/Serialization/ResourceDtoContractTest.php :: mirrored :: src/Shared/Serialization
+tests/Unit/Support/PHPUnit/FreezeSystemClockExtensionTest.php :: mirrored :: tests/Support/PHPUnit
 tests/Unit/Support/PhpSourceTest.php :: mirrored :: tests/Support
 tests/Unit/Support/PublicSignaturesTest.php :: mirrored :: tests/Support
 tests/Unit/Support/RepositoryRootTest.php :: mirrored :: tests/Support

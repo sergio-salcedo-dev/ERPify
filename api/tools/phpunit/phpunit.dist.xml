@@ -55,6 +55,6 @@
     </source>
 
     <extensions>
-        <bootstrap class="Erpify\Tests\Support\PHPUnit\ResetSystemClockExtension" />
+        <bootstrap class="Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension" />
     </extensions>
 </phpunit>

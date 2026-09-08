@@ -8,7 +8,7 @@ use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Infrastructure\Cli\PruneExpiredPasswordResetTokensCommand;
 use Erpify\Shared\Token\Domain\SingleUseToken;
-use Erpify\Tests\Unit\Iam\Identity\Application\FixedClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryPasswordResetTokenRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

@@ -10,11 +10,10 @@ use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Shared\Clock\Domain\SystemClock;
-use Erpify\Shared\Clock\Infrastructure\SymfonyClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 use Symfony\Component\Validator\Violation\ConstraintViolationBuilderInterface;
 
@@ -65,7 +64,7 @@ final class BankTest extends TestCase
     public function testCreateStampsTimestampsAndEventOccurredOnFromTheAmbientClock(): void
     {
         $instant = '2026-06-14T09:30:00+00:00';
-        SystemClock::set(new SymfonyClock(new MockClock($instant)));
+        SystemClock::set(FixedClock::at($instant));
 
         $bank = BankMother::create();
 
@@ -84,10 +83,10 @@ final class BankTest extends TestCase
         $createdAt = '2026-06-14T09:30:00+00:00';
         $renamedAt = '2026-06-15T11:00:00+00:00';
 
-        SystemClock::set(new SymfonyClock(new MockClock($createdAt)));
+        SystemClock::set(FixedClock::at($createdAt));
         $bank = BankMother::drained();
 
-        SystemClock::set(new SymfonyClock(new MockClock($renamedAt)));
+        SystemClock::set(FixedClock::at($renamedAt));
         $bank->rename('Acme Renamed', 'ACME');
 
         $this->assertSame($createdAt, $bank->getCreatedAt()->format(DateTimeInterface::ATOM));
