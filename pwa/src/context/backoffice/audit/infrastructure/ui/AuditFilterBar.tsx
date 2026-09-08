@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/components/cn";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { DateField, FormField } from "@/components/erpify";
+import { CorrelationIdChip, DateField, FormField } from "@/components/erpify";
 import { useDebouncedValue } from "@/context/shared/search/infrastructure/useDebouncedValue";
 import { ActorType } from "@/context/backoffice/audit/domain/AuditEntry";
 import {
@@ -16,6 +16,17 @@ import {
 } from "@/app/backoffice/audit/_lib/auditFilter";
 
 const FILTER_DEBOUNCE_MS = 250;
+
+/**
+ * The toggle's accessible name. The badge beside it counts only what the collapsed panel hides — its
+ * documented contract — but whether ANYTHING is filtering is a different question, and this is what
+ * answers it: the correlation axis has no panel control (the row pivot is its only entry point), so a
+ * name derived from the panel count alone announces a filtered list as a plain "Filters".
+ */
+function filterToggleLabel(panelCount: number, filtering: boolean): string {
+  if (panelCount > 0) return `Filters, ${panelCount} active`;
+  return filtering ? "Filters, active" : "Filters";
+}
 
 /** The debounced text axes (id/text inputs); level and actorType push immediately (click/select). */
 interface TextDraft {
@@ -42,7 +53,7 @@ interface AuditFilterBarProps {
   filter: AuditFilter;
   onPatch: (patch: Partial<AuditFilter>) => void;
   onReset: () => void;
-  /** Optional leading controls (density / view toggle) shared on the toolbar row. */
+  /** Optional leading controls (density) shared on the toolbar row. */
   leading?: ReactNode;
 }
 
@@ -116,7 +127,7 @@ export function AuditFilterBar({
   };
 
   const canReset = hasActiveAuditFilter(filter);
-  const toggleLabel = panelCount > 0 ? `Filters, ${panelCount} active` : "Filters";
+  const toggleLabel = filterToggleLabel(panelCount, canReset);
 
   return (
     <section className="audit-filter-bar" aria-label="Audit filters" data-testid="audit-filter-bar">
@@ -197,6 +208,27 @@ export function AuditFilterBar({
             </span>
           ) : null}
         </Button>
+
+        {filter.correlationId ? (
+          <span
+            className="audit-filter-bar__correlation inline-flex items-center gap-1.5"
+            data-testid="audit-filter-bar__correlation"
+          >
+            <span className="text-text-subtle text-xs">Correlation</span>
+            <CorrelationIdChip id={filter.correlationId} />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onPatch({ correlationId: "" })}
+              aria-label="Clear the correlation filter"
+              title="Clear the correlation filter"
+              data-testid="audit-filter-bar__correlation-clear"
+            >
+              <X className="size-3.5" aria-hidden="true" />
+            </Button>
+          </span>
+        ) : null}
 
         {canReset ? (
           <Button

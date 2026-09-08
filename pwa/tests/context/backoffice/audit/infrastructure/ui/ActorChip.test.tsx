@@ -21,8 +21,8 @@ describe("ActorChip", () => {
 
   it("renders the anonymized GDPR variant as a distinct thing, never an id", () => {
     render(<ActorChip actorType="user" actorId={ACTOR_ID} actorErased testId="row-actor" />);
-    expect(screen.getByText("anonimizado (GDPR)")).toBeInTheDocument();
-    expect(screen.getByText("· no identificable")).toBeInTheDocument();
+    expect(screen.getByText("anonymized (GDPR)")).toBeInTheDocument();
+    expect(screen.getByText("· not identifiable")).toBeInTheDocument();
     // The post-erasure UUID is NEVER shown as an id, and there is nothing to copy.
     expect(screen.queryByText(/019f04/)).toBeNull();
     expect(screen.queryByRole("button", { name: /copy actor id/i })).toBeNull();

@@ -29,7 +29,12 @@ function isFromInteractiveControl(target: EventTarget | null, row: Element): boo
   return control != null && !control.contains(row);
 }
 
-/** A rendered group of rows under one header (a day divider, or a Journey session). */
+/**
+ * A rendered group of rows under one header (a day divider today, its only producer). The shape stays
+ * local to this component rather than collapsing onto `AuditDayGroup`: that type lives under
+ * `app/backoffice/audit/_lib/`, so importing it here would put a `context/ → app/` edge back into the
+ * graph — the inversion this table's own layer is meant not to have.
+ */
 export interface AuditTimelineGroup {
   key: string;
   header: ReactNode;
@@ -40,8 +45,6 @@ interface AuditTimelineTableProps extends AuditPivotHandlers {
   groups: ReadonlyArray<AuditTimelineGroup>;
   density: ListDensity;
   direction: SortDirection;
-  /** When false (Journey), the "Time" header is a static label — the sort axis does not apply. */
-  sortable?: boolean;
   onToggleSort: () => void;
   onRowActivate: (entry: AuditEntry) => void;
   activeEntryId?: string | null;
@@ -49,10 +52,10 @@ interface AuditTimelineTableProps extends AuditPivotHandlers {
 }
 
 /**
- * The dense investigation timeline, driven by precomputed groups so the SAME table renders the
- * Timeline (per-day dividers) and the Journey (per-correlation sessions) modes. A real `<table>`:
- * each group is a `<tbody>` (implicit `rowgroup`) labelled by a `<th scope="rowgroup">` header, so a
- * screen reader announces the day / session as group context. One roving tabindex spans the page (no
+ * The dense investigation timeline, driven by precomputed groups (per-day dividers). A real
+ * `<table>`: each group is a `<tbody>` (implicit `rowgroup`) labelled by a `<th scope="rowgroup">`
+ * header, so a screen reader announces the day as group context. One roving tabindex spans the page
+ * (no
  * `div role=button` per row — a native table sidesteps the `jsx-a11y` S6847 antipattern): `↑`/`↓`
  * move focus, `Enter` opens the drawer, a click anywhere off an in-row control opens it too.
  * `security` and `change` rows carry a 2px lateral accent — a second channel beside the badge, each a
@@ -62,7 +65,6 @@ export function AuditTimelineTable({
   groups,
   density,
   direction,
-  sortable = true,
   onToggleSort,
   onRowActivate,
   activeEntryId,
@@ -75,8 +77,8 @@ export function AuditTimelineTable({
   const [focusedRow, setFocusedRow] = useState(0);
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
 
-  // Assign the flat roving-focus index here, in render order, so regrouping (Timeline ↔ Journey,
-  // which reorders rows within a session) never has to re-thread indices upstream.
+  // Assign the flat roving-focus index here, in render order, so a regrouping never has to re-thread
+  // indices upstream.
   const { renderGroups, rowCount } = useMemo(() => {
     let flat = 0;
     const rg = groups.map((group) => ({
@@ -88,8 +90,8 @@ export function AuditTimelineTable({
   }, [groups]);
 
   // The roving-focus index must always land on a real row: when the page shrinks (a shorter last
-  // page, a narrower filter, a Timeline↔Journey regroup) a stale `focusedRow >= rowCount` would leave
-  // every row at `tabIndex=-1`, making the table unreachable by keyboard. Fall back to the first row.
+  // page, a narrower filter) a stale `focusedRow >= rowCount` would leave every row at
+  // `tabIndex=-1`, making the table unreachable by keyboard. Fall back to the first row.
   const activeRow = focusedRow < rowCount ? focusedRow : 0;
 
   const registerRowRef = useCallback((index: number, el: HTMLTableRowElement | null) => {
@@ -145,28 +147,20 @@ export function AuditTimelineTable({
         </colgroup>
         <thead className="bg-background sticky top-0 z-10">
           <tr className={cn("border-border text-muted-foreground border-b", ROW_HEIGHTS[density])}>
-            <th
-              scope="col"
-              aria-sort={sortable ? ariaSort : undefined}
-              className="px-3 text-left text-xs font-medium"
-            >
-              {sortable ? (
-                <button
-                  type="button"
-                  onClick={onToggleSort}
-                  className="hover:text-foreground inline-flex items-center gap-1 transition-colors"
-                  title="Sort by time"
-                >
-                  Time
-                  {direction === SortDirection.ASC ? (
-                    <ArrowUp className="size-3" aria-hidden="true" />
-                  ) : (
-                    <ArrowDown className="size-3" aria-hidden="true" />
-                  )}
-                </button>
-              ) : (
-                <span>Time</span>
-              )}
+            <th scope="col" aria-sort={ariaSort} className="px-3 text-left text-xs font-medium">
+              <button
+                type="button"
+                onClick={onToggleSort}
+                className="hover:text-foreground inline-flex items-center gap-1 transition-colors"
+                title="Sort by time"
+              >
+                Time
+                {direction === SortDirection.ASC ? (
+                  <ArrowUp className="size-3" aria-hidden="true" />
+                ) : (
+                  <ArrowDown className="size-3" aria-hidden="true" />
+                )}
+              </button>
             </th>
             <th scope="col" className="px-3 text-left text-xs font-medium">
               Level

@@ -32,8 +32,8 @@ interface ActorChipProps {
  * carries one — its id (mono, middle-truncated, copyable in full).
  *
  * The **anonymized** variant (`actorErased`, the materialised GDPR flag) is visually *another thing*,
- * never an id with a marking: a masked icon, the legal-state label «anonimizado (GDPR) · no
- * identificable», and the post-erasure random UUID is **never** shown as an id. `actorErased` is
+ * never an id with a marking: a masked icon, the legal-state label "anonymized (GDPR) · not
+ * identifiable", and the post-erasure random UUID is **never** shown as an id. `actorErased` is
  * orthogonal to `actorType` (an `anonymous` actor — never identified — is never `actorErased`).
  */
 export function ActorChip({
@@ -54,8 +54,8 @@ export function ActorChip({
         data-anonymized="true"
       >
         <EyeOff className="text-text-subtle size-3.5 flex-none" aria-hidden="true" />
-        <span>anonimizado (GDPR)</span>
-        <span>· no identificable</span>
+        <span>anonymized (GDPR)</span>
+        <span>· not identifiable</span>
       </span>
     );
   }

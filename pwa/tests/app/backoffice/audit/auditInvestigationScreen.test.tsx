@@ -4,6 +4,7 @@ import { AuditInvestigationScreen } from "@/app/backoffice/audit/_components/Aud
 import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import type { AuditEntry } from "@/context/backoffice/audit/domain/AuditEntry";
 import type { AuditTimelineState } from "@/context/backoffice/audit/application/useAuditTimeline";
+import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 
 const replaceMock = vi.fn();
 let searchParamsStr = "";
@@ -88,38 +89,36 @@ describe("AuditInvestigationScreen", () => {
     expect(screen.getByText("No activity recorded")).toBeInTheDocument();
   });
 
-  it("gates the Journey toggle until an actor is fixed", () => {
-    timelineState = stateWith({});
-    render(<AuditInvestigationScreen />);
-    expect(screen.getByTestId("audit-view-toggle__journey")).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
-    expect(screen.getByTestId("audit-view-toggle__hint")).toBeInTheDocument();
-  });
-
-  it("reconstructs the journey grouped by correlation when an actor is fixed and view=journey", () => {
+  it("renders the timeline for a bookmarked URL carrying the retired view param", () => {
+    // `?view=journey` was a live, shareable URL while the correlation grouping shipped, so a
+    // bookmark or a ticket link can still carry it. The param is no longer read: the screen renders
+    // the chronological timeline, and the next URL write drops the stale key rather than echoing it.
     searchParamsStr = `actorType=api_key&actorId=${ENTRY.actorId}&view=journey`;
     timelineState = stateWith({});
     render(<AuditInvestigationScreen />);
-    // Journey is now reachable (no hint) and the session header summarises the correlation.
-    expect(screen.queryByTestId("audit-view-toggle__hint")).toBeNull();
-    expect(screen.getByText(/1 entry/)).toBeInTheDocument();
-    expect(screen.getByTestId(`audit-timeline__row-${ENTRY.id}`)).toBeInTheDocument();
+
+    // The day divider is what distinguishes the surviving mode: the row rendered under BOTH
+    // groupings, so asserting the row alone would stay green over a restored correlation grouping.
+    expect(
+      screen.getByText(dateTimeProvider.formatIsoToLongDate(ENTRY.occurredOn)),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId(`audit-timeline__row-${ENTRY.id}`));
+    expect(replaceMock).toHaveBeenCalledTimes(1);
+    expect(replaceMock.mock.calls[0][0]).not.toContain("view=");
   });
 
-  it("counts a multi-row session in the plural", () => {
-    // The session header's count is the one place the grouping's size is stated, and its singular and
-    // its plural are different branches: a fixture of one row exercises only half of it.
-    const sibling: AuditEntry = {
-      ...ENTRY,
-      id: "019f0691-2b5b-731e-9509-000000000002",
-      occurredOn: "2026-06-12T12:00:01.000000+00:00",
-    };
-    searchParamsStr = `actorType=api_key&actorId=${ENTRY.actorId}&view=journey`;
-    timelineState = stateWith({ entries: [ENTRY, sibling] });
+  it("writes the toggled sort direction rather than the current one", () => {
+    // `commit()` takes the direction positionally, and `setDirection` passing the CURRENT `direction`
+    // instead of the toggled `next` type-checks cleanly while leaving the header inert. From the DESC
+    // default that bug writes no `dir` at all, because DESC is the omitted default.
+    timelineState = stateWith({});
     render(<AuditInvestigationScreen />);
-    expect(screen.getByText(/2 entries/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Time" }));
+
+    expect(replaceMock).toHaveBeenCalledTimes(1);
+    expect(replaceMock.mock.calls[0][0]).toContain("dir=asc");
   });
 
   it("renders an error panel with a retry action", () => {

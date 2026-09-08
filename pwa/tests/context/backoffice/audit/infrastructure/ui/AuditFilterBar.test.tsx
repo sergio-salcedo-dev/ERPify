@@ -66,4 +66,43 @@ describe("AuditFilterBar", () => {
     });
     expect(onPatch).toHaveBeenCalledWith({ actorType: "api_key" });
   });
+
+  it("names the active correlation on screen and offers to clear just that axis", () => {
+    // The row pivot is the only entry point for this axis — there is no panel control — so without
+    // this the list filters with nothing on screen saying what filtered it.
+    const { onPatch, onReset } = renderBar({
+      correlationId: "019f0691-2aeb-7377-ba2d-1c9666c9ab90",
+    });
+
+    expect(screen.getByTestId("audit-filter-bar__correlation")).toBeInTheDocument();
+    expect(screen.getByText(/1c9666c9ab90$/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("audit-filter-bar__correlation-clear"));
+    expect(onPatch).toHaveBeenCalledWith({ correlationId: "" });
+    expect(onReset).not.toHaveBeenCalled();
+  });
+
+  it("hides the correlation chip when the axis is empty", () => {
+    renderBar();
+    expect(screen.queryByTestId("audit-filter-bar__correlation")).toBeNull();
+  });
+
+  it("announces that filtering is active for an axis the panel count cannot see", () => {
+    // `countPanelFilters` deliberately excludes `correlationId`, so the badge stays 0 here. A label
+    // tied to that count alone announced a filtered list as a plain "Filters".
+    renderBar({ correlationId: "019f0691-2aeb-7377-ba2d-1c9666c9ab90" });
+    expect(screen.getByTestId("audit-filter-bar__toggle")).toHaveAttribute(
+      "aria-label",
+      "Filters, active",
+    );
+    expect(screen.queryByTestId("audit-filter-bar__count")).toBeNull();
+  });
+
+  it("keeps the panel count in the label when the panel itself holds the filters", () => {
+    renderBar({ actorType: "api_key" });
+    expect(screen.getByTestId("audit-filter-bar__toggle")).toHaveAttribute(
+      "aria-label",
+      "Filters, 1 active",
+    );
+  });
 });
