@@ -13,7 +13,7 @@ use Erpify\Iam\Identity\Domain\Exception\LockoutStoreUnavailable;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Identity\Infrastructure\Security\ClearLockoutOnLoginSuccess;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
-use Erpify\Tests\Unit\Iam\Identity\Application\FixedClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;

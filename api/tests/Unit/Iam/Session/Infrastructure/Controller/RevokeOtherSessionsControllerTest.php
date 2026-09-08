@@ -8,7 +8,7 @@ use DateTimeImmutable;
 use Erpify\Iam\Session\Application\RevokeOtherSessions;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Infrastructure\Controller\RevokeOtherSessionsController;
-use Erpify\Tests\Unit\Iam\Session\Application\FixedClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Session\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;

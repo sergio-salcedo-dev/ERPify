@@ -8,12 +8,11 @@ use DateTimeInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Shared\Clock\Domain\SystemClock;
-use Erpify\Shared\Clock\Infrastructure\SymfonyClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
-use Symfony\Component\Clock\MockClock;
 
 /**
  * Idempotence of the rename. Equality is decided against the three persisted columns — `name`,
@@ -139,11 +138,11 @@ final class BankRenameNoOpTest extends TestCase
 
     private function storedBank(): Bank
     {
-        SystemClock::set(new SymfonyClock(new MockClock(self::STORED_AT)));
+        SystemClock::set(FixedClock::at(self::STORED_AT));
 
         $bank = BankMother::drained(name: self::NAME, shortName: self::SHORT_NAME);
 
-        SystemClock::set(new SymfonyClock(new MockClock(self::RENAMED_AT)));
+        SystemClock::set(FixedClock::at(self::RENAMED_AT));
 
         return $bank;
     }

@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Session\Application;
 
-use DateTimeImmutable;
+use DateInterval;
 use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Iam\Session\Domain\Enum\SessionStatus;
 use Erpify\Iam\Session\Domain\Event\SessionRevoked;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -50,7 +51,9 @@ final class RevokeSessionTest extends TestCase
 
     public function testRevokingATimeExpiredSessionIsANoOp(): void
     {
-        $session = SessionMother::active(expiresAt: new DateTimeImmutable('2020-01-01T00:00:00+00:00'));
+        // "Expired" is a day behind the clock the predicate reads, not a date on the calendar: an
+        // absolute literal makes this case depend on the suite's instant sitting after it.
+        $session = SessionMother::active(expiresAt: SystemClock::now()->sub(new DateInterval('P1D')));
         $session->pullDomainEvents();
 
         $sessions = new InMemorySessionRepository($session);

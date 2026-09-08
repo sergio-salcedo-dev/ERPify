@@ -10,6 +10,7 @@ use Erpify\Iam\Identity\Application\RecordLockoutAuditBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Psr\Log\NullLogger;

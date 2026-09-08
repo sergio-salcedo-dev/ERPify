@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
+use Erpify\Tests\Double\Clock\FixedClock;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;

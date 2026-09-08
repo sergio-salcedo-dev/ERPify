@@ -143,6 +143,14 @@ final class InMemorySessionRepository implements SessionRepository
         // so without it this double answers ties in insertion order — deterministically, while Postgres answers
         // them however the plan runs. A double that is MORE ordered than production is the same defect as one
         // that is less strict about admissibility.
+        //
+        // It is also the half that decides, not a tie-break in practice: the suite pins one instant
+        // (`FreezeSystemClockExtension`) and `AggregateRoot::__construct()` stamps `createdAt` from it, so
+        // EVERY session a test builds carries the same one and the whole order falls to the id. Harmless
+        // while `SessionId::generate()` mints v7 on the real clock, which keeps ids monotonic in insertion
+        // order — so a two-element ordered assertion here would be asserting the id's minting order and
+        // reading like an assertion about `createdAt`. Give such a test explicit `createdAt`s rather than
+        // trusting the sort to have looked at them.
         \usort(
             $admissible,
             static fn (Session $a, Session $b): int => [$b->getCreatedAt(), $b->getId()]

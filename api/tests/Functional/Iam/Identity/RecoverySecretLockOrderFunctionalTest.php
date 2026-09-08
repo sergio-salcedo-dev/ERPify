@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Iam\Identity;
 
-use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\DriverException;
@@ -212,7 +211,11 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
         ), Role::AUDIT_READER);
         $user->pullDomainEvents();
 
-        $generated = RecoverySecret::mint($userId, new DateTimeImmutable());
+        // Minted on the clock the redemption reads; a bare `new DateTimeImmutable()` here would make the
+        // secret's liveness depend on the wall clock and the container's clock agreeing.
+        $mintClock = self::getContainer()->get(Clock::class);
+        $this->assertInstanceOf(Clock::class, $mintClock);
+        $generated = RecoverySecret::mint($userId, $mintClock->now());
         $generated->secret->pullDomainEvents();
 
         $this->entityManager->persist($user);

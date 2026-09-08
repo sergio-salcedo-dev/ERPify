@@ -9,7 +9,7 @@ use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\PruneRetiredSession
 use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\PruneRetiredSessionsMessage;
 use Erpify\Iam\Session\Application\PruneRetiredSessions;
 use Erpify\Shared\Clock\Domain\SystemClock;
-use Erpify\Tests\Unit\Iam\Session\Application\FixedClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;

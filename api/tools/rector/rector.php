@@ -9,6 +9,7 @@ use Rector\Naming\Rector\ClassMethod\RenameParamToMatchTypeRector;
 use Rector\Naming\Rector\ClassMethod\RenameVariableToMatchNewTypeRector;
 use Rector\Php83\Rector\Class_\ReadOnlyAnonymousClassRector;
 use Rector\Php84\Rector\MethodCall\NewMethodCallWithoutParenthesesRector;
+use Rector\PHPUnit\CodeQuality\Rector\Class_\AddSeeTestAnnotationRector;
 use Rector\PHPUnit\PHPUnit120\Rector\Class_\AllowMockObjectsForDataProviderRector;
 use Rector\Symfony\Symfony73\Rector\Class_\CommandHelpToAttributeRector;
 
@@ -78,6 +79,13 @@ return RectorConfig::configure()
             __DIR__ . '/../../tests/Unit/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponderTest.php',
         ],
         RenamePropertyToMatchTypeRector::class,
+        // Non-convergent against php-cs-fixer's `fully_qualified_strict_types`, which is on: Rector adds
+        // `@see \Fully\Qualified\SubjectTest`, the fixer shortens it to `SubjectTest`, and the next run no
+        // longer recognises it and appends another — measured, one duplicate line per `make php.quality`.
+        // Nothing in `src` pairs a class with a same-named test today, so the rule fires only on the
+        // subject/test pairs inside `tests/`, where the annotation buys least: the test names its subject in
+        // its own docblock and sits at the mirrored path.
+        AddSeeTestAnnotationRector::class,
         RenameVariableToMatchMethodCallReturnTypeRector::class,
         RenameVariableToMatchNewTypeRector::class,
     ])

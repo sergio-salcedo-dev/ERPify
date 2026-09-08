@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional;
 
-use DateTimeImmutable;
+use DateInterval;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Domain\Email;
@@ -15,6 +15,7 @@ use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -181,6 +182,13 @@ trait AuthenticatesFunctionalRequests
         $sessions = $container->get(SessionRepository::class);
         self::assertInstanceOf(SessionRepository::class, $sessions);
 
+        // The window comes off the clock the admission gate reads, never a bare `new DateTimeImmutable()`:
+        // seating the session by one clock and admitting it by another leaves every authenticated functional
+        // test depending on the two agreeing. Measured, they do not have to: pinning the suite's clock away
+        // from the wall clock answered 401 on 57 tests across 15 classes, all of them this one seed.
+        $clock = $container->get(Clock::class);
+        self::assertInstanceOf(Clock::class, $clock);
+
         $sessionId = SessionId::generate();
         $session = Session::start(
             $sessionId->toString(),
@@ -188,7 +196,7 @@ trait AuthenticatesFunctionalRequests
             self::FUNCTIONAL_ORGANIZATION_ID,
             'Functional test client',
             '127.0.0.1',
-            new DateTimeImmutable('+1 day'),
+            $clock->now()->add(new DateInterval('P1D')),
         );
         $session->pullDomainEvents();
 

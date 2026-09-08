@@ -9,6 +9,7 @@ use Erpify\Iam\Session\Application\RevokeOtherSessions;
 use Erpify\Iam\Session\Domain\Event\OtherSessionsRevoked;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

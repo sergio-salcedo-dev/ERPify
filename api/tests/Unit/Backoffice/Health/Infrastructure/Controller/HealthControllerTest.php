@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\Health\Infrastructure\Controller;
 
 use Erpify\Backoffice\Health\Infrastructure\Controller\HealthController;
-use Erpify\Shared\Clock\Infrastructure\SymfonyClock;
 use Erpify\Shared\Http\Infrastructure\Responder\JsonResponder;
+use Erpify\Tests\Double\Clock\FixedClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -26,7 +25,7 @@ final class HealthControllerTest extends TestCase
     {
         $controller = new HealthController(
             new JsonResponder(),
-            new SymfonyClock(new MockClock(self::FROZEN_INSTANT)),
+            FixedClock::at(self::FROZEN_INSTANT),
         );
 
         $response = $controller();

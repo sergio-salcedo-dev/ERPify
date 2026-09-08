@@ -16,6 +16,7 @@ use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Identity\Infrastructure\Http\CompletePasswordResetController;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ComparesOpaqueRefusals;
@@ -102,7 +103,10 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
         $this->seededUserIds = [$userId];
 
         $tokenId = Uuid::generate();
-        $lapsed = SingleUseToken::mint((new DateTimeImmutable())->sub(new DateInterval('P1D')));
+        // From the clock the use case reads, not a second one: minting the window off a bare
+        // `new DateTimeImmutable()` makes "expired" mean expired-by-the-wall-clock while the subject
+        // decides by the container's, and the two only agree by accident.
+        $lapsed = SingleUseToken::mint($this->service(Clock::class)->now()->sub(new DateInterval('P1D')));
         $this->service(PasswordResetTokenRepository::class)->save(
             PasswordResetToken::issue($tokenId, $userId, $lapsed->token),
         );
