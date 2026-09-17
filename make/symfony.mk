@@ -3,7 +3,7 @@
 # =============================================================================
 
 .PHONY: sf sf.cc sf.cache.warmup sf.routes sf.about \
-        sf.routes.manifest \
+        sf.routes.manifest sf.config.reference \
         sf.messenger.stop-workers \
         sf.clear.vendor sf.clear.var sf.clear.var.log sf.clear.var.cache \
         sf.chown.var sf.clear sf.clear.sudo \
@@ -51,6 +51,17 @@ sf.about: ## bin/console about
 # The braces around the dump are load-bearing — ROUTE_MANIFEST_DUMP expands to `cd … && docker …`,
 # and `! cd … && docker …` parses as `(! cd …) && docker …`, which short-circuits and never runs
 # the dump at all.
+sf.config.reference: ## Regenerate api/config/reference.php from this vendor tree
+	@dump="$$(mktemp)"; \
+	if ! { $(CONFIG_REFERENCE_DUMP) > "$$dump"; }; then \
+		rm -f "$$dump"; \
+		echo "✗ sf.config.reference: could not regenerate — $(CONFIG_REFERENCE) left unchanged" >&2; \
+		exit 1; \
+	fi; \
+	cat "$$dump" > $(CONFIG_REFERENCE); \
+	rm -f "$$dump"; \
+	echo "✓ sf.config.reference: api/config/reference.php regenerated"
+
 sf.routes.manifest: php.lint.prod-container ## Regenerate api/.route-manifest.json from the prod router
 	@dump="$$(mktemp)"; \
 	if ! { $(ROUTE_MANIFEST_DUMP) > "$$dump"; }; then \

@@ -323,6 +323,40 @@ php.lint.route-manifest: php.lint.prod-container ## Route-manifest freshness gat
 		exit 1; \
 	fi
 
+## —— Config-reference freshness gate ———————————————————————————————————————
+
+# Fails when `api/config/reference.php` differs from what this vendor tree generates.
+#
+# The file is written by a FrameworkBundle compiler pass during a DEBUG container compile, so it
+# drifts on any dependency bump that touches a bundle's `Configuration` — and nothing noticed:
+# measured on the twelve-bump batch in #926, three entries went stale (`login_throttling.lock_factory`
+# and `remember_me.secure` moving to `"auto"`, and Mercure's `Default: null` marker moving from `url`
+# to `public_url`) and sat there. Because the file is marked "do not touch — auto-generated", every
+# checkout that booted a dev kernel found the tree dirty in it and the file then travelled in
+# whichever commit happened to be open: `69320e5e`, `df595281` and `6a0eddf1` all carry it
+# incidentally rather than deliberately.
+#
+# A green proves the committed file equals what THIS checkout generates. What it does not prove, the
+# snapshot/restore, and why the dump deletes the file before regenerating rather than diffing
+# whatever a warmup left behind: api/tools/config-reference/dump.sh.
+php.lint.config-reference: ## Config-reference freshness gate (committed reference.php vs this vendor tree)
+	@actual="$$(mktemp)"; \
+	if ! { $(CONFIG_REFERENCE_DUMP) > "$$actual"; }; then \
+		rm -f "$$actual"; \
+		echo "✗ php.lint.config-reference: could not regenerate the reference — the check did not run" >&2; \
+		exit 1; \
+	fi; \
+	if diff -u "$(CONFIG_REFERENCE)" "$$actual"; then \
+		rm -f "$$actual"; \
+		echo "✓ php.lint.config-reference: api/config/reference.php matches this vendor tree"; \
+	else \
+		rm -f "$$actual"; \
+		echo "✗ php.lint.config-reference: api/config/reference.php is stale for the locked dependencies." >&2; \
+		echo "  The file is GENERATED — never hand-edit it. Run 'make sf.config.reference' and commit the result." >&2; \
+		echo "  Above, '-' is what the committed file claims and '+' is what this vendor tree generates." >&2; \
+		exit 1; \
+	fi
+
 ## —— Behat step-vocabulary gate ————————————————————————————————————————————
 
 # Fails CI when the Behat step vocabulary drifts from api/.behat-step-vocabulary: a declared pattern
@@ -536,7 +570,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -554,7 +588,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -564,7 +598,7 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence \
         php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary \
-        php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.project-context php.lint.public-access \
+        php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference php.lint.project-context php.lint.public-access \
         php.lint.gate-placement php.lint.log-carriers php.lint.log-retention \
         php.lint.accepted-risk php.lint.stacked-docblock \
         php.deptrac php.deptrac.baseline \
