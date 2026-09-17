@@ -24,7 +24,7 @@ final class SessionFixtureFactory
         $userId = $user->getId() ?? throw new LogicException('Fixture user must have an id.');
         $organizationId = $organization->getId() ?? throw new LogicException('Fixture organization must have an id.');
 
-        $session = Session::start(
+        return Session::start(
             $sessionId,
             $userId,
             $organizationId,
@@ -32,8 +32,5 @@ final class SessionFixtureFactory
             '127.0.0.1',
             new DateTimeImmutable('+1 day'),
         );
-        $session->pullDomainEvents();
-
-        return $session;
     }
 }

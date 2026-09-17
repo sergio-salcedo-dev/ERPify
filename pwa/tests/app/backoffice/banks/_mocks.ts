@@ -39,7 +39,7 @@ export function routerMock(
  * `BackOfficeDeleteBank` use case directly, so a spec exercising both delete
  * paths points them at the same spy. Leaving `BackOfficeCountBanks` unbound is a
  * supported case: `useBanksCount` swallows the resolution failure and the header
- * total stays at its default.
+ * renders no total at all — an unresolvable count is unknown, never zero.
  */
 export function containerMock(handlers: Record<string, object>) {
   return {

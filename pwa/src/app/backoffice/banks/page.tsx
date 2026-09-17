@@ -273,12 +273,16 @@ export default function BanksListPage() {
           <p className="text-muted-foreground mt-1 text-sm" data-testid="banks-list__subtitle">
             Manage the banks available in the back office.
           </p>
-          <p
-            className="banks-list__count text-muted-foreground mt-1 text-xs"
-            data-testid="banks-list__count"
-          >
-            {totalBanks === 1 ? "1 bank total" : `${totalBanks} banks total`}
-          </p>
+          {/* Omitted while the total is unknown (not yet resolved, or the auxiliary read failed):
+              the header states a total or states nothing, never a placeholder number. */}
+          {totalBanks !== null ? (
+            <p
+              className="banks-list__count text-muted-foreground mt-1 text-xs"
+              data-testid="banks-list__count"
+            >
+              {totalBanks === 1 ? "1 bank total" : `${totalBanks} banks total`}
+            </p>
+          ) : null}
         </div>
         <Link
           href={bankRoutes.new}

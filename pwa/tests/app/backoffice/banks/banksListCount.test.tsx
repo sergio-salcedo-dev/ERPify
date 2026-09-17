@@ -48,21 +48,18 @@ describe("BanksListPage — header total", () => {
     searchRun.mockResolvedValue(searchPage([ACME]));
   });
 
-  it("renders the total from the count projection", async () => {
-    countRun.mockResolvedValue(12);
+  // Zero is in the table on purpose: it is the value the header must keep STATING, so that omitting
+  // the total on an unavailable read (below) cannot be satisfied by omitting it on a real zero too.
+  it.each([
+    { total: 12, expected: "12 banks total", shape: "plural" },
+    { total: 1, expected: "1 bank total", shape: "singular for exactly one" },
+    { total: 0, expected: "0 banks total", shape: "a genuine zero, which is not unknown" },
+  ])("states $expected — $shape", async ({ total, expected }) => {
+    countRun.mockResolvedValue(total);
     render(<BanksListPage />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("banks-list__count")).toHaveTextContent("12 banks total");
-    });
-  });
-
-  it("uses the singular noun for exactly one bank", async () => {
-    countRun.mockResolvedValue(1);
-    render(<BanksListPage />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("banks-list__count")).toHaveTextContent("1 bank total");
+      expect(screen.getByTestId("banks-list__count")).toHaveTextContent(expected);
     });
   });
 
@@ -80,12 +77,14 @@ describe("BanksListPage — header total", () => {
     });
   });
 
-  it("keeps the default total when the count fetch fails (auxiliary read)", async () => {
+  it("makes no claim about the total when the count read fails (auxiliary read)", async () => {
     countRun.mockRejectedValue(new Error("network"));
     render(<BanksListPage />);
 
-    // The list still renders; the header falls back to 0 rather than crashing.
+    // The list still renders — the count is auxiliary and must never block it. What it must not do
+    // is fall back to a number: "0 banks total" above a populated table is a falsehood stated with
+    // the same confidence as a true total, and an unavailable count is not a count of zero.
     await screen.findByTestId(`banks-table__row-${ACME.id}`);
-    expect(screen.getByTestId("banks-list__count")).toHaveTextContent("0 banks total");
+    expect(screen.queryByTestId("banks-list__count")).toBeNull();
   });
 });

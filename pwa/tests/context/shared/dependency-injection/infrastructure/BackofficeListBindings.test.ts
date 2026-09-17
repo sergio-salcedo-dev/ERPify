@@ -14,7 +14,8 @@ import { SearchBankAccounts } from "@/context/backoffice/bankaccount/application
  * fails in the browser. These resolutions are the check that would otherwise not exist.
  *
  * `BackOfficeCountBanks` earns its line for a second reason: `useBanksCount` swallows a resolution
- * failure by design, so a lost binding there degrades silently to "0 banks" with nothing red anywhere.
+ * failure by design, so a lost binding there degrades silently to a header with no total at all —
+ * a missing line rather than a wrong number, and nothing red anywhere either way.
  */
 describe("backoffice list bindings", () => {
   it.each([

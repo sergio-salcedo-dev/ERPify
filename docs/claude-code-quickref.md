@@ -58,7 +58,7 @@ make db.migrate                     # Run pending Doctrine migrations.
 make db.diff                        # Generate migration from entity/schema diff.
 make db.status                      # Migration status.
 make db.validate                    # Validate ORM mapping against the database.
-make db.load.fixtures               # Load Hautelook Alice fixtures.
+make db.load.fixtures               # Load Hautelook Alice fixtures, then replay every projection.
 make db.reset                       # Drop → migrate → fixtures (destructive).
 make db.test.prepare                # Create + migrate the APP_ENV=test database (<dbname>_test); idempotent, a prerequisite of php.unit.
 make db.test.reset                  # Drop every <dbname>_test* database, recreate the PHPUnit one (destructive; test DBs only).
