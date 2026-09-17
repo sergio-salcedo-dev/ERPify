@@ -60,8 +60,8 @@ final class PhpmdParsableSyntaxGateTest extends TestCase
     /** The directories `make php.md` hands PHPMD, mirrored from `make/php-quality.mk`. */
     private const array SWEPT = ['bin', 'config', 'src', 'tests', 'tools', 'public'];
 
-    /** `tools/phpmd/phpmd.xml`'s own exclusions; a path under one of these is never parsed. */
-    private const array EXCLUDED = ['/vendor/', '/var/'];
+    /** `tools/phpmd/phpmd.xml`'s own exclusions; a path matching one of these is never parsed. */
+    private const array EXCLUDED = ['/vendor/', '/var/', '/config/reference.php'];
 
     /**
      * What may stand between `new` and its argument list: a name, a namespace-qualified name, a variable or

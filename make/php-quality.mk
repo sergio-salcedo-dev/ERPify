@@ -282,7 +282,8 @@ php.lint.prod-container: ## Prod service-container compile gate
 #
 # The comparison is a plain diff against a fresh dump, so this gate has no rule engine and needs no
 # falsification suite: mutate the file, mutate a `#[Route]`, delete a line — each is one diff hunk.
-# It is the only php.lint.* member that is not a PHPUnit `--filter`, because its subject is the
+# It is one of the two php.lint.* members that are not a PHPUnit `--filter` (the other is
+# php.lint.config-reference), because its subject is the
 # LIVE router rather than a repository artifact read as data; there is nothing here for
 # api/.artifact-gate-placement to classify.
 #
@@ -327,33 +328,41 @@ php.lint.route-manifest: php.lint.prod-container ## Route-manifest freshness gat
 
 # Fails when `api/config/reference.php` differs from what this vendor tree generates.
 #
-# The file is written by a FrameworkBundle compiler pass during a DEBUG container compile, so it
-# drifts on any dependency bump that touches a bundle's `Configuration` — and nothing noticed:
-# measured on the twelve-bump batch in #926, three entries went stale (`login_throttling.lock_factory`
-# and `remember_me.secure` moving to `"auto"`, and Mercure's `Default: null` marker moving from `url`
-# to `public_url`) and sat there. Because the file is marked "do not touch — auto-generated", every
-# checkout that booted a dev kernel found the tree dirty in it and the file then travelled in
-# whichever commit happened to be open: `69320e5e`, `df595281` and `6a0eddf1` all carry it
-# incidentally rather than deliberately.
+# The file goes stale in the direction nobody watches. FrameworkBundle's
+# `PhpConfigReferenceDumpPass` rewrites it on every DEBUG container compile — `dev` and `test` alike
+# — from whatever `vendor/` that checkout holds, so a branch whose vendor tree is OLDER than `main`'s
+# rewrites it BACKWARDS the moment someone boots it, and the regression rides along in a pull request
+# about something else. Measured with the diff rather than a grep: #926, the twelve-bump batch, is
+# the commit that got it RIGHT (`login_throttling.lock_factory` and `remember_me.secure` moved to
+# `"auto"` alongside the `symfony/security-bundle` bump that caused them); #924, a PWA-only pull
+# request, reverted both, and `69320e5e` moved Mercure's `Default: null` marker from `public_url` to
+# `url`. None of those three commit messages mentions the file.
 #
-# A green proves the committed file equals what THIS checkout generates. What it does not prove, the
-# snapshot/restore, and why the dump deletes the file before regenerating rather than diffing
-# whatever a warmup left behind: api/tools/config-reference/dump.sh.
-php.lint.config-reference: ## Config-reference freshness gate (committed reference.php vs this vendor tree)
+# A green proves the file IN THE WORKING TREE equals what this checkout generates. What it does not
+# prove, why the dump clears `var/cache/dev` rather than deleting the tracked file, and the rest of
+# the blind spots: api/tools/config-reference/dump.sh.
+php.lint.config-reference: php.md php.cs.dry-run ## Config-reference freshness gate (committed reference.php vs this vendor tree)
 	@actual="$$(mktemp)"; \
 	if ! { $(CONFIG_REFERENCE_DUMP) > "$$actual"; }; then \
 		rm -f "$$actual"; \
-		echo "✗ php.lint.config-reference: could not regenerate the reference — the check did not run" >&2; \
+		if [ ! -f "$(CONFIG_REFERENCE)" ]; then \
+			echo "✗ php.lint.config-reference: $(CONFIG_REFERENCE) was left deleted — recover with 'git checkout -- api/config/reference.php'" >&2; \
+		else \
+			echo "✗ php.lint.config-reference: could not regenerate the reference — the check did not run" >&2; \
+		fi; \
 		exit 1; \
 	fi; \
-	if diff -u "$(CONFIG_REFERENCE)" "$$actual"; then \
-		rm -f "$$actual"; \
+	diff -u "$(CONFIG_REFERENCE)" "$$actual"; rc=$$?; \
+	rm -f "$$actual"; \
+	if [ $$rc -eq 0 ]; then \
 		echo "✓ php.lint.config-reference: api/config/reference.php matches this vendor tree"; \
-	else \
-		rm -f "$$actual"; \
+	elif [ $$rc -eq 1 ]; then \
 		echo "✗ php.lint.config-reference: api/config/reference.php is stale for the locked dependencies." >&2; \
 		echo "  The file is GENERATED — never hand-edit it. Run 'make sf.config.reference' and commit the result." >&2; \
-		echo "  Above, '-' is what the committed file claims and '+' is what this vendor tree generates." >&2; \
+		echo "  Above, '-' is what the file in the working tree holds and '+' is what this vendor tree generates." >&2; \
+		exit 1; \
+	else \
+		echo "✗ php.lint.config-reference: diff could not compare the two files (exit $$rc) — the check did not run" >&2; \
 		exit 1; \
 	fi
 
@@ -577,8 +586,14 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #   1. Gating — php.quality runs the fixers in APPLY mode (rector process,
 #      cs-fixer fix, phpcbf), so in an ephemeral CI container it
 #      auto-fixes drift and exits 0; these check variants FAIL on drift instead.
-#   2. Parallel-safe — every prerequisite here is read-only (no src/ writes), so
-#      CI can fan them out with `make -j --output-sync=target` without racing.
+#   2. Parallel-safe — every prerequisite here is read-only with respect to the working tree, so
+#      CI can fan them out with `make -j --output-sync=target` without racing. The one member that
+#      can write is `php.lint.config-reference`, and only on a run that is about to fail: it clears
+#      `var/cache/dev` to force the recompile rather than deleting the tracked file, so the pass
+#      rewrites `api/config/reference.php` only when it is genuinely stale. It is sequenced after
+#      `php.md` and `php.cs.dry-run` — the two members whose input sets reach `api/config/` — and the
+#      file is excluded in `api/tools/phpmd/phpmd.xml` as well, because a prerequisite list is an
+#      enumeration and the exclusion is a mechanism.
 # php.lint.doctrine + php.lint.error-contract still need the running stack
 # (DB + console), which CI already has up from `docker.up.wait.no-build.api`.
 #
