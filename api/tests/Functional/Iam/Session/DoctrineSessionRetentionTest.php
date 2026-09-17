@@ -12,6 +12,7 @@ use Erpify\Iam\Session\Infrastructure\Persistence\Doctrine\DoctrineSessionReposi
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -143,7 +144,9 @@ final class DoctrineSessionRetentionTest extends KernelTestCase
         try {
             $session->revoke();
         } finally {
-            SystemClock::reset();
+            // Back to the suite's pinned instant, not to the wall clock: `reset()` un-pins, and every
+            // aggregate this method builds afterwards would carry a calendar-dependent stamp.
+            FreezeSystemClockExtension::pin();
         }
 
         $session->pullDomainEvents();

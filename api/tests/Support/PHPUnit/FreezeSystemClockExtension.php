@@ -31,7 +31,7 @@ use Symfony\Component\Clock\MockClock;
  * run after, which is the property that keeps a red attributable to the change that caused it.
  *
  * **What it buys, measured rather than estimated: the suite's verdict no longer depends on the instant at
- * all.** 3706 tests are green with `now` pinned at 1999-06-15, at {@see SUITE_INSTANT}, at 2035-01-01 and at
+ * all.** 3707 tests are green with `now` pinned at 1999-06-15, at {@see self::SUITE_INSTANT}, at 2035-01-01 and at
  * 2100-01-01 — a 101-year span over which nothing changes. Reaching that took four fixes and the pin is what
  * made each of them visible, since every one had been green for as long as two clocks happened to agree: a
  * shared functional login seating its session with `new DateTimeImmutable('+1 day')` while the admission gate
@@ -43,8 +43,9 @@ use Symfony\Component\Clock\MockClock;
  * **The alternative that was measured and rejected**: a clock whose `now()` throws, so a test either
  * freezes time or dies. It closes a strictly wider class — "this test READ the clock" — and costs 720 tests
  * across 192 classes, because {@see \Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot::__construct()}
- * reads the clock, so every aggregate the suite builds touches it. Against a measured calendar-dependence
- * surface of one test, that is 720 rebuilds of unrelated fixtures for the same protection.
+ * reads the clock, so every aggregate the suite builds touches it. It closes that wider class by making
+ * every one of those 192 classes state an instant it does not care about; the pin closes the narrower class
+ * that actually does the damage — a verdict that moves with the calendar — and leaves them alone.
  *
  * **Both edges are subscribed, because a trailing pin alone is not a net.** The runner guards that emit on
  * `TestCase::wasPrepared()`, which a test skipping in `setUp()` never sets, and which an unexpected
@@ -61,19 +62,28 @@ use Symfony\Component\Clock\MockClock;
  * The trailing pin stays for the interval the leading one cannot cover — whatever runs between the end of
  * one test and the start of the next, which is where a leaked instant would otherwise sit unattributed.
  *
- * **What the leading pin is deliberately upstream of, and therefore overwrites: the class-level hooks.**
- * `setUpBeforeClass()` / `#[BeforeClass]` run once before the suite's first `PreparationStarted`, and a
- * data provider resolves earlier still, so a clock installed in either is replaced before every test of the
- * class including the first. Under `inIsolation` the ordering inverts, so the behaviour would differ by
- * isolation mode. Freeze the clock per test (`setUp()` or the test body, both of which run after this pin);
- * nothing in the suite freezes it at class level today, and nothing gates that.
+ * **Two windows run outside every per-test event, and neither subscriber can reach them — which is why
+ * {@see pin()} is ALSO called from `api/tools/phpunit/bootstrap.php`.** A data provider resolves while the
+ * suite is being BUILT (`TestBuilder::build()`, before the runner emits anything at all), and three
+ * providers in this tree construct aggregates there, so `AggregateRoot::__construct()` stamped them off the
+ * host wall clock while the body receiving them ran at the pinned instant — a divergence no choice of
+ * instant can surface, since the provider's clock does not move with it. `setUpBeforeClass()` /
+ * `#[BeforeClass]` is the same window; nothing in the suite uses one today. And an isolated child process
+ * (`--process-isolation`, `#[RunInSeparateProcess]`) registers NO extension at all: its template calls
+ * `Facade::instance()->initForIsolation()`, which builds a dispatcher with no subscribers, so neither
+ * subscriber exists for the whole of that test. The bootstrap is the one file all three windows share.
+ *
+ * The leading pin still overwrites a clock installed in a class-level hook or a provider, so freeze per
+ * test (`setUp()` or the test body, both of which run after it); nothing gates that.
  *
  * **Blind spots, because a green here proves less than the pin suggests.** It owns the two time sources
- * {@see pin()} names and no others. A bare `new DateTimeImmutable()` or `time()` reads past both —
- * including `Shared\Event\Domain\DomainEvent`'s `$occurredOn ?? new DateTimeImmutable()` default, a
- * second ambient source in production code, and the handful of test seeds that mint an expiry from the wall
- * clock while the subject reads the container's. Postgres has a clock of its own that nothing here touches.
- * And Behat boots from its own bootstrap, which registers none of this.
+ * {@see pin()} names and no others. A bare `new DateTimeImmutable()` or `time()` reads past both, and the
+ * pin makes one of those divergences LARGER rather than smaller: `Shared\Event\Domain\DomainEvent`'s
+ * `$occurredOn ?? new DateTimeImmutable()` default is a second ambient source in production code, and where
+ * it used to disagree with an aggregate's `createdAt` by microseconds it now disagrees by however far the
+ * wall clock stands from {@see self::SUITE_INSTANT}. Around ten events take that default and no test
+ * compares the two sources, so nothing would notice. Postgres keeps a clock of its own that nothing here
+ * touches. And Behat boots from its own bootstrap, which registers none of this.
  */
 final class FreezeSystemClockExtension implements Extension
 {

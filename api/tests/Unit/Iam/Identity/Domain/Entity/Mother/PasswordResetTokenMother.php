@@ -20,20 +20,21 @@ final class PasswordResetTokenMother
 {
     /**
      * The default window is measured FROM the clock the test is running on, mirroring the `+1 hour` ceiling
-     * {@see \Erpify\Iam\Identity\Application\RequestPasswordReset} issues with — which is what the
-     * paragraph above claims and an absolute `2030-01-01` literal did not deliver. Pass `expiresAt` to place
-     * the row on either side of the boundary.
+     * {@see \Erpify\Iam\Identity\Application\RequestPasswordReset} issues with — which is the only form
+     * in which the paragraph above is a statement about duration rather than about a date. Pass `expiresAt`
+     * to place the row on either side of the boundary.
      */
     public const string DEFAULT_TTL = '+1 hour';
 
     public static function pendingFor(
         string $userId = UserMother::DEFAULT_ID,
-        ?string $expiresAt = null,
+        ?DateTimeImmutable $expiresAt = null,
         ?string $id = null,
     ): PasswordResetToken {
-        $expiry = null === $expiresAt
-            ? SystemClock::now()->modify(self::DEFAULT_TTL)
-            : new DateTimeImmutable($expiresAt);
+        // An instant and not a string, so this parameter cannot be confused with the relative spec beside
+        // it: a caller who read `DEFAULT_TTL` and passed `'+2 hours'` would have got a window measured off
+        // the host wall clock, with no error and nothing red.
+        $expiry = $expiresAt ?? SystemClock::now()->modify(self::DEFAULT_TTL);
 
         return PasswordResetToken::issue(
             $id ?? Uuid::generate(),

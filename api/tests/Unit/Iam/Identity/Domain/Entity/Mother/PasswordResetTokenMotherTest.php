@@ -11,10 +11,9 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The sibling of {@see SessionMotherTest}, over the shorter fuse: {@see PasswordResetTokenMother}'s default
- * expiry was `2030-01-01T00:00:00+00:00` while its own docblock said the row "lapses within the hour" — a
- * literal outliving by four years the window it claimed to model, which is how a seed stops describing
- * anything and starts merely being far away.
+ * The sibling of {@see SessionMotherTest}, over a mother whose docblock promises a row that "lapses within
+ * the hour". A window measured from the clock is the only form in which that promise is checkable at all:
+ * an absolute literal states a date, and a date says nothing about how long anything lasts.
  *
  * @internal
  */

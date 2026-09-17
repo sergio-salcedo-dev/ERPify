@@ -13,18 +13,20 @@ use Override;
  * or an event's `occurredOn` is a value the test chose rather than whatever the wall clock read while the
  * row was written.
  *
- * One class for the whole test tree, and the reason is not only the Rule of Three. Five identical copies
- * lived one per module under the claim that each kept its module's tests free of another module's helpers,
- * and that claim was already false: `Unit/Iam/Identity/…/PruneRetiredSessionsHandlerTest` and two tests
- * under `Functional/Iam/Session/` imported the Session module's copy. What the split bought was drift —
- * only one of the five carried the {@see at()} constructor — and a third way of spelling the same thing
- * (`new SymfonyClock(new MockClock(...))`) growing beside them. The Symfony pair stays where the subject IS
- * that adapter: {@see \Erpify\Tests\Unit\Shared\Clock\Infrastructure\SymfonyClockTest} and its neighbours.
+ * One class for the whole test tree rather than one per module, and the Rule of Three is the weaker half of
+ * the reason. A per-module copy is only worth its duplication while the modules stay apart, and they do not:
+ * `Unit/Iam/Identity/…/PruneRetiredSessionsHandlerTest` reaches across a module boundary for the Session
+ * module's double, and two tests under `Functional/Iam/Session/` reach across the unit/functional lane for
+ * the same one. Copies also drift — of the five that existed, one carried {@see at()} and four did not — and
+ * a second spelling of the same idea (`new SymfonyClock(new MockClock(...))`) had grown beside them. That
+ * pair stays where the subject IS that adapter:
+ * {@see \Erpify\Tests\Unit\Shared\Clock\Infrastructure\SymfonyClockTest} and its neighbours.
  *
- * It sits under `tests/Double/` and not `tests/Support/`, which is the rule-engine home: `ArtifactGateSweep`
- * treats an import from `Erpify\Tests\Support\` as one of the two signals that a kernel-free test is an
- * artifact gate, so filing a double there made two session contract tests unclassifiable and reddened
- * `ArtifactGatePlacementGateTest` — measured, not foreseen.
+ * **It sits under `tests/Double/` and not `tests/Support/`, which is the rule-engine home.**
+ * `ArtifactGateSweep` reads an import from `Erpify\Tests\Support\` as one of the two signals that a
+ * kernel-free test is an artifact gate, so a double filed there turns every kernel-free test using it into
+ * one: four of this tree's tests credit no production class and would need a registry line they have no
+ * business carrying. `Erpify\Tests\Double\` is not an engine namespace, so it turns nothing into a gate.
  *
  * A named class rather than an anonymous one, and not only for reuse: PDepend cannot parse a `readonly`
  * anonymous class, so a file containing one is skipped whole by PHPMD — the analyser reports one error and

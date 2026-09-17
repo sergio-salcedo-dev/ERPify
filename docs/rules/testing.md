@@ -61,13 +61,20 @@ Corollary — **a control that has never been seen red is not a control.** Prove
 
 ## The suite reads one pinned instant, and a test double's window is relative to it
 
-The PHPUnit suite pins both of the application's time sources to `FreezeSystemClockExtension::SUITE_INSTANT` before every test and again after it — the ambient `SystemClock` that aggregates read, and Symfony's global clock, which the container's `clock` service delegates to and which `SystemClockInitializer` copies back over the ambient one on `kernel.request`, `console.command` and every worker message. A test that needs another instant sets its own (`SystemClock::set(FixedClock::at(…))`); the extension re-pins around it, so nothing leaks into the next test.
+The PHPUnit suite pins both of the application's time sources to `FreezeSystemClockExtension::SUITE_INSTANT` — the ambient `SystemClock` that aggregates read, and Symfony's global clock, which the container's `clock` service delegates to and which `SystemClockInitializer` copies back over the ambient one on `kernel.request`, `console.command` and every worker message. `FreezeSystemClockExtension::pin()` is called from three places, and the two subscribers are not enough on their own: `PreparationStarted` and `Finished` bracket each test, and `api/tools/phpunit/bootstrap.php` covers the windows no per-test event reaches — a data provider (resolved while the suite is *built*; three providers here construct aggregates there), `setUpBeforeClass()` of the first class, and an isolated child process, which registers no extension at all.
+
+**Which lever overrides it depends on the lane, and reaching for the wrong one fails silently.**
+
+- Kernel-free test: `SystemClock::set(FixedClock::at(…))` — `FixedClock` is `Erpify\Tests\Double\Clock\FixedClock`, under `api/tests/Double/` and deliberately not under `api/tests/Support/`, whose namespace `ArtifactGateSweep` reads as a signal that a kernel-free test is an artifact gate.
+- Once a request, command or worker message is dispatched: `Symfony\Component\Clock\Clock::set(new MockClock(…))`. `SystemClockInitializer` runs at priority 4096 on `kernel.request` and overwrites the ambient clock with the container's, so a `SystemClock::set()` made before the request is gone by the time the controller reads it — and the failure surfaces as a wrong expiry, pointing nowhere near the listener that caused it.
+
+Restore with `FreezeSystemClockExtension::pin()`, never `SystemClock::reset()`: `reset()` un-pins to the host wall clock, which under this harness is an escape rather than a restore. The trailing pin makes a missed restore harmless at the test boundary, not within a test.
 
 **Why pinning and not clearing.** Clearing hands the ambient accessor back to the host wall clock, which is the failure mode itself: a test that seeds an absolute near-future expiry and reads it through an active-only predicate is green until that date arrives, then red on a commit that touched nothing. The tree shipped that twice. A pin does not make a bad seed correct — it makes its verdict the same on the first run and every run after, which is what keeps a red attributable to the change that caused it.
 
 **Why not a clock that refuses to answer.** It was measured. `AggregateRoot::__construct()` reads the clock, so a `now()` that throws unless the test froze time reddens **720 tests across 192 classes** — every aggregate the suite builds — for a defect the pin closes outright at no such cost.
 
-**What the pin buys is that the instant stops mattering.** 3706 tests are green pinned at 1999-06-15, at 2026-01-01, at 2035-01-01 and at 2100-01-01 — a 101-year span over which the suite's verdict does not move. That is the property to preserve, and it is what makes the constant's value free to change.
+**What the pin buys is that the instant stops mattering.** 3707 tests are green pinned at 1999-06-15, at 2026-01-01, at 2035-01-01 and at 2100-01-01 — a 101-year span over which the suite's verdict does not move. That is the property to preserve, and it is what makes the constant's value free to change.
 
 **What it asks of a test.** Seed from the clock the subject reads, never from a second one, and express a window rather than a date. Four defects had to be fixed to reach the span above, and every one had been green for as long as two clocks happened to agree:
 
@@ -76,7 +83,7 @@ The PHPUnit suite pins both of the application's time sources to `FreezeSystemCl
 - a recovery secret was minted off the wall clock and redeemed against the container's;
 - `SessionMother` and `PasswordResetTokenMother` defaulted to `2099-01-01` and `2030-01-01`, the same bomb with a longer fuse — what kept every consumer that does not freeze the clock green was those dates still being in the future. They now mint `SystemClock::now()->add(P7D)` and `+1 hour`, mirroring what `StartSession` and `RequestPasswordReset` issue, and each is pinned by a test that freezes the clock past the retired literal.
 
-**Blind spots.** The pin owns those two sources and no others. A bare `new DateTimeImmutable()` or `time()` reads past both — including `Shared\Event\Domain\DomainEvent`'s `$occurredOn ?? new DateTimeImmutable()` default. Nothing gates the rule: the four above were found by moving the pinned instant and reading what broke, which is the check to repeat rather than a green to trust. Postgres keeps a clock nothing here touches, and Behat boots from its own bootstrap, which registers none of this.
+**Blind spots.** The pin owns those two sources and no others, and `FreezeSystemClockExtensionTest` witnesses both — but not the *leading* edge, which the trailing pin satisfies on its own; the case it defends (a test that skipped or threw in `setUp()` and so never reached `Finished`) cannot be staged in a suite that forbids ordering dependencies, and rests on argument alone. A bare `new DateTimeImmutable()` or `time()` reads past both — including `Shared\Event\Domain\DomainEvent`'s `$occurredOn ?? new DateTimeImmutable()` default. Nothing gates the rule: the four above were found by moving the pinned instant and reading what broke, which is the check to repeat rather than a green to trust. Postgres keeps a clock nothing here touches, and Behat boots from its own bootstrap, which registers none of this.
 
 ## Artifact gates: where they live
 

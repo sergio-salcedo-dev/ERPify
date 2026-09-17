@@ -169,6 +169,7 @@ scripts/        Utility scripts
 | Test fixtures (Hautelook Alice)                                              | `api/tests/DataFixtures/` and `api/tests/Fixtures/`                      |
 | Unit tests                                                                   | `api/tests/Unit/`                                                        |
 | Artifact-gate rule engines                                                   | `api/tests/Support/`                                                     |
+| Shared test doubles (`FixedClock`)                                           | `api/tests/Double/`                                                      |
 | Functional tests                                                             | `api/tests/Functional/`                                                  |
 | Behat contexts                                                               | `api/tests/Behat/`                                                       |
 | Behat features                                                               | `api/features/`                                                          |

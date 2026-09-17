@@ -80,11 +80,15 @@ return RectorConfig::configure()
         ],
         RenamePropertyToMatchTypeRector::class,
         // Non-convergent against php-cs-fixer's `fully_qualified_strict_types`, which is on: Rector adds
-        // `@see \Fully\Qualified\SubjectTest`, the fixer shortens it to `SubjectTest`, and the next run no
-        // longer recognises it and appends another — measured, one duplicate line per `make php.quality`.
-        // Nothing in `src` pairs a class with a same-named test today, so the rule fires only on the
-        // subject/test pairs inside `tests/`, where the annotation buys least: the test names its subject in
-        // its own docblock and sits at the mirrored path.
+        // `@see \Fully\Qualified\SubjectTest`, the fixer shortens it — it may, because subject and test
+        // share a namespace — and the next run no longer recognises the short form and appends another.
+        // Measured: one duplicate line per `make php.quality`.
+        //
+        // It never reaches `src`, and not for want of same-named pairs (`SymfonyClock`/`SymfonyClockTest`,
+        // `Bank`/`BankTest` and others exist). `TestClassNameResolver` inserts exactly ONE `Tests`/`Test`
+        // segment, while this tree's tests are `Erpify\Tests\Unit\…` — two — so no candidate ever
+        // resolves. Adopt a one-segment test namespace and the rule would fire across `src` with this
+        // blanket skip silently suppressing it.
         AddSeeTestAnnotationRector::class,
         RenameVariableToMatchMethodCallReturnTypeRector::class,
         RenameVariableToMatchNewTypeRector::class,

@@ -14,14 +14,12 @@ use PHPUnit\Framework\TestCase;
  * The one property of {@see SessionMother} worth pinning: its default expiry is measured from the clock the
  * test is running on, never from a literal on the calendar.
  *
- * It exists because the absolute form is not a hypothetical failure here. The default was
- * `2099-01-01T00:00:00+00:00`, and what kept every consumer that does not freeze the clock green was that
- * date still being in the future — the same shape, and the same silence, as the seeds that expired under
- * the suite in September 2026 and turned three assertions vacuous on their way past. A far fuse is not the
- * absence of the bomb.
+ * An absolute far-future expiry is not the absence of the bomb, it is the same bomb with a longer fuse: a
+ * consumer that does not freeze the clock is green only for as long as that date stays in the future, and
+ * the failure arrives on a commit that touched nothing. A relative window cannot have that property.
  *
- * The instant below is deliberately past the retired literal: with it, the absolute form fails and the
- * relative one cannot, which is the only difference this test is able to see.
+ * The instant below sits past any far-future literal a mother would plausibly carry, which is the only
+ * difference this test is able to see: with it, an absolute default fails and a relative one cannot.
  *
  * @internal
  */

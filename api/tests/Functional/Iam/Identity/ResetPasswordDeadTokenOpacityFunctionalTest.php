@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Iam\Identity;
 
 use DateInterval;
-use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Application\CompletePasswordReset;
