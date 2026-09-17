@@ -103,7 +103,7 @@ NFR12: Idempotencia / orden de listeners: el listener de `security` sobre `Acces
 
 UX-DR1: Vista **timeline** de auditoría (admin Backoffice) — lista cronológica de entradas de `audit_log`, ordenada por `occurred_on`.
 UX-DR2: **Filtros** del timeline — por actor (`actor_type`/`actor_id`), por rango de fechas, por recurso (`resource_type` + `resource_id`), por `level` (`activity`/`security`) y por `action`.
-UX-DR3: **Reconstrucción de jornada** — agrupar/correlar entradas por `actor_id` + `correlation_id` + ventana temporal (el caso de uso central de D6, sin tabla de sesión).
+UX-DR3: **Correlación de entradas** — el `correlation_id` se muestra en cada fila del timeline y es un eje de filtrado propio ("Follow this correlation"), así que las entradas de una misma petición se reconocen y se aíslan sin agrupación dedicada (D6, sin tabla de sesión). **Corregido tras la entrega:** la redacción original pedía agrupar por `actor_id` + `correlation_id` + **ventana temporal**; el término de ventana nunca llegó a formar parte de la clave de agrupación, y la vista agrupada construida sobre ella se retiró por no añadir capacidad frente al timeline — el identificador ya estaba en cada fila y el pivote alcanza más que la vista, que exigía fijar antes un actor.
 UX-DR4: **Detalle de entrada** — `action`, actor (`actor_type` + `actor_id`), `correlation_id`, recurso, `ip`, `user_agent`, `occurred_on` y `metadata`.
 UX-DR5: Presentación **consciente de PII** — los actores pseudonimizados se muestran como tales; nunca se expone payload sensible ni PII de negocio.
 

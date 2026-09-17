@@ -25,7 +25,7 @@ export function ErasedResource({ resourceType, className }: Readonly<ErasedResou
       <EyeOff className="text-text-subtle size-3.5 flex-none" aria-hidden="true" />
       {resourceType ? <span>{resourceType}</span> : null}
       {resourceType ? <span className="text-text-subtle">·</span> : null}
-      <span>anonimizado (GDPR)</span>
+      <span>anonymized (GDPR)</span>
     </span>
   );
 }
