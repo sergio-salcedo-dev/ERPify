@@ -32,6 +32,6 @@ Run from the repository root:
 ## File Constraints
 
 - **Immutable Migrations:** Never edit a migration merged into `main`. Create a new one.
-- **Reference Config:** `api/config/reference.php` is auto-generated; do not touch.
+- **Reference Config:** `api/config/reference.php` is auto-generated; never hand-edit it. Regenerate with `make sf.config.reference` and commit the result; `make php.lint.config-reference` fails when it is stale.
 - **Vendor:** `api/vendor/` is managed by Composer; never edit manually.
 - **Xdebug:** Use `make xdebug.enable` / `xdebug.disable` to toggle.
