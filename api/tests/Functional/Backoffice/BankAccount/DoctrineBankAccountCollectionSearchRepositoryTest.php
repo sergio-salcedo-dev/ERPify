@@ -256,8 +256,18 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
         $alphaId = Uuid::v7()->toRfc4122();
         $betaId = Uuid::v7()->toRfc4122();
 
-        $this->entityManager->persist(Bank::create($alphaId, self::BANK_ALPHA_NAME, self::BANK_ALPHA_SHORT));
-        $this->entityManager->persist(Bank::create($betaId, self::BANK_BETA_NAME, self::BANK_BETA_SHORT));
+        // Stamped, because the suite pins one instant and the frozen double answers every read with the
+        // SAME object: two unstamped aggregates come out exactly tied, where the wall clock used to give
+        // them distinct microseconds and order them by construction. No choice of pinned instant fixes
+        // that — only saying when each row was created does.
+        $this->entityManager->persist(
+            Bank::create($alphaId, self::BANK_ALPHA_NAME, self::BANK_ALPHA_SHORT)
+                ->setCreatedAt(new DateTimeImmutable('2026-01-01 09:00:00')),
+        );
+        $this->entityManager->persist(
+            Bank::create($betaId, self::BANK_BETA_NAME, self::BANK_BETA_SHORT)
+                ->setCreatedAt(new DateTimeImmutable('2026-01-01 09:30:00')),
+        );
         $this->entityManager->flush();
 
         $this->persistAccount(

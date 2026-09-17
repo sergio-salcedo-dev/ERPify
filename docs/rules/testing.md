@@ -26,11 +26,13 @@ Name **ports by capability** and **implementations by technology/strategy** — 
 | Port (capability) | `<Capability>` | `BankAccountCounter`, `BankRepository`, `BankExistenceChecker` |
 | Production adapter | `<Technology><Port>` | `DoctrineBankAccountCounter`, `DoctrineBankRepository` |
 | Test double that is an in-memory implementation of the port | `InMemory<Port>` | `InMemoryBankAccountCounter`, `InMemoryBankRepository` |
-| Test double that is a test-double pattern, not a port implementation | `Spy*` / `Stub*` / `Dummy*` | `StubDriverException`, `SpyMailer`, `StubClock` |
+| Test double that is a test-double pattern, not a port implementation | `Spy*` / `Stub*` / `Dummy*` | `StubDriverException`, `StubPersistenceFailure` |
 
 - An in-memory test implementation of a port is `InMemory<Port>`, never `Fake<Port>`: it stays symmetric with the `Doctrine<Port>` adapter and states *how* it works rather than the uninformative "fake".
 - An in-memory double that also records the calls it received still uses `InMemory<Port>` — the implementation nature dominates the incidental spying.
-- Reserve `Spy*` / `Stub*` / `Dummy*` for doubles that embody a test-double pattern instead of an alternative implementation of a domain port (a stubbed framework exception, a spy mailer, a stub clock).
+- Reserve `Spy*` / `Stub*` / `Dummy*` for a **solitary** double whose only notable property is its pattern — a stubbed framework exception, a stubbed persistence failure. The prefix earns its place by distinguishing that double from nothing else.
+- **When a port has several doubles, the pattern prefix stops discriminating and the name states the behaviour instead**, on the same axis as the port's production adapters: `FixedClock` / `AdvancingClock` / `MovableClock`, siblings of `NativeClock` / `SymfonyClock` (and of the vendor's own `NativeClock` / `MonotonicClock` / `MockClock`). All three of those clocks are stubs, so `Stub` would name the category beside two names that name members, and the question a reader actually has — does the clock move, and who moves it — would go unanswered. This is not a carve-out for clocks: it is the rule the first row already states, applied where the pattern prefix carries no information.
+- The two rules above describe what the tree does; the row's own predicate does not. `StubImageProcessor` and `SpyInvitationEmailSender` both implement a domain port, which "not a port implementation" excludes. They keep their names — renaming them buys nothing — but they are the reason the predicate is a guide rather than a gate.
 
 ## A double with no expectations is `createStub()`
 
@@ -74,7 +76,9 @@ Restore with `FreezeSystemClockExtension::pin()`, never `SystemClock::reset()`: 
 
 **Why not a clock that refuses to answer.** It was measured. `AggregateRoot::__construct()` reads the clock, so a `now()` that throws unless the test froze time reddens **720 tests across 192 classes** — every aggregate the suite builds — for a defect the pin closes outright at no such cost.
 
-**What the pin buys is that the instant stops mattering.** 3707 tests are green pinned at 1999-06-15, at 2026-01-01, at 2035-01-01 and at 2100-01-01 — a 101-year span over which the suite's verdict does not move. That is the property to preserve, and it is what makes the constant's value free to change.
+**What the pin buys is that the instant stops mattering.** 3707 tests are green pinned at 1999-06-15, 2026-01-01, 2035-01-01, 2100-01-01, `SUITE_INSTANT` and 2017-03-08T14:22:37 — past and future, on a boundary and off one, to the round hour and to the odd second. That is the property to preserve.
+
+**Free to a test is not free to a reader, and the constant carries two properties because of it.** It must sit in a year the tree does not use — the value appears verbatim in failure diffs, and when it was `2026-01-01` (the tree's most-used date literal, 66 occurrences) that string led the reader to 65 files instead of to the constant, while making `assertSame('2026-01-01…', $x->createdAt)` true by two independent paths: the code copied the seed, or the code read the clock. And it must sit away from every day/month/year boundary, so a test doing `->modify('-1 second')` does not cross all three at once. `2099` and `2100` are unavailable: the tree already spells them 19 and 7 times as its idioms for "far future" and "locked for ever".
 
 **What it asks of a test.** Seed from the clock the subject reads, never from a second one, and express a window rather than a date. Four defects had to be fixed to reach the span above, and every one had been green for as long as two clocks happened to agree:
 

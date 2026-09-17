@@ -31,8 +31,9 @@ use Symfony\Component\Clock\MockClock;
  * run after, which is the property that keeps a red attributable to the change that caused it.
  *
  * **What it buys, measured rather than estimated: the suite's verdict no longer depends on the instant at
- * all.** 3707 tests are green with `now` pinned at 1999-06-15, at {@see self::SUITE_INSTANT}, at 2035-01-01 and at
- * 2100-01-01 — a 101-year span over which nothing changes. Reaching that took four fixes and the pin is what
+ * all.** 3707 tests are green with `now` pinned at 1999-06-15, 2026-01-01, 2035-01-01, 2100-01-01,
+ * {@see self::SUITE_INSTANT} and 2017-03-08T14:22:37 — past and future, on a boundary and off one, to the
+ * round hour and to the odd second. Reaching that took four fixes and the pin is what
  * made each of them visible, since every one had been green for as long as two clocks happened to agree: a
  * shared functional login seating its session with `new DateTimeImmutable('+1 day')` while the admission gate
  * read the container's clock (**57 tests across 15 classes**, one seed), an aggregate stamp compared against
@@ -90,12 +91,27 @@ final class FreezeSystemClockExtension implements Extension
     /**
      * The instant the whole suite reads as "now" unless a test pins its own.
      *
-     * Its exact value carries no meaning and none should be read into it; what matters is that it is a
-     * literal, so it is the same on every machine and every day. Moving it is measured to change nothing:
-     * the suite is green at 1999-06-15 and at 2100-01-01 alike, which is the property that says no test is
-     * leaning on this constant rather than on the clock.
+     * No test may lean on it — that is measured, and the sweep above is the measurement. But the value is
+     * not therefore arbitrary, and saying it was is what put this constant on `2026-01-01T00:00:00+00:00`,
+     * **the most-used date literal in the whole test tree**: 66 occurrences, against 27 for the next, with
+     * 368 of the tree's 381 date literals in that same year. Two costs followed, and neither is aesthetic.
+     * A failure diff showing that string sent the reader to 65 files instead of to this one; and, worse, an
+     * assertion like `assertSame('2026-01-01T00:00:00+00:00', $x->createdAt)` became true by two
+     * independent paths — the code copied what the test seeded, or the code read the clock — so it stopped
+     * falsifying the mapping it was written for.
+     *
+     * Two properties, then, and both are cheap to keep:
+     *
+     *   - **A year the tree does not use**, so the value in a failure diff can only have come from here.
+     *     `2099` and `2100` are taken: the tree already spells them 19 and 7 times as its idioms for "far
+     *     future" and "locked for ever".
+     *   - **Away from every boundary.** `2026-01-01T00:00:00` sat on the day, month and year boundary at
+     *     once, so a test doing `->modify('-1 second')` crossed all three. Mid-month and mid-day leaves
+     *     ±14 days and ±11 hours of room.
+     *
+     * Within those two, the value is a preference and nothing more.
      */
-    public const string SUITE_INSTANT = '2026-01-01T00:00:00+00:00';
+    public const string SUITE_INSTANT = '2050-06-15T12:00:00+00:00';
 
     /**
      * Both halves of the same instant, because the application has two time sources and pinning one of them
