@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother;
 
+use DateInterval;
 use DateTimeImmutable;
 use Erpify\Iam\Session\Domain\Entity\Session;
+use Erpify\Shared\Clock\Domain\SystemClock;
 
 final class SessionMother
 {
@@ -20,10 +22,11 @@ final class SessionMother
     public const string DEFAULT_IP = '203.0.113.7';
 
     /**
-     * The far-future default keeps a session admissible by time so a test that does not care about expiry never
-     * trips the temporal predicate; pass `expiresAt` to exercise the caducity boundary.
+     * The default window is measured FROM the clock the test is running on, mirroring the `P7D` ceiling
+     * {@see \Erpify\Iam\Session\Application\StartSession} mints with; pass `expiresAt` to exercise the
+     * caducity boundary.
      */
-    public const string DEFAULT_EXPIRES_AT = '2099-01-01T00:00:00+00:00';
+    public const string DEFAULT_TTL_SPEC = 'P7D';
 
     public static function active(
         string $id = self::DEFAULT_ID,
@@ -39,7 +42,7 @@ final class SessionMother
             $organizationId,
             $device,
             $ip,
-            $expiresAt ?? new DateTimeImmutable(self::DEFAULT_EXPIRES_AT),
+            $expiresAt ?? SystemClock::now()->add(new DateInterval(self::DEFAULT_TTL_SPEC)),
         );
     }
 }

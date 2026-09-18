@@ -11,10 +11,11 @@ use Override;
 /**
  * A {@see Clock} that moves one second forward on every read and counts how many times it was read.
  *
- * Both properties exist because {@see FixedClock} cannot falsify "the sweep takes `now` once per execution":
- * a frozen clock returns the same instant however many times it is asked, so a sweep reading it per row
- * produces byte-identical output and the defect is invisible. Here the reads are both counted and
- * distinguishable, so a per-row read shows up as a count above one and as stamps that disagree.
+ * Both properties exist because {@see \Erpify\Tests\Double\Clock\FixedClock} cannot falsify "the sweep
+ * takes `now` once per execution": a frozen clock returns the same instant however many times it is asked,
+ * so a sweep reading it per row produces byte-identical output and the defect is invisible. Here the reads
+ * are both counted and distinguishable, so a per-row read shows up as a count above one and as stamps that
+ * disagree.
  *
  * @internal
  */

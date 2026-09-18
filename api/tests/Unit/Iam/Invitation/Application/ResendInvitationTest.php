@@ -13,6 +13,7 @@ use Erpify\Iam\Invitation\Domain\Event\InvitationResent;
 use Erpify\Iam\Invitation\Domain\Exception\InvitationNotFound;
 use Erpify\Iam\Invitation\Domain\Exception\InvitedIdentityUnavailable;
 use Erpify\Shared\Token\Domain\SingleUseToken;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;

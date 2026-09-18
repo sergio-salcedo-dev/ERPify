@@ -9,6 +9,7 @@ use Rector\Naming\Rector\ClassMethod\RenameParamToMatchTypeRector;
 use Rector\Naming\Rector\ClassMethod\RenameVariableToMatchNewTypeRector;
 use Rector\Php83\Rector\Class_\ReadOnlyAnonymousClassRector;
 use Rector\Php84\Rector\MethodCall\NewMethodCallWithoutParenthesesRector;
+use Rector\PHPUnit\CodeQuality\Rector\Class_\AddSeeTestAnnotationRector;
 use Rector\PHPUnit\PHPUnit120\Rector\Class_\AllowMockObjectsForDataProviderRector;
 use Rector\Symfony\Symfony73\Rector\Class_\CommandHelpToAttributeRector;
 
@@ -78,6 +79,17 @@ return RectorConfig::configure()
             __DIR__ . '/../../tests/Unit/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponderTest.php',
         ],
         RenamePropertyToMatchTypeRector::class,
+        // Non-convergent against php-cs-fixer's `fully_qualified_strict_types`, which is on: Rector adds
+        // `@see \Fully\Qualified\SubjectTest`, the fixer shortens it — it may, because subject and test
+        // share a namespace — and the next run no longer recognises the short form and appends another.
+        // Measured: one duplicate line per `make php.quality`.
+        //
+        // It never reaches `src`, and not for want of same-named pairs (`SymfonyClock`/`SymfonyClockTest`,
+        // `Bank`/`BankTest` and others exist). `TestClassNameResolver` inserts exactly ONE `Tests`/`Test`
+        // segment, while this tree's tests are `Erpify\Tests\Unit\…` — two — so no candidate ever
+        // resolves. Adopt a one-segment test namespace and the rule would fire across `src` with this
+        // blanket skip silently suppressing it.
+        AddSeeTestAnnotationRector::class,
         RenameVariableToMatchMethodCallReturnTypeRector::class,
         RenameVariableToMatchNewTypeRector::class,
     ])

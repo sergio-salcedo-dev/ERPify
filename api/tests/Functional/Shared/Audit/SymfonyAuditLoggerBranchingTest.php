@@ -13,11 +13,11 @@ use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger;
 use Erpify\Shared\Http\Infrastructure\CorrelationIdListener;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\Clock as SymfonyClockFacade;
 use Symfony\Component\Clock\MockClock;
-use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 
@@ -68,7 +68,10 @@ final class SymfonyAuditLoggerBranchingTest extends KernelTestCase
             }
 
             $requestStack->pop();
-            SymfonyClockFacade::set(new NativeClock());
+            // The suite's pinned instant, not the wall clock: this is the one place that writes the
+            // global clock directly, so handing it back the host wall clock would leave the two pinned sources
+            // out of step for the rest of the test.
+            FreezeSystemClockExtension::pin();
         }
     }
 

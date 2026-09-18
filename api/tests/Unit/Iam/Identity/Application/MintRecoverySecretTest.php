@@ -17,6 +17,7 @@ use Erpify\Iam\Identity\Domain\Exception\InvalidCurrentPassword;
 use Erpify\Iam\Identity\Domain\Exception\RecoverySecretAlreadyExists;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\HashedPassword;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;

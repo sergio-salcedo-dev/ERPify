@@ -7,13 +7,12 @@ namespace Erpify\Tests\Unit\Backoffice\Health\Infrastructure\Controller;
 use Erpify\Backoffice\Health\Application\CheckDatabaseHealth;
 use Erpify\Backoffice\Health\Domain\DatabaseHealthChecker;
 use Erpify\Backoffice\Health\Infrastructure\Controller\DatabaseHealthController;
-use Erpify\Shared\Clock\Infrastructure\SymfonyClock;
 use Erpify\Shared\Http\Infrastructure\Responder\JsonResponder;
+use Erpify\Tests\Double\Clock\FixedClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -34,7 +33,7 @@ final class DatabaseHealthControllerTest extends TestCase
         $controller = new DatabaseHealthController(
             new JsonResponder(),
             new CheckDatabaseHealth($checker),
-            new SymfonyClock(new MockClock(self::FROZEN_INSTANT)),
+            FixedClock::at(self::FROZEN_INSTANT),
         );
 
         $response = $controller();

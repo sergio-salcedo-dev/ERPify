@@ -14,6 +14,7 @@ use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Iam\Invitation\Domain\Event\InvitationAccepted;
 use Erpify\Iam\Invitation\Domain\Exception\InvalidToken;
 use Erpify\Shared\Token\Domain\SingleUseToken;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;

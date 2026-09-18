@@ -8,6 +8,7 @@ use DateInterval;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\NotifyLockedIdentities;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Tests\Double\Clock\FixedClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;

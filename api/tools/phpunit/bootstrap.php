@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Erpify\Tests\Support\Database\RefuseRuntimeDatabaseGuard;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Symfony\Component\Dotenv\Dotenv;
 
 $apiRoot = dirname(__DIR__, 2);
@@ -37,3 +38,15 @@ RefuseRuntimeDatabaseGuard::refuseUnlessTestDatabase(
     $apiRoot . '/config/packages/test/doctrine.yaml',
     $_SERVER['TEST_TOKEN'] ?? $_ENV['TEST_TOKEN'] ?? null,
 );
+
+// The clock is pinned here as well as from FreezeSystemClockExtension's two per-test subscribers, because
+// three things run OUTSIDE any per-test event and would otherwise read the host wall clock — the source this
+// whole harness exists to remove. A data provider resolves while the suite is being BUILT
+// (`TestBuilder::build()`, before the runner emits anything), and three providers in this tree construct
+// aggregates there, so `AggregateRoot::__construct()` stamped them from the wall clock while the test body
+// receiving them ran at the pinned instant. `setUpBeforeClass()` of the first class executed is the same
+// window. And an isolated child process (`--process-isolation`, `#[RunInSeparateProcess]`) never registers
+// extensions at all: its template calls `Facade::instance()->initForIsolation()`, which builds a dispatcher
+// with no subscribers, so the pin would not exist there for the whole test — but the template DOES
+// `require_once` this file, which is why the pin belongs here and not only in the extension.
+FreezeSystemClockExtension::pin();

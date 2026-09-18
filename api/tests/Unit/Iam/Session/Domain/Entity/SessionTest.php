@@ -12,7 +12,7 @@ use Erpify\Iam\Session\Domain\Event\SessionStarted;
 use Erpify\Iam\Session\Domain\Exception\InvalidSessionTransition;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
-use Erpify\Tests\Unit\Iam\Session\Application\FixedClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

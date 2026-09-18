@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

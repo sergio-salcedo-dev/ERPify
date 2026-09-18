@@ -10,7 +10,7 @@ use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Infrastructure\Cli\PruneRetiredSessionsCommand;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\Uuid;
-use Erpify\Tests\Unit\Iam\Session\Application\FixedClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
 use Override;

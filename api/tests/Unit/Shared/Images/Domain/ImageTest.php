@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Domain;
 
-use DateTimeImmutable;
+use DateTimeInterface;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use InvalidArgumentException;
@@ -34,7 +35,14 @@ final class ImageTest extends TestCase
         $this->assertSame(32, $image->width());
         $this->assertSame(24, $image->height());
         $this->assertSame(12345, $image->byteSize());
-        $this->assertLessThanOrEqual(new DateTimeImmutable(), $image->createdAt());
+        // The stamp is the instant of the clock the aggregate read, compared as a formatted value: the
+        // objects are compared for identity by `assertSame`, and that holds only because the suite's double
+        // hands out its backing instance un-cloned — every other clock in the tree mints a fresh one per
+        // read, `SymfonyClock` included, which is what the ambient clock becomes inside a functional test.
+        $this->assertSame(
+            SystemClock::now()->format(DateTimeInterface::ATOM),
+            $image->createdAt()->format(DateTimeInterface::ATOM),
+        );
     }
 
     public function testRejectsADigestShorterThanSixtyFourHexCharacters(): void

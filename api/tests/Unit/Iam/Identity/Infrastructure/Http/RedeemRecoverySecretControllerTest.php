@@ -16,7 +16,7 @@ use Erpify\Iam\Identity\Infrastructure\Http\RedeemRecoverySecretRequest;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordRecoveryThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice;
 use Erpify\Iam\Session\Application\RevokeSession;
-use Erpify\Tests\Unit\Iam\Identity\Application\FixedClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;

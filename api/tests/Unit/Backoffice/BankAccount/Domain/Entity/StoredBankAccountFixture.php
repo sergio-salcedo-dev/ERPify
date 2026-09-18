@@ -8,9 +8,8 @@ use DateTimeInterface;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent;
 use Erpify\Shared\Clock\Domain\SystemClock;
-use Erpify\Shared\Clock\Infrastructure\SymfonyClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
-use Symfony\Component\Clock\MockClock;
 
 /**
  * An account stored at one instant and edited at a later one, with the two verdicts an edit can carry.
@@ -37,7 +36,7 @@ trait StoredBankAccountFixture
 
     private function storedAccount(?string $bic = null, ?string $alias = null): BankAccount
     {
-        SystemClock::set(new SymfonyClock(new MockClock(self::STORED_AT)));
+        SystemClock::set(FixedClock::at(self::STORED_AT));
 
         $account = BankAccountMother::drained(
             holderName: self::HOLDER_NAME,
@@ -46,7 +45,7 @@ trait StoredBankAccountFixture
             alias: $alias,
         );
 
-        SystemClock::set(new SymfonyClock(new MockClock(self::EDITED_AT)));
+        SystemClock::set(FixedClock::at(self::EDITED_AT));
 
         return $account;
     }

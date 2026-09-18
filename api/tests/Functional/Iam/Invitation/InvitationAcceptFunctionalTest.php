@@ -20,6 +20,7 @@ use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Organization\Organization\Domain\Repository\OrganizationRepository;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ComparesOpaqueRefusals;
@@ -212,7 +213,9 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
             Membership::grant(Uuid::generate(), $userId, $this->organizationId),
         );
 
-        $generated = SingleUseToken::mint($expiresAt ?? (new DateTimeImmutable())->add(new DateInterval('P3D')));
+        $generated = SingleUseToken::mint(
+            $expiresAt ?? $this->service(Clock::class)->now()->add(new DateInterval('P3D')),
+        );
         $invitationId = Uuid::generate();
         $invitation = Invitation::create($invitationId, $this->organizationId, $userId, $generated->token);
         $invitation->markSent();
@@ -231,7 +234,11 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
         [, $validToken] = $this->seedSentInvitation();
         $validInvitationId = \substr($validToken, 0, (int) \strpos($validToken, '.'));
 
-        [, $expiredToken] = $this->seedSentInvitation((new DateTimeImmutable())->sub(new DateInterval('P1D')));
+        // The lapsed window comes off the clock the acceptance use case reads; a bare `new DateTimeImmutable()`
+        // here would make this case depend on the two clocks happening to agree.
+        [, $expiredToken] = $this->seedSentInvitation(
+            $this->service(Clock::class)->now()->sub(new DateInterval('P1D')),
+        );
 
         [$acceptedUserId, $acceptedToken] = $this->seedSentInvitation();
         $this->post($acceptedToken, self::ORIGIN);

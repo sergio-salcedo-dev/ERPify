@@ -12,12 +12,11 @@ use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountStatusChangedDomainEve
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotClosedException;
 use Erpify\Shared\Clock\Domain\SystemClock;
-use Erpify\Shared\Clock\Infrastructure\SymfonyClock;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Clock\MockClock;
 
 /**
  * Update / delete behaviour of the {@see BankAccount} aggregate, split from {@see BankAccountTest} so
@@ -74,10 +73,10 @@ final class BankAccountWriteEventTest extends TestCase
         $createdAt = '2026-06-14T09:30:00+00:00';
         $updatedAt = '2026-06-15T11:00:00+00:00';
 
-        SystemClock::set(new SymfonyClock(new MockClock($createdAt)));
+        SystemClock::set(FixedClock::at($createdAt));
         $account = BankAccountMother::drained();
 
-        SystemClock::set(new SymfonyClock(new MockClock($updatedAt)));
+        SystemClock::set(FixedClock::at($updatedAt));
         $account->update('Holder', 'DE89370400440532013000', null, null, Currency::EUR);
 
         $this->assertSame($createdAt, $account->getCreatedAt()->format(DateTimeInterface::ATOM));

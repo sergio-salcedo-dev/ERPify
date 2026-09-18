@@ -11,7 +11,7 @@ use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Iam\Session\Infrastructure\Persistence\Doctrine\DoctrineSessionRepository;
 use Erpify\Shared\Uuid\Domain\Uuid;
-use Erpify\Tests\Unit\Iam\Session\Application\FixedClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;

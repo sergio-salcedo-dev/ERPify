@@ -22,8 +22,8 @@ use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\ResourceResponderBuilder;
-use Erpify\Tests\Unit\Iam\Identity\Application\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
@@ -221,7 +221,7 @@ final class MintRecoverySecretControllerTest extends TestCase
         );
 
         // The aggregate stamps its own `createdAt` from the ambient clock, which no constructor argument
-        // reaches. `ResetSystemClockExtension` unfreezes it after each case.
+        // reaches. `FreezeSystemClockExtension` re-pins the suite instant after each case.
         SystemClock::set(FixedClock::at(self::NOW));
 
         $useCase = new MintRecoverySecret(

@@ -10,8 +10,8 @@ use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Infrastructure\Controller\GetMyRecoverySecretController;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\ResourceResponderBuilder;
-use Erpify\Tests\Unit\Iam\Identity\Application\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
@@ -110,7 +110,7 @@ final class GetMyRecoverySecretControllerTest extends TestCase
     {
         // The aggregate stamps its own `createdAt` from the ambient clock, which no constructor argument
         // reaches; freezing it is what turns `mintedAt` from a type into a value this test can assert.
-        // `ResetSystemClockExtension` unfreezes it after the case, so nothing leaks into the next one.
+        // `FreezeSystemClockExtension` re-pins the suite instant after the case, so nothing leaks into the next one.
         SystemClock::set(FixedClock::at(self::NOW));
 
         $generated = RecoverySecret::mint(UserMother::DEFAULT_ID, new DateTimeImmutable(self::NOW));

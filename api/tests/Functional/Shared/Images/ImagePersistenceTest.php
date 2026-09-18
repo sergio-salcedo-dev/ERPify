@@ -9,6 +9,8 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
+use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -48,7 +50,8 @@ final class ImagePersistenceTest extends KernelTestCase
                 $entityManager->persist($image);
                 $entityManager->flush();
             } finally {
-                SystemClock::reset();
+                // Back to the suite's pinned instant rather than to the wall clock: `reset()` un-pins.
+                FreezeSystemClockExtension::pin();
             }
 
             $entityManager->clear();

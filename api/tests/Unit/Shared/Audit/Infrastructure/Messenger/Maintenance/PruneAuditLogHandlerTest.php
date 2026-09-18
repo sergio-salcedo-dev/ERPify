@@ -8,7 +8,7 @@ use DateTimeImmutable;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Infrastructure\Messenger\Maintenance\PruneAuditLogHandler;
 use Erpify\Shared\Audit\Infrastructure\Messenger\Maintenance\PruneAuditLogMessage;
-use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogPruner;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
