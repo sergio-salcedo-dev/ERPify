@@ -27,7 +27,7 @@ All targets are ENV-aware (`ENV=dev|ci|staging|prod`) and default to `IN_CONTAIN
 -   `make db.migrate` — run pending migrations.
 -   `make db.diff` — generate a migration from entity/schema diff (**review before committing**).
 -   `make db.status`, `make db.validate` (ORM mapping ↔ DB).
--   `make db.load.fixtures` — purge + load Hautelook Alice fixtures.
+-   `make db.load.fixtures` — purge + load Hautelook Alice fixtures, then replay every projection over the seeded event log (`event:projection:rebuild --all`).
 -   `make db.reset` — drop → migrate → fixtures (**destructive**).
 -   `make db.shell` — interactive psql.
 

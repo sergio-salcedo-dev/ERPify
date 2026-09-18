@@ -80,7 +80,7 @@ superficie tiene un camino que la alcanza:
 | ---------------------------------- | ----------------------------------------------------- |
 | UX-DR1 timeline cronológico        | `<AuditTimelineTable>` (orden `occurred_on` desc)     |
 | UX-DR2 filtros                     | `<AuditFilterBar>` (barra + panel, estado en URL)     |
-| UX-DR3 reconstrucción de jornada   | pivote «seguir actor» → toggle `Jornada` → agrupado   |
+| UX-DR3 correlación de entradas     | chip por fila + pivote «seguir esta correlación» (toggle `Jornada` retirado) |
 | UX-DR4 detalle de entrada          | `<AuditEntryDrawer>` (secciones Qué/Quién/…/Metadata) |
 | UX-DR5 presentación PII-aware      | `<ActorChip anonymized>` · `<RedactedValue>` · § PII  |
 

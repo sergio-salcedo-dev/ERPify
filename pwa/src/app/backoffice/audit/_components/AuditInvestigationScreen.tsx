@@ -23,24 +23,14 @@ import {
 import { AuditTimelineSkeleton } from "@/context/backoffice/audit/infrastructure/ui/AuditTimelineSkeleton";
 import { AuditPagination } from "@/context/backoffice/audit/infrastructure/ui/AuditPagination";
 import { AuditEntryDrawer } from "@/context/backoffice/audit/infrastructure/ui/AuditEntryDrawer";
-import { AuditViewToggle } from "@/context/backoffice/audit/infrastructure/ui/AuditViewToggle";
-import { JourneySessionHeader } from "@/context/backoffice/audit/infrastructure/ui/JourneySessionHeader";
-import { AuditView, hasActiveAuditFilter, hasFixedActor } from "../_lib/auditFilter";
+import { hasActiveAuditFilter } from "../_lib/auditFilter";
 import { toAuditCriteria } from "../_lib/auditSearchCriteria";
 import { groupEntriesByDay } from "../_lib/auditDayGroups";
-import { groupEntriesByCorrelation } from "../_lib/auditJourneyGroups";
 import { AUDIT_PAGE_SIZE_DEFAULT, type AuditPageSize } from "../_lib/auditPaginate";
 import { useAuditUrlState } from "../_lib/auditUrlState";
 
-/** Day-divider groups (Timeline) or correlation sessions (Journey) for the grouped timeline table. */
-function buildGroups(entries: ReadonlyArray<AuditEntry>, view: AuditView): AuditTimelineGroup[] {
-  if (view === AuditView.Journey) {
-    return groupEntriesByCorrelation(entries).map((session) => ({
-      key: session.correlationId,
-      header: <JourneySessionHeader group={session} />,
-      entries: session.entries,
-    }));
-  }
+/** Day-divider groups for the grouped timeline table. */
+function buildGroups(entries: ReadonlyArray<AuditEntry>): AuditTimelineGroup[] {
   return groupEntriesByDay(entries, (iso) => dateTimeProvider.formatIsoToLongDate(iso)).map(
     (day) => ({ key: day.label, header: day.label, entries: day.entries }),
   );
@@ -61,25 +51,14 @@ export function AuditInvestigationScreen() {
   );
   // Page size and the keyset cursor (held in `useAuditTimeline`) are deliberately transient view
   // state, not URL params. The shareable unit of an investigation is the filtered query —
-  // level / actor / resource / range / mode — which already lives in the URL; a keyset cursor is an
+  // level / actor / resource / range — which already lives in the URL; a keyset cursor is an
   // opaque, prunable server token, so bookmarking "page 7" would rot once the pruner trims the tail.
   // A reloaded link therefore reopens page 1 of the same query, the predictable forensic behaviour.
   const [pageSize, setPageSize] = useState<AuditPageSize>(AUDIT_PAGE_SIZE_DEFAULT);
 
-  // Journey is reachable only with a fixed actor; a stale `view=journey` URL with no actor falls back
-  // to Timeline so the toggle and the rendered grouping never disagree.
-  const journeyEnabled = hasFixedActor(url.filter);
-  const journeyMode = journeyEnabled && url.view === AuditView.Journey;
-  const effectiveView = journeyMode ? AuditView.Journey : AuditView.Timeline;
-
-  // The "Hora" sort axis does not apply to Journey: a session is intrinsically ordered and the
-  // sessions themselves always read newest-first. So Journey fetches DESC regardless of the URL `dir`
-  // and the column header drops its toggle (see `sortable` below).
-  const sortDirection = journeyMode ? SortDirection.DESC : url.direction;
-
   const criteria = useMemo(
-    () => toAuditCriteria(url.filter, sortDirection, pageSize),
-    [url.filter, sortDirection, pageSize],
+    () => toAuditCriteria(url.filter, url.direction, pageSize),
+    [url.filter, url.direction, pageSize],
   );
   const hasActiveFilter = hasActiveAuditFilter(url.filter);
 
@@ -97,7 +76,7 @@ export function AuditInvestigationScreen() {
   // carries a JSONB blob per row.
   const { detail } = useAuditEventDetail(activeEntry?.id ?? null);
 
-  const groups = useMemo(() => buildGroups(entries, effectiveView), [entries, effectiveView]);
+  const groups = useMemo(() => buildGroups(entries), [entries]);
 
   const followActor = (entry: AuditEntry): void =>
     url.patchFilter({ actorType: entry.actorType, actorId: entry.actorId ?? "" });
@@ -122,12 +101,6 @@ export function AuditInvestigationScreen() {
         leading={
           <DensityToggle density={density} onDensityChange={setDensity} testId="audit-density" />
         }
-      />
-
-      <AuditViewToggle
-        view={effectiveView}
-        onViewChange={url.setView}
-        journeyEnabled={journeyEnabled}
       />
 
       <AsyncBoundary
@@ -163,8 +136,7 @@ export function AuditInvestigationScreen() {
               <AuditTimelineTable
                 groups={groups}
                 density={density}
-                direction={sortDirection}
-                sortable={!journeyMode}
+                direction={url.direction}
                 onToggleSort={toggleSort}
                 onRowActivate={(entry) => url.openEntry(entry.id)}
                 activeEntryId={url.entry}

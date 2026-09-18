@@ -3,7 +3,7 @@
 # =============================================================================
 
 .PHONY: sf sf.cc sf.cache.warmup sf.routes sf.about \
-        sf.routes.manifest \
+        sf.routes.manifest sf.config.reference \
         sf.messenger.stop-workers \
         sf.clear.vendor sf.clear.var sf.clear.var.log sf.clear.var.cache \
         sf.chown.var sf.clear sf.clear.sudo \
@@ -58,9 +58,36 @@ sf.routes.manifest: php.lint.prod-container ## Regenerate api/.route-manifest.js
 		echo "✗ sf.routes.manifest: could not read the production router — $(ROUTE_MANIFEST) left unchanged" >&2; \
 		exit 1; \
 	fi; \
-	cat "$$dump" > $(ROUTE_MANIFEST); \
+	if ! cat "$$dump" > $(ROUTE_MANIFEST); then \
+		rm -f "$$dump"; \
+		echo "✗ sf.routes.manifest: could not write $(ROUTE_MANIFEST)" >&2; \
+		exit 1; \
+	fi; \
 	rm -f "$$dump"; \
 	echo "✓ $(ROUTE_MANIFEST) regenerated"
+
+## —— Config reference ————————————————————————————————————————————————————————
+# Regenerates `api/config/reference.php` from what THIS vendor tree produces. The dump lands in a
+# temp file and is copied over only once it has succeeded, so a failed regeneration leaves the file
+# intact; `cat >` rather than `mv` keeps its own mode instead of mktemp's 0600, and the write is
+# checked because an unchecked one makes the recipe's exit status the ECHO's. The braces around the
+# dump are load-bearing for the same reason they are above. Rationale, the cache-invalidation design
+# and the blind spots: api/tools/config-reference/dump.sh.
+
+sf.config.reference: ## Regenerate api/config/reference.php from this vendor tree
+	@dump="$$(mktemp)"; \
+	if ! { $(CONFIG_REFERENCE_DUMP) > "$$dump"; }; then \
+		rm -f "$$dump"; \
+		echo "✗ sf.config.reference: could not regenerate — $(CONFIG_REFERENCE) left unchanged" >&2; \
+		exit 1; \
+	fi; \
+	if ! cat "$$dump" > $(CONFIG_REFERENCE); then \
+		rm -f "$$dump"; \
+		echo "✗ sf.config.reference: could not write $(CONFIG_REFERENCE)" >&2; \
+		exit 1; \
+	fi; \
+	rm -f "$$dump"; \
+	echo "✓ sf.config.reference: api/config/reference.php regenerated"
 
 ## —— Symfony Messenger ————————————————————————————————————————————————————————————
 

@@ -93,6 +93,14 @@ Golden rule: *contexts reference each other's identities and react to each other
 - **Primary store**: PostgreSQL 18 via Doctrine ORM.
 - **Migrations**: `api/migrations/2026/Version<timestamp>.php` (organised by year). Generate via `make db.diff`; never hand-edit applied migrations.
 - **Fixtures**: Hautelook Alice — `make db.load.fixtures`; destructive reset via `make db.reset` (drop → migrate → fixtures).
+  Seeding is three pieces, because a fixture aggregate is built through its domain factory and therefore *records*
+  the same domain events an application-created one does. `EventBackbonePurger` resets the raw-DBAL tables the ORM
+  purge cannot see (`event_store`, `projection_checkpoint`, `handled_domain_event` and `messenger_messages`) and
+  clears read models through `Projector::reset()` rather than naming them; `RecordSeededDomainEventsProcessor`
+  appends those recorded events — **appending only, never publishing**, so the seed stays free of outbox rows,
+  `async` deliveries and in-process handlers; and the target then replays (`event:projection:rebuild --all`),
+  because catch-up is triggered by message *delivery* and nothing was dispatched. Drop any one of the three and a
+  read model reports its pre-seed value over a freshly seeded table.
 - **Mapping**: declared as `#[ORM\…]` attributes on the entities (passive-metadata exception — see [`rules/architecture.md`](./rules/architecture.md)); repository implementations and persistence listeners live in `Infrastructure/Persistence/`.
 - **Cross-module references & persistence strategy**: an aggregate references another module's aggregate **by id** (`string` UUID v7), never via a typed `#[ORM\ManyToOne]` property to the other module's entity; read composition is an explicit DQL JOIN into a projection DTO, and the physical FK stays diff-clean via a `postGenerateSchema` listener. State-oriented persistence is the default; event sourcing is an opt-in, per-aggregate decision. ADR: [`adr/bank-bankaccount-modeling.md`](./adr/bank-bankaccount-modeling.md).
 - **Identifiers**: every entity id is an **app-assigned UUID v7** (`Uuid::generate()`, `Shared/Uuid/Domain`), mapped via the shared `Shared/Kernel/Domain/Entity/Identifiable` trait as a Doctrine *assigned* identifier — `#[ORM\Id]` + `#[ORM\Column]`, **no** `#[ORM\GeneratedValue]`. Load-bearing: the id assigned in the application layer is the persisted PK **and** the id carried by the aggregate's creation `DomainEvent`, so id-based consumers (e.g. Mercure realtime) match the create event to its row. Re-adding a Doctrine id generator makes it mint a divergent v7 PK at flush and breaks that invariant — pinned by `tests/Functional/Doctrine/IdentifiableAssignedIdentifierTest`. See [`rules/database.md`](./rules/database.md#identifiers-uuid-v7-app-assigned).

@@ -82,4 +82,9 @@
     <!-- Exclude paths -->
     <exclude-pattern>*/vendor/*</exclude-pattern>
     <exclude-pattern>*/var/*</exclude-pattern>
+    <!-- Generated array-shape documentation, and the one file in the swept set that another target
+         rewrites: `php.lint.config-reference` regenerates it to check it is current. PDepend
+         abandons the whole run on a read or parse error, reporting `Found 0 violations and 1 error`,
+         so a sweep overlapping that rewrite would report nothing while looking clean. -->
+    <exclude-pattern>*/config/reference.php</exclude-pattern>
 </ruleset>

@@ -16,7 +16,7 @@ See [`README.md`](../README.md) and [`docs/deployment-guide.md`](./deployment-gu
 cp api/.env.example api/.env         # edit as needed
 make docker.up                        # full stack (api + pwa + postgres + mercure)
 make db.migrate                       # apply Doctrine migrations
-make db.load.fixtures                 # Hautelook Alice fixtures (dev only)
+make db.load.fixtures                 # Hautelook Alice fixtures + projection replay (dev only)
 ```
 
 ### Logging in (dev)
@@ -154,7 +154,7 @@ make composer.check.all               # composer-unused + composer-require-check
 | Generate diff migration      | `make db.diff`          | From Doctrine schema changes            |
 | Migration status             | `make db.status`        |                                         |
 | Validate schema              | `make db.validate`      |                                         |
-| Load fixtures                | `make db.load.fixtures` | Hautelook Alice                         |
+| Load fixtures                | `make db.load.fixtures` | Hautelook Alice + projection replay     |
 | **Destructive** — full reset | `make db.reset`         | Drop → migrate → fixtures. Dev/CI only. |
 | psql shell                   | `make db.shell`         |                                         |
 

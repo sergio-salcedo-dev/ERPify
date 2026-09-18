@@ -17,11 +17,12 @@ use Symfony\Component\Uid\Uuid;
  * minted here → `_correlation_id` request attribute → `X-Correlation-Id` response header.
  *
  * **The server owns this value; an inbound `X-Correlation-Id` is ignored, not validated.** The
- * id is the column `audit_log` rows are grouped by, so whoever can choose it can choose how the
- * forensic trail reads: send one value on N unrelated requests and their rows collapse into one
- * apparent journey; send another actor's value and rows join under an identity that is not
- * theirs. No check on a single request can separate a reused id from a fresh one — a shape test
- * proves the value looks like a UUIDv7, never that its bearer minted it — so the only property
+ * id is the column every `audit_log` row of the request carries, rendered per row in the back
+ * office and offered there as a filter axis of its own, so whoever can choose it can choose how the
+ * forensic trail reads: send one value on N unrelated requests and a pivot on it returns them as
+ * one; send another actor's value and rows file under an identity that is not theirs. No check on
+ * a single request can separate a reused id from a fresh one — a shape test proves the value looks
+ * like a UUIDv7, never that its bearer minted it — so the only property
  * that holds is the one taken here: nothing outside the process can name it. The header is
  * dropped silently rather than logged, because logging it would move the same caller-chosen
  * string into a sink with no TTL and no erasure owner.
