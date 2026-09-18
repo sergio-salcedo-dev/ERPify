@@ -28,7 +28,7 @@ Read outputs from 4 parallel NFR evidence audit subagents, calculate overall ris
 ### 1. Read All Subagent Outputs
 
 ```javascript
-const domains = ['security', 'performance', 'reliability', 'scalability'];
+const domains = ['security', 'performance', 'reliability', 'maintainability'];
 const assessments = {};
 
 domains.forEach((domain) => {
@@ -36,6 +36,67 @@ domains.forEach((domain) => {
   assessments[domain] = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
 });
 ```
+
+---
+
+### 1a. Enforce the Undefined-Threshold Default
+
+Step 2 (Define Thresholds) marks a category **UNKNOWN** when no threshold was
+found in any source, and states the plan to report **CONCERNS** for it (see
+`{skill-root}/steps-c/nfr-status-definitions.md`). This is where that plan is
+checked, not just stated: a worker cannot silently report PASS for a domain
+whose threshold was never established.
+
+```javascript
+const domainThresholdKnown = (domain) => {
+  const threshold = subagentContext.nfr_thresholds?.[domain];
+  return threshold !== undefined && threshold !== 'UNKNOWN';
+};
+
+domains.forEach((domain) => {
+  if (domainThresholdKnown(domain)) return;
+  assessments[domain].findings.forEach((finding) => {
+    if (finding.status === 'PASS') {
+      finding.status = 'CONCERNS';
+      finding.description = `${finding.description} (downgraded from PASS: threshold was UNKNOWN at Step 2; an unmeasured target cannot pass).`;
+    }
+  });
+  Object.entries(assessments[domain].compliance || {}).forEach(([standard, status]) => {
+    if (status === 'PASS') assessments[domain].compliance[standard] = 'CONCERNS';
+  });
+});
+```
+
+---
+
+### 1b. Roll Each Domain's Findings Into Its Domain Status
+
+A worker reports findings. The domain has one status of its own, and this is
+where it is computed, by the rule stated in
+`{skill-root}/steps-c/nfr-status-definitions.md` (see "Domain Status"): the worst
+status among the domain's findings, with N/A deciding nothing.
+
+This runs after 1a, so a PASS the undefined-threshold default downgraded is
+already CONCERNS here and cannot roll a domain up to PASS.
+
+```javascript
+const DOMAIN_STATUS_ORDER = ['FAIL', 'CONCERNS', 'PASS'];
+
+const worstStatus = (statuses) => {
+  const judged = statuses.filter((status) => DOMAIN_STATUS_ORDER.includes(status));
+  // Every finding N/A is the one case where the domain is N/A: no finding
+  // carried a judgment, so there is no worst one.
+  if (judged.length === 0) return 'N/A';
+  return DOMAIN_STATUS_ORDER.find((candidate) => judged.includes(candidate));
+};
+
+const domainStatuses = Object.fromEntries(
+  domains.map((domain) => [domain, worstStatus(assessments[domain].findings.map((finding) => finding.status))]),
+);
+```
+
+Step 5 writes these four values into the gate artifact's `audited_domains` block
+and into each `## <Domain> Assessment` section, and the two have to agree.
 
 ---
 
@@ -77,7 +138,7 @@ domains.forEach((domain) => {
 const complianceSummary = {};
 Object.entries(allCompliance).forEach(([standard, statuses]) => {
   const hasFail = statuses.some((s) => s.status === 'FAIL');
-  const hasPartial = statuses.some((s) => s.status === 'PARTIAL' || s.status === 'CONCERN');
+  const hasPartial = statuses.some((s) => s.status === 'PARTIAL' || s.status === 'CONCERNS');
 
   complianceSummary[standard] = hasFail ? 'FAIL' : hasPartial ? 'PARTIAL' : 'PASS';
 });
@@ -92,13 +153,13 @@ Object.entries(allCompliance).forEach(([standard, statuses]) => {
 ```javascript
 const crossDomainRisks = [];
 
-// Example: Performance + Scalability issue
-const perfConcerns = assessments.performance.findings.filter((f) => f.status !== 'PASS');
-const scaleConcerns = assessments.scalability.findings.filter((f) => f.status !== 'PASS');
-if (perfConcerns.length > 0 && scaleConcerns.length > 0) {
+// Example: Reliability + Maintainability issue
+const reliabilityFindingConcerns = assessments.reliability.findings.filter((f) => f.status !== 'PASS');
+const maintainabilityConcerns = assessments.maintainability.findings.filter((f) => f.status !== 'PASS');
+if (reliabilityFindingConcerns.length > 0 && maintainabilityConcerns.length > 0) {
   crossDomainRisks.push({
-    domains: ['performance', 'scalability'],
-    description: 'Performance issues may worsen under scale',
+    domains: ['reliability', 'maintainability'],
+    description: 'Low test coverage or missing observability may hide reliability regressions',
     impact: 'HIGH',
   });
 }
@@ -160,6 +221,11 @@ const executiveSummary = {
 
   domain_assessments: assessments,
 
+  // The four values step 5 writes into the gate artifact's `audited_domains`
+  // block. They are carried here rather than recomputed there, so the artifact
+  // and the report sections cannot drift apart between the two steps.
+  domain_statuses: domainStatuses,
+
   compliance_summary: complianceSummary,
 
   cross_domain_risks: crossDomainRisks,
@@ -170,7 +236,7 @@ const executiveSummary = {
     security: assessments.security.risk_level,
     performance: assessments.performance.risk_level,
     reliability: assessments.reliability.risk_level,
-    scalability: assessments.scalability.risk_level,
+    maintainability: assessments.maintainability.risk_level,
   },
 
   subagent_execution: subagentExecutionLabel,
@@ -185,7 +251,7 @@ fs.writeFileSync('/tmp/tea-nfr-summary-{{timestamp}}.json', JSON.stringify(execu
 
 ### 7. Display Summary to User
 
-```
+```text
 ✅ NFR Evidence Audit Complete ({subagentExecutionLabel})
 
 🎯 Overall Risk Level: {overallRisk}
@@ -194,7 +260,7 @@ fs.writeFileSync('/tmp/tea-nfr-summary-{{timestamp}}.json', JSON.stringify(execu
 - Security:      {security_risk}
 - Performance:   {performance_risk}
 - Reliability:   {reliability_risk}
-- Scalability:   {scalability_risk}
+- Maintainability: {maintainability_risk}
 
 ✅ Compliance Summary:
 {list standards with PASS/PARTIAL/FAIL}
@@ -241,6 +307,7 @@ fs.writeFileSync('/tmp/tea-nfr-summary-{{timestamp}}.json', JSON.stringify(execu
 Proceed to Step 5 when:
 
 - ✅ All subagent outputs read
+- ✅ A domain status rolled up for each of the four domains
 - ✅ Overall risk calculated
 - ✅ Compliance aggregated
 - ✅ Summary saved

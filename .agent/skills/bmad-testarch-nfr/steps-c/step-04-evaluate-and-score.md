@@ -141,7 +141,7 @@ If probing is disabled, honor the requested mode strictly. If that mode cannot b
 
 ### 3. Dispatch 4 NFR Workers
 
-**Subagent A: Security Evidence Audit**
+#### Subagent A: Security Evidence Audit
 
 - File: `./step-04a-subagent-security.md`
 - Output: `/tmp/tea-nfr-security-${timestamp}.json`
@@ -150,22 +150,22 @@ If probing is disabled, honor the requested mode strictly. If that mode cannot b
   - `sequential`: run blocking and wait
 - Status: Running... ⟳
 
-**Subagent B: Performance Evidence Audit**
+#### Subagent B: Performance Evidence Audit
 
 - File: `./step-04b-subagent-performance.md`
 - Output: `/tmp/tea-nfr-performance-${timestamp}.json`
 - Status: Running... ⟳
 
-**Subagent C: Reliability Evidence Audit**
+#### Subagent C: Reliability Evidence Audit
 
 - File: `./step-04c-subagent-reliability.md`
 - Output: `/tmp/tea-nfr-reliability-${timestamp}.json`
 - Status: Running... ⟳
 
-**Subagent D: Scalability Evidence Audit**
+#### Subagent D: Maintainability Evidence Audit
 
-- File: `./step-04d-subagent-scalability.md`
-- Output: `/tmp/tea-nfr-scalability-${timestamp}.json`
+- File: `./step-04d-subagent-maintainability.md`
+- Output: `/tmp/tea-nfr-maintainability-${timestamp}.json`
 - Status: Running... ⟳
 
 In `agent-team` and `subagent` modes, runtime decides worker scheduling and concurrency.
@@ -176,12 +176,12 @@ In `agent-team` and `subagent` modes, runtime decides worker scheduling and conc
 
 **If `resolvedMode` is `agent-team` or `subagent`:**
 
-```
+```text
 ⏳ Waiting for 4 NFR subagents to complete...
   ├── Subagent A (Security): Running... ⟳
   ├── Subagent B (Performance): Running... ⟳
   ├── Subagent C (Reliability): Running... ⟳
-  └── Subagent D (Scalability): Running... ⟳
+  └── Subagent D (Maintainability): Running... ⟳
 
 [... time passes ...]
 
@@ -190,7 +190,7 @@ In `agent-team` and `subagent` modes, runtime decides worker scheduling and conc
 
 **If `resolvedMode` is `sequential`:**
 
-```
+```text
 ✅ Sequential mode: each worker already completed during dispatch.
 ```
 
@@ -199,7 +199,7 @@ In `agent-team` and `subagent` modes, runtime decides worker scheduling and conc
 ### 5. Verify All Outputs Exist
 
 ```javascript
-const outputs = ['security', 'performance', 'reliability', 'scalability'].map((domain) => `/tmp/tea-nfr-${domain}-${timestamp}.json`);
+const outputs = ['security', 'performance', 'reliability', 'maintainability'].map((domain) => `/tmp/tea-nfr-${domain}-${timestamp}.json`);
 
 outputs.forEach((output) => {
   if (!fs.existsSync(output)) {
@@ -212,7 +212,7 @@ outputs.forEach((output) => {
 
 ### 6. Execution Report
 
-```
+```text
 🚀 Performance Report:
 - Execution Mode: {resolvedMode}
 - Total Elapsed: ~mode-dependent
