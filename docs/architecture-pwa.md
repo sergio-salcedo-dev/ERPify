@@ -192,7 +192,7 @@ The PWA consumes the API's [RFC 9457 Problem Details](./api-error-contract.md) c
 
 | Layer         | Tool                                           | Entry                                                                                                                                              |
 | ------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit          | **Vitest 4** (jsdom)                           | `pwa/vitest.config.ts`, run via `make pwa.test.unit`                                                                                               |
+| Unit          | **Vitest 5** (jsdom)                           | `pwa/vitest.config.ts`, run via `make pwa.test.unit`                                                                                               |
 | E2E           | **Playwright 1.62**                            | `pwa/playwright.config.ts`, run via `make pwa.test.e2e`                                                                                            |
 | Watch         | Vitest                                         | `make pwa.test.unit.watch`                                                                                                                         |
 | Reports       | Playwright HTML                                | `make pwa.test.e2e.reports`                                                                                                                        |
