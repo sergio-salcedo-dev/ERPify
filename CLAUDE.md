@@ -300,6 +300,8 @@ is stated in the pull request body, since a non-story change has nowhere else to
 
 **These three layers are the surviving control, and that is a change of load rather than of wording.** The adversarial-pass gate on opening a PR was retired on 2026-08-31, so nothing mechanical now checks that a hostile read happened before a branch merges — which makes the per-story debt above the thing that has to hold on its own. See *Security review on every change* → Process for what the retired gate did and did not buy.
 
+**And "surviving" is now literal: no automated security reviewer reads a pull request here.** A review bot did, until its workspace trial lapsed — its last actual review was #903, which is itself the PR that retired the adversarial-pass gate. No pull request since has been reviewed by it, and **21 merged before anyone noticed** (#929 among them). Two facts are worth keeping from it rather than the vendor's name. The first is that the retirement argument above was made in the same week the repository's other automated reader went dark, so the load the three layers carry is larger than the sentence that handed it to them. The second is the shape of the failure: the tool is a GitHub App configured outside the tree, so no gate here could see it stop — a comment kept appearing on every PR, and a green build with a bot comment on it looks exactly like a reviewed one. **Check that a claimed reviewer actually ran before counting it**, whoever it is; the absence of a review is not visible in anything this repository can assert.
+
 - **Read-only, stated explicitly in each prompt** — no edits, no `git` state changes, no mutating `make`
   target, scratch files outside the repo. A subagent here once emptied the dev database.
 - **Pass the worktree's ABSOLUTE path** — a subagent defaults to the primary checkout, which is on `main`
@@ -314,16 +316,16 @@ is stated in the pull request body, since a non-story change has nowhere else to
 
 - **Read the pull request's existing review threads BEFORE launching the layers, and end every one of them
   as applied or answered — never leave one open.** The three layers read the code; nothing in them reads the
-  PR. Measured on #899: two Strix threads sat open through an entire review — thirty patches applied, every
-  gate green, the branch ready to merge — and the *user* found them, not the review. Neither outcome
+  PR. Measured on #899: two review-bot threads sat open through an entire review — thirty patches applied,
+  every gate green, the branch ready to merge — and the *user* found them, not the review. Neither outcome
   justified the silence, and they failed in opposite directions: the `Cross-Origin-Resource-Policy` finding
   was independently rediscovered by the Blind Hunter layer and fixed, so the thread was **stale**, while the
   object-level-authorization finding is a decision the epic settled (`epics-images.md`, item 17 of its
   firewall) and needed a **reply**, not a patch — applying the bot's suggested `#[IsGranted]` would have
   reopened a closed decision *and* broken the route, since the permission is granted to no role.
-  **An open thread is not evidence the finding is live.** Strix's re-review on push is off for this
-  repository, so its comment stays stamped `Updated for <sha>` at the commit it read and never re-runs
-  itself; a fixed finding and an unfixed one look identical. Read them with
+  **An open thread is not evidence the finding is live**, and that holds for a human reviewer as much as a
+  bot: a comment is stamped at the commit it read, so a fixed finding and an unfixed one look identical.
+  Read them with
   `gh pr view <n> --json comments` **and** `gh api repos/{owner}/{repo}/pulls/<n>/comments` (the inline
   threads live only on the second), pass what they already report into the layer prompts so the layers spend
   their effort elsewhere, and close the loop at the end: a patch, or a reply naming the epic/ADR line that
