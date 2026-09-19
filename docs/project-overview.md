@@ -44,7 +44,7 @@ Target personas (each shapes a distinct surface): **civil engineers** (pavement 
 | Part | Role | Language / Runtime | Framework | Key infrastructure |
 |---|---|---|---|---|
 | `api/` | HTTP API + async workers | PHP 8.5 | Symfony 8.1.x | FrankenPHP (Caddy), Doctrine ORM 3.6 / DBAL 4.4, PostgreSQL 18, Symfony Messenger, Mercure Hub, Monolog, Symfony UID |
-| `pwa/` | Web UI | TypeScript 6 / Node 24 | Next.js 16.2 (App Router) + React 19.2 | Tailwind 4.2, Shadcn 4, Inversify 8.1, Base UI 1.4, Vitest 4.1, Playwright 1.59 |
+| `pwa/` | Web UI | TypeScript 6 / Node 26 | Next.js 16.3 (App Router) + React 19.2 | Tailwind 4.3, Shadcn 4, Inversify 8.2, Base UI 1.8, Vitest 5.0, Playwright 1.62 |
 
 ## Architecture type
 
