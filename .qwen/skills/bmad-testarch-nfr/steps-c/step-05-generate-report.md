@@ -41,7 +41,13 @@ Use `nfr-report-template.md` to produce `{outputFile}` containing:
 - Category results (PASS/CONCERNS/FAIL)
 - Evidence summary
 - Remediation actions
-- Gate-ready YAML snippet (if applicable)
+- Gate-ready YAML snippet
+
+The gate snippet's `audited_domains` block carries the four domain statuses Step
+4E rolled up in `domain_statuses`. Write them from that value rather than judging
+them again here, and write each domain's `## <Domain> Assessment` section from the
+same value: the block is what a machine reads and the section is what a person
+reads, and a report whose two disagree about a domain has published two answers.
 
 ---
 
@@ -109,7 +115,7 @@ Report:
 
 ## On Complete
 
-Run: `python3 {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --key workflow.on_complete`
+Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow.on_complete`
 
 If the resolver succeeds and returns a non-empty `workflow.on_complete`, execute that value as the final terminal instruction before exiting.
 
