@@ -1,9 +1,9 @@
 # Handoff — BMAD update to 6.12.0 (PR #945)
 
-> Session closed mid-task on 2026-09-19 at the user's request. Everything below is
-> measured against this branch unless it says otherwise. Branch:
-> `chore/bmad-update-6-12-udzh`. Worktree:
-> `/home/dev/Projects/ERPify/.claude/worktrees/bmad-update-6-12-udzh`.
+> Written at a session close on 2026-09-19 and refreshed the same day, after PR #945
+> merged as `3d3ef122` and CI ran. Its branch and worktree are gone; read it against
+> `main`. The three items that blocked it are **closed** — what survives below is
+> decisions nobody has dated, not work in flight.
 
 ## Done and pushed
 
@@ -11,7 +11,7 @@
   tea v1.19.0 → v1.27.1, cis v0.2.1 → v0.3.2, automator main @f332173 → @0b94fd7.
   bmb stayed **pinned** at v1.8.1 and wds was already v0.4.3.
 - Commit `ed7c7731` carries the two tracked IDE skill trees (`.agent/skills`, `.qwen/skills`,
-  1792 files, written as mirrors of each other). PR **#945** is open against `main`.
+  1792 files, written as mirrors of each other). PR **#945** merged as `3d3ef122`.
 - Ran with `--shims`, so the retired IDs still resolve. Only `bmad-index-docs` and
   `bmad-shard-doc` are gone with no replacement.
 - `AGENTS.md` now names `docs/project-context.md`, and the falsified sentence in `CLAUDE.md`
@@ -49,41 +49,50 @@ Resolved by adopting the route 6.12 moves to — `AGENTS.md`, already tracked he
 **14** of the 92 skills. Restoring the auto-load was declined: the only place to write it is
 `_bmad/custom/`, which is gitignored, so it would hold on one machine and reach nobody else.
 
-## Pending — pick up here
+## Closed by CI on the merge commit
 
-1. **`make php.lint.project-context` was never run.** It is a PHPUnit-filter gate and needs the
-   php container, which is not up in this worktree. Low risk but unverified: the page claims no
-   BMAD version (measured by grep over `docs/project-context.md` and
-   `api/.project-context-versions`, one incidental `bmad-agent-dev` mention at line 212, not a
-   version claim), so the update should not have staled it. **Run it and confirm.**
-2. **`make shell.lint` was never run locally** — `shellcheck` is not installed on this machine.
-   Its subject did not move: the only two tracked files with a sh/bash shebang under these trees
-   (`bmad-story-automator/scripts/story-automator`, in `.agent` and `.qwen`) are byte-identical
-   after the update. The CI `shell-lint` job covers it. **Read CI rather than assume.**
-3. **CI on #945 has not been read at all.** Nothing was checked after the push.
-4. **A live question that was never asked.** `document_output_language` is `"Spanish"`, and
-   6.11 made it **enforced on file writes** where it used to be advisory. This repo's rule is
-   conversation in Spanish, docs/commits/PRs in English — so BMAD will now write its artifacts
-   in Spanish by contract. Restoring the pre-existing value was the faithful move during a
-   restore, but the setting itself deserves a decision. **Ask the user.**
-5. **`bmb` is pinned at v1.8.1 while v2.2.2 is the stable release** (two majors back). The pin
-   was respected deliberately — the user declined unpinning when asked, and nobody in this
-   session knows what motivated the pin. Not a defect; a decision someone should date.
-6. **wds is deprecated upstream in 6.12**, hidden from the module picker for new installs and
-   firing deprecation warnings on every flow. It still installs here (v0.4.3, unchanged). No
-   action taken.
-7. **The four IDE skill roots do not agree with each other**, and this is a real inconsistency
-   rather than an observation: the installer writes 92 skills to each of `.claude/skills`,
-   `.agents/skills`, `.agent/skills` and `.qwen/skills`, but `.gitignore:94-96` ignores
-   `/.claude/skills/bmad-*/` and `/.agents/skills/bmad-*/` (**with an s**) while `.agent/skills`
-   (**no s**) and `.qwen/skills` are fully tracked — which is why this PR is 1792 files of two
-   identical mirrors. `make/worktree.mk:176` seeds new worktrees from `.agent/skills`
-   specifically. Whether `.qwen` should be tracked at all is worth deciding; nobody chose this,
-   it accreted.
-8. **The `_bmad/custom/` guardrail is per-machine.** `/_bmad/` is gitignored, so the pinned
-   `project_name` / languages / `user_name` protect this checkout only. A fresh clone or another
-   developer gets the installer's defaults, and the next `quick-update` there will reset them
-   the same way. If that matters, the fix has to live somewhere tracked.
+The three blocking items were "never run locally", and CI answered all three on `3d3ef122`.
+Both gates this session could not execute are **green**, so the doubt they recorded is spent:
+
+- **`php.lint.project-context`** — green, inside `API Tests (PHPUnit + Lint)`. It is a member of
+  `php.quality.dry-run`, which is the sweep CI runs; the local run was impossible only because
+  the worktree had no php container. The measurement that predicted this still holds:
+  `docs/project-context.md` claims no BMAD version (one incidental `bmad-agent-dev` mention at
+  line 212 is not a version claim), so the update could not stale it.
+- **`shell.lint`** — green, as the `Shell (ShellCheck)` job. `shellcheck` is not installed on
+  the machine that did the update, which is why it went unrun; its subject had not moved, the
+  two tracked files with a sh/bash shebang under these trees being byte-identical afterwards.
+- **CI overall** — API Behat, API Build (Docker), API Security (Semgrep), CodeQL (both), PWA
+  (Node) and both PWA E2E shards all green; PWA Burn-In skipped. That run covers **four**
+  merges (#943/#947, #944, #946, #945), so a red there would not have been attributable to this
+  change without checking — this one touches no PHP and no PWA source.
+
+**`document_output_language` is decided: it stays `Spanish`.** 6.11 made it enforced on file
+writes rather than advisory, and the question was whether that collides with the repo writing
+its docs in English. It does not, deliberately: `_bmad-output/` is the working layer and
+several of its artifacts are already in Spanish, while what lands under `docs/` is English.
+The value is pinned in `_bmad/custom/config.toml`.
+
+## Still open — decisions nobody has dated
+
+These are not unfinished work; each is a choice someone should make on purpose.
+
+1. **`bmb` is pinned at v1.8.1 while v2.2.2 is the stable release** (two majors back). The pin
+   was respected deliberately during the update, and nobody in that session knew what motivated
+   it. Not a defect — a decision with no date on it.
+2. **wds is deprecated upstream in 6.12**, hidden from the module picker for new installs and
+   firing deprecation warnings on every flow. It still installs here at v0.4.3.
+3. **The four IDE skill roots do not agree with each other**, and this accreted rather than
+   being chosen: the installer writes 92 skills to each of `.claude/skills`, `.agents/skills`,
+   `.agent/skills` and `.qwen/skills`, but `.gitignore:94-96` ignores `/.claude/skills/bmad-*/`
+   and `/.agents/skills/bmad-*/` (**with an s**) while `.agent/skills` (**no s**) and
+   `.qwen/skills` are tracked in full — which is why #945 was 1792 files of two identical
+   mirrors. `make/worktree.mk:176` seeds new worktrees from `.agent/skills` specifically.
+   Whether `.qwen` should be tracked at all is the open question.
+4. **The `_bmad/custom/` guardrail is per-machine.** `/_bmad/` is gitignored, so the pinned
+   `project_name`, languages and `user_name` protect one checkout. A fresh clone or another
+   developer gets the installer's defaults, and the next `quick-update` there resets them the
+   same way it did here. If that matters, the fix has to live somewhere tracked.
 
 ## Not owed, stated so it does not read as an omission
 
