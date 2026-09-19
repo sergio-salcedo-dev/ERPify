@@ -86,6 +86,13 @@ updates:
           - "phpstan/phpstan-*"
           - "phpstan/extension-installer"
           - "rector/rector"
+      phpstan-rector-security:
+        applies-to: security-updates
+        patterns:
+          - "phpstan/phpstan"
+          - "phpstan/phpstan-*"
+          - "phpstan/extension-installer"
+          - "rector/rector"
 
   - package-ecosystem: github-actions
     directory: /
@@ -106,6 +113,10 @@ updates:
       codeql-action:
         patterns:
           - "github/codeql-action*"
+      codeql-action-security:
+        applies-to: security-updates
+        patterns:
+          - "github/codeql-action*"
 
   - package-ecosystem: npm
     directory: /pwa
@@ -115,3 +126,18 @@ updates:
       prefix: "chore"
     cooldown:
       default-days: 7
+    groups:
+      # @vitest/* packages pin an exact peer on the vitest release they ship with,
+      # so a PR moving one alone cannot install and no rerun fixes it. Declared
+      # twice because `applies-to` defaults to version-updates: an advisory on
+      # either half would otherwise still arrive as a single-package PR, which
+      # is the one shape that cannot go green.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+      vitest-security:
+        applies-to: security-updates
+        patterns:
+          - "vitest"
+          - "@vitest/*"

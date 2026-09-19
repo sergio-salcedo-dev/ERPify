@@ -1,5 +1,39 @@
 # Deferred work
 
+## Deferred from: retiring the named review bot from the code-review rule (2026-09-19)
+
+Session closed here with the thread unfinished. Everything below is open; nothing is blocked.
+
+- **PR #943 merged WITHOUT the three review layers, which it owed.** Merged 2026-09-18 as `feafdddb`;
+  the layers were never run. Its body now says so, but the merge is done and that is the record:
+  `CLAUDE.md` states the precedent this violated — the PR that retired the adversarial-pass gate was
+  itself a `chore/` with no story, *"the one change in this repo's history that removed a security
+  control would have been the first to owe nothing"*, and running the layers anyway returned two GRAVE
+  plus a gate that could not fail. #943 had that same shape: a no-story change retiring a security
+  control from the instructions. The rule's trigger is the surface touched, not whether the diff
+  reaches `src/`. **A post-hoc pass over `feafdddb` is the remaining option**, and it is worth taking:
+  the Acceptance Auditor can check the numbers that PR wrote into `CLAUDE.md` against the tree — "21
+  merged unreviewed", "#903 was the last real review", "no gate reads this file's contents" — and
+  whether making the review-threads rule tool-agnostic dropped something specific and load-bearing;
+  the Blind Hunter can check whether the added paragraph claims more than was measured. Edge Case
+  Hunter will probably return little over a markdown diff; say so rather than padding.
+- **The asymmetry is worth keeping, because it is the general lesson and not a detail of this PR.**
+  #943 was authored by an agent, about a rule governing agents, and the argument for skipping its own
+  review was written into its own body by that same agent. Nothing mechanical catches that shape.
+- **How it merged unreviewed is itself the second lesson.** The review debt was named in the session,
+  the PR was open, and it merged anyway between two turns — an open PR is a PR that can merge, and
+  nothing in the tooling distinguishes "open, awaiting its review" from "open, ready". The note that
+  was meant to record all this was committed to the PR's own branch AFTER that branch had already
+  merged and been deleted, so it reached nobody; that is why it is filed here on `main` instead.
+- **The reactivate-or-retire decision on the review bot itself is still the user's and is unresolved.**
+  `CLAUDE.md` now records it as inactive since 2026-08-31 (last real review: #903), which is correct
+  only while it stays inactive — reactivating it means reverting that paragraph. Its own notice
+  reports 46 PRs reviewed and 2 security issues surfaced workspace-wide; the two measured here are the
+  #899 threads, one independently rediscovered by the Blind Hunter layer and one a false positive
+  against a closed epic decision. Two data points, not a verdict on the other 44.
+- Context, already finished and needing nothing: PR #929 (the suite clock pin) merged as `4a692aab`,
+  with its three review layers run, all `patch` findings applied, and its two `decision-needed` items
+  settled after consulting three independent readers. Its worktree and branch are cleaned up.
 
 ## Deferred from: code review of PR #853 — audit write-operation snapshot header (2026-08-26)
 
