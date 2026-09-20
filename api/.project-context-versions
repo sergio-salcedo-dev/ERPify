@@ -67,7 +67,7 @@
 
 api/composer.json :: require.php => PHP 8.5
 api/composer.json :: extra.symfony.require => Symfony 8.1
-api/composer.json :: require.doctrine/orm => Doctrine ORM 3.6
+api/composer.json :: require.doctrine/orm => Doctrine ORM 3.7
 api/composer.json :: require.doctrine/dbal => DBAL 4.4
 api/composer.json :: require.doctrine/doctrine-migrations-bundle => migrations-bundle 4.0
 api/composer.json :: require.doctrine/persistence => Persistence 4.2
@@ -89,7 +89,7 @@ pwa/package.json :: devDependencies.tailwindcss => Tailwind 4.3
 pwa/package.json :: dependencies.shadcn => Shadcn 4.19
 pwa/package.json :: dependencies.inversify => Inversify 8
 pwa/package.json :: dependencies.vitest => Vitest 5
-pwa/package.json :: dependencies.@playwright/test => Playwright 1.62
+pwa/package.json :: dependencies.@playwright/test => Playwright 1.63
 pwa/package.json :: dependencies.@testing-library/react => @testing-library/react 16
 pwa/package.json :: dependencies.@testing-library/jest-dom => jest-dom 7
 pwa/package.json :: devDependencies.jsdom => jsdom 30

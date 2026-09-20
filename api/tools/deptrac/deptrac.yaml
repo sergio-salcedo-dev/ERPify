@@ -216,6 +216,20 @@ deptrac:
         - name: Vendor.Flysystem
           collectors: [{ type: classLike, value: ^League\\Flysystem\\.* }]
 
+        # PHP's own `SortDirection`, which doctrine/orm 3.7 takes in place of the 'ASC'/'DESC'
+        # string it deprecated (removed in ORM 4). It is a LANGUAGE enum, native from PHP 8.6 and
+        # declared by symfony/polyfill-php86 below it — so on this platform deptrac sees a userland
+        # global class rather than an internal one, and it needs a layer to stop being Uncovered.
+        # Global, hence anchored on both ends: no namespace prefix can scope it.
+        #
+        # Infrastructure-only, and that placement is the decision rather than a formality: the
+        # domain enum (Shared\Search\Domain\SortDirection) does not convert itself, because the
+        # only reason the conversion exists is the ORM's signature. DoctrineSortDirection owns it.
+        # This layer goes away on its own once the platform reaches PHP 8.6 and the symbol becomes
+        # internal.
+        - name: Vendor.PhpNativeSort
+          collectors: [{ type: classLike, value: ^SortDirection$ }]
+
     ruleset:
         # Domain rule is identical for every module: only the shared-kernel Domain
         # and the blessed external namespaces. No sibling layer, no framework runtime.
@@ -391,6 +405,7 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
+            - Vendor.PhpNativeSort
         Iam.Session.Infrastructure:
             - Iam.Session.Domain
             - Iam.Session.Application
@@ -405,6 +420,7 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
+            - Vendor.PhpNativeSort
         Organization.Organization.Infrastructure:
             - Organization.Organization.Domain
             - Organization.Organization.Application
@@ -472,6 +488,7 @@ deptrac:
             - Vendor.Sentry
             - Vendor.Intervention
             - Vendor.Flysystem
+            - Vendor.PhpNativeSort
 
     # Published cross-context seams — the exact (importer => imported) pairs blessed
     # in api/.bounded-context-allowlist. Keep the two lists in sync.
