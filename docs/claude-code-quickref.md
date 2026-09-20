@@ -116,7 +116,24 @@ make super-lint.slim                # SuperLinter on changed files only (slim im
 ```bash
 make bmad.status.audit              # Report stale markers across every sprint-status board (canonical + sprint-status-*.yaml).
 make bmad.status.audit c='--strict' # Same, but exit 1 on drift (for a gate).
+make bmad.skills.sync.dry-run       # Report drift between .claude/skills/bmad-* and the tracked .agent/skills.
+make bmad.skills.sync               # Replace that tree from .agent/skills (destructive; backs up to tmp/ first).
+make bmad.skills.sync c='--force'   # Same, but also removes a hand-written skill the installer never wrote.
 ```
+
+**The skill sync exists because an update never reaches the primary checkout.** The installer writes its
+skills to one root per target IDE, and they disagree about ownership: `.agent/skills` is tracked while
+`.gitignore` ignores `/.claude/skills/bmad-*/`. So an update run from a worktree travels back through git
+for `.agent/` only, and the primary keeps serving whatever version it was installed with — measured on
+2026-09-20, two months after the 6.12.0 update, the primary still held the 6.10 tree of 2026-07-14 (73
+skill directories against 77, 793 lines of `diff -rq`). Nothing went red, because `make worktree.create`
+seeds every *new* worktree from `.agent/` and the only checkout left wrong is the busiest one. The sync
+**replaces** rather than merging — `cp -a` over the top keeps the retired skills and every file the new
+version stopped shipping — and it refuses, before touching anything, when a `bmad-*` directory under
+`.claude/skills` has no history at the same path in `.agent/skills`. That is the mechanical difference
+between a skill the installer *retired* (regenerable) and one somebody *wrote by hand* (gone for good),
+and it is not hypothetical: `git-worktree-code-review` lived in exactly one skill root and was found by a
+human reading a diff. `--force` archives it into the backup instead of refusing.
 
 Nothing in the merge path moves a marker in `sprint-status.yaml`: a PR squash-merges on GitHub and the file keeps saying `review` / `in-progress`. The audit is offline (no network, no `gh`) and reports two things — an epic still open whose stories are all `done`, and a story below `done` whose tag (`RM-6`, `U-4`, `II-5`, `AF-1.1`…) already appears in a commit subject on the base branch. Story keys with no letter prefix carry no commit tag, so they are listed as unchecked rather than passed silently.
 
