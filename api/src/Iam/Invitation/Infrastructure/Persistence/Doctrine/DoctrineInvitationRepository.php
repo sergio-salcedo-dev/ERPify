@@ -23,8 +23,9 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 final readonly class DoctrineInvitationRepository implements InvitationRepository
 {
     /**
-     * The predicate selecting one invitee's invitations. All three statements here take rows of the
-     * same set, which is why their lock direction has to agree — see the docblocks below.
+     * The predicate selecting one invitee's invitations. The three statements below take OVERLAPPING
+     * sets of the same table — the `FOR UPDATE` read narrows further with a status — which is why their
+     * lock direction has to agree; each states its half of that argument at its own declaration.
      */
     private const string INVITED_USER_PREDICATE = 'i.invitedUserId = :userId';
 

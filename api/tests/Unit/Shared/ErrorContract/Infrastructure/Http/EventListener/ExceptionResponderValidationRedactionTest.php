@@ -142,6 +142,42 @@ final class ExceptionResponderValidationRedactionTest extends TestCase
     }
 
     /**
+     * A violation with no property path names the payload itself, not a member of it. It has to read as
+     * that and not as an unrecognised member, which is the verdict reserved for bytes the caller chose.
+     */
+    #[Test]
+    public function itNamesTheRootWhenAViolationCarriesNoPath(): void
+    {
+        $exceptionMessage = $this->exceptionMessageFor(new ValidationFailedException(
+            $this->validatedPayload(),
+            $this->violations('irrelevant', ''),
+        ));
+
+        $this->assertStringContainsString('(root)', $exceptionMessage);
+        $this->assertStringNotContainsString('(unrecognised member)', $exceptionMessage);
+    }
+
+    /**
+     * A path whose first segment IS declared is shape, so it is written — but a declared member can still
+     * be followed by an unbounded tail of indices and sub-properties, and that tail is caller-sized. It is
+     * cut rather than refused, because the member name is the diagnostic and dropping it loses it.
+     */
+    #[Test]
+    public function itTruncatesADeclaredPathThatRunsTooLong(): void
+    {
+        $longButDeclared = 'bic' . \str_repeat('.a', 60);
+
+        $exceptionMessage = $this->exceptionMessageFor(new ValidationFailedException(
+            $this->validatedPayload(),
+            $this->violations('irrelevant', $longButDeclared),
+        ));
+
+        $this->assertStringNotContainsString($longButDeclared, $exceptionMessage);
+        $this->assertStringNotContainsString('(unrecognised member)', $exceptionMessage);
+        $this->assertStringContainsString('…', $exceptionMessage);
+    }
+
+    /**
      * What actually reaches the listener: the mapped DTO or the aggregate, never a bare scalar. The
      * declared vocabulary of paths is read off it, so the fixture has to be an object to mean anything.
      */

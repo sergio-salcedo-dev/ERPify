@@ -99,12 +99,12 @@ tres del PWA, relativas a `pwa/`.
 
 | # | Issue key | Fichero:línea | Regla | Hoy | Final | Acción y porqué |
 |---|---|---|---|---|---|---|
-| 1 | `AZ7DGUEmgfB4D_M8NyjH` | `src/Shared/Mailer/Infrastructure/PlainTextNotificationMailer.php:65` | S1142 | FP | FIXED | Despacho por tipo → `match (true)`. No era FP: 5 returns reales. |
+| 1 | `AZ7DGUEmgfB4D_M8NyjH` | `src/Shared/Mailer/Infrastructure/PlainTextNotificationMailer.php:65` | S1142 | FP | FIXED | Despacho por tipo → `match (true)`. No era FP: 4 returns reales, como dice el propio issue. |
 | 2 | `AaAAgaU5yvo70u5u9kLb` | `src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php:440` | S1142 | FP | FIXED | `safePath` secuencial → `match (true)`, con `$segments` calculado antes. |
 | 3 | `AZ67oOo9ZBZf2NUkZYvC` | `src/Shared/Search/Infrastructure/Persistence/Doctrine/FilterApplier.php:249` | S1142 | FP | FIXED | Tres `return null` idénticos → una guarda con predicado nombrado. |
-| 4 | `AZ8ELY1UAWYzuNNhOQ7A` | `src/Backoffice/Audit/Infrastructure/Persistence/Dbal/AuditTimelineFilterApplier.php:170` | S1142 | A | FIXED | Mismo colapso; los dos `parseStrict` del árbol quedan iguales. |
+| 4 | `AZ8ELY1UAWYzuNNhOQ7A` | `src/Backoffice/Audit/Infrastructure/Persistence/Dbal/AuditTimelineFilterApplier.php:170` | S1142 | A | FIXED | Mismo colapso. **No quedan iguales**: el de auditoría no tiene guarda de offset y el compartido sí — divergencia preexistente, ver decisiones abiertas. |
 | 5 | `AZ8pTBHmz13szBXudoo6` | `src/Iam/Identity/Infrastructure/Security/UnauthenticatedAccessListener.php:55` | S1142 | A | FIXED | **Cuatro `return;` idénticos** → predicado que nombra el caso positivo. Sujeto al límite anti-abstracción. |
-| 6 | `AaAB6tw8TV2yRQvmWVCc` | `src/Iam/Identity/Infrastructure/Messenger/Maintenance/IdentityMaintenanceSchedule.php:98` | S1192 | FP | FIXED | `'1 day'` ×3 → constante que nombra la cadencia. El literal se repite de verdad. |
+| 6 | `AaAB6tw8TV2yRQvmWVCc` | `src/Iam/Identity/Infrastructure/Messenger/Maintenance/IdentityMaintenanceSchedule.php:98` | S1192 | FP | ACCEPTED | **Revertida en review (2 capas).** El docblock de la clase dice en negrita *«The periods are set by what each check observes, not by symmetry»* y da TRES razones distintas para los tres `1 day` — el prune es *«a third reason again»*. No son un concepto: una constante afirmaría un acoplamiento que la clase niega. **Reclasificar**. |
 | 7 | `AZ_obfVh0FCPfX5GnPzh` | `src/Iam/Identity/Infrastructure/Cli/InspectStoredIdentityIntegrityCommand.php:146` | S1192 | FP | FIXED | `'%d identity(ies).'` ×3 → constante; tres `sprintf` iguales divergen al primer retoque. |
 | 8 | `AZ_eL9FHQn1YLhAmwh7m` | `src/Iam/Invitation/Infrastructure/Persistence/Doctrine/DoctrineInvitationRepository.php:74` | S1192 | FP | FIXED | Predicado DQL ×3 → constante; un rename se arregla en un sitio. |
 | 9 | `AZ8ELY0ZAWYzuNNhOQ6_` | `src/Backoffice/Audit/Infrastructure/Persistence/Dbal/DbalAuditTimelineRepository.php:73` | S1488 | A | FIXED | Hipótesis: `$page` sólo porta el `@var`. **Falsificador: `make php.stan` rojo tras usar `@phpstan-var` sobre el `return`** ⇒ se conserva el código actual y la fila acaba en `ACCEPTED`. No se busca una segunda transformación. |
@@ -152,6 +152,31 @@ sin OK explícito, y no es trabajo de código.
 - Dadas las 10 supervivientes, cuando se consulta cada issue key con `additionalFields=comments` **después** del write, entonces cada una tiene exactamente un comentario y las filas 18–19 devuelven `ACCEPTED`.
 
 ## Spec Change Log
+
+- `2026-09-20` — **Review de tres capas (Blind Hunter · Edge Case Hunter · Acceptance Auditor, en paralelo).**
+  Ninguna GRAVE; el Blind Hunter **no pudo romper la equivalencia**, verificada método a método por álgebra
+  booleana. Aplicados nueve parches; **tres hallazgos los levantó más de una capa a la vez**.
+  **El más caro es aritmético y era mío**: el Intent dice «14 ACCEPTED y 9 FALSE_POSITIVE» y la medición dice
+  **13 y 10** — la columna por fila del Code Map siempre estuvo bien, así que la tabla contradecía a la prosa
+  desde el primer día y sólo la tercera capa lo vio. Corolario: son **8** mal clasificadas, no 7.
+  **La fila 6 se revierte** (2 capas): `DAILY_SWEEP_INTERVAL` acoplaba tres cadencias que el docblock de la
+  clase argumenta, en negrita, como derivadas independientemente — violaba la restricción de esta misma spec
+  sobre nombrar el concepto y no el literal. Reparto final: **12 FIXED / 9 ACCEPTED / 2 FP**.
+  **La excepción nueva pasa a `LogicException`**: el censo del commit decía «dos precedentes» y eran cuatro —
+  `AggregateRoot::id()` guarda la misma invariante en el kernel compartido y la clasifica como error de
+  programación, que es lo correcto cuando el id se mina en proceso antes de persistir.
+  **Tres testigos añadidos donde no había ninguno**: la guarda de sub-request del listener (borrarla dejaba la
+  suite verde — medido antes y después), los brazos `(root)` y de truncado de `safePath`, y la excepción nueva.
+  **Una aserción se retiró por no ser falsable**: pinchar la clase base es tautológico a `level: max` en todas
+  sus grafías (`assertInstanceOf` y `get_parent_class`, ambas medidas), y las salidas restantes eran ofuscar la
+  referencia o silenciar el analizador.
+  **Correcciones de prosa**: la fila 1 decía 5 returns y el issue dice 4; la fila 4 afirmaba que los dos
+  `parseStrict` quedaban iguales y no es cierto; el docblock de `INVITED_USER_PREDICATE` decía «same set»
+  donde sus dos vecinos dicen «overlapping», que es la palabra que el argumento ABBA necesita; y el alcance del
+  write plan eran 10 keys, no 12. **Y el marco «mismos mensajes» era falso**: el mensaje al operador del
+  comando SÍ cambió, y ningún test lo afirmaba.
+  **Boy-scout**: dos cadenas en castellano en el fichero del flow, invisibles al gate de idioma por
+  construcción (sólo lee literales sin sustitución), traducidas.
 
 - `2026-09-20` — **Implementación de los 13 arreglos.** Dos resultados que el spec dejaba abiertos y ahora
   están medidos. **Fila 9:** el falsificador NO se disparó — `@phpstan-var` sobre el `return` pasa
@@ -216,7 +241,7 @@ El orden de los brazos ES la precedencia: el booleano va primero porque `is_scal
 - `make php.quality` / `make pwa.quality` -- exit 0 impreso, de corrida fresca.
 - `make php.unit` / `make pwa.test.unit` -- verde sin tocar ningún test existente.
 - `git diff origin/main... -- api/src api/tests pwa/src pwa/tests | grep -E '^\+[^+]' | grep -nE 'NOSONAR|@phpstan-ignore|eslint-disable|@SuppressWarnings|S1142|S1192|S107|S6772|S1488|S112|return budget'` -- sin salida. Lee **sólo líneas añadidas**: prueba que no se introduce supresión ni jerga, y nada más.
-- `sonar api GET "/api/issues/search?…&additionalFields=comments"` sobre las 12 issue keys -- antes (preflight) y después (read-back).
+- `sonar api GET "/api/issues/search?…&additionalFields=comments"` sobre las 11 issue keys -- antes (preflight) y después (read-back).
 
 **Manual checks:**
 - Render del diálogo de borrado y de la leyenda de `/backoffice/docs/flow` en el stack vivo: el `?` sigue pegado a la etiqueta y la leyenda conserva su separación por `gap-2`.

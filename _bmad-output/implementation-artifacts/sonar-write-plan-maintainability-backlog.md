@@ -16,9 +16,11 @@ ejecuta sin OK explícito de Sergio.
 SonarCloud es un **sistema externo y compartido**. Esta sección es la frontera entre el refactor local y
 una mutación fuera del repo; nada de aquí se ejecuta sin OK explícito de Sergio.
 
-**Alcance:** 10 comentarios (filas 14–23) y 2 cambios de estado (filas 18–19). Nada más.
+**Alcance:** **11 comentarios** (filas 6 y 14–23) y **3 cambios de estado** `FALSE_POSITIVE → ACCEPTED`
+(filas 6, 18 y 19). Son 11 issue keys en total — las filas 18 y 19 están DENTRO del rango 14–23, así que
+contarlas aparte daba 12 y mandaba al operador a buscar dos keys que no existen.
 
-**Preflight** (sólo lectura), para las 12 issues implicadas: estado actual y comentarios existentes.
+**Preflight** (sólo lectura), para las 11 issues implicadas: estado actual y comentarios existentes.
 La precondición está **medida a 2026-09-19: las 23 tienen cero comentarios**, así que un comentario
 presente al llegar es una señal de que alguien intervino — se para y se pregunta, no se añade encima.
 

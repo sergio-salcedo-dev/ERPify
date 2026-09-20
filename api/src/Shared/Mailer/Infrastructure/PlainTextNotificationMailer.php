@@ -72,10 +72,6 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
         };
     }
 
-    /**
-     * The boolean arm has to come first: `is_scalar(false)` is true, so a later arm would render it
-     * through `%s` as an empty string.
-     */
     private function encodedOrMarked(mixed $value): string
     {
         $encoded = \json_encode($value);

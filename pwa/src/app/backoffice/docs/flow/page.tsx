@@ -19,7 +19,7 @@ function FlowMap({ flow }: Readonly<{ flow: Flow }>) {
   return (
     <nav
       className="flow__map border-border bg-card overflow-x-auto rounded-xl border p-4 shadow-sm"
-      aria-label={`Mapa del flujo: ${flow.title}`}
+      aria-label={`Flow map: ${flow.title}`}
       data-testid={`docs-flow__map-${flow.id}`}
     >
       <ol className="flow__map-track flex items-start gap-1.5">
@@ -31,7 +31,7 @@ function FlowMap({ flow }: Readonly<{ flow: Flow }>) {
               <a
                 href={`#${flow.id}-step-${index + 1}`}
                 className="hover:bg-muted/60 focus-visible:ring-ring flex w-21 flex-col items-center gap-1 rounded-lg p-1.5 text-center focus-visible:ring-2 focus-visible:outline-none"
-                title={`Ir al paso ${index + 1}: ${step.title}`}
+                title={`Go to step ${index + 1}: ${step.title}`}
                 data-testid={`docs-flow__map-link-${flow.id}-${step.id}`}
               >
                 <span

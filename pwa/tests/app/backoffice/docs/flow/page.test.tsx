@@ -13,7 +13,10 @@ describe("DocsFlowPage legend", () => {
     (label) => {
       render(<DocsFlowPage />);
 
-      expect(screen.getByText(label).textContent).toBe(label);
+      const labels = screen.getAllByText(label);
+
+      expect(labels.length).toBeGreaterThan(0);
+      labels.forEach((node) => expect(node.textContent).toBe(label));
     },
   );
 });
