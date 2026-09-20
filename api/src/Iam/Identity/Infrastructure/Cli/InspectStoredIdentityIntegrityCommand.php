@@ -47,6 +47,13 @@ use Throwable;
 )]
 final class InspectStoredIdentityIntegrityCommand extends Command
 {
+    /**
+     * How many identities a finding affects. Every section reports the same shape, and the wording is
+     * deliberately hedged: the operator is told the size of the problem, never which rows, because an
+     * identity id is a person.
+     */
+    private const string AFFECTED_IDENTITY_COUNT = '%d identity(ies).';
+
     private const string DRIFT_ACTION = 'STORED_IDENTITY_DRIFT_DETECTED';
 
     public function __construct(
@@ -143,7 +150,7 @@ final class InspectStoredIdentityIntegrityCommand extends Command
 
         if (0 !== $findings->malformedRoles) {
             $io->section('identity_user.roles — columns that are not a JSON array');
-            $io->text(\sprintf('%d identity(ies).', $findings->malformedRoles));
+            $io->text(\sprintf(self::AFFECTED_IDENTITY_COUNT, $findings->malformedRoles));
             $io->note([
                 "This one does not degrade quietly: a scalar there fails the entity's array property type "
                 . 'during hydration, so the identity cannot be loaded at all and every path that reads it '
@@ -154,7 +161,7 @@ final class InspectStoredIdentityIntegrityCommand extends Command
 
         if (0 !== $findings->unreadableCredentials) {
             $io->section('identity_user.password_hash — credentials the value object refuses');
-            $io->text(\sprintf('%d identity(ies).', $findings->unreadableCredentials));
+            $io->text(\sprintf(self::AFFECTED_IDENTITY_COUNT, $findings->unreadableCredentials));
             $io->note([
                 'Each is refused a session exactly as an unknown email is, so its owner cannot sign in and '
                 . 'gets no clue why. The rows are NOT listed here on purpose: an identity id is a person '
@@ -168,7 +175,7 @@ final class InspectStoredIdentityIntegrityCommand extends Command
 
         if (0 !== $findings->admittedWithoutCredential) {
             $io->section('identity_user.password_hash — admitted identities holding no credential');
-            $io->text(\sprintf('%d identity(ies).', $findings->admittedWithoutCredential));
+            $io->text(\sprintf(self::AFFECTED_IDENTITY_COUNT, $findings->admittedWithoutCredential));
             $io->note([
                 'The quietest of the four: nothing refuses it loudly, because the value object is never asked. '
                 . 'The credentials check simply reads a null password as "cannot authenticate" and answers the '

@@ -197,11 +197,11 @@ function FlowChart({ flow }: Readonly<{ flow: Flow }>) {
       <figcaption className="flow__chart-legend text-muted-foreground mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
         <span className="flex items-center gap-2">
           <span className="border-muted-foreground w-5 border-t" aria-hidden="true" />
-          Your request&apos;s path (there and back)
+          {"Your request's path (there and back)"}
         </span>
         <span className="flex items-center gap-2">
           <span className="border-muted-foreground w-5 border-t border-dashed" aria-hidden="true" />
-          In the background (asynchronous)
+          {"In the background (asynchronous)"}
         </span>
       </figcaption>
     </figure>

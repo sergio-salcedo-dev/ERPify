@@ -2,7 +2,8 @@
 title: 'Vaciar el backlog de mantenibilidad de SonarCloud: arreglar 13, argumentar 10, ninguna supresión nueva'
 type: 'refactor'
 created: '2026-09-20'
-status: 'ready-for-dev'
+status: 'in-progress'
+baseline_commit: '20acf52a'
 review_loop_iteration: 1
 context:
   - '{project-root}/docs/rules/clean-code.md'
@@ -132,14 +133,14 @@ sin OK explícito, y no es trabajo de código.
 
 **Execution** (el porqué de cada una está en su fila del Code Map):
 
-- [ ] Filas 1–2 -- reescribir ambos métodos como `match (true)` **preservando la precedencia**, conservando sus docblocks.
-- [ ] Filas 3–4 -- colapsar los `return null` repetidos de cada `parseStrict` tras un predicado nombrado.
-- [ ] Fila 5 -- extraer las cuatro guardas de `onException` a un predicado privado, **sujeto al límite anti-abstracción**.
-- [ ] Filas 6–8 -- extraer cada literal repetido a una constante nombrada por su concepto.
-- [ ] Fila 9 -- probar `@phpstan-var` sobre el `return`; correr `make php.stan` **antes** de cerrarla y aplicar el falsificador.
-- [ ] Fila 10 -- crear la excepción dedicada **sólo si su nombre informa**; en otro caso degradar la fila.
-- [ ] Filas 11–13 -- texto JSX explícito; **verificar el render en el stack vivo**, no sólo el lint.
-- [ ] Cobertura -- por cada cambio, identificar la cobertura existente **de la rama o contrato que el refactor podría alterar**; se añade test sólo cuando ese comportamiento no esté ya protegido por una aserción viva.
+- [x] Filas 1–2 -- reescribir ambos métodos como `match (true)` **preservando la precedencia**, conservando sus docblocks.
+- [x] Filas 3–4 -- colapsar los `return null` repetidos de cada `parseStrict` tras un predicado nombrado.
+- [x] Fila 5 -- extraer las cuatro guardas de `onException` a un predicado privado, **sujeto al límite anti-abstracción**.
+- [x] Filas 6–8 -- extraer cada literal repetido a una constante nombrada por su concepto.
+- [x] Fila 9 -- probar `@phpstan-var` sobre el `return`; correr `make php.stan` **antes** de cerrarla y aplicar el falsificador.
+- [x] Fila 10 -- crear la excepción dedicada **sólo si su nombre informa**; en otro caso degradar la fila.
+- [x] Filas 11–13 -- texto JSX explícito; **verificar el render en el stack vivo**, no sólo el lint.
+- [x] Cobertura -- por cada cambio, identificar la cobertura existente **de la rama o contrato que el refactor podría alterar**; se añade test sólo cuando ese comportamiento no esté ya protegido por una aserción viva.
 - [ ] `tmp/sonar-justifications.md` -- redactarlo y **esperar OK**; después ejecutar el *Write Plan* con su read-back.
 - [ ] Registrar en la PR el **SHA del commit** con los 13 arreglos y el **timestamp del análisis** de SonarCloud contra el que se verificó el cierre.
 
@@ -151,6 +152,27 @@ sin OK explícito, y no es trabajo de código.
 - Dadas las 10 supervivientes, cuando se consulta cada issue key con `additionalFields=comments` **después** del write, entonces cada una tiene exactamente un comentario y las filas 18–19 devuelven `ACCEPTED`.
 
 ## Spec Change Log
+
+- `2026-09-20` — **Implementación de los 13 arreglos.** Dos resultados que el spec dejaba abiertos y ahora
+  están medidos. **Fila 9:** el falsificador NO se disparó — `@phpstan-var` sobre el `return` pasa
+  `make php.stan` con `[OK] No errors`, así que la fila se queda en `FIXED` y `$page` desaparece.
+  **Fila 10:** el límite anti-abstracción se resolvió a favor de arreglar, y no por el analizador: el árbol
+  ya nombra esta misma condición dos veces (`InvitedIdentityUnavailable::withoutId()` en `SendInvitation` y
+  `OrganizationNotProvisioned` en `GrantMembership`), y el comando era el único de los tres con un
+  `RuntimeException` sin nombre — tercera ocurrencia, Regla de Tres. La excepción nueva extiende
+  `RuntimeException` siguiendo a `PersonReferenceProbeFailed` del mismo módulo, y **no** `DomainException`
+  como sus dos hermanos: ellos se alcanzan por HTTP y necesitan un `ProblemDetails.type`; éste sólo lo
+  alcanza una consola, y acuñar un nombre de error de wire para una ruta que nunca contesta una petición
+  metería en ese vocabulario un miembro que nada puede emitir.
+  **Una regresión que cazó PHPStan:** mover `preg_split` delante de la guarda de cadena vacía en `safePath`
+  perdía el estrechamiento de `$path` a no-vacío, dejando `$segments[0]` sin garantía. La guarda vuelve a ser
+  early return y el `match` cubre los tres casos restantes.
+  **Equivalencia del JSX probada, no afirmada:** los dos tests nuevos pasan contra el código nuevo Y contra
+  el del baseline (copiado byte a byte, restaurado por checksum), y enrojecen con un espacio plantado,
+  devolviendo el diff exacto. Se comparan con `textContent`, nunca con `toHaveTextContent`, que normaliza
+  los espacios y habría pasado por encima del defecto vigilado.
+  **Rector no reexpandió** la cadena `&&` de la fila 5: la reescritura determinista que hay anotada afecta a
+  `||`, no a `&&`.
 
 - `2026-09-20` — **Review 1 (externa, pre-aprobación).** Aplicado: estado objetivo explícito (13/8/2/0);
   «comportamiento observable idéntico» → **contrato funcional idéntico**, que era incompatible con la

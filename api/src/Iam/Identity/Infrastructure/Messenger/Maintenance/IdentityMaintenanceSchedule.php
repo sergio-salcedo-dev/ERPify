@@ -84,6 +84,12 @@ use Symfony\Contracts\Cache\CacheInterface;
 #[AsSchedule('identity_maintenance')]
 final readonly class IdentityMaintenanceSchedule implements ScheduleProviderInterface
 {
+    /**
+     * The cadence the identity sweeps share. `NotifyLockedIdentitiesMessage` deliberately does not use
+     * it: its five-minute period is what spares it the re-anchoring defect this class documents.
+     */
+    private const string DAILY_SWEEP_INTERVAL = '1 day';
+
     public function __construct(
         #[Autowire(service: 'cache.scheduler_checkpoint')]
         private CacheInterface $checkpointState,
@@ -95,10 +101,10 @@ final readonly class IdentityMaintenanceSchedule implements ScheduleProviderInte
     {
         return (new Schedule())
             ->stateful($this->checkpointState)
-            ->add(RecurringMessage::every('1 day', new ReconcilePersonReferencesMessage()))
+            ->add(RecurringMessage::every(self::DAILY_SWEEP_INTERVAL, new ReconcilePersonReferencesMessage()))
             ->add(RecurringMessage::every('5 minutes', new NotifyLockedIdentitiesMessage()))
-            ->add(RecurringMessage::every('1 day', new InspectStoredIdentityMessage()))
-            ->add(RecurringMessage::every('1 day', new PruneRetiredSessionsMessage()))
+            ->add(RecurringMessage::every(self::DAILY_SWEEP_INTERVAL, new InspectStoredIdentityMessage()))
+            ->add(RecurringMessage::every(self::DAILY_SWEEP_INTERVAL, new PruneRetiredSessionsMessage()))
         ;
     }
 }

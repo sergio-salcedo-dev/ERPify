@@ -175,17 +175,25 @@ final readonly class AuditTimelineFilterApplier
             return null;
         }
 
-        if (!$dateTime instanceof DateTimeImmutable) {
-            return null;
-        }
-
-        // UTC has two canonical spellings: `P` parses both but emits `+00:00`, while `p` emits the
-        // literal `Z` a JS toISOString() sends — accept either rendering of the same instant.
-        if ($dateTime->format($format) !== $value && $dateTime->format(\str_replace('P', 'p', $format)) !== $value) {
+        // The instance test subsumes createFromFormat's `false` and narrows the type for the gate
+        // behind it.
+        if (!$dateTime instanceof DateTimeImmutable || !$this->isCanonicalUnder($dateTime, $format, $value)) {
             return null;
         }
 
         return $dateTime;
+    }
+
+    /**
+     * Round-trip gate: the value is canonical under `$format` only if formatting the parsed instant
+     * reproduces it byte-identically. UTC has two canonical spellings — `P` parses both but emits
+     * `+00:00`, while `p` emits the literal `Z` a JS toISOString() sends — so either rendering of the
+     * same instant is accepted.
+     */
+    private function isCanonicalUnder(DateTimeImmutable $dateTime, string $format, string $value): bool
+    {
+        return $dateTime->format($format) === $value
+            || $dateTime->format(\str_replace('P', 'p', $format)) === $value;
     }
 
     private function scalarValue(Filter $filter): string

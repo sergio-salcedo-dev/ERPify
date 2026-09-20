@@ -254,26 +254,28 @@ final readonly class FilterApplier
             return null;
         }
 
-        // A real instant is required before any offset read; createFromFormat returns false on
-        // an unparseable value (and on a hard error), so this also subsumes the error path.
-        if (false === $dateTime) {
-            return null;
-        }
-
-        // The real-world offset span is asymmetric (UTC-12 to UTC+14), so each side is checked
-        // separately; a symmetric abs() would admit the non-existent -13/-14h offsets.
+        // A real instant is required before any offset read; createFromFormat returns false on an
+        // unparseable value (and on a hard error), so the instance test also subsumes the error path
+        // and is what narrows the type for the two gates behind it.
         if (
-            $dateTime->getOffset() > self::MAX_UTC_OFFSET_EAST_SECONDS
-            || $dateTime->getOffset() < self::MIN_UTC_OFFSET_WEST_SECONDS
+            !$dateTime instanceof DateTimeImmutable
+            || !$this->carriesRealWorldOffset($dateTime)
+            || !$this->isCanonicalUnder($dateTime, $format, $value)
         ) {
             return null;
         }
 
-        if (!$this->isCanonicalUnder($dateTime, $format, $value)) {
-            return null;
-        }
-
         return $dateTime;
+    }
+
+    /**
+     * The real-world offset span is asymmetric (UTC-12 to UTC+14), so each side is checked
+     * separately; a symmetric abs() would admit the non-existent -13/-14h offsets.
+     */
+    private function carriesRealWorldOffset(DateTimeImmutable $dateTime): bool
+    {
+        return $dateTime->getOffset() <= self::MAX_UTC_OFFSET_EAST_SECONDS
+            && $dateTime->getOffset() >= self::MIN_UTC_OFFSET_WEST_SECONDS;
     }
 
     /**

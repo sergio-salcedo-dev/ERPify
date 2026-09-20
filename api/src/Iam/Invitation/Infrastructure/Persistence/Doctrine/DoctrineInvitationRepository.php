@@ -22,6 +22,12 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 #[AsAlias(InvitationRepository::class)]
 final readonly class DoctrineInvitationRepository implements InvitationRepository
 {
+    /**
+     * The predicate selecting one invitee's invitations. All three statements here take rows of the
+     * same set, which is why their lock direction has to agree — see the docblocks below.
+     */
+    private const string INVITED_USER_PREDICATE = 'i.invitedUserId = :userId';
+
     public function __construct(private EntityManagerInterface $entityManager)
     {
     }
@@ -71,7 +77,7 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
         return $this->entityManager->createQueryBuilder()
             ->select('i')
             ->from(Invitation::class, 'i')
-            ->where('i.invitedUserId = :userId')
+            ->where(self::INVITED_USER_PREDICATE)
             ->andWhere('i.status = :status')
             ->orderBy('i.id', 'ASC')
             ->setParameter('userId', $userId)
@@ -103,7 +109,7 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
 
         $affected = $this->entityManager->createQueryBuilder()
             ->delete(Invitation::class, 'i')
-            ->where('i.invitedUserId = :userId')
+            ->where(self::INVITED_USER_PREDICATE)
             ->setParameter('userId', $userId)
             ->getQuery()
             ->execute()
@@ -122,7 +128,7 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
         $this->entityManager->createQueryBuilder()
             ->select('i.id')
             ->from(Invitation::class, 'i')
-            ->where('i.invitedUserId = :userId')
+            ->where(self::INVITED_USER_PREDICATE)
             ->orderBy('i.id', 'ASC')
             ->setParameter('userId', $userId)
             ->getQuery()

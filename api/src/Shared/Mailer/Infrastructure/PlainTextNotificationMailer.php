@@ -64,18 +64,20 @@ final readonly class PlainTextNotificationMailer implements NotificationMailer
      */
     private function renderFieldValue(mixed $value): string
     {
-        if (\is_bool($value)) {
-            return $value ? 'true' : 'false';
-        }
+        return match (true) {
+            \is_bool($value) => $value ? 'true' : 'false',
+            null === $value => 'null',
+            \is_scalar($value) => (string) $value,
+            default => $this->encodedOrMarked($value),
+        };
+    }
 
-        if (null === $value) {
-            return 'null';
-        }
-
-        if (\is_scalar($value)) {
-            return (string) $value;
-        }
-
+    /**
+     * The boolean arm has to come first: `is_scalar(false)` is true, so a later arm would render it
+     * through `%s` as an empty string.
+     */
+    private function encodedOrMarked(mixed $value): string
+    {
         $encoded = \json_encode($value);
 
         return false === $encoded ? '[unserializable]' : $encoded;
