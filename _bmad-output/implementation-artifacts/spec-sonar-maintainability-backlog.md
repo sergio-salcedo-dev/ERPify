@@ -158,6 +158,15 @@ sin OK explícito, y no es trabajo de código.
 
 ## Spec Change Log
 
+- `2026-09-22` — **La PR se introdujo a sí misma una issue nueva, y el quality gate en verde es justo lo
+  que no vale como excusa.** El análisis de SonarCloud de la PR salió `qualityGateStatus: OK` con
+  `codeSmells: 1`: un `php:S1186` **OPEN** sobre el constructor privado vacío de `StrictRangeBound` — en un
+  trabajo cuyo objetivo entero es vaciar el backlog sin supresiones. El árbol ya tiene ese idiom tres veces
+  (`ExistingCredential`, `AuditErasureEvidence`, `AuditRedaction`) y **las tres llevan docblock**; la mía era
+  la única sin él. A/B contra el analizador vivo antes de arreglar, no después: constructor pelado → 1
+  issue, con docblock → 0. Lo que satisface la regla es el docblock, así que la reparación es la forma de la
+  casa y no una supresión.
+
 - `2026-09-22` — **Unificado el parseo estricto RFC 3339, que es la raíz de la que salieron B y C.** La
   recomendación cambió de signo por una medición, no por gusto: tras B+C la duplicación entre los dos
   appliers eran **cuatro métodos y cuatro constantes, idénticos carácter a carácter** salvo el texto de un

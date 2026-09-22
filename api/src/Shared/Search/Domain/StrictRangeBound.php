@@ -47,6 +47,10 @@ final class StrictRangeBound
     /** The year PostgreSQL's calendar does not have; see {@see self::carriesAStorableYear()}. */
     private const string UNSTORABLE_YEAR = '0000';
 
+    /**
+     * A namespace for one rule and its gates, never a value. Instantiating it would carry nothing, so it
+     * is made impossible rather than merely pointless.
+     */
     private function __construct()
     {
     }
