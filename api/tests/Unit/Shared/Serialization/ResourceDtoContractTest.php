@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Serialization;
 
+use ArrayObject;
 use Erpify\Tests\Support\ApiSourceFiles;
 use Erpify\Tests\Unit\Shared\Serialization\Fixture\NonFlatResourceStub;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -21,12 +22,13 @@ use ReflectionType;
  * public shape a DTO exposes is emitted verbatim. The two byte-stability nets that `#[Groups]` (an
  * allowlist) and the `#[Serializer\Context]` ATOM pin used to provide are therefore gone, so the
  * contract is enforced structurally here: every class under an `Application/Resource/` directory must
- * be a flat, immutable DTO whose properties are scalar/null or a decoded-JSON `array` (see
- * {@see NORMALIZER_SAFE_TYPES} for why the array is the one safe non-scalar).
+ * be a flat, immutable DTO whose properties are scalar/null or a decoded-JSON payload (see
+ * {@see NORMALIZER_SAFE_TYPES} for which two non-scalars are safe and why).
  *
  * This closes both latent risks at once:
  *   - a raw `DateTimeImmutable` (or any object) reaching the normalizer would emit a non-ATOM /
- *     nested shape with nothing to catch it — rejecting non-builtin types makes that impossible;
+ *     nested shape with nothing to catch it — admitting types by an explicit allowlist, rather than by
+ *     any property of the type, makes that impossible;
  *   - ungrouped normalization serializes every public property AND getter — the type allow-list plus
  *     no public method beyond the constructor means there is no object graph to leak.
  *
@@ -49,15 +51,24 @@ final class ResourceDtoContractTest extends TestCase
     private const string RESOURCE_DIR_SEGMENT = '/Application/Resource/';
 
     /**
-     * A Resource DTO property is normalizer-safe when it is a flat scalar OR a plain `array`. The
-     * array is admitted for one shape only — an already-decoded JSON payload (e.g. the audit diff read
-     * from a JSONB column): `json_decode` guarantees it holds scalars, arrays and null but never a PHP
-     * object, so it reaches the groupless/contextless normalizer in final serialized form, with none
-     * of the non-ATOM / object-graph risk a raw object (a `DateTimeImmutable`, an entity) would carry.
+     * A Resource DTO property is normalizer-safe when it is a flat scalar, a plain `array`, or an
+     * `ArrayObject`. The array is admitted for one shape only — an already-decoded JSON payload (e.g.
+     * the audit diff read from a JSONB column): `json_decode` guarantees it holds scalars, arrays and
+     * null but never a PHP object, so it reaches the groupless/contextless normalizer in final
+     * serialized form, with none of the non-ATOM / object-graph risk a raw object (a
+     * `DateTimeImmutable`, an entity) would carry.
+     *
+     * `ArrayObject` is admitted for the SAME payload under a different wire obligation, and it is not a
+     * loosening of the rule: it carries exactly what an `array` carries, and the reason the rule reads
+     * "array" at all — that the value is already serialized JSON — holds identically. What it adds is
+     * the one thing an `array` cannot express, an EMPTY MAP: PHP encodes `[]` as a JSON array, so a
+     * field whose contract is an object would silently go out as `[]` and a client guard that admits
+     * only objects rejects the envelope. It carries no object graph and no getter beyond the storage
+     * the normalizer reads, so neither risk this contract exists to close is reopened.
      *
      * @var list<string>
      */
-    private const array NORMALIZER_SAFE_TYPES = ['string', 'int', 'float', 'bool', 'array'];
+    private const array NORMALIZER_SAFE_TYPES = ['string', 'int', 'float', 'bool', 'array', ArrayObject::class];
 
     public function testResourceDtoSweepIsNotVacuous(): void
     {
@@ -166,10 +177,11 @@ final class ResourceDtoContractTest extends TestCase
 
             if (!$this->isNormalizerSafeType($type)) {
                 $violations[] = \sprintf(
-                    'property $%s is %s; only flat scalar/null or a decoded-JSON array '
-                    . '(string|int|float|bool|array) may reach the normalizer',
+                    'property $%s is %s; only flat scalar/null or a decoded-JSON payload (%s) '
+                    . 'may reach the normalizer',
                     $reflectionProperty->getName(),
                     null === $type ? 'untyped' : (string) $type,
+                    \implode('|', self::NORMALIZER_SAFE_TYPES),
                 );
             }
         }
@@ -179,8 +191,9 @@ final class ResourceDtoContractTest extends TestCase
 
     private function isNormalizerSafeType(?ReflectionType $type): bool
     {
+        // Matched by NAME against the allowlist rather than by `isBuiltin()` as well: the list is what
+        // decides, and a second predicate beside it is a second place for the rule to drift.
         return $type instanceof ReflectionNamedType
-            && $type->isBuiltin()
             && \in_array($type->getName(), self::NORMALIZER_SAFE_TYPES, true);
     }
 }
