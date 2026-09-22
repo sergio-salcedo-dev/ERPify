@@ -16,6 +16,7 @@ use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Persistence\Infrastructure\AffectedRows;
 use Override;
+use SortDirection as NativeSortDirection;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
@@ -107,8 +108,8 @@ final readonly class DoctrineSessionRepository implements SessionRepository
                 // `created_at` is TIMESTAMP(0), so two sessions minted in the same second tie and the ordering
                 // would be whatever the plan yields. The id breaks it: UUID v7 sorts by mint time, so it agrees
                 // with "newest first" instead of merely making the sequence arbitrary-but-stable.
-                ->orderBy('s.createdAt', 'DESC')
-                ->addOrderBy('s.id', 'DESC')
+                ->orderBy('s.createdAt', NativeSortDirection::Descending)
+                ->addOrderBy('s.id', NativeSortDirection::Descending)
                 ->setParameter('userId', $userId)
             ;
 

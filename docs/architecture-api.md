@@ -2,7 +2,7 @@
 
 ## Executive summary
 
-The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded), backed by PostgreSQL via Doctrine ORM 3.6 / DBAL 4.4, with async workflows on Symfony Messenger and real-time updates on Mercure. Code follows **DDD + Hexagonal / Clean Architecture** across top-level bounded contexts (`Backoffice/`, `Frontoffice/`, `Iam/`, `Organization/`, `Shared/`), each layered into `Domain / Application / Infrastructure`.
+The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded), backed by PostgreSQL via Doctrine ORM 3.7 / DBAL 4.4, with async workflows on Symfony Messenger and real-time updates on Mercure. Code follows **DDD + Hexagonal / Clean Architecture** across top-level bounded contexts (`Backoffice/`, `Frontoffice/`, `Iam/`, `Organization/`, `Shared/`), each layered into `Domain / Application / Infrastructure`.
 
 ## Technology stack
 
@@ -11,7 +11,7 @@ The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded)
 | Runtime         | PHP                                                    | **8.5**                                       |
 | Framework       | Symfony (components)                                   | **8.1.x**                                     |
 | HTTP server     | FrankenPHP (Caddy)                                     | `dunglas/frankenphp:1-php8.5` (digest-pinned) |
-| ORM / DBAL      | Doctrine ORM / DBAL / Migrations / Persistence         | 3.6 / 4.4 / 4.0 / 4.2                         |
+| ORM / DBAL      | Doctrine ORM / DBAL / Migrations / Persistence         | 3.7 / 4.4 / 4.0 / 4.2                         |
 | Database        | PostgreSQL                                             | 18 (Compose)                                  |
 | Async           | Symfony Messenger + Doctrine transport                 | 8.1.x                                         |
 | Realtime        | Symfony Mercure (+ Hub)                                | 0.7 / bundle 0.4                              |
