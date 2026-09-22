@@ -50,7 +50,7 @@ final class AuditEventDetailResourceMapperTest extends TestCase
         $this->assertFalse($resource->actorErased);
         $this->assertFalse($resource->resourceErased);
         // The structured diff reaches the wire unaltered — the mapper formats time, never the payload.
-        $this->assertSame($changes, $resource->metadata);
+        $this->assertSame($changes, $resource->metadata->getArrayCopy());
     }
 
     public function testToResourcePassesNullableFieldsAndAnEmptyDiffThrough(): void
@@ -75,7 +75,9 @@ final class AuditEventDetailResourceMapperTest extends TestCase
         $this->assertNull($resource->resourceId);
         $this->assertTrue($resource->actorErased, 'an erased subject surfaces as such in the detail');
         $this->assertTrue($resource->resourceErased, 'an erased resource surfaces as such in the detail');
-        $this->assertSame([], $resource->metadata, 'a non-change record carries no diff');
+        // The property's own type is what guarantees the wire MAP; that an empty one reaches the
+        // response as `{}` is asserted over the bytes in `AuditEventDetailFunctionalTest`.
+        $this->assertSame([], $resource->metadata->getArrayCopy(), 'a non-change record carries no diff');
     }
 
     private function mapper(): AuditEventDetailResourceMapper

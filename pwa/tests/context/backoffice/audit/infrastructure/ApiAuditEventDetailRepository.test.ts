@@ -136,6 +136,11 @@ describe("ApiAuditEventDetailRepository response guard", () => {
     void _m;
     expect(isAuditEventDetailResponse({ data: withoutMetadata })).toBe(false);
     expect(isAuditEventDetailResponse({ data: { ...DETAIL, metadata: "nope" } })).toBe(false);
+    // An empty ARRAY, which is what an entry carrying no metadata looked like on the wire until the
+    // API wrapped the field so it serializes as `{}`. It stays refused on purpose: the field's
+    // contract is a map, and accepting `[]` here would make the client the place that hides a
+    // contract drift rather than the place that reports it.
+    expect(isAuditEventDetailResponse({ data: { ...DETAIL, metadata: [] } })).toBe(false);
     // Drift: a change side is an object, not a scalar/null.
     expect(
       isAuditEventDetailResponse({
