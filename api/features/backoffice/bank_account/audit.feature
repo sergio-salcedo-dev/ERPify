@@ -22,7 +22,7 @@ Feature: Audit the access to a bank's accounts
         "resource_type": "Bank",
         "resource_id": "11111111-1111-7000-8000-000000000001",
         "correlation_id": "<correlationId>",
-        "metadata": "[]"
+        "metadata": "{}"
       }
     ]
     """
@@ -70,7 +70,7 @@ Feature: Audit the access to a bank's accounts
         "resource_type": "BankAccount",
         "resource_id": "33333333-3333-7000-8000-000000000001",
         "correlation_id": "<correlationId>",
-        "metadata": "[]"
+        "metadata": "{}"
       }
     ]
     """
@@ -98,7 +98,7 @@ Feature: Audit the access to a bank's accounts
         "resource_type": null,
         "resource_id": null,
         "correlation_id": "<correlationId>",
-        "metadata": "[]"
+        "metadata": "{}"
       }
     ]
     """

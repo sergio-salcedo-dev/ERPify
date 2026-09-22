@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Cli;
 
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
+use Erpify\Iam\Identity\Application\FulfilIdentityErasureResult;
 use Erpify\Shared\Console\Infrastructure\ConfirmedErasureCommand;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
@@ -19,9 +20,9 @@ use Throwable;
 
 /**
  * GDPR "right to erasure" for an identity subject, run as one chained operation through {@see FulfilIdentityErasure}:
- * it hard-deletes the user row (the module's PII — email and credential hash) and every pending password-reset
- * token, anonymises every audit row the subject authored and every one that names them, rewrites their
- * identifier out of the reproducible business log, and hard-deletes the subject's sessions, the
+ * it hard-deletes the user row (the module's PII — email and credential hash), every pending password-reset
+ * token and the recovery secret, anonymises every audit row the subject authored and every one that names them,
+ * rewrites their identifier out of the reproducible business log, and hard-deletes the subject's sessions, the
  * membership that admitted them and every invitation addressed to them — atomically —
  * leaving `GDPR_SUBJECT_ERASED` and `GDPR_ERASURE_EXECUTED` security entries as the compliance record. Because it
  * shares that use case with the identity console, the CLI also enforces the ≥1-active-administrator guard (erasing
@@ -49,6 +50,13 @@ use Throwable;
 )]
 final class EraseIdentitySubjectCommand extends ConfirmedErasureCommand
 {
+    /**
+     * Two of the consent labels carry a comma, so a comma here would make the rendered list read as more
+     * categories than there are. Public so the pin on the prompt can assert the labels are not merely
+     * present but separable.
+     */
+    public const string CATEGORY_SEPARATOR = '; ';
+
     public function __construct(
         private readonly FulfilIdentityErasure $eraser,
     ) {
@@ -64,8 +72,9 @@ final class EraseIdentitySubjectCommand extends ConfirmedErasureCommand
             ->addOption('force', null, InputOption::VALUE_NONE, 'Skip the confirmation prompt')
             ->setHelp(<<<'HELP'
                 The <info>%command.name%</info> command hard-deletes an identity (its email and credential
-                hash) together with every pending password-reset token, anonymises every audit row the subject
-                authored and every one that names it, rewrites its identifier out of the reproducible business
+                hash) together with every pending password-reset token and its recovery secret, anonymises
+                every audit row the subject authored and every one that names it, rewrites its identifier
+                out of the reproducible business
                 log (<comment>event_store</comment>, in the aggregate column and inside the stored JSON alike)
                 and hard-deletes its sessions, its organization membership and every invitation
                 addressed to it — atomically — so no <comment>user_id</comment> linkage, recovery artefact or
@@ -111,12 +120,22 @@ final class EraseIdentitySubjectCommand extends ConfirmedErasureCommand
         return $this->eraseAndReport($io, $userId);
     }
 
+    /**
+     * Rendered from {@see FulfilIdentityErasureResult::ERASED_CATEGORIES} rather than written here: this
+     * sentence is the whole of what the operator consents to, so it may not describe less than the chain
+     * destroys, and a hand-written one did — it named eight links while the result carried nine.
+     *
+     * The categories are joined with a semicolon because two of the labels contain a comma of their own, so
+     * a comma-joined list reads as more entries than there are; `FulfilIdentityErasureResultTest` refuses a
+     * label carrying the separator, which is what keeps that true of a label added later.
+     */
     #[Override]
     protected function confirmationQuestion(): string
     {
-        return 'Irreversibly erase this identity (removes the user and its reset tokens, anonymises its audit '
-            . 'trail, rewrites its identifier out of the business event log, and drops its sessions, its '
-            . 'organization membership and every invitation addressed to it)?';
+        return \sprintf(
+            'Irreversibly erase this subject? This removes or anonymises %s.',
+            \implode(self::CATEGORY_SEPARATOR, FulfilIdentityErasureResult::ERASED_CATEGORIES),
+        );
     }
 
     private function eraseAndReport(SymfonyStyle $io, string $userId): int
@@ -132,7 +151,7 @@ final class EraseIdentitySubjectCommand extends ConfirmedErasureCommand
         if (!$result->erasedAnything()) {
             $io->warning(
                 'Nothing to erase — the subject has no live identity, pending reset tokens, recovery '
-                . 'secret, audit trail, sessions, membership or invitations.',
+                . 'secret, audit trail, business-log rows, sessions, membership or invitations.',
             );
 
             return Command::SUCCESS;
