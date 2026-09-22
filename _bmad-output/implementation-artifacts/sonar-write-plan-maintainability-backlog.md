@@ -2,11 +2,22 @@
 title: 'Write Plan de SonarCloud — backlog de mantenibilidad'
 type: 'chore'
 created: '2026-09-20'
-status: 'draft'
+status: 'done'
 spec: 'spec-sonar-maintainability-backlog.md'
 ---
 
 # Write Plan de SonarCloud
+
+> **Ejecutado el 2026-09-22.** 11 comentarios y 3 transiciones `FALSE_POSITIVE → ACCEPTED`, con preflight
+> (0 comentarios en las 11, estados cuadrando) y read-back por issue. Estado final medido: **16 ACCEPTED +
+> 7 FALSE_POSITIVE = 23**, once con exactamente un comentario, **ninguna duplicada**, y 0 OPEN/CONFIRMED en
+> todo el proyecto. Las doce restantes siguen sin comentario a propósito: son las arregladas en código y las
+> cierra SonarCloud al re-analizar.
+>
+> **Un detalle operativo que el plan no preveía**: la única transición disponible sobre una issue resuelta es
+> `reopen`, así que `FALSE_POSITIVE → ACCEPTED` son dos pasos y entre ellos la issue queda OPEN. Se ejecutó
+> con read-back intermedio y con el aborto armado para ese hueco; el comentario viaja en el `accept`, que
+> admite `comment`, de modo que ninguna issue recibe dos escrituras de texto.
 
 Companion de [`spec-sonar-maintainability-backlog.md`](spec-sonar-maintainability-backlog.md). Vive
 aparte a propósito: **el refactor local y la mutación de un sistema externo no son el mismo trabajo**, no

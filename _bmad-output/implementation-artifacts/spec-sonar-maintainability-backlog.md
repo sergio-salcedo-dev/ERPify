@@ -146,7 +146,7 @@ sin OK explícito, y no es trabajo de código.
 - [x] Fila 10 -- crear la excepción dedicada **sólo si su nombre informa**; en otro caso degradar la fila.
 - [x] Filas 11–13 -- texto JSX explícito; **verificar el render en el stack vivo**, no sólo el lint.
 - [x] Cobertura -- por cada cambio, identificar la cobertura existente **de la rama o contrato que el refactor podría alterar**; se añade test sólo cuando ese comportamiento no esté ya protegido por una aserción viva.
-- [ ] `tmp/sonar-justifications.md` -- redactarlo y **esperar OK**; después ejecutar el *Write Plan* con su read-back.
+- [x] `tmp/sonar-justifications.md` -- redactado, aprobado y ejecutado: 11 comentarios y 3 transiciones, con preflight y read-back. Estado final medido 16/7/0.
 - [ ] Registrar en la PR el **SHA del commit** con los 13 arreglos y el **timestamp del análisis** de SonarCloud contra el que se verificó el cierre.
 
 **Acceptance Criteria:**
