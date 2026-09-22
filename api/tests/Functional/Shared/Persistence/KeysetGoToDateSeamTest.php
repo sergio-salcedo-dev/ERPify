@@ -18,6 +18,7 @@ use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
+use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSortDirection;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FieldMapping;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FilterApplier;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Cursor;
@@ -375,8 +376,8 @@ final class KeysetGoToDateSeamTest extends KernelTestCase
             ->from(Bank::class, 'b')
             ->where('b.id IN (:ids)')
             ->setParameter('ids', $ids)
-            ->addOrderBy('b.createdAt', $direction->value)
-            ->addOrderBy('b.id', SortDirection::ASC->value)
+            ->addOrderBy('b.createdAt', DoctrineSortDirection::from($direction))
+            ->addOrderBy('b.id', DoctrineSortDirection::from(SortDirection::ASC))
             ->getQuery()
             ->getResult()
         ;

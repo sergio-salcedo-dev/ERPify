@@ -28,6 +28,34 @@ namespace Erpify\Iam\Identity\Application;
  */
 final readonly class FulfilIdentityErasureResult
 {
+    /**
+     * What the operator is consenting to, one entry per promoted constructor property, in constructor
+     * order — which is NOT the order the chain runs in (the invitation purge leads, and that position is
+     * load-bearing; {@see FulfilIdentityErasure} argues why). The map lives
+     * beside the properties because an enumeration kept anywhere else drifts from them silently: the
+     * recovery-secret link was added to this DTO and to the CLI's success line while three prose
+     * descriptions of the same chain kept naming eight links, so the confirmation prompt asked consent for
+     * less than the erasure destroys. A surface that asks or explains renders this map rather than writing
+     * its own sentence, and {@see FulfilIdentityErasureResultTest} holds the two sets equal in both
+     * directions, so a tenth property cannot arrive without its label.
+     *
+     * It does not reach the prose in a docblock — that stays a review matter — and it says nothing about
+     * whether a label describes its property correctly.
+     *
+     * @var array<string, string>
+     */
+    public const array ERASED_CATEGORIES = [
+        'identityErased' => 'the identity itself, its email and its credential hash',
+        'resetTokensDeleted' => 'every pending password-reset token',
+        'recoverySecretsDeleted' => 'its administrative recovery secret',
+        'anonymizedAuditRows' => 'the audit rows it authored',
+        'anonymizedResourceRows' => 'the audit rows that name it',
+        'anonymizedEventRows' => 'its identifier inside the business event log',
+        'sessionsDeleted' => 'its sessions',
+        'membershipsDeleted' => 'its organization membership',
+        'invitationsDeleted' => 'every invitation addressed to it',
+    ];
+
     public function __construct(
         public bool $identityErased,
         public int $resetTokensDeleted,

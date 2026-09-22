@@ -6,6 +6,7 @@ namespace Erpify\Shared\Serialization\Infrastructure;
 
 use ArrayObject;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
+use Symfony\Component\Serializer\Normalizer\AbstractObjectNormalizer;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use UnexpectedValueException;
 
@@ -70,7 +71,11 @@ final readonly class ResourceNormalizer
      */
     private function normalizeToArray(mixed $payload, string $format): array
     {
-        $normalized = $this->normalizer->normalize($payload, $format);
+        $normalized = $this->normalizer->normalize(
+            $payload,
+            $format,
+            [AbstractObjectNormalizer::PRESERVE_EMPTY_OBJECTS => true],
+        );
 
         if ($normalized instanceof ArrayObject) {
             /** @var array<array-key, mixed> */
