@@ -247,7 +247,7 @@ function FlowJourney({ flow }: Readonly<{ flow: Flow }>) {
 
               <div className={cn("flow__step-body min-w-0 flex-1", isLast ? "pb-0" : "pb-8")}>
                 <p className="text-muted-foreground text-2xs font-semibold tracking-wider uppercase">
-                  Paso {index + 1}
+                  Step {index + 1}
                 </p>
                 <h3 className="text-foreground text-base font-semibold tracking-tight">
                   {step.title}
@@ -255,7 +255,7 @@ function FlowJourney({ flow }: Readonly<{ flow: Flow }>) {
                 <p className="text-foreground mt-1 text-sm leading-relaxed">{step.plain}</p>
                 {step.tech ? (
                   <p className="text-muted-foreground mt-1.5 text-xs leading-relaxed">
-                    <span className="font-medium">Entre bastidores:</span> {step.tech}
+                    <span className="font-medium">Behind the scenes:</span> {step.tech}
                   </p>
                 ) : null}
               </div>

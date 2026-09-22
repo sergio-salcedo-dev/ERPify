@@ -55,6 +55,9 @@ final readonly class FilterApplier
     /** Westernmost real-world UTC offset (UTC-12, e.g. Baker Island); west of it a bound is nonsensical. */
     private const int MIN_UTC_OFFSET_WEST_SECONDS = -12 * 3600;
 
+    /** The year PostgreSQL's calendar does not have; see {@see self::carriesAStorableYear()}. */
+    private const string UNSTORABLE_YEAR = '0000';
+
     /**
      * Applies the allow-listed filters to the query builder and returns the receipt of what was
      * actually applied — the {@see AppliedFilters} that feed step 4 of the engine pipeline (the
@@ -259,6 +262,7 @@ final readonly class FilterApplier
         // and is what narrows the type for the two gates behind it.
         if (
             !$dateTime instanceof DateTimeImmutable
+            || !$this->carriesAStorableYear($dateTime)
             || !$this->carriesRealWorldOffset($dateTime)
             || !$this->isCanonicalUnder($dateTime, $format, $value)
         ) {
@@ -266,6 +270,19 @@ final readonly class FilterApplier
         }
 
         return $dateTime;
+    }
+
+    /**
+     * PostgreSQL's calendar runs from 1 BC straight to 1 AD, so it has no year zero and rejects
+     * `0000-…` with SQLSTATE 22008. PHP parses that year happily and it round-trips byte-identically,
+     * so every other gate here passes it: measured, the bound reached the driver and surfaced as a 500
+     * on input any client can send for free — the one value that falsified this parse's own promise of
+     * a 422. A four-digit year makes it the only unstorable instant these formats can express;
+     * `9999-12-31` stores fine, both measured against the running server.
+     */
+    private function carriesAStorableYear(DateTimeImmutable $dateTime): bool
+    {
+        return self::UNSTORABLE_YEAR !== $dateTime->format('Y');
     }
 
     /**

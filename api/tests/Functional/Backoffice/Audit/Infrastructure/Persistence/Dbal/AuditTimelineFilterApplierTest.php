@@ -156,6 +156,39 @@ final class AuditTimelineFilterApplierTest extends KernelTestCase
         }
     }
 
+    /**
+     * The strict parse here has to answer like its twin on the shared search path: the same wire value
+     * cannot be a 422 on one list and a quietly wrong result set on the other. The offset case is the
+     * divergence a review measured — PHP parses offsets to ±99:00 and every one round-trips, so without
+     * the gate the bound was accepted and the instant shifted by up to four days with nothing reported.
+     * The year case is the one that reached PostgreSQL: its calendar has no year zero, so the bound came
+     * back as a 22008 and surfaced as a 500 rather than the 422 this parse promises.
+     *
+     * @param string $value the rejected bound, never echoed into the exception context
+     */
+    #[DataProvider('provideRangeRejectsABoundTheDatabaseCouldNotHonourCases')]
+    public function testRangeRejectsABoundTheDatabaseCouldNotHonour(string $value): void
+    {
+        try {
+            $this->apply($this->rangeFilter('occurredOn', 'gte', $value));
+
+            $this->fail('Expected InvalidSearchValue to be thrown.');
+        } catch (InvalidSearchValue $invalidSearchValue) {
+            $this->assertSame(['field' => 'occurredOn', 'position' => 0], $invalidSearchValue->context());
+        }
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideRangeRejectsABoundTheDatabaseCouldNotHonourCases(): iterable
+    {
+        yield 'year zero, which the database calendar does not have' => ['0000-01-01T00:00:00+00:00'];
+        yield 'out-of-range east utc offset' => ['2026-01-01T00:00:00+25:00'];
+        yield 'out-of-range west utc offset' => ['2026-01-01T00:00:00-13:00'];
+        yield 'offset far past any real one' => ['2026-01-01T00:00:00+99:00'];
+    }
+
     public function testUnknownFieldIsRejected(): void
     {
         $this->expectException(UnknownSearchField::class);

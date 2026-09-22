@@ -45,6 +45,15 @@ final readonly class AuditTimelineFilterApplier
         'Y-m-d\TH:i:s.uP',
     ];
 
+    /** Easternmost real-world UTC offset (UTC+14, e.g. Kiribati); east of it a bound is nonsensical. */
+    private const int MAX_UTC_OFFSET_EAST_SECONDS = 14 * 3600;
+
+    /** Westernmost real-world UTC offset (UTC-12, e.g. Baker Island); west of it a bound is nonsensical. */
+    private const int MIN_UTC_OFFSET_WEST_SECONDS = -12 * 3600;
+
+    /** The year PostgreSQL's calendar does not have; see {@see self::carriesAStorableYear()}. */
+    private const string UNSTORABLE_YEAR = '0000';
+
     public function apply(QueryBuilder $queryBuilder, Filters $filters, SearchFieldMap $fieldMap): void
     {
         $index = 0;
@@ -177,11 +186,44 @@ final readonly class AuditTimelineFilterApplier
 
         // The instance test subsumes createFromFormat's `false` and narrows the type for the gate
         // behind it.
-        if (!$dateTime instanceof DateTimeImmutable || !$this->isCanonicalUnder($dateTime, $format, $value)) {
+        if (
+            !$dateTime instanceof DateTimeImmutable
+            || !$this->carriesAStorableYear($dateTime)
+            || !$this->carriesRealWorldOffset($dateTime)
+            || !$this->isCanonicalUnder($dateTime, $format, $value)
+        ) {
             return null;
         }
 
         return $dateTime;
+    }
+
+    /**
+     * PostgreSQL's calendar runs from 1 BC straight to 1 AD, so it has no year zero and rejects
+     * `0000-…` with SQLSTATE 22008. PHP parses that year happily and it round-trips byte-identically,
+     * so every other gate here passes it: measured, the bound reached the driver and surfaced as a 500
+     * on input any client can send for free — the one value that falsified this parse's own promise of
+     * a 422. A four-digit year makes it the only unstorable instant these formats can express;
+     * `9999-12-31` stores fine, both measured against the running server.
+     */
+    private function carriesAStorableYear(DateTimeImmutable $dateTime): bool
+    {
+        return self::UNSTORABLE_YEAR !== $dateTime->format('Y');
+    }
+
+    /**
+     * The real-world offset span is asymmetric (UTC-12 to UTC+14), so each side is checked separately; a
+     * symmetric abs() would admit the non-existent -13/-14h offsets. PHP parses an offset all the way to
+     * ±99:00 and every one of them round-trips canonically, so without this the bound is accepted and the
+     * instant silently shifts by up to four days — and the same wire value would be a 422 on the shared
+     * search path and a quietly wrong result set here. Twinned with
+     * {@see \Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FilterApplier}: the two strict
+     * parses have to answer alike, and this one lacked the gate until a review measured the divergence.
+     */
+    private function carriesRealWorldOffset(DateTimeImmutable $dateTime): bool
+    {
+        return $dateTime->getOffset() <= self::MAX_UTC_OFFSET_EAST_SECONDS
+            && $dateTime->getOffset() >= self::MIN_UTC_OFFSET_WEST_SECONDS;
     }
 
     /**

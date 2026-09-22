@@ -192,6 +192,16 @@ const CONTENT_WORDS = [
   "pendientes",
   "hecho",
   "obra",
+  // Admitted for the template-literal widening: without them it reports nothing on the two strings
+  // that earned it, because `del` and `al` are one function word each and the threshold is two.
+  // None is also English and none is a Tailwind fragment.
+  "mapa",
+  "flujo",
+  "paso",
+  // "Entre bastidores:" shipped beside them and no signal saw it either: `entre` is one function word
+  // against a threshold of two, and the noun was unknown. The widening found `paso` and a hand sweep of
+  // the same file found this one — which is the floor-not-ceiling property, observed rather than argued.
+  "bastidores",
   "obras",
   "proveedor",
   "proveedores",
@@ -289,6 +299,22 @@ function spanishReason(text: string): string | null {
   return null;
 }
 
+/**
+ * The static halves of a template literal that has substitutions, joined by the holes between them.
+ *
+ * Joined rather than visited one chunk at a time, and that is the whole point: `${...}` cuts a sentence
+ * into pieces that individually fall under every threshold here. `` `Ir al paso ${n}: ${title}` `` is
+ * three chunks carrying one function word between them, so a per-chunk reader reports nothing on copy
+ * that is plainly Spanish. Measured on the two strings this shape was widened for.
+ *
+ * A `TemplateExpression` is neither a `StringLiteral` nor a `NoSubstitutionTemplateLiteral`, so until
+ * this existed no lexicon entry, no diacritic rule and no threshold was ever consulted for one — the
+ * blindness was structural, not a gap in the signals.
+ */
+function staticTextOf(node: ts.TemplateExpression): string {
+  return [node.head.text, ...node.templateSpans.map((span) => span.literal.text)].join(" ").trim();
+}
+
 function isNonCopyAttribute(node: ts.Node): boolean {
   return (
     ts.isJsxAttribute(node) && ts.isIdentifier(node.name) && NON_COPY_ATTRIBUTES.has(node.name.text)
@@ -309,6 +335,7 @@ function findingsIn(file: string): Finding[] {
       let text: string | null = null;
       if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) text = node.text;
       else if (ts.isJsxText(node)) text = node.text.trim();
+      else if (ts.isTemplateExpression(node)) text = staticTextOf(node);
 
       if (text) {
         const reason = spanishReason(text);
@@ -374,9 +401,27 @@ describe("rendered copy speaks the language the document declares", () => {
       // fixture proves the member is live rather than decorative.
       "anonimizado",
       "identificable",
+      // Rendered for months from a template literal with substitutions, which no signal here could
+      // reach: the node type was not read at all. Pinned as the plain static text they carry so the
+      // lexicon half of that fix stays live even if the node-type half is ever narrowed.
+      "Mapa del flujo:",
+      "Ir al paso",
+      // Found by hand, not by the widening: one function word and one unknown noun clears neither
+      // threshold. Pinned so the lexicon entry that now covers it cannot quietly go away.
+      "Entre bastidores:",
     ];
 
     expect(missed.filter((text) => spanishReason(text) === null)).toEqual([]);
+  });
+
+  it("reads a template literal that has substitutions, joined across its holes", () => {
+    // The exact two shapes that shipped in `docs/flow/page.tsx`. Each is reported only when both
+    // halves of the fix are live: the node type has to be read AND the words have to be admitted.
+    expect(spanishReason("Mapa del flujo:")).not.toBeNull();
+    expect(spanishReason("Ir al paso :")).not.toBeNull();
+    // An English template of the same shape stays silent, which is what keeps the widening from
+    // reporting every interpolated label in the tree.
+    expect(spanishReason("Go to step :")).toBeNull();
   });
 
   it("does not claim the English it would otherwise report", () => {

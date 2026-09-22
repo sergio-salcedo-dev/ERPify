@@ -16,11 +16,11 @@ context:
 ## Intent
 
 **Problema.** SonarCloud no tiene **ninguna** issue abierta (medido 2026-09-19, análisis de las 13:57Z:
-`OPEN+CONFIRMED = 0` en las tres calidades). Quedan **23 de mantenibilidad silenciadas** — 14 `ACCEPTED`
-y 9 `FALSE_POSITIVE` — y **ninguna lleva comentario** (medido: `additionalFields=comments` devuelve 0/23):
+`OPEN+CONFIRMED = 0` en las tres calidades). Quedan **23 de mantenibilidad silenciadas** — 13 `ACCEPTED`
+y 10 `FALSE_POSITIVE` — y **ninguna lleva comentario** (medido: `additionalFields=comments` devuelve 0/23):
 el argumento por el que cada una se calló no existe en ningún sitio auditable. Peor que el vacío es la
-mezcla: `FALSE_POSITIVE` **afirma que el analizador se equivoca**, y sólo 2 de las 9 lo sostienen; las
-otras 7 son código donde Sonar acierta y se decidió no actuar, que es `ACCEPTED`. `php:S1142` está a los
+mezcla: `FALSE_POSITIVE` **afirma que el analizador se equivoca**, y sólo 2 de las 10 lo sostienen; las
+otras 8 son código donde Sonar acierta y se decidió no actuar, que es `ACCEPTED`. `php:S1142` está a los
 dos lados del reparto, y un parámetro que una firma abstracta obliga a declarar figura como `ACCEPTED`.
 
 **Enfoque.** Dar a cada una la salida que la casa ya define (`docs/rules/clean-code.md:43`: *fix the code
@@ -30,21 +30,23 @@ or accept the finding in Sonar*), con idiomas que el repo ya usa.
 
 | Resultado | Nº | Cómo se alcanza |
 |---|---|---|
-| `FIXED` | 13 | Arreglo en código. Lo pone SonarCloud al re-analizar, **nunca a mano**. |
-| `ACCEPTED` | 8 | 6 ya lo están · **2 reclasificadas desde `FALSE_POSITIVE`**. Todas con comentario. |
+| `FIXED` | 12 | Arreglo en código. Lo pone SonarCloud al re-analizar, **nunca a mano**. |
+| `ACCEPTED` | 9 | 6 ya lo están · **3 reclasificadas desde `FALSE_POSITIVE`**. Todas con comentario. |
 | `FALSE_POSITIVE` | 2 | Se quedan: son defectos reales del analizador. Con comentario. |
 | Supresiones nuevas | 0 | Ni una, de ningún tipo. |
 
-Sobreviven silenciadas **10** (8 + 2), y cada una recibe su justificación escrita en la propia issue.
+Sobreviven silenciadas **11** (9 + 2), y cada una recibe su justificación escrita en la propia issue.
 
 ## Boundaries & Constraints
 
 **Always:**
-- **Contrato funcional idéntico.** No cambian los contratos documentados: exit codes, mensajes y render,
-  el conjunto de valores que cada `parseStrict` acepta y rechaza, y el resultado de serialización.
-  *No* se afirma «comportamiento observable idéntico»: la fila 10 cambia deliberadamente el **tipo**
-  interno de excepción, y sólo es admisible porque ningún contrato expuesto lo publica — lo confirman
-  los tests y gates existentes, no una afirmación.
+- **Contrato funcional idéntico, con tres excepciones decididas y nombradas.** No cambian los contratos
+  documentados: exit codes, render y el resultado de serialización. Lo que sí cambia, a propósito:
+  (a) la fila 10 cambia el **tipo** interno de excepción, admisible porque ningún contrato expuesto lo
+  publica, y de paso el mensaje que ve el operador — nada lo aseveraba; (b) los dos `parseStrict` dejan de
+  aceptar el año cero, que llegaba a PostgreSQL como `22008` y salía por un 500; (c) el applier de
+  auditoría deja de aceptar un offset irreal. (b) y (c) no *cambian* el contrato: **restauran el que los
+  docblocks de ambas clases ya prometían** y el código incumplía, y cada uno lleva su falsificador.
 - **La precedencia es el contrato de un `match (true)`.** El orden de los brazos reproduce la primera
   condición verdadera del flujo anterior; queda prohibido reordenar por brevedad o simetría.
 - **Ninguna abstracción movida por el analizador.** Un predicado extraído (fila 5) o una excepción nueva
@@ -85,7 +87,10 @@ cubren**, no inventando una batería nueva; las filas de abajo son las ramas que
 | `parseStrict` tras el colapso | byte nulo (`ValueError`), no parseable (`false`), offset UTC+15, no canónico | `null` en los cuatro, como hoy | ningún `ValueError` escapa como 500 |
 | `parseStrict` feliz | valor canónico bajo el formato | el mismo `DateTimeImmutable`, en UTC | N/A |
 | `renderFieldValue` con `match` | `false`, `null`, `0`, `'a'`, `['x']`, recurso | `'false'`, `'null'`, `'0'`, `'a'`, `'["x"]'`, `'[unserializable]'` | encode fallido ⇒ marca visible, nunca campo perdido |
+| `safePath` tras el `match` | ruta vacía · primer segmento no declarado · ruta de 64 chars · de 65 | `(root)` · `(unrecognised member)` · la ruta entera · truncada con `…` | la guarda de ruta vacía va ANTES del split, o el primer segmento deja de estar garantizado |
 | `onException` tras el colapso | sub-request / no-API / no-AccessDenied / token pleno | no sustituye el throwable en ninguno | N/A |
+| bound con año cero | `0000-01-01T00:00:00+00:00` en cualquiera de las dos lanes | `InvalidSearchValue` → 422 | nunca un `22008` del driver saliendo por un 500 |
+| bound con offset irreal, lane de auditoría | `+25:00`, `-13:00`, `+99:00` | `InvalidSearchValue` → 422, igual que su gemelo | el instante no se desplaza en silencio |
 | JSX `DeleteResourceButton` | cualquier `resourceLabel` | `…etiqueta? This cannot be undone.` — sin espacio antes del `?` | N/A |
 | JSX leyenda de `flow` | — | separa `gap-2`, **no** un espacio de texto | N/A |
 
@@ -152,6 +157,28 @@ sin OK explícito, y no es trabajo de código.
 - Dadas las 10 supervivientes, cuando se consulta cada issue key con `additionalFields=comments` **después** del write, entonces cada una tiene exactamente un comentario y las filas 18–19 devuelven `ACCEPTED`.
 
 ## Spec Change Log
+
+- `2026-09-22` — **Las tres decisiones abiertas, resueltas por Sergio.** El bloque congelado se corrige
+  (recuento 13/10, reparto 12/9/2, y la matriz de E/S gana la fila de `safePath` que nunca tuvo más las dos
+  de los arreglos nuevos), y la restricción de contrato pasa a nombrar sus **tres** excepciones en vez de una.
+  **B y C se arreglan aquí**, y el encuadre importa: no *cambian* el contrato, **restauran el que los
+  docblocks de ambas clases ya prometían**. Año cero — medido por mí contra el servidor, no sólo por la capa:
+  `0000-01-01` devuelve `date/time field value out of range`, mientras `0001-01-01` y `9999-12-31` se
+  almacenan; PHP lo parsea, le da offset 0 y hace round-trip byte a byte, así que pasaba **todas** las
+  guardas. Con año de cuatro dígitos es el único instante inalmacenable que estos formatos pueden expresar.
+  Offset irreal — el applier de auditoría no tenía guarda ninguna y PHP acepta hasta ±99:00 con round-trip
+  canónico, así que el mismo valor daba 422 en una lane y un desplazamiento silencioso de hasta cuatro días
+  en la otra. **Los tres guards nuevos, falsificados uno a uno**: quitar cada conjunto enrojece (EXIT=2), y
+  los dos ficheros vuelven byte a byte por checksum.
+  **El gate de idioma se amplía, y la medición previa evitó que fuese decorativo**: leer el tipo de nodo
+  *por sí solo* no habría cazado ninguna de las dos cadenas que lo motivaron, porque `del` y `al` son una
+  sola palabra función contra un umbral de dos y ni `mapa` ni `flujo` ni `paso` estaban en el léxico. Hacen
+  falta las dos mitades, y el texto estático se lee **unido** por sus huecos, porque `${…}` parte la frase en
+  trozos que individualmente caen por debajo de todos los umbrales. Al encenderlo **enrojeció el árbol**: una
+  tercera cadena, `"Paso"`, en el mismo fichero; y un barrido a mano encontró una cuarta, `"Entre
+  bastidores:"`, que el gate ampliado **tampoco** ve — una palabra función y un sustantivo desconocido no
+  cruzan ningún umbral. Es la propiedad de suelo-y-no-techo, observada en vez de argumentada. Las cuatro
+  traducidas y fijadas verbatim.
 
 - `2026-09-20` — **Review de tres capas (Blind Hunter · Edge Case Hunter · Acceptance Auditor, en paralelo).**
   Ninguna GRAVE; el Blind Hunter **no pudo romper la equivalencia**, verificada método a método por álgebra
