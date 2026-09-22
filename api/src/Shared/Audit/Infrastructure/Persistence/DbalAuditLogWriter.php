@@ -21,6 +21,12 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  *
  * It owns no transaction and does not swallow database failures — the best-effort boundary that keeps an
  * audit failure from sinking a use case lives in the caller.
+ *
+ * `metadata` is cast to an object before encoding so an entry carrying none stores `{}` rather than `[]`:
+ * PHP's empty array encodes as a JSON array, which gives the column two shapes and only one of them is
+ * deconstructable — `jsonb_each('[]')` raises, where `->>'key'` merely answers NULL. The cast is at the top
+ * level only, so a list nested under a key (the role arrays in a roles-changed entry) stays a JSON array;
+ * `JSON_FORCE_OBJECT` would rewrite those into `{"0": …}` and change what the trail records.
  */
 #[AsAlias(AuditLogWriter::class)]
 final readonly class DbalAuditLogWriter implements AuditLogWriter
@@ -51,7 +57,7 @@ final readonly class DbalAuditLogWriter implements AuditLogWriter
                 'correlation_id' => $entry->correlationId,
                 'resource_type' => $entry->resource?->type,
                 'resource_id' => $entry->resource?->id,
-                'metadata' => \json_encode($entry->metadata, JSON_THROW_ON_ERROR),
+                'metadata' => \json_encode((object) $entry->metadata, JSON_THROW_ON_ERROR),
                 'ip' => $entry->ip,
                 'user_agent' => $entry->userAgent,
                 'occurred_on' => $entry->occurredOn->format('Y-m-d H:i:s.uP'),
