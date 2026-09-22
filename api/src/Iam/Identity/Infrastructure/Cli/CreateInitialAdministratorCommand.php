@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Cli;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Application\CreateUser;
+use Erpify\Iam\Identity\Application\IdentityProvisionedWithoutId;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordPolicyCheck;
@@ -129,7 +130,7 @@ final class CreateInitialAdministratorCommand extends Command
 
             $this->entityManager->wrapInTransaction(function () use ($email, $hashedPassword): void {
                 $user = $this->createUser->create($email, $hashedPassword, Role::ADMIN);
-                $userId = $user->getId() ?? throw new RuntimeException('The created user has no id.');
+                $userId = $user->getId() ?? throw IdentityProvisionedWithoutId::afterCreation();
 
                 $this->grantMembership->grant($userId);
             });
