@@ -158,6 +158,23 @@ sin OK explícito, y no es trabajo de código.
 
 ## Spec Change Log
 
+- `2026-09-22` — **Unificado el parseo estricto RFC 3339, que es la raíz de la que salieron B y C.** La
+  recomendación cambió de signo por una medición, no por gusto: tras B+C la duplicación entre los dos
+  appliers eran **cuatro métodos y cuatro constantes, idénticos carácter a carácter** salvo el texto de un
+  comentario y una `||` escrita como dos `return`. Y la costura ya existía — el applier de auditoría
+  importaba ocho cosas de `Shared\Search` —, así que extraer no minta ninguna dependencia nueva.
+  `Shared\Search\Domain\StrictRangeBound` se queda con los formatos, los tres gates y la normalización a
+  UTC; **no** con `Filter` ni con `InvalidSearchValue`: qué error es un rechazo, con qué campo y qué
+  posición, sigue siendo del applier que posee el contrato de error. `dateTimeBound` queda en una línea.
+  `scalarValue` NO se extrae — dos ocurrencias de ocho líneas atadas al mensaje de error del llamante,
+  Regla de Tres.
+  **Un hallazgo del Edge Case Hunter que seguía sin fijar, ahora pinchado**: los límites inclusivos del
+  offset (`+14:00` y `-12:00`) no los cubría nada; las suites viejas prueban `+25:00` y `-13:00`, que caen
+  fuera. Medido: al volver `<=`/`>=` en `<`/`>`, el test nuevo da **2 fallos** y las dos suites viejas
+  siguen **verdes** — el guardián no existía.
+  Coste pagado: 20 tests unitarios nuevos sin base de datos donde antes toda la cobertura del parseo era
+  funcional y pasaba por dos appliers.
+
 - `2026-09-22` — **Un hallazgo MINOR que se me quedó sin cerrar, encontrado al releer mi propia afirmación.**
   El cuerpo de la PR decía «every `patch` finding was applied» y no era exacto: el Acceptance Auditor
   señaló que `isUnauthenticatedApiDenial` nombraba tres de sus cuatro conjuntos — `isMainRequest()` es

@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Audit\Infrastructure\Persistence\Dbal;
 
 use DateTimeImmutable;
-use DateTimeInterface;
-use DateTimeZone;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Query\QueryBuilder;
 use Erpify\Shared\Search\Domain\Exception\InvalidSearchValue;
@@ -15,11 +13,11 @@ use Erpify\Shared\Search\Domain\Exception\UnsupportedSearchOperator;
 use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\FilterOperator;
 use Erpify\Shared\Search\Domain\Filters;
+use Erpify\Shared\Search\Domain\StrictRangeBound;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FieldMapping;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use InvalidArgumentException;
-use ValueError;
 
 /**
  * Translates the generic {@see Filters} into DBAL `andWhere` conditions over the raw `audit_log`
@@ -33,27 +31,6 @@ use ValueError;
  */
 final readonly class AuditTimelineFilterApplier
 {
-    /**
-     * Accepted range-bound formats, tried in order: ATOM (`+00:00`/`Z` at second precision), the
-     * milli-second `toISOString()` a JS client emits, and the microsecond form the audit timeline
-     * carries. `P` matches both an offset and `Z`, spanning the RFC 3339 surface without a lax parse
-     * that would also accept "now"/"tomorrow".
-     */
-    private const array SUPPORTED_DATE_TIME_FORMATS = [
-        DateTimeInterface::ATOM,
-        DateTimeInterface::RFC3339_EXTENDED,
-        'Y-m-d\TH:i:s.uP',
-    ];
-
-    /** Easternmost real-world UTC offset (UTC+14, e.g. Kiribati); east of it a bound is nonsensical. */
-    private const int MAX_UTC_OFFSET_EAST_SECONDS = 14 * 3600;
-
-    /** Westernmost real-world UTC offset (UTC-12, e.g. Baker Island); west of it a bound is nonsensical. */
-    private const int MIN_UTC_OFFSET_WEST_SECONDS = -12 * 3600;
-
-    /** The year PostgreSQL's calendar does not have; see {@see self::carriesAStorableYear()}. */
-    private const string UNSTORABLE_YEAR = '0000';
-
     public function apply(QueryBuilder $queryBuilder, Filters $filters, SearchFieldMap $fieldMap): void
     {
         $index = 0;
@@ -163,79 +140,8 @@ final readonly class AuditTimelineFilterApplier
      */
     private function dateTimeBound(Filter $filter): DateTimeImmutable
     {
-        $value = $this->scalarValue($filter);
-
-        foreach (self::SUPPORTED_DATE_TIME_FORMATS as $format) {
-            $dateTime = $this->parseStrict($format, $value);
-
-            if ($dateTime instanceof DateTimeImmutable) {
-                return $dateTime->setTimezone(new DateTimeZone('UTC'));
-            }
-        }
-
-        throw InvalidSearchValue::notADateTime($filter->field, 0);
-    }
-
-    private function parseStrict(string $format, string $value): ?DateTimeImmutable
-    {
-        try {
-            $dateTime = DateTimeImmutable::createFromFormat($format, $value);
-        } catch (ValueError) {
-            return null;
-        }
-
-        // The instance test subsumes createFromFormat's `false` and narrows the type for the gate
-        // behind it.
-        if (
-            !$dateTime instanceof DateTimeImmutable
-            || !$this->carriesAStorableYear($dateTime)
-            || !$this->carriesRealWorldOffset($dateTime)
-            || !$this->isCanonicalUnder($dateTime, $format, $value)
-        ) {
-            return null;
-        }
-
-        return $dateTime;
-    }
-
-    /**
-     * PostgreSQL's calendar runs from 1 BC straight to 1 AD, so it has no year zero and rejects
-     * `0000-…` with SQLSTATE 22008. PHP parses that year happily and it round-trips byte-identically,
-     * so every other gate here passes it: measured, the bound reached the driver and surfaced as a 500
-     * on input any client can send for free — the one value that falsified this parse's own promise of
-     * a 422. A four-digit year makes it the only unstorable instant these formats can express;
-     * `9999-12-31` stores fine, both measured against the running server.
-     */
-    private function carriesAStorableYear(DateTimeImmutable $dateTime): bool
-    {
-        return self::UNSTORABLE_YEAR !== $dateTime->format('Y');
-    }
-
-    /**
-     * The real-world offset span is asymmetric (UTC-12 to UTC+14), so each side is checked separately; a
-     * symmetric abs() would admit the non-existent -13/-14h offsets. PHP parses an offset all the way to
-     * ±99:00 and every one of them round-trips canonically, so without this the bound is accepted and the
-     * instant silently shifts by up to four days — and the same wire value would be a 422 on the shared
-     * search path and a quietly wrong result set here. Twinned with
-     * {@see \Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FilterApplier}: the two strict
-     * parses have to answer alike, and this one lacked the gate until a review measured the divergence.
-     */
-    private function carriesRealWorldOffset(DateTimeImmutable $dateTime): bool
-    {
-        return $dateTime->getOffset() <= self::MAX_UTC_OFFSET_EAST_SECONDS
-            && $dateTime->getOffset() >= self::MIN_UTC_OFFSET_WEST_SECONDS;
-    }
-
-    /**
-     * Round-trip gate: the value is canonical under `$format` only if formatting the parsed instant
-     * reproduces it byte-identically. UTC has two canonical spellings — `P` parses both but emits
-     * `+00:00`, while `p` emits the literal `Z` a JS toISOString() sends — so either rendering of the
-     * same instant is accepted.
-     */
-    private function isCanonicalUnder(DateTimeImmutable $dateTime, string $format, string $value): bool
-    {
-        return $dateTime->format($format) === $value
-            || $dateTime->format(\str_replace('P', 'p', $format)) === $value;
+        return StrictRangeBound::parse($this->scalarValue($filter))
+            ?? throw InvalidSearchValue::notADateTime($filter->field, 0);
     }
 
     private function scalarValue(Filter $filter): string
