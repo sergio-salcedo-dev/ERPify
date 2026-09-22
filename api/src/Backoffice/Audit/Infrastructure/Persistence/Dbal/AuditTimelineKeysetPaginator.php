@@ -177,6 +177,10 @@ final readonly class AuditTimelineKeysetPaginator
 
     private function applyOrderBy(QueryBuilder $queryBuilder, string $alias, SortDirection $scanDirection): void
     {
+        // why: the string is deliberate here, and it is the one place in the tree that still passes one.
+        // This is DBAL's query builder, not the ORM's: Doctrine\DBAL\Query\QueryBuilder::orderBy()
+        // declares `?string $order` and deprecates nothing, while the ORM's took PHP's SortDirection
+        // in 3.7 and drops the string in 4. Handing DBAL that enum is a TypeError, not an upgrade.
         $queryBuilder
             ->orderBy(\sprintf('%s.%s', $alias, self::SORT_COLUMN), $scanDirection->value)
             ->addOrderBy(\sprintf('%s.%s', $alias, self::TIE_BREAK_COLUMN), $scanDirection->value)

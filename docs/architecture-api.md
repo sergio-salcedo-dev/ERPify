@@ -11,7 +11,7 @@ The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded)
 | Runtime         | PHP                                                    | **8.5**                                       |
 | Framework       | Symfony (components)                                   | **8.1.x**                                     |
 | HTTP server     | FrankenPHP (Caddy)                                     | `dunglas/frankenphp:1-php8.5` (digest-pinned) |
-| ORM / DBAL      | Doctrine ORM / DBAL / Migrations / Persistence         | 3.6 / 4.4 / 4.0 / 4.2                         |
+| ORM / DBAL      | Doctrine ORM / DBAL / Migrations / Persistence         | 3.7 / 4.4 / 4.0 / 4.2                         |
 | Database        | PostgreSQL                                             | 18 (Compose)                                  |
 | Async           | Symfony Messenger + Doctrine transport                 | 8.1.x                                         |
 | Realtime        | Symfony Mercure (+ Hub)                                | 0.7 / bundle 0.4                              |

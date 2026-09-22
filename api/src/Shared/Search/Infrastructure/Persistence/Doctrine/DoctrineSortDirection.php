@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine;
 
 use Erpify\Shared\Search\Domain\SortDirection;
+use SortDirection as NativeSortDirection;
 
 /**
  * Translates the search contract's sort direction into the one Doctrine's query builder takes.
@@ -16,11 +17,19 @@ use Erpify\Shared\Search\Domain\SortDirection;
  */
 final class DoctrineSortDirection
 {
-    public static function from(SortDirection $direction): \SortDirection
+    /**
+     * A namespace for one translation, never a value. `services.yaml` autodiscovers `../src/`, so a
+     * public constructor here registers an instantiable service nothing injects.
+     */
+    private function __construct()
+    {
+    }
+
+    public static function from(SortDirection $direction): NativeSortDirection
     {
         return match ($direction) {
-            SortDirection::ASC => \SortDirection::Ascending,
-            SortDirection::DESC => \SortDirection::Descending,
+            SortDirection::ASC => NativeSortDirection::Ascending,
+            SortDirection::DESC => NativeSortDirection::Descending,
         };
     }
 }

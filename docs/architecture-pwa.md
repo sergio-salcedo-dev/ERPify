@@ -22,7 +22,7 @@ The `pwa/` deployable is a Next.js 16.2 (App Router) + React 19.2 + TypeScript 6
 | Class utilities | class-variance-authority, clsx, tailwind-merge    | —       |
 | Unit tests      | Vitest (jsdom)                                    | 4.1     |
 | Testing library | @testing-library/react, @testing-library/jest-dom | 16/7    |
-| E2E             | Playwright                                        | 1.62    |
+| E2E             | Playwright                                        | 1.63    |
 | Linting         | ESLint + `@next/eslint-plugin-next`               | 10 / 16 |
 | Formatting      | Prettier                                          | 3.9     |
 

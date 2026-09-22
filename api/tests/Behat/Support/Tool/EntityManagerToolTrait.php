@@ -15,7 +15,7 @@ use Erpify\Tests\Behat\Support\Tool\TypeHint\TypeHintValueResolver;
 use ReflectionException;
 use ReflectionNamedType;
 use ReflectionProperty;
-use SortDirection;
+use SortDirection as NativeSortDirection;
 use Throwable;
 use TypeError;
 
@@ -131,7 +131,7 @@ trait EntityManagerToolTrait
 
         $result = $this->getRepository($entityClass)->createQueryBuilder('e')
             ->where(\sprintf('e.%s <= :%s', $attribute, self::NOW_PARAM))
-            ->orderBy(\sprintf('e.%s', $attribute), SortDirection::Descending)
+            ->orderBy(\sprintf('e.%s', $attribute), NativeSortDirection::Descending)
             ->setParameter(self::NOW_PARAM, new DateTime())
             ->setMaxResults(1)
             ->getQuery()
@@ -155,7 +155,7 @@ trait EntityManagerToolTrait
 
         $result = $queryBuilder
             ->andWhere(\sprintf('e.%s <= :%s', $attribute, self::NOW_PARAM))
-            ->orderBy(\sprintf('e.%s', $attribute), SortDirection::Descending)
+            ->orderBy(\sprintf('e.%s', $attribute), NativeSortDirection::Descending)
             ->setParameter(self::NOW_PARAM, new DateTime())
             ->setMaxResults(1)
             ->getQuery()
