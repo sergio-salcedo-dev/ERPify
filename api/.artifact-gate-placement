@@ -148,6 +148,7 @@ tests/Unit/Gate/MigrationColumnDefaultGateTest.php :: home
 tests/Unit/Gate/MigrationColumnDefaultRulesGateTest.php :: home
 tests/Unit/Gate/MonologExclusionDeclarationGateTest.php :: home
 tests/Unit/Gate/ObservabilityChannelGateTest.php :: home
+tests/Unit/Gate/OrmSortDirectionGateTest.php :: home
 tests/Unit/Gate/PersistentTransportPolicyGateTest.php :: home
 tests/Unit/Gate/PersistentTransportRoutingShapeGateTest.php :: home
 tests/Unit/Gate/PersonAddressParameterGateTest.php :: home

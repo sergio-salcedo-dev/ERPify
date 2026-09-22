@@ -11,6 +11,7 @@ use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
 use Erpify\Shared\Persistence\Infrastructure\AffectedRows;
 use Override;
+use SortDirection as NativeSortDirection;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
@@ -80,7 +81,7 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
             ->from(Invitation::class, 'i')
             ->where(self::INVITED_USER_PREDICATE)
             ->andWhere('i.status = :status')
-            ->orderBy('i.id', 'ASC')
+            ->orderBy('i.id', NativeSortDirection::Ascending)
             ->setParameter('userId', $userId)
             ->setParameter('status', InvitationStatus::SENT->value)
             ->getQuery()
@@ -130,7 +131,7 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
             ->select('i.id')
             ->from(Invitation::class, 'i')
             ->where(self::INVITED_USER_PREDICATE)
-            ->orderBy('i.id', 'ASC')
+            ->orderBy('i.id', NativeSortDirection::Ascending)
             ->setParameter('userId', $userId)
             ->getQuery()
             ->setLockMode(LockMode::PESSIMISTIC_WRITE)

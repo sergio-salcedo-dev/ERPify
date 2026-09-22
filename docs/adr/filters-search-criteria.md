@@ -9,8 +9,8 @@ vivos. El estado actual del sistema (y la receta "añadir una lista filtrable") 
 ## Contexto
 
 Sin PRD formal: la base de requisitos es el research técnico
-`technical-php-criteria-vs-searchcriteria-erpify-research-2026-06-06.md`
-(`_bmad-output/planning-artifacts/research/`), cuya decisión formal es la **opción C**: converger
+`technical-php-criteria-vs-searchcriteria-erpify-research-2026-06-06.md` (ya no en el árbol;
+el nombre se conserva para arqueología en git), cuya decisión formal es la **opción C**: converger
 con el patrón php-criteria mediante **reimplementación propia** — se absorben *ideas* (VOs
 inmutables, enum de operadores, contrato HTTP genérico, object mothers), nunca código ni
 dependencias. Brownfield sobre el seam existente
