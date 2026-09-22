@@ -158,6 +158,14 @@ sin OK explícito, y no es trabajo de código.
 
 ## Spec Change Log
 
+- `2026-09-22` — **Un hallazgo MINOR que se me quedó sin cerrar, encontrado al releer mi propia afirmación.**
+  El cuerpo de la PR decía «every `patch` finding was applied» y no era exacto: el Acceptance Auditor
+  señaló que `isUnauthenticatedApiDenial` nombraba tres de sus cuatro conjuntos — `isMainRequest()` es
+  ámbito de **despacho**, no una propiedad de la denegación — y yo ni lo apliqué ni registré una decisión.
+  La guarda vuelve a `onException` como early return propio: el ámbito de despacho es asunto del listener,
+  el predicado pasa a decir exactamente lo que testea, y `onException` se queda en 2 returns. El test de
+  sub-request sigue vivo — re-falsificado tras el cambio.
+
 - `2026-09-22` — **Las tres decisiones abiertas, resueltas por Sergio.** El bloque congelado se corrige
   (recuento 13/10, reparto 12/9/2, y la matriz de E/S gana la fila de `safePath` que nunca tuvo más las dos
   de los arreglos nuevos), y la restricción de contrato pasa a nombrar sus **tres** excepciones en vez de una.

@@ -54,6 +54,13 @@ final readonly class UnauthenticatedAccessListener
     #[AsEventListener(event: KernelEvents::EXCEPTION, priority: self::PRIORITY)]
     public function onException(ExceptionEvent $event): void
     {
+        // Dispatch scope is this listener's concern rather than a property of the denial: only the main
+        // request's throwable becomes the response, so a sub-request's would be rewritten and never
+        // rendered. Kept out of the predicate below so that name states exactly what it tests.
+        if (!$event->isMainRequest()) {
+            return;
+        }
+
         if (!$this->isUnauthenticatedApiDenial($event)) {
             return;
         }
@@ -64,13 +71,12 @@ final readonly class UnauthenticatedAccessListener
     /**
      * An API caller being refused while carrying no full-fledged authentication — the single case this
      * listener exists to re-label, because a 403 tells an anonymous caller nothing about what to do
-     * next. The conjunction is ordered cheapest-first and short-circuits: the chain walk and the token
-     * read only run once the request is known to be ours.
+     * next. The conjunction short-circuits in its own order: the chain walk and the token read only run
+     * once the request is known to be ours.
      */
     private function isUnauthenticatedApiDenial(ExceptionEvent $event): bool
     {
-        return $event->isMainRequest()
-            && $this->apiRequestMatcher->matches($event->getRequest())
+        return $this->apiRequestMatcher->matches($event->getRequest())
             && $this->isAccessDenied($event->getThrowable())
             && !$this->trustResolver->isFullFledged($this->tokenStorage->getToken());
     }
