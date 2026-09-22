@@ -172,6 +172,62 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
     }
 
     /**
+     * Every row THIS WRITER writes holds one shape — not every row in a deployed table, where the ones
+     * written before the coercion are still `[]` and no backfill flattens them. `jsonb_typeof` is what
+     * asks, because decoding the string cannot tell the two apart: `json_decode('{}', true)` and
+     * `json_decode('[]', true)` are both `[]` in PHP — which is why the neighbouring case above stays
+     * green either way and proves nothing about the shape.
+     *
+     * The second half is the falsification that keeps the cast honest. `JSON_FORCE_OBJECT` would satisfy
+     * the first assertion and fail this one, rewriting the role lists into `{"0": …}` and changing what
+     * the trail records about a roles change.
+     */
+    public function testMetadataIsStoredAsAnObjectWithoutRewritingNestedLists(): void
+    {
+        $this->withWriter(function (AuditLogWriter $writer, Connection $connection): void {
+            $empty = AuditLogEntry::create(
+                'BANK_ACCOUNTS_VIEWED',
+                AuditLevel::ACTIVITY,
+                ActorContext::anonymous(),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-05-01T09:00:00+00:00'),
+            );
+            $withLists = AuditLogEntry::create(
+                'USER_ROLES_CHANGED',
+                AuditLevel::SECURITY,
+                ActorContext::forUser(Uuid::generate()),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-05-01T09:00:01+00:00'),
+                metadata: ['previous_roles' => ['ROLE_USER'], 'new_roles' => ['ROLE_USER', 'ROLE_ADMIN']],
+            );
+
+            $writer->write($empty);
+            $writer->write($withLists);
+
+            $this->assertSame(
+                'object',
+                $connection->fetchOne(
+                    'SELECT jsonb_typeof(metadata) FROM audit_log WHERE id = :id',
+                    ['id' => $empty->id],
+                ),
+                'an entry carrying no metadata still stores an object',
+            );
+
+            $shapes = $connection->fetchAssociative(
+                'SELECT jsonb_typeof(metadata) AS root, '
+                . "jsonb_typeof(metadata->'previous_roles') AS previous, "
+                . "jsonb_typeof(metadata->'new_roles') AS new "
+                . 'FROM audit_log WHERE id = :id',
+                ['id' => $withLists->id],
+            );
+            $this->assertIsArray($shapes);
+            $this->assertSame('object', $shapes['root'] ?? null);
+            $this->assertSame('array', $shapes['previous'] ?? null, 'a nested list stays a JSON array');
+            $this->assertSame('array', $shapes['new'] ?? null);
+        });
+    }
+
+    /**
      * A caller asking for the port gets this implementation. Two independent mechanisms name it — the
      * `#[AsAlias]` attribute, and the service loader's rule that aliases a singly-implemented interface
      * to its one implementer — so what is pinned here is the resolution rather than either mechanism,
