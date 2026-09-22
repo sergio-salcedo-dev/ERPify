@@ -150,15 +150,27 @@ somewhere tracked.
 skills to one root per target IDE, and they disagree about ownership: `.agent/skills` is tracked while
 `.gitignore` ignores `/.claude/skills/bmad-*/`. So an update run from a worktree travels back through git
 for `.agent/` only, and the primary keeps serving whatever version it was installed with — measured on
-2026-09-20, two months after the 6.12.0 update, the primary still held the 6.10 tree of 2026-07-14 (73
-skill directories against 77, 793 lines of `diff -rq`). Nothing went red, because `make worktree.create`
-seeds every *new* worktree from `.agent/` and the only checkout left wrong is the busiest one. The sync
-**replaces** rather than merging — `cp -a` over the top keeps the retired skills and every file the new
-version stopped shipping — and it refuses, before touching anything, when a `bmad-*` directory under
-`.claude/skills` has no history at the same path in `.agent/skills`. That is the mechanical difference
-between a skill the installer *retired* (regenerable) and one somebody *wrote by hand* (gone for good),
-and it is not hypothetical: `git-worktree-code-review` lived in exactly one skill root and was found by a
-human reading a diff. `--force` archives it into the backup instead of refusing.
+2026-09-20, **the day after** the 6.12.0 update landed (#945, `3d3ef122`, 2026-09-19), the primary was
+still serving a tree roughly two months old (73 skill directories against 77, 790+ lines of `diff -rq`;
+the last bulk `.agent/skills` commit before the update is `4c5bb241`, 2026-07-09). Nothing went red,
+because `make worktree.create` seeds every *new* worktree from `.agent/` and the only checkout left wrong
+is the busiest one. **The command acts on the primary whichever checkout invokes it** — `CLAUDE.md`
+requires the work to happen in a worktree, and a worktree is correct by construction, so a run scoped to
+its own checkout would answer "in sync" from the one place that never drifts. `c='--root <path>'`
+overrides. The sync **replaces** rather than merging, refuses a non-directory `bmad-*` entry before
+touching anything, and restores from its own backup — verifying the restore — if the copy fails.
+
+Its guardrail compares **bytes**, not path history. A `bmad-*` directory the source lacks is treated as
+retired only when it still matches what git last recorded at that path; anything else stops the run. The
+first version asked only whether the path had history, and hand-written content sitting where the
+installer once had a skill was measured classifying as retired and deleted with exit 0. Two bounds worth
+stating: the universe is `bmad-*/`, so a hand-written skill under any other name is protected by the
+glob rather than by this check — `git-worktree-code-review`, cited in earlier versions as the precedent,
+is exactly that case and could never have reached it — and the comparison prunes `__pycache__`/`*.pyc`,
+because a skill that has merely been *run* would otherwise report as drift for ever, with a destructive
+replace as its only offered remedy. Of the ~92 skills the installer writes, 77 carry the `bmad-` prefix;
+the other 15 (`memory`, `sync`, `wds-*`) are tracked under `.claude/skills` too — `.gitignore` ignores
+only `/.claude/skills/bmad-*/` — so they travel through git in both roots and need no sync.
 
 Nothing in the merge path moves a marker in `sprint-status.yaml`: a PR squash-merges on GitHub and the file keeps saying `review` / `in-progress`. The audit is offline (no network, no `gh`) and reports two things — an epic still open whose stories are all `done`, and a story below `done` whose tag (`RM-6`, `U-4`, `II-5`, `AF-1.1`…) already appears in a commit subject on the base branch. Story keys with no letter prefix carry no commit tag, so they are listed as unchecked rather than passed silently.
 
