@@ -94,6 +94,8 @@ pnpm-debug.log*
 /_bmad/
 /.agents/skills/bmad-*/
 /.claude/skills/bmad-*/
+# .qwen/ is no longer an install target; ignored so a stray regeneration stays out.
+/.qwen/
 
 # Claude Code worktrees (transient, machine-local)
 /.claude/worktrees/
