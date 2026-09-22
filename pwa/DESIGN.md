@@ -1,6 +1,6 @@
 # ERPify PWA Design System
 
-Lean implementation-facing reference for polishing the ERPify back-office PWA. Day-to-day artifact for engineers; full design spec lives at `_bmad-output/planning-artifacts/ux-design-specification.md`.
+Lean implementation-facing reference for polishing the ERPify back-office PWA. Day-to-day artifact for engineers, and the **visual authority**: the per-axis UX runs under `_bmad-output/planning-artifacts/ux-designs/` are deltas that inherit from this file and define only what they add.
 
 > **Status:** v1, brownfield-safe, applied iteratively. Tokens land first; components consume tokens; composites wrap Shadcn primitives. No big-bang rewrite.
 > **Inspiration:** Linear's restraint principles and palette discipline, applied to an ERP back-office that runs **light-mode by default**. Dark mode is a fully supported variant on a navy-slate band (GitHub-dimmed undertone / Stripe-Vercel navy).
@@ -639,4 +639,4 @@ A long-term goal is an ESLint rule that flags raw Shadcn primitive use where an 
 - **Light-mode ramp tuning.** The light-mode neutrals (`#f7f8f8`, `#f3f4f5`, `#e9eaec`, `#dcdfe3`, `#bfc3ca`) are first-pass. Refine after the first feature surface ships and we see them in context.
 - **`--color-warning` light value `#d97706`** is provisional; pick a final low-chroma amber when the first warning surface ships.
 
-Updates to this file: PRs that change tokens, primitives, or patterns must update the relevant section here. The full spec at `_bmad-output/planning-artifacts/ux-design-specification.md` is the canonical reference for rationale.
+Updates to this file: PRs that change tokens, primitives, or patterns must update the relevant section here. Rationale for a given axis lives in that axis's UX run (`_bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-06-26/DESIGN.md` for the audit surfaces, `.../ux-ERPify-2026-07-06/DESIGN.md` for access and identity); where a run and this file disagree, this file wins.
