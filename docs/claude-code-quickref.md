@@ -121,6 +121,31 @@ make bmad.skills.sync               # Replace that tree from .agent/skills (dest
 make bmad.skills.sync c='--force'   # Same, but also removes a hand-written skill the installer never wrote.
 ```
 
+### Updating the BMad install
+
+**Neither of the installer's self-reports is evidence.** `bmad install --action quick-update`
+prints "preserved settings" and does not preserve them — measured on the 6.12.0 update, it reset
+`user_name`, both language keys and `project_name` (deriving the last from the directory it ran in,
+which was a worktree slug) while discarding the `--user-name`, `--communication-language` and
+`--document-output-language` flags it had been handed. The values that survive are the ones pinned
+in `_bmad/custom/config.toml` and `_bmad/custom/config.user.toml`, the one layer the installer never
+rewrites; verify through `uv run _bmad/scripts/resolve_config.py --project-root .`, not by reading
+the files back, because what matters is the resolved merge. And `bmad status` under-reports: it said
+`1 update(s) available` and marked `cis ✓` over three shipped stable releases, because it reads npm
+while the installer resolves externals from **release tags**. Read the tags.
+
+`_bmad` is a symlink to the primary checkout's install, so an update run from a worktree writes
+there: one install per machine, serving every session. Run one only when no other session is
+mid-task, or their skills change under them.
+
+**Open, and nobody has dated them:** `bmb` is pinned at v1.8.1 (`channel: pinned`) while v2.2.2 is
+the stable release, two majors on, and the pin's motivation is not recorded anywhere; `wds` is
+deprecated upstream in 6.12 — hidden from the module picker for new installs and warning on every
+flow — yet still installed at v0.4.3; and the `_bmad/custom/` pinning above protects **one machine**,
+because `/_bmad/` is gitignored, so a fresh clone gets the installer's defaults and the next
+`quick-update` there resets them the same way. If that last one matters, the fix has to live
+somewhere tracked.
+
 **The skill sync exists because an update never reaches the primary checkout.** The installer writes its
 skills to one root per target IDE, and they disagree about ownership: `.agent/skills` is tracked while
 `.gitignore` ignores `/.claude/skills/bmad-*/`. So an update run from a worktree travels back through git
