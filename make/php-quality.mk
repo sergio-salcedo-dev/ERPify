@@ -351,9 +351,19 @@ php.lint.route-manifest: php.lint.prod-container ## Route-manifest freshness gat
 # request, reverted both, and `69320e5e` moved Mercure's `Default: null` marker from `public_url` to
 # `url`. None of those three commit messages mentions the file.
 #
-# A green proves the file IN THE WORKING TREE equals what this checkout generates. What it does not
-# prove, why the dump clears `var/cache/dev` rather than deleting the tracked file, and the rest of
-# the blind spots: api/tools/config-reference/dump.sh.
+# **It compares the COMMITTED BLOB, never the working-tree file, and that is the whole gate.** The
+# pass rewrites the tracked file on every debug compile, and this sweep is full of targets that cause
+# one: `php.lint.doctrine` alone runs `bin/console` under `APP_ENV=test`. Measured on a planted drift
+# — the gate alone exits 2 and names the missing line; `make php.lint.doctrine` then exits 0, says
+# nothing, and leaves the file REPAIRED; the gate run after it exits 0 over the identical drift. So
+# reading the working tree made this unable to fail, and not as a race it sometimes lost: the gate
+# waits on `php.md` and `php.cs.dry-run`, the two heaviest targets in the sweep, while the sibling is
+# one console command — under `-j4` the sibling always wins. That is how the monolog-bundle 4.1.0
+# bump (#968) shipped a stale reference with every check green.
+#
+# A green proves the COMMITTED file equals what this checkout generates. What it does not prove, why
+# the dump clears `var/cache/dev` rather than deleting the tracked file, and the rest of the blind
+# spots: api/tools/config-reference/dump.sh.
 php.lint.config-reference: php.md php.cs.dry-run ## Config-reference freshness gate (committed reference.php vs this vendor tree)
 	@actual="$$(mktemp)"; \
 	if ! { $(CONFIG_REFERENCE_DUMP) > "$$actual"; }; then \
@@ -365,14 +375,21 @@ php.lint.config-reference: php.md php.cs.dry-run ## Config-reference freshness g
 		fi; \
 		exit 1; \
 	fi; \
-	diff -u "$(CONFIG_REFERENCE)" "$$actual"; rc=$$?; \
-	rm -f "$$actual"; \
+	committed="$$(mktemp)"; \
+	if ! git -C "$(PROJECT_ROOT)" show "HEAD:$(CONFIG_REFERENCE_PATH)" > "$$committed" 2>/dev/null; then \
+		rm -f "$$actual" "$$committed"; \
+		echo "✗ php.lint.config-reference: could not read HEAD:$(CONFIG_REFERENCE_PATH) — the check did not run" >&2; \
+		exit 1; \
+	fi; \
+	diff -u "$$committed" "$$actual"; rc=$$?; \
+	rm -f "$$actual" "$$committed"; \
 	if [ $$rc -eq 0 ]; then \
-		echo "✓ php.lint.config-reference: api/config/reference.php matches this vendor tree"; \
+		echo "✓ php.lint.config-reference: the committed api/config/reference.php matches this vendor tree"; \
 	elif [ $$rc -eq 1 ]; then \
-		echo "✗ php.lint.config-reference: api/config/reference.php is stale for the locked dependencies." >&2; \
+		echo "✗ php.lint.config-reference: the COMMITTED api/config/reference.php is stale for the locked dependencies." >&2; \
 		echo "  The file is GENERATED — never hand-edit it. Run 'make sf.config.reference' and commit the result." >&2; \
-		echo "  Above, '-' is what the file in the working tree holds and '+' is what this vendor tree generates." >&2; \
+		echo "  Above, '-' is what HEAD holds and '+' is what this vendor tree generates." >&2; \
+		echo "  Read HEAD and not the working tree on purpose: a debug compile in this same sweep repairs the file in place, and comparing the repair is what let #968 ship a stale reference green." >&2; \
 		exit 1; \
 	else \
 		echo "✗ php.lint.config-reference: diff could not compare the two files (exit $$rc) — the check did not run" >&2; \
