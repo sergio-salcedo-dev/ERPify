@@ -201,6 +201,16 @@ const uploadsSourcemaps = Boolean(
   sentryAuthToken && (sentryOrg || sentryAuthToken.startsWith(ORG_SCOPED_TOKEN_PREFIX)),
 );
 
+// A token that cannot upload is a misconfiguration the build would otherwise
+// carry out in silence: the image builds, traces stay minified, and nothing says
+// why. The warning names the missing piece and never the token.
+if (sentryAuthToken && !uploadsSourcemaps) {
+  console.warn(
+    "sentry: SENTRY_AUTH_TOKEN is set but SENTRY_ORG is empty and the token is not an " +
+      `organisation token (${ORG_SCOPED_TOKEN_PREFIX}…), so source-map upload is off.`,
+  );
+}
+
 // Wrap with Sentry. Events are routed through a same-origin tunnel
 // (`/monitoring`) so the locked-down CSP `connect-src 'self'` covers them with
 // no widening, and ad-blockers can't drop them.
@@ -216,7 +226,10 @@ const uploadsSourcemaps = Boolean(
 //    `sourcemaps.disable` is false. They land in `.next/static`, which Next
 //    serves at `/_next/static`, and `deleteSourcemapsAfterUpload` deletes them
 //    after the upload — whether or not the upload succeeded — and strips their
-//    `sourceMappingURL` comments. Setting it here pins what the SDK would
+//    `sourceMappingURL` comments. That deletion runs in the SDK's post-compile
+//    hook, which a Turbopack build uses unless `useRunAfterProductionCompileHook`
+//    is set to `false`; with the hook off the maps are still generated and
+//    nothing deletes them. Setting the flag here pins what the SDK would
 //    otherwise default to at build time, so a changed default or a casual edit
 //    is a visible change rather than a silent republish.
 //  - Server maps are emitted on every production build, upload or not, into
@@ -225,10 +238,20 @@ const uploadsSourcemaps = Boolean(
 //    its static routes are `public/` and `.next/static` alone. They are image
 //    contents, readable by whoever can pull the image, not a URL.
 //
-// Two settings would genuinely publish client maps, and the gate refuses both:
-// `filesToDeleteAfterUpload`, which OVERRIDES the deletion flag so a narrow glob
-// serves everything it does not name, and `productionBrowserSourceMaps: true`,
-// which generates maps even when upload is off and nothing deletes them.
+// Four settings would genuinely publish client maps, and the gate refuses all
+// of them: `filesToDeleteAfterUpload`, which OVERRIDES the deletion flag so a
+// narrow glob serves everything it does not name; `productionBrowserSourceMaps:
+// true`, which generates maps even when upload is off and nothing deletes them;
+// `useRunAfterProductionCompileHook: false`, which switches the deleting hook
+// off; and `unstable_sentryWebpackPluginOptions`, whose `sourcemaps` the SDK
+// spreads last over its own and so replaces the deletion glob wholesale.
+//
+// The token is used for exactly two things, both in the post-compile hook: the
+// source-map upload, and creating the release those maps are attached to. With
+// upload off the options pass an EMPTY `authToken` rather than none, because an
+// absent one makes the upload plugin fall back to the `SENTRY_AUTH_TOKEN`
+// environment variable — which the image build always sets — and still create
+// a release and associate commits with it.
 //
 // `silent` is off so a failed upload or a refused credential is printed in the
 // build log: the SDK reports both as an error and carries on, and with `silent`
@@ -243,7 +266,7 @@ export default withSentryConfig(nextConfig, {
         project: sentryProject,
         ...(sentryOrg ? { org: sentryOrg } : {}),
       }
-    : {}),
+    : { authToken: "" }),
   sourcemaps: {
     disable: !uploadsSourcemaps,
     deleteSourcemapsAfterUpload: true,

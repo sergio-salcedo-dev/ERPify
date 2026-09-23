@@ -66,7 +66,8 @@ import { describe, expect, it } from "vitest";
  * carries — `"Blue/green o rolling deploy"` and `"Extension hooks en domain events"` shipped
  * past all three signals: `o` is a single letter, excluded for Tailwind's sake, and even a
  * listed `en` would be one function word with no diacritic, under every threshold; and
- * nothing about whether the English that replaced a string is any GOOD. Review remains the only control on that last direction.
+ * nothing about whether the English that replaced a string is any GOOD. Review remains the
+ * only control on that last direction.
  */
 const PWA_ROOT = path.resolve(__dirname, "..");
 const SRC_ROOT = path.join(PWA_ROOT, "src");
@@ -531,7 +532,7 @@ describe("rendered copy speaks the language the document declares", () => {
     ];
 
     expect(roadmap.filter((text) => spanishReason(text) === null)).toEqual([]);
-    // The English that replaced them stays silent, so the new entries cost no exemption.
+    // The English that replaced them stays silent, so these entries cost no exemption.
     expect(
       [
         "Needs it covers",

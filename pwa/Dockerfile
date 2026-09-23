@@ -82,11 +82,15 @@ ENV SENTRY_PROJECT=${SENTRY_PROJECT}
 # nothing, while Compose mounts an EMPTY file when SENTRY_AUTH_TOKEN is unset or
 # empty. Both leave upload off and say so once in the build log. Anything else
 # at that path — a directory, an unreadable file, a file holding more than one
-# word (a whole env file pointed at by mistake) — is a broken mount, and it
-# fails the build rather than degrading into a silent build with no upload.
+# word (a whole env file pointed at by mistake), a token carrying an `=` or a
+# quote (one `SENTRY_AUTH_TOKEN=…` line, or a value copied with its quotes) — is
+# a broken mount, and it fails the build rather than degrading into a build that
+# sends Sentry a credential it will refuse. The message never prints the value.
 #
-# An empty SENTRY_ORG is unset rather than passed on: sentry-cli inherits the
-# build environment, and an org-scoped `sntrys_` token already names its org.
+# A SENTRY_ORG with no non-blank character is unset rather than passed on: the
+# upload plugin falls back to the SENTRY_ORG environment variable when the
+# config names no org, and a blank one would reach Sentry as an org slug; an
+# org-scoped `sntrys_` token already names its org.
 RUN --mount=type=secret,id=sentry_auth_token \
     secret=/run/secrets/sentry_auth_token; \
     token=""; \
@@ -101,8 +105,11 @@ RUN --mount=type=secret,id=sentry_auth_token \
         elif [ "$(wc -w < "$secret")" -ne 1 ]; then \
             echo "sentry: $secret holds more than one word, not an auth token" >&2; exit 1; \
         fi; \
+        case "$token" in \
+            *=*|*\"*|*\'*) echo "sentry: $secret holds an '=' or a quote, not a bare auth token" >&2; exit 1 ;; \
+        esac; \
     fi; \
-    if [ -z "$SENTRY_ORG" ]; then unset SENTRY_ORG; fi; \
+    case "${SENTRY_ORG:-}" in *[![:space:]]*) ;; *) unset SENTRY_ORG ;; esac; \
     SENTRY_AUTH_TOKEN="$token" npm run build
 
 # Production — copy standalone output (same idea as upstream `prod` stage)

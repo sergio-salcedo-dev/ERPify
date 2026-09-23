@@ -3,7 +3,7 @@ title: 'La superficie que no hablaba su idioma, y los source maps que nadie sub�
 type: 'fix'
 created: '2026-08-22'
 baseline_commit: '868c29a48055d6df02dc9e5ec0b4a65387b1d59b'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 1
 context: []
 ---
@@ -48,7 +48,7 @@ Cuatro comprobaciones se hicieron ejecutando algo, no leyendo el diff:
 - **Valores de enum y constantes.** `git diff` sobre `audit/domain` y `audit/_lib` no
   devuelve **ninguna** asignación `<clave>: "<valor>"` modificada: `AuditView.Journey` sigue
   valiendo `"journey"`, así que el estado en la URL y los deep links siguen resolviendo.
-  Sólo cambian etiquetas y comentarios.
+  Sólo cambian etiquetas y comentarios — falso, ver Review Findings.
 - **Suites e2e.** Ningún spec de Playwright toca la superficie de auditoría ni las tres
   páginas de documentación, así que no hay aserciones e2e que arrastrar.
 - **El gate de idioma se falsificó dos veces, y la primera vez FALLÓ.** Con el umbral
@@ -152,7 +152,43 @@ existe "pros and cons".
 
 ## Outcome
 
-- `pwa/tests/ui-copy-language.test.ts` — 3 casos, `src/` en cero.
+- `pwa/tests/ui-copy-language.test.ts` — 4 casos, `src/` en cero.
 - `pwa/tests/sentry-sourcemap-exposure.test.ts` — 5 casos.
 - Suite completa: eslint 0, prettier limpio, dependency-cruiser limpio (507 módulos),
   `tsc` 0, vitest **1503 passed / 247 ficheros**.
+- Seguimiento (#834 review, rama fix/pwa-834-review-followups): language gate 7 casos, sentry gate 67 casos.
+
+### Review Findings
+
+Ronda BMAD (`bmad-code-review`, 2026-08-22) sobre `868c29a4..a52ef6de` — tres capas en
+paralelo, ninguna falló. Severidades reasignadas en el triaje leyendo el código en su sitio,
+descartando las que asignaron las capas. 0 descartados por ruido.
+
+**Contexto que cambia el coste de todo lo de abajo: esto ya está mergeado en `main`.** Ningún
+patch es una enmienda; todos requieren rama de seguimiento.
+
+- [x] [Review][Decision] El secreto de compose puede no llegar nunca a buildx — `compose.prod.yaml` rinde `id=sentry_auth_token,type=env,env=SENTRY_AUTH_TOKEN`, y buildx resuelve `type=env` del entorno del proceso invocante, mientras `make/config.mk:81-87` entrega los secretos de prod **solo** por `--env-file .env.prod.local`. Si los valores del env-file no alcanzan el entorno del proceso, la ruta documentada produce upload-off — y, por el hallazgo del `silent`, en silencio. No verificable aquí (sin daemon); se zanja con un comando. — settled by measurement: `docker compose --env-file` delivers the value to the BuildKit secret (Compose v5.5.1, bake and classic), no defect
+
+- [x] [Review][Patch] Seis entradas del léxico están escritas sin tilde y no pueden matchear español real [pwa/tests/ui-copy-language.test.ts:165,170,171,177,183,187] — fixed in the follow-up
+- [x] [Review][Patch] El recorrido AST nunca visita literales de plantilla → tres nombres accesibles en español [pwa/tests/ui-copy-language.test.ts:306] — fixed in the follow-up
+- [x] [Review][Patch] ~21 cadenas españolas siguen renderizándose en superficies que este cambio declara inglesas [pwa/src/app/backoffice/roadmap/page.tsx:104,120-123,170,178; docs/flow/page.tsx:22,34,250,258; audit/ui/ActorChip.tsx:57,58; ErasedResource.tsx:28; AuditEntryDrawer.tsx:163; JourneySessionHeader.tsx:23; roadmap.ts:312,442,492,572,676,679] — fixed in the follow-up
+- [x] [Review][Patch] Seis aserciones de test fijan español y certifican el defecto [pwa/tests/.../ActorChip.test.tsx:24; AuditEntryDrawer.test.tsx:111; AuditTimelineTable.test.tsx:132; auditInvestigationScreen.test.tsx:107,117,125] — fixed in the follow-up
+- [x] [Review][Patch] La búsqueda de propiedades no está anclada al bloque `sourcemaps` y una clave entrecomillada derrota la invariante 2 — falla ABIERTO [pwa/tests/sentry-sourcemap-exposure.test.ts:58-72] — fixed in the follow-up
+- [x] [Review][Patch] `productionBrowserSourceMaps: true` publica todos los maps con el gate en verde [pwa/tests/sentry-sourcemap-exposure.test.ts:88-105] — fixed in the follow-up
+- [x] [Review][Patch] El chequeo de `ARG` no cubre `ENV` ni un `ARG` multi-nombre [pwa/tests/sentry-sourcemap-exposure.test.ts:107-122] — fixed in the follow-up
+- [x] [Review][Patch] Toda configuración errónea produce un build verde y mudo — `silent: !process.env.CI` y `CI` nunca está definido en la etapa builder; `|| true` enmascara además un montaje roto [pwa/next.config.ts:215; pwa/Dockerfile:83-85] — fixed in the follow-up
+- [x] [Review][Patch] Un token `sntrys_` con ámbito de organización se rechaza por exigir `SENTRY_ORG`, que el SDK exime [pwa/next.config.ts:194] — fixed in the follow-up
+- [x] [Review][Patch] La doc de despliegue del PWA sigue afirmando lo contrario de lo que el cambio hizo [pwa/docs/production-deployment.md:38] — fixed in the follow-up
+- [x] [Review][Patch] `docs/rules/security.md` no recoge el primer patrón de secreto BuildKit del repo [docs/rules/security.md] — fixed in the follow-up
+- [x] [Review][Patch] «defaults to true» es cierto solo para el build de cliente; los maps de servidor se generan y se conservan [pwa/next.config.ts:206; PRODUCTION_SECURITY_CHECKLIST.md:112; pwa/CLAUDE.md:72; .env.prod.example:16] — fixed in the follow-up
+- [x] [Review][Patch] La cabecera del gate se contradice con su propio código en tres puntos, y describe mal su lista de atributos omitidos [pwa/tests/ui-copy-language.test.ts:20-22,49] — fixed in the follow-up
+- [x] [Review][Patch] «ocho cadenas» no cuadra entre tres documentos del mismo cambio [CLAUDE.md; pwa/CLAUDE.md; pwa/tests/ui-copy-language.test.ts] — fixed in the follow-up
+- [x] [Review][Patch] La traducción rompió una concordancia previa: auditoría dice «Short name», el formulario «Code» [pwa/src/context/backoffice/audit/application/humanizeAuditField.ts:12] — fixed in the follow-up
+- [x] [Review][Patch] Comentarios relativos al cambio en los dos ficheros de test nuevos, prohibidos por CLAUDE.md [pwa/tests/sentry-sourcemap-exposure.test.ts; pwa/tests/ui-copy-language.test.ts] — fixed in the follow-up
+- [x] [Review][Patch] Comentarios obsoletos que nombran etiquetas ya sustituidas [pwa/src/app/backoffice/audit/_lib/auditFilter.ts:67; AuditInvestigationScreen.tsx:75; MetadataBlock.tsx:54] — fixed in the follow-up
+- [x] [Review][Patch] La referencia al gate no resuelve desde la raíz [.env.prod.example:58] — fixed in the follow-up
+- [x] [Review][Patch] El propio Outcome declara «3 casos» donde hay 4, y la medición «ninguna asignación clave:valor modificada» es falsa [este fichero] — fixed in the follow-up
+
+- [x] [Review][Defer] Las cabeceras de día de auditoría renderizan fechas en español vía `Intl` — ningún barrido de cadenas puede verlo [pwa/src/context/shared/date-time-provider/infrastructure/DateFnsDateTimeProvider.ts:42] — resolved: en-GB (user decision)
+- [x] [Review][Defer] El literal `10.70.0` se afirma en cuatro sitios sin nada que lo ate al manifiesto [pwa/next.config.ts:207; pwa/CLAUDE.md:72; PRODUCTION_SECURITY_CHECKLIST.md:112; pwa/tests/sentry-sourcemap-exposure.test.ts:21] — resolved: no version literal in prose
+- [x] [Review][Defer] La lectura independiente aterrizó post-PR y sin `ADVERSARIAL_PASS_ACK` — el orden no es corregible retroactivamente [CLAUDE.md → Security review → Process] — moot: rule retired 2026-08-31

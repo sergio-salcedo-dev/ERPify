@@ -121,13 +121,18 @@ you change anything here.
       **Client maps** exist only while upload is on (the SDK turns
       `productionBrowserSourceMaps` on for a Turbopack build), land in
       `.next/static` — served at `/_next/static` — and are deleted after the
-      upload, succeeded or not. `deleteSourcemapsAfterUpload: true` in
+      upload, succeeded or not, by the SDK's post-compile hook, which a
+      Turbopack build runs unless `useRunAfterProductionCompileHook` is `false`.
+      `deleteSourcemapsAfterUpload: true` in
       `pwa/next.config.ts` is a **pin, not a switch**: the SDK already applies it
       when it turns client maps on, and writing it makes a changed default or a
-      casual removal a visible change rather than a silent republish. Two
+      casual removal a visible change rather than a silent republish. Four
       settings would genuinely publish them and must stay out:
       `filesToDeleteAfterUpload`, which **overrides** the flag outright so a
-      narrow glob serves everything it does not name, and
+      narrow glob serves everything it does not name;
+      `useRunAfterProductionCompileHook: false`, which keeps the maps and drops
+      the hook that deletes them; `unstable_sentryWebpackPluginOptions`, whose
+      `sourcemaps` the SDK spreads last and so replaces the deletion glob; and
       `productionBrowserSourceMaps: true`, which generates maps in a build with
       upload off, where nothing deletes them. **Server maps** are emitted into
       `.next/server` on every production build and the SDK's deletion covers
@@ -138,8 +143,10 @@ you change anything here.
       (`--mount=type=secret,id=sentry_auth_token`), never as a build `ARG` or an
       `ENV` — `docker history` prints args, `docker inspect` prints env, and this
       token grants *write* access to the Sentry project. A mount that is present
-      but unreadable, or holds more than one word, fails the build; an absent or
-      empty one leaves upload off and says so in the build log, and the upload
+      but unreadable, holds more than one word, or carries an `=` or a quote
+      fails the build; an absent or
+      empty one — or a personal token with no `SENTRY_ORG` — leaves upload off
+      and says so in the build log, and the upload
       step itself runs with `silent: false`, so a refused credential or a failed
       upload is printed rather than swallowed. Gated by
       `pwa/tests/sentry-sourcemap-exposure.test.ts`; a green proves the
