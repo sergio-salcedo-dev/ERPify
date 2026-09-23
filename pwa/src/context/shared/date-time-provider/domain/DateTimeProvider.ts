@@ -21,7 +21,7 @@ export interface DateTimeProvider {
 
   /**
    * Format a date for end-user display as `dd/mm/yyyy, HH:mm:ss` in 24-hour
-   * time using the `es-ES` locale, rendered in the viewer's own local
+   * time, in English, rendered in the viewer's own local
    * timezone. The instant is unchanged — only its wall-clock presentation is
    * localized, so a UTC timestamp from the API shows as the user's local time.
    */
@@ -107,8 +107,8 @@ export interface DateTimeProvider {
   formatIsoToLocalTimeOfDay(iso: string): string;
 
   /**
-   * Render an ISO 8601 timestamp as a long, human local date (e.g. `12 de junio
-   * de 2026` in es-ES) — the day-divider header of a grouped timeline. Returns
+   * Render an ISO 8601 timestamp as a long, human local date in English (e.g.
+   * `12 June 2026`) — the day-divider header of a grouped timeline. Returns
    * the raw input back when it is unparseable.
    */
   formatIsoToLongDate(iso: string): string;

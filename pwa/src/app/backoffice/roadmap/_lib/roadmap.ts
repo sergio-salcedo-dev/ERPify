@@ -40,7 +40,7 @@ import {
 
 /**
  * Single source of truth for the product + engineering roadmap. The in-app
- * "backlog vivo" at `/backoffice/roadmap` ({@link RoadmapPage}) renders straight
+ * living backlog at `/backoffice/roadmap` ({@link RoadmapPage}) renders straight
  * from this data, mirroring how the sidebar is built from `backofficeMenu.ts`,
  * so the UI and the plan can never drift. Kept as plain typed data — no React,
  * no framework imports — so it stays portable (a future API/DB seed or a
@@ -213,7 +213,7 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Future ABAC hooks (policies)" },
           { name: "JWT auth + refresh strategy" },
           { name: "Session / device tracking" },
-          { name: "Audit log base system", note: "tabla domain_event" },
+          { name: "Audit log base system", note: "domain_event table" },
         ],
       },
       {
@@ -309,7 +309,7 @@ export const roadmapPhases: RoadmapPhase[] = [
           },
           { name: "F1 · Local storage + per-tenant upload/download" },
           { name: "F2 · Generic Media Library (reuse, no duplication, tags)" },
-          { name: "F3 · Document System (agregado Document, versionado, tipos, estados)" },
+          { name: "F3 · Document System (Document aggregate, versioning, types, states)" },
           { name: "F4 · Storage abstraction (S3/MinIO, swappable by config)" },
           { name: "F5 · SaaS optimisation (signed URLs, CDN, thumbnails, OCR)" },
         ],
@@ -340,7 +340,7 @@ export const roadmapPhases: RoadmapPhase[] = [
   },
   {
     code: "1",
-    label: "Core ERP operativo",
+    label: "Operational ERP core",
     summary:
       "Where the real business value starts. Banks is the reference vertical already delivered.",
     modules: [
@@ -439,7 +439,7 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Proposal documents (technical + commercial)" },
           { name: "Cost estimate (client-facing, from a Budget)" },
           { name: "Validity period + lifecycle (issued/accepted/rejected)" },
-          { name: "Accept → project creation trigger", note: "evento proposal.accepted" },
+          { name: "Accept → project creation trigger", note: "proposal.accepted event" },
         ],
       },
       {
@@ -489,7 +489,7 @@ export const roadmapPhases: RoadmapPhase[] = [
             name: "Certifications (to date)",
             note: "measurement → certification → invoice (2.3)",
           },
-          { name: "Incidents (incidencias)" },
+          { name: "Incidents" },
           { name: "Quality checks" },
           { name: "Safety / PRL records" },
           { name: "Site planning" },
@@ -569,14 +569,14 @@ export const roadmapPhases: RoadmapPhase[] = [
           { name: "Cost computation (material + labour + transport)" },
           { name: "Productivity ratios" },
           { name: "Dynamic pricing rules engine" },
-          { name: "Output → budget line generation", note: "alimenta 1.4" },
+          { name: "Output → budget line generation", note: "feeds 1.4" },
         ],
       },
     ],
   },
   {
     code: "2",
-    label: "Operaciones avanzadas",
+    label: "Advanced operations",
     summary:
       "Operational capabilities that leverage the core: people, documents, the financial core, cost allocation, external-party portals and commissions.",
     modules: [
@@ -673,10 +673,10 @@ export const roadmapPhases: RoadmapPhase[] = [
         dependsOn: ["0.9", "1.3"],
         submodules: [
           { name: "Work-log capture on site" },
-          { name: "Fotos geolocalizadas e incidencias" },
+          { name: "Geolocated photos and incidents" },
           { name: "Offline mode + synchronisation" },
           { name: "Approvals from a phone" },
-          { name: "Field measurements → certification", note: "alimenta 1.3 y 2.3" },
+          { name: "Field measurements → certification", note: "feeds 1.3 and 2.3" },
         ],
       },
       {
@@ -922,7 +922,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         submodules: [
           { name: "Cost deviation analysis" },
           { name: "Project profitability tracking" },
-          { name: "Forecasting engine (rule-based inicialmente)" },
+          { name: "Forecasting engine (rule-based at first)" },
           { name: "Cost-overrun and delay prediction (site history)" },
           { name: "Bottleneck detection (workflow + time analysis)" },
         ],
@@ -972,7 +972,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         submodules: [
           { name: "Module registry system" },
           { name: "Dynamic module enable/disable per tenant" },
-          { name: "Extension hooks en domain events" },
+          { name: "Extension hooks on domain events" },
           { name: "API extension points" },
         ],
       },
@@ -997,7 +997,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "GitHub Actions pipelines", note: "quality + tests en push/PR" },
+          { name: "GitHub Actions pipelines", note: "quality + tests on push/PR" },
           { name: "Environment promotion (dev → staging → prod)" },
           { name: "Migration automation strategy" },
           { name: "Rollback system" },
@@ -1039,7 +1039,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         submodules: [
           { name: "Docker Compose environments" },
           { name: "Infrastructure as code (future)" },
-          { name: "Blue/green o rolling deploy" },
+          { name: "Blue/green or rolling deploy" },
           { name: "Background worker scaling (Messenger consumers)" },
         ],
       },

@@ -20,10 +20,10 @@ describe("dateTimeProvider audit formatters", () => {
   });
 
   describe("formatIsoToLongDate", () => {
-    it("renders a long local date (es-ES) and never the raw ISO", () => {
+    it("renders a long English date, day first, and never the raw ISO", () => {
       const result = dateTimeProvider.formatIsoToLongDate(iso);
-      expect(result).toContain("2026");
-      expect(result).toMatch(/de .*2026/); // es-ES "<d> de <month> de 2026"
+      // 12:04 UTC stays in June across every real offset, so only the day number is left open.
+      expect(result).toMatch(/^\d{1,2} June 2026$/);
       expect(result).not.toBe(iso);
     });
 
