@@ -51,6 +51,16 @@
   },
   "enabledPlugins": {
     "mcp-server-dev@claude-plugins-official": true,
-    "aikido@claude-plugins-official": true
+    "aikido@claude-plugins-official": true,
+    "bmad-method@bmad": true,
+    "bmad-toolbox@bmad": true
+  },
+  "extraKnownMarketplaces": {
+    "bmad": {
+      "source": {
+        "source": "github",
+        "repo": "bmad-code-org/bmad-plugins"
+      }
+    }
   }
 }
