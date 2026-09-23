@@ -149,6 +149,10 @@ ROUTE_MANIFEST_DUMP := $(PHP_PROD_CAPTURE) sh tools/route-manifest/dump.sh
 # re-derived by `php.lint.config-reference` (make/php-quality.mk). Rationale, the snapshot/restore
 # and the blind spots: api/tools/config-reference/dump.sh.
 CONFIG_REFERENCE      := $(API_ROOT)/config/reference.php
+# Repo-relative spelling, for reading the COMMITTED blob out of git. The gate compares that and
+# not the working-tree file: a sibling of the same sweep repairs the file in place, and comparing
+# what it repaired is what made the gate unable to fail. See php.lint.config-reference.
+CONFIG_REFERENCE_PATH := api/config/reference.php
 CONFIG_REFERENCE_DUMP := $(PHP_DEV_CAPTURE) sh tools/config-reference/dump.sh
 
 # —— Overrides —————————————————————————————————————————————————————————————
