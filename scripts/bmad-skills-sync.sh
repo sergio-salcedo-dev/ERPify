@@ -27,23 +27,19 @@
 # file the new version stopped shipping, so the tree ends up the union of two
 # releases rather than either one.
 #
-# WHAT THE GUARDRAIL DOES AND DOES NOT SEPARATE
+# THE GUARDRAIL IS CONSERVATIVE, BECAUSE NOTHING CAN ARBITRATE PROVENANCE
 #
-# A `bmad-*` directory under `.claude/skills` that `.agent/` does not have is
-# either a skill the installer RETIRED (regenerable) or one somebody WROTE by
-# hand, which exists nowhere else. Git is asked, but asking it whether the PATH
-# has history is not enough and the first version of this script got that wrong:
-# hand-written content sitting at a path the installer once occupied classified
-# as `retired` and was deleted with exit 0, no refusal — measured. Path history
-# separates PATHS, not AUTHORS. So the test is content: a directory absent from
-# the source is `retired` only when its bytes still match what git last recorded
-# at that path. Anything else is `foreign` and stops the run.
+# A `bmad-*` directory under `.claude/skills` that the source lacks is either a skill the
+# installer RETIRED — regenerable, safe to drop — or one somebody WROTE by hand, which
+# exists nowhere else. An earlier version asked git which, because `.agent/skills` was
+# tracked; it no longer is (every skill root is installer output, regenerated from `_bmad/`,
+# which git does not carry either), so there is no arbiter left and guessing would be worse
+# than refusing. Every extra therefore stops the run, and `--force` removes it after the
+# backup holds it. Noisier than the old rule after an update that retires a skill, and
+# strictly safer: the failure mode it replaces deleted hand-written content with exit 0.
 #
-# Its remaining bound, stated rather than discovered: the universe is
-# `bmad-*/`, so a hand-written skill under any other name is invisible here —
-# it is protected by the glob, not by this check. `git-worktree-code-review`,
-# cited in earlier versions of this comment as the precedent, is exactly that
-# case and could never have reached this guardrail.
+# Its bound, stated rather than discovered: the universe is `bmad-*/`, so a hand-written
+# skill under any other name is invisible here — protected by the glob, not by this check.
 #
 # Usage:  scripts/bmad-skills-sync.sh [--dry-run] [--force] [--quiet-when-clean]
 #                                     [--root <path>]
@@ -112,11 +108,6 @@ SOURCE="${ROOT}/.agent/skills"
 TARGET="${ROOT}/.claude/skills"
 BACKUP_DIR="${ROOT}/tmp"
 
-git -C "${ROOT}" rev-parse --git-dir >/dev/null 2>&1 || {
-	printf '✗ %s is not a git checkout — retired and hand-written cannot be told apart\n' "${ROOT}" >&2
-	exit 2
-}
-
 # ---------------------------------------------------------------------------
 # Inventory
 # ---------------------------------------------------------------------------
@@ -128,7 +119,7 @@ done
 
 if [ ${#source_names[@]} -eq 0 ]; then
 	printf '✗ no bmad-* skills under %s\n' "${SOURCE}" >&2
-	printf '  .agent/skills is tracked — a checkout without it is broken, not stale.\n' >&2
+	printf '  Run the BMad installer in this checkout; every skill root is its output.\n' >&2
 	exit 2
 fi
 
@@ -151,44 +142,20 @@ for d in "${TARGET}"/bmad-*/; do
 done
 
 # ---------------------------------------------------------------------------
-# Classify what would be removed: retired (regenerable) or hand-written (not)
+# Classify what would be removed: everything the source lacks is unknown provenance
 # ---------------------------------------------------------------------------
 
-# Extract the last version git recorded at .agent/skills/<name> into $2.
-# Returns 1 when git has no record of that path at all.
-extract_last_recorded() {
-	local name="$1" dest="$2" commit
-	commit="$(git -C "${ROOT}" log -1 --format=%H -- ".agent/skills/${name}")" || return 1
-	[ -n "${commit}" ] || return 1
-	for ref in "${commit}^" "${commit}"; do
-		if git -C "${ROOT}" archive "${ref}" -- ".agent/skills/${name}" 2>/dev/null |
-			tar xf - -C "${dest}" --strip-components=3 2>/dev/null; then
-			return 0
-		fi
-	done
-	return 1
-}
-
-retired=()
-foreign=()
+unknown=()
 for name in "${target_names[@]}"; do
-	[ -d "${SOURCE}/${name}" ] && continue
-	recorded="$(mktemp -d)"
-	if extract_last_recorded "${name}" "${recorded}" &&
-		diff -rq "${PRUNE[@]}" "${recorded}" "${TARGET}/${name}" >/dev/null 2>&1; then
-		retired+=("${name}")
-	else
-		foreign+=("${name}")
-	fi
-	rm -rf "${recorded}"
+	[ -d "${SOURCE}/${name}" ] || unknown+=("${name}")
 done
 
-if [ ${#foreign[@]} -gt 0 ] && [ "${force}" = false ] && [ "${dry_run}" = false ]; then
-	printf '✗ %d bmad-* skill(s) under .claude/skills are not what git recorded at that path:\n' "${#foreign[@]}" >&2
-	printf '    • %s\n' "${foreign[@]}" >&2
-	printf '  No reinstall brings hand-written content back. Move it to .agent/skills/<name>,\n' >&2
-	printf '  which is tracked and survives every future sync, or pass --force to archive it\n' >&2
-	printf '  into the backup and remove it.\n' >&2
+if [ ${#unknown[@]} -gt 0 ] && [ "${force}" = false ] && [ "${dry_run}" = false ]; then
+	printf '✗ %d bmad-* skill(s) under .claude/skills are absent from %s:\n' "${#unknown[@]}" "${SOURCE#"${ROOT}"/}" >&2
+	printf '    • %s\n' "${unknown[@]}" >&2
+	printf '  Each is either a skill the installer retired or one somebody wrote by hand, and\n' >&2
+	printf '  nothing here can tell those apart. Hand-written content comes back from no reinstall:\n' >&2
+	printf '  move it out of .claude/skills first, or pass --force to archive and remove it.\n' >&2
 	exit 1
 fi
 
@@ -213,19 +180,18 @@ for name in "${source_names[@]}"; do
 	fi
 done
 
-total=$((${#added[@]} + ${#changed[@]} + ${#retired[@]} + ${#foreign[@]}))
+total=$((${#added[@]} + ${#changed[@]} + ${#unknown[@]}))
 
 if [ "${total}" -eq 0 ]; then
 	[ "${quiet_when_clean}" = true ] || printf '✓ bmad-skills-sync: %s — %d bmad-* skills match .agent/skills\n' "${ROOT}" "${#source_names[@]}"
 	exit 0
 fi
 
-printf 'drift in %s — %d added, %d changed, %d retired, %d hand-written\n' \
-	"${ROOT}" "${#added[@]}" "${#changed[@]}" "${#retired[@]}" "${#foreign[@]}"
+printf 'drift in %s — %d added, %d changed, %d unknown\n' \
+	"${ROOT}" "${#added[@]}" "${#changed[@]}" "${#unknown[@]}"
 [ ${#added[@]} -gt 0 ] && printf '  + %s\n' "${added[@]}"
-[ ${#retired[@]} -gt 0 ] && printf '  - %s\n' "${retired[@]}"
 [ ${#changed[@]} -gt 0 ] && printf '  ~ %s\n' "${changed[@]}"
-[ ${#foreign[@]} -gt 0 ] && printf '  ! %s (not what git recorded; removed only under --force)\n' "${foreign[@]}"
+[ ${#unknown[@]} -gt 0 ] && printf '  ! %s (absent from the source; removed only under --force)\n' "${unknown[@]}"
 
 if [ "${dry_run}" = true ]; then
 	printf '→ run: make bmad.skills.sync — replaces the tree\n'
