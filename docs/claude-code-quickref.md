@@ -160,6 +160,13 @@ its own checkout would answer "in sync" from the one place that never drifts. `c
 overrides. The sync **replaces** rather than merging, refuses a non-directory `bmad-*` entry before
 touching anything, and restores from its own backup — verifying the restore — if the copy fails.
 
+A third `SessionStart` hook in `.claude/settings.json` runs the dry run with `--quiet-when-clean`, so the
+drift surfaces when a session opens and a matching tree stays silent — the fixing half without it was still
+the state the original defect describes, *"nothing went red, because nothing was looking"*. It never blocks
+(`|| true`), it reports on the **primary** checkout whichever session opened, and it costs ~0.7 s against the
+15 s timeout its two siblings use. It was only viable once the comparison started pruning `__pycache__`: a
+check that prints on every session, whose one remedy is a destructive replace, teaches its reader to skip it.
+
 Its guardrail compares **bytes**, not path history. A `bmad-*` directory the source lacks is treated as
 retired only when it still matches what git last recorded at that path; anything else stops the run. The
 first version asked only whether the path had history, and hand-written content sitting where the
