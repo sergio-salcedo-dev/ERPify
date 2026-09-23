@@ -38,6 +38,12 @@
             "command": "scripts/worktree-collision-check.sh --quiet-when-clean || true",
             "timeout": 15,
             "statusMessage": "Checking for a worktree or branch collision"
+          },
+          {
+            "type": "command",
+            "command": "scripts/bmad-skills-sync.sh --dry-run --quiet-when-clean || true",
+            "timeout": 15,
+            "statusMessage": "Checking the primary checkout's BMad skill tree for drift"
           }
         ]
       }
