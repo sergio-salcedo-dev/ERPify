@@ -7,6 +7,7 @@ namespace Erpify\Organization\Organization\Application;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Organization\Organization\Domain\Exception\OrganizationAlreadyProvisioned;
 use Erpify\Organization\Organization\Domain\Repository\OrganizationRepository;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
 
@@ -20,6 +21,7 @@ final readonly class ProvisionOrganization
     public function __construct(
         private OrganizationRepository $organizations,
         private Validator $validator,
+        private Clock $clock,
     ) {
     }
 
@@ -32,7 +34,7 @@ final readonly class ProvisionOrganization
             throw new OrganizationAlreadyProvisioned();
         }
 
-        $organization = Organization::provision(Uuid::generate(), $name);
+        $organization = Organization::provision(Uuid::generate(), $name, $this->clock->now());
 
         $this->validator->ensure($organization);
         $this->organizations->save($organization);

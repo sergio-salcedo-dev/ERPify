@@ -17,6 +17,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
@@ -133,7 +134,10 @@ final class RevokeMyRecoverySecretControllerTest extends TestCase
 
     private function signedInOwner(): SecurityUser
     {
-        return new SecurityUser(UserMother::create(password: HashedPassword::fromHash(self::PASSWORD)));
+        return new SecurityUser(UserMother::create(
+            password: HashedPassword::fromHash(self::PASSWORD),
+            now: new DateTimeImmutable(self::NOW),
+        ));
     }
 
     private function secret(): RecoverySecret
@@ -150,6 +154,7 @@ final class RevokeMyRecoverySecretControllerTest extends TestCase
     ): RevokeMyRecoverySecretController {
         $users = new InMemoryUserRepository(UserMother::create(
             password: HashedPassword::fromHash(self::PASSWORD),
+            now: new DateTimeImmutable(self::NOW),
         ));
 
         $useCase = new RevokeRecoverySecret(
@@ -159,6 +164,7 @@ final class RevokeMyRecoverySecretControllerTest extends TestCase
             new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
             new RecordingEventBus(),
             new InlineTransactionManager(),
+            FixedClock::at(self::NOW),
         );
 
         $limiter = new RateLimiterFactory(

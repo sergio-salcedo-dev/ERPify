@@ -242,7 +242,7 @@ final class NotifyLockedIdentitiesTest extends TestCase
         $now = new DateTimeImmutable(self::NOW);
 
         $deactivated = $this->lockedAt($now, self::FIRST_ID);
-        $deactivated->deactivate();
+        $deactivated->deactivate($now);
 
         $recovered = $this->lockedAt($now, self::SECOND_ID);
         $recovered->clearLockout();

@@ -9,10 +9,8 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Infrastructure\Persistence\Doctrine\DoctrineSessionRepository;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
-use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -50,12 +48,6 @@ final class DoctrineSessionRetentionTest extends KernelTestCase
         $this->connection = $entityManager->getConnection();
         $clock = new FixedClock(new DateTimeImmutable(self::NOW));
         $this->repository = new DoctrineSessionRepository($entityManager, $clock);
-    }
-
-    protected function tearDown(): void
-    {
-        SystemClock::reset();
-        parent::tearDown();
     }
 
     public function testDropsBothKindsOfDeadRowAndLeavesTheRestAlone(): void
@@ -134,22 +126,13 @@ final class DoctrineSessionRetentionTest extends KernelTestCase
 
     private function saveRevokedSession(string $userId, string $revokedOffset, string $expiryOffset = '+1 hour'): void
     {
-        $now = new DateTimeImmutable(self::NOW);
-        $session = $this->newSession($userId, $expiryOffset);
-
-        // The aggregate stamps `revokedAt` from the ambient clock, so it is frozen for the revocation and
-        // released immediately — nothing else in this class wants a frozen one.
-        SystemClock::set(new FixedClock($now->modify($revokedOffset)));
-
-        try {
-            $session->revoke();
-        } finally {
-            // Back to the suite's pinned instant, not to the wall clock: `reset()` un-pins, and every
-            // aggregate this method builds afterwards would carry a calendar-dependent stamp.
-            FreezeSystemClockExtension::pin();
-        }
-
+        $revokedAt = (new DateTimeImmutable(self::NOW))->modify($revokedOffset);
+        // Started and revoked at the instant the window is measured against, so the row's stamps agree with
+        // the `revokedAt` the sweep reads.
+        $session = $this->newSession($userId, $expiryOffset, $revokedAt);
+        $session->revoke($revokedAt);
         $session->pullDomainEvents();
+
         $this->repository->save($session);
     }
 
@@ -158,7 +141,7 @@ final class DoctrineSessionRetentionTest extends KernelTestCase
         $this->repository->save($this->newSession($userId, $expiryOffset));
     }
 
-    private function newSession(string $userId, string $expiryOffset): Session
+    private function newSession(string $userId, string $expiryOffset, ?DateTimeImmutable $startedAt = null): Session
     {
         $now = new DateTimeImmutable(self::NOW);
         $session = Session::start(
@@ -168,6 +151,7 @@ final class DoctrineSessionRetentionTest extends KernelTestCase
             'Chrome on macOS',
             '203.0.113.7',
             $now->modify($expiryOffset),
+            $startedAt ?? $now,
         );
         $session->pullDomainEvents();
 

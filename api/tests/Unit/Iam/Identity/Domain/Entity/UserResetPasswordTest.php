@@ -8,6 +8,7 @@ use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\HashedPassword;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -24,7 +25,7 @@ final class UserResetPasswordTest extends TestCase
         $user = UserMother::create();
         $newHash = HashedPassword::fromHash('new-argon2id-hash');
 
-        $user->resetPassword($newHash);
+        $user->resetPassword($newHash, SuiteInstant::now());
 
         $this->assertTrue($user->passwordHash()?->equals($newHash));
         $this->assertSame(IdentityStatus::ACTIVE, $user->status());
@@ -41,7 +42,7 @@ final class UserResetPasswordTest extends TestCase
     {
         $user = UserMother::create();
 
-        $user->resetPassword(HashedPassword::fromHash('new-argon2id-hash'));
+        $user->resetPassword(HashedPassword::fromHash('new-argon2id-hash'), SuiteInstant::now());
 
         $events = $user->pullDomainEvents();
         $this->assertCount(1, $events);
@@ -54,7 +55,7 @@ final class UserResetPasswordTest extends TestCase
     {
         $this->expectException(InvalidIdentityTransition::class);
 
-        $user->resetPassword(HashedPassword::fromHash('new-argon2id-hash'));
+        $user->resetPassword(HashedPassword::fromHash('new-argon2id-hash'), SuiteInstant::now());
     }
 
     /**
@@ -63,10 +64,10 @@ final class UserResetPasswordTest extends TestCase
     public static function provideRejectsResettingANonActiveIdentityCases(): iterable
     {
         $suspended = UserMother::create();
-        $suspended->suspend();
+        $suspended->suspend(SuiteInstant::now());
 
         $deactivated = UserMother::create();
-        $deactivated->deactivate();
+        $deactivated->deactivate(SuiteInstant::now());
 
         yield 'invited' => [UserMother::invited()];
         yield 'suspended' => [$suspended];

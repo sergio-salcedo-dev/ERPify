@@ -9,6 +9,7 @@ use Erpify\Organization\Membership\Domain\Exception\OrganizationNotProvisioned;
 use Erpify\Organization\Membership\Domain\Exception\UserAlreadyMember;
 use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
 use Erpify\Organization\Organization\Domain\Repository\OrganizationRepository;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
@@ -23,6 +24,7 @@ final readonly class GrantMembership
     public function __construct(
         private MembershipRepository $memberships,
         private OrganizationRepository $organizations,
+        private Clock $clock,
     ) {
     }
 
@@ -42,7 +44,7 @@ final readonly class GrantMembership
             throw new UserAlreadyMember($userId);
         }
 
-        $membership = Membership::grant(Uuid::generate(), $userId, $organizationId);
+        $membership = Membership::grant(Uuid::generate(), $userId, $organizationId, $this->clock->now());
 
         $this->memberships->save($membership);
 

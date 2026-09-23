@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Event\Mother;
 use DateTimeImmutable;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountDeletedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountSnapshot;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 
 final class BankAccountDeletedDomainEventMother
@@ -20,8 +21,8 @@ final class BankAccountDeletedDomainEventMother
         return new BankAccountDeletedDomainEvent(
             $aggregateId,
             $snapshot ?? BankAccountSnapshotMother::create(status: 'CLOSED'),
+            null === $occurredOn ? SuiteInstant::now() : new DateTimeImmutable($occurredOn),
             $eventId,
-            null === $occurredOn ? null : new DateTimeImmutable($occurredOn),
         );
     }
 }

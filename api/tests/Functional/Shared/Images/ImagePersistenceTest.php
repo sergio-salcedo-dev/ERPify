@@ -6,11 +6,9 @@ namespace Erpify\Tests\Functional\Shared\Images;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
-use Erpify\Tests\Double\Clock\FixedClock;
-use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -29,8 +27,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 final class ImagePersistenceTest extends KernelTestCase
 {
     /**
-     * Hydration must not re-run the constructor, which would stamp `createdAt` with the wall clock of
-     * the read instead of the write.
+     * Hydration must restore the `createdAt` the write stamped, never replace it with an instant from the
+     * read.
      *
      * The instant is far away AND carries microseconds on purpose. A "now"-based assertion passes even
      * under a total re-stamp whenever both operations land in the same second, and the column is
@@ -43,16 +41,9 @@ final class ImagePersistenceTest extends KernelTestCase
             $stamped = new DateTimeImmutable('2020-01-01T00:00:00.123456+00:00');
             $imageId = ImageId::generate();
 
-            SystemClock::set(new FixedClock($stamped));
-
-            try {
-                $image = new Image($imageId, \str_repeat('a', 64), 'image/webp', 800, 600, 4096);
-                $entityManager->persist($image);
-                $entityManager->flush();
-            } finally {
-                // Back to the suite's pinned instant rather than to the wall clock: `reset()` un-pins.
-                FreezeSystemClockExtension::pin();
-            }
+            $image = new Image($imageId, \str_repeat('a', 64), 'image/webp', 800, 600, 4096, $stamped);
+            $entityManager->persist($image);
+            $entityManager->flush();
 
             $entityManager->clear();
 
@@ -163,7 +154,15 @@ final class ImagePersistenceTest extends KernelTestCase
     public function testRefreshingAManagedImageIsRefusedBecauseTheAggregateIsImmutable(): void
     {
         $this->withEntityManager(function (EntityManagerInterface $entityManager): void {
-            $image = new Image(ImageId::generate(), \str_repeat('b', 64), 'image/png', 10, 10, 128);
+            $image = new Image(
+                ImageId::generate(),
+                \str_repeat('b', 64),
+                'image/png',
+                10,
+                10,
+                128,
+                SuiteInstant::now(),
+            );
             $entityManager->persist($image);
             $entityManager->flush();
 

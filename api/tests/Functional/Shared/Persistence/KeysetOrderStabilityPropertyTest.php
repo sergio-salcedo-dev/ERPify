@@ -295,9 +295,7 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
         $ids = [];
 
         foreach ($insertionOrder as $row) {
-            $bank = Bank::create($row['id'], $row['name'], $row['shortName']);
-            $bank->setCreatedAt($row['createdAt']);
-            $bank->setUpdatedAt($row['updatedAt']);
+            $bank = Bank::create($row['id'], $row['name'], $row['shortName'], $row['createdAt']);
 
             $this->entityManager->persist($bank);
             $ids[] = $row['id'];
@@ -314,7 +312,6 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
      *     name: string,
      *     shortName: string,
      *     createdAt: DateTimeImmutable,
-     *     updatedAt: DateTimeImmutable,
      * }>
      */
     private function plannedRows(): array
@@ -339,7 +336,6 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
                 'name' => \sprintf('bank %s %s', $token, $suffix),
                 'shortName' => \strtoupper($token . \substr($suffix, 0, 3)),
                 'createdAt' => $createdAt,
-                'updatedAt' => $createdAt,
             ];
         }
 

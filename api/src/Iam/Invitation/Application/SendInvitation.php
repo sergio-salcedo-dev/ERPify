@@ -62,10 +62,11 @@ final readonly class SendInvitation
     public function invite(#[SensitiveParameter] string $email, Role ...$roles): IssuedInvitation
     {
         $invitationId = Uuid::generate();
-        $generated = SingleUseToken::mint($this->clock->now()->add(new DateInterval(self::TTL_SPEC)));
+        $now = $this->clock->now();
+        $generated = SingleUseToken::mint($now->add(new DateInterval(self::TTL_SPEC)));
 
         $recipientEmail = $this->transactionManager->transactional(
-            function () use ($invitationId, $email, $generated, $roles): string {
+            function () use ($invitationId, $email, $generated, $roles, $now): string {
                 $user = $this->inviteUser->invite($email, ...$roles);
                 $userId = $user->getId() ?? throw InvitedIdentityUnavailable::withoutId();
                 $membership = $this->grantMembership->grant($userId);
@@ -75,8 +76,9 @@ final readonly class SendInvitation
                     $membership->organizationId(),
                     $userId,
                     $generated->token,
+                    $now,
                 );
-                $invitation->markSent();
+                $invitation->markSent($now);
 
                 $this->invitations->save($invitation);
                 $this->eventBus->publish(...$invitation->pullDomainEvents());

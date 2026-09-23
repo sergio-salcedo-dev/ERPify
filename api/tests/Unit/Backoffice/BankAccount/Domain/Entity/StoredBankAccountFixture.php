@@ -4,16 +4,15 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity;
 
+use DateTimeImmutable;
 use DateTimeInterface;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent;
-use Erpify\Shared\Clock\Domain\SystemClock;
-use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 
 /**
  * An account stored at one instant and edited at a later one, with the two verdicts an edit can carry.
- * The clock moves between the two, which is what makes an `updatedAt` that should not have moved
+ * The edit is applied at the later instant, which is what makes an `updatedAt` that should not have moved
  * observable: a guard that skips the event but still stamps the timestamp alters the persistable state
  * and would pass a check that only counted events.
  */
@@ -27,27 +26,20 @@ trait StoredBankAccountFixture
 
     private const string IBAN = 'DE89370400440532013000';
 
-    protected function tearDown(): void
+    private static function editedAt(): DateTimeImmutable
     {
-        SystemClock::reset();
-
-        parent::tearDown();
+        return new DateTimeImmutable(self::EDITED_AT);
     }
 
     private function storedAccount(?string $bic = null, ?string $alias = null): BankAccount
     {
-        SystemClock::set(FixedClock::at(self::STORED_AT));
-
-        $account = BankAccountMother::drained(
+        return BankAccountMother::drained(
             holderName: self::HOLDER_NAME,
             iban: self::IBAN,
             bic: $bic,
             alias: $alias,
+            now: new DateTimeImmutable(self::STORED_AT),
         );
-
-        SystemClock::set(FixedClock::at(self::EDITED_AT));
-
-        return $account;
     }
 
     private function assertNoOp(BankAccount $account): void

@@ -13,6 +13,7 @@ use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\DoctrineM
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Organization\Organization\Domain\Repository\OrganizationRepository;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -48,7 +49,9 @@ final class MembershipUniqueConstraintFunctionalTest extends KernelTestCase
         $this->truncate();
 
         $this->organizationId = Uuid::generate();
-        $this->service(OrganizationRepository::class)->save(Organization::provision($this->organizationId, 'ACME'));
+        $this->service(OrganizationRepository::class)->save(
+            Organization::provision($this->organizationId, 'ACME', SuiteInstant::now()),
+        );
     }
 
     protected function tearDown(): void
@@ -62,11 +65,11 @@ final class MembershipUniqueConstraintFunctionalTest extends KernelTestCase
         $userId = Uuid::generate();
         $memberships = $this->service(MembershipRepository::class);
 
-        $memberships->save(Membership::grant(Uuid::generate(), $userId, $this->organizationId));
+        $memberships->save(Membership::grant(Uuid::generate(), $userId, $this->organizationId, SuiteInstant::now()));
 
         $this->expectException(UserAlreadyMember::class);
 
-        $memberships->save(Membership::grant(Uuid::generate(), $userId, $this->organizationId));
+        $memberships->save(Membership::grant(Uuid::generate(), $userId, $this->organizationId, SuiteInstant::now()));
     }
 
     private function truncate(): void

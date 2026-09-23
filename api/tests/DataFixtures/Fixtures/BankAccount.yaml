@@ -1,7 +1,7 @@
 Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
     bank_account_globex_corporation:
         __factory:
-            Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
+            'Erpify\Tests\DataFixtures\BankAccountFixtureFactory::create':
                 - '33333333-3333-7000-8000-000000000001'
                 - '@bank_jpmorgan_chase->id'
                 - 'Globex Corporation'
@@ -12,7 +12,7 @@ Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
                 - !php/enum Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus::INACTIVE
     bank_account_initech_llc:
         __factory:
-            Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
+            'Erpify\Tests\DataFixtures\BankAccountFixtureFactory::create':
                 - '33333333-3333-7000-8000-000000000002'
                 - '@bank_of_america->id'
                 - 'Initech LLC'
@@ -21,21 +21,21 @@ Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
     # can be exercised — the other banks have at most one. No assertion elsewhere pins Citigroup's count.
     bank_account_citi_operations:
         __factory:
-            Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
+            'Erpify\Tests\DataFixtures\BankAccountFixtureFactory::create':
                 - '33333333-3333-7000-8000-000000000003'
                 - '@bank_citigroup->id'
                 - 'Citi Operations'
                 - 'GB29NWBK60161331926819'
     bank_account_citi_payroll:
         __factory:
-            Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
+            'Erpify\Tests\DataFixtures\BankAccountFixtureFactory::create':
                 - '33333333-3333-7000-8000-000000000004'
                 - '@bank_citigroup->id'
                 - 'Citi Payroll'
                 - 'NL91ABNA0417164300'
     bank_account_citi_treasury:
         __factory:
-            Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::create:
+            'Erpify\Tests\DataFixtures\BankAccountFixtureFactory::create':
                 - '33333333-3333-7000-8000-000000000005'
                 - '@bank_citigroup->id'
                 - 'Citi Treasury'

@@ -22,7 +22,6 @@ use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Shared\Access\Domain\Role;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use SensitiveParameter;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
@@ -129,9 +128,10 @@ final class User extends AggregateRoot
         ?HashedPassword $password,
         #[ORM\Column(enumType: IdentityStatus::class)]
         private IdentityStatus $status,
+        DateTimeImmutable $now,
         Role ...$roles,
     ) {
-        parent::__construct();
+        parent::__construct($now);
 
         $this->id = $id;
         $this->email = Email::from($email)->toString();
@@ -148,9 +148,10 @@ final class User extends AggregateRoot
         #[SensitiveParameter]
         string $email,
         HashedPassword $password,
+        DateTimeImmutable $now,
         Role ...$roles,
     ): self {
-        return new self($id, $email, $password, IdentityStatus::ACTIVE, ...$roles);
+        return new self($id, $email, $password, IdentityStatus::ACTIVE, $now, ...$roles);
     }
 
     /**
@@ -161,9 +162,10 @@ final class User extends AggregateRoot
         string $id,
         #[SensitiveParameter]
         string $email,
+        DateTimeImmutable $now,
         Role ...$roles,
     ): self {
-        return new self($id, $email, null, IdentityStatus::INVITED, ...$roles);
+        return new self($id, $email, null, IdentityStatus::INVITED, $now, ...$roles);
     }
 
     /**
@@ -171,13 +173,13 @@ final class User extends AggregateRoot
      *
      * @throws InvalidIdentityTransition when the identity is not `INVITED`
      */
-    public function activate(HashedPassword $password): void
+    public function activate(HashedPassword $password, DateTimeImmutable $now): void
     {
         $this->guardTransitionTo(IdentityStatus::ACTIVE, IdentityStatus::INVITED);
 
         $this->passwordHash = $password->toString();
         $this->status = IdentityStatus::ACTIVE;
-        $this->updatedAt = SystemClock::now();
+        $this->updatedAt = $now;
     }
 
     /**
@@ -216,14 +218,14 @@ final class User extends AggregateRoot
      *
      * @throws InvalidIdentityTransition when the identity is not `INVITED`
      */
-    public function revokeInvitation(): void
+    public function revokeInvitation(DateTimeImmutable $now): void
     {
         $this->guardTransitionTo(IdentityStatus::REVOKED, IdentityStatus::INVITED);
 
         $this->status = IdentityStatus::REVOKED;
-        $this->updatedAt = SystemClock::now();
+        $this->updatedAt = $now;
 
-        $this->record(new UserInvitationRevoked($this->id(), null, $this->updatedAt));
+        $this->record(new UserInvitationRevoked($this->id(), $now));
     }
 
     /**
@@ -236,11 +238,11 @@ final class User extends AggregateRoot
      *
      * @throws InvalidIdentityTransition when the identity is not `ACTIVE`
      */
-    public function resetPassword(HashedPassword $password): void
+    public function resetPassword(HashedPassword $password, DateTimeImmutable $now): void
     {
-        $this->replaceCredential($password);
+        $this->replaceCredential($password, $now);
 
-        $this->record(new PasswordResetCompleted($this->id()));
+        $this->record(new PasswordResetCompleted($this->id(), $now));
     }
 
     /**
@@ -253,11 +255,11 @@ final class User extends AggregateRoot
      *
      * @throws InvalidIdentityTransition when the identity is not `ACTIVE`
      */
-    public function changePassword(HashedPassword $password): void
+    public function changePassword(HashedPassword $password, DateTimeImmutable $now): void
     {
-        $this->replaceCredential($password);
+        $this->replaceCredential($password, $now);
 
-        $this->record(new PasswordChanged($this->id()));
+        $this->record(new PasswordChanged($this->id(), $now));
     }
 
     /**
@@ -265,14 +267,14 @@ final class User extends AggregateRoot
      *
      * @throws InvalidIdentityTransition when the identity is not `ACTIVE`
      */
-    public function suspend(): void
+    public function suspend(DateTimeImmutable $now): void
     {
         $this->guardTransitionTo(IdentityStatus::SUSPENDED, IdentityStatus::ACTIVE);
 
         $this->status = IdentityStatus::SUSPENDED;
-        $this->updatedAt = SystemClock::now();
+        $this->updatedAt = $now;
 
-        $this->record(new UserSuspended($this->id(), null, $this->updatedAt));
+        $this->record(new UserSuspended($this->id(), $now));
     }
 
     /**
@@ -280,14 +282,14 @@ final class User extends AggregateRoot
      *
      * @throws InvalidIdentityTransition when the identity is not `ACTIVE`
      */
-    public function deactivate(): void
+    public function deactivate(DateTimeImmutable $now): void
     {
         $this->guardTransitionTo(IdentityStatus::DEACTIVATED, IdentityStatus::ACTIVE);
 
         $this->status = IdentityStatus::DEACTIVATED;
-        $this->updatedAt = SystemClock::now();
+        $this->updatedAt = $now;
 
-        $this->record(new UserDeactivated($this->id(), null, $this->updatedAt));
+        $this->record(new UserDeactivated($this->id(), $now));
     }
 
     /**
@@ -300,12 +302,12 @@ final class User extends AggregateRoot
      * act again) and there is no state matrix to enforce. The cross-aggregate "keep ≥1 active ADMIN" rule is
      * deliberately absent too — it must see every other identity, so it lives in the application use case.
      */
-    public function changeRoles(Role ...$roles): void
+    public function changeRoles(DateTimeImmutable $now, Role ...$roles): void
     {
         $this->roles = $this->distinctRoleValues($roles);
-        $this->updatedAt = SystemClock::now();
+        $this->updatedAt = $now;
 
-        $this->record(new UserRolesChanged($this->id(), $this->roles()));
+        $this->record(new UserRolesChanged($this->id(), $this->roles(), $now));
     }
 
     /**
@@ -345,7 +347,7 @@ final class User extends AggregateRoot
         if ($this->failedAttempts >= self::MAX_FAILED_ATTEMPTS) {
             $this->lockedUntil = $now->add(new DateInterval(self::LOCK_DURATION));
 
-            $this->record(new UserLocked($this->id(), $this->lockedUntil));
+            $this->record(new UserLocked($this->id(), $this->lockedUntil, $now));
         }
 
         return true;
@@ -492,14 +494,14 @@ final class User extends AggregateRoot
      *
      * @throws InvalidIdentityTransition when the identity is not `ACTIVE`
      */
-    private function replaceCredential(HashedPassword $password): void
+    private function replaceCredential(HashedPassword $password, DateTimeImmutable $now): void
     {
         if (IdentityStatus::ACTIVE !== $this->status) {
             throw InvalidIdentityTransition::from($this->status, IdentityStatus::ACTIVE);
         }
 
         $this->passwordHash = $password->toString();
-        $this->updatedAt = SystemClock::now();
+        $this->updatedAt = $now;
     }
 
     /**

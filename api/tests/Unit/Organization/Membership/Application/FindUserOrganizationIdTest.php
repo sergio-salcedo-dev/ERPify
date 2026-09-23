@@ -9,6 +9,7 @@ use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Membership\Domain\Exception\MembershipNotFound;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -23,7 +24,7 @@ final class FindUserOrganizationIdTest extends TestCase
         $userId = Uuid::generate();
         $organizationId = Uuid::generate();
         $memberships = new InMemoryMembershipRepository();
-        $memberships->save(Membership::grant(Uuid::generate(), $userId, $organizationId));
+        $memberships->save(Membership::grant(Uuid::generate(), $userId, $organizationId, SuiteInstant::now()));
 
         $resolved = (new FindUserOrganizationId($memberships))->of($userId);
 

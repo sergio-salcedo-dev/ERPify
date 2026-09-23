@@ -53,7 +53,7 @@ final class AcceptInvitationTest extends TestCase
     public function itActivatesTheIdentityRetiresTheInvitationAndPublishesOnce(): void
     {
         [$invitation, $token] = $this->sentInvitation($this->future());
-        $user = UserMother::invited(self::USER_ID);
+        $user = UserMother::invited(self::USER_ID, now: $this->now());
         $invitations = new InMemoryInvitationRepository($invitation);
         $users = new InMemoryUserRepository($user);
         $eventBus = new RecordingEventBus();
@@ -77,7 +77,7 @@ final class AcceptInvitationTest extends TestCase
         foreach (['no-separator', self::INVITATION_ID . '.', 'not-a-uuid.some-secret', '.secret'] as $malformed) {
             $invitation = $this->pristineSentInvitation();
             $invitations = new InMemoryInvitationRepository($invitation);
-            $users = new InMemoryUserRepository(UserMother::invited(self::USER_ID));
+            $users = new InMemoryUserRepository(UserMother::invited(self::USER_ID, now: $this->now()));
             $eventBus = new RecordingEventBus();
 
             $this->assertRejected(
@@ -93,7 +93,7 @@ final class AcceptInvitationTest extends TestCase
     public function itRejectsANonExistentInvitation(): void
     {
         $invitations = new InMemoryInvitationRepository();
-        $users = new InMemoryUserRepository(UserMother::invited(self::USER_ID));
+        $users = new InMemoryUserRepository(UserMother::invited(self::USER_ID, now: $this->now()));
         $eventBus = new RecordingEventBus();
 
         $this->assertRejected(
@@ -110,7 +110,7 @@ final class AcceptInvitationTest extends TestCase
     {
         [$invitation] = $this->sentInvitation($this->future());
         $invitations = new InMemoryInvitationRepository($invitation);
-        $users = new InMemoryUserRepository(UserMother::invited(self::USER_ID));
+        $users = new InMemoryUserRepository(UserMother::invited(self::USER_ID, now: $this->now()));
         $eventBus = new RecordingEventBus();
 
         $this->assertRejected(
@@ -127,7 +127,7 @@ final class AcceptInvitationTest extends TestCase
     {
         [$invitation, $token] = $this->sentInvitation($this->past());
         $invitations = new InMemoryInvitationRepository($invitation);
-        $users = new InMemoryUserRepository(UserMother::invited(self::USER_ID));
+        $users = new InMemoryUserRepository(UserMother::invited(self::USER_ID, now: $this->now()));
         $eventBus = new RecordingEventBus();
 
         $this->assertRejected(
@@ -142,11 +142,11 @@ final class AcceptInvitationTest extends TestCase
     public function itRejectsAnAlreadyAcceptedInvitationWithTheSameValidToken(): void
     {
         [$invitation, $token] = $this->sentInvitation($this->future());
-        $invitation->accept();
+        $invitation->accept($this->now());
         $invitation->pullDomainEvents();
 
         $invitations = new InMemoryInvitationRepository($invitation);
-        $users = new InMemoryUserRepository(UserMother::invited(self::USER_ID));
+        $users = new InMemoryUserRepository(UserMother::invited(self::USER_ID, now: $this->now()));
         $eventBus = new RecordingEventBus();
 
         $this->assertRejected(
@@ -180,7 +180,7 @@ final class AcceptInvitationTest extends TestCase
         $invitations = new InMemoryInvitationRepository($invitation);
         // A SENT invitation pointing at an already-ACTIVE identity is a desync; it must collapse to the opaque
         // wall, never leak the distinguishable 409 that activate() would raise on a non-INVITED identity.
-        $users = new InMemoryUserRepository(UserMother::create(self::USER_ID));
+        $users = new InMemoryUserRepository(UserMother::create(self::USER_ID, now: $this->now()));
         $eventBus = new RecordingEventBus();
 
         $this->assertRejected(
@@ -206,7 +206,7 @@ final class AcceptInvitationTest extends TestCase
     public function itPropagatesAStoreFailureRaisedAfterTheFlipsAndAnnouncesNothing(): void
     {
         [$invitation, $token] = $this->sentInvitation($this->future());
-        $user = UserMother::invited(self::USER_ID);
+        $user = UserMother::invited(self::USER_ID, now: $this->now());
         $invitations = new InMemoryInvitationRepository($invitation);
         $users = new InMemoryUserRepository($user);
         $eventBus = new RecordingEventBus();
@@ -272,7 +272,7 @@ final class AcceptInvitationTest extends TestCase
             $users,
             $eventBus,
             new InlineTransactionManager(),
-            new FixedClock(new DateTimeImmutable(self::NOW)),
+            new FixedClock($this->now()),
         );
     }
 
@@ -282,8 +282,14 @@ final class AcceptInvitationTest extends TestCase
     private function sentInvitation(DateTimeImmutable $expiresAt): array
     {
         $generated = SingleUseToken::mint($expiresAt);
-        $invitation = Invitation::create(self::INVITATION_ID, self::ORG_ID, self::USER_ID, $generated->token);
-        $invitation->markSent();
+        $invitation = Invitation::create(
+            self::INVITATION_ID,
+            self::ORG_ID,
+            self::USER_ID,
+            $generated->token,
+            $this->now(),
+        );
+        $invitation->markSent($this->now());
         $invitation->pullDomainEvents();
 
         return [$invitation, self::INVITATION_ID . '.' . $generated->plaintext()];
@@ -294,6 +300,11 @@ final class AcceptInvitationTest extends TestCase
         [$invitation] = $this->sentInvitation($this->future());
 
         return $invitation;
+    }
+
+    private function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable(self::NOW);
     }
 
     private function future(): DateTimeImmutable

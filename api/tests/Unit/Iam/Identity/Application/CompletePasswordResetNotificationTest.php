@@ -83,7 +83,7 @@ final class CompletePasswordResetNotificationTest extends TestCase
     {
         // Best-effort: the credential change has already committed, so surfacing a mailer fault would answer
         // a successful reset with a 500 and tell the caller their password never changed.
-        $user = UserMother::create();
+        $user = UserMother::create(now: $this->now());
         $sessions = new InMemorySessionRepository();
         [$tokens, $secret] = $this->mintToken();
         $newHash = HashedPassword::fromHash('new-argon2id-hash');
@@ -110,7 +110,7 @@ final class CompletePasswordResetNotificationTest extends TestCase
         [$tokens, $secret] = $this->mintToken();
 
         $this->useCase(
-            new InMemoryUserRepository(UserMother::create()),
+            new InMemoryUserRepository(UserMother::create(now: $this->now())),
             $tokens,
             $sessions ?? new InMemorySessionRepository(),
             $emails,
@@ -130,7 +130,7 @@ final class CompletePasswordResetNotificationTest extends TestCase
 
         return [
             new InMemoryPasswordResetTokenRepository(
-                PasswordResetToken::issue(self::TOKEN_ID, UserMother::DEFAULT_ID, $generated->token),
+                PasswordResetToken::issue(self::TOKEN_ID, UserMother::DEFAULT_ID, $generated->token, $this->now()),
             ),
             $generated->plaintext(),
         ];

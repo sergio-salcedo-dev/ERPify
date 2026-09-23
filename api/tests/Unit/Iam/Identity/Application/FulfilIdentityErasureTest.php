@@ -20,6 +20,7 @@ use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\PasswordResetTokenMother;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
@@ -417,6 +418,7 @@ final class FulfilIdentityErasureTest extends TestCase
             '127.0.0.1',
             // Deliberately lapsed: erasure must reach the subject's expired rows, not only the admissible ones.
             new DateTimeImmutable('2020-01-01T00:00:00+00:00'),
+            SuiteInstant::now(),
         );
         $session->pullDomainEvents();
 

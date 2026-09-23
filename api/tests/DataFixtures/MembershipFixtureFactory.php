@@ -22,6 +22,6 @@ final class MembershipFixtureFactory
         $userId = $user->getId() ?? throw new LogicException('Fixture user must have an id.');
         $organizationId = $organization->getId() ?? throw new LogicException('Fixture organization must have an id.');
 
-        return Membership::grant(Uuid::generate(), $userId, $organizationId);
+        return Membership::grant(Uuid::generate(), $userId, $organizationId, SeedInstant::now());
     }
 }

@@ -9,6 +9,7 @@ use Erpify\Backoffice\BankAccount\Application\BankAccountUpdater;
 use Erpify\Backoffice\BankAccount\Application\Command\UpdateBankAccountCommand;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
@@ -91,6 +92,7 @@ final class BankAccountUpdaterTest extends TestCase
             $eventBus,
             $this->passThroughValidator(),
             $transactions,
+            SuiteInstant::clock(),
         );
     }
 }

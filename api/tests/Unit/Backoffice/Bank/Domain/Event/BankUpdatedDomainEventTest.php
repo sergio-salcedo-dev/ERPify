@@ -65,8 +65,8 @@ final class BankUpdatedDomainEventTest extends TestCase
         return new BankUpdatedDomainEvent(
             self::BANK_ID,
             $this->snapshot(),
-            self::EVENT_ID,
             new DateTimeImmutable(self::OCCURRED_ON),
+            self::EVENT_ID,
         );
     }
 

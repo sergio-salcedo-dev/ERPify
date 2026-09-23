@@ -13,10 +13,10 @@ final class BankCreatedDomainEvent extends DomainEvent
     public function __construct(
         string $aggregateId,
         private readonly BankSnapshot $snapshot,
+        DateTimeImmutable $occurredOn,
         ?string $eventId = null,
-        ?DateTimeImmutable $occurredOn = null,
     ) {
-        parent::__construct($aggregateId, $eventId, $occurredOn);
+        parent::__construct($aggregateId, $occurredOn, $eventId);
     }
 
     #[Override]
@@ -53,8 +53,8 @@ final class BankCreatedDomainEvent extends DomainEvent
         return new self(
             $aggregateId,
             BankSnapshot::fromPrimitives($body),
-            $eventId,
             new DateTimeImmutable($occurredOn),
+            $eventId,
         );
     }
 }

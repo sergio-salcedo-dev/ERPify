@@ -8,6 +8,7 @@ use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Iam\Session\Domain\Enum\SessionStatus;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Iam\Session\Infrastructure\Security\RevokeSessionOnTokenDeauthenticated;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Session\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;
@@ -34,7 +35,12 @@ final class RevokeSessionOnTokenDeauthenticatedTest extends TestCase
         $sessions = new InMemorySessionRepository($session);
         $reactor = new RevokeSessionOnTokenDeauthenticated(
             new RecordingCurrentSessionReference(SessionId::fromString(SessionMother::DEFAULT_ID)),
-            new RevokeSession($sessions, new RecordingEventBus(), new InlineTransactionManager()),
+            new RevokeSession(
+                $sessions,
+                new RecordingEventBus(),
+                new InlineTransactionManager(),
+                SuiteInstant::clock(),
+            ),
         );
 
         $reactor();
@@ -48,7 +54,12 @@ final class RevokeSessionOnTokenDeauthenticatedTest extends TestCase
         $sessions = new InMemorySessionRepository();
         $reactor = new RevokeSessionOnTokenDeauthenticated(
             new RecordingCurrentSessionReference(),
-            new RevokeSession($sessions, new RecordingEventBus(), new InlineTransactionManager()),
+            new RevokeSession(
+                $sessions,
+                new RecordingEventBus(),
+                new InlineTransactionManager(),
+                SuiteInstant::clock(),
+            ),
         );
 
         $reactor();

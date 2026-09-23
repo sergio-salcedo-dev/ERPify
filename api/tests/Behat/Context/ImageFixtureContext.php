@@ -16,6 +16,7 @@ use Erpify\Shared\Images\Domain\Repository\ImageRepository;
 use Erpify\Shared\Images\Domain\Storage\ImageStorage;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
+use Erpify\Tests\DataFixtures\SeedInstant;
 use FriendsOfBehat\SymfonyExtension\Context\Environment\InitializedSymfonyExtensionEnvironment;
 use RuntimeException;
 
@@ -130,6 +131,7 @@ final class ImageFixtureContext extends AbstractContext
             16,
             16,
             \strlen(self::CANONICAL_BYTES),
+            SeedInstant::now(),
         );
 
         $this->transactionManager->transactional(function () use ($image): void {

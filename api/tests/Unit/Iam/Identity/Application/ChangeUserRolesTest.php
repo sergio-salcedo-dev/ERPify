@@ -15,6 +15,7 @@ use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
@@ -93,7 +94,7 @@ final class ChangeUserRolesTest extends TestCase
     {
         // A suspended identity is not in the active-administrator pool, so dropping its ADMIN drains nothing.
         $user = UserMother::create(roles: [Role::ADMIN]);
-        $user->suspend();
+        $user->suspend(SuiteInstant::now());
         $user->pullDomainEvents();
 
         $directory = new InMemoryActiveAdministratorDirectory([UserMother::DEFAULT_ID => true]);
@@ -151,7 +152,7 @@ final class ChangeUserRolesTest extends TestCase
         $user = UserMother::create(roles: [Role::VIEWER]);
         $repository = new InMemoryUserRepository($user);
         $repository->onFindByIdForUpdate = static function () use ($user): void {
-            $user->changeRoles(Role::ADMIN);
+            $user->changeRoles(SuiteInstant::now(), Role::ADMIN);
             $user->pullDomainEvents();
         };
         $directory = new InMemoryActiveAdministratorDirectory([UserMother::DEFAULT_ID => true]);
@@ -304,6 +305,7 @@ final class ChangeUserRolesTest extends TestCase
             $eventBus ?? new RecordingEventBus(),
             $audit ?? new RecordingAuditLogger(),
             new InlineTransactionManager(),
+            SuiteInstant::clock(),
         );
     }
 

@@ -8,6 +8,7 @@ use Erpify\Backoffice\Bank\Domain\Repository\BankExistenceChecker;
 use Erpify\Backoffice\BankAccount\Application\Command\CreateBankAccountCommand;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
@@ -22,6 +23,7 @@ final readonly class BankAccountCreator
         private EventBus $eventBus,
         private Validator $validator,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -42,6 +44,7 @@ final readonly class BankAccountCreator
             $command->bankId,
             $command->holderName,
             $command->iban,
+            $this->clock->now(),
             $command->bic,
             $command->alias,
             $command->currency,

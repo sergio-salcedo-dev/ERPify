@@ -195,8 +195,14 @@ final class DoctrineUserSearchRepositoryTest extends KernelTestCase
         array $roleValues,
         string $status = 'ACTIVE',
     ): void {
-        $user = UserFixtureFactory::create(Uuid::v7()->toRfc4122(), $email, 'seed-password', $roleValues, $status);
-        $user->setCreatedAt($createdAt);
+        $user = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            $email,
+            'seed-password',
+            $roleValues,
+            $status,
+            $createdAt,
+        );
 
         $this->entityManager->persist($user);
     }

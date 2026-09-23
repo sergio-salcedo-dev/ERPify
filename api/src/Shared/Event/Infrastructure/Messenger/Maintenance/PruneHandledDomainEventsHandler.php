@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Event\Infrastructure\Messenger\Maintenance;
 
-use DateTimeImmutable;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Application\HandledDomainEventPruner;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
@@ -16,11 +16,12 @@ final readonly class PruneHandledDomainEventsHandler
 {
     public function __construct(
         private HandledDomainEventPruner $pruner,
+        private Clock $clock,
     ) {
     }
 
     public function __invoke(PruneHandledDomainEventsMessage $message): void
     {
-        $this->pruner->pruneClaimedBefore(new DateTimeImmutable('-' . $message->retentionDays . ' days'));
+        $this->pruner->pruneClaimedBefore($this->clock->now()->modify('-' . $message->retentionDays . ' days'));
     }
 }

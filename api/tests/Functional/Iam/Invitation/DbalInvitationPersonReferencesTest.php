@@ -11,6 +11,7 @@ use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Infrastructure\Persistence\Doctrine\DbalInvitationPersonReferences;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -73,6 +74,7 @@ final class DbalInvitationPersonReferencesTest extends KernelTestCase
                 \hash('sha256', Uuid::generate()),
                 new DateTimeImmutable('2030-01-01T00:00:00+00:00'),
             ),
+            SuiteInstant::now(),
         ));
         $this->entityManager->flush();
     }

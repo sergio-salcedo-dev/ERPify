@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Domain\Entity;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -22,7 +23,7 @@ final class UserChangeRolesTest extends TestCase
     {
         $user = UserMother::create(roles: [Role::VIEWER, Role::AUDIT_READER]);
 
-        $user->changeRoles(Role::EDITOR);
+        $user->changeRoles(SuiteInstant::now(), Role::EDITOR);
 
         $this->assertSame([Role::EDITOR], $user->roles());
     }
@@ -31,7 +32,7 @@ final class UserChangeRolesTest extends TestCase
     {
         $user = UserMother::create(roles: [Role::VIEWER]);
 
-        $user->changeRoles(Role::EDITOR, Role::EDITOR, Role::MANAGER);
+        $user->changeRoles(SuiteInstant::now(), Role::EDITOR, Role::EDITOR, Role::MANAGER);
 
         $this->assertSame([Role::EDITOR, Role::MANAGER], $user->roles());
     }
@@ -40,7 +41,7 @@ final class UserChangeRolesTest extends TestCase
     {
         $user = UserMother::create(roles: [Role::VIEWER]);
 
-        $user->changeRoles(Role::MANAGER, Role::MANAGER, Role::AUDIT_READER);
+        $user->changeRoles(SuiteInstant::now(), Role::MANAGER, Role::MANAGER, Role::AUDIT_READER);
 
         $events = $user->pullDomainEvents();
         $this->assertCount(1, $events);
@@ -57,7 +58,7 @@ final class UserChangeRolesTest extends TestCase
     #[DataProvider('provideAcceptsANewSetInAnyStatusCases')]
     public function testAcceptsANewSetInAnyStatus(User $user, IdentityStatus $expectedStatus): void
     {
-        $user->changeRoles(Role::MANAGER);
+        $user->changeRoles(SuiteInstant::now(), Role::MANAGER);
 
         $this->assertSame([Role::MANAGER], $user->roles());
         $this->assertSame($expectedStatus, $user->status());
@@ -69,10 +70,10 @@ final class UserChangeRolesTest extends TestCase
     public static function provideAcceptsANewSetInAnyStatusCases(): iterable
     {
         $suspended = UserMother::create();
-        $suspended->suspend();
+        $suspended->suspend(SuiteInstant::now());
 
         $deactivated = UserMother::create();
-        $deactivated->deactivate();
+        $deactivated->deactivate(SuiteInstant::now());
 
         yield 'active' => [UserMother::create(), IdentityStatus::ACTIVE];
         yield 'invited' => [UserMother::invited(), IdentityStatus::INVITED];

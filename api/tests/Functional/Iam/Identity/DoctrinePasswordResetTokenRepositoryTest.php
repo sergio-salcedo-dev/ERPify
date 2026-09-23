@@ -11,6 +11,7 @@ use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrinePasswordResetTokenRepository;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -59,7 +60,7 @@ final class DoctrinePasswordResetTokenRepositoryTest extends KernelTestCase
             $generated = SingleUseToken::mint($now->modify('+1 hour'));
             $id = Uuid::generate();
 
-            $this->repository->save(PasswordResetToken::issue($id, self::USER_A, $generated->token));
+            $this->repository->save(PasswordResetToken::issue($id, self::USER_A, $generated->token, $now));
             $this->entityManager->clear();
 
             $found = $this->repository->findById($id);
@@ -79,7 +80,7 @@ final class DoctrinePasswordResetTokenRepositoryTest extends KernelTestCase
         $this->inRolledBackTransaction(function (): void {
             $id = Uuid::generate();
             $minted = SingleUseToken::mint(new DateTimeImmutable(self::LATER))->token;
-            $token = PasswordResetToken::issue($id, self::USER_A, $minted);
+            $token = PasswordResetToken::issue($id, self::USER_A, $minted, SuiteInstant::now());
 
             $this->repository->save($token);
 
@@ -101,9 +102,10 @@ final class DoctrinePasswordResetTokenRepositoryTest extends KernelTestCase
             $firstToken = SingleUseToken::mint(new DateTimeImmutable(self::LATER))->token;
             $secondToken = SingleUseToken::mint(new DateTimeImmutable(self::LATER))->token;
             $thirdToken = SingleUseToken::mint(new DateTimeImmutable(self::LATER))->token;
-            $this->repository->save(PasswordResetToken::issue($firstA, self::USER_A, $firstToken));
-            $this->repository->save(PasswordResetToken::issue($secondA, self::USER_A, $secondToken));
-            $this->repository->save(PasswordResetToken::issue($onlyB, self::USER_B, $thirdToken));
+            $issuedAt = SuiteInstant::now();
+            $this->repository->save(PasswordResetToken::issue($firstA, self::USER_A, $firstToken, $issuedAt));
+            $this->repository->save(PasswordResetToken::issue($secondA, self::USER_A, $secondToken, $issuedAt));
+            $this->repository->save(PasswordResetToken::issue($onlyB, self::USER_B, $thirdToken, $issuedAt));
 
             $this->assertSame(2, $this->repository->deleteAllForUser(self::USER_A));
 
@@ -123,8 +125,8 @@ final class DoctrinePasswordResetTokenRepositoryTest extends KernelTestCase
             $live = Uuid::generate();
             $expiredToken = SingleUseToken::mint($now->modify('-1 minute'))->token;
             $liveToken = SingleUseToken::mint($now->modify('+1 hour'))->token;
-            $this->repository->save(PasswordResetToken::issue($expired, self::USER_A, $expiredToken));
-            $this->repository->save(PasswordResetToken::issue($live, self::USER_B, $liveToken));
+            $this->repository->save(PasswordResetToken::issue($expired, self::USER_A, $expiredToken, $now));
+            $this->repository->save(PasswordResetToken::issue($live, self::USER_B, $liveToken, $now));
 
             $this->assertSame(1, $this->repository->deleteExpired($now));
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use Closure;
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\RedeemRecoverySecret;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
@@ -53,8 +54,8 @@ final class RedeemRecoverySecretRefusalTest extends TestCase
         // The one IDENTIFIED refusal on this endpoint. The presenter has already proven possession, so
         // telling them the account is suspended reveals nothing they could not learn by redeeming a working
         // one — and the row stays live for an attempt after the account is reinstated.
-        $user = UserMother::create();
-        $user->suspend();
+        $user = UserMother::create(now: new DateTimeImmutable(self::NOW));
+        $user->suspend(new DateTimeImmutable(self::NOW));
         $user->pullDomainEvents();
 
         $users = new InMemoryUserRepository($user);
@@ -109,14 +110,18 @@ final class RedeemRecoverySecretRefusalTest extends TestCase
         // and proves it against a double, so this side is where the claim that the API produces that type at
         // all has to be made.
         yield 'deactivated' => [static function (): User {
-            $user = UserMother::create();
-            $user->deactivate();
+            $user = UserMother::create(now: new DateTimeImmutable(self::NOW));
+            $user->deactivate(new DateTimeImmutable(self::NOW));
             $user->pullDomainEvents();
 
             return $user;
         }];
-        yield 'invited, never activated' => [static fn (): User => UserMother::invited()];
-        yield 'invitation revoked' => [static fn (): User => UserMother::revoked()];
+        yield 'invited, never activated' => [
+            static fn (): User => UserMother::invited(now: new DateTimeImmutable(self::NOW)),
+        ];
+        yield 'invitation revoked' => [
+            static fn (): User => UserMother::revoked(now: new DateTimeImmutable(self::NOW)),
+        ];
     }
 
     #[Test]

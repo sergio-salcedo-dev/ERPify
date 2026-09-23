@@ -30,8 +30,8 @@ final class OtherSessionsRevokedTest extends TestCase
         $event = new OtherSessionsRevoked(
             self::USER_ID,
             self::KEPT_SESSION_ID,
-            self::EVENT_ID,
             new DateTimeImmutable(self::OCCURRED_ON),
+            self::EVENT_ID,
         );
 
         $this->assertSame('erpify.iam.session.others-revoked', $event::eventName());

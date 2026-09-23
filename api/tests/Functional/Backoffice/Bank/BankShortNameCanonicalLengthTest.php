@@ -8,12 +8,13 @@ use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Shared\Kernel\Domain\ValueObject\NormalizedText;
 use Erpify\Shared\Uuid\Domain\Uuid as DomainUuid;
 use Erpify\Shared\Validation\Application\Validator;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 
 /**
- * gh-203 follow-up: a raw `shortName` within the 50-char DTO limit can still grow past 50 once
+ * A raw `shortName` within the 50-char DTO limit can still grow past 50 once
  * `NormalizedText::toAsciiUpper` folds it (ß→SS, Æ→AE), because the canonical form is what the
  * `VARCHAR(50)` column persists. This pins that the Bank entity invariant rejects the over-long
  * canonical form as a clean validation violation on `shortName` (→ 422) instead of letting the
@@ -42,7 +43,7 @@ final class BankShortNameCanonicalLengthTest extends KernelTestCase
 
         $id = DomainUuid::generate();
         $suffix = \strtoupper(\substr(\str_replace('-', '', $id), 0, 8));
-        $bank = Bank::create($id, 'Canonical Overflow Bank ' . $suffix, $rawShortName);
+        $bank = Bank::create($id, 'Canonical Overflow Bank ' . $suffix, $rawShortName, SuiteInstant::now());
 
         try {
             $validator->ensure($bank);

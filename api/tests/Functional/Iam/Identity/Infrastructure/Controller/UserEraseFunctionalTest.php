@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Iam\Identity\Infrastructure\Controller;
 
-use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Infrastructure\Controller\UserEraseController;
 use Erpify\Iam\Session\Domain\Entity\Session;
@@ -13,6 +12,7 @@ use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use Erpify\Tests\Functional\Iam\Identity\Fixtures\FailingAuditActorAnonymiser;
 use Override;
@@ -214,13 +214,15 @@ final class UserEraseFunctionalTest extends WebTestCase
         $sessions = self::getContainer()->get(SessionRepository::class);
         $this->assertInstanceOf(SessionRepository::class, $sessions);
 
+        $now = SuiteInstant::now();
         $session = Session::start(
             SessionId::generate()->toString(),
             self::TARGET_ID,
             self::ORGANIZATION_ID,
             'Erase-target device',
             '203.0.113.7',
-            new DateTimeImmutable('+1 day'),
+            $now->modify('+1 day'),
+            $now,
         );
         $session->pullDomainEvents();
 

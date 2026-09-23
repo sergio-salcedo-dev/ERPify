@@ -9,6 +9,7 @@ use Erpify\Backoffice\BankAccount\Application\BankAccountFinder;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountDeletedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotClosedException;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
@@ -76,6 +77,7 @@ final class BankAccountDeleterTest extends TestCase
             new BankAccountFinder($repository),
             $eventBus,
             $transactions,
+            SuiteInstant::clock(),
         );
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Images\Application;
 
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\ImageProcessor;
@@ -27,6 +28,7 @@ final readonly class UploadImage
         private ImageStorage $imageStorage,
         private ImageRepository $imageRepository,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -59,6 +61,7 @@ final readonly class UploadImage
             $canonicalImage->width,
             $canonicalImage->height,
             $canonicalImage->byteSize,
+            $this->clock->now(),
         );
 
         // Only the canonical bytes are ever stored. The originals the caller supplied end here.

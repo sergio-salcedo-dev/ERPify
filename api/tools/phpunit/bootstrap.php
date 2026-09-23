@@ -40,13 +40,8 @@ RefuseRuntimeDatabaseGuard::refuseUnlessTestDatabase(
 );
 
 // The clock is pinned here as well as from FreezeSystemClockExtension's two per-test subscribers, because
-// three things run OUTSIDE any per-test event and would otherwise read the host wall clock — the source this
-// whole harness exists to remove. A data provider resolves while the suite is being BUILT
-// (`TestBuilder::build()`, before the runner emits anything), and three providers in this tree construct
-// aggregates there, so `AggregateRoot::__construct()` stamped them from the wall clock while the test body
-// receiving them ran at the pinned instant. `setUpBeforeClass()` of the first class executed is the same
-// window. And an isolated child process (`--process-isolation`, `#[RunInSeparateProcess]`) never registers
-// extensions at all: its template calls `Facade::instance()->initForIsolation()`, which builds a dispatcher
-// with no subscribers, so the pin would not exist there for the whole test — but the template DOES
-// `require_once` this file, which is why the pin belongs here and not only in the extension.
+// three things run OUTSIDE any per-test event and would otherwise read the host wall clock through the
+// container's `clock` service: a data provider resolving while the suite is BUILT, `setUpBeforeClass()` of the
+// first class executed, and an isolated child process, whose template registers no extension at all but does
+// `require_once` this file — which is why the pin belongs here and not only in the extension.
 FreezeSystemClockExtension::pin();

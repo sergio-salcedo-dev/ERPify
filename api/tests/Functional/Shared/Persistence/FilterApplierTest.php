@@ -19,6 +19,7 @@ use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\AppliedFilte
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\NormalizedTextFieldNormalizer;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use InvalidArgumentException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -386,7 +387,7 @@ final class FilterApplierTest extends KernelTestCase
 
     private function createBank(string $name, string $shortName): Bank
     {
-        $bank = Bank::create(Uuid::generate(), $name, $shortName);
+        $bank = Bank::create(Uuid::generate(), $name, $shortName, SuiteInstant::now());
 
         $this->entityManager->persist($bank);
         $this->entityManager->flush();

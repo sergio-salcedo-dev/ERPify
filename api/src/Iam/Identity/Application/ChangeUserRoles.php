@@ -13,6 +13,7 @@ use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -69,6 +70,7 @@ final readonly class ChangeUserRoles
         private EventBus $eventBus,
         private AuditLogger $auditLogger,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -100,7 +102,7 @@ final readonly class ChangeUserRoles
                 $this->guardActiveAdministratorsSurvive($userId, $user, $roles);
 
                 $held = $this->canonical($user->roles());
-                $user->changeRoles(...$roles);
+                $user->changeRoles($this->clock->now(), ...$roles);
                 $this->users->save($user);
                 $this->eventBus->publish(...$user->pullDomainEvents());
                 $this->auditRoleChange($userId, $held, $this->canonical($roles));

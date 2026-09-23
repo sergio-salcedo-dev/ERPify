@@ -63,7 +63,9 @@ final readonly class AcceptInvitation
 
                 $invitation = $this->invitations->findByIdForUpdate($invitationId) ?? throw new InvalidToken();
 
-                if (!$invitation->verify($secret, $this->clock->now())) {
+                $now = $this->clock->now();
+
+                if (!$invitation->verify($secret, $now)) {
                     throw new InvalidToken();
                 }
 
@@ -79,9 +81,9 @@ final readonly class AcceptInvitation
                     throw new InvalidToken();
                 }
 
-                $user->activate($hashPassword());
+                $user->activate($hashPassword(), $now);
 
-                $invitation->accept();
+                $invitation->accept($now);
 
                 $this->users->save($user);
                 $this->invitations->save($invitation);

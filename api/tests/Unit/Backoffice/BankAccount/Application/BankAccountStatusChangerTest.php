@@ -9,6 +9,7 @@ use Erpify\Backoffice\BankAccount\Application\BankAccountStatusChanger;
 use Erpify\Backoffice\BankAccount\Application\Command\ChangeBankAccountStatusCommand;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountStatusChangedDomainEvent;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
@@ -77,6 +78,7 @@ final class BankAccountStatusChangerTest extends TestCase
             $eventBus,
             $this->passThroughValidator(),
             $transactions,
+            SuiteInstant::clock(),
         );
     }
 }

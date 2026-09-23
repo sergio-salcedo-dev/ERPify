@@ -256,18 +256,20 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
         $alphaId = Uuid::v7()->toRfc4122();
         $betaId = Uuid::v7()->toRfc4122();
 
-        // Stamped, because the suite pins one instant and the frozen double answers every read with the
-        // SAME object: two unstamped aggregates come out exactly tied, where the wall clock used to give
-        // them distinct microseconds and order them by construction. No choice of pinned instant fixes
-        // that — only saying when each row was created does.
-        $this->entityManager->persist(
-            Bank::create($alphaId, self::BANK_ALPHA_NAME, self::BANK_ALPHA_SHORT)
-                ->setCreatedAt(new DateTimeImmutable('2026-01-01 09:00:00')),
-        );
-        $this->entityManager->persist(
-            Bank::create($betaId, self::BANK_BETA_NAME, self::BANK_BETA_SHORT)
-                ->setCreatedAt(new DateTimeImmutable('2026-01-01 09:30:00')),
-        );
+        // Each row is created at its own instant: aggregates handed one shared instant come out exactly
+        // tied on `createdAt`, so only saying when each row was created orders them by construction.
+        $this->entityManager->persist(Bank::create(
+            $alphaId,
+            self::BANK_ALPHA_NAME,
+            self::BANK_ALPHA_SHORT,
+            new DateTimeImmutable('2026-01-01 09:00:00'),
+        ));
+        $this->entityManager->persist(Bank::create(
+            $betaId,
+            self::BANK_BETA_NAME,
+            self::BANK_BETA_SHORT,
+            new DateTimeImmutable('2026-01-01 09:30:00'),
+        ));
         $this->entityManager->flush();
 
         $this->persistAccount(
@@ -312,12 +314,12 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
             $bankId,
             $holderName,
             $iban,
+            $createdAt,
             $bic,
             $alias,
             Currency::EUR,
             $status,
         );
-        $account->setCreatedAt($createdAt);
 
         $this->entityManager->persist($account);
     }

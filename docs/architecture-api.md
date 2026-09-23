@@ -59,7 +59,7 @@ api/src/
     ├── Application/    { Problem, UseCase }                      # kernel: RFC 9457 mapping + use-case Result
     ├── Domain/         { Aggregate, Entity, Enum, Exception, Uuid, ValueObject }   # kernel primitives
     ├── Infrastructure/ { Http, Persistence, Serializer }         # kernel adapters/helpers
-    ├── Clock/          { Domain, Infrastructure }                # time port + Symfony/native adapters
+    ├── Clock/          { Domain, Infrastructure }                # time port + Symfony adapter (the one source)
     ├── Event/          { Domain, Application, Infrastructure }   # event backbone: DomainEvent, EventBus, event store, projections
     ├── Images/         { Domain, Application, Infrastructure }   # canonicalization pipeline + byte storage (Flysystem) + Image row + the authenticated read route GET /api/v1/images/{imageId}; deletion is requested by the consumer, never decided here — adr/image-deletion-signal-transport.md
     ├── Mailer/         { Application, Infrastructure }           # notification-mail port + adapter

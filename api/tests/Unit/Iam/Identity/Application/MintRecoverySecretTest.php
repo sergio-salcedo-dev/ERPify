@@ -44,7 +44,7 @@ final class MintRecoverySecretTest extends TestCase
     #[Test]
     public function itPersistsTheDigestAndReturnsThePlaintextExactlyOnce(): void
     {
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: self::now()));
         $secrets = new InMemoryRecoverySecretRepository();
         $eventBus = new RecordingEventBus();
 
@@ -70,7 +70,7 @@ final class MintRecoverySecretTest extends TestCase
         // The TTL is an accepted risk with an open issue behind it, so it is asserted rather than left to
         // whatever the constant happens to say: a shortened window would silently reintroduce the invisible
         // destruction this design rejected when it decided a password change leaves the secret standing.
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: self::now()));
         $secrets = new InMemoryRecoverySecretRepository();
 
         $generated = $this->useCase($users, $secrets)->mint(UserMother::DEFAULT_ID, $this->acceptsTheCurrentPassword());
@@ -87,7 +87,7 @@ final class MintRecoverySecretTest extends TestCase
         // The ORDER is the security property. Answering the 409 to somebody who has not re-proved the
         // credential would turn a stolen session into an oracle over whether a recovery secret exists to go
         // looking for — so the refusal must fire even when one does.
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: self::now()));
         $secrets = new InMemoryRecoverySecretRepository(
             RecoverySecret::mint(UserMother::DEFAULT_ID, new DateTimeImmutable(self::NOW))->secret,
         );
@@ -107,7 +107,7 @@ final class MintRecoverySecretTest extends TestCase
         // Refusing is the point: superseding would destroy, with no notice to anyone, a credential whose
         // holder may have written it down and stored it away from the machine.
         $existing = RecoverySecret::mint(UserMother::DEFAULT_ID, new DateTimeImmutable(self::NOW))->secret;
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: self::now()));
         $secrets = new InMemoryRecoverySecretRepository($existing);
 
         $this->expectException(RecoverySecretAlreadyExists::class);
@@ -168,20 +168,20 @@ final class MintRecoverySecretTest extends TestCase
     public static function provideAnUnadmittedIdentityCannotMintAndIsWalledBeforeItsCredentialIsReadCases(): iterable
     {
         yield 'deactivated' => [static function (): User {
-            $user = UserMother::create();
-            $user->deactivate();
+            $user = UserMother::create(now: self::now());
+            $user->deactivate(self::now());
             $user->pullDomainEvents();
 
             return $user;
         }];
-        yield 'invited, never activated' => [static fn (): User => UserMother::invited()];
-        yield 'invitation revoked' => [static fn (): User => UserMother::revoked()];
+        yield 'invited, never activated' => [static fn (): User => UserMother::invited(now: self::now())];
+        yield 'invitation revoked' => [static fn (): User => UserMother::revoked(now: self::now())];
     }
 
     #[Test]
     public function theUserRowIsLockedBeforeTheSecretRow(): void
     {
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: self::now()));
         $secrets = new InMemoryRecoverySecretRepository();
         $journal = new LockOrderJournal();
         $users->lockOrderJournal = $journal;
@@ -199,7 +199,7 @@ final class MintRecoverySecretTest extends TestCase
     #[Test]
     public function theAuditRowNamesTheSubjectAndCarriesNothingElse(): void
     {
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: self::now()));
         $secrets = new InMemoryRecoverySecretRepository();
         $audit = new RecordingAuditLogger();
 
@@ -255,5 +255,14 @@ final class MintRecoverySecretTest extends TestCase
             new InlineTransactionManager(),
             FixedClock::at(self::NOW),
         );
+    }
+
+    /**
+     * The instant the use case runs at, and so the one every identity the cases build is stamped with —
+     * static because the data provider builds its identities before any instance exists.
+     */
+    private static function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable(self::NOW);
     }
 }

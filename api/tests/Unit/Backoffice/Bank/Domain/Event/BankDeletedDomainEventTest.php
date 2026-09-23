@@ -25,7 +25,7 @@ final class BankDeletedDomainEventTest extends TestCase
     #[Test]
     public function itExposesItsStableIdentityAndCarriesNoPayload(): void
     {
-        $event = new BankDeletedDomainEvent(self::BANK_ID, self::EVENT_ID, new DateTimeImmutable(self::OCCURRED_ON));
+        $event = new BankDeletedDomainEvent(self::BANK_ID, new DateTimeImmutable(self::OCCURRED_ON), self::EVENT_ID);
 
         $this->assertSame('erpify.backoffice.bank.deleted', $event::eventName());
         $this->assertSame('Backoffice.Bank', $event::aggregateType());
@@ -37,7 +37,7 @@ final class BankDeletedDomainEventTest extends TestCase
     #[Test]
     public function fromPrimitivesReconstructsAnIdenticalEvent(): void
     {
-        $event = new BankDeletedDomainEvent(self::BANK_ID, self::EVENT_ID, new DateTimeImmutable(self::OCCURRED_ON));
+        $event = new BankDeletedDomainEvent(self::BANK_ID, new DateTimeImmutable(self::OCCURRED_ON), self::EVENT_ID);
 
         $reconstructed = BankDeletedDomainEvent::fromPrimitives(self::BANK_ID, [], self::EVENT_ID, self::OCCURRED_ON);
 

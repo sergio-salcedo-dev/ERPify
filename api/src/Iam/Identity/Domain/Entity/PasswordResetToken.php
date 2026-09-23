@@ -47,9 +47,9 @@ final class PasswordResetToken extends AggregateRoot
     #[ORM\Column(name: 'expires_at', type: Types::DATETIME_IMMUTABLE)]
     private DateTimeImmutable $expiresAt;
 
-    private function __construct(string $id, string $userId, SingleUseToken $token)
+    private function __construct(string $id, string $userId, SingleUseToken $token, DateTimeImmutable $now)
     {
-        parent::__construct();
+        parent::__construct($now);
 
         Uuid::ensure($id);
         Uuid::ensure($userId);
@@ -66,10 +66,10 @@ final class PasswordResetToken extends AggregateRoot
      * "a reset was requested" fact, so the aggregate records {@see PasswordResetRequested} at its source (mirror
      * of {@see User} recording its own credential events) — PII-free, only the user id.
      */
-    public static function issue(string $id, string $userId, SingleUseToken $token): self
+    public static function issue(string $id, string $userId, SingleUseToken $token, DateTimeImmutable $now): self
     {
-        $reset = new self($id, $userId, $token);
-        $reset->record(new PasswordResetRequested($userId));
+        $reset = new self($id, $userId, $token, $now);
+        $reset->record(new PasswordResetRequested($userId, $now));
 
         return $reset;
     }

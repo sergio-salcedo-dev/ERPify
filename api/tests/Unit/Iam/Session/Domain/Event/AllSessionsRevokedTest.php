@@ -25,7 +25,7 @@ final class AllSessionsRevokedTest extends TestCase
     #[Test]
     public function itIsAUserSubjectedFactWithAnEmptyPayload(): void
     {
-        $event = new AllSessionsRevoked(self::USER_ID, self::EVENT_ID, new DateTimeImmutable(self::OCCURRED_ON));
+        $event = new AllSessionsRevoked(self::USER_ID, new DateTimeImmutable(self::OCCURRED_ON), self::EVENT_ID);
 
         $this->assertSame('erpify.iam.session.all-revoked', $event::eventName());
         $this->assertSame('Iam.Session', $event::aggregateType());

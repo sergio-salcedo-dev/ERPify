@@ -11,7 +11,6 @@ use Erpify\Iam\Session\Domain\Enum\SessionStatus;
 use Erpify\Iam\Session\Domain\Event\SessionRevoked;
 use Erpify\Iam\Session\Domain\Event\SessionStarted;
 use Erpify\Iam\Session\Domain\Exception\InvalidSessionTransition;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -57,8 +56,9 @@ final class Session extends AggregateRoot
         private DateTimeImmutable $expiresAt,
         #[ORM\Column(enumType: SessionStatus::class)]
         private SessionStatus $status,
+        DateTimeImmutable $now,
     ) {
-        parent::__construct();
+        parent::__construct($now);
 
         Uuid::ensure($userId);
         Uuid::ensure($organizationId);
@@ -80,9 +80,10 @@ final class Session extends AggregateRoot
         string $device,
         ?string $ip,
         DateTimeImmutable $expiresAt,
+        DateTimeImmutable $now,
     ): self {
-        $session = new self($id, $userId, $organizationId, $device, $ip, $expiresAt, SessionStatus::ACTIVE);
-        $session->record(new SessionStarted($id, $userId, occurredOn: $session->getCreatedAt()));
+        $session = new self($id, $userId, $organizationId, $device, $ip, $expiresAt, SessionStatus::ACTIVE, $now);
+        $session->record(new SessionStarted($id, $userId, $session->getCreatedAt()));
 
         return $session;
     }
@@ -93,16 +94,15 @@ final class Session extends AggregateRoot
      *
      * @throws InvalidSessionTransition when the session is not `ACTIVE`
      */
-    public function revoke(): void
+    public function revoke(DateTimeImmutable $now): void
     {
         $this->guardTransitionTo(SessionStatus::REVOKED, SessionStatus::ACTIVE);
 
-        $now = SystemClock::now();
         $this->status = SessionStatus::REVOKED;
         $this->revokedAt = $now;
         $this->updatedAt = $now;
 
-        $this->record(new SessionRevoked($this->id(), $this->userId, occurredOn: $now));
+        $this->record(new SessionRevoked($this->id(), $this->userId, $now));
     }
 
     /**

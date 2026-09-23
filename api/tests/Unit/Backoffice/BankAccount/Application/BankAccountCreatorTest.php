@@ -10,6 +10,7 @@ use Erpify\Backoffice\BankAccount\Application\Command\CreateBankAccountCommand;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountCreatedDomainEvent;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
@@ -97,6 +98,7 @@ final class BankAccountCreatorTest extends TestCase
             $eventBus,
             $this->passThroughValidator(),
             $transactions,
+            SuiteInstant::clock(),
         );
     }
 }

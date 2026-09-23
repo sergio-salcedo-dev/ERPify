@@ -35,8 +35,9 @@ final class InvitationFixtureFactory
         $organizationId = $organization->getId() ?? throw new LogicException('Fixture organization must have an id.');
 
         $token = SingleUseToken::fromHash($tokenHash, new DateTimeImmutable($expiresAt));
-        $invitation = Invitation::create($id, $organizationId, $invitedUserId, $token);
-        $invitation->markSent();
+        $now = SeedInstant::now();
+        $invitation = Invitation::create($id, $organizationId, $invitedUserId, $token, $now);
+        $invitation->markSent($now);
 
         return $invitation;
     }

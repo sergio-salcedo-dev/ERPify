@@ -8,6 +8,7 @@ use Erpify\Backoffice\Bank\Application\Command\UpdateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
@@ -21,6 +22,7 @@ final readonly class BankUpdater
         private EventBus $eventBus,
         private Validator $validator,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -32,7 +34,7 @@ final readonly class BankUpdater
     {
         $bank = $this->bankFinder->find($id);
 
-        $bank->rename($bankCommand->name, $bankCommand->shortName);
+        $bank->rename($bankCommand->name, $bankCommand->shortName, $this->clock->now());
 
         $this->validator->ensure($bank);
 

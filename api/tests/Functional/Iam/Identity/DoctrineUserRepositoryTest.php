@@ -14,6 +14,7 @@ use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineUserReposito
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -248,6 +249,7 @@ final class DoctrineUserRepositoryTest extends KernelTestCase
             Uuid::generate(),
             $email,
             HashedPassword::fromHash('hashed-' . \mb_strtolower(\trim($email))),
+            SuiteInstant::now(),
             Role::AUDIT_READER,
         );
     }

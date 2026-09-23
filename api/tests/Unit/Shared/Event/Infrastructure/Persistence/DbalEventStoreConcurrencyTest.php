@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Event\Infrastructure\Persistence;
 
+use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
@@ -42,6 +43,10 @@ final class DbalEventStoreConcurrencyTest extends TestCase
     {
         $now = '2026-01-01T00:00:00+00:00';
 
-        return new BankCreatedDomainEvent(Uuid::generate(), new BankSnapshot('Bank', 'BANK', $now, $now));
+        return new BankCreatedDomainEvent(
+            Uuid::generate(),
+            new BankSnapshot('Bank', 'BANK', $now, $now),
+            new DateTimeImmutable($now),
+        );
     }
 }

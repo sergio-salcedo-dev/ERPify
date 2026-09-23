@@ -10,6 +10,7 @@ use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
 use SensitiveParameter;
@@ -48,12 +49,13 @@ final readonly class InviteUser
         private UserRepository $users,
         private Validator $validator,
         private AuditLogger $auditLogger,
+        private Clock $clock,
     ) {
     }
 
     public function invite(#[SensitiveParameter] string $email, Role ...$roles): User
     {
-        $user = User::invite(Uuid::generate(), $email, ...$roles);
+        $user = User::invite(Uuid::generate(), $email, $this->clock->now(), ...$roles);
 
         $this->validator->ensure($user);
         $this->users->save($user);

@@ -12,6 +12,7 @@ use Erpify\Iam\Identity\Domain\Exception\NewPasswordMustDiffer;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 
@@ -65,6 +66,12 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  *
  * Revoking EVERY session (rather than every other one) is deliberate: it reuses the seam Identity is already
  * allowed to consume, and the caller's own device is signed back in by the HTTP adapter immediately afterwards.
+ *
+ * Its coupling sits at the threshold by what it is rather than by accretion: five of the types are the refusals
+ * its `@throws` contract names, and the rest are the collaborators the ordering above requires, the clock that
+ * stamps the change among them.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final readonly class ChangeMyPassword
 {
@@ -75,6 +82,7 @@ final readonly class ChangeMyPassword
         private SendPasswordChangedEmailBestEffort $notifyPasswordChanged,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -115,7 +123,7 @@ final readonly class ChangeMyPassword
                     throw new NewPasswordMustDiffer();
                 }
 
-                $user->changePassword($hashNew());
+                $user->changePassword($hashNew(), $this->clock->now());
                 $user->clearLockout();
 
                 $this->users->save($user);

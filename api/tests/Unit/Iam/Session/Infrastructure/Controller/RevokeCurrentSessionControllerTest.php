@@ -12,6 +12,7 @@ use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Iam\Session\Infrastructure\Controller\RevokeCurrentSessionController;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -60,6 +61,7 @@ final class RevokeCurrentSessionControllerTest extends TestCase
             $store,
             $this->createStub(EventBus::class),
             $this->createStub(TransactionManager::class),
+            SuiteInstant::clock(),
         );
 
         return new RevokeCurrentSessionController($currentSession, $revokeSession, new NullLogger());

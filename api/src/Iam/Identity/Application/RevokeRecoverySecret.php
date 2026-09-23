@@ -11,6 +11,7 @@ use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\RecoverySecretRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 
@@ -67,6 +68,7 @@ final readonly class RevokeRecoverySecret
         private RecordRecoverySecretAuditBestEffort $audit,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -90,7 +92,7 @@ final readonly class RevokeRecoverySecret
                 return false;
             }
 
-            $secret->revoke();
+            $secret->revoke($this->clock->now());
 
             // Inside the transaction, for the reason redemption publishes there: the durable record of the
             // revocation lands with the delete or not at all.

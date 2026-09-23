@@ -25,7 +25,7 @@ final class UserSuspendedTest extends TestCase
     #[Test]
     public function itExposesItsStableIdentityAndCarriesNoPayload(): void
     {
-        $event = new UserSuspended(self::USER_ID, self::EVENT_ID, new DateTimeImmutable(self::OCCURRED_ON));
+        $event = new UserSuspended(self::USER_ID, new DateTimeImmutable(self::OCCURRED_ON), self::EVENT_ID);
 
         $this->assertSame('erpify.iam.identity.suspended', $event::eventName());
         $this->assertSame('Iam.Identity', $event::aggregateType());
@@ -37,7 +37,7 @@ final class UserSuspendedTest extends TestCase
     #[Test]
     public function fromPrimitivesReconstructsAnIdenticalEvent(): void
     {
-        $event = new UserSuspended(self::USER_ID, self::EVENT_ID, new DateTimeImmutable(self::OCCURRED_ON));
+        $event = new UserSuspended(self::USER_ID, new DateTimeImmutable(self::OCCURRED_ON), self::EVENT_ID);
 
         $reconstructed = UserSuspended::fromPrimitives(self::USER_ID, [], self::EVENT_ID, self::OCCURRED_ON);
 

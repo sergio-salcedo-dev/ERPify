@@ -12,6 +12,7 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -33,11 +34,17 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
         $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
             $bankId = Uuid::generate();
             $token = \strtoupper(\substr(\str_replace('-', '', $bankId), 0, 8));
-            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token));
+            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token, SuiteInstant::now()));
             $em->flush();
 
             $accountId = Uuid::generate();
-            $em->persist(BankAccount::create($accountId, $bankId, 'Juan Pérez', 'ES9121000418450200051332'));
+            $em->persist(BankAccount::create(
+                $accountId,
+                $bankId,
+                'Juan Pérez',
+                'ES9121000418450200051332',
+                SuiteInstant::now(),
+            ));
             $em->flush();
 
             $scope = 'BankAccount:' . $accountId;
@@ -79,11 +86,17 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
         $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
             $bankId = Uuid::generate();
             $token = \strtoupper(\substr(\str_replace('-', '', $bankId), 0, 8));
-            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token));
+            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token, SuiteInstant::now()));
             $em->flush();
 
             $accountId = Uuid::generate();
-            $em->persist(BankAccount::create($accountId, $bankId, 'Juan Pérez', 'ES9121000418450200051332'));
+            $em->persist(BankAccount::create(
+                $accountId,
+                $bankId,
+                'Juan Pérez',
+                'ES9121000418450200051332',
+                SuiteInstant::now(),
+            ));
             $em->flush();
 
             $scope = 'BankAccount:' . $accountId;

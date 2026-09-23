@@ -6,6 +6,7 @@ namespace Erpify\Tests\Functional\Backoffice\Bank\Infrastructure\Controller;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
@@ -75,7 +76,7 @@ final class BankDetailResponseGoldenFunctionalTest extends WebTestCase
     private function persistBank(string $id, string $name, string $shortName): void
     {
         $entityManager = $this->entityManager();
-        $entityManager->persist(Bank::create($id, $name, $shortName));
+        $entityManager->persist(Bank::create($id, $name, $shortName, SuiteInstant::now()));
         $entityManager->flush();
         $entityManager->clear();
     }

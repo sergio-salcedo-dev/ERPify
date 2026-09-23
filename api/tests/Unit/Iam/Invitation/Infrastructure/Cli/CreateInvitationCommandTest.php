@@ -99,21 +99,22 @@ final class CreateInvitationCommandTest extends TestCase
      */
     private function invite(bool $mailerFails, bool $showToken): array
     {
+        $clock = new FixedClock(new DateTimeImmutable(self::NOW));
         $organizations = new InMemoryOrganizationRepository();
-        $organizations->save(Organization::provision(self::ORG_ID, 'ACME'));
+        $organizations->save(Organization::provision(self::ORG_ID, 'ACME', $clock->now()));
 
         $emailSender = $mailerFails
             ? CapturingInvitationEmailSender::refusing()
             : CapturingInvitationEmailSender::accepting();
 
         $command = new CreateInvitationCommand(new SendInvitation(
-            new InviteUser(new InMemoryUserRepository(), $this->passingValidator(), new RecordingAuditLogger()),
-            new GrantMembership(new InMemoryMembershipRepository(), $organizations),
+            new InviteUser(new InMemoryUserRepository(), $this->passingValidator(), new RecordingAuditLogger(), $clock),
+            new GrantMembership(new InMemoryMembershipRepository(), $organizations, $clock),
             new InMemoryInvitationRepository(),
             new SendInvitationEmailBestEffort($emailSender, new NullLogger()),
             new RecordingEventBus(),
             new InlineTransactionManager(),
-            new FixedClock(new DateTimeImmutable(self::NOW)),
+            $clock,
         ));
 
         $tester = new CommandTester($command);

@@ -16,6 +16,7 @@ use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -29,6 +30,9 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * Runs inside a transaction that is always rolled back, so nothing escapes the shared dev database.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") it builds both aggregates, the capture, the sealer and the
+ * keystore end to end, which is the point of the test
  */
 #[CoversClass(PiiDiffSealer::class)]
 final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
@@ -38,13 +42,15 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
         $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
             $bankId = Uuid::generate();
             $token = \strtoupper(\substr(\str_replace('-', '', $bankId), 0, 8));
-            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token));
+            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token, SuiteInstant::now()));
             $em->flush(); // the bank must exist before the account's foreign key
 
             $accountId = Uuid::generate();
             $holderName = 'Juan Pérez';
             $iban = 'ES9121000418450200051332';
-            $em->persist(BankAccount::create($accountId, $bankId, $holderName, $iban, 'CAIXESBBXXX'));
+            $em->persist(
+                BankAccount::create($accountId, $bankId, $holderName, $iban, SuiteInstant::now(), 'CAIXESBBXXX'),
+            );
             $em->flush();
 
             $row = $this->changeRow($connection, $accountId, 'BANK_ACCOUNT_CREATED');
@@ -111,7 +117,7 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
         $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
             $bankId = Uuid::generate();
             $token = \strtoupper(\substr(\str_replace('-', '', $bankId), 0, 8));
-            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token));
+            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token, SuiteInstant::now()));
             $em->flush(); // the bank must exist before either account's foreign key
 
             $firstId = Uuid::generate();
@@ -127,11 +133,12 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
             // sealer stores a null unsealed, so leaving it unset is what let it go unasserted everywhere.
             $firstAlias = 'Nomina Ana';
             $secondAlias = 'Nomina Bruno';
+            $now = SuiteInstant::now();
             $em->persist(
-                BankAccount::create($firstId, $bankId, $firstHolder, $firstIban, 'CAIXESBBXXX', $firstAlias),
+                BankAccount::create($firstId, $bankId, $firstHolder, $firstIban, $now, 'CAIXESBBXXX', $firstAlias),
             );
             $em->persist(
-                BankAccount::create($secondId, $bankId, $secondHolder, $secondIban, 'DEUTDEFFXXX', $secondAlias),
+                BankAccount::create($secondId, $bankId, $secondHolder, $secondIban, $now, 'DEUTDEFFXXX', $secondAlias),
             );
             $em->flush(); // one flush, two mints
 

@@ -71,8 +71,8 @@ final class BankAccountCreatedDomainEventTest extends TestCase
         return new BankAccountCreatedDomainEvent(
             self::ACCOUNT_ID,
             $this->snapshot(),
-            self::EVENT_ID,
             new DateTimeImmutable(self::OCCURRED_ON),
+            self::EVENT_ID,
         );
     }
 

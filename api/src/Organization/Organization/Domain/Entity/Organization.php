@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Organization\Organization\Domain\Entity;
 
+use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -27,15 +28,16 @@ final class Organization extends AggregateRoot
         #[Assert\NotBlank]
         #[Assert\Length(max: self::MAX_NAME_LENGTH)]
         private string $name,
+        DateTimeImmutable $now,
     ) {
-        parent::__construct();
+        parent::__construct($now);
 
         $this->id = $id;
     }
 
-    public static function provision(string $id, string $name): self
+    public static function provision(string $id, string $name, DateTimeImmutable $now): self
     {
-        return new self($id, \trim($name));
+        return new self($id, \trim($name), $now);
     }
 
     public function name(): string

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Kernel\Domain\Aggregate;
 
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 
 /**
  * Minimal concrete {@see AggregateRoot} for unit-testing shared aggregate behaviour.
@@ -18,7 +19,7 @@ final class IdlessAggregateStub extends AggregateRoot
 {
     public static function unidentified(): self
     {
-        return new self();
+        return new self(SuiteInstant::now());
     }
 
     /**

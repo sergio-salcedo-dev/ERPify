@@ -10,6 +10,7 @@ use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Backoffice\BankAccount\Infrastructure\Cli\EraseBankAccountSubjectCommand;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -57,7 +58,13 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
     {
         $repository = $this->createStub(BankAccountRepository::class);
         $repository->method('findByIdForUpdate')->willReturn(
-            BankAccount::create(self::ACCOUNT_ID, self::BANK_ID, 'Juan Pérez', 'ES9121000418450200051332'),
+            BankAccount::create(
+                self::ACCOUNT_ID,
+                self::BANK_ID,
+                'Juan Pérez',
+                'ES9121000418450200051332',
+                SuiteInstant::now(),
+            ),
         );
         $encryptor = $this->createStub(EnvelopeEncryptor::class);
         $encryptor->method('destroyScope')->willReturn(true);

@@ -1,6 +1,6 @@
 ---
 title: The aggregate receives the instant, not the clock
-status: ready
+status: in-review
 branch: fix/shared-aggregate-receives-the-instant-isvf
 ---
 

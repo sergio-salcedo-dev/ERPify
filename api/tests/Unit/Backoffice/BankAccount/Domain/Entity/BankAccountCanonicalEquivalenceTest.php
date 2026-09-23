@@ -31,7 +31,14 @@ final class BankAccountCanonicalEquivalenceTest extends TestCase
     {
         $account = $this->storedAccount();
 
-        $account->update(self::HOLDER_NAME, "DE89\u{00A0}3704\u{202F}0044 0532 0130 00", null, null, Currency::EUR);
+        $account->update(
+            self::HOLDER_NAME,
+            "DE89\u{00A0}3704\u{202F}0044 0532 0130 00",
+            null,
+            null,
+            Currency::EUR,
+            self::editedAt(),
+        );
 
         $this->assertSame(self::IBAN, $account->getIban());
         $this->assertNoOp($account);
@@ -47,7 +54,7 @@ final class BankAccountCanonicalEquivalenceTest extends TestCase
     {
         $account = $this->storedAccount(bic: 'DEUTDEFF');
 
-        $account->update(self::HOLDER_NAME, self::IBAN, 'DEUT DEFF', null, Currency::EUR);
+        $account->update(self::HOLDER_NAME, self::IBAN, 'DEUT DEFF', null, Currency::EUR, self::editedAt());
 
         $this->assertSame('DEUTDEFF', $account->getBic());
         $this->assertNoOp($account);
@@ -64,7 +71,7 @@ final class BankAccountCanonicalEquivalenceTest extends TestCase
     {
         $account = $this->storedAccount();
 
-        $account->update(self::HOLDER_NAME, self::IBAN, '   ', null, Currency::EUR);
+        $account->update(self::HOLDER_NAME, self::IBAN, '   ', null, Currency::EUR, self::editedAt());
 
         $this->assertNull($account->getBic());
         $this->assertNoOp($account);

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Images\Infrastructure;
 
 use Closure;
-use Erpify\Shared\Clock\Domain\NativeClock;
 use Erpify\Shared\Images\Application\FailureSignalWindow;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Storage\ImageBytesNotFound;
@@ -15,6 +14,7 @@ use Erpify\Shared\Images\Domain\Storage\ImageStorageUnavailable;
 use Erpify\Shared\Images\Domain\Storage\StorageFailureCategory;
 use Erpify\Shared\Images\Domain\Storage\StorageOperation;
 use Erpify\Shared\Images\Infrastructure\FlysystemImageStorage;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use League\Flysystem\Filesystem;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\Local\LocalFilesystemAdapter;
@@ -416,7 +416,7 @@ final class FlysystemImageStorageFailureContractTest extends TestCase
                         new Filesystem(new LocalFilesystemAdapter($missingRoot, lazyRootCreation: true)),
                         $missingRoot,
                         $logger,
-                        new FailureSignalWindow(new NativeClock()),
+                        new FailureSignalWindow(SuiteInstant::clock()),
                     ))->delete($identifier);
                 },
             ],

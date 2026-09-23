@@ -7,6 +7,7 @@ namespace Erpify\Backoffice\Bank\Application;
 use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -19,6 +20,7 @@ final readonly class BankCreator
         private EventBus $eventBus,
         private Validator $validator,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -28,6 +30,7 @@ final readonly class BankCreator
             Uuid::generate(),
             $bankCommand->name,
             $bankCommand->shortName,
+            $this->clock->now(),
         );
 
         $this->validator->ensure($newBank);

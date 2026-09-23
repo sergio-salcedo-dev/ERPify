@@ -9,6 +9,7 @@ use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditedEntity;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -25,7 +26,13 @@ final class UserTest extends TestCase
     {
         $password = HashedPassword::fromHash('a-precomputed-hash');
 
-        $user = User::register(UserMother::DEFAULT_ID, 'bob@erpify.test', $password, Role::AUDIT_READER);
+        $user = User::register(
+            UserMother::DEFAULT_ID,
+            'bob@erpify.test',
+            $password,
+            SuiteInstant::now(),
+            Role::AUDIT_READER,
+        );
 
         $this->assertSame(UserMother::DEFAULT_ID, $user->getId());
         $this->assertSame('bob@erpify.test', $user->email());
@@ -51,6 +58,7 @@ final class UserTest extends TestCase
             UserMother::DEFAULT_ID,
             'not-an-email',
             HashedPassword::fromHash('h'),
+            SuiteInstant::now(),
             Role::AUDIT_READER,
         );
 

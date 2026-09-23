@@ -37,10 +37,11 @@ final class RecoverySecretSelectorContainmentTest extends TestCase
     #[Test]
     public function noEventTheAggregateRecordsCarriesTheSelector(): void
     {
-        $generated = RecoverySecret::mint(UserMother::DEFAULT_ID, new DateTimeImmutable(self::NOW));
+        $now = new DateTimeImmutable(self::NOW);
+        $generated = RecoverySecret::mint(UserMother::DEFAULT_ID, $now);
         $secret = $generated->secret;
-        $secret->redeem();
-        $secret->revoke();
+        $secret->redeem($now);
+        $secret->revoke($now);
 
         $events = $secret->pullDomainEvents();
         $selector = $secret->getId();

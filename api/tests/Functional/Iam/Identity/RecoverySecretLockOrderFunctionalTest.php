@@ -205,17 +205,19 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
      */
     private function seedIdentityHoldingASecret(): array
     {
+        // Registered and minted on the clock the redemption reads; a bare `new DateTimeImmutable()` here would
+        // make the secret's liveness depend on the wall clock and the container's clock agreeing.
+        $mintClock = self::getContainer()->get(Clock::class);
+        $this->assertInstanceOf(Clock::class, $mintClock);
+        $now = $mintClock->now();
+
         $userId = Uuid::generate();
         $user = User::register($userId, \sprintf('holder-%s@erpify.test', $userId), HashedPassword::fromHash(
             '$2y$04$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012',
-        ), Role::AUDIT_READER);
+        ), $now, Role::AUDIT_READER);
         $user->pullDomainEvents();
 
-        // Minted on the clock the redemption reads; a bare `new DateTimeImmutable()` here would make the
-        // secret's liveness depend on the wall clock and the container's clock agreeing.
-        $mintClock = self::getContainer()->get(Clock::class);
-        $this->assertInstanceOf(Clock::class, $mintClock);
-        $generated = RecoverySecret::mint($userId, $mintClock->now());
+        $generated = RecoverySecret::mint($userId, $now);
         $generated->secret->pullDomainEvents();
 
         $this->entityManager->persist($user);
@@ -270,11 +272,13 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
         $secrets = self::getContainer()->get(RecoverySecretRepository::class);
         $transactions = self::getContainer()->get(TransactionManager::class);
         $eventBus = self::getContainer()->get(EventBus::class);
+        $clock = self::getContainer()->get(Clock::class);
 
         $this->assertInstanceOf(UserRepository::class, $users);
         $this->assertInstanceOf(RecoverySecretRepository::class, $secrets);
         $this->assertInstanceOf(TransactionManager::class, $transactions);
         $this->assertInstanceOf(EventBus::class, $eventBus);
+        $this->assertInstanceOf(Clock::class, $clock);
 
         return new RevokeRecoverySecret(
             $users,
@@ -283,6 +287,7 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
             new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
             $eventBus,
             $transactions,
+            $clock,
         );
     }
 

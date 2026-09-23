@@ -8,6 +8,7 @@ use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use LogicException;
@@ -42,7 +43,7 @@ final class ReauthenticateDeviceTest extends TestCase
     public function testItRefusesToMintForAnIdentitySuspendedWhileTheRequestWasInFlight(): void
     {
         $user = UserMother::create();
-        $user->suspend();
+        $user->suspend(SuiteInstant::now());
 
         $security = $this->createMock(Security::class);
         $security->expects($this->never())->method('login');
@@ -55,7 +56,7 @@ final class ReauthenticateDeviceTest extends TestCase
     public function testItRefusesToMintForAnIdentityDeactivatedWhileTheRequestWasInFlight(): void
     {
         $user = UserMother::create();
-        $user->deactivate();
+        $user->deactivate(SuiteInstant::now());
 
         $security = $this->createMock(Security::class);
         $security->expects($this->never())->method('login');

@@ -8,12 +8,10 @@ use DateTimeImmutable;
 use Erpify\Iam\Session\Application\PruneRetiredSessions;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Infrastructure\Cli\PruneRetiredSessionsCommand;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
-use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -26,12 +24,6 @@ use Symfony\Component\Console\Tester\CommandTester;
 final class PruneRetiredSessionsCommandTest extends TestCase
 {
     private const string NOW = '2026-07-10T12:00:00+00:00';
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        SystemClock::reset();
-    }
 
     public function testPrunesOnlyRetiredSessionsAndReportsTheCount(): void
     {
@@ -68,10 +60,13 @@ final class PruneRetiredSessionsCommandTest extends TestCase
     private function longRevokedSession(): Session
     {
         $now = new DateTimeImmutable(self::NOW);
-        $session = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
+        $session = SessionMother::active(
+            id: Uuid::generate(),
+            expiresAt: $now->modify('+1 hour'),
+            startedAt: $now->modify('-40 days'),
+        );
 
-        SystemClock::set(new FixedClock($now->modify('-31 days')));
-        $session->revoke();
+        $session->revoke($now->modify('-31 days'));
 
         return $session;
     }
@@ -80,6 +75,6 @@ final class PruneRetiredSessionsCommandTest extends TestCase
     {
         $now = new DateTimeImmutable(self::NOW);
 
-        return SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
+        return SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'), startedAt: $now);
     }
 }

@@ -40,7 +40,7 @@ final class UserCheckerTest extends TestCase
     {
         $this->expectException(InvitedAccountException::class);
 
-        $this->checker()->checkPreAuth(new SecurityUser(UserMother::invited()));
+        $this->checker()->checkPreAuth(new SecurityUser(UserMother::invited(now: $this->now())));
     }
 
     public function testPreAuthWallsARevokedIdentityAndPaysTheTimingFloorForIt(): void
@@ -55,7 +55,7 @@ final class UserCheckerTest extends TestCase
         $this->expectException(RevokedAccountException::class);
 
         try {
-            $checker->checkPreAuth(new SecurityUser(UserMother::revoked()));
+            $checker->checkPreAuth(new SecurityUser(UserMother::revoked(now: $this->now())));
         } finally {
             $this->assertSame(1, $floor->invocations);
         }
@@ -69,13 +69,13 @@ final class UserCheckerTest extends TestCase
         $floor = new CountingPreIdentityTimingFloor();
         $checker = new UserChecker(new FixedClock(new DateTimeImmutable(self::NOW)), $floor);
 
-        $checker->checkPreAuth(new SecurityUser(UserMother::create()));
+        $checker->checkPreAuth(new SecurityUser(UserMother::create(now: $this->now())));
         $this->assertSame(0, $floor->invocations);
 
         $this->expectException(InvitedAccountException::class);
 
         try {
-            $checker->checkPreAuth(new SecurityUser(UserMother::invited()));
+            $checker->checkPreAuth(new SecurityUser(UserMother::invited(now: $this->now())));
         } finally {
             $this->assertSame(1, $floor->invocations);
         }
@@ -85,7 +85,7 @@ final class UserCheckerTest extends TestCase
     {
         $this->expectNotToPerformAssertions();
 
-        $this->checker()->checkPreAuth(new SecurityUser(UserMother::create()));
+        $this->checker()->checkPreAuth(new SecurityUser(UserMother::create(now: $this->now())));
     }
 
     public function testPostAuthRaisesTheSuspendedWall(): void
@@ -127,7 +127,7 @@ final class UserCheckerTest extends TestCase
         // surfaces as `locked` — the state arm runs before the lock arm.
         $now = new DateTimeImmutable(self::NOW);
         $user = $this->lockedActiveUser($now);
-        $user->suspend();
+        $user->suspend($now);
 
         $this->expectException(SuspendedAccountException::class);
 
@@ -138,7 +138,7 @@ final class UserCheckerTest extends TestCase
     {
         $this->expectNotToPerformAssertions();
 
-        $this->checker()->checkPostAuth(new SecurityUser(UserMother::create()));
+        $this->checker()->checkPostAuth(new SecurityUser(UserMother::create(now: $this->now())));
     }
 
     public function testIgnoresAUserItDoesNotOwn(): void
@@ -162,28 +162,37 @@ final class UserCheckerTest extends TestCase
 
     private function suspended(): User
     {
-        $user = UserMother::create();
-        $user->suspend();
+        $user = UserMother::create(now: $this->now());
+        $user->suspend($this->now());
 
         return $user;
     }
 
     private function deactivated(): User
     {
-        $user = UserMother::create();
-        $user->deactivate();
+        $user = UserMother::create(now: $this->now());
+        $user->deactivate($this->now());
 
         return $user;
     }
 
     private function lockedActiveUser(DateTimeImmutable $now): User
     {
-        $user = UserMother::create();
+        $user = UserMother::create(now: $now);
 
         for ($attempt = 0; $attempt < User::MAX_FAILED_ATTEMPTS; ++$attempt) {
             $user->recordFailedAttempt($now);
         }
 
         return $user;
+    }
+
+    /**
+     * The instant the checker's clock reads unless a case moves it, and so the one every identity a case
+     * builds is stamped with.
+     */
+    private function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable(self::NOW);
     }
 }

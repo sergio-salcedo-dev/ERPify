@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\DataFixtures\Processor;
 
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Tests\DataFixtures\Processor\RecordSeededDomainEventsProcessor;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -25,7 +26,10 @@ final class RecordSeededDomainEventsProcessorTest extends TestCase
         $eventStore = new CollectingEventStore();
         $processor = new RecordSeededDomainEventsProcessor($eventStore);
 
-        $processor->postProcess('bank_acme', Bank::create('11111111-1111-7000-8000-0000000000ff', 'Acme Bank', 'ACM'));
+        $processor->postProcess(
+            'bank_acme',
+            Bank::create('11111111-1111-7000-8000-0000000000ff', 'Acme Bank', 'ACM', SuiteInstant::now()),
+        );
 
         $this->assertCount(1, $eventStore->appended);
         $this->assertSame('erpify.backoffice.bank.created', $eventStore->appended[0]::eventName());
@@ -51,7 +55,7 @@ final class RecordSeededDomainEventsProcessorTest extends TestCase
     {
         $eventStore = new CollectingEventStore();
         $processor = new RecordSeededDomainEventsProcessor($eventStore);
-        $bank = Bank::create('11111111-1111-7000-8000-0000000000fe', 'Beta Bank', 'BET');
+        $bank = Bank::create('11111111-1111-7000-8000-0000000000fe', 'Beta Bank', 'BET', SuiteInstant::now());
 
         $processor->postProcess('bank_beta', $bank);
         $processor->postProcess('bank_beta', $bank);
@@ -69,7 +73,10 @@ final class RecordSeededDomainEventsProcessorTest extends TestCase
         $eventStore = new CollectingEventStore();
         $processor = new RecordSeededDomainEventsProcessor($eventStore);
 
-        $processor->preProcess('bank_gamma', Bank::create('11111111-1111-7000-8000-0000000000fd', 'Gamma Bank', 'GAM'));
+        $processor->preProcess(
+            'bank_gamma',
+            Bank::create('11111111-1111-7000-8000-0000000000fd', 'Gamma Bank', 'GAM', SuiteInstant::now()),
+        );
 
         $this->assertSame([], $eventStore->appended);
     }

@@ -183,6 +183,8 @@ tests/Unit/Gate/StackedDocblockRulesGateTest.php :: home
 tests/Unit/Gate/StatelessCsrfTokenIdGateTest.php :: home
 tests/Unit/Gate/StepVocabularyRegistryTest.php :: home
 tests/Unit/Gate/StrictRequestPayloadGateTest.php :: home
+tests/Unit/Gate/WallClockReadGateTest.php :: home
+tests/Unit/Gate/WallClockReadRulesGateTest.php :: home
 
 # Reads no repository artifact: it puts candidate separators through `Assert\Iban` at runtime and requires
 # the canonical form to absorb whatever the validator accepts. Whether the category covers a contract test

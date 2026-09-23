@@ -67,7 +67,7 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
         $this->inRolledBackTransaction(function (): void {
             $id = Uuid::generate();
             $session = $this->activeSession($id, Uuid::generate(), '+1 hour');
-            $session->revoke();
+            $session->revoke(new DateTimeImmutable(self::NOW));
 
             $this->repository->save($session);
             $this->entityManager->clear();
@@ -121,9 +121,8 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
             $newest = Uuid::generate();
 
             // Saved in an order that matches neither the expectation nor its reverse, so dropping the
-            // ORDER BY cannot pass by coincidence. `createdAt` is stamped rather than left to three
-            // `SystemClock::now()` calls landing microseconds apart: the claim under test is the ordering
-            // clause, not how fast the three saves ran.
+            // ORDER BY cannot pass by coincidence. Each session starts at its own stated instant rather than
+            // sharing one: the claim under test is the ordering clause, not how the three seeds were stamped.
             $this->saveSessionCreatedAt($oldest, $userId, '2026-07-08T09:00:00+00:00');
             $this->saveSessionCreatedAt($newest, $userId, '2026-07-10T09:00:00+00:00');
             $this->saveSessionCreatedAt($middle, $userId, '2026-07-09T09:00:00+00:00');
@@ -220,8 +219,7 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
 
     private function saveSessionCreatedAt(string $id, string $userId, string $createdAt): void
     {
-        $session = $this->activeSession($id, $userId, '+1 hour');
-        $session->setCreatedAt(new DateTimeImmutable($createdAt));
+        $session = $this->activeSession($id, $userId, '+1 hour', new DateTimeImmutable($createdAt));
 
         $this->repository->save($session);
     }
@@ -236,8 +234,12 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
         return \is_numeric($count) ? (int) $count : 0;
     }
 
-    private function activeSession(string $id, string $userId, string $expiryOffset): Session
-    {
+    private function activeSession(
+        string $id,
+        string $userId,
+        string $expiryOffset,
+        ?DateTimeImmutable $startedAt = null,
+    ): Session {
         $now = new DateTimeImmutable(self::NOW);
         $session = Session::start(
             $id,
@@ -246,6 +248,7 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
             'Chrome on macOS',
             '203.0.113.7',
             $now->modify($expiryOffset),
+            $startedAt ?? $now,
         );
         $session->pullDomainEvents();
 

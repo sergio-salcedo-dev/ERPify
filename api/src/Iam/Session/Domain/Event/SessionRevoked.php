@@ -17,10 +17,10 @@ final class SessionRevoked extends DomainEvent
     public function __construct(
         string $aggregateId,
         private readonly string $userId,
+        DateTimeImmutable $occurredOn,
         ?string $eventId = null,
-        ?DateTimeImmutable $occurredOn = null,
     ) {
-        parent::__construct($aggregateId, $eventId, $occurredOn);
+        parent::__construct($aggregateId, $occurredOn, $eventId);
     }
 
     #[Override]
@@ -56,7 +56,7 @@ final class SessionRevoked extends DomainEvent
     ): static {
         $userId = self::stringMember($body, 'userId');
 
-        return new self($aggregateId, $userId, $eventId, new DateTimeImmutable($occurredOn));
+        return new self($aggregateId, $userId, new DateTimeImmutable($occurredOn), $eventId);
     }
 
     public function userId(): string

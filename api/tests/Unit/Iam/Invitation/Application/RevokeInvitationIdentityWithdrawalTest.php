@@ -13,6 +13,7 @@ use Erpify\Iam\Invitation\Application\RevokeInvitation;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Shared\Token\Domain\SingleUseToken;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -91,7 +92,7 @@ final class RevokeInvitationIdentityWithdrawalTest extends TestCase
         // longer `INVITED`. Refusing here would abort the whole transaction on the identity's guard, so the
         // live token would survive every attempt — the exact outcome the all-or-nothing loop exists to prevent.
         $user = $this->invitedUser();
-        $user->revokeInvitation();
+        $user->revokeInvitation(SuiteInstant::now());
         $user->pullDomainEvents();
 
         $users = new InMemoryUserRepository($user);
@@ -137,19 +138,25 @@ final class RevokeInvitationIdentityWithdrawalTest extends TestCase
         InMemoryUserRepository $users,
         RecordingEventBus $eventBus,
     ): RevokeInvitation {
-        return new RevokeInvitation($invitations, $users, $eventBus, new CountingTransactionManager());
+        return new RevokeInvitation(
+            $invitations,
+            $users,
+            $eventBus,
+            new CountingTransactionManager(),
+            SuiteInstant::clock(),
+        );
     }
 
     private function invitedUser(): User
     {
-        return User::invite(self::USER_ID, 'invitee@erpify.test');
+        return User::invite(self::USER_ID, 'invitee@erpify.test', SuiteInstant::now());
     }
 
     private function sentInvitation(string $id = self::INVITATION_ID): Invitation
     {
         $generated = SingleUseToken::mint(new DateTimeImmutable('2026-07-16T10:00:00+00:00'));
-        $invitation = Invitation::create($id, self::ORG_ID, self::USER_ID, $generated->token);
-        $invitation->markSent();
+        $invitation = Invitation::create($id, self::ORG_ID, self::USER_ID, $generated->token, SuiteInstant::now());
+        $invitation->markSent(SuiteInstant::now());
         $invitation->pullDomainEvents();
 
         return $invitation;

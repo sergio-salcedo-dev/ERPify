@@ -94,11 +94,11 @@ final class ResendInvitationCommandTest extends TestCase
 
         $command = new ResendInvitationCommand(new ResendInvitation(
             new InMemoryInvitationRepository($this->sentInvitation()),
-            new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID)),
+            new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID, now: $this->now())),
             new SendInvitationEmailBestEffort($emailSender, new NullLogger()),
             new RecordingEventBus(),
             new InlineTransactionManager(),
-            new FixedClock(new DateTimeImmutable(self::NOW)),
+            new FixedClock($this->now()),
         ));
 
         $tester = new CommandTester($command);
@@ -114,10 +114,16 @@ final class ResendInvitationCommandTest extends TestCase
             self::ORG_ID,
             UserMother::DEFAULT_ID,
             SingleUseToken::mint(new DateTimeImmutable('2026-07-16T10:00:00+00:00'))->token,
+            $this->now(),
         );
-        $invitation->markSent();
+        $invitation->markSent($this->now());
         $invitation->pullDomainEvents();
 
         return $invitation;
+    }
+
+    private function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable(self::NOW);
     }
 }

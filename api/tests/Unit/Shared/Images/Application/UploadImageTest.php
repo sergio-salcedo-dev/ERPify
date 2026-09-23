@@ -7,6 +7,8 @@ namespace Erpify\Tests\Unit\Shared\Images\Application;
 use Erpify\Shared\Images\Application\UploadImage;
 use Erpify\Shared\Images\Domain\CanonicalImage;
 use Erpify\Shared\Images\Domain\ImageProcessor;
+use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -23,7 +25,8 @@ final class UploadImageTest extends TestCase
     {
         $canonicalImage = new CanonicalImage('canonical-bytes', 'image/png', 10, 20);
         $processor = new StubImageProcessor($canonicalImage);
-        $uploadImage = $this->uploadImageWith($processor);
+        $clock = FixedClock::at('2031-03-07T09:15:00+00:00');
+        $uploadImage = $this->uploadImageWith($processor, $clock);
 
         $image = $uploadImage->upload('raw-bytes');
 
@@ -32,6 +35,7 @@ final class UploadImageTest extends TestCase
         $this->assertSame($canonicalImage->width, $image->width());
         $this->assertSame($canonicalImage->height, $image->height());
         $this->assertSame($canonicalImage->byteSize, $image->byteSize());
+        $this->assertSame($clock->now(), $image->createdAt());
     }
 
     /**
@@ -95,13 +99,14 @@ final class UploadImageTest extends TestCase
      * The collaborators the storage and persistence steps need. Cases here are about assembling the
      * aggregate, so they take working in-memory implementations of the ports and assert nothing about them.
      */
-    private function uploadImageWith(ImageProcessor $processor): UploadImage
+    private function uploadImageWith(ImageProcessor $processor, ?FixedClock $clock = null): UploadImage
     {
         return new UploadImage(
             $processor,
             new InMemoryImageStorage(),
             new InMemoryImageRepository(),
             new ImmediateTransactionManager(),
+            $clock ?? SuiteInstant::clock(),
         );
     }
 }

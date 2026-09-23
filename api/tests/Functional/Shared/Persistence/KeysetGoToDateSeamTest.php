@@ -421,9 +421,7 @@ final class KeysetGoToDateSeamTest extends KernelTestCase
         $ids = [];
 
         foreach ([...\array_slice($rows, 3), ...\array_slice($rows, 0, 3)] as $row) {
-            $bank = Bank::create($row['id'], $row['name'], $row['shortName']);
-            $bank->setCreatedAt($row['createdAt']);
-            $bank->setUpdatedAt($row['createdAt']);
+            $bank = Bank::create($row['id'], $row['name'], $row['shortName'], $row['createdAt']);
 
             $this->entityManager->persist($bank);
             $ids[] = $row['id'];

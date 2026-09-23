@@ -7,6 +7,7 @@ namespace Erpify\Iam\Session\Application;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 
@@ -22,6 +23,7 @@ final readonly class RevokeSession
         private SessionRepository $sessions,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -33,7 +35,7 @@ final readonly class RevokeSession
             return;
         }
 
-        $session->revoke();
+        $session->revoke($this->clock->now());
 
         $this->transactionManager->transactional(function () use ($session): void {
             $this->sessions->save($session);

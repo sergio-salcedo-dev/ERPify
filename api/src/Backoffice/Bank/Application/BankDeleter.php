@@ -8,6 +8,7 @@ use Erpify\Backoffice\Bank\Domain\Exception\BankInUseException;
 use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Persistence\Domain\Exception\ReferentialIntegrityViolation;
@@ -22,6 +23,7 @@ final readonly class BankDeleter
         private BankAccountRepository $bankAccountRepository,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -40,7 +42,7 @@ final readonly class BankDeleter
             throw BankInUseException::withAccountCount($id, $accountCount);
         }
 
-        $bank->delete();
+        $bank->delete($this->clock->now());
 
         // Pull events before removal so the aggregate is still intact when captured.
         $domainEvents = $bank->pullDomainEvents();

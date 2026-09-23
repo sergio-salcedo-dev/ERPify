@@ -25,7 +25,7 @@ final class PasswordResetCompletedTest extends TestCase
     #[Test]
     public function itExposesItsStableIdentityAndCarriesNoPayload(): void
     {
-        $event = new PasswordResetCompleted(self::USER_ID, self::EVENT_ID, new DateTimeImmutable(self::OCCURRED_ON));
+        $event = new PasswordResetCompleted(self::USER_ID, new DateTimeImmutable(self::OCCURRED_ON), self::EVENT_ID);
 
         $this->assertSame('erpify.iam.identity.password-reset-completed', $event::eventName());
         $this->assertSame('Iam.Identity', $event::aggregateType());
@@ -37,7 +37,7 @@ final class PasswordResetCompletedTest extends TestCase
     #[Test]
     public function fromPrimitivesReconstructsAnIdenticalEvent(): void
     {
-        $event = new PasswordResetCompleted(self::USER_ID, self::EVENT_ID, new DateTimeImmutable(self::OCCURRED_ON));
+        $event = new PasswordResetCompleted(self::USER_ID, new DateTimeImmutable(self::OCCURRED_ON), self::EVENT_ID);
 
         $reconstructed = PasswordResetCompleted::fromPrimitives(self::USER_ID, [], self::EVENT_ID, self::OCCURRED_ON);
 

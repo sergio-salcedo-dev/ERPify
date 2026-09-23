@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\DataFixtures;
 
-use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
@@ -24,13 +23,16 @@ final class SessionFixtureFactory
         $userId = $user->getId() ?? throw new LogicException('Fixture user must have an id.');
         $organizationId = $organization->getId() ?? throw new LogicException('Fixture organization must have an id.');
 
+        $now = SeedInstant::now();
+
         return Session::start(
             $sessionId,
             $userId,
             $organizationId,
             'Behat test client',
             '127.0.0.1',
-            new DateTimeImmutable('+1 day'),
+            $now->modify('+1 day'),
+            $now,
         );
     }
 }

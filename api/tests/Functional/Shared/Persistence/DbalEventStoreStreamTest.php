@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Shared\Persistence;
 
+use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
@@ -41,7 +42,7 @@ final class DbalEventStoreStreamTest extends KernelTestCase
             $aggregateId = Uuid::generate();
             $occurredOn = '2026-06-06T08:00:00+00:00';
             $snapshot = new BankSnapshot('Stream Bank', 'STRM', $occurredOn, $occurredOn);
-            $event = new BankCreatedDomainEvent($aggregateId, $snapshot);
+            $event = new BankCreatedDomainEvent($aggregateId, $snapshot, new DateTimeImmutable($occurredOn));
 
             $store->append($event);
             $sequence = $this->sequenceOf($connection, $event->eventId());

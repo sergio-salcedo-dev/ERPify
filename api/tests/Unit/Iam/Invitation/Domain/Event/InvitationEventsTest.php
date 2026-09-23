@@ -62,8 +62,8 @@ final class InvitationEventsTest extends TestCase
     {
         $event = new InvitationCreated(
             self::INVITED_USER_ID,
-            self::EVENT_ID,
             new DateTimeImmutable(self::OCCURRED_ON),
+            self::EVENT_ID,
         );
 
         $this->assertSame('Iam.Invitation', $event::aggregateType());
@@ -94,7 +94,7 @@ final class InvitationEventsTest extends TestCase
         $this->assertGreaterThanOrEqual(self::KNOWN_EVENT_COUNT, \count($eventClasses));
 
         foreach ($eventClasses as $eventClass) {
-            $event = new $eventClass(self::INVITED_USER_ID);
+            $event = new $eventClass(self::INVITED_USER_ID, new DateTimeImmutable(self::OCCURRED_ON));
 
             $this->assertSame('Iam.Invitation', $eventClass::aggregateType(), $eventClass);
             $this->assertSame(2, $eventClass::eventVersion(), $eventClass);
@@ -195,17 +195,19 @@ final class InvitationEventsTest extends TestCase
      */
     private function everyLifecycleEvent(): array
     {
+        $now = new DateTimeImmutable(self::OCCURRED_ON);
+
         $accepted = $this->sentInvitation();
-        $accepted->accept();
+        $accepted->accept($now);
 
         $revoked = $this->sentInvitation();
-        $revoked->revoke();
+        $revoked->revoke($now);
 
         $expired = $this->sentInvitation();
-        $expired->expire();
+        $expired->expire($now);
 
         $resent = $this->sentInvitation();
-        $resent->resend(SingleUseToken::mint(new DateTimeImmutable(self::OCCURRED_ON))->token);
+        $resent->resend(SingleUseToken::mint($now)->token, $now);
 
         return [
             ...$accepted->pullDomainEvents(),
@@ -217,13 +219,15 @@ final class InvitationEventsTest extends TestCase
 
     private function sentInvitation(): Invitation
     {
+        $now = new DateTimeImmutable(self::OCCURRED_ON);
         $invitation = Invitation::create(
             self::INVITATION_ID,
             self::ORG_ID,
             self::INVITED_USER_ID,
-            SingleUseToken::mint(new DateTimeImmutable(self::OCCURRED_ON))->token,
+            SingleUseToken::mint($now)->token,
+            $now,
         );
-        $invitation->markSent();
+        $invitation->markSent($now);
 
         return $invitation;
     }

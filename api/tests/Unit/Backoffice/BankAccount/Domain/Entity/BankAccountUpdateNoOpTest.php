@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
  * persist, never against the arguments, so spacing, casing and the empty string an API caller may send
  * for an absent BIC do not by themselves constitute a change.
  *
- * Every test moves the clock between storing and editing, which is what makes an `updatedAt` that
+ * Every test edits at a later instant than the one the account was stored at, which is what makes an `updatedAt` that
  * should not have moved observable: a guard that skips the event but still stamps the timestamp alters
  * the persistable state and would pass a test that only counted events.
  *
@@ -31,7 +31,7 @@ final class BankAccountUpdateNoOpTest extends TestCase
     {
         $account = $this->storedAccount(bic: self::BIC, alias: 'Treasury');
 
-        $account->update(self::HOLDER_NAME, self::IBAN, self::BIC, 'Treasury', Currency::EUR);
+        $account->update(self::HOLDER_NAME, self::IBAN, self::BIC, 'Treasury', Currency::EUR, self::editedAt());
 
         $this->assertSame('Treasury', $account->getAlias());
         $this->assertNoOp($account);
@@ -41,7 +41,7 @@ final class BankAccountUpdateNoOpTest extends TestCase
     {
         $account = $this->storedAccount();
 
-        $account->update(self::HOLDER_NAME, 'DE89 3704 0044 0532 0130 00', null, null, Currency::EUR);
+        $account->update(self::HOLDER_NAME, 'DE89 3704 0044 0532 0130 00', null, null, Currency::EUR, self::editedAt());
 
         $this->assertSame(self::IBAN, $account->getIban());
         $this->assertNoOp($account);
@@ -51,7 +51,7 @@ final class BankAccountUpdateNoOpTest extends TestCase
     {
         $account = $this->storedAccount();
 
-        $account->update(self::HOLDER_NAME, 'de89370400440532013000', null, null, Currency::EUR);
+        $account->update(self::HOLDER_NAME, 'de89370400440532013000', null, null, Currency::EUR, self::editedAt());
 
         $this->assertSame(self::IBAN, $account->getIban());
         $this->assertNoOp($account);
@@ -61,7 +61,7 @@ final class BankAccountUpdateNoOpTest extends TestCase
     {
         $account = $this->storedAccount(bic: self::BIC);
 
-        $account->update(self::HOLDER_NAME, self::IBAN, 'deutdeffxxx', null, Currency::EUR);
+        $account->update(self::HOLDER_NAME, self::IBAN, 'deutdeffxxx', null, Currency::EUR, self::editedAt());
 
         $this->assertSame(self::BIC, $account->getBic());
         $this->assertNoOp($account);
@@ -71,7 +71,7 @@ final class BankAccountUpdateNoOpTest extends TestCase
     {
         $account = $this->storedAccount();
 
-        $account->update(self::HOLDER_NAME, self::IBAN, '', null, Currency::EUR);
+        $account->update(self::HOLDER_NAME, self::IBAN, '', null, Currency::EUR, self::editedAt());
 
         $this->assertNull($account->getBic());
         $this->assertNoOp($account);
@@ -83,7 +83,7 @@ final class BankAccountUpdateNoOpTest extends TestCase
         // persisted states, so the write is a real change and must publish.
         $account = $this->storedAccount();
 
-        $account->update(self::HOLDER_NAME, self::IBAN, null, '', Currency::EUR);
+        $account->update(self::HOLDER_NAME, self::IBAN, null, '', Currency::EUR, self::editedAt());
 
         $this->assertSame('', $account->getAlias());
         $this->assertMutated($account);
@@ -93,7 +93,7 @@ final class BankAccountUpdateNoOpTest extends TestCase
     {
         $account = $this->storedAccount(bic: self::BIC, alias: 'Treasury');
 
-        $account->update('Globex Renamed', self::IBAN, self::BIC, 'Treasury', Currency::EUR);
+        $account->update('Globex Renamed', self::IBAN, self::BIC, 'Treasury', Currency::EUR, self::editedAt());
 
         $this->assertSame('Globex Renamed', $account->getHolderName());
         $this->assertMutated($account);
@@ -103,7 +103,7 @@ final class BankAccountUpdateNoOpTest extends TestCase
     {
         $account = $this->storedAccount();
 
-        $account->update(self::HOLDER_NAME, 'FR1420041010050500013M02606', null, null, Currency::EUR);
+        $account->update(self::HOLDER_NAME, 'FR1420041010050500013M02606', null, null, Currency::EUR, self::editedAt());
 
         $this->assertSame('FR1420041010050500013M02606', $account->getIban());
         $this->assertMutated($account);
@@ -113,7 +113,7 @@ final class BankAccountUpdateNoOpTest extends TestCase
     {
         $account = $this->storedAccount(bic: self::BIC);
 
-        $account->update(self::HOLDER_NAME, self::IBAN, 'BNPAFRPPXXX', null, Currency::EUR);
+        $account->update(self::HOLDER_NAME, self::IBAN, 'BNPAFRPPXXX', null, Currency::EUR, self::editedAt());
 
         $this->assertSame('BNPAFRPPXXX', $account->getBic());
         $this->assertMutated($account);

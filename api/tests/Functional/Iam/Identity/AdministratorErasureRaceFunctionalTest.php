@@ -26,6 +26,7 @@ use Erpify\Shared\Audit\Application\AuditSubjectTrailErasure;
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Override;
@@ -215,6 +216,7 @@ final class AdministratorErasureRaceFunctionalTest extends KernelTestCase
             $this->subjectId,
             'admin-race-' . $this->subjectId . '@erpify.test',
             HashedPassword::fromHash('hashed-password-placeholder'),
+            SuiteInstant::now(),
             Role::AUDIT_READER,
         );
         $user->pullDomainEvents();

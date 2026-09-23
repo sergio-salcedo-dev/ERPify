@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Backoffice\Bank\Domain\Event\Mother;
 
 use DateTimeImmutable;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 
 final class BankDeletedDomainEventMother
@@ -17,8 +18,8 @@ final class BankDeletedDomainEventMother
     ): BankDeletedDomainEvent {
         return new BankDeletedDomainEvent(
             $aggregateId,
+            null === $occurredOn ? SuiteInstant::now() : new DateTimeImmutable($occurredOn),
             $eventId,
-            null === $occurredOn ? null : new DateTimeImmutable($occurredOn),
         );
     }
 }

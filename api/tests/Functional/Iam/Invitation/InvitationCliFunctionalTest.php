@@ -20,6 +20,7 @@ use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Organization\Organization\Domain\Repository\OrganizationRepository;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -68,7 +69,9 @@ final class InvitationCliFunctionalTest extends KernelTestCase
         $this->application = new Application($kernel);
 
         $this->truncate();
-        $this->service(OrganizationRepository::class)->save(Organization::provision(Uuid::generate(), 'ACME'));
+        $this->service(OrganizationRepository::class)->save(
+            Organization::provision(Uuid::generate(), 'ACME', SuiteInstant::now()),
+        );
     }
 
     protected function tearDown(): void

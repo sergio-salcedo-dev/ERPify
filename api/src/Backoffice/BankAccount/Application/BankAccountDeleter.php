@@ -7,6 +7,7 @@ namespace Erpify\Backoffice\BankAccount\Application;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotClosedException;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotFoundException;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
@@ -18,6 +19,7 @@ final readonly class BankAccountDeleter
         private BankAccountFinder $bankAccountFinder,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -36,7 +38,7 @@ final readonly class BankAccountDeleter
     {
         $account = $this->bankAccountFinder->find($id);
 
-        $account->delete();
+        $account->delete($this->clock->now());
 
         // Pull events before removal so the aggregate is still intact when captured.
         $domainEvents = $account->pullDomainEvents();

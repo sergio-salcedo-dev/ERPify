@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother;
 
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 
 final class UserMother
 {
@@ -30,11 +32,13 @@ final class UserMother
         string $email = self::DEFAULT_EMAIL,
         ?HashedPassword $password = null,
         ?array $roles = null,
+        ?DateTimeImmutable $now = null,
     ): User {
         return User::register(
             $id,
             $email,
             $password ?? HashedPassword::fromHash(self::DEFAULT_HASH),
+            $now ?? SuiteInstant::now(),
             ...($roles ?? [Role::AUDIT_READER]),
         );
     }
@@ -49,18 +53,23 @@ final class UserMother
         string $id = self::DEFAULT_ID,
         string $email = self::DEFAULT_EMAIL,
         ?array $roles = null,
+        ?DateTimeImmutable $now = null,
     ): User {
-        return User::invite($id, $email, ...($roles ?? [Role::AUDIT_READER]));
+        return User::invite($id, $email, $now ?? SuiteInstant::now(), ...($roles ?? [Role::AUDIT_READER]));
     }
 
     /**
      * An identity whose invitation was withdrawn before it was accepted: terminal, still credential-less, and
      * the second state the pre-authentication wall has to refuse.
      */
-    public static function revoked(string $id = self::DEFAULT_ID, string $email = self::DEFAULT_EMAIL): User
-    {
-        $user = self::invited($id, $email);
-        $user->revokeInvitation();
+    public static function revoked(
+        string $id = self::DEFAULT_ID,
+        string $email = self::DEFAULT_EMAIL,
+        ?DateTimeImmutable $now = null,
+    ): User {
+        $instant = $now ?? SuiteInstant::now();
+        $user = self::invited($id, $email, now: $instant);
+        $user->revokeInvitation($instant);
         $user->pullDomainEvents();
 
         return $user;

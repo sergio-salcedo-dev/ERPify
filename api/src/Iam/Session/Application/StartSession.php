@@ -41,8 +41,9 @@ final readonly class StartSession
     public function start(string $userId, string $organizationId, string $device, ?string $ip): SessionId
     {
         $sessionId = SessionId::generate();
-        $expiresAt = $this->clock->now()->add(new DateInterval(self::TTL_SPEC));
-        $session = Session::start($sessionId->toString(), $userId, $organizationId, $device, $ip, $expiresAt);
+        $now = $this->clock->now();
+        $expiresAt = $now->add(new DateInterval(self::TTL_SPEC));
+        $session = Session::start($sessionId->toString(), $userId, $organizationId, $device, $ip, $expiresAt, $now);
 
         $this->transactionManager->transactional(function () use ($session): void {
             $this->sessions->save($session);

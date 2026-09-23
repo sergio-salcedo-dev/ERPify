@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Domain\Entity;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -39,7 +40,7 @@ final class UserAdmissionTest extends TestCase
     public function testASuspendedIdentityIsWalledWithItsOwnReason(): void
     {
         $user = UserMother::create();
-        $user->suspend();
+        $user->suspend(SuiteInstant::now());
 
         $this->expectException(AccountSuspended::class);
 
@@ -49,7 +50,7 @@ final class UserAdmissionTest extends TestCase
     public function testADeactivatedIdentityIsWalledWithItsOwnReason(): void
     {
         $user = UserMother::create();
-        $user->deactivate();
+        $user->deactivate(SuiteInstant::now());
 
         $this->expectException(AccountDeactivated::class);
 
@@ -60,7 +61,7 @@ final class UserAdmissionTest extends TestCase
     {
         // Unreachable through the reset flow — a token is only ever minted for an ACTIVE identity and no
         // transition returns to INVITED — but the wall must still refuse it rather than admit by omission.
-        $user = User::invite(UserMother::DEFAULT_ID, UserMother::DEFAULT_EMAIL);
+        $user = User::invite(UserMother::DEFAULT_ID, UserMother::DEFAULT_EMAIL, SuiteInstant::now());
 
         $this->expectException(AccountDeactivated::class);
 

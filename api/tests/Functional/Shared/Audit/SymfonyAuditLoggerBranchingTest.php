@@ -69,8 +69,8 @@ final class SymfonyAuditLoggerBranchingTest extends KernelTestCase
 
             $requestStack->pop();
             // The suite's pinned instant, not the wall clock: this is the one place that writes the
-            // global clock directly, so handing it back the host wall clock would leave the two pinned sources
-            // out of step for the rest of the test.
+            // global clock directly, so handing it back the host wall clock would leave the container's clock
+            // disagreeing with `SuiteInstant` for the rest of the test.
             FreezeSystemClockExtension::pin();
         }
     }

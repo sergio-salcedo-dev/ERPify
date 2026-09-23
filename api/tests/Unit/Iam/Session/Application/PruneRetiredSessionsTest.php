@@ -7,11 +7,9 @@ namespace Erpify\Tests\Unit\Iam\Session\Application;
 use DateTimeImmutable;
 use Erpify\Iam\Session\Application\PruneRetiredSessions;
 use Erpify\Iam\Session\Domain\Entity\Session;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
-use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -34,13 +32,11 @@ final class PruneRetiredSessionsTest extends TestCase
 {
     private const string NOW = '2026-07-10T12:00:00+00:00';
 
-    #[Override]
-    protected function tearDown(): void
-    {
-        // The revocation stamp comes from the ambient clock, so every case sets it; leaving it set would hand
-        // the next test in the process a frozen "now" it never asked for.
-        SystemClock::reset();
-    }
+    /**
+     * Every session starts here, ahead of any revocation or expiry a case places, so no row is revoked or
+     * lapses before it began.
+     */
+    private const string STARTED_OFFSET = '-1 year';
 
     public function testDeletesASessionRevokedBeforeTheRetentionWindow(): void
     {
@@ -118,10 +114,13 @@ final class PruneRetiredSessionsTest extends TestCase
     private function revokedSession(string $revokedOffset, string $expiryOffset = '+1 hour'): Session
     {
         $now = new DateTimeImmutable(self::NOW);
-        $session = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify($expiryOffset));
+        $session = SessionMother::active(
+            id: Uuid::generate(),
+            expiresAt: $now->modify($expiryOffset),
+            startedAt: $now->modify(self::STARTED_OFFSET),
+        );
 
-        SystemClock::set(new FixedClock($now->modify($revokedOffset)));
-        $session->revoke();
+        $session->revoke($now->modify($revokedOffset));
 
         return $session;
     }
@@ -130,7 +129,11 @@ final class PruneRetiredSessionsTest extends TestCase
     {
         $now = new DateTimeImmutable(self::NOW);
 
-        return SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify($expiryOffset));
+        return SessionMother::active(
+            id: Uuid::generate(),
+            expiresAt: $now->modify($expiryOffset),
+            startedAt: $now->modify(self::STARTED_OFFSET),
+        );
     }
 
     private function pruner(InMemorySessionRepository $sessions): PruneRetiredSessions

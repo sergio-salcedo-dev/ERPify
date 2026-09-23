@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Infrastructure;
 
-use Erpify\Shared\Clock\Domain\NativeClock;
 use Erpify\Shared\Images\Application\FailureSignalWindow;
 use Erpify\Shared\Images\Infrastructure\FlysystemImageStorage;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use League\Flysystem\Filesystem;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\Local\LocalFilesystemAdapter;
@@ -39,7 +39,7 @@ final class LocalImageStorages
             $filesystem ?? new Filesystem(new LocalFilesystemAdapter($root, lazyRootCreation: true)),
             $root,
             $logger ?? new RecordingLogger(),
-            new FailureSignalWindow(new NativeClock()),
+            new FailureSignalWindow(SuiteInstant::clock()),
         );
     }
 }

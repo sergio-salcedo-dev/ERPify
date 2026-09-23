@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Iam\Identity;
 
-use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\DriverException;
@@ -30,6 +29,7 @@ use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Override;
@@ -247,10 +247,12 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
      */
     private function seedCommittedSubject(): void
     {
+        $now = SuiteInstant::now();
         $user = User::register(
             $this->subjectId,
             'lock-order-' . $this->subjectId . '@erpify.test',
             HashedPassword::fromHash('hashed-password-placeholder'),
+            $now,
             Role::AUDIT_READER,
         );
         // Drained like the other two fixtures: nothing publishes them today, but a fixture whose job is to
@@ -258,17 +260,18 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
         $user->pullDomainEvents();
         $this->service(UserRepository::class)->save($user);
 
-        $generated = SingleUseToken::mint(new DateTimeImmutable('+1 hour'));
+        $generated = SingleUseToken::mint($now->modify('+1 hour'));
         $invitation = Invitation::create(
             $this->invitationId,
             self::ORGANIZATION_ID,
             $this->subjectId,
             $generated->token,
+            $now,
         );
         $invitation->pullDomainEvents();
         $this->service(InvitationRepository::class)->save($invitation);
 
-        $token = PasswordResetToken::issue($this->resetTokenId, $this->subjectId, $generated->token);
+        $token = PasswordResetToken::issue($this->resetTokenId, $this->subjectId, $generated->token, $now);
         $token->pullDomainEvents();
         $this->service(PasswordResetTokenRepository::class)->save($token);
 

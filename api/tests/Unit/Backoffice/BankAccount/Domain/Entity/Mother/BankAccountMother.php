@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother;
 
+use DateTimeImmutable;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 
 final class BankAccountMother
 {
@@ -23,8 +25,19 @@ final class BankAccountMother
         ?string $alias = null,
         Currency $currency = Currency::EUR,
         BankAccountStatus $status = BankAccountStatus::ACTIVE,
+        ?DateTimeImmutable $now = null,
     ): BankAccount {
-        return BankAccount::create($id, $bankId, $holderName, $iban, $bic, $alias, $currency, $status);
+        return BankAccount::create(
+            $id,
+            $bankId,
+            $holderName,
+            $iban,
+            $now ?? SuiteInstant::now(),
+            $bic,
+            $alias,
+            $currency,
+            $status,
+        );
     }
 
     /**
@@ -40,8 +53,9 @@ final class BankAccountMother
         ?string $alias = null,
         Currency $currency = Currency::EUR,
         BankAccountStatus $status = BankAccountStatus::ACTIVE,
+        ?DateTimeImmutable $now = null,
     ): BankAccount {
-        $account = self::create($id, $bankId, $holderName, $iban, $bic, $alias, $currency, $status);
+        $account = self::create($id, $bankId, $holderName, $iban, $bic, $alias, $currency, $status, $now);
         $account->pullDomainEvents();
 
         return $account;

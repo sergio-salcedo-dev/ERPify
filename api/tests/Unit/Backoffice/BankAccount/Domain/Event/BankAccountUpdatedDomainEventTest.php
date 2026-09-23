@@ -60,8 +60,8 @@ final class BankAccountUpdatedDomainEventTest extends TestCase
         return new BankAccountUpdatedDomainEvent(
             self::ACCOUNT_ID,
             new BankAccountSnapshot(self::BANK_ID, 'INACTIVE', self::OCCURRED_ON, self::OCCURRED_ON),
-            self::EVENT_ID,
             new DateTimeImmutable(self::OCCURRED_ON),
+            self::EVENT_ID,
         );
     }
 }

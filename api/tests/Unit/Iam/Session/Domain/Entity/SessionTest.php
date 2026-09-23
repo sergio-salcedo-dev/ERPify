@@ -10,16 +10,15 @@ use Erpify\Iam\Session\Domain\Enum\SessionStatus;
 use Erpify\Iam\Session\Domain\Event\SessionRevoked;
 use Erpify\Iam\Session\Domain\Event\SessionStarted;
 use Erpify\Iam\Session\Domain\Exception\InvalidSessionTransition;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
-use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 /**
  * The session lifecycle machine: `ACTIVE → REVOKED` (single, terminal) plus the orthogonal temporal-validity
- * predicate. `SystemClock` is frozen for the revocation timestamp; the auto-reset extension restores it.
+ * predicate. Every instant is handed in by the test, so each stamp asserted below is one the test chose.
  *
  * @internal
  */
@@ -28,10 +27,12 @@ final class SessionTest extends TestCase
 {
     public function testStartMintsAnActiveSessionRecordingSessionStarted(): void
     {
+        $startedAt = new DateTimeImmutable('2029-12-25T00:00:00+00:00');
         $expiresAt = new DateTimeImmutable('2030-01-01T00:00:00+00:00');
-        $session = SessionMother::active(expiresAt: $expiresAt);
+        $session = SessionMother::active(expiresAt: $expiresAt, startedAt: $startedAt);
 
         $this->assertSame(SessionStatus::ACTIVE, $session->status());
+        $this->assertSame($startedAt, $session->getCreatedAt());
         $this->assertSame(SessionMother::DEFAULT_USER_ID, $session->userId());
         $this->assertSame(SessionMother::DEFAULT_ORG_ID, $session->organizationId());
         $this->assertSame(SessionMother::DEFAULT_DEVICE, $session->device());
@@ -50,11 +51,10 @@ final class SessionTest extends TestCase
     public function testRevokeMovesActiveToRevokedRecordingSessionRevoked(): void
     {
         $now = new DateTimeImmutable('2026-07-10T09:30:00+00:00');
-        SystemClock::set(new FixedClock($now));
-        $session = SessionMother::active();
+        $session = SessionMother::active(startedAt: $now->modify('-1 hour'));
         $session->pullDomainEvents();
 
-        $session->revoke();
+        $session->revoke($now);
 
         $this->assertSame(SessionStatus::REVOKED, $session->status());
         $this->assertSame($now, $session->revokedAt());
@@ -70,12 +70,13 @@ final class SessionTest extends TestCase
 
     public function testAnAlreadyRevokedSessionRejectsASecondRevokeWithoutFurtherMutation(): void
     {
-        $session = SessionMother::active();
-        $session->revoke();
+        $now = SuiteInstant::now();
+        $session = SessionMother::active(startedAt: $now);
+        $session->revoke($now);
         $session->pullDomainEvents();
 
         try {
-            $session->revoke();
+            $session->revoke($now);
             $this->fail('Expected the terminal transition to reject a second revoke.');
         } catch (InvalidSessionTransition) {
             // the guard runs before the aggregate mutates or records anything
@@ -88,7 +89,7 @@ final class SessionTest extends TestCase
     public function testIsExpiredIsTrueOnceNowReachesTheAbsoluteExpiry(): void
     {
         $expiresAt = new DateTimeImmutable('2026-07-10T10:00:00+00:00');
-        $session = SessionMother::active(expiresAt: $expiresAt);
+        $session = SessionMother::active(expiresAt: $expiresAt, startedAt: $expiresAt->modify('-7 days'));
 
         $this->assertTrue($session->isExpired($expiresAt));
         $this->assertTrue($session->isExpired($expiresAt->modify('+1 second')));
@@ -99,12 +100,12 @@ final class SessionTest extends TestCase
     {
         $expiresAt = new DateTimeImmutable('2026-07-10T10:00:00+00:00');
         $beforeExpiry = $expiresAt->modify('-1 hour');
-        $session = SessionMother::active(expiresAt: $expiresAt);
+        $session = SessionMother::active(expiresAt: $expiresAt, startedAt: $expiresAt->modify('-7 days'));
 
         $this->assertTrue($session->isActive($beforeExpiry));
         $this->assertFalse($session->isActive($expiresAt), 'an expired session is not active even while ACTIVE');
 
-        $session->revoke();
+        $session->revoke($beforeExpiry);
         $this->assertFalse($session->isActive($beforeExpiry), 'a revoked session is not active even before expiry');
     }
 

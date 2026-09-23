@@ -7,7 +7,6 @@ namespace Erpify\Shared\Images\Domain\Entity;
 use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Images\Domain\ImageId;
 use InvalidArgumentException;
 
@@ -53,15 +52,6 @@ final readonly class Image
     #[ORM\Column(type: Types::GUID)]
     private string $id;
 
-    /**
-     * Stored with microsecond precision through the project's own `datetimetz_immutable` type. The
-     * built-in immutable type declares `TIMESTAMP(0)` on PostgreSQL, which would round every value
-     * to the whole second and leave the round-trip test unable to tell a preserved stamp from a
-     * fresh one taken in the same second.
-     */
-    #[ORM\Column(name: 'created_at', type: Types::DATETIMETZ_IMMUTABLE)]
-    private DateTimeImmutable $createdAt;
-
     public function __construct(
         ImageId $id,
         #[ORM\Column(length: self::DIGEST_HEX_LENGTH)]
@@ -74,6 +64,14 @@ final readonly class Image
         private int $height,
         #[ORM\Column(name: 'byte_size', type: Types::INTEGER)]
         private int $byteSize,
+        /**
+         * Stored with microsecond precision through the project's own `datetimetz_immutable` type. The
+         * built-in immutable type declares `TIMESTAMP(0)` on PostgreSQL, which would round every value
+         * to the whole second and leave the round-trip test unable to tell a preserved stamp from a
+         * fresh one taken in the same second.
+         */
+        #[ORM\Column(name: 'created_at', type: Types::DATETIMETZ_IMMUTABLE)]
+        private DateTimeImmutable $createdAt,
     ) {
         // `D` is load-bearing: without it `$` also matches before a trailing newline, so 63 hex digits
         // followed by "\n" are 64 characters that satisfy both halves of this guard.
@@ -98,7 +96,6 @@ final readonly class Image
         }
 
         $this->id = $id->toString();
-        $this->createdAt = SystemClock::now();
     }
 
     public function id(): ImageId

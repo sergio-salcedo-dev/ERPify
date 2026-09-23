@@ -10,6 +10,7 @@ use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\DbalMembershipPersonReferences;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -51,14 +52,14 @@ final class DbalMembershipPersonReferencesTest extends KernelTestCase
         $this->inRolledBackTransaction(function (): void {
             $userId = Uuid::generate();
             $absentUserId = Uuid::generate();
-            $organization = Organization::provision(Uuid::generate(), 'ACME Corp');
+            $organization = Organization::provision(Uuid::generate(), 'ACME Corp', SuiteInstant::now());
             $this->entityManager->persist($organization);
             $this->entityManager->flush();
 
             $organizationId = $organization->getId();
             $this->assertNotNull($organizationId);
             $this->entityManager->persist(
-                Membership::grant(Uuid::generate(), $userId, $organizationId),
+                Membership::grant(Uuid::generate(), $userId, $organizationId, SuiteInstant::now()),
             );
             $this->entityManager->flush();
 

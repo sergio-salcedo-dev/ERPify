@@ -25,7 +25,7 @@ final class PasswordResetTokenTest extends TestCase
     {
         $now = new DateTimeImmutable('2026-07-13T12:00:00+00:00');
         $generated = SingleUseToken::mint($now->modify('+1 hour'));
-        $token = PasswordResetToken::issue(self::TOKEN_ID, self::USER_ID, $generated->token);
+        $token = PasswordResetToken::issue(self::TOKEN_ID, self::USER_ID, $generated->token, $now);
 
         $this->assertTrue($token->verify($generated->plaintext(), $now));
     }
@@ -34,7 +34,7 @@ final class PasswordResetTokenTest extends TestCase
     {
         $now = new DateTimeImmutable('2026-07-13T12:00:00+00:00');
         $generated = SingleUseToken::mint($now->modify('+1 hour'));
-        $token = PasswordResetToken::issue(self::TOKEN_ID, self::USER_ID, $generated->token);
+        $token = PasswordResetToken::issue(self::TOKEN_ID, self::USER_ID, $generated->token, $now);
 
         $this->assertFalse($token->verify('not-the-secret', $now));
     }
@@ -43,7 +43,7 @@ final class PasswordResetTokenTest extends TestCase
     {
         $now = new DateTimeImmutable('2026-07-13T12:00:00+00:00');
         $generated = SingleUseToken::mint($now->modify('+1 hour'));
-        $token = PasswordResetToken::issue(self::TOKEN_ID, self::USER_ID, $generated->token);
+        $token = PasswordResetToken::issue(self::TOKEN_ID, self::USER_ID, $generated->token, $now);
 
         $this->assertFalse($token->verify($generated->plaintext(), $now->modify('+2 hours')));
     }
@@ -52,7 +52,7 @@ final class PasswordResetTokenTest extends TestCase
     {
         $now = new DateTimeImmutable('2026-07-13T12:00:00+00:00');
         $generated = SingleUseToken::mint($now->modify('+1 hour'));
-        $token = PasswordResetToken::issue(self::TOKEN_ID, self::USER_ID, $generated->token);
+        $token = PasswordResetToken::issue(self::TOKEN_ID, self::USER_ID, $generated->token, $now);
 
         $storedHash = (new ReflectionProperty(PasswordResetToken::class, 'tokenHash'))->getValue($token);
 
@@ -67,6 +67,7 @@ final class PasswordResetTokenTest extends TestCase
             self::TOKEN_ID,
             self::USER_ID,
             SingleUseToken::mint(new DateTimeImmutable('2026-07-13T13:00:00+00:00'))->token,
+            new DateTimeImmutable('2026-07-13T12:00:00+00:00'),
         );
 
         $this->assertSame(self::USER_ID, $token->userId());
@@ -78,6 +79,7 @@ final class PasswordResetTokenTest extends TestCase
             self::TOKEN_ID,
             self::USER_ID,
             SingleUseToken::mint(new DateTimeImmutable('2026-07-13T13:00:00+00:00'))->token,
+            new DateTimeImmutable('2026-07-13T12:00:00+00:00'),
         );
 
         $events = $token->pullDomainEvents();

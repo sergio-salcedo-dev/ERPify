@@ -12,8 +12,10 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * Base type for domain events. The contract is hardened for a *reproducible* event store (not event
  * sourcing): an event can be reconstructed from its persisted row without minting new identity.
  *
- * `eventId`/`occurredOn` are injectable so replay, retries and tests preserve historical identity
- * instead of acquiring a fresh one. The canonical key of the store and the mapper is the
+ * `occurredOn` is required: the recorder passes the instant of the operation that produced the fact, so an
+ * event never reads a clock of its own and cannot disagree with the aggregate stamps recorded beside it.
+ * `eventId` is injectable so replay, retries and tests preserve historical identity instead of acquiring a
+ * fresh one. The canonical key of the store and the mapper is the
  * `(eventName, eventVersion)` pair, never the FQCN (refactor-fragile). See
  * docs/adr/event-store-and-projections.md.
  *
@@ -27,15 +29,12 @@ abstract class DomainEvent
 {
     private readonly string $eventId;
 
-    private readonly DateTimeImmutable $occurredOn;
-
     public function __construct(
         private readonly string $aggregateId,
+        private readonly DateTimeImmutable $occurredOn,
         ?string $eventId = null,
-        ?DateTimeImmutable $occurredOn = null,
     ) {
         $this->eventId = $eventId ?? Uuid::generate();
-        $this->occurredOn = $occurredOn ?? new DateTimeImmutable();
     }
 
     /**

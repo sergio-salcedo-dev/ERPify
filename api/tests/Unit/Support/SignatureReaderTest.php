@@ -64,14 +64,14 @@ final class SignatureReaderTest extends TestCase
             final class C {
                 public function a(
                     array $options = ['a', 'b'],
-                    ?Clock $clock = new SystemClock(),
+                    ?Clock $clock = new WallClock(),
                     string $id = '',
                 ): void {}
             }
             PHP);
 
         $this->assertSame(['options', 'clock', 'id'], $signature['parameters']);
-        $this->assertNotContains('SystemClock', $signature['types']);
+        $this->assertNotContains('WallClock', $signature['types']);
     }
 
     #[Test]

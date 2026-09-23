@@ -47,6 +47,6 @@ final class UserDeactivated extends DomainEvent
         string $eventId,
         string $occurredOn,
     ): static {
-        return new self($aggregateId, $eventId, new DateTimeImmutable($occurredOn));
+        return new self($aggregateId, new DateTimeImmutable($occurredOn), $eventId);
     }
 }

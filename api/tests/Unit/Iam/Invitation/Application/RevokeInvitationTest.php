@@ -13,6 +13,7 @@ use Erpify\Iam\Invitation\Domain\Event\InvitationRevoked;
 use Erpify\Iam\Invitation\Domain\Exception\InvitationNotFound;
 use Erpify\Iam\Invitation\Domain\Exception\RevocableInvitationNotFound;
 use Erpify\Shared\Token\Domain\SingleUseToken;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -151,7 +152,7 @@ final class RevokeInvitationTest extends TestCase
         // Terminal invitations are not revocable, so a user holding only spent ones is indistinguishable from
         // one holding none — the console's cue that the row is already in its final state.
         $accepted = $this->sentInvitation();
-        $accepted->accept();
+        $accepted->accept(SuiteInstant::now());
         $accepted->pullDomainEvents();
 
         $invitations = new InMemoryInvitationRepository($accepted);
@@ -172,6 +173,7 @@ final class RevokeInvitationTest extends TestCase
             $this->invitedUserStore(),
             $eventBus,
             $transactions ?? new CountingTransactionManager(),
+            SuiteInstant::clock(),
         );
     }
 
@@ -182,14 +184,14 @@ final class RevokeInvitationTest extends TestCase
      */
     private function invitedUserStore(): InMemoryUserRepository
     {
-        return new InMemoryUserRepository(User::invite(self::USER_ID, 'invitee@erpify.test'));
+        return new InMemoryUserRepository(User::invite(self::USER_ID, 'invitee@erpify.test', SuiteInstant::now()));
     }
 
     private function sentInvitation(string $id = self::INVITATION_ID, string $userId = self::USER_ID): Invitation
     {
         $generated = SingleUseToken::mint(new DateTimeImmutable('2026-07-16T10:00:00+00:00'));
-        $invitation = Invitation::create($id, self::ORG_ID, $userId, $generated->token);
-        $invitation->markSent();
+        $invitation = Invitation::create($id, self::ORG_ID, $userId, $generated->token, SuiteInstant::now());
+        $invitation->markSent(SuiteInstant::now());
         $invitation->pullDomainEvents();
 
         return $invitation;

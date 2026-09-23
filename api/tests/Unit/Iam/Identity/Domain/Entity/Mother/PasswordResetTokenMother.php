@@ -6,9 +6,9 @@ namespace Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother;
 
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 
 /**
  * A pending {@see PasswordResetToken} for tests that need one to exist rather than to exercise how it was
@@ -19,7 +19,7 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 final class PasswordResetTokenMother
 {
     /**
-     * The default window is measured FROM the clock the test is running on, mirroring the `+1 hour` ceiling
+     * The default window is measured FROM the instant the token is issued at, mirroring the `+1 hour` ceiling
      * {@see \Erpify\Iam\Identity\Application\RequestPasswordReset} issues with — which is the only form
      * in which the paragraph above is a statement about duration rather than about a date. Pass `expiresAt`
      * to place the row on either side of the boundary.
@@ -30,16 +30,19 @@ final class PasswordResetTokenMother
         string $userId = UserMother::DEFAULT_ID,
         ?DateTimeImmutable $expiresAt = null,
         ?string $id = null,
+        ?DateTimeImmutable $issuedAt = null,
     ): PasswordResetToken {
         // An instant and not a string, so this parameter cannot be confused with the relative spec beside
         // it: a caller who read `DEFAULT_TTL` and passed `'+2 hours'` would have got a window measured off
-        // the host wall clock, with no error and nothing red.
-        $expiry = $expiresAt ?? SystemClock::now()->modify(self::DEFAULT_TTL);
+        // nothing the test chose, with no error and nothing red.
+        $issued = $issuedAt ?? SuiteInstant::now();
+        $expiry = $expiresAt ?? $issued->modify(self::DEFAULT_TTL);
 
         return PasswordResetToken::issue(
             $id ?? Uuid::generate(),
             $userId,
             SingleUseToken::mint($expiry)->token,
+            $issued,
         );
     }
 }

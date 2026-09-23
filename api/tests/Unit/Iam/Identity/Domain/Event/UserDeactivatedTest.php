@@ -25,7 +25,7 @@ final class UserDeactivatedTest extends TestCase
     #[Test]
     public function itExposesItsStableIdentityAndCarriesNoPayload(): void
     {
-        $event = new UserDeactivated(self::USER_ID, self::EVENT_ID, new DateTimeImmutable(self::OCCURRED_ON));
+        $event = new UserDeactivated(self::USER_ID, new DateTimeImmutable(self::OCCURRED_ON), self::EVENT_ID);
 
         $this->assertSame('erpify.iam.identity.deactivated', $event::eventName());
         $this->assertSame('Iam.Identity', $event::aggregateType());
@@ -37,7 +37,7 @@ final class UserDeactivatedTest extends TestCase
     #[Test]
     public function fromPrimitivesReconstructsAnIdenticalEvent(): void
     {
-        $event = new UserDeactivated(self::USER_ID, self::EVENT_ID, new DateTimeImmutable(self::OCCURRED_ON));
+        $event = new UserDeactivated(self::USER_ID, new DateTimeImmutable(self::OCCURRED_ON), self::EVENT_ID);
 
         $reconstructed = UserDeactivated::fromPrimitives(self::USER_ID, [], self::EVENT_ID, self::OCCURRED_ON);
 

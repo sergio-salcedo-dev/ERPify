@@ -29,6 +29,8 @@ use Psr\Log\NullLogger;
 #[CoversClass(RequestPasswordReset::class)]
 final class RequestPasswordResetTest extends TestCase
 {
+    private const string NOW = '2026-07-13T12:00:00+00:00';
+
     private const string SUPERSEDED_TOKEN_ID = '0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e63';
 
     public function testActiveIdentitySupersedesMintsPersistsAndEmails(): void
@@ -36,7 +38,7 @@ final class RequestPasswordResetTest extends TestCase
         $tokens = new InMemoryPasswordResetTokenRepository();
         $eventBus = new RecordingEventBus();
         $emails = new RecordingPasswordResetEmailSender();
-        $this->useCase(new InMemoryUserRepository(UserMother::create()), $tokens, $eventBus, $emails)
+        $this->useCase(new InMemoryUserRepository(UserMother::create(now: self::now())), $tokens, $eventBus, $emails)
             ->request(UserMother::DEFAULT_EMAIL)
         ;
 
@@ -69,7 +71,9 @@ final class RequestPasswordResetTest extends TestCase
         $tokens = new InMemoryPasswordResetTokenRepository();
         $eventBus = new RecordingEventBus();
         $emails = new RecordingPasswordResetEmailSender();
-        $this->useCase(new InMemoryUserRepository(UserMother::create()), $tokens, $eventBus, $emails)->request('   ');
+        $this->useCase(new InMemoryUserRepository(UserMother::create(now: self::now())), $tokens, $eventBus, $emails)
+            ->request('   ')
+        ;
 
         $this->assertNoWork($tokens, $eventBus, $emails);
     }
@@ -92,13 +96,13 @@ final class RequestPasswordResetTest extends TestCase
      */
     public static function provideNonActiveIdentityTouchesNothingCases(): iterable
     {
-        $suspended = UserMother::create();
-        $suspended->suspend();
+        $suspended = UserMother::create(now: self::now());
+        $suspended->suspend(self::now());
 
-        $deactivated = UserMother::create();
-        $deactivated->deactivate();
+        $deactivated = UserMother::create(now: self::now());
+        $deactivated->deactivate(self::now());
 
-        yield 'invited' => [UserMother::invited()];
+        yield 'invited' => [UserMother::invited(now: self::now())];
         yield 'suspended' => [$suspended];
         yield 'deactivated' => [$deactivated];
     }
@@ -108,7 +112,7 @@ final class RequestPasswordResetTest extends TestCase
         // Single-threaded proof of the mutex's SHAPE: the write path re-acquires the user row under a
         // pessimistic lock inside its transaction, which is what serialises two concurrent forgots into
         // "only the latest token lives". The real interleaving is covered by design, not by this test.
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: self::now()));
         $tokens = new InMemoryPasswordResetTokenRepository();
 
         $this->useCase($users, $tokens, new RecordingEventBus(), new RecordingPasswordResetEmailSender())
@@ -137,7 +141,7 @@ final class RequestPasswordResetTest extends TestCase
         };
 
         $this->useCase(
-            new InMemoryUserRepository(UserMother::create()),
+            new InMemoryUserRepository(UserMother::create(now: self::now())),
             $tokens,
             new RecordingEventBus(),
             new RecordingPasswordResetEmailSender(),
@@ -165,7 +169,7 @@ final class RequestPasswordResetTest extends TestCase
 
     public function testAUserGoneUnderTheLockIssuesAndEmailsNothing(): void
     {
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: self::now()));
         $users->goneUnderLock = true;
 
         $tokens = new InMemoryPasswordResetTokenRepository();
@@ -201,13 +205,13 @@ final class RequestPasswordResetTest extends TestCase
      */
     public static function provideEveryOutcomePaysTheSameTimingFloorSoLatencyDoesNotLeakExistenceCases(): iterable
     {
-        $suspended = UserMother::create();
-        $suspended->suspend();
+        $suspended = UserMother::create(now: self::now());
+        $suspended->suspend(self::now());
 
-        yield 'active (the write path)' => [UserMother::create(), UserMother::DEFAULT_EMAIL];
+        yield 'active (the write path)' => [UserMother::create(now: self::now()), UserMother::DEFAULT_EMAIL];
         yield 'unknown email' => [null, 'nobody@erpify.test'];
         yield 'malformed email' => [null, '   '];
-        yield 'invited' => [UserMother::invited(), UserMother::DEFAULT_EMAIL];
+        yield 'invited' => [UserMother::invited(now: self::now()), UserMother::DEFAULT_EMAIL];
         yield 'suspended' => [$suspended, UserMother::DEFAULT_EMAIL];
     }
 
@@ -221,6 +225,7 @@ final class RequestPasswordResetTest extends TestCase
             self::SUPERSEDED_TOKEN_ID,
             UserMother::DEFAULT_ID,
             SingleUseToken::mint(new DateTimeImmutable('2026-07-13T12:30:00+00:00'))->token,
+            self::now(),
         );
     }
 
@@ -236,7 +241,7 @@ final class RequestPasswordResetTest extends TestCase
             $tokens,
             $eventBus,
             new InlineTransactionManager(),
-            FixedClock::at('2026-07-13T12:00:00+00:00'),
+            FixedClock::at(self::NOW),
             new SendPasswordResetEmailBestEffort($emails, new NullLogger()),
             $floor ?? new CountingPreIdentityTimingFloor(),
         );
@@ -251,5 +256,14 @@ final class RequestPasswordResetTest extends TestCase
         $this->assertSame([], $tokens->deleteAllForUserCalls);
         $this->assertSame([], $eventBus->publishedEvents);
         $this->assertSame([], $emails->sent);
+    }
+
+    /**
+     * The instant the use case runs at, and so the one every identity and token the cases build is stamped
+     * with — static because the data providers build aggregates before any instance exists.
+     */
+    private static function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable(self::NOW);
     }
 }

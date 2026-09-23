@@ -59,7 +59,7 @@ final class InvitationTest extends TestCase
         $invitation = $this->create();
         $invitation->pullDomainEvents();
 
-        $invitation->markSent();
+        $invitation->markSent($this->now());
 
         $this->assertSame(InvitationStatus::SENT, $invitation->status());
         $this->assertRecordedExactly($invitation, InvitationSent::class);
@@ -70,7 +70,7 @@ final class InvitationTest extends TestCase
     {
         $invitation = $this->sent();
 
-        $invitation->accept();
+        $invitation->accept($this->now());
 
         $this->assertSame(InvitationStatus::ACCEPTED, $invitation->status());
         $this->assertRecordedExactly($invitation, InvitationAccepted::class);
@@ -81,7 +81,7 @@ final class InvitationTest extends TestCase
     {
         $invitation = $this->sent();
 
-        $invitation->revoke();
+        $invitation->revoke($this->now());
 
         $this->assertSame(InvitationStatus::REVOKED, $invitation->status());
         $this->assertRecordedExactly($invitation, InvitationRevoked::class);
@@ -92,7 +92,7 @@ final class InvitationTest extends TestCase
     {
         $invitation = $this->sent();
 
-        $invitation->expire();
+        $invitation->expire($this->now());
 
         $this->assertSame(InvitationStatus::EXPIRED, $invitation->status());
         $this->assertRecordedExactly($invitation, InvitationExpired::class);
@@ -102,12 +102,12 @@ final class InvitationTest extends TestCase
     public function itIsResentWithAFreshTokenStayingSentAndInvalidatingTheOld(): void
     {
         $old = SingleUseToken::mint($this->future());
-        $invitation = Invitation::create(self::INVITATION_ID, self::ORG_ID, self::USER_ID, $old->token);
-        $invitation->markSent();
+        $invitation = Invitation::create(self::INVITATION_ID, self::ORG_ID, self::USER_ID, $old->token, $this->now());
+        $invitation->markSent($this->now());
         $invitation->pullDomainEvents();
 
         $fresh = SingleUseToken::mint($this->future());
-        $invitation->resend($fresh->token);
+        $invitation->resend($fresh->token, $this->now());
 
         $this->assertSame(InvitationStatus::SENT, $invitation->status());
         $this->assertFalse($invitation->verify($old->plaintext(), $this->now()));
@@ -119,13 +119,13 @@ final class InvitationTest extends TestCase
     public function itRejectsIllegalTransitions(): void
     {
         $this->assertRejects($this->create(), static function (Invitation $i): void {
-            $i->accept();
+            $i->accept(new DateTimeImmutable(self::NOW));
         });
         $this->assertRejects($this->sent(), static function (Invitation $i): void {
-            $i->markSent();
+            $i->markSent(new DateTimeImmutable(self::NOW));
         });
         $this->assertRejects($this->accepted(), static function (Invitation $i): void {
-            $i->revoke();
+            $i->revoke(new DateTimeImmutable(self::NOW));
         });
     }
 
@@ -133,13 +133,19 @@ final class InvitationTest extends TestCase
     public function verifyIsOpaqueToAWrongSecretAndAnExpiredTtl(): void
     {
         $valid = SingleUseToken::mint($this->future());
-        $invitation = Invitation::create(self::INVITATION_ID, self::ORG_ID, self::USER_ID, $valid->token);
+        $invitation = Invitation::create(self::INVITATION_ID, self::ORG_ID, self::USER_ID, $valid->token, $this->now());
 
         $this->assertTrue($invitation->verify($valid->plaintext(), $this->now()));
         $this->assertFalse($invitation->verify('the-wrong-secret', $this->now()));
 
         $expiredToken = SingleUseToken::mint($this->past());
-        $expiredInvitation = Invitation::create(self::INVITATION_ID, self::ORG_ID, self::USER_ID, $expiredToken->token);
+        $expiredInvitation = Invitation::create(
+            self::INVITATION_ID,
+            self::ORG_ID,
+            self::USER_ID,
+            $expiredToken->token,
+            $this->past(),
+        );
         $this->assertFalse($expiredInvitation->verify($expiredToken->plaintext(), $this->now()));
     }
 
@@ -169,7 +175,7 @@ final class InvitationTest extends TestCase
     private function accepted(): Invitation
     {
         $invitation = $this->sent();
-        $invitation->accept();
+        $invitation->accept($this->now());
         $invitation->pullDomainEvents();
 
         return $invitation;
@@ -177,13 +183,13 @@ final class InvitationTest extends TestCase
 
     private function create(): Invitation
     {
-        return Invitation::create(self::INVITATION_ID, self::ORG_ID, self::USER_ID, $this->mint()->token);
+        return Invitation::create(self::INVITATION_ID, self::ORG_ID, self::USER_ID, $this->mint()->token, $this->now());
     }
 
     private function sent(): Invitation
     {
         $invitation = $this->create();
-        $invitation->markSent();
+        $invitation->markSent($this->now());
         $invitation->pullDomainEvents();
 
         return $invitation;

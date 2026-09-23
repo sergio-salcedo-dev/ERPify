@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Invitation\Application;
 
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Exception\InvitationNotFound;
 use Erpify\Iam\Invitation\Domain\Exception\RevocableInvitationNotFound;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -39,6 +41,7 @@ final readonly class RevokeInvitation
         private UserRepository $users,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -62,8 +65,10 @@ final readonly class RevokeInvitation
             $invitation = $this->invitations->findByIdForUpdate($invitationId)
                 ?? throw new InvitationNotFound($invitationId);
 
-            $this->revokeOne($invitation);
-            $this->withdrawIdentity($invitation->invitedUserId());
+            $now = $this->clock->now();
+
+            $this->revokeOne($invitation, $now);
+            $this->withdrawIdentity($invitation->invitedUserId(), $now);
         });
     }
 
@@ -97,17 +102,19 @@ final readonly class RevokeInvitation
                 throw new RevocableInvitationNotFound($userId);
             }
 
+            $now = $this->clock->now();
+
             foreach ($invitations as $invitation) {
-                $this->revokeOne($invitation);
+                $this->revokeOne($invitation, $now);
             }
 
-            $this->withdrawIdentity($userId);
+            $this->withdrawIdentity($userId, $now);
         });
     }
 
-    private function revokeOne(Invitation $invitation): void
+    private function revokeOne(Invitation $invitation, DateTimeImmutable $now): void
     {
-        $invitation->revoke();
+        $invitation->revoke($now);
 
         $this->invitations->save($invitation);
         $this->eventBus->publish(...$invitation->pullDomainEvents());
@@ -133,7 +140,7 @@ final readonly class RevokeInvitation
      * @throws UserNotFound when the invitations name an identity that no longer exists — a desync no write path
      *                      produces, surfaced rather than swallowed
      */
-    private function withdrawIdentity(string $userId): void
+    private function withdrawIdentity(string $userId, DateTimeImmutable $now): void
     {
         $user = $this->users->findByIdForUpdate($userId) ?? throw UserNotFound::withId($userId);
 
@@ -141,7 +148,7 @@ final readonly class RevokeInvitation
             return;
         }
 
-        $user->revokeInvitation();
+        $user->revokeInvitation($now);
 
         $this->users->save($user);
         $this->eventBus->publish(...$user->pullDomainEvents());

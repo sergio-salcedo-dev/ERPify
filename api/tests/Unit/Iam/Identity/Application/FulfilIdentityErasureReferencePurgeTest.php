@@ -16,6 +16,7 @@ use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
@@ -57,8 +58,8 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
         $memberships->save($this->membershipFor($other));
         // A terminal invitation counts too: its lifecycle state has no bearing on the column being an id.
         $accepted = $this->invitationFor(UserMother::DEFAULT_ID);
-        $accepted->markSent();
-        $accepted->accept();
+        $accepted->markSent(SuiteInstant::now());
+        $accepted->accept(SuiteInstant::now());
 
         $invitations = new InMemoryInvitationRepository(
             $this->invitationFor(UserMother::DEFAULT_ID),
@@ -159,7 +160,7 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
 
     private function membershipFor(string $userId): Membership
     {
-        $membership = Membership::grant(Uuid::generate(), $userId, self::ORGANIZATION_ID);
+        $membership = Membership::grant(Uuid::generate(), $userId, self::ORGANIZATION_ID, SuiteInstant::now());
         $membership->pullDomainEvents();
 
         return $membership;
@@ -168,7 +169,13 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
     private function invitationFor(string $userId): Invitation
     {
         $generated = SingleUseToken::mint(new DateTimeImmutable('2026-07-21T13:00:00+00:00'));
-        $invitation = Invitation::create(Uuid::generate(), self::ORGANIZATION_ID, $userId, $generated->token);
+        $invitation = Invitation::create(
+            Uuid::generate(),
+            self::ORGANIZATION_ID,
+            $userId,
+            $generated->token,
+            SuiteInstant::now(),
+        );
         $invitation->pullDomainEvents();
 
         return $invitation;

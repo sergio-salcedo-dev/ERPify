@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Kernel\Domain\Aggregate;
 
-use Erpify\Shared\Clock\Domain\SystemClock;
+use DateTimeImmutable;
 use Erpify\Shared\Event\Domain\DomainEvent;
 use Erpify\Shared\Kernel\Domain\Entity\Identifiable;
 use Erpify\Shared\Kernel\Domain\Entity\Timestamped;
@@ -22,9 +22,12 @@ abstract class AggregateRoot
     /** @var list<DomainEvent> */
     private array $domainEvents = [];
 
-    protected function __construct()
+    /**
+     * The instant is handed in by the application layer, which reads its injected clock once per
+     * operation: an aggregate never decides what time it is, so its stamps are a function of its inputs.
+     */
+    protected function __construct(DateTimeImmutable $now)
     {
-        $now = SystemClock::now();
         $this->createdAt = $now;
         $this->updatedAt = $now;
     }

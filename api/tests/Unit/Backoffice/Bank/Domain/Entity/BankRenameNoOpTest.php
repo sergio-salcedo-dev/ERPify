@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity;
 
+use DateTimeImmutable;
 use DateTimeInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
-use Erpify\Shared\Clock\Domain\SystemClock;
-use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -19,8 +18,8 @@ use ReflectionProperty;
  * `nameNormalized`, `shortName` — never against the two arguments, so trimming and the accent-folded
  * upper-casing of the short name are applied before anything is compared.
  *
- * Every test moves the clock between storing and renaming, which is what makes an `updatedAt` that
- * should not have moved observable.
+ * Every test renames at a later instant than the one the bank was stored at, which is what makes an
+ * `updatedAt` that should not have moved observable.
  *
  * @internal
  */
@@ -35,18 +34,11 @@ final class BankRenameNoOpTest extends TestCase
 
     private const string SHORT_NAME = 'ACME';
 
-    protected function tearDown(): void
-    {
-        SystemClock::reset();
-
-        parent::tearDown();
-    }
-
     public function testRenameWithTheStoredValuesRecordsNothingAndLeavesUpdatedAtUntouched(): void
     {
         $bank = $this->storedBank();
 
-        $bank->rename(self::NAME, self::SHORT_NAME);
+        $bank->rename(self::NAME, self::SHORT_NAME, $this->renamedAt());
 
         $this->assertNoOp($bank);
     }
@@ -55,7 +47,7 @@ final class BankRenameNoOpTest extends TestCase
     {
         $bank = $this->storedBank();
 
-        $bank->rename('   Acme Savings   ', self::SHORT_NAME);
+        $bank->rename('   Acme Savings   ', self::SHORT_NAME, $this->renamedAt());
 
         $this->assertNoOp($bank);
     }
@@ -64,7 +56,7 @@ final class BankRenameNoOpTest extends TestCase
     {
         $bank = $this->storedBank();
 
-        $bank->rename(self::NAME, 'acmé');
+        $bank->rename(self::NAME, 'acmé', $this->renamedAt());
 
         $this->assertSame(self::SHORT_NAME, $bank->getShortName());
         $this->assertNoOp($bank);
@@ -74,7 +66,7 @@ final class BankRenameNoOpTest extends TestCase
     {
         $bank = $this->storedBank();
 
-        $bank->rename('Acme Renamed', self::SHORT_NAME);
+        $bank->rename('Acme Renamed', self::SHORT_NAME, $this->renamedAt());
 
         $this->assertSame('Acme Renamed', $bank->getName());
         $this->assertSame('acme renamed', $bank->getNameNormalized());
@@ -87,7 +79,7 @@ final class BankRenameNoOpTest extends TestCase
         // what the UI renders, and the stored casing is exactly what the user asked to change.
         $bank = $this->storedBank();
 
-        $bank->rename('ACME SAVINGS', self::SHORT_NAME);
+        $bank->rename('ACME SAVINGS', self::SHORT_NAME, $this->renamedAt());
 
         $this->assertSame('ACME SAVINGS', $bank->getName());
         $this->assertSame('acme savings', $bank->getNameNormalized());
@@ -98,7 +90,7 @@ final class BankRenameNoOpTest extends TestCase
     {
         $bank = $this->storedBank();
 
-        $bank->rename(self::NAME, 'ACME2');
+        $bank->rename(self::NAME, 'ACME2', $this->renamedAt());
 
         $this->assertSame('ACME2', $bank->getShortName());
         $this->assertMutated($bank);
@@ -114,7 +106,7 @@ final class BankRenameNoOpTest extends TestCase
     {
         $bank = $this->storedBank();
 
-        $bank->rename('   Banco Uno   ', 'bú');
+        $bank->rename('   Banco Uno   ', 'bú', $this->renamedAt());
 
         $this->assertSame('Banco Uno', $bank->getName());
         $this->assertSame('banco uno', $bank->getNameNormalized());
@@ -130,21 +122,24 @@ final class BankRenameNoOpTest extends TestCase
         $bank = $this->storedBank();
         (new ReflectionProperty(Bank::class, 'nameNormalized'))->setValue($bank, 'acme-savings');
 
-        $bank->rename(self::NAME, self::SHORT_NAME);
+        $bank->rename(self::NAME, self::SHORT_NAME, $this->renamedAt());
 
         $this->assertSame('acme savings', $bank->getNameNormalized());
         $this->assertMutated($bank);
     }
 
+    private function renamedAt(): DateTimeImmutable
+    {
+        return new DateTimeImmutable(self::RENAMED_AT);
+    }
+
     private function storedBank(): Bank
     {
-        SystemClock::set(FixedClock::at(self::STORED_AT));
-
-        $bank = BankMother::drained(name: self::NAME, shortName: self::SHORT_NAME);
-
-        SystemClock::set(FixedClock::at(self::RENAMED_AT));
-
-        return $bank;
+        return BankMother::drained(
+            name: self::NAME,
+            shortName: self::SHORT_NAME,
+            now: new DateTimeImmutable(self::STORED_AT),
+        );
     }
 
     private function assertNoOp(Bank $bank): void

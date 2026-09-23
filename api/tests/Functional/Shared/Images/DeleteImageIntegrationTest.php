@@ -13,6 +13,7 @@ use Erpify\Shared\Images\Domain\Storage\ImageStorageException;
 use Erpify\Shared\Images\Infrastructure\FlysystemImageStorage;
 use Erpify\Shared\Images\Infrastructure\Persistence\Doctrine\DoctrineImageRepository;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Shared\Images\Infrastructure\LocalImageStorages;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -218,7 +219,7 @@ final class DeleteImageIntegrationTest extends KernelTestCase
         $identifier = ImageId::generate();
         $storage->store($identifier, 'canonical bytes under test');
         (new DoctrineImageRepository($entityManager))->save(
-            new Image($identifier, \str_repeat('a', 64), 'image/png', 24, 24, 512),
+            new Image($identifier, \str_repeat('a', 64), 'image/png', 24, 24, 512, SuiteInstant::now()),
         );
         $entityManager->clear();
 

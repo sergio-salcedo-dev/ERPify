@@ -8,6 +8,7 @@ use Erpify\Backoffice\Bank\Application\BankFinder;
 use Erpify\Backoffice\Bank\Application\BankUpdater;
 use Erpify\Backoffice\Bank\Application\Command\UpdateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -77,6 +78,7 @@ final class BankUpdaterTest extends TestCase
             $eventBus,
             $this->passThroughValidator(),
             $transactions,
+            SuiteInstant::clock(),
         );
     }
 }

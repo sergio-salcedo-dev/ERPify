@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Organization\Membership\Domain\Entity;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -22,7 +23,7 @@ final class MembershipTest extends TestCase
         $userId = Uuid::generate();
         $organizationId = Uuid::generate();
 
-        $membership = Membership::grant($id, $userId, $organizationId);
+        $membership = Membership::grant($id, $userId, $organizationId, SuiteInstant::now());
 
         $this->assertSame($id, $membership->getId());
         $this->assertSame($userId, $membership->userId());
@@ -33,13 +34,13 @@ final class MembershipTest extends TestCase
     {
         $this->expectException(InvalidUuidException::class);
 
-        Membership::grant(Uuid::generate(), 'not-a-uuid', Uuid::generate());
+        Membership::grant(Uuid::generate(), 'not-a-uuid', Uuid::generate(), SuiteInstant::now());
     }
 
     public function testGrantRejectsAMalformedOrganizationId(): void
     {
         $this->expectException(InvalidUuidException::class);
 
-        Membership::grant(Uuid::generate(), Uuid::generate(), 'not-a-uuid');
+        Membership::grant(Uuid::generate(), Uuid::generate(), 'not-a-uuid', SuiteInstant::now());
     }
 }

@@ -193,7 +193,7 @@ final class RedeemRecoverySecretControllerTest extends TestCase
         InMemoryRecoverySecretRepository $secrets,
         int $budget,
     ): RedeemRecoverySecretController {
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: new DateTimeImmutable(self::NOW)));
 
         $useCase = new RedeemRecoverySecret(
             $users,
@@ -205,6 +205,7 @@ final class RedeemRecoverySecretControllerTest extends TestCase
                     new InMemorySessionRepository(),
                     new RecordingEventBus(),
                     new InlineTransactionManager(),
+                    FixedClock::at(self::NOW),
                 ),
                 new NullLogger(),
             ),

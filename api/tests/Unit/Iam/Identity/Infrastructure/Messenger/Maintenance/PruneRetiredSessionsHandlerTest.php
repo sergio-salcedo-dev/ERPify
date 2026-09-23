@@ -8,10 +8,8 @@ use DateTimeImmutable;
 use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\PruneRetiredSessionsHandler;
 use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\PruneRetiredSessionsMessage;
 use Erpify\Iam\Session\Application\PruneRetiredSessions;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
-use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -25,12 +23,6 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(PruneRetiredSessionsHandler::class)]
 final class PruneRetiredSessionsHandlerTest extends TestCase
 {
-    #[Override]
-    protected function tearDown(): void
-    {
-        SystemClock::reset();
-    }
-
     public function testATickRunsTheRetentionSweepExactlyOnce(): void
     {
         $sessions = new InMemorySessionRepository();

@@ -42,7 +42,7 @@ final class CompletePasswordResetTest extends TestCase
 
     public function testResetsClearsTheLockConsumesTheTokenRevokesAllAndEmits(): void
     {
-        $user = UserMother::create();
+        $user = UserMother::create(now: $this->now());
         $this->lock($user);
         $this->assertTrue($user->isLockedAt($this->now()));
 
@@ -91,15 +91,15 @@ final class CompletePasswordResetTest extends TestCase
         $this->assertRejectedWithoutMutating(
             InvalidResetToken::class,
             self::TOKEN_ID . '.' . $secret,
-            UserMother::create(),
+            UserMother::create(now: $this->now()),
             $token,
         );
     }
 
     public function testSuspendedIdentityIsWalledWithoutConsumingTheToken(): void
     {
-        $user = UserMother::create();
-        $user->suspend();
+        $user = UserMother::create(now: $this->now());
+        $user->suspend($this->now());
         $user->pullDomainEvents();
         [$token, $secret] = $this->mintToken(UserMother::DEFAULT_ID);
 
@@ -108,8 +108,8 @@ final class CompletePasswordResetTest extends TestCase
 
     public function testDeactivatedIdentityIsWalledWithoutConsumingTheToken(): void
     {
-        $user = UserMother::create();
-        $user->deactivate();
+        $user = UserMother::create(now: $this->now());
+        $user->deactivate($this->now());
         $user->pullDomainEvents();
         [$token, $secret] = $this->mintToken(UserMother::DEFAULT_ID);
 
@@ -118,7 +118,7 @@ final class CompletePasswordResetTest extends TestCase
 
     public function testTheCompletionRunsUnderTheUserRowLock(): void
     {
-        $user = UserMother::create();
+        $user = UserMother::create(now: $this->now());
         [$token, $secret] = $this->mintToken(UserMother::DEFAULT_ID);
         $users = new InMemoryUserRepository($user);
 
@@ -136,11 +136,12 @@ final class CompletePasswordResetTest extends TestCase
         // The sequential shape of the TOCTOU guard: the status is re-sampled from the locked row, so an
         // admin write landing between the unlocked load and the transaction walls the reset. The real
         // concurrent race is covered by the lock's serialisation, not exercisable in this harness.
-        $user = UserMother::create();
+        $user = UserMother::create(now: $this->now());
         [$token, $secret] = $this->mintToken(UserMother::DEFAULT_ID);
         $users = new InMemoryUserRepository($user);
-        $users->onFindByIdForUpdate = static function () use ($user): void {
-            $user->suspend();
+        $now = $this->now();
+        $users->onFindByIdForUpdate = static function () use ($user, $now): void {
+            $user->suspend($now);
             $user->pullDomainEvents();
         };
         $tokens = new InMemoryPasswordResetTokenRepository($token);
@@ -168,7 +169,7 @@ final class CompletePasswordResetTest extends TestCase
 
     public function testAUserGoneUnderTheLockIsRejectedAsTheUniformInvalidToken(): void
     {
-        $user = UserMother::create();
+        $user = UserMother::create(now: $this->now());
         [$token, $secret] = $this->mintToken(UserMother::DEFAULT_ID);
         $users = new InMemoryUserRepository($user);
         $users->goneUnderLock = true;
@@ -197,7 +198,7 @@ final class CompletePasswordResetTest extends TestCase
         ?User $user = null,
         ?PasswordResetToken $preset = null,
     ): void {
-        $users = new InMemoryUserRepository($user ?? UserMother::create());
+        $users = new InMemoryUserRepository($user ?? UserMother::create(now: $this->now()));
         $tokens = $preset instanceof PasswordResetToken
             ? new InMemoryPasswordResetTokenRepository($preset)
             : new InMemoryPasswordResetTokenRepository();
@@ -265,7 +266,10 @@ final class CompletePasswordResetTest extends TestCase
     {
         $generated = SingleUseToken::mint($this->now()->modify($expiry));
 
-        return [PasswordResetToken::issue(self::TOKEN_ID, $userId, $generated->token), $generated->plaintext()];
+        return [
+            PasswordResetToken::issue(self::TOKEN_ID, $userId, $generated->token, $this->now()),
+            $generated->plaintext(),
+        ];
     }
 
     private function lock(User $user): void

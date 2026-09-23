@@ -14,6 +14,7 @@ use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineLockedIdentityDirectory;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -196,6 +197,7 @@ final class DoctrineLockedIdentityDirectoryTest extends KernelTestCase
             $id,
             \sprintf('locked-%s@erpify.test', $id),
             HashedPassword::fromHash('hashed-' . $id),
+            SuiteInstant::now(),
             Role::AUDIT_READER,
         );
     }

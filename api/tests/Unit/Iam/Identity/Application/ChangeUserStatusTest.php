@@ -13,6 +13,7 @@ use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
 use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -164,7 +165,7 @@ final class ChangeUserStatusTest extends TestCase
         $user = UserMother::create();
         $repository = new InMemoryUserRepository($user);
         $repository->onFindByIdForUpdate = static function () use ($user): void {
-            $user->suspend();
+            $user->suspend(SuiteInstant::now());
             $user->pullDomainEvents();
         };
         $directory = new InMemoryActiveAdministratorDirectory([
@@ -210,6 +211,7 @@ final class ChangeUserStatusTest extends TestCase
             $this->revokeSessions($sessions),
             $eventBus,
             new InlineTransactionManager(),
+            SuiteInstant::clock(),
         );
     }
 

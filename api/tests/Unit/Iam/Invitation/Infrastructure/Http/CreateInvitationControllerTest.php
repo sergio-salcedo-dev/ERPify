@@ -132,17 +132,18 @@ final class CreateInvitationControllerTest extends TestCase
         InMemoryUserRepository $users,
         InMemoryInvitationRepository $invitations,
     ): SendInvitation {
+        $clock = new FixedClock(new DateTimeImmutable(self::NOW));
         $organizations = new InMemoryOrganizationRepository();
-        $organizations->save(Organization::provision(self::ORG_ID, 'ACME'));
+        $organizations->save(Organization::provision(self::ORG_ID, 'ACME', $clock->now()));
 
         return new SendInvitation(
-            new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger()),
-            new GrantMembership(new InMemoryMembershipRepository(), $organizations),
+            new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger(), $clock),
+            new GrantMembership(new InMemoryMembershipRepository(), $organizations, $clock),
             $invitations,
             new SendInvitationEmailBestEffort(new SpyInvitationEmailSender(), new NullLogger()),
             new RecordingEventBus(),
             new InlineTransactionManager(),
-            new FixedClock(new DateTimeImmutable(self::NOW)),
+            $clock,
         );
     }
 

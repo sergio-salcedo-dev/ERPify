@@ -15,6 +15,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\UserChecker;
 use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Functional\ComparesOpaqueRefusals;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
@@ -104,8 +105,11 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
 
         $hash = $this->service(PasswordHasher::class)->hash(self::REGISTERED_PASSWORD);
         $users = $this->service(UserRepository::class);
-        $users->save(User::register($activeId, $this->activeEmail, HashedPassword::fromHash($hash), Role::VIEWER));
-        $users->save(User::invite($invitedId, $this->invitedEmail, Role::VIEWER));
+        $now = SuiteInstant::now();
+        $users->save(
+            User::register($activeId, $this->activeEmail, HashedPassword::fromHash($hash), $now, Role::VIEWER),
+        );
+        $users->save(User::invite($invitedId, $this->invitedEmail, $now, Role::VIEWER));
 
         $this->seededUserIds = [$activeId, $invitedId];
     }

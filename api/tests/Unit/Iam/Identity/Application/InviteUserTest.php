@@ -11,6 +11,7 @@ use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Validation\Application\Validator;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -20,6 +21,9 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the use case's four collaborators each need a double, and the
+ * validator's two Symfony types are the port it is handed
  */
 #[CoversClass(InviteUser::class)]
 final class InviteUserTest extends TestCase
@@ -29,7 +33,7 @@ final class InviteUserTest extends TestCase
     {
         $users = new InMemoryUserRepository();
 
-        $user = (new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger()))
+        $user = (new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger(), SuiteInstant::clock()))
             ->invite('Alice@Erpify.Test', Role::EDITOR)
         ;
 
@@ -45,7 +49,7 @@ final class InviteUserTest extends TestCase
     {
         $users = new InMemoryUserRepository();
 
-        $user = (new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger()))
+        $user = (new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger(), SuiteInstant::clock()))
             ->invite('bob@erpify.test')
         ;
 
@@ -61,7 +65,7 @@ final class InviteUserTest extends TestCase
         // matter of inviting one instead of promoting one.
         $audit = new RecordingAuditLogger();
 
-        $user = (new InviteUser(new InMemoryUserRepository(), $this->passingValidator(), $audit))
+        $user = (new InviteUser(new InMemoryUserRepository(), $this->passingValidator(), $audit, SuiteInstant::clock()))
             ->invite('carol@erpify.test', Role::ADMIN, Role::EDITOR, Role::ADMIN)
         ;
 
@@ -91,7 +95,7 @@ final class InviteUserTest extends TestCase
     {
         $audit = new RecordingAuditLogger();
 
-        (new InviteUser(new InMemoryUserRepository(), $this->passingValidator(), $audit))
+        (new InviteUser(new InMemoryUserRepository(), $this->passingValidator(), $audit, SuiteInstant::clock()))
             ->invite('dora@erpify.test', Role::VIEWER)
         ;
 

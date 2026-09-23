@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Event\Infrastructure\Messenger\Maintenance;
 
 use DateTimeImmutable;
-use DateTimeZone;
+use DateTimeInterface;
 use Erpify\Shared\Event\Application\FailedMessagePruner;
 use Erpify\Shared\Event\Infrastructure\Messenger\Maintenance\PruneFailedMessagesHandler;
 use Erpify\Shared\Event\Infrastructure\Messenger\Maintenance\PruneFailedMessagesMessage;
+use Erpify\Tests\Double\Clock\FixedClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -27,28 +28,34 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(PruneFailedMessagesHandler::class)]
 final class PruneFailedMessagesHandlerTest extends TestCase
 {
-    private const int TOLERANCE_SECONDS = 60;
-
     #[Test]
     public function itPrunesFailedMessagesOlderThanTheRetentionWindow(): void
     {
-        $expected = new DateTimeImmutable('-7 days', new DateTimeZone('UTC'));
+        $captured = null;
 
         $pruner = $this->createMock(FailedMessagePruner::class);
         $pruner->expects($this->once())
             ->method('pruneFailedBefore')
-            ->with($this->callback(fn (mixed $threshold): bool => $this->isAbout($threshold, $expected)))
-            ->willReturn(3)
+            ->willReturnCallback(static function (mixed $threshold) use (&$captured): int {
+                $captured = $threshold;
+
+                return 3;
+            })
         ;
 
-        (new PruneFailedMessagesHandler($pruner))(new PruneFailedMessagesMessage(7));
+        (new PruneFailedMessagesHandler($pruner, FixedClock::at('2050-06-15T12:00:00+00:00')))(
+            new PruneFailedMessagesMessage(7),
+        );
+
+        $this->assertInstanceOf(DateTimeImmutable::class, $captured);
+        $this->assertSame('2050-06-08T12:00:00+00:00', $captured->format(DateTimeInterface::ATOM));
     }
 
     #[Test]
-    public function itBuildsTheThresholdInUtcWhateverZoneTheProcessRunsIn(): void
+    public function itBuildsTheThresholdInUtcWhateverZoneTheClockReadsIn(): void
     {
         // `created_at` is a `timestamp WITHOUT time zone` written in UTC by the transport, and DBAL formats
-        // whatever zone the threshold carries without converting it. A process running in another zone would
+        // whatever zone the threshold carries without converting it. A clock reading in another zone would
         // therefore shift the window by its offset, silently, with every other test still green.
         $captured = null;
 
@@ -62,15 +69,11 @@ final class PruneFailedMessagesHandlerTest extends TestCase
             })
         ;
 
-        (new PruneFailedMessagesHandler($pruner))(new PruneFailedMessagesMessage());
+        (new PruneFailedMessagesHandler($pruner, FixedClock::at('2050-06-15T14:00:00+02:00')))(
+            new PruneFailedMessagesMessage(),
+        );
 
         $this->assertInstanceOf(DateTimeImmutable::class, $captured);
-        $this->assertSame('UTC', $captured->getTimezone()->getName());
-    }
-
-    private function isAbout(mixed $threshold, DateTimeImmutable $expected): bool
-    {
-        return $threshold instanceof DateTimeImmutable
-            && \abs($threshold->getTimestamp() - $expected->getTimestamp()) < self::TOLERANCE_SECONDS;
+        $this->assertSame('2050-05-16T12:00:00+00:00', $captured->format(DateTimeInterface::ATOM));
     }
 }

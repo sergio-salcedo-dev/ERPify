@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Organization\Organization\Infrastructure\Persistence\Doctrine\DoctrineOrganizationRepository;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -47,7 +48,7 @@ final class DoctrineOrganizationRepositoryTest extends KernelTestCase
     public function testSaveThenFindByIdRoundTrips(): void
     {
         $this->inRolledBackTransaction(function (): void {
-            $organization = Organization::provision(Uuid::generate(), 'ACME Corp');
+            $organization = Organization::provision(Uuid::generate(), 'ACME Corp', SuiteInstant::now());
             $id = $organization->getId();
             $this->assertNotNull($id);
 
@@ -65,7 +66,7 @@ final class DoctrineOrganizationRepositoryTest extends KernelTestCase
         $this->inRolledBackTransaction(function (): void {
             $this->assertNotInstanceOf(Organization::class, $this->repository->findTheOne());
 
-            $this->repository->save(Organization::provision(Uuid::generate(), 'ACME Corp'));
+            $this->repository->save(Organization::provision(Uuid::generate(), 'ACME Corp', SuiteInstant::now()));
             $this->entityManager->clear();
 
             $found = $this->repository->findTheOne();

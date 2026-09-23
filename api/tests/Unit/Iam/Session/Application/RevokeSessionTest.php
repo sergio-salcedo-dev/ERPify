@@ -9,7 +9,8 @@ use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Iam\Session\Domain\Enum\SessionStatus;
 use Erpify\Iam\Session\Domain\Event\SessionRevoked;
 use Erpify\Iam\Session\Domain\SessionId;
-use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -22,17 +23,21 @@ final class RevokeSessionTest extends TestCase
 {
     public function testRevokesAnActiveSessionAndPublishesSessionRevoked(): void
     {
-        $session = SessionMother::active();
+        $clock = FixedClock::at('2050-06-15T13:30:00+00:00');
+        $session = SessionMother::active(startedAt: SuiteInstant::now());
         $session->pullDomainEvents();
 
         $sessions = new InMemorySessionRepository($session);
+        $sessions->clock = $clock;
+
         $eventBus = new RecordingEventBus();
-        $revokeSession = new RevokeSession($sessions, $eventBus, new InlineTransactionManager());
+        $revokeSession = new RevokeSession($sessions, $eventBus, new InlineTransactionManager(), $clock);
 
         $revokeSession->revoke(SessionId::fromString(SessionMother::DEFAULT_ID));
 
         $this->assertSame([$session], $sessions->saved);
         $this->assertSame(SessionStatus::REVOKED, $session->status());
+        $this->assertSame($clock->now(), $session->revokedAt());
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(SessionRevoked::class, $eventBus->publishedEvents[0]);
     }
@@ -41,7 +46,7 @@ final class RevokeSessionTest extends TestCase
     {
         $sessions = new InMemorySessionRepository();
         $eventBus = new RecordingEventBus();
-        $revokeSession = new RevokeSession($sessions, $eventBus, new InlineTransactionManager());
+        $revokeSession = new RevokeSession($sessions, $eventBus, new InlineTransactionManager(), SuiteInstant::clock());
 
         $revokeSession->revoke(SessionId::generate());
 
@@ -53,12 +58,16 @@ final class RevokeSessionTest extends TestCase
     {
         // "Expired" is a day behind the clock the predicate reads, not a date on the calendar: an
         // absolute literal makes this case depend on the suite's instant sitting after it.
-        $session = SessionMother::active(expiresAt: SystemClock::now()->sub(new DateInterval('P1D')));
+        $now = SuiteInstant::now();
+        $session = SessionMother::active(
+            expiresAt: $now->sub(new DateInterval('P1D')),
+            startedAt: $now->sub(new DateInterval('P8D')),
+        );
         $session->pullDomainEvents();
 
         $sessions = new InMemorySessionRepository($session);
         $eventBus = new RecordingEventBus();
-        $revokeSession = new RevokeSession($sessions, $eventBus, new InlineTransactionManager());
+        $revokeSession = new RevokeSession($sessions, $eventBus, new InlineTransactionManager(), SuiteInstant::clock());
 
         $revokeSession->revoke(SessionId::fromString(SessionMother::DEFAULT_ID));
 

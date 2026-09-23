@@ -15,6 +15,7 @@ use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Organization\Organization\Domain\Repository\OrganizationRepository;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 
 /**
  * An identity that can complete a REAL credential exchange over HTTP, which
@@ -48,7 +49,7 @@ trait SeedsAnOrganizationMember
         self::assertInstanceOf(OrganizationRepository::class, $organizations);
 
         if (!$organizations->findTheOne() instanceof Organization) {
-            $organizations->save(Organization::provision(Uuid::generate(), 'Functional Member'));
+            $organizations->save(Organization::provision(Uuid::generate(), 'Functional Member', SuiteInstant::now()));
         }
 
         $organization = $organizations->findTheOne();
@@ -67,7 +68,7 @@ trait SeedsAnOrganizationMember
 
         $memberships = $container->get(MembershipRepository::class);
         self::assertInstanceOf(MembershipRepository::class, $memberships);
-        $memberships->save(Membership::grant(Uuid::generate(), $userId, $organizationId));
+        $memberships->save(Membership::grant(Uuid::generate(), $userId, $organizationId, SuiteInstant::now()));
 
         $entityManager->flush();
         $entityManager->clear();

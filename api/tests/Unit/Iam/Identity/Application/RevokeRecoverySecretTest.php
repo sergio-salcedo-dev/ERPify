@@ -14,6 +14,7 @@ use Erpify\Iam\Identity\Domain\Event\RecoverySecretRevoked;
 use Erpify\Iam\Identity\Domain\Exception\InvalidCurrentPassword;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\HashedPassword;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
@@ -42,7 +43,7 @@ final class RevokeRecoverySecretTest extends TestCase
     #[Test]
     public function itRetiresTheRowUnderTheLockAndRecordsTheFact(): void
     {
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: new DateTimeImmutable(self::NOW)));
         $secrets = new InMemoryRecoverySecretRepository($this->secretFor(UserMother::DEFAULT_ID));
         $eventBus = new RecordingEventBus();
         $audit = new RecordingAuditLogger();
@@ -64,7 +65,7 @@ final class RevokeRecoverySecretTest extends TestCase
         // Proving the credential means reading the identity, so this flow holds the same PAIR of locks minting
         // and redemption hold — and a deadlock cycle needs two transactions taking that pair in opposite
         // orders. Taking the user first is what leaves no order to be opposite to.
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: new DateTimeImmutable(self::NOW)));
         $secrets = new InMemoryRecoverySecretRepository($this->secretFor(UserMother::DEFAULT_ID));
         $journal = new LockOrderJournal();
         $users->lockOrderJournal = $journal;
@@ -85,7 +86,7 @@ final class RevokeRecoverySecretTest extends TestCase
         // The whole point of the proof: a stolen session may not spend one request destroying the credential
         // that is its owner's way back in. The row must still be there afterwards, and nothing may be recorded
         // as revoked.
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: new DateTimeImmutable(self::NOW)));
         $secret = $this->secretFor(UserMother::DEFAULT_ID);
         $secrets = new InMemoryRecoverySecretRepository($secret);
         $eventBus = new RecordingEventBus();
@@ -111,7 +112,7 @@ final class RevokeRecoverySecretTest extends TestCase
         // The ORDER is the security property, and it is the same one minting states: answering differently to
         // someone who has not re-proved the credential would turn a stolen session into an oracle over whether
         // a recovery secret exists. The refusal must therefore fire without the secret row ever being read.
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: new DateTimeImmutable(self::NOW)));
         $secrets = new InMemoryRecoverySecretRepository($this->secretFor(UserMother::DEFAULT_ID));
         $journal = new LockOrderJournal();
         $users->lockOrderJournal = $journal;
@@ -136,7 +137,7 @@ final class RevokeRecoverySecretTest extends TestCase
         // Idempotent by construction — the caller has proved their credential by the time this answer is
         // reached, so an empty revocation discloses nothing. The audit row is conditioned on a row actually
         // going: a `security` entry for an act that never happened is a false statement in the trail.
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: new DateTimeImmutable(self::NOW)));
         $secrets = new InMemoryRecoverySecretRepository();
         $eventBus = new RecordingEventBus();
         $audit = new RecordingAuditLogger();
@@ -173,7 +174,7 @@ final class RevokeRecoverySecretTest extends TestCase
     {
         $mine = $this->secretFor(UserMother::DEFAULT_ID);
         $theirs = $this->secretFor('0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a99');
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: new DateTimeImmutable(self::NOW)));
         $secrets = new InMemoryRecoverySecretRepository($mine, $theirs);
 
         $this->useCase($users, $secrets)->revoke(UserMother::DEFAULT_ID, $this->acceptsTheCurrentPassword());
@@ -225,6 +226,7 @@ final class RevokeRecoverySecretTest extends TestCase
             new RecordRecoverySecretAuditBestEffort($audit ?? new RecordingAuditLogger(), new NullLogger()),
             $eventBus ?? new RecordingEventBus(),
             new InlineTransactionManager(),
+            FixedClock::at(self::NOW),
         );
     }
 }

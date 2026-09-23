@@ -42,10 +42,11 @@ final readonly class ResendInvitation
     {
         Uuid::ensure($invitationId);
 
-        $generated = SingleUseToken::mint($this->clock->now()->add(new DateInterval(self::TTL_SPEC)));
+        $now = $this->clock->now();
+        $generated = SingleUseToken::mint($now->add(new DateInterval(self::TTL_SPEC)));
 
         $recipientEmail = $this->transactionManager->transactional(
-            function () use ($invitationId, $generated): string {
+            function () use ($invitationId, $generated, $now): string {
                 $invitation = $this->invitations->findByIdForUpdate($invitationId)
                     ?? throw new InvitationNotFound($invitationId);
 
@@ -60,7 +61,7 @@ final readonly class ResendInvitation
                     throw InvitedIdentityUnavailable::withdrawn();
                 }
 
-                $invitation->resend($generated->token);
+                $invitation->resend($generated->token, $now);
 
                 $this->invitations->save($invitation);
                 $this->eventBus->publish(...$invitation->pullDomainEvents());

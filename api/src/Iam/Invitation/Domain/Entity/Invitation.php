@@ -15,7 +15,6 @@ use Erpify\Iam\Invitation\Domain\Event\InvitationResent;
 use Erpify\Iam\Invitation\Domain\Event\InvitationRevoked;
 use Erpify\Iam\Invitation\Domain\Event\InvitationSent;
 use Erpify\Iam\Invitation\Domain\Exception\InvalidInvitationTransition;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Erpify\Shared\Token\Domain\SingleUseToken;
@@ -62,8 +61,9 @@ final class Invitation extends AggregateRoot
         private DateTimeImmutable $expiresAt,
         #[ORM\Column(enumType: InvitationStatus::class)]
         private InvitationStatus $status,
+        DateTimeImmutable $now,
     ) {
-        parent::__construct();
+        parent::__construct($now);
 
         Uuid::ensure($organizationId);
         Uuid::ensure($invitedUserId);
@@ -82,6 +82,7 @@ final class Invitation extends AggregateRoot
         string $organizationId,
         string $invitedUserId,
         SingleUseToken $token,
+        DateTimeImmutable $now,
     ): self {
         $invitation = new self(
             $id,
@@ -90,8 +91,9 @@ final class Invitation extends AggregateRoot
             $token->toHash(),
             $token->expiresAt(),
             InvitationStatus::CREATED,
+            $now,
         );
-        $invitation->record(new InvitationCreated($invitedUserId, occurredOn: $invitation->getCreatedAt()));
+        $invitation->record(new InvitationCreated($invitedUserId, $invitation->getCreatedAt()));
 
         return $invitation;
     }
@@ -101,10 +103,10 @@ final class Invitation extends AggregateRoot
      *
      * @throws InvalidInvitationTransition when the invitation is not `CREATED`
      */
-    public function markSent(): void
+    public function markSent(DateTimeImmutable $now): void
     {
-        $this->transitionTo(InvitationStatus::SENT, InvitationStatus::CREATED);
-        $this->record(new InvitationSent($this->invitedUserId, occurredOn: $this->updatedAt));
+        $this->transitionTo(InvitationStatus::SENT, InvitationStatus::CREATED, $now);
+        $this->record(new InvitationSent($this->invitedUserId, $this->updatedAt));
     }
 
     /**
@@ -113,10 +115,10 @@ final class Invitation extends AggregateRoot
      *
      * @throws InvalidInvitationTransition when the invitation is not `SENT`
      */
-    public function accept(): void
+    public function accept(DateTimeImmutable $now): void
     {
-        $this->transitionTo(InvitationStatus::ACCEPTED, InvitationStatus::SENT);
-        $this->record(new InvitationAccepted($this->invitedUserId, occurredOn: $this->updatedAt));
+        $this->transitionTo(InvitationStatus::ACCEPTED, InvitationStatus::SENT, $now);
+        $this->record(new InvitationAccepted($this->invitedUserId, $this->updatedAt));
     }
 
     /**
@@ -124,10 +126,10 @@ final class Invitation extends AggregateRoot
      *
      * @throws InvalidInvitationTransition when the invitation is not `SENT`
      */
-    public function revoke(): void
+    public function revoke(DateTimeImmutable $now): void
     {
-        $this->transitionTo(InvitationStatus::REVOKED, InvitationStatus::SENT);
-        $this->record(new InvitationRevoked($this->invitedUserId, occurredOn: $this->updatedAt));
+        $this->transitionTo(InvitationStatus::REVOKED, InvitationStatus::SENT, $now);
+        $this->record(new InvitationRevoked($this->invitedUserId, $this->updatedAt));
     }
 
     /**
@@ -137,10 +139,10 @@ final class Invitation extends AggregateRoot
      *
      * @throws InvalidInvitationTransition when the invitation is not `SENT`
      */
-    public function expire(): void
+    public function expire(DateTimeImmutable $now): void
     {
-        $this->transitionTo(InvitationStatus::EXPIRED, InvitationStatus::SENT);
-        $this->record(new InvitationExpired($this->invitedUserId, occurredOn: $this->updatedAt));
+        $this->transitionTo(InvitationStatus::EXPIRED, InvitationStatus::SENT, $now);
+        $this->record(new InvitationExpired($this->invitedUserId, $this->updatedAt));
     }
 
     /**
@@ -148,7 +150,7 @@ final class Invitation extends AggregateRoot
      *
      * @throws InvalidInvitationTransition when the invitation is not `SENT`
      */
-    public function resend(SingleUseToken $newToken): void
+    public function resend(SingleUseToken $newToken, DateTimeImmutable $now): void
     {
         if (InvitationStatus::SENT !== $this->status) {
             throw InvalidInvitationTransition::from($this->status, InvitationStatus::SENT);
@@ -156,9 +158,9 @@ final class Invitation extends AggregateRoot
 
         $this->tokenHash = $newToken->toHash();
         $this->expiresAt = $newToken->expiresAt();
-        $this->updatedAt = SystemClock::now();
+        $this->updatedAt = $now;
 
-        $this->record(new InvitationResent($this->invitedUserId, occurredOn: $this->updatedAt));
+        $this->record(new InvitationResent($this->invitedUserId, $this->updatedAt));
     }
 
     /**
@@ -189,13 +191,16 @@ final class Invitation extends AggregateRoot
     /**
      * @throws InvalidInvitationTransition when the current status is not the required predecessor
      */
-    private function transitionTo(InvitationStatus $target, InvitationStatus $requiredFrom): void
-    {
+    private function transitionTo(
+        InvitationStatus $target,
+        InvitationStatus $requiredFrom,
+        DateTimeImmutable $now,
+    ): void {
         if ($this->status !== $requiredFrom) {
             throw InvalidInvitationTransition::from($this->status, $target);
         }
 
         $this->status = $target;
-        $this->updatedAt = SystemClock::now();
+        $this->updatedAt = $now;
     }
 }

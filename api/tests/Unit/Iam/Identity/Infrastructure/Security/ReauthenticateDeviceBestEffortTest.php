@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice;
 use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -34,7 +35,7 @@ final class ReauthenticateDeviceBestEffortTest extends TestCase
     public function testARefusedReLoginIsSwallowedAndRecordedAsCritical(): void
     {
         $user = UserMother::create();
-        $user->suspend();
+        $user->suspend(SuiteInstant::now());
 
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->once())->method('critical');

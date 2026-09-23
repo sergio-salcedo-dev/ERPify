@@ -9,6 +9,7 @@ use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Shared\Event\Domain\DomainEvent;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -25,7 +26,7 @@ final class UserChangePasswordTest extends TestCase
         $user = UserMother::create();
         $newHash = HashedPassword::fromHash('new-argon2id-hash');
 
-        $user->changePassword($newHash);
+        $user->changePassword($newHash, SuiteInstant::now());
 
         $this->assertTrue($user->passwordHash()?->equals($newHash));
         $this->assertSame(IdentityStatus::ACTIVE, $user->status());
@@ -35,7 +36,7 @@ final class UserChangePasswordTest extends TestCase
     {
         $user = UserMother::create();
 
-        $user->changePassword(HashedPassword::fromHash('new-argon2id-hash'));
+        $user->changePassword(HashedPassword::fromHash('new-argon2id-hash'), SuiteInstant::now());
 
         $events = $user->pullDomainEvents();
         $this->assertCount(1, $events);
@@ -52,7 +53,7 @@ final class UserChangePasswordTest extends TestCase
     {
         $user = UserMother::create();
 
-        $user->changePassword(HashedPassword::fromHash('new-argon2id-hash'));
+        $user->changePassword(HashedPassword::fromHash('new-argon2id-hash'), SuiteInstant::now());
 
         $names = \array_map(
             static fn (DomainEvent $event): string => $event::eventName(),
@@ -66,7 +67,7 @@ final class UserChangePasswordTest extends TestCase
     {
         $this->expectException(InvalidIdentityTransition::class);
 
-        $user->changePassword(HashedPassword::fromHash('new-argon2id-hash'));
+        $user->changePassword(HashedPassword::fromHash('new-argon2id-hash'), SuiteInstant::now());
     }
 
     /**
@@ -75,10 +76,10 @@ final class UserChangePasswordTest extends TestCase
     public static function provideRejectsChangingANonActiveIdentityCases(): iterable
     {
         $suspended = UserMother::create();
-        $suspended->suspend();
+        $suspended->suspend(SuiteInstant::now());
 
         $deactivated = UserMother::create();
-        $deactivated->deactivate();
+        $deactivated->deactivate(SuiteInstant::now());
 
         yield 'invited' => [UserMother::invited()];
         yield 'suspended' => [$suspended];
@@ -92,11 +93,11 @@ final class UserChangePasswordTest extends TestCase
     public function testARefusedChangeMutatesNothingAndRecordsNothing(): void
     {
         $user = UserMother::create();
-        $user->suspend();
+        $user->suspend(SuiteInstant::now());
         $user->pullDomainEvents();
 
         try {
-            $user->changePassword(HashedPassword::fromHash('new-argon2id-hash'));
+            $user->changePassword(HashedPassword::fromHash('new-argon2id-hash'), SuiteInstant::now());
             $this->fail('Expected ' . InvalidIdentityTransition::class);
         } catch (InvalidIdentityTransition) {
             $this->assertSame(UserMother::DEFAULT_HASH, $user->passwordHash()?->toString());

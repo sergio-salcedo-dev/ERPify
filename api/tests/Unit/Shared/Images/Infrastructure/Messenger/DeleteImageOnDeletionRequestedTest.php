@@ -10,6 +10,7 @@ use Erpify\Shared\Images\Domain\Event\ImageDeletionRequested;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Infrastructure\Messenger\DeleteImageOnDeletionRequested;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Shared\Images\Application\InMemoryImageRepository;
 use Erpify\Tests\Unit\Shared\Images\Application\InMemoryImageStorage;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
@@ -35,13 +36,15 @@ final class DeleteImageOnDeletionRequestedTest extends TestCase
     {
         $storage = new InMemoryImageStorage();
         $repository = new InMemoryImageRepository();
-        $image = new Image(ImageId::generate(), \str_repeat('a', 64), 'image/png', 8, 8, 64);
+        $image = new Image(ImageId::generate(), \str_repeat('a', 64), 'image/png', 8, 8, 64, SuiteInstant::now());
         $storage->store($image->id(), 'canonical bytes');
         $repository->save($image);
 
         $this->assertNotSame([], $storage->objects, 'seed the object before asserting it is gone');
 
-        $this->handlerFor($storage, $repository)(new ImageDeletionRequested($image->id()->toString()));
+        $this->handlerFor($storage, $repository)(
+            new ImageDeletionRequested($image->id()->toString(), SuiteInstant::now()),
+        );
 
         $this->assertSame([], $storage->objects, 'the bytes are gone');
         $this->assertNotInstanceOf(Image::class, $repository->findById($image->id()), 'and so is the row');
@@ -55,7 +58,9 @@ final class DeleteImageOnDeletionRequestedTest extends TestCase
         $storage->store($bystander, 'bytes belonging to somebody else');
 
         try {
-            $this->handlerFor($storage, $repository)(new ImageDeletionRequested('not-an-identifier'));
+            $this->handlerFor($storage, $repository)(
+                new ImageDeletionRequested('not-an-identifier', SuiteInstant::now()),
+            );
             $this->fail('a malformed aggregate id must be refused');
         } catch (InvalidUuidException) {
             $this->addToAssertionCount(1);

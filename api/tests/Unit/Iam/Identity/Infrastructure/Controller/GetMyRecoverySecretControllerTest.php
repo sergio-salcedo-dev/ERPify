@@ -9,8 +9,6 @@ use Erpify\Iam\Identity\Application\Resource\RecoverySecretResource;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Infrastructure\Controller\GetMyRecoverySecretController;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
-use Erpify\Shared\Clock\Domain\SystemClock;
-use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\ResourceResponderBuilder;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
@@ -63,11 +61,10 @@ final class GetMyRecoverySecretControllerTest extends TestCase
         $payload = $this->emit(new InMemoryRecoverySecretRepository($this->secret()));
 
         $this->assertTrue($payload['exists']);
-        // Both instants are pinned to a VALUE, not to a type. `expiresAt` comes from the injected clock, but
-        // `mintedAt` is the aggregate's `createdAt`, taken from the ambient {@see SystemClock} — so asserting
-        // only `assertIsString` here leaves the two slots interchangeable: feeding `expiresAt` into the
-        // `mintedAt` position passes, and the owner reads "Created 2036 / Expires 2036" over a credential
-        // minted today. Freezing the ambient clock is what makes the value assertable at all.
+        // Both instants are pinned to a VALUE, not to a type. `mintedAt` is the aggregate's `createdAt` and
+        // `expiresAt` its TTL away from the same instant, so asserting only `assertIsString` here leaves the
+        // two slots interchangeable: feeding `expiresAt` into the `mintedAt` position passes, and the owner
+        // reads "Created 2036 / Expires 2036" over a credential minted today.
         $this->assertSame(self::NOW, $payload['mintedAt']);
         $this->assertSame(self::LAPSES, $payload['expiresAt']);
     }
@@ -108,11 +105,8 @@ final class GetMyRecoverySecretControllerTest extends TestCase
 
     private function secret(): RecoverySecret
     {
-        // The aggregate stamps its own `createdAt` from the ambient clock, which no constructor argument
-        // reaches; freezing it is what turns `mintedAt` from a type into a value this test can assert.
-        // `FreezeSystemClockExtension` re-pins the suite instant after the case, so nothing leaks into the next one.
-        SystemClock::set(FixedClock::at(self::NOW));
-
+        // The aggregate stamps the instant it is handed as its `createdAt`, which is what turns `mintedAt`
+        // from a type into a value this test can assert.
         $generated = RecoverySecret::mint(UserMother::DEFAULT_ID, new DateTimeImmutable(self::NOW));
         $generated->secret->pullDomainEvents();
 

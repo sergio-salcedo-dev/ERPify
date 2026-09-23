@@ -9,6 +9,7 @@ use Erpify\Shared\Images\Domain\CanonicalImage;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use InvalidArgumentException;
 use Override;
@@ -126,7 +127,13 @@ final class UploadImageStorageAndPersistenceTest extends TestCase
             }
         };
 
-        $image = (new UploadImage(new StubImageProcessor($canonical), $storage, $repository, $probe))->upload('raw');
+        $image = (new UploadImage(
+            new StubImageProcessor($canonical),
+            $storage,
+            $repository,
+            $probe,
+            SuiteInstant::clock(),
+        ))->upload('raw');
 
         $this->assertTrue($probe->storedBeforeTheTransaction);
         $this->assertSame(1, $transactions->committed, 'the row committed');
@@ -147,6 +154,7 @@ final class UploadImageStorageAndPersistenceTest extends TestCase
             $storage,
             $repository ?? new InMemoryImageRepository(),
             new ImmediateTransactionManager(),
+            SuiteInstant::clock(),
         );
     }
 }

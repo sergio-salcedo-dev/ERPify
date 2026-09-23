@@ -11,6 +11,7 @@ use Erpify\Iam\Identity\Domain\Event\UserInvitationRevoked;
 use Erpify\Iam\Identity\Domain\Event\UserSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\HashedPassword;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -26,7 +27,7 @@ final class UserLifecycleTest extends TestCase
 {
     public function testInviteProvisionsAnInvitedIdentityWithoutACredential(): void
     {
-        $user = User::invite(UserMother::DEFAULT_ID, UserMother::DEFAULT_EMAIL);
+        $user = User::invite(UserMother::DEFAULT_ID, UserMother::DEFAULT_EMAIL, SuiteInstant::now());
 
         $this->assertSame(IdentityStatus::INVITED, $user->status());
         $this->assertNotInstanceOf(HashedPassword::class, $user->passwordHash());
@@ -36,7 +37,7 @@ final class UserLifecycleTest extends TestCase
     {
         $password = HashedPassword::fromHash('a-precomputed-hash');
 
-        $user = User::register(UserMother::DEFAULT_ID, UserMother::DEFAULT_EMAIL, $password);
+        $user = User::register(UserMother::DEFAULT_ID, UserMother::DEFAULT_EMAIL, $password, SuiteInstant::now());
 
         $this->assertSame(IdentityStatus::ACTIVE, $user->status());
         $passwordHash = $user->passwordHash();
@@ -49,7 +50,7 @@ final class UserLifecycleTest extends TestCase
         $user = UserMother::invited();
         $password = HashedPassword::fromHash('the-chosen-hash');
 
-        $user->activate($password);
+        $user->activate($password, SuiteInstant::now());
 
         $this->assertSame(IdentityStatus::ACTIVE, $user->status());
         $passwordHash = $user->passwordHash();
@@ -61,7 +62,7 @@ final class UserLifecycleTest extends TestCase
     {
         $this->expectException(InvalidIdentityTransition::class);
 
-        UserMother::create()->activate(HashedPassword::fromHash('another-hash'));
+        UserMother::create()->activate(HashedPassword::fromHash('another-hash'), SuiteInstant::now());
     }
 
     public function testSuspendRaisesTheReversibleWallAndRecordsTheEvent(): void
@@ -69,7 +70,7 @@ final class UserLifecycleTest extends TestCase
         $user = UserMother::create();
         $this->assertSame(IdentityStatus::ACTIVE, $user->status());
 
-        $user->suspend();
+        $user->suspend(SuiteInstant::now());
 
         $this->assertSame(IdentityStatus::SUSPENDED, $user->status());
 
@@ -86,7 +87,7 @@ final class UserLifecycleTest extends TestCase
     {
         $user = UserMother::create();
 
-        $user->deactivate();
+        $user->deactivate(SuiteInstant::now());
 
         $this->assertSame(IdentityStatus::DEACTIVATED, $user->status());
 
@@ -104,7 +105,7 @@ final class UserLifecycleTest extends TestCase
         $user = UserMother::invited();
 
         try {
-            $user->suspend();
+            $user->suspend(SuiteInstant::now());
             $this->fail('Expected suspend() to reject a non-ACTIVE identity.');
         } catch (InvalidIdentityTransition) {
             // the guard runs before the aggregate mutates or records anything
@@ -118,14 +119,14 @@ final class UserLifecycleTest extends TestCase
     {
         $this->expectException(InvalidIdentityTransition::class);
 
-        UserMother::invited()->deactivate();
+        UserMother::invited()->deactivate(SuiteInstant::now());
     }
 
     public function testRevokeInvitationWithdrawsAnIdentityThatNeverActivated(): void
     {
         $user = UserMother::invited();
 
-        $user->revokeInvitation();
+        $user->revokeInvitation(SuiteInstant::now());
 
         $this->assertSame(IdentityStatus::REVOKED, $user->status());
 
@@ -144,6 +145,6 @@ final class UserLifecycleTest extends TestCase
         // ACTIVE would collapse the two and misreport a former member as one who never arrived.
         $this->expectException(InvalidIdentityTransition::class);
 
-        UserMother::create()->revokeInvitation();
+        UserMother::create()->revokeInvitation(SuiteInstant::now());
     }
 }

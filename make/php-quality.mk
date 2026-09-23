@@ -560,6 +560,14 @@ php.lint.stacked-docblock: ## Superseded-docblock gate (a doc comment PHP binds 
 	@$(PHP_TEST) bin/phpunit --filter=StackedDocblockRulesGateTest
 	@$(PHP_TEST) bin/phpunit --filter=StackedDocblockGateTest
 
+# api/src has one time source, the injected Clock port: the application layer reads it once per operation and
+# hands the instant inward. A bare `new DateTimeImmutable()`, `time()`, a relative literal or Symfony's global
+# clock reached statically is a second source whose instant can disagree with that reading -- and nothing else
+# goes red, because a unit test injecting a clock double passes while production stamps a different instant.
+php.lint.wall-clock: ## Wall-clock gate (api/src reads "now" only through the Clock port)
+	@$(PHP_TEST) bin/phpunit --filter=WallClockReadRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=WallClockReadGateTest
+
 ## —— Deptrac (architectural boundaries) ————————————————————————————————————
 
 # Static, AST-aware gate over api/src enforcing three concerns in one ruleset
@@ -595,7 +603,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.wall-clock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -619,7 +627,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.wall-clock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -631,6 +639,6 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary \
         php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference php.lint.project-context php.lint.public-access \
         php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention \
-        php.lint.accepted-risk php.lint.stacked-docblock \
+        php.lint.accepted-risk php.lint.stacked-docblock php.lint.wall-clock \
         php.deptrac php.deptrac.baseline \
         php.quality php.quality.dry-run

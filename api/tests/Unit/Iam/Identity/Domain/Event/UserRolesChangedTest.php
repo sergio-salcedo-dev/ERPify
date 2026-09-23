@@ -30,8 +30,8 @@ final class UserRolesChangedTest extends TestCase
         $event = new UserRolesChanged(
             self::USER_ID,
             [Role::EDITOR, Role::AUDIT_READER],
-            self::EVENT_ID,
             new DateTimeImmutable(self::OCCURRED_ON),
+            self::EVENT_ID,
         );
 
         $this->assertSame('erpify.iam.identity.roles-changed', $event::eventName());

@@ -226,10 +226,8 @@ final class KeysetBaseQueryScopeTest extends KernelTestCase
                 $id,
                 \sprintf('scope bank %d %s', $index, $suffix),
                 \strtoupper(\sprintf('SC%d%s', $index, \substr($suffix, 0, 3))),
+                $base->modify(\sprintf('+%d seconds', $offset)),
             );
-            $createdAt = $base->modify(\sprintf('+%d seconds', $offset));
-            $bank->setCreatedAt($createdAt);
-            $bank->setUpdatedAt($createdAt);
 
             $this->entityManager->persist($bank);
             $ids[] = $id;

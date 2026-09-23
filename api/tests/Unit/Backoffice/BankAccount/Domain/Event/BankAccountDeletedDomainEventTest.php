@@ -60,8 +60,8 @@ final class BankAccountDeletedDomainEventTest extends TestCase
         return new BankAccountDeletedDomainEvent(
             self::ACCOUNT_ID,
             new BankAccountSnapshot(self::BANK_ID, 'CLOSED', self::OCCURRED_ON, self::OCCURRED_ON),
-            self::EVENT_ID,
             new DateTimeImmutable(self::OCCURRED_ON),
+            self::EVENT_ID,
         );
     }
 }

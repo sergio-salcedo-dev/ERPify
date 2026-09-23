@@ -79,7 +79,7 @@ final class UserLockoutNoticeTest extends TestCase
         $staleFrom = $now->sub(new DateInterval('P1D'));
 
         $deactivated = $this->lockedAt($now);
-        $deactivated->deactivate();
+        $deactivated->deactivate($now);
         $this->assertFalse($deactivated->awaitsLockoutNoticeAt($now, $staleFrom));
 
         $recovered = $this->lockedAt($now);

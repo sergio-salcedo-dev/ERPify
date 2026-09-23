@@ -64,8 +64,8 @@ final class PasswordChangedTest extends TestCase
     {
         return new PasswordChanged(
             self::AGGREGATE_ID,
-            self::EVENT_ID,
             new DateTimeImmutable(self::OCCURRED_ON),
+            self::EVENT_ID,
         );
     }
 }

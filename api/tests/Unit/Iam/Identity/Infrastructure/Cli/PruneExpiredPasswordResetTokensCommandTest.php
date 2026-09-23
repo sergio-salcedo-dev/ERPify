@@ -55,6 +55,7 @@ final class PruneExpiredPasswordResetTokensCommandTest extends TestCase
             $id,
             '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b',
             SingleUseToken::mint($expiresAt)->token,
+            new DateTimeImmutable(self::NOW),
         );
     }
 }

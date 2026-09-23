@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Shared\Token\Domain\SingleUseToken;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -87,6 +88,7 @@ final class InMemoryPasswordResetTokenRepositoryContractTest extends TestCase
             $tokenId,
             $userId,
             SingleUseToken::mint(new DateTimeImmutable('2026-07-13T12:30:00+00:00'))->token,
+            SuiteInstant::now(),
         );
     }
 }

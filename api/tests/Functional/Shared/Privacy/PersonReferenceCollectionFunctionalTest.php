@@ -10,6 +10,7 @@ use Erpify\Iam\Identity\Application\ReconcileErasedSubjectReferences;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Support\PersonReferenceKeys;
 use Erpify\Tests\Support\PersonReferences;
 use Override;
@@ -84,7 +85,7 @@ final class PersonReferenceCollectionFunctionalTest extends KernelTestCase
      */
     private function seedMembershipOfAnIdentityThatDoesNotExist(): string
     {
-        $organization = Organization::provision(Uuid::generate(), 'ACME Corp');
+        $organization = Organization::provision(Uuid::generate(), 'ACME Corp', SuiteInstant::now());
         $this->entityManager->persist($organization);
         $this->entityManager->flush();
 
@@ -93,7 +94,7 @@ final class PersonReferenceCollectionFunctionalTest extends KernelTestCase
 
         $orphanId = Uuid::generate();
         $this->entityManager->persist(
-            Membership::grant(Uuid::generate(), $orphanId, $organizationId),
+            Membership::grant(Uuid::generate(), $orphanId, $organizationId, SuiteInstant::now()),
         );
         $this->entityManager->flush();
 

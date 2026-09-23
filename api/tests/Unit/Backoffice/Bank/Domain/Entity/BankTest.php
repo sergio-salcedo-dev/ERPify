@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity;
 
+use DateTimeImmutable;
 use DateTimeInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
-use Erpify\Shared\Clock\Domain\SystemClock;
-use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -23,13 +23,6 @@ use Symfony\Component\Validator\Violation\ConstraintViolationBuilderInterface;
 #[CoversClass(Bank::class)]
 final class BankTest extends TestCase
 {
-    protected function tearDown(): void
-    {
-        SystemClock::reset();
-
-        parent::tearDown();
-    }
-
     public function testCreateRecordsCreatedEventWhoseAggregateIdEqualsTheEntityId(): void
     {
         // Domain-level invariant: the create event's aggregate id is the entity id. Persist-time id
@@ -51,7 +44,7 @@ final class BankTest extends TestCase
     {
         $bank = BankMother::drained();
 
-        $bank->rename('Acme Renamed', 'ACME');
+        $bank->rename('Acme Renamed', 'ACME', SuiteInstant::now());
 
         $events = $bank->pullDomainEvents();
         $this->assertCount(1, $events);
@@ -61,12 +54,11 @@ final class BankTest extends TestCase
         $this->assertSame(BankMother::DEFAULT_ID, $event->aggregateId());
     }
 
-    public function testCreateStampsTimestampsAndEventOccurredOnFromTheAmbientClock(): void
+    public function testCreateStampsTimestampsAndEventOccurredOnWithTheInstantItWasGiven(): void
     {
         $instant = '2026-06-14T09:30:00+00:00';
-        SystemClock::set(FixedClock::at($instant));
 
-        $bank = BankMother::create();
+        $bank = BankMother::create(now: new DateTimeImmutable($instant));
 
         $this->assertSame($instant, $bank->getCreatedAt()->format(DateTimeInterface::ATOM));
         $this->assertSame($instant, $bank->getUpdatedAt()->format(DateTimeInterface::ATOM));
@@ -78,16 +70,14 @@ final class BankTest extends TestCase
         $this->assertSame($instant, $event->occurredOn()->format(DateTimeInterface::ATOM));
     }
 
-    public function testRenameStampsUpdatedAtAndEventOccurredOnFromTheAmbientClock(): void
+    public function testRenameStampsUpdatedAtAndEventOccurredOnWithTheInstantItWasGiven(): void
     {
         $createdAt = '2026-06-14T09:30:00+00:00';
         $renamedAt = '2026-06-15T11:00:00+00:00';
 
-        SystemClock::set(FixedClock::at($createdAt));
-        $bank = BankMother::drained();
+        $bank = BankMother::drained(now: new DateTimeImmutable($createdAt));
 
-        SystemClock::set(FixedClock::at($renamedAt));
-        $bank->rename('Acme Renamed', 'ACME');
+        $bank->rename('Acme Renamed', 'ACME', new DateTimeImmutable($renamedAt));
 
         $this->assertSame($createdAt, $bank->getCreatedAt()->format(DateTimeInterface::ATOM));
         $this->assertSame($renamedAt, $bank->getUpdatedAt()->format(DateTimeInterface::ATOM));
@@ -112,7 +102,7 @@ final class BankTest extends TestCase
     {
         $bank = BankMother::drained();
 
-        $bank->delete();
+        $bank->delete(SuiteInstant::now());
 
         $events = $bank->pullDomainEvents();
         $this->assertCount(1, $events);

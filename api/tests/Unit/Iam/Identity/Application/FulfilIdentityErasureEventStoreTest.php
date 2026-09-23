@@ -14,6 +14,7 @@ use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
 use Erpify\Shared\Token\Domain\SingleUseToken;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
@@ -140,6 +141,6 @@ final class FulfilIdentityErasureEventStoreTest extends TestCase
     {
         $generated = SingleUseToken::mint(new DateTimeImmutable('2026-07-14T13:00:00+00:00'));
 
-        return PasswordResetToken::issue(self::TOKEN_ID, $userId, $generated->token);
+        return PasswordResetToken::issue(self::TOKEN_ID, $userId, $generated->token, SuiteInstant::now());
     }
 }

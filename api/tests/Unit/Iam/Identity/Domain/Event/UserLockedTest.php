@@ -74,8 +74,8 @@ final class UserLockedTest extends TestCase
         return new UserLocked(
             self::USER_ID,
             new DateTimeImmutable(self::LOCKED_UNTIL),
-            self::EVENT_ID,
             new DateTimeImmutable(self::OCCURRED_ON),
+            self::EVENT_ID,
         );
     }
 }

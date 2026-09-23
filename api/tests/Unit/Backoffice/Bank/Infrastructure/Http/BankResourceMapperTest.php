@@ -117,10 +117,12 @@ final class BankResourceMapperTest extends TestCase
 
     private function pinnedBank(): Bank
     {
-        return Bank::create(self::BANK_ID, 'JPMorgan Chase', 'JPM')
-            ->setCreatedAt(new DateTimeImmutable(self::CREATED_AT))
-            ->setUpdatedAt(new DateTimeImmutable(self::UPDATED_AT))
-        ;
+        // A real rename is what moves `updatedAt` off `createdAt`, so the bank is created under an
+        // earlier name and renamed to the pinned one at the later instant.
+        $bank = Bank::create(self::BANK_ID, 'JPMorgan', 'JPM', new DateTimeImmutable(self::CREATED_AT));
+        $bank->rename('JPMorgan Chase', 'JPM', new DateTimeImmutable(self::UPDATED_AT));
+
+        return $bank;
     }
 
     private function mapper(): BankResourceMapper

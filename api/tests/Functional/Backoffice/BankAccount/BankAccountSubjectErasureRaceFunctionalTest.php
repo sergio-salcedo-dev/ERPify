@@ -17,6 +17,7 @@ use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -208,11 +209,19 @@ final class BankAccountSubjectErasureRaceFunctionalTest extends KernelTestCase
         $connection->beginTransaction();
 
         try {
-            $entityManager->persist(Bank::create($this->bankId, 'Bank ' . $this->bankId, 'BNK' . $token));
+            $entityManager->persist(
+                Bank::create($this->bankId, 'Bank ' . $this->bankId, 'BNK' . $token, SuiteInstant::now()),
+            );
             $entityManager->flush();
 
             $entityManager->persist(
-                BankAccount::create($this->accountId, $this->bankId, 'Juan Pérez', $this->unusedIban()),
+                BankAccount::create(
+                    $this->accountId,
+                    $this->bankId,
+                    'Juan Pérez',
+                    $this->unusedIban(),
+                    SuiteInstant::now(),
+                ),
             );
             $entityManager->flush();
             $connection->commit();

@@ -8,6 +8,7 @@ use Erpify\Iam\Identity\Application\CreateUser;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Validation\Application\Validator;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\ConstraintViolationList;
@@ -22,7 +23,7 @@ final class CreateUserTest extends TestCase
     public function testRegistersAndPersistsTheUser(): void
     {
         $users = new InMemoryUserRepository();
-        $creator = new CreateUser($users, $this->passingValidator());
+        $creator = new CreateUser($users, $this->passingValidator(), SuiteInstant::clock());
 
         $user = $creator->create(
             'Alice@Erpify.Test',
@@ -38,7 +39,7 @@ final class CreateUserTest extends TestCase
     public function testAllowsARolelessUser(): void
     {
         $users = new InMemoryUserRepository();
-        $creator = new CreateUser($users, $this->passingValidator());
+        $creator = new CreateUser($users, $this->passingValidator(), SuiteInstant::clock());
 
         $user = $creator->create('bob@erpify.test', HashedPassword::fromHash('another-hash'));
 

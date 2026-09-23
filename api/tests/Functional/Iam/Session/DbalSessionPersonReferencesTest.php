@@ -10,6 +10,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Infrastructure\Persistence\Doctrine\DbalSessionPersonReferences;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -78,6 +79,7 @@ final class DbalSessionPersonReferencesTest extends KernelTestCase
             'functional-test',
             '127.0.0.1',
             new DateTimeImmutable('2020-01-01T00:00:00+00:00'),
+            SuiteInstant::now(),
         ));
         $this->entityManager->flush();
     }

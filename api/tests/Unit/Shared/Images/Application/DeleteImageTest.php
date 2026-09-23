@@ -9,6 +9,7 @@ use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Storage\ImageStorageUnavailable;
 use Erpify\Shared\Images\Domain\Storage\StorageOperation;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -63,7 +64,7 @@ final class DeleteImageTest extends TestCase
     public function testWithOnlyTheRowLeftTheRedeliveryClosesThePair(): void
     {
         [$storage, $repository, $deleteImage] = $this->deleteImage();
-        $image = new Image(ImageId::generate(), \str_repeat('c', 64), 'image/png', 2, 2, 8);
+        $image = new Image(ImageId::generate(), \str_repeat('c', 64), 'image/png', 2, 2, 8, SuiteInstant::now());
         $repository->save($image);
 
         $deleteImage->delete($image->id());
@@ -118,7 +119,7 @@ final class DeleteImageTest extends TestCase
     public function testAStorageFailureLeavesTheRowIntactSoTheRequestStaysRetryable(): void
     {
         $repository = new InMemoryImageRepository();
-        $image = new Image(ImageId::generate(), \str_repeat('a', 64), 'image/png', 4, 4, 16);
+        $image = new Image(ImageId::generate(), \str_repeat('a', 64), 'image/png', 4, 4, 16, SuiteInstant::now());
         $repository->save($image);
 
         $deleteImage = new DeleteImage(
@@ -143,7 +144,7 @@ final class DeleteImageTest extends TestCase
 
     private function storedImage(InMemoryImageStorage $storage, InMemoryImageRepository $repository): Image
     {
-        $image = new Image(ImageId::generate(), \str_repeat('b', 64), 'image/webp', 8, 8, 64);
+        $image = new Image(ImageId::generate(), \str_repeat('b', 64), 'image/webp', 8, 8, 64, SuiteInstant::now());
         $storage->store($image->id(), 'canonical bytes');
         $repository->save($image);
 

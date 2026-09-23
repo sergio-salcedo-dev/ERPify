@@ -22,10 +22,10 @@ final class BankAccountStatusChangedDomainEvent extends DomainEvent
         private readonly string $bankId,
         private readonly string $fromStatus,
         private readonly string $toStatus,
+        DateTimeImmutable $occurredOn,
         ?string $eventId = null,
-        ?DateTimeImmutable $occurredOn = null,
     ) {
-        parent::__construct($aggregateId, $eventId, $occurredOn);
+        parent::__construct($aggregateId, $occurredOn, $eventId);
     }
 
     #[Override]
@@ -87,8 +87,8 @@ final class BankAccountStatusChangedDomainEvent extends DomainEvent
             self::stringField($body, 'bankId'),
             self::stringField($body, 'fromStatus'),
             self::stringField($body, 'toStatus'),
-            $eventId,
             new DateTimeImmutable($occurredOn),
+            $eventId,
         );
     }
 

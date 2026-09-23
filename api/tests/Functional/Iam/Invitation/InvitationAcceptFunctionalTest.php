@@ -82,7 +82,9 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
         $this->truncate();
 
         $this->organizationId = Uuid::generate();
-        $this->service(OrganizationRepository::class)->save(Organization::provision($this->organizationId, 'ACME'));
+        $this->service(OrganizationRepository::class)->save(
+            Organization::provision($this->organizationId, 'ACME', $this->service(Clock::class)->now()),
+        );
     }
 
     protected function tearDown(): void
@@ -207,18 +209,18 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
         // UUIDv7 shares a timestamp prefix between close-in-time mints, so the whole id (dashes stripped) is the
         // only collision-free local part when a single test seeds several invitees.
         $email = \sprintf('invitee-%s@erpify.test', \str_replace('-', '', $userId));
+        // Seeded on the clock the acceptance use case reads, so every stamp agrees with the request's instant.
+        $now = $this->service(Clock::class)->now();
 
-        $this->service(UserRepository::class)->save(User::invite($userId, $email, Role::VIEWER));
+        $this->service(UserRepository::class)->save(User::invite($userId, $email, $now, Role::VIEWER));
         $this->service(MembershipRepository::class)->save(
-            Membership::grant(Uuid::generate(), $userId, $this->organizationId),
+            Membership::grant(Uuid::generate(), $userId, $this->organizationId, $now),
         );
 
-        $generated = SingleUseToken::mint(
-            $expiresAt ?? $this->service(Clock::class)->now()->add(new DateInterval('P3D')),
-        );
+        $generated = SingleUseToken::mint($expiresAt ?? $now->add(new DateInterval('P3D')));
         $invitationId = Uuid::generate();
-        $invitation = Invitation::create($invitationId, $this->organizationId, $userId, $generated->token);
-        $invitation->markSent();
+        $invitation = Invitation::create($invitationId, $this->organizationId, $userId, $generated->token, $now);
+        $invitation->markSent($now);
         $invitation->pullDomainEvents();
         $this->service(InvitationRepository::class)->save($invitation);
 
@@ -274,7 +276,7 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
         $invitation = $invitations->findById($invitationId);
         $this->assertInstanceOf(Invitation::class, $invitation);
 
-        $invitation->revoke();
+        $invitation->revoke($this->service(Clock::class)->now());
         $invitation->pullDomainEvents();
 
         $invitations->save($invitation);

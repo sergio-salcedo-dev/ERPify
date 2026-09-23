@@ -9,6 +9,7 @@ use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Infrastructure\Controller\BankAccountIbanLookupController;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
@@ -91,7 +92,7 @@ final class BankAccountIbanLookupFunctionalTest extends WebTestCase
     {
         $entityManager = $this->entityManager();
         $bankId = Uuid::v7()->toRfc4122();
-        $entityManager->persist(Bank::create($bankId, 'JPMorgan Chase', 'JPM'));
+        $entityManager->persist(Bank::create($bankId, 'JPMorgan Chase', 'JPM', SuiteInstant::now()));
         $entityManager->flush();
 
         $entityManager->persist(BankAccount::create(
@@ -99,6 +100,7 @@ final class BankAccountIbanLookupFunctionalTest extends WebTestCase
             $bankId,
             'Globex Corporation',
             self::MATCHING_IBAN,
+            SuiteInstant::now(),
             null,
             null,
             Currency::EUR,

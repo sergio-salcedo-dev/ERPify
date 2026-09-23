@@ -6,6 +6,7 @@ namespace Erpify\Tests\Functional\Backoffice\Bank\Infrastructure\Controller;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
@@ -53,7 +54,9 @@ final class BankSearchCursorFunctionalTest extends WebTestCase
         // 30 banks with zero-padded names so `sort=name` is a deterministic 01..30 sequence.
         for ($i = 1; $i <= self::DATASET_SIZE; ++$i) {
             $label = \str_pad((string) $i, 2, '0', STR_PAD_LEFT);
-            $entityManager->persist(Bank::create(Uuid::v7()->toRfc4122(), 'Bank ' . $label, 'BNK' . $label));
+            $entityManager->persist(
+                Bank::create(Uuid::v7()->toRfc4122(), 'Bank ' . $label, 'BNK' . $label, SuiteInstant::now()),
+            );
         }
 
         $entityManager->flush();

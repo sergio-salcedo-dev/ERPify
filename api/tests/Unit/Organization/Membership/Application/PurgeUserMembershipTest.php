@@ -8,6 +8,7 @@ use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -61,7 +62,7 @@ final class PurgeUserMembershipTest extends TestCase
 
     private function membershipFor(string $userId): Membership
     {
-        $membership = Membership::grant(Uuid::generate(), $userId, self::ORGANIZATION_ID);
+        $membership = Membership::grant(Uuid::generate(), $userId, self::ORGANIZATION_ID, SuiteInstant::now());
         $membership->pullDomainEvents();
 
         return $membership;

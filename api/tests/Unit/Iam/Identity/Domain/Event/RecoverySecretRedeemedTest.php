@@ -27,7 +27,7 @@ final class RecoverySecretRedeemedTest extends TestCase
     {
         // The aggregate id is the USER, never the selector: the selector is the row's primary key and
         // therefore a denial capability, and `event_store` has no TTL and no erasure owner.
-        $event = new RecoverySecretRedeemed(self::USER_ID, self::EVENT_ID, new DateTimeImmutable(self::OCCURRED_ON));
+        $event = new RecoverySecretRedeemed(self::USER_ID, new DateTimeImmutable(self::OCCURRED_ON), self::EVENT_ID);
 
         $this->assertSame('erpify.iam.identity.recovery-secret-redeemed', $event::eventName());
         $this->assertSame('Iam.Identity', $event::aggregateType());
@@ -39,7 +39,7 @@ final class RecoverySecretRedeemedTest extends TestCase
     #[Test]
     public function fromPrimitivesReconstructsAnIdenticalEvent(): void
     {
-        $event = new RecoverySecretRedeemed(self::USER_ID, self::EVENT_ID, new DateTimeImmutable(self::OCCURRED_ON));
+        $event = new RecoverySecretRedeemed(self::USER_ID, new DateTimeImmutable(self::OCCURRED_ON), self::EVENT_ID);
 
         $reconstructed = RecoverySecretRedeemed::fromPrimitives(self::USER_ID, [], self::EVENT_ID, self::OCCURRED_ON);
 

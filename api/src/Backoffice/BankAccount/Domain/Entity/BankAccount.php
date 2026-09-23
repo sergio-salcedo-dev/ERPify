@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\BankAccount\Domain\Entity;
 
+use DateTimeImmutable;
 use DateTimeInterface;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
@@ -18,7 +19,6 @@ use Erpify\Backoffice\BankAccount\Domain\Iban;
 use Erpify\Shared\Audit\Domain\AuditedEntity;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Domain\AuditWriteOperation;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
 use Erpify\Shared\Privacy\Domain\PersonalData;
@@ -92,8 +92,9 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         #[ORM\Column(type: Types::TEXT, enumType: BankAccountStatus::class)]
         #[EnumType(BankAccountStatus::class)]
         private BankAccountStatus $status,
+        DateTimeImmutable $now,
     ) {
-        parent::__construct();
+        parent::__construct($now);
 
         $this->id = $id;
     }
@@ -103,6 +104,7 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         string $bankId,
         string $holderName,
         string $iban,
+        DateTimeImmutable $now,
         ?string $bic = null,
         ?string $alias = null,
         Currency $currency = Currency::EUR,
@@ -119,12 +121,12 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
             $alias,
             $currency,
             $status,
+            $now,
         );
 
         $account->record(new BankAccountCreatedDomainEvent(
             $id,
             $account->snapshot($account->createdAt->format(DateTimeInterface::ATOM)),
-            null,
             $account->createdAt,
         ));
 
@@ -144,6 +146,7 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         ?string $bic,
         ?string $alias,
         Currency $currency,
+        DateTimeImmutable $now,
     ): void {
         $canonicalIban = self::canonicalizeIban($iban);
         $canonicalBic = self::canonicalizeBic($bic);
@@ -158,13 +161,11 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         $this->alias = $alias;
         $this->currency = $currency;
 
-        $now = SystemClock::now();
         $this->updatedAt = $now;
 
         $this->record(new BankAccountUpdatedDomainEvent(
             $this->id(),
             $this->snapshot($now->format(DateTimeInterface::ATOM)),
-            null,
             $now,
         ));
     }
@@ -172,7 +173,7 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
     /**
      * @throws BankAccountNotClosedException when the account is not in the terminal CLOSED state
      */
-    public function delete(): void
+    public function delete(DateTimeImmutable $now): void
     {
         if (BankAccountStatus::CLOSED !== $this->status) {
             throw BankAccountNotClosedException::withId($this->id());
@@ -181,8 +182,7 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         $this->record(new BankAccountDeletedDomainEvent(
             $this->id(),
             $this->snapshot($this->updatedAt->format(DateTimeInterface::ATOM)),
-            null,
-            SystemClock::now(),
+            $now,
         ));
     }
 
@@ -192,7 +192,7 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
      * idempotent. Records a dedicated {@see BankAccountStatusChangedDomainEvent} carrying the from/to
      * pair, distinct from a descriptive {@see update()}.
      */
-    public function changeStatus(BankAccountStatus $newStatus): void
+    public function changeStatus(BankAccountStatus $newStatus, DateTimeImmutable $now): void
     {
         if ($newStatus === $this->status) {
             return;
@@ -200,14 +200,13 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
 
         $previousStatus = $this->status;
         $this->status = $newStatus;
-        $this->updatedAt = SystemClock::now();
+        $this->updatedAt = $now;
 
         $this->record(new BankAccountStatusChangedDomainEvent(
             $this->id(),
             $this->bankId,
             $previousStatus->value,
             $newStatus->value,
-            null,
             $this->updatedAt,
         ));
     }

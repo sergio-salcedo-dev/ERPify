@@ -7,7 +7,6 @@ namespace Erpify\Tests\Unit\Iam\Session\Application;
 use DateTimeImmutable;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\SessionId;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
@@ -31,9 +30,11 @@ final class InMemorySessionRepositoryContractTest extends TestCase
 
     public function testASavedSessionIsVisibleToASubsequentRead(): void
     {
-        SystemClock::set(new FixedClock(new DateTimeImmutable(self::NOW)));
+        $now = new DateTimeImmutable(self::NOW);
         $sessions = new InMemorySessionRepository();
-        $session = SessionMother::active();
+        $sessions->clock = new FixedClock($now);
+
+        $session = SessionMother::active(startedAt: $now);
 
         $sessions->save($session);
 
@@ -43,20 +44,25 @@ final class InMemorySessionRepositoryContractTest extends TestCase
     public function testFindByUserIdReturnsOnlyTheUsersAdmissibleSessions(): void
     {
         $now = new DateTimeImmutable(self::NOW);
-        SystemClock::set(new FixedClock($now));
 
-        $admissible = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
-        $lapsed = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('-1 hour'));
-        $revoked = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
-        $revoked->revoke();
+        $admissible = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'), startedAt: $now);
+        $lapsed = SessionMother::active(
+            id: Uuid::generate(),
+            expiresAt: $now->modify('-1 hour'),
+            startedAt: $now->modify('-2 hours'),
+        );
+        $revoked = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'), startedAt: $now);
+        $revoked->revoke($now);
 
         $otherUser = SessionMother::active(
             id: Uuid::generate(),
             userId: Uuid::generate(),
             expiresAt: $now->modify('+1 hour'),
+            startedAt: $now,
         );
 
         $sessions = new InMemorySessionRepository($admissible, $lapsed, $revoked, $otherUser);
+        $sessions->clock = new FixedClock($now);
 
         $this->assertSame([$admissible], $sessions->findByUserId(SessionMother::DEFAULT_USER_ID));
     }
@@ -64,20 +70,28 @@ final class InMemorySessionRepositoryContractTest extends TestCase
     public function testFindByUserIdListsTheUsersSessionsNewestFirst(): void
     {
         $now = new DateTimeImmutable(self::NOW);
-        SystemClock::set(new FixedClock($now));
+        $expiresAt = $now->modify('+1 hour');
 
-        $oldest = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
-        $oldest->setCreatedAt($now->modify('-3 days'));
-
-        $newest = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
-        $newest->setCreatedAt($now->modify('-1 day'));
-
-        $middle = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
-        $middle->setCreatedAt($now->modify('-2 days'));
+        $oldest = SessionMother::active(
+            id: Uuid::generate(),
+            expiresAt: $expiresAt,
+            startedAt: $now->modify('-3 days'),
+        );
+        $newest = SessionMother::active(
+            id: Uuid::generate(),
+            expiresAt: $expiresAt,
+            startedAt: $now->modify('-1 day'),
+        );
+        $middle = SessionMother::active(
+            id: Uuid::generate(),
+            expiresAt: $expiresAt,
+            startedAt: $now->modify('-2 days'),
+        );
 
         // Preset in an order matching neither the expectation nor its reverse, so answering in insertion
         // order cannot pass by coincidence.
         $sessions = new InMemorySessionRepository($oldest, $newest, $middle);
+        $sessions->clock = new FixedClock($now);
 
         $this->assertSame([$newest, $middle, $oldest], $sessions->findByUserId(SessionMother::DEFAULT_USER_ID));
     }
@@ -85,18 +99,24 @@ final class InMemorySessionRepositoryContractTest extends TestCase
     public function testFindByUserIdBreaksACreatedAtTieOnTheSessionId(): void
     {
         $now = new DateTimeImmutable(self::NOW);
-        SystemClock::set(new FixedClock($now));
 
         // `created_at` is stored to the second, so two sessions minted within one second tie — two tabs, two
         // devices at login, a scripted client. Without a tiebreaker Postgres answers ties however the plan
         // runs while this double, whose sort is stable, would answer them in insertion order: deterministic
         // here and a coin flip in production, which is the divergence the mirroring exists to prevent.
-        $lower = SessionMother::active(id: '0190c1d2-e3f4-7a5b-8c6d-000000000001', expiresAt: $now->modify('+1 hour'));
-        $higher = SessionMother::active(id: '0190c1d2-e3f4-7a5b-8c6d-000000000002', expiresAt: $now->modify('+1 hour'));
-        $lower->setCreatedAt($now);
-        $higher->setCreatedAt($now);
+        $lower = SessionMother::active(
+            id: '0190c1d2-e3f4-7a5b-8c6d-000000000001',
+            expiresAt: $now->modify('+1 hour'),
+            startedAt: $now,
+        );
+        $higher = SessionMother::active(
+            id: '0190c1d2-e3f4-7a5b-8c6d-000000000002',
+            expiresAt: $now->modify('+1 hour'),
+            startedAt: $now,
+        );
 
         $sessions = new InMemorySessionRepository($lower, $higher);
+        $sessions->clock = new FixedClock($now);
 
         $this->assertSame([$higher, $lower], $sessions->findByUserId(SessionMother::DEFAULT_USER_ID));
     }
@@ -104,8 +124,10 @@ final class InMemorySessionRepositoryContractTest extends TestCase
     public function testASessionExpiringOnThisVeryInstantIsInadmissible(): void
     {
         $now = new DateTimeImmutable(self::NOW);
-        SystemClock::set(new FixedClock($now));
-        $sessions = new InMemorySessionRepository(SessionMother::active(expiresAt: $now));
+        $sessions = new InMemorySessionRepository(
+            SessionMother::active(expiresAt: $now, startedAt: $now->modify('-1 hour')),
+        );
+        $sessions->clock = new FixedClock($now);
 
         $found = $sessions->findActiveById(SessionId::fromString(SessionMother::DEFAULT_ID));
 

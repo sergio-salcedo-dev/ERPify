@@ -12,6 +12,7 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Projection\BankAccountCollectionRow;
 use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountIbanLookupRepository;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -103,7 +104,7 @@ final class DoctrineBankAccountIbanLookupRepositoryTest extends KernelTestCase
         $this->connection->executeStatement('TRUNCATE bank_account, bank RESTART IDENTITY CASCADE');
 
         $bankId = Uuid::v7()->toRfc4122();
-        $this->entityManager->persist(Bank::create($bankId, self::BANK_NAME, self::BANK_SHORT));
+        $this->entityManager->persist(Bank::create($bankId, self::BANK_NAME, self::BANK_SHORT, SuiteInstant::now()));
         $this->entityManager->flush();
 
         $account = BankAccount::create(
@@ -111,11 +112,11 @@ final class DoctrineBankAccountIbanLookupRepositoryTest extends KernelTestCase
             $bankId,
             'Globex Corporation',
             self::MATCHING_IBAN,
+            new DateTimeImmutable('2026-01-01 10:00:00'),
             null,
             null,
             Currency::EUR,
         );
-        $account->setCreatedAt(new DateTimeImmutable('2026-01-01 10:00:00'));
 
         $this->entityManager->persist($account);
         $this->entityManager->flush();

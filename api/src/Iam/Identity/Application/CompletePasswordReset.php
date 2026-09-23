@@ -102,7 +102,7 @@ final readonly class CompletePasswordReset
                 throw new InvalidResetToken();
             }
 
-            $user->resetPassword($newPassword);
+            $user->resetPassword($newPassword, $this->clock->now());
             $user->clearLockout();
 
             $this->users->save($user);

@@ -71,8 +71,9 @@ final readonly class RequestPasswordReset
         }
 
         $tokenId = Uuid::generate();
-        $generated = SingleUseToken::mint($this->clock->now()->modify(self::TOKEN_TTL));
-        $token = PasswordResetToken::issue($tokenId, $userId, $generated->token);
+        $now = $this->clock->now();
+        $generated = SingleUseToken::mint($now->modify(self::TOKEN_TTL));
+        $token = PasswordResetToken::issue($tokenId, $userId, $generated->token, $now);
 
         $issued = $this->transactionManager->transactional(function () use ($userId, $token): bool {
             // The user row lock is the supersede mutex: two concurrent forgots would otherwise interleave

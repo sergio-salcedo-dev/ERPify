@@ -83,9 +83,9 @@ final class RecoverySecret extends AggregateRoot
     #[ORM\Column(name: 'expires_at', type: Types::DATETIME_IMMUTABLE)]
     private DateTimeImmutable $expiresAt;
 
-    private function __construct(string $selector, string $userId, SingleUseToken $secret)
+    private function __construct(string $selector, string $userId, SingleUseToken $secret, DateTimeImmutable $now)
     {
-        parent::__construct();
+        parent::__construct($now);
 
         Uuid::ensure($selector);
         Uuid::ensure($userId);
@@ -116,8 +116,8 @@ final class RecoverySecret extends AggregateRoot
         $selector = Uuid::generate();
         $generated = SingleUseToken::mint($now->add(new DateInterval(self::RECOVERY_SECRET_TTL)));
 
-        $recoverySecret = new self($selector, $userId, $generated->token);
-        $recoverySecret->record(new RecoverySecretMinted($userId));
+        $recoverySecret = new self($selector, $userId, $generated->token, $now);
+        $recoverySecret->record(new RecoverySecretMinted($userId, $now));
 
         return new GeneratedRecoverySecret($recoverySecret, $selector . '.' . $generated->plaintext());
     }
@@ -143,18 +143,18 @@ final class RecoverySecret extends AggregateRoot
      * column. What the aggregate owns here is the FACT, and it has to be recorded before the repository
      * removes the row, because after that there is nothing left to pull the events from.
      */
-    public function redeem(): void
+    public function redeem(DateTimeImmutable $now): void
     {
-        $this->record(new RecoverySecretRedeemed($this->userId));
+        $this->record(new RecoverySecretRedeemed($this->userId, $now));
     }
 
     /**
      * Records that the owner destroyed this secret deliberately. Same shape and same reason as
      * {@see redeem()}: the transition is the row's removal, the aggregate owns the fact.
      */
-    public function revoke(): void
+    public function revoke(DateTimeImmutable $now): void
     {
-        $this->record(new RecoverySecretRevoked($this->userId));
+        $this->record(new RecoverySecretRevoked($this->userId, $now));
     }
 
     public function userId(): string

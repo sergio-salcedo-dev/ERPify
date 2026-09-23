@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Shared\Images\Domain;
 
 use Erpify\Shared\Images\Domain\Event\ImageDeletionRequested;
 use Erpify\Shared\Images\Domain\ImageId;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -30,7 +31,7 @@ final class ImageDeletionRequestedTest extends TestCase
     public function testTheWholeEnvelopeCarriesNothingButTheIdentity(): void
     {
         $imageId = ImageId::generate();
-        $event = new ImageDeletionRequested($imageId->toString());
+        $event = new ImageDeletionRequested($imageId->toString(), SuiteInstant::now());
 
         $this->assertSame([], $event->toPrimitives(), 'the payload is empty');
 
@@ -53,7 +54,7 @@ final class ImageDeletionRequestedTest extends TestCase
 
     public function testItReconstitutesFromItsPersistedRowWithoutMintingNewIdentity(): void
     {
-        $original = new ImageDeletionRequested(ImageId::generate()->toString());
+        $original = new ImageDeletionRequested(ImageId::generate()->toString(), SuiteInstant::now());
 
         $restored = ImageDeletionRequested::fromPrimitives(
             $original->aggregateId(),

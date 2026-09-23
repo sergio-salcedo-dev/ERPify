@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Shared\Domain\Event;
 
 use DateTimeImmutable;
 use Erpify\Shared\Event\Domain\DomainEvent;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -19,7 +20,7 @@ final class DomainEventTest extends TestCase
     {
         // Messenger's default PhpSerializer transports events via serialize()/unserialize(), which
         // bypasses the constructor — the id minted at construction must reach consumers unchanged.
-        $event = new SerializableTestDomainEvent('aggregate-id');
+        $event = new SerializableTestDomainEvent('aggregate-id', SuiteInstant::now());
 
         $roundTripped = \unserialize(\serialize($event));
 
@@ -33,7 +34,7 @@ final class DomainEventTest extends TestCase
         $eventId = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b';
         $occurredOn = new DateTimeImmutable('2026-06-06T00:00:00+00:00');
 
-        $event = new SerializableTestDomainEvent('aggregate-id', $eventId, $occurredOn);
+        $event = new SerializableTestDomainEvent('aggregate-id', $occurredOn, $eventId);
 
         $this->assertSame('aggregate-id', $event->aggregateId());
         $this->assertSame($eventId, $event->eventId());
@@ -41,15 +42,15 @@ final class DomainEventTest extends TestCase
         $this->assertSame(1, $event::eventVersion());
     }
 
-    public function testEnvelopeIsMintedWhenNotInjected(): void
+    public function testEventIdIsMintedWhenNotInjectedAndOccurredOnIsTheGivenInstant(): void
     {
-        $event = new SerializableTestDomainEvent('aggregate-id');
+        $occurredOn = new DateTimeImmutable('2031-03-07T09:15:00+00:00');
+
+        $event = new SerializableTestDomainEvent('aggregate-id', $occurredOn);
+        $other = new SerializableTestDomainEvent('aggregate-id', $occurredOn);
 
         $this->assertNotSame('', $event->eventId());
-        $this->assertEqualsWithDelta(
-            (new DateTimeImmutable())->getTimestamp(),
-            $event->occurredOn()->getTimestamp(),
-            5,
-        );
+        $this->assertNotSame($event->eventId(), $other->eventId());
+        $this->assertSame($occurredOn, $event->occurredOn());
     }
 }

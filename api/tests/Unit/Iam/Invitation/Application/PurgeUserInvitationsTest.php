@@ -10,6 +10,7 @@ use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -32,12 +33,12 @@ final class PurgeUserInvitationsTest extends TestCase
         // A retired invitation still carries the invited person's id, so the terminal states are exactly as
         // much of a residue as the pending one — sparing them would leave the reference alive.
         $accepted = $this->invitationFor($userId);
-        $accepted->markSent();
-        $accepted->accept();
+        $accepted->markSent(SuiteInstant::now());
+        $accepted->accept(SuiteInstant::now());
 
         $revoked = $this->invitationFor($userId);
-        $revoked->markSent();
-        $revoked->revoke();
+        $revoked->markSent(SuiteInstant::now());
+        $revoked->revoke(SuiteInstant::now());
 
         $invitations = new InMemoryInvitationRepository(
             $this->invitationFor($userId),
@@ -77,7 +78,13 @@ final class PurgeUserInvitationsTest extends TestCase
     private function invitationFor(string $userId): Invitation
     {
         $generated = SingleUseToken::mint(new DateTimeImmutable('2026-07-21T13:00:00+00:00'));
-        $invitation = Invitation::create(Uuid::generate(), self::ORGANIZATION_ID, $userId, $generated->token);
+        $invitation = Invitation::create(
+            Uuid::generate(),
+            self::ORGANIZATION_ID,
+            $userId,
+            $generated->token,
+            SuiteInstant::now(),
+        );
         $invitation->pullDomainEvents();
 
         return $invitation;

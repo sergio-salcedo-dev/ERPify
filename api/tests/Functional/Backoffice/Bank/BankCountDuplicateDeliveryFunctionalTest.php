@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Backoffice\Bank;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Application\Projection\BankCountReadModel;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
@@ -87,6 +88,6 @@ final class BankCountDuplicateDeliveryFunctionalTest extends KernelTestCase
         $now = '2026-06-06T00:00:00+00:00';
         $snapshot = new BankSnapshot('Duplicate Delivery Bank', 'DUP', $now, $now);
 
-        return new BankCreatedDomainEvent(Uuid::generate(), $snapshot);
+        return new BankCreatedDomainEvent(Uuid::generate(), $snapshot, new DateTimeImmutable($now));
     }
 }

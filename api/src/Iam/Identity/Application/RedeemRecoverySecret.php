@@ -215,7 +215,7 @@ final readonly class RedeemRecoverySecret
             }
 
             $user->clearLockout();
-            $liveSecret->redeem();
+            $liveSecret->redeem($now);
 
             $this->users->save($user);
             // The event is published INSIDE this transaction, so `DbalEventStore` appends it in the same

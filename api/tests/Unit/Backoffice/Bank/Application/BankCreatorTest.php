@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\Bank\Application;
 use Erpify\Backoffice\Bank\Application\BankCreator;
 use Erpify\Backoffice\Bank\Application\Command\CreateBankCommand;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -51,6 +52,7 @@ final class BankCreatorTest extends TestCase
             $eventBus,
             $this->passThroughValidator(),
             $transactions,
+            SuiteInstant::clock(),
         );
     }
 }

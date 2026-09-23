@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity;
 
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
@@ -20,7 +21,7 @@ final class BankDeleteEventTest extends TestCase
         // drained() returns a bank with its creation event already pulled, so only the deletion surfaces.
         $bank = BankMother::drained();
 
-        $bank->delete();
+        $bank->delete(SuiteInstant::now());
 
         $events = $bank->pullDomainEvents();
 

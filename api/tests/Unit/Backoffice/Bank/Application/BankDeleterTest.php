@@ -9,6 +9,7 @@ use Erpify\Backoffice\Bank\Application\BankFinder;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Exception\BankInUseException;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use Erpify\Tests\Unit\Shared\Persistence\Double\FailingTransactionManager;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
@@ -186,6 +187,7 @@ final class BankDeleterTest extends TestCase
             $accounts ?? new InMemoryBankAccountRepository($accountCount, $recount),
             $eventBus ?? new RecordingEventBus(),
             $transactions ?? new ImmediateTransactionManager(),
+            SuiteInstant::clock(),
         );
     }
 }

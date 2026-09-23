@@ -285,10 +285,10 @@ final class RedeemRecoverySecretTest extends TestCase
         // the identity's status — so a 403 body over a live session would leave an administrator's
         // suspension defeated by a race an attacker can simply retry until it lands. The status re-read
         // refuses the consumption; only the compensating revoke refuses the session.
-        $user = UserMother::create();
+        $user = UserMother::create(now: new DateTimeImmutable(self::NOW));
         $users = new InMemoryUserRepository($user);
         $users->onFindByIdForUpdate = static function () use ($user): void {
-            $user->suspend();
+            $user->suspend(new DateTimeImmutable(self::NOW));
             $user->pullDomainEvents();
         };
         $secrets = new InMemoryRecoverySecretRepository();

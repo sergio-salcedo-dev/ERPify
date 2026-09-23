@@ -38,8 +38,8 @@ final class MessengerDeadLetterReaderTest extends TestCase
     {
         $event = new SerializableTestDomainEvent(
             'aggregate-1',
-            'event-id-1',
             new DateTimeImmutable('2026-06-20 09:00'),
+            'event-id-1',
         );
         $failedAt = new DateTimeImmutable('2026-06-20 10:30');
         $envelope = new Envelope($event, [

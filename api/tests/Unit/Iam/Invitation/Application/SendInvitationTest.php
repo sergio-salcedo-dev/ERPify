@@ -48,8 +48,9 @@ final class SendInvitationTest extends TestCase
     #[Test]
     public function itInvitesFunnelsThroughMembershipMintsTheInvitationAndEmailsTheToken(): void
     {
+        $clock = new FixedClock(new DateTimeImmutable(self::NOW));
         $organizations = new InMemoryOrganizationRepository();
-        $organizations->save(Organization::provision(self::ORG_ID, 'ACME'));
+        $organizations->save(Organization::provision(self::ORG_ID, 'ACME', $clock->now()));
 
         $memberships = new InMemoryMembershipRepository();
         $users = new InMemoryUserRepository();
@@ -58,13 +59,13 @@ final class SendInvitationTest extends TestCase
         $eventBus = new RecordingEventBus();
 
         $sendInvitation = new SendInvitation(
-            new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger()),
-            new GrantMembership($memberships, $organizations),
+            new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger(), $clock),
+            new GrantMembership($memberships, $organizations, $clock),
             $invitations,
             new SendInvitationEmailBestEffort($emailSender, new NullLogger()),
             $eventBus,
             new InlineTransactionManager(),
-            new FixedClock(new DateTimeImmutable(self::NOW)),
+            $clock,
         );
 
         $issued = $sendInvitation->invite('Newbie@Erpify.Test', Role::EDITOR);

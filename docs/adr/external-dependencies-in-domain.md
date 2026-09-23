@@ -33,7 +33,7 @@ Un puerto que es *pass-through* byte a byte de un estándar permitido es abstrac
 | `psr/log`          | **Directo**                       | El dominio necesita exactamente el contrato PSR-3. Sin reshape.                       |
 | `psr/cache`        | **Directo**                       | Contrato neutro suficiente.                                                          |
 | `psr/http-message` | **Directo**                       | Contrato neutro suficiente.                                                          |
-| Clock              | **Puerto propio válido**          | "Now" es concepto de dominio; se quiere seam de test + contrato estrecho (`SystemClock`). |
+| Clock              | **Puerto propio válido**          | "Now" es concepto de dominio; se quiere seam de test + contrato estrecho. El dominio recibe el instante, no el puerto ([`aggregate-receives-the-instant.md`](aggregate-receives-the-instant.md)). |
 | EventBus           | **Puerto propio válido**          | Los domain events DDD quieren semántica propia, no PSR-14 crudo.                      |
 | MessageBus         | **Puerto propio obligatorio**     | No hay PSR; Symfony Messenger es Cat-1.                                              |
 | Monolog            | **Solo Infrastructure**           | Implementación con runtime.                                                          |

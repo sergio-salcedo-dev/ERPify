@@ -296,9 +296,7 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
 
     private function createBankAt(string $name, string $shortName, DateTimeImmutable $instant): Bank
     {
-        $bank = Bank::create(Uuid::generate(), $name, $shortName);
-        $bank->setCreatedAt($instant);
-        $bank->setUpdatedAt($instant);
+        $bank = Bank::create(Uuid::generate(), $name, $shortName, $instant);
 
         $this->entityManager->persist($bank);
         $this->entityManager->flush();

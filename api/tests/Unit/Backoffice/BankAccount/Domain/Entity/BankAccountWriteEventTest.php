@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity;
 
+use DateTimeImmutable;
 use DateTimeInterface;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
@@ -11,9 +12,8 @@ use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountDeletedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountStatusChangedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotClosedException;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
-use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -28,13 +28,6 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(BankAccount::class)]
 final class BankAccountWriteEventTest extends TestCase
 {
-    protected function tearDown(): void
-    {
-        SystemClock::reset();
-
-        parent::tearDown();
-    }
-
     public function testUpdateRecanonicalizesIbanUppercasesBicAndRecordsUpdatedEvent(): void
     {
         $account = BankAccountMother::drained(bic: 'DEUTDEFFXXX', alias: 'Old Alias');
@@ -45,6 +38,7 @@ final class BankAccountWriteEventTest extends TestCase
             'bnpafrppxxx',
             'New Alias',
             Currency::EUR,
+            SuiteInstant::now(),
         );
 
         $this->assertSame('Globex Renamed', $account->getHolderName());
@@ -62,22 +56,27 @@ final class BankAccountWriteEventTest extends TestCase
     {
         $account = BankAccountMother::drained(bic: 'DEUTDEFFXXX', alias: 'Treasury');
 
-        $account->update('Holder', 'DE89370400440532013000', null, null, Currency::EUR);
+        $account->update('Holder', 'DE89370400440532013000', null, null, Currency::EUR, SuiteInstant::now());
 
         $this->assertNull($account->getBic());
         $this->assertNull($account->getAlias());
     }
 
-    public function testUpdateBumpsUpdatedAtAndStampsTheEventFromTheAmbientClock(): void
+    public function testUpdateBumpsUpdatedAtAndStampsTheEventWithTheInstantItWasGiven(): void
     {
         $createdAt = '2026-06-14T09:30:00+00:00';
         $updatedAt = '2026-06-15T11:00:00+00:00';
 
-        SystemClock::set(FixedClock::at($createdAt));
-        $account = BankAccountMother::drained();
+        $account = BankAccountMother::drained(now: new DateTimeImmutable($createdAt));
 
-        SystemClock::set(FixedClock::at($updatedAt));
-        $account->update('Holder', 'DE89370400440532013000', null, null, Currency::EUR);
+        $account->update(
+            'Holder',
+            'DE89370400440532013000',
+            null,
+            null,
+            Currency::EUR,
+            new DateTimeImmutable($updatedAt),
+        );
 
         $this->assertSame($createdAt, $account->getCreatedAt()->format(DateTimeInterface::ATOM));
         $this->assertSame($updatedAt, $account->getUpdatedAt()->format(DateTimeInterface::ATOM));
@@ -92,7 +91,7 @@ final class BankAccountWriteEventTest extends TestCase
     {
         $account = BankAccountMother::drained(status: BankAccountStatus::CLOSED);
 
-        $account->delete();
+        $account->delete(SuiteInstant::now());
 
         $events = $account->pullDomainEvents();
         $this->assertCount(1, $events);
@@ -106,7 +105,7 @@ final class BankAccountWriteEventTest extends TestCase
         $account = BankAccountMother::drained(status: BankAccountStatus::ACTIVE);
 
         try {
-            $account->delete();
+            $account->delete(SuiteInstant::now());
             $this->fail('Expected BankAccountNotClosedException to be thrown.');
         } catch (BankAccountNotClosedException $bankAccountNotClosedException) {
             $this->assertSame('bank-account-not-closed', $bankAccountNotClosedException->type());
@@ -123,7 +122,7 @@ final class BankAccountWriteEventTest extends TestCase
     {
         $account = BankAccountMother::drained(status: BankAccountStatus::ACTIVE);
 
-        $account->changeStatus(BankAccountStatus::CLOSED);
+        $account->changeStatus(BankAccountStatus::CLOSED, SuiteInstant::now());
 
         $this->assertSame(BankAccountStatus::CLOSED, $account->getStatus());
 
@@ -139,7 +138,7 @@ final class BankAccountWriteEventTest extends TestCase
     {
         $account = BankAccountMother::drained(status: BankAccountStatus::ACTIVE);
 
-        $account->changeStatus(BankAccountStatus::ACTIVE);
+        $account->changeStatus(BankAccountStatus::ACTIVE, SuiteInstant::now());
 
         $this->assertSame(BankAccountStatus::ACTIVE, $account->getStatus());
         $this->assertSame([], $account->pullDomainEvents());
@@ -149,7 +148,7 @@ final class BankAccountWriteEventTest extends TestCase
     {
         $account = BankAccountMother::drained(status: BankAccountStatus::CLOSED);
 
-        $account->changeStatus(BankAccountStatus::ACTIVE);
+        $account->changeStatus(BankAccountStatus::ACTIVE, SuiteInstant::now());
 
         $this->assertSame(BankAccountStatus::ACTIVE, $account->getStatus());
 

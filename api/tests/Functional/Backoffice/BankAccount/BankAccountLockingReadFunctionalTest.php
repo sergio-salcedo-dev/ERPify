@@ -10,6 +10,7 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountRepository;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -59,10 +60,18 @@ final class BankAccountLockingReadFunctionalTest extends KernelTestCase
         $connection->beginTransaction();
 
         try {
-            $this->entityManager->persist(Bank::create($bankId, 'Bank ' . $bankId, $this->shortCode($bankId)));
+            $this->entityManager->persist(
+                Bank::create($bankId, 'Bank ' . $bankId, $this->shortCode($bankId), SuiteInstant::now()),
+            );
             $this->entityManager->flush();
             $this->entityManager->persist(
-                BankAccount::create($accountId, $bankId, 'Juan Pérez', $this->unusedIban($accountId)),
+                BankAccount::create(
+                    $accountId,
+                    $bankId,
+                    'Juan Pérez',
+                    $this->unusedIban($accountId),
+                    SuiteInstant::now(),
+                ),
             );
             $this->entityManager->flush();
 

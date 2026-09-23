@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Domain;
 
-use DateTimeInterface;
-use Erpify\Shared\Clock\Domain\SystemClock;
+use DateTimeImmutable;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -27,7 +27,9 @@ final class ImageTest extends TestCase
         $digest = \hash('sha256', 'quadrant-fixture');
         $id = ImageId::generate();
 
-        $image = new Image($id, $digest, 'image/jpeg', 32, 24, 12345);
+        $createdAt = new DateTimeImmutable('2031-03-07T09:15:00+00:00');
+
+        $image = new Image($id, $digest, 'image/jpeg', 32, 24, 12345, $createdAt);
 
         $this->assertTrue($id->equals($image->id()));
         $this->assertSame($digest, $image->digest());
@@ -35,21 +37,15 @@ final class ImageTest extends TestCase
         $this->assertSame(32, $image->width());
         $this->assertSame(24, $image->height());
         $this->assertSame(12345, $image->byteSize());
-        // The stamp is the instant of the clock the aggregate read, compared as a formatted value: the
-        // objects are compared for identity by `assertSame`, and that holds only because the suite's double
-        // hands out its backing instance un-cloned — every other clock in the tree mints a fresh one per
-        // read, `SymfonyClock` included, which is what the ambient clock becomes inside a functional test.
-        $this->assertSame(
-            SystemClock::now()->format(DateTimeInterface::ATOM),
-            $image->createdAt()->format(DateTimeInterface::ATOM),
-        );
+        // The stamp is the instant the caller handed in, held as given: the aggregate never reads a clock.
+        $this->assertSame($createdAt, $image->createdAt());
     }
 
     public function testRejectsADigestShorterThanSixtyFourHexCharacters(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new Image(ImageId::generate(), 'abc123', 'image/png', 10, 10, 100);
+        new Image(ImageId::generate(), 'abc123', 'image/png', 10, 10, 100, SuiteInstant::now());
     }
 
     public function testRejectsADigestWithNonHexCharacters(): void
@@ -58,35 +54,35 @@ final class ImageTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        new Image(ImageId::generate(), $notHex, 'image/png', 10, 10, 100);
+        new Image(ImageId::generate(), $notHex, 'image/png', 10, 10, 100, SuiteInstant::now());
     }
 
     public function testRejectsANonPositiveWidth(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new Image(ImageId::generate(), \hash('sha256', 'x'), 'image/png', 0, 10, 100);
+        new Image(ImageId::generate(), \hash('sha256', 'x'), 'image/png', 0, 10, 100, SuiteInstant::now());
     }
 
     public function testRejectsANonPositiveHeight(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new Image(ImageId::generate(), \hash('sha256', 'x'), 'image/png', 10, 0, 100);
+        new Image(ImageId::generate(), \hash('sha256', 'x'), 'image/png', 10, 0, 100, SuiteInstant::now());
     }
 
     public function testRejectsANonPositiveByteSize(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new Image(ImageId::generate(), \hash('sha256', 'x'), 'image/png', 10, 10, 0);
+        new Image(ImageId::generate(), \hash('sha256', 'x'), 'image/png', 10, 10, 0, SuiteInstant::now());
     }
 
     public function testRejectsAnEmptyMediaType(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new Image(ImageId::generate(), \hash('sha256', 'x'), '   ', 10, 10, 100);
+        new Image(ImageId::generate(), \hash('sha256', 'x'), '   ', 10, 10, 100, SuiteInstant::now());
     }
 
     /**
@@ -98,16 +94,16 @@ final class ImageTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new Image(ImageId::generate(), \str_repeat('a', 63) . "\n", 'image/png', 10, 10, 100);
+        new Image(ImageId::generate(), \str_repeat('a', 63) . "\n", 'image/png', 10, 10, 100, SuiteInstant::now());
     }
 
     /**
      * The whole surface, and it has to be the whole surface.
      *
      * The earlier version of this read the CONSTRUCTOR SIGNATURE and called it "the complete list of what
-     * this aggregate can ever hold". That was never true of a Doctrine entity and is now visibly untrue:
-     * `$id` and `$createdAt` are declared in the class body and mapped as columns without appearing in the
-     * signature at all. A `private string $conservationContract` written the same way, with its accessor,
+     * this aggregate can ever hold". That was never true of a Doctrine entity and is visibly untrue here:
+     * `$id` and `$createdAt` are declared in the class body and mapped as columns, and `$id` does not appear
+     * in the signature at all. A `private string $conservationContract` written the same way, with its accessor,
      * satisfied a signature check and reached the database — which is exactly the field this test exists
      * to keep out.
      *
@@ -130,7 +126,7 @@ final class ImageTest extends TestCase
             $constructor->getParameters(),
         );
 
-        $this->assertSame(['id', 'digest', 'mediaType', 'width', 'height', 'byteSize'], $parameterNames);
+        $this->assertSame(['id', 'digest', 'mediaType', 'width', 'height', 'byteSize', 'createdAt'], $parameterNames);
 
         $propertyNames = \array_map(
             static fn (ReflectionProperty $property): string => $property->getName(),

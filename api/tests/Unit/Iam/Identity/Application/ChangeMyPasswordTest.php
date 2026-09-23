@@ -46,7 +46,7 @@ final class ChangeMyPasswordTest extends TestCase
 
     public function testReplacesTheCredentialRevokesEverySessionEmitsAndNotifies(): void
     {
-        $user = UserMother::create();
+        $user = UserMother::create(now: $this->now());
         $users = new InMemoryUserRepository($user);
         $sessions = new InMemorySessionRepository();
         $eventBus = new RecordingEventBus();
@@ -80,7 +80,7 @@ final class ChangeMyPasswordTest extends TestCase
      */
     public function testTheChangeRunsUnderTheUserRowLock(): void
     {
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: $this->now()));
 
         $this->useCase($users)->change(
             UserMother::DEFAULT_ID,
@@ -121,7 +121,7 @@ final class ChangeMyPasswordTest extends TestCase
             AccountDeactivated::class,
             $this->credentialMatches(),
             $this->credentialDoesNotMatch(),
-            UserMother::invited(),
+            UserMother::invited(now: $this->now()),
             expectedKdfRuns: 0,
         );
     }
@@ -138,7 +138,7 @@ final class ChangeMyPasswordTest extends TestCase
      */
     public function testAnUnreadableStoredCredentialIsRefusedRatherThanRaising(): void
     {
-        $user = UserMother::create();
+        $user = UserMother::create(now: $this->now());
         $property = new ReflectionProperty(User::class, 'passwordHash');
         $property->setValue($user, '');
 
@@ -152,15 +152,15 @@ final class ChangeMyPasswordTest extends TestCase
     }
 
     /**
-     * The wall now sits immediately after the row lock, so a walled identity pays no KDF at all and hears the
+     * The wall sits immediately after the row lock, so a walled identity pays no KDF at all and hears the
      * same 403 the rest of the product speaks — not the aggregate's `InvalidIdentityTransition`, whose title
      * announces a lifecycle transition nobody asked for. Zero KDF runs is the load-bearing half of this: the
      * refusal is decided before either comparison closure is invoked.
      */
     public function testASuspendedIdentityIsWalledBeforeAnyComparison(): void
     {
-        $suspended = UserMother::create();
-        $suspended->suspend();
+        $suspended = UserMother::create(now: $this->now());
+        $suspended->suspend($this->now());
         $suspended->pullDomainEvents();
 
         $this->assertRefusedWithoutEffect(
@@ -179,7 +179,7 @@ final class ChangeMyPasswordTest extends TestCase
     public function testChangingTheCredentialClearsALiveLockout(): void
     {
         $now = $this->now();
-        $locked = UserMother::create();
+        $locked = UserMother::create(now: $this->now());
 
         for ($attempt = 0; $attempt < User::MAX_FAILED_ATTEMPTS; ++$attempt) {
             $locked->recordFailedAttempt($now);
@@ -200,7 +200,7 @@ final class ChangeMyPasswordTest extends TestCase
 
     public function testAnIdThatResolvesToNoIdentityIsANotFound(): void
     {
-        $users = new InMemoryUserRepository(UserMother::create());
+        $users = new InMemoryUserRepository(UserMother::create(now: $this->now()));
         $users->goneUnderLock = true;
 
         $emails = new RecordingPasswordChangedEmailSender();
@@ -266,7 +266,7 @@ final class ChangeMyPasswordTest extends TestCase
         ?User $user = null,
         int $expectedKdfRuns = 0,
     ): void {
-        $users = new InMemoryUserRepository($user ?? UserMother::create());
+        $users = new InMemoryUserRepository($user ?? UserMother::create(now: $this->now()));
         $sessions = new InMemorySessionRepository();
         $eventBus = new RecordingEventBus();
         $emails = new RecordingPasswordChangedEmailSender();
@@ -308,7 +308,7 @@ final class ChangeMyPasswordTest extends TestCase
         $clock = new FixedClock($this->now());
 
         return new ChangeMyPassword(
-            $users ?? new InMemoryUserRepository(UserMother::create()),
+            $users ?? new InMemoryUserRepository(UserMother::create(now: $this->now())),
             new ProveCurrentPassword(),
             new RevokeSessionsBestEffort(
                 new RevokeAllSessions(
@@ -325,13 +325,14 @@ final class ChangeMyPasswordTest extends TestCase
             ),
             $eventBus ?? new RecordingEventBus(),
             $transactions ?? new InlineTransactionManager(),
+            $clock,
         );
     }
 
     /**
-     * One instant for the whole fixture. The lockout arithmetic and the clock the revoke path runs on are
-     * independent today; a literal repeated at both is how a pair stops being deliberately independent and
-     * starts being accidentally equal.
+     * One instant for the whole fixture: the identities the cases build, the lockout arithmetic and the clock
+     * the use case and its revoke path run on. A literal repeated at each is how the stamps an aggregate
+     * carries stop agreeing with the instant the operation was handed.
      */
     private function now(): DateTimeImmutable
     {

@@ -11,6 +11,7 @@ use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBa
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
 use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -104,6 +105,7 @@ final class DoctrineBankAccountRepositoryUniqueTest extends KernelTestCase
             self::BANK_ID,
             'Race Holder',
             self::IBAN,
+            SuiteInstant::now(),
             null,
             null,
             Currency::EUR,

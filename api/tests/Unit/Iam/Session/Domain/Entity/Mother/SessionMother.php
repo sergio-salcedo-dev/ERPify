@@ -7,7 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother;
 use DateInterval;
 use DateTimeImmutable;
 use Erpify\Iam\Session\Domain\Entity\Session;
-use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 
 final class SessionMother
 {
@@ -22,7 +22,7 @@ final class SessionMother
     public const string DEFAULT_IP = '203.0.113.7';
 
     /**
-     * The default window is measured FROM the clock the test is running on, mirroring the `P7D` ceiling
+     * The default window is measured FROM the instant the session starts at, mirroring the `P7D` ceiling
      * {@see \Erpify\Iam\Session\Application\StartSession} mints with; pass `expiresAt` to exercise the
      * caducity boundary.
      */
@@ -35,14 +35,18 @@ final class SessionMother
         ?DateTimeImmutable $expiresAt = null,
         string $device = self::DEFAULT_DEVICE,
         ?string $ip = self::DEFAULT_IP,
+        ?DateTimeImmutable $startedAt = null,
     ): Session {
+        $started = $startedAt ?? SuiteInstant::now();
+
         return Session::start(
             $id,
             $userId,
             $organizationId,
             $device,
             $ip,
-            $expiresAt ?? SystemClock::now()->add(new DateInterval(self::DEFAULT_TTL_SPEC)),
+            $expiresAt ?? $started->add(new DateInterval(self::DEFAULT_TTL_SPEC)),
+            $started,
         );
     }
 }

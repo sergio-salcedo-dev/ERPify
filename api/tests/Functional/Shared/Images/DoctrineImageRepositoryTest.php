@@ -10,6 +10,7 @@ use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
 use Erpify\Shared\Images\Infrastructure\Persistence\Doctrine\DoctrineImageRepository;
 use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -28,7 +29,7 @@ final class DoctrineImageRepositoryTest extends KernelTestCase
     {
         $this->withRepository(function (ImageRepository $repository, EntityManagerInterface $entityManager): void {
             $imageId = ImageId::generate();
-            $repository->save(new Image($imageId, \str_repeat('c', 64), 'image/png', 32, 32, 512));
+            $repository->save(new Image($imageId, \str_repeat('c', 64), 'image/png', 32, 32, 512, SuiteInstant::now()));
 
             $entityManager->clear();
 
@@ -55,7 +56,9 @@ final class DoctrineImageRepositoryTest extends KernelTestCase
     {
         $this->withRepository(function (ImageRepository $repository, EntityManagerInterface $entityManager): void {
             $imageId = ImageId::generate();
-            $repository->save(new Image($imageId, \str_repeat('d', 64), 'image/webp', 16, 16, 256));
+            $repository->save(
+                new Image($imageId, \str_repeat('d', 64), 'image/webp', 16, 16, 256, SuiteInstant::now()),
+            );
 
             $entityManager->clear();
             $persisted = $repository->findById($imageId);
@@ -78,12 +81,12 @@ final class DoctrineImageRepositoryTest extends KernelTestCase
     {
         $this->withRepository(function (ImageRepository $repository, EntityManagerInterface $entityManager): void {
             $imageId = ImageId::generate();
-            $repository->save(new Image($imageId, \str_repeat('e', 64), 'image/png', 8, 8, 64));
+            $repository->save(new Image($imageId, \str_repeat('e', 64), 'image/png', 8, 8, 64, SuiteInstant::now()));
 
             $entityManager->clear();
 
             $this->expectException(ConcurrentUniqueWrite::class);
-            $repository->save(new Image($imageId, \str_repeat('f', 64), 'image/jpeg', 9, 9, 81));
+            $repository->save(new Image($imageId, \str_repeat('f', 64), 'image/jpeg', 9, 9, 81, SuiteInstant::now()));
         });
     }
 

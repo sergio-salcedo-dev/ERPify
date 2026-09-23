@@ -91,13 +91,14 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
 
         $this->connection = $this->service(EntityManagerInterface::class)->getConnection();
 
+        $now = $this->service(Clock::class)->now();
         $userId = Uuid::generate();
         // UUIDv7 shares a timestamp prefix between close-in-time mints, so the whole id (dashes stripped) is
         // the only collision-free local part — and the rows of a concurrent run must not be reachable here.
         $email = \sprintf('reset-opacity-%s@erpify.test', \str_replace('-', '', $userId));
 
         $this->service(UserRepository::class)->save(
-            User::register($userId, $email, HashedPassword::fromHash('an-opaque-precomputed-hash'), Role::VIEWER),
+            User::register($userId, $email, HashedPassword::fromHash('an-opaque-precomputed-hash'), $now, Role::VIEWER),
         );
         $this->seededUserIds = [$userId];
 
@@ -105,9 +106,9 @@ final class ResetPasswordDeadTokenOpacityFunctionalTest extends WebTestCase
         // From the clock the use case reads, not a second one: minting the window off a bare
         // `new DateTimeImmutable()` makes "expired" mean expired-by-the-wall-clock while the subject
         // decides by the container's, and the two only agree by accident.
-        $lapsed = SingleUseToken::mint($this->service(Clock::class)->now()->sub(new DateInterval('P1D')));
+        $lapsed = SingleUseToken::mint($now->sub(new DateInterval('P1D')));
         $this->service(PasswordResetTokenRepository::class)->save(
-            PasswordResetToken::issue($tokenId, $userId, $lapsed->token),
+            PasswordResetToken::issue($tokenId, $userId, $lapsed->token, $now),
         );
         $this->seededTokenIds = [$tokenId];
         // The secret is the right one: what kills this link is the lapsed window and nothing else, which is

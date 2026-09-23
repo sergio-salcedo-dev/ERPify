@@ -8,6 +8,7 @@ use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Infrastructure\Controller\ImageGetController;
 use Erpify\Shared\Images\Infrastructure\Http\HttpCacheValidator;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Shared\Images\Application\ImageFinderHarness;
 use Erpify\Tests\Unit\Shared\Images\Application\InMemoryImageRepository;
 use Erpify\Tests\Unit\Shared\Images\Application\InMemoryImageStorage;
@@ -161,6 +162,7 @@ final class ImageGetControllerTest extends TestCase
             10,
             10,
             \strlen(self::BYTES),
+            SuiteInstant::now(),
         );
         $repository->save($image);
         $storage->store($image->id(), self::BYTES);

@@ -9,6 +9,7 @@ use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -47,6 +48,7 @@ final readonly class ChangeUserStatus
         private RevokeSessionsBestEffort $revokeSessions,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -56,8 +58,8 @@ final readonly class ChangeUserStatus
      */
     public function suspend(string $userId): User
     {
-        return $this->transition($userId, static function (User $user): void {
-            $user->suspend();
+        return $this->transition($userId, function (User $user): void {
+            $user->suspend($this->clock->now());
         });
     }
 
@@ -67,8 +69,8 @@ final readonly class ChangeUserStatus
      */
     public function deactivate(string $userId): User
     {
-        return $this->transition($userId, static function (User $user): void {
-            $user->deactivate();
+        return $this->transition($userId, function (User $user): void {
+            $user->deactivate($this->clock->now());
         });
     }
 

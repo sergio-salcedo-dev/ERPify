@@ -22,10 +22,10 @@ final class UserLocked extends DomainEvent
     public function __construct(
         string $aggregateId,
         private readonly DateTimeImmutable $lockedUntil,
+        DateTimeImmutable $occurredOn,
         ?string $eventId = null,
-        ?DateTimeImmutable $occurredOn = null,
     ) {
-        parent::__construct($aggregateId, $eventId, $occurredOn);
+        parent::__construct($aggregateId, $occurredOn, $eventId);
     }
 
     #[Override]
@@ -64,8 +64,8 @@ final class UserLocked extends DomainEvent
         return new self(
             $aggregateId,
             new DateTimeImmutable($lockedUntil),
-            $eventId,
             new DateTimeImmutable($occurredOn),
+            $eventId,
         );
     }
 

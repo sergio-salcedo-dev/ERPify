@@ -12,6 +12,7 @@ use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Iam\Invitation\Infrastructure\Persistence\Doctrine\DoctrineInvitationRepository;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -54,8 +55,8 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
             $this->repository->save($this->invitationFor($userId));
             // A retired invitation still carries the invited person's id, so the erasure has to reach it too.
             $accepted = $this->invitationFor($userId);
-            $accepted->markSent();
-            $accepted->accept();
+            $accepted->markSent(SuiteInstant::now());
+            $accepted->accept(SuiteInstant::now());
 
             $this->repository->save($accepted);
             $this->repository->save($this->invitationFor($other));
@@ -104,18 +105,18 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
             $userId = Uuid::generate();
 
             $live = $this->invitationFor($userId);
-            $live->markSent();
+            $live->markSent(SuiteInstant::now());
 
             $secondLive = $this->invitationFor($userId);
-            $secondLive->markSent();
+            $secondLive->markSent(SuiteInstant::now());
             // Not revocable: never delivered, already consumed, and somebody else's.
             $undelivered = $this->invitationFor($userId);
             $spent = $this->invitationFor($userId);
-            $spent->markSent();
-            $spent->accept();
+            $spent->markSent(SuiteInstant::now());
+            $spent->accept(SuiteInstant::now());
 
             $foreign = $this->invitationFor(Uuid::generate());
-            $foreign->markSent();
+            $foreign->markSent(SuiteInstant::now());
 
             foreach ([$live, $secondLive, $undelivered, $spent, $foreign] as $invitation) {
                 $this->repository->save($invitation);
@@ -157,7 +158,7 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
 
             foreach (\array_reverse($ascendingIds) as $invitationId) {
                 $invitation = $this->invitationFor($userId, $invitationId);
-                $invitation->markSent();
+                $invitation->markSent(SuiteInstant::now());
                 $this->repository->save($invitation);
             }
 
@@ -221,7 +222,7 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
         $this->inRolledBackTransaction(function (): void {
             $userId = Uuid::generate();
             $live = $this->invitationFor($userId);
-            $live->markSent();
+            $live->markSent(SuiteInstant::now());
 
             $this->repository->save($live);
             $this->entityManager->clear();
@@ -268,6 +269,7 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
             Uuid::generate(),
             $userId,
             $generated->token,
+            SuiteInstant::now(),
         );
         $invitation->pullDomainEvents();
 

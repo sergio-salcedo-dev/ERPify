@@ -39,10 +39,10 @@ trait CarriesInvitationSnapshot
 {
     public function __construct(
         string $invitedUserId,
+        DateTimeImmutable $occurredOn,
         ?string $eventId = null,
-        ?DateTimeImmutable $occurredOn = null,
     ) {
-        parent::__construct($invitedUserId, $eventId, $occurredOn);
+        parent::__construct($invitedUserId, $occurredOn, $eventId);
     }
 
     #[Override]
@@ -91,7 +91,7 @@ trait CarriesInvitationSnapshot
         string $eventId,
         string $occurredOn,
     ): static {
-        return new self($aggregateId, $eventId, new DateTimeImmutable($occurredOn));
+        return new self($aggregateId, new DateTimeImmutable($occurredOn), $eventId);
     }
 
     public function invitedUserId(): string

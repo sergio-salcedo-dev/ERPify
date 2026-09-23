@@ -10,7 +10,8 @@ use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Enum\SessionStatus;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
-use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Shared\Clock\Domain\Clock;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 use ReflectionProperty;
 use RuntimeException;
@@ -30,9 +31,10 @@ use RuntimeException;
  * same reason the predicate is: it is a promise of the port, so a double that answered in another order would
  * let a use-case test assert a sequence production cannot produce.
  *
- * The instant comes from {@see SystemClock} rather than an injected {@see \Erpify\Shared\Clock\Domain\Clock}:
- * the constructor is variadic, so a clock parameter would have to precede the presets, and no consumer has yet
- * needed to freeze one here. A test that does freezes it exactly as it already freezes the aggregate's own.
+ * The instant comes from the public {@see $clock} property rather than a constructor parameter, which is
+ * variadic over the presets and would force a clock ahead of them. It defaults to the suite instant; a test
+ * that reasons about "now" assigns its own clock and hands the same instant to the sessions it builds, so the
+ * double and the aggregates never disagree about what time it is.
  *
  * **The bulk revocations mutate, and what they mirror is the adapter's directed UPDATE — not the aggregate's
  * own {@see Session::revoke()}.** The two write different things and only one of them is what a consumer of
@@ -59,7 +61,7 @@ use RuntimeException;
  *     here it reads `REVOKED`. Assert through the port's reads, never off a held aggregate — an assertion on
  *     a held object is the one shape this double answers differently from the adapter it mirrors.
  *
- * Writing those two columns takes reflection, because the aggregate publishes exactly one guarded transition
+ * Writing those three columns takes reflection, because the aggregate publishes exactly one guarded transition
  * and no seam for anything else — deliberately. That is the faithful mirror rather than a shortcut: the
  * adapter reaches past the aggregate too, and the alternative is widening the domain's write surface for a
  * double's convenience. `now` is read once per call, mirroring the single `:now` the UPDATE binds to
@@ -78,6 +80,12 @@ final class InMemorySessionRepository implements SessionRepository
      * parameter for the same reason the clock is not one: the constructor is variadic over the presets.
      */
     public ?Closure $onRevokeAll = null;
+
+    /**
+     * The instant every read and bulk write evaluates against, mirroring the {@see Clock} the adapter is
+     * constructed with.
+     */
+    public Clock $clock;
 
     /** @var list<string> userIds passed to revokeOthersForUser */
     public array $revokeOthersCalls = [];
@@ -101,6 +109,8 @@ final class InMemorySessionRepository implements SessionRepository
 
     public function __construct(Session ...$preset)
     {
+        $this->clock = SuiteInstant::clock();
+
         foreach ($preset as $session) {
             $this->index($session);
         }
@@ -122,13 +132,13 @@ final class InMemorySessionRepository implements SessionRepository
             return null;
         }
 
-        return $session->isActive(SystemClock::now()) ? $session : null;
+        return $session->isActive($this->clock->now()) ? $session : null;
     }
 
     #[Override]
     public function findByUserId(string $userId): array
     {
-        $now = SystemClock::now();
+        $now = $this->clock->now();
 
         $admissible = \array_values(\array_filter(
             $this->byId,
@@ -144,9 +154,10 @@ final class InMemorySessionRepository implements SessionRepository
         // them however the plan runs. A double that is MORE ordered than production is the same defect as one
         // that is less strict about admissibility.
         //
-        // It is also the half that decides, not a tie-break in practice: the suite pins one instant
-        // (`FreezeSystemClockExtension`) and `AggregateRoot::__construct()` stamps `createdAt` from it, so
-        // EVERY session a test builds carries the same one and the whole order falls to the id. Harmless
+        // It is also the half that decides, not a tie-break in practice: a test that does not care what time it
+        // is starts every session at the suite instant (`SuiteInstant`), and `AggregateRoot::__construct()`
+        // stamps `createdAt` from the instant it is handed, so EVERY session such a test builds carries the same
+        // one and the whole order falls to the id. Harmless
         // while `SessionId::generate()` mints v7 on the real clock, which keeps ids monotonic in insertion
         // order — so a two-element ordered assertion here would be asserting the id's minting order and
         // reading like an assertion about `createdAt`. Give such a test explicit `createdAt`s rather than
@@ -254,7 +265,7 @@ final class InMemorySessionRepository implements SessionRepository
      */
     private function bulkRevokeActive(string $userId, ?SessionId $except): void
     {
-        $now = SystemClock::now();
+        $now = $this->clock->now();
         $spared = $except?->toString();
 
         foreach ($this->byId as $id => $session) {
@@ -289,7 +300,7 @@ final class InMemorySessionRepository implements SessionRepository
         // Parenthesised rather than a bare dereferenced `new`, the form `PhpmdParsableSyntaxGateTest` refuses.
         (new ReflectionProperty(Session::class, 'status'))->setValue($session, SessionStatus::REVOKED);
         (new ReflectionProperty(Session::class, 'revokedAt'))->setValue($session, $now);
-        $session->setUpdatedAt($now);
+        (new ReflectionProperty(Session::class, 'updatedAt'))->setValue($session, $now);
     }
 
     private function index(Session $session): void

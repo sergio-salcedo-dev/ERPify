@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\Bank\Domain\Event\Mother;
 use DateTimeImmutable;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 
 final class BankCreatedDomainEventMother
@@ -20,8 +21,8 @@ final class BankCreatedDomainEventMother
         return new BankCreatedDomainEvent(
             $aggregateId,
             $snapshot ?? BankSnapshotMother::create(),
+            null === $occurredOn ? SuiteInstant::now() : new DateTimeImmutable($occurredOn),
             $eventId,
-            null === $occurredOn ? null : new DateTimeImmutable($occurredOn),
         );
     }
 }

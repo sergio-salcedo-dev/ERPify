@@ -6,13 +6,13 @@ namespace Erpify\Tests\Unit\Shared\Images\Application;
 
 use DateTimeImmutable;
 use Erpify\Shared\Clock\Domain\Clock;
-use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 
 /**
  * A clock the test moves, so the 60-second period can be crossed without the suite waiting for it.
  *
- * It starts wherever the suite's clock is, because the only thing this double owes a test is a distance:
+ * It starts at the suite instant, because the only thing this double owes a test is a distance:
  * every consumer moves it with {@see advance()} and asserts about the window, never about the date. An
  * absolute starting literal would state a day that nothing depends on, which is the shape
  * `docs/rules/testing.md` asks the rest of the tree to stop writing.
@@ -27,7 +27,7 @@ final class MovableClock implements Clock
 
     public function __construct()
     {
-        $this->now = SystemClock::now();
+        $this->now = SuiteInstant::now();
     }
 
     #[Override]

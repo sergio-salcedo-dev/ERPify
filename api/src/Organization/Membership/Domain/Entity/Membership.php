@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Organization\Membership\Domain\Entity;
 
+use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
@@ -38,9 +39,9 @@ final class Membership extends AggregateRoot
     #[ORM\Column(name: 'organization_id', type: Types::GUID)]
     private string $organizationId;
 
-    private function __construct(string $id, string $userId, string $organizationId)
+    private function __construct(string $id, string $userId, string $organizationId, DateTimeImmutable $now)
     {
-        parent::__construct();
+        parent::__construct($now);
 
         Uuid::ensure($userId);
         Uuid::ensure($organizationId);
@@ -50,9 +51,9 @@ final class Membership extends AggregateRoot
         $this->organizationId = $organizationId;
     }
 
-    public static function grant(string $id, string $userId, string $organizationId): self
+    public static function grant(string $id, string $userId, string $organizationId, DateTimeImmutable $now): self
     {
-        return new self($id, $userId, $organizationId);
+        return new self($id, $userId, $organizationId, $now);
     }
 
     public function userId(): string

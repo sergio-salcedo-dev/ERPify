@@ -26,10 +26,10 @@ final class UserRolesChanged extends DomainEvent
     public function __construct(
         string $aggregateId,
         private readonly array $roles,
+        DateTimeImmutable $occurredOn,
         ?string $eventId = null,
-        ?DateTimeImmutable $occurredOn = null,
     ) {
-        parent::__construct($aggregateId, $eventId, $occurredOn);
+        parent::__construct($aggregateId, $occurredOn, $eventId);
     }
 
     #[Override]
@@ -66,8 +66,8 @@ final class UserRolesChanged extends DomainEvent
         return new self(
             $aggregateId,
             self::rolesFrom(self::arrayMember($body, 'roles')),
-            $eventId,
             new DateTimeImmutable($occurredOn),
+            $eventId,
         );
     }
 

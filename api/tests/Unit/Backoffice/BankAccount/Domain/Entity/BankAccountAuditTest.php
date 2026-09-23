@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Shared\Audit\Domain\AuditWriteOperation;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -40,6 +41,6 @@ final class BankAccountAuditTest extends TestCase
 
     private function account(string $id): BankAccount
     {
-        return BankAccount::create($id, Uuid::generate(), 'Holder', 'ES9121000418450200051332');
+        return BankAccount::create($id, Uuid::generate(), 'Holder', 'ES9121000418450200051332', SuiteInstant::now());
     }
 }

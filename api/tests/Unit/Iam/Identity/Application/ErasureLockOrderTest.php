@@ -16,6 +16,7 @@ use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\PasswordResetTokenMother;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\RecoverySecretMother;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
@@ -197,7 +198,13 @@ final class ErasureLockOrderTest extends TestCase
     private function invitationFor(string $userId): Invitation
     {
         $generated = SingleUseToken::mint(new DateTimeImmutable('2026-08-07T13:00:00+00:00'));
-        $invitation = Invitation::create(Uuid::generate(), self::ORGANIZATION_ID, $userId, $generated->token);
+        $invitation = Invitation::create(
+            Uuid::generate(),
+            self::ORGANIZATION_ID,
+            $userId,
+            $generated->token,
+            SuiteInstant::now(),
+        );
         $invitation->pullDomainEvents();
 
         return $invitation;

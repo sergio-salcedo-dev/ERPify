@@ -182,13 +182,14 @@ trait AuthenticatesFunctionalRequests
         $sessions = $container->get(SessionRepository::class);
         self::assertInstanceOf(SessionRepository::class, $sessions);
 
-        // The window comes off the clock the admission gate reads, never a bare `new DateTimeImmutable()`.
-        // Seating a session by one clock and admitting it by another makes every authenticated functional
-        // test in the tree depend on the two agreeing — and this is the single seed they all come through,
-        // so when they disagree the whole functional lane answers 401 at once.
+        // The start instant and the window both come off the clock the admission gate reads, never a bare
+        // `new DateTimeImmutable()`. Seating a session by one clock and admitting it by another makes every
+        // authenticated functional test in the tree depend on the two agreeing — and this is the single seed
+        // they all come through, so when they disagree the whole functional lane answers 401 at once.
         $clock = $container->get(Clock::class);
         self::assertInstanceOf(Clock::class, $clock);
 
+        $now = $clock->now();
         $sessionId = SessionId::generate();
         $session = Session::start(
             $sessionId->toString(),
@@ -196,7 +197,8 @@ trait AuthenticatesFunctionalRequests
             self::FUNCTIONAL_ORGANIZATION_ID,
             'Functional test client',
             '127.0.0.1',
-            $clock->now()->add(new DateInterval('P1D')),
+            $now->add(new DateInterval('P1D')),
+            $now,
         );
         $session->pullDomainEvents();
 

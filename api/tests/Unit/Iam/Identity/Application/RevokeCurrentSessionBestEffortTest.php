@@ -10,12 +10,10 @@ use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingLogger;
-use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -48,26 +46,10 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
     private const string SEED_EXPIRED
         = 'the seeded session is already expired, so every assertion over this store is vacuous';
 
-    #[Override]
-    protected function setUp(): void
-    {
-        // `seed()` gives each session an absolute expiry relative to `NOW`, while `activeIds()` reads
-        // admissibility back through a repository double that asks the ambient clock. Unfrozen, the two ends
-        // drift: past `NOW` the fixture is expired, the surviving-session assertions read an empty set, and
-        // the case that expects an EMPTY set keeps passing for the wrong reason.
-        SystemClock::set(FixedClock::at(self::NOW));
-    }
-
-    protected function tearDown(): void
-    {
-        SystemClock::reset();
-        parent::tearDown();
-    }
-
     #[Test]
     public function itRevokesTheSessionTheCorrelationNames(): void
     {
-        $sessions = new InMemorySessionRepository();
+        $sessions = $this->sessions();
         $current = $this->seed($sessions);
 
         $this->revoker($sessions, new RecordingCurrentSessionReference($current))->revoke();
@@ -81,7 +63,7 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
         // The property the coarse sibling does not have, and the reason this class exists. Asserted as the
         // surviving SET rather than as a call count: a count cannot tell one revoke of the right session from
         // one revoke of all of them.
-        $sessions = new InMemorySessionRepository();
+        $sessions = $this->sessions();
         $other = $this->seed($sessions);
         $current = $this->seed($sessions);
 
@@ -95,7 +77,7 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
     {
         // Reported rather than treated as success, and deliberately not widened into a revoke by user id:
         // on the one path where the session is unknown, guessing reaches sessions this request never minted.
-        $sessions = new InMemorySessionRepository();
+        $sessions = $this->sessions();
         $survivor = $this->seed($sessions);
         $logger = new RecordingLogger();
 
@@ -154,6 +136,20 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
         );
     }
 
+    /**
+     * `seed()` gives each session an absolute expiry relative to `NOW`, while `activeIds()` reads
+     * admissibility back through this store's clock. Left at any other instant the two ends drift: past `NOW`
+     * the fixture is expired, the surviving-session assertions read an empty set, and the case that expects
+     * an EMPTY set keeps passing for the wrong reason. One instant on both ends keeps them comparable.
+     */
+    private function sessions(): InMemorySessionRepository
+    {
+        $sessions = new InMemorySessionRepository();
+        $sessions->clock = FixedClock::at(self::NOW);
+
+        return $sessions;
+    }
+
     private function seed(InMemorySessionRepository $sessions): SessionId
     {
         $sessionId = SessionId::generate();
@@ -164,6 +160,7 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
             'test-device',
             null,
             (new DateTimeImmutable(self::NOW))->modify('+7 days'),
+            new DateTimeImmutable(self::NOW),
         );
         $session->pullDomainEvents();
 
@@ -183,7 +180,12 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
     ): RevokeCurrentSessionBestEffort {
         return new RevokeCurrentSessionBestEffort(
             $current,
-            new RevokeSession($sessions, new RecordingEventBus(), new InlineTransactionManager()),
+            new RevokeSession(
+                $sessions,
+                new RecordingEventBus(),
+                new InlineTransactionManager(),
+                FixedClock::at(self::NOW),
+            ),
             $logger ?? new RecordingLogger(),
         );
     }

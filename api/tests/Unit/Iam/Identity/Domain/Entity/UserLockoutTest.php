@@ -122,7 +122,7 @@ final class UserLockoutTest extends TestCase
         $now = new DateTimeImmutable(self::NOW);
 
         $suspended = UserMother::create();
-        $suspended->suspend();
+        $suspended->suspend($now);
         $suspended->pullDomainEvents();
 
         foreach ([UserMother::invited(), $suspended] as $user) {

@@ -44,7 +44,7 @@ final class ResendInvitationTest extends TestCase
     {
         [$invitation, $oldSecret] = $this->sentInvitation();
         $invitations = new InMemoryInvitationRepository($invitation);
-        $users = new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID));
+        $users = new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID, now: $this->now()));
         $emailSender = new SpyInvitationEmailSender();
         $eventBus = new RecordingEventBus();
 
@@ -52,9 +52,9 @@ final class ResendInvitationTest extends TestCase
         $newToken = $reissued->acceptToken;
 
         $this->assertSame(InvitationStatus::SENT, $invitation->status());
-        $this->assertFalse($invitation->verify($oldSecret, new DateTimeImmutable(self::NOW)));
+        $this->assertFalse($invitation->verify($oldSecret, $this->now()));
         $this->assertStringStartsWith(self::INVITATION_ID . '.', $newToken);
-        $this->assertTrue($invitation->verify($this->secretOf($newToken), new DateTimeImmutable(self::NOW)));
+        $this->assertTrue($invitation->verify($this->secretOf($newToken), $this->now()));
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(InvitationResent::class, $eventBus->publishedEvents[0]);
         $this->assertCount(1, $emailSender->sent);
@@ -72,7 +72,7 @@ final class ResendInvitationTest extends TestCase
         // opaque wall.
         [$invitation] = $this->sentInvitation();
         $invitations = new InMemoryInvitationRepository($invitation);
-        $users = new InMemoryUserRepository(UserMother::revoked(UserMother::DEFAULT_ID));
+        $users = new InMemoryUserRepository(UserMother::revoked(UserMother::DEFAULT_ID, now: $this->now()));
         $emailSender = new SpyInvitationEmailSender();
         $eventBus = new RecordingEventBus();
 
@@ -94,7 +94,7 @@ final class ResendInvitationTest extends TestCase
     {
         [$invitation] = $this->sentInvitation();
         $invitations = new InMemoryInvitationRepository($invitation);
-        $users = new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID));
+        $users = new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID, now: $this->now()));
 
         $this->useCase($invitations, $users, new SpyInvitationEmailSender(), new RecordingEventBus())
             ->resend(self::INVITATION_ID)
@@ -129,7 +129,7 @@ final class ResendInvitationTest extends TestCase
             new SendInvitationEmailBestEffort($emailSender, new NullLogger()),
             $eventBus,
             new InlineTransactionManager(),
-            new FixedClock(new DateTimeImmutable(self::NOW)),
+            new FixedClock($this->now()),
         );
     }
 
@@ -139,11 +139,22 @@ final class ResendInvitationTest extends TestCase
     private function sentInvitation(): array
     {
         $generated = SingleUseToken::mint(new DateTimeImmutable('2026-07-16T10:00:00+00:00'));
-        $invitation = Invitation::create(self::INVITATION_ID, self::ORG_ID, UserMother::DEFAULT_ID, $generated->token);
-        $invitation->markSent();
+        $invitation = Invitation::create(
+            self::INVITATION_ID,
+            self::ORG_ID,
+            UserMother::DEFAULT_ID,
+            $generated->token,
+            $this->now(),
+        );
+        $invitation->markSent($this->now());
         $invitation->pullDomainEvents();
 
         return [$invitation, $generated->plaintext()];
+    }
+
+    private function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable(self::NOW);
     }
 
     private function secretOf(string $token): string

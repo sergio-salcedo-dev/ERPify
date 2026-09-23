@@ -8,7 +8,6 @@ use DateTimeImmutable;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Enum\SessionStatus;
 use Erpify\Iam\Session\Domain\SessionId;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
@@ -44,8 +43,9 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
 
     public function testABulkRevocationTakesTheSessionOutOfBothReads(): void
     {
-        SystemClock::set(new FixedClock(new DateTimeImmutable(self::NOW)));
-        $sessions = new InMemorySessionRepository(SessionMother::active());
+        $now = new DateTimeImmutable(self::NOW);
+        $sessions = new InMemorySessionRepository(SessionMother::active(startedAt: $now));
+        $sessions->clock = new FixedClock($now);
 
         $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID);
 
@@ -59,11 +59,11 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
     public function testRevokingTheOthersSparesTheSessionInHand(): void
     {
         $now = new DateTimeImmutable(self::NOW);
-        SystemClock::set(new FixedClock($now));
 
-        $current = SessionMother::active(expiresAt: $now->modify('+1 hour'));
-        $other = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
+        $current = SessionMother::active(expiresAt: $now->modify('+1 hour'), startedAt: $now);
+        $other = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'), startedAt: $now);
         $sessions = new InMemorySessionRepository($current, $other);
+        $sessions->clock = new FixedClock($now);
 
         $sessions->revokeOthersForUser(
             SessionMother::DEFAULT_USER_ID,
@@ -83,11 +83,11 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
     public function testABulkRevocationComparesIdsTheWayPostgresCompares(): void
     {
         $now = new DateTimeImmutable(self::NOW);
-        SystemClock::set(new FixedClock($now));
 
-        $current = SessionMother::active(expiresAt: $now->modify('+1 hour'));
-        $other = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
+        $current = SessionMother::active(expiresAt: $now->modify('+1 hour'), startedAt: $now);
+        $other = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'), startedAt: $now);
         $sessions = new InMemorySessionRepository($current, $other);
+        $sessions->clock = new FixedClock($now);
 
         $sessions->revokeOthersForUser(
             \strtoupper(SessionMother::DEFAULT_USER_ID),
@@ -101,11 +101,11 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
     public function testABulkRevocationLeavesAnotherUsersSessionAlone(): void
     {
         $now = new DateTimeImmutable(self::NOW);
-        SystemClock::set(new FixedClock($now));
 
         $otherUserId = Uuid::generate();
-        $theirs = SessionMother::active(id: Uuid::generate(), userId: $otherUserId);
-        $sessions = new InMemorySessionRepository(SessionMother::active(), $theirs);
+        $theirs = SessionMother::active(id: Uuid::generate(), userId: $otherUserId, startedAt: $now);
+        $sessions = new InMemorySessionRepository(SessionMother::active(startedAt: $now), $theirs);
+        $sessions->clock = new FixedClock($now);
 
         $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID);
 
@@ -115,17 +115,16 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
     public function testABulkRevocationFlipsALapsedSessionThatIsStillActive(): void
     {
         $now = new DateTimeImmutable(self::NOW);
-        SystemClock::set(new FixedClock($now));
 
         // Inadmissible by time and untouched in status — the row the adapter's `status = ACTIVE` filter does
         // reach, and the one a selection written against the reads' admissibility predicate would skip. It is
         // invisible to both reads either way, so nothing but its own state can tell the two selections apart.
-        $lapsed = SessionMother::active(expiresAt: $now->modify('-1 hour'));
-        // Backdated so the `updated_at` assertion below reads the revocation's stamp rather than the instant
-        // the mint already wrote there, which every arm of this test would satisfy.
-        $lapsed->setUpdatedAt($now->modify('-2 hours'));
+        // Started before the revocation so the `updated_at` assertion below reads the revocation's stamp rather
+        // than the instant the mint already wrote there, which every arm of this test would satisfy.
+        $lapsed = SessionMother::active(expiresAt: $now->modify('-1 hour'), startedAt: $now->modify('-2 hours'));
 
         $sessions = new InMemorySessionRepository($lapsed);
+        $sessions->clock = new FixedClock($now);
 
         $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID);
 
@@ -137,11 +136,11 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
     public function testABulkRevocationArmsTheRetentionBranchThatReadsTheStatus(): void
     {
         $now = new DateTimeImmutable(self::NOW);
-        SystemClock::set(new FixedClock($now));
-        $sessions = new InMemorySessionRepository(SessionMother::active());
+        $sessions = new InMemorySessionRepository(SessionMother::active(startedAt: $now));
+        $sessions->clock = new FixedClock($now);
 
-        // Only the revocation branch can match: the default expiry is decades away, so `expiredBefore` here
-        // never reaches it and a deletion is evidence of a stamped `revokedAt` rather than of a lapsed clock.
+        // Only the revocation branch can match: the default expiry is a week after the start, so `expiredBefore`
+        // here never reaches it and a deletion is evidence of a stamped `revokedAt` rather than of a lapsed clock.
         $revokedBefore = $now->modify('+1 minute');
         $expiredBefore = $now;
 
@@ -154,9 +153,10 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
 
     public function testABulkRevocationRecordsNoDomainEvent(): void
     {
-        SystemClock::set(new FixedClock(new DateTimeImmutable(self::NOW)));
-        $session = SessionMother::active();
+        $now = new DateTimeImmutable(self::NOW);
+        $session = SessionMother::active(startedAt: $now);
         $sessions = new InMemorySessionRepository($session);
+        $sessions->clock = new FixedClock($now);
 
         // Drains the `SessionStarted` the mother's mint recorded, so what the assertion reads afterwards is
         // the revocation's own contribution and not a leftover.

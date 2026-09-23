@@ -20,7 +20,6 @@ use Erpify\Iam\Identity\Infrastructure\Http\MintRecoverySecretRequest;
 use Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\ResourceResponderBuilder;
@@ -114,9 +113,9 @@ final class MintRecoverySecretControllerTest extends TestCase
             $secrets->saved[0]->verify($halves[1], new DateTimeImmutable(self::NOW)),
             'the 201 carried a secret that does not open the row it minted',
         );
-        // Both instants carry a VALUE, not a type. `expiresAt` comes from the injected clock, but `mintedAt`
-        // is the aggregate's `createdAt` off the ambient {@see SystemClock}, so leaving it unasserted makes
-        // the two slots interchangeable: emitting the expiry in the `mintedAt` position passes, and the owner
+        // Both instants carry a VALUE, not a type. `mintedAt` is the aggregate's `createdAt` and `expiresAt`
+        // its TTL away from the same injected instant, so leaving either unasserted makes the two slots
+        // interchangeable: emitting the expiry in the `mintedAt` position passes, and the owner
         // is handed "Created 2036 / Expires 2036" for a credential minted today. Both instants are this
         // case's subject, so both carry a value.
         $this->assertSame(self::NOW, $data['mintedAt']);
@@ -158,8 +157,8 @@ final class MintRecoverySecretControllerTest extends TestCase
     {
         // The wall precedes the proof, so a suspended identity pays no hashing work — and the refusal is the
         // status one rather than a credential one, even though the password below is deliberately wrong.
-        $suspended = UserMother::create(password: HashedPassword::fromHash(self::PASSWORD));
-        $suspended->suspend();
+        $suspended = UserMother::create(password: HashedPassword::fromHash(self::PASSWORD), now: $this->now());
+        $suspended->suspend($this->now());
         $suspended->pullDomainEvents();
 
         $secrets = new InMemoryRecoverySecretRepository();
@@ -200,12 +199,14 @@ final class MintRecoverySecretControllerTest extends TestCase
 
     private function signedInOwner(): SecurityUser
     {
-        return new SecurityUser(UserMother::create(password: HashedPassword::fromHash(self::PASSWORD)));
+        return new SecurityUser(
+            UserMother::create(password: HashedPassword::fromHash(self::PASSWORD), now: $this->now()),
+        );
     }
 
     private function existingSecret(): RecoverySecret
     {
-        $generated = RecoverySecret::mint(UserMother::DEFAULT_ID, new DateTimeImmutable(self::NOW));
+        $generated = RecoverySecret::mint(UserMother::DEFAULT_ID, $this->now());
         $generated->secret->pullDomainEvents();
 
         return $generated->secret;
@@ -217,12 +218,8 @@ final class MintRecoverySecretControllerTest extends TestCase
         ?User $user = null,
     ): MintRecoverySecretController {
         $users = new InMemoryUserRepository(
-            $user ?? UserMother::create(password: HashedPassword::fromHash(self::PASSWORD)),
+            $user ?? UserMother::create(password: HashedPassword::fromHash(self::PASSWORD), now: $this->now()),
         );
-
-        // The aggregate stamps its own `createdAt` from the ambient clock, which no constructor argument
-        // reaches. `FreezeSystemClockExtension` re-pins the suite instant after each case.
-        SystemClock::set(FixedClock::at(self::NOW));
 
         $useCase = new MintRecoverySecret(
             $users,
@@ -231,7 +228,7 @@ final class MintRecoverySecretControllerTest extends TestCase
             new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
             new RecordingEventBus(),
             new InlineTransactionManager(),
-            FixedClock::at(self::NOW),
+            new FixedClock($this->now()),
         );
 
         $limiter = new RateLimiterFactory(
@@ -245,5 +242,14 @@ final class MintRecoverySecretControllerTest extends TestCase
             new CurrentPasswordProofThrottle($limiter, new RequestStack()),
             ResourceResponderBuilder::wired(),
         );
+    }
+
+    /**
+     * One instant for the whole case: the identity it signs in, the secret it seeds and the clock the use
+     * case mints on, so `mintedAt` is asserted against the instant every aggregate here was handed.
+     */
+    private function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable(self::NOW);
     }
 }

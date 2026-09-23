@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Bank\Domain\Entity;
 
+use DateTimeImmutable;
 use DateTimeInterface;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
@@ -13,7 +14,6 @@ use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Shared\Audit\Domain\AuditedEntity;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Domain\AuditWriteOperation;
-use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Kernel\Domain\ValueObject\NormalizedText;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
@@ -53,8 +53,9 @@ final class Bank extends AggregateRoot implements AuditedEntity
         #[Assert\NotBlank]
         #[Assert\Length(max: 50)]
         private string $shortName,
+        DateTimeImmutable $now,
     ) {
-        parent::__construct();
+        parent::__construct($now);
 
         $this->id = $id;
     }
@@ -63,6 +64,7 @@ final class Bank extends AggregateRoot implements AuditedEntity
         string $id,
         string $name,
         string $shortName,
+        DateTimeImmutable $now,
     ): self {
         $normalizedText = NormalizedText::from($name);
 
@@ -71,6 +73,7 @@ final class Bank extends AggregateRoot implements AuditedEntity
             $normalizedText->display,
             $normalizedText->normalized,
             NormalizedText::toAsciiUpper($shortName),
+            $now,
         );
 
         $createdAt = $bank->createdAt->format(DateTimeInterface::ATOM);
@@ -83,7 +86,6 @@ final class Bank extends AggregateRoot implements AuditedEntity
                 $createdAt,
                 $createdAt,
             ),
-            null,
             $bank->createdAt,
         ));
 
@@ -128,7 +130,7 @@ final class Bank extends AggregateRoot implements AuditedEntity
      * A rename whose canonical forms match the ones already stored is a no-op — nothing mutates,
      * `updatedAt` stands and nothing is recorded — so a redundant PUT stays idempotent.
      */
-    public function rename(string $name, string $shortName): void
+    public function rename(string $name, string $shortName, DateTimeImmutable $now): void
     {
         $normalizedText = NormalizedText::from($name);
         $canonicalShortName = NormalizedText::toAsciiUpper($shortName);
@@ -140,7 +142,6 @@ final class Bank extends AggregateRoot implements AuditedEntity
         $this->name = $normalizedText->display;
         $this->nameNormalized = $normalizedText->normalized;
         $this->shortName = $canonicalShortName;
-        $now = SystemClock::now();
         $this->updatedAt = $now;
 
         $this->record(new BankUpdatedDomainEvent(
@@ -151,14 +152,13 @@ final class Bank extends AggregateRoot implements AuditedEntity
                 $this->createdAt->format(DateTimeInterface::ATOM),
                 $now->format(DateTimeInterface::ATOM),
             ),
-            null,
             $now,
         ));
     }
 
-    public function delete(): void
+    public function delete(DateTimeImmutable $now): void
     {
-        $this->record(new BankDeletedDomainEvent($this->id(), null, SystemClock::now()));
+        $this->record(new BankDeletedDomainEvent($this->id(), $now));
     }
 
     /**

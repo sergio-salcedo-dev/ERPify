@@ -18,10 +18,10 @@ trait CarriesBankAccountSnapshot
     public function __construct(
         string $aggregateId,
         private readonly BankAccountSnapshot $snapshot,
+        DateTimeImmutable $occurredOn,
         ?string $eventId = null,
-        ?DateTimeImmutable $occurredOn = null,
     ) {
-        parent::__construct($aggregateId, $eventId, $occurredOn);
+        parent::__construct($aggregateId, $occurredOn, $eventId);
     }
 
     #[Override]
@@ -61,8 +61,8 @@ trait CarriesBankAccountSnapshot
         return new self(
             $aggregateId,
             BankAccountSnapshot::fromPrimitives($body),
-            $eventId,
             new DateTimeImmutable($occurredOn),
+            $eventId,
         );
     }
 }

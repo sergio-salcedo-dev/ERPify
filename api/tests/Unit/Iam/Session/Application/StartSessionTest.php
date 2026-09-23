@@ -55,6 +55,37 @@ final class StartSessionTest extends TestCase
         $this->assertInstanceOf(SessionStarted::class, $eventBus->publishedEvents[0]);
     }
 
+    /**
+     * Every instant the session carries is the one the test supplied: its stamps, the event it records and the
+     * expiry window. An aggregate stamped from any other source would expire relative to one instant and have
+     * been created at another — which is how a session once came to expire 24 years before its own creation in
+     * a green test.
+     */
+    public function testEveryInstantTheSessionCarriesDerivesFromTheClockTheUseCaseWasGiven(): void
+    {
+        $now = new DateTimeImmutable('2026-07-10T12:00:00+00:00');
+        $sessions = new InMemorySessionRepository();
+        $eventBus = new RecordingEventBus();
+
+        (new StartSession(
+            $sessions,
+            new RecordingCurrentSessionReference(),
+            $eventBus,
+            new InlineTransactionManager(),
+            new FixedClock($now),
+        ))->start(SessionMother::DEFAULT_USER_ID, SessionMother::DEFAULT_ORG_ID, 'Chrome on macOS', null);
+
+        $this->assertCount(1, $sessions->saved);
+        $this->assertCount(1, $eventBus->publishedEvents);
+        $session = $sessions->saved[0];
+        $started = $eventBus->publishedEvents[0];
+        $this->assertInstanceOf(SessionStarted::class, $started);
+        $this->assertSame('2026-07-10T12:00:00+00:00', $session->getCreatedAt()->format('c'));
+        $this->assertSame('2026-07-10T12:00:00+00:00', $session->getUpdatedAt()->format('c'));
+        $this->assertSame('2026-07-10T12:00:00+00:00', $started->occurredOn()->format('c'));
+        $this->assertSame('2026-07-17T12:00:00+00:00', $session->expiresAt()->format('c'));
+    }
+
     public function testTheWrittenCorrelationIsTheMintedSessionId(): void
     {
         $currentSession = new RecordingCurrentSessionReference();

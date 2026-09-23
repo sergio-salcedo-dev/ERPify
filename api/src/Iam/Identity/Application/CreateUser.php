@@ -8,6 +8,7 @@ use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
 use SensitiveParameter;
@@ -26,12 +27,13 @@ final readonly class CreateUser
     public function __construct(
         private UserRepository $users,
         private Validator $validator,
+        private Clock $clock,
     ) {
     }
 
     public function create(#[SensitiveParameter] string $email, HashedPassword $password, Role ...$roles): User
     {
-        $user = User::register(Uuid::generate(), $email, $password, ...$roles);
+        $user = User::register(Uuid::generate(), $email, $password, $this->clock->now(), ...$roles);
 
         $this->validator->ensure($user);
         $this->users->save($user);

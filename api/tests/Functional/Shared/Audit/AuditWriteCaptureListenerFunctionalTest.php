@@ -10,6 +10,7 @@ use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Shared\Audit\Infrastructure\Persistence\AuditWriteCaptureListener;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -57,7 +58,7 @@ final class AuditWriteCaptureListenerFunctionalTest extends KernelTestCase
 
             $originalName = $bank->getName();
 
-            $bank->rename('Audited Renamed Bank', 'AUDREN');
+            $bank->rename('Audited Renamed Bank', 'AUDREN', SuiteInstant::now());
             $em->flush();
 
             $row = $this->changeRow($connection, $id, 'BANK_UPDATED');
@@ -175,7 +176,11 @@ final class AuditWriteCaptureListenerFunctionalTest extends KernelTestCase
     {
         $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
             $organizationId = Uuid::generate();
-            $organization = Organization::provision($organizationId, 'Acme Holdings ' . $organizationId);
+            $organization = Organization::provision(
+                $organizationId,
+                'Acme Holdings ' . $organizationId,
+                SuiteInstant::now(),
+            );
 
             $em->persist($organization);
             $em->flush();
@@ -220,7 +225,7 @@ final class AuditWriteCaptureListenerFunctionalTest extends KernelTestCase
     {
         $token = \strtoupper(\substr(\str_replace('-', '', $id), 0, 8));
 
-        return Bank::create($id, 'Audited Bank ' . $id, 'AUD' . $token);
+        return Bank::create($id, 'Audited Bank ' . $id, 'AUD' . $token, SuiteInstant::now());
     }
 
     /**

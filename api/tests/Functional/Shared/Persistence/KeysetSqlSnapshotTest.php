@@ -29,6 +29,7 @@ use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\RowUniquenessGuard;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SortFieldMap;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Erpify\Tests\Functional\Shared\Persistence\Fixtures\CapturingSqlLogger;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -215,7 +216,12 @@ final class KeysetSqlSnapshotTest extends KernelTestCase
     {
         foreach ($names as $index => $name) {
             $suffix = \substr(\str_replace('-', '', Uuid::generate()), -6);
-            $bank = Bank::create(Uuid::generate(), \sprintf('%s %s', $name, $suffix), \strtoupper($index . $suffix));
+            $bank = Bank::create(
+                Uuid::generate(),
+                \sprintf('%s %s', $name, $suffix),
+                \strtoupper($index . $suffix),
+                SuiteInstant::now(),
+            );
             $this->loggedEntityManager->persist($bank);
         }
 

@@ -65,8 +65,8 @@ final class BankAccountStatusChangedDomainEventTest extends TestCase
             self::BANK_ID,
             'ACTIVE',
             'CLOSED',
-            self::EVENT_ID,
             new DateTimeImmutable(self::OCCURRED_ON),
+            self::EVENT_ID,
         );
     }
 }

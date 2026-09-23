@@ -57,6 +57,7 @@ final class PurgeUserSessionsTest extends TestCase
             // Deliberately lapsed: the purge is a hard delete of every row of the subject, admissible or not,
             // so a time-expired session must still be counted and removed.
             new DateTimeImmutable('2020-01-01T00:00:00+00:00'),
+            new DateTimeImmutable('2019-12-25T00:00:00+00:00'),
         );
         $session->pullDomainEvents();
 

@@ -11,6 +11,7 @@ use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalPasswordResetTokenPersonReferences;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\SuiteInstant;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -76,6 +77,7 @@ final class DbalPasswordResetTokenPersonReferencesTest extends KernelTestCase
                 \hash('sha256', Uuid::generate()),
                 new DateTimeImmutable('2030-01-01T00:00:00+00:00'),
             ),
+            SuiteInstant::now(),
         ));
         $this->entityManager->flush();
     }
