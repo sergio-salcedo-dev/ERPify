@@ -456,6 +456,9 @@ development_status:
   # gh-925-repository-root-marker.md
   gh-925-repository-root-marker: ready-for-dev
 
+  # bmad-loop-board-legibility.md
+  bmad-loop-board-legibility: ready-for-dev
+
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.
 # NOTA: 5 items resultaron deuda FANTASMA / ya-resuelta (verificado en main) y se removieron: FetchHttpClient
