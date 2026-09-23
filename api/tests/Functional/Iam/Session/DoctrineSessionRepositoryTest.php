@@ -173,7 +173,7 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
 
             $current = SessionId::fromString($currentId);
             $other = SessionId::fromString($otherId);
-            $this->repository->revokeOthersForUser($userId, $current);
+            $this->repository->revokeOthersForUser($userId, $current, new DateTimeImmutable(self::NOW));
             $this->entityManager->clear();
 
             $this->assertInstanceOf(Session::class, $this->repository->findActiveById($current));
@@ -189,10 +189,17 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
             $this->repository->save($this->activeSession($id, $userId, '+1 hour'));
             $this->entityManager->clear();
 
-            $this->repository->revokeAllForUser($userId);
+            // A different instant from the repository's own clock, so the stamp can only have come from the caller.
+            $revokedAt = new DateTimeImmutable('2026-07-10T12:05:00+00:00');
+            $this->repository->revokeAllForUser($userId, $revokedAt);
             $this->entityManager->clear();
 
             $this->assertNotInstanceOf(Session::class, $this->repository->findActiveById(SessionId::fromString($id)));
+            // The listing admits active sessions only, so the revoked row is read back by its id.
+            $revoked = $this->entityManager->find(Session::class, $id);
+            $this->assertInstanceOf(Session::class, $revoked);
+            $this->assertSame('2026-07-10T12:05:00+00:00', $revoked->revokedAt()?->format('c'));
+            $this->assertSame('2026-07-10T12:05:00+00:00', $revoked->getUpdatedAt()->format('c'));
         });
     }
 

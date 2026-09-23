@@ -10,26 +10,45 @@ namespace Erpify\Tests\Support;
  * application layer read and handed inward.
  *
  * Read with `token_get_all`, never per line, so a call split across lines, a comment between the name and its
- * parenthesis, or a fully-qualified `\time()` is the same call. What counts as a read:
+ * parenthesis, a fully-qualified `\time()` and a name imported under an alias ({@see ImportAliases}) are the
+ * same call. What counts as a read:
  *
- *   - `new DateTime[Immutable]` / `date_create[_immutable]()` with no argument, or whose first argument
- *     STARTS with a string literal that is not an absolute instant (`'now'`, `'-30 days'`, `'tomorrow'`,
- *     `'-' . $n . ' days'`). A first argument held in a variable is parsing a value, not reading the clock.
- *   - `new DatePoint` with no argument or a relative literal, since Symfony's `DatePoint` defaults to its
- *     global clock and so reaches past the port.
+ *   - `new DateTime[Immutable]` / `new DatePoint` / `date_create[_immutable]()` with no `datetime` argument —
+ *     positionally or by name, so `new DateTimeImmutable(timezone: $zone)` is one — or whose `datetime`
+ *     argument STARTS with a string that is not an absolute instant: a literal (`'now'`, `'-30 days'`,
+ *     `'-' . $n . ' days'`), an interpolated string (`"-{$n} days"`) or a heredoc. A value held in a variable is
+ *     parsed, not read.
+ *   - `new NativeClock()` / `new MonotonicClock()` from `symfony/clock`, and `Symfony\Component\Clock\Clock::get()`
+ *     or `Symfony\Component\Clock\now()` — the global clock reached statically rather than injected.
  *   - `time()`, `microtime()`, `mktime()`, `gmmktime()`, `gettimeofday()` always; `getdate()` and
- *     `localtime()` with no argument; `date()`, `gmdate()`, `idate()` and `strtotime()` with one.
- *   - `Symfony\Component\Clock\Clock::get()` and `Symfony\Component\Clock\now()`, the global clock reached
- *     statically rather than injected.
+ *     `localtime()` with no argument; `date()`, `gmdate()`, `idate()` and `strtotime()` with one; and
+ *     `$_SERVER['REQUEST_TIME']` / `['REQUEST_TIME_FLOAT']`.
  *
- * **Blind spots, stated rather than implied.** A relative spec reached through a variable
- * (`new DateTimeImmutable($spec)`) or a constant, `hrtime()` (a monotonic duration, not an instant, and
- * deliberately not a finding), a call through a callable string, and a namespaced function that shadows a
- * global of the same name. Postgres's `now()` inside SQL is not PHP and is not read at all.
+ * An absolute instant is an ISO-8601 date (`2026-01-01…`) or a Unix timestamp (`'@' . $ts`). Every other
+ * literal is taken as relative, so `'Jan 1 2026'` or `strtotime('2026-01-01')` is reported although it names a
+ * fixed instant: the remedy is to spell it in ISO form or build it from a value, which this errs towards on
+ * purpose rather than guessing which of PHP's formats consult the clock.
+ *
+ * **Blind spots, stated rather than implied.** A relative spec reached through a variable, a constant or a
+ * call (`new DateTimeImmutable($spec)`, `new DateTimeImmutable(\sprintf('-%d days', $n))`); an interpolated
+ * string that starts with the interpolation; `DateTimeImmutable::createFromFormat()` with a format lacking
+ * `!` or `|`, which fills the fields it omits from the wall clock; `date($format, null)`; `new (Foo::class)()`;
+ * a call through a callable string; `hrtime()`, deliberately, since it measures a duration rather than naming
+ * an instant; and a namespaced function shadowing a global of the same name. Postgres's `now()` inside SQL is
+ * not PHP and is not read at all.
  */
 final class WallClockReads
 {
-    private const array DATE_CLASSES = ['datetime', 'datetimeimmutable', 'datepoint'];
+    private const array DATE_CLASSES = ['datetime', 'datetimeimmutable', 'symfony\component\clock\datepoint'];
+
+    private const array CLOCK_CLASSES = [
+        'symfony\component\clock\nativeclock',
+        'symfony\component\clock\monotonicclock',
+    ];
+
+    private const string GLOBAL_CLOCK = 'symfony\component\clock\clock';
+
+    private const string GLOBAL_NOW = 'symfony\component\clock\now';
 
     private const array ALWAYS = ['time', 'microtime', 'mktime', 'gmmktime', 'gettimeofday'];
 
@@ -53,37 +72,16 @@ final class WallClockReads
     ];
 
     /**
-     * An absolute instant as a literal: an ISO-8601 date or a Unix timestamp. Anything else a date
-     * constructor parses is resolved against "now".
-     */
-    private const string ABSOLUTE = '/^\s*(?:@-?\d|\d{4}-\d{2}-\d{2})/';
-
-    /**
      * @return list<int> the line of each read, in source order
      */
     public static function inSource(string $source): array
     {
         $tokens = self::significant(\token_get_all($source));
-        $symfonyClockImported = 1 === \preg_match('/^use\s+Symfony\\\Component\\\Clock\\\Clock\s*;/m', $source);
-        $symfonyNowImported = 1 === \preg_match('/^use\s+function\s+Symfony\\\Component\\\Clock\\\now\s*;/m', $source);
+        $aliases = ImportAliases::of($tokens);
         $lines = [];
 
-        foreach ($tokens as $index => $token) {
-            if (!\is_array($token)) {
-                continue;
-            }
-
-            $line = match (true) {
-                T_NEW === $token[0] => self::constructorRead($tokens, $index),
-                \in_array($token[0], self::NAME_TOKENS, true) => self::functionRead(
-                    $tokens,
-                    $token,
-                    $index,
-                    $symfonyClockImported,
-                    $symfonyNowImported,
-                ),
-                default => null,
-            };
+        foreach (\array_keys($tokens) as $index) {
+            $line = self::readAt($tokens, $index, $aliases);
 
             if (null !== $line) {
                 $lines[] = $line;
@@ -94,13 +92,44 @@ final class WallClockReads
     }
 
     /**
-     * @param list<array{int, string, int}|string> $tokens
+     * @param list<array{int, string, int}|string>                                    $tokens
+     * @param array{classes: array<string, string>, functions: array<string, string>} $aliases
      */
-    private static function constructorRead(array $tokens, int $index): ?int
+    private static function readAt(array $tokens, int $index, array $aliases): ?int
+    {
+        $token = $tokens[$index] ?? null;
+
+        if (!\is_array($token)) {
+            return null;
+        }
+
+        return match (true) {
+            T_NEW === $token[0] => self::constructorRead($tokens, $index, $aliases['classes']),
+            T_VARIABLE === $token[0] => self::requestTimeRead($tokens, $index, $token),
+            \in_array($token[0], self::NAME_TOKENS, true) => self::functionRead($tokens, $index, $token, $aliases),
+            default => null,
+        };
+    }
+
+    /**
+     * @param list<array{int, string, int}|string> $tokens
+     * @param array<string, string>                $classAliases
+     */
+    private static function constructorRead(array $tokens, int $index, array $classAliases): ?int
     {
         $class = $tokens[$index + 1] ?? null;
 
-        if (!\is_array($class) || !\in_array(self::shortName($class[1]), self::DATE_CLASSES, true)) {
+        if (!\is_array($class) || !\in_array($class[0], self::NAME_TOKENS, true)) {
+            return null;
+        }
+
+        $resolved = self::resolveClass($class[1], $classAliases);
+
+        if (\in_array($resolved, self::CLOCK_CLASSES, true)) {
+            return $class[2];
+        }
+
+        if (!\in_array($resolved, self::DATE_CLASSES, true)) {
             return null;
         }
 
@@ -108,74 +137,39 @@ final class WallClockReads
             return $class[2];
         }
 
-        return self::readsNow(\array_slice($tokens, $index + 2)) ? $class[2] : null;
+        return DateTimeArguments::readsNow(\array_slice($tokens, $index + 2)) ? $class[2] : null;
     }
 
     /**
-     * @param list<array{int, string, int}|string> $tokens
-     * @param array{int, string, int}              $name   the name token at `$index`
+     * @param list<array{int, string, int}|string>                                    $tokens
+     * @param array{int, string, int}                                                 $name    the token at `$index`
+     * @param array{classes: array<string, string>, functions: array<string, string>} $aliases
      */
-    private static function functionRead(
-        array $tokens,
-        array $name,
-        int $index,
-        bool $symfonyClockImported,
-        bool $symfonyNowImported,
-    ): ?int {
+    private static function functionRead(array $tokens, int $index, array $name, array $aliases): ?int
+    {
         if ('(' !== ($tokens[$index + 1] ?? null)) {
             return null;
         }
 
-        if (self::isStaticGetOnSymfonyClock($tokens, $name, $index, $symfonyClockImported)) {
-            return $name[2];
-        }
-
         $previous = $tokens[$index - 1] ?? null;
+        $isMember = \is_array($previous) && \in_array($previous[0], self::MEMBER_OR_DECLARATION, true);
 
-        if (\is_array($previous) && \in_array($previous[0], self::MEMBER_OR_DECLARATION, true)) {
-            return null;
+        if ($isMember) {
+            return self::isStaticGetOnGlobalClock($tokens, $index, $name, $aliases['classes']) ? $name[2] : null;
         }
 
-        return self::isGlobalRead($name, \array_slice($tokens, $index + 1), $symfonyNowImported) ? $name[2] : null;
-    }
+        $fromParenthesis = \array_slice($tokens, $index + 1);
 
-    /**
-     * @param array{int, string, int}              $name
-     * @param list<array{int, string, int}|string> $fromParenthesis
-     */
-    private static function isGlobalRead(array $name, array $fromParenthesis, bool $symfonyNowImported): bool
-    {
-        $spelling = \strtolower($name[1]);
-
-        if ('\symfony\component\clock\now' === $spelling || ('now' === $spelling && $symfonyNowImported)) {
-            return true;
-        }
-
-        if (T_NAME_QUALIFIED === $name[0]) {
-            return false;
-        }
-
-        $function = \ltrim($spelling, '\\');
-
-        return match (true) {
-            \in_array($function, self::ALWAYS, true) => true,
-            \in_array($function, self::WITHOUT_ARGUMENTS, true) => 0 === self::argumentCount($fromParenthesis),
-            \in_array($function, self::WITH_ONE_ARGUMENT, true) => 1 === self::argumentCount($fromParenthesis),
-            \in_array($function, self::CONSTRUCTOR_LIKE, true) => self::readsNow($fromParenthesis),
-            default => false,
-        };
+        return self::isGlobalRead($name, $fromParenthesis, $aliases['functions']) ? $name[2] : null;
     }
 
     /**
      * @param list<array{int, string, int}|string> $tokens
-     * @param array{int, string, int}              $name   the name token at `$index`
+     * @param array{int, string, int}              $name
+     * @param array<string, string>                $classAliases
      */
-    private static function isStaticGetOnSymfonyClock(
-        array $tokens,
-        array $name,
-        int $index,
-        bool $symfonyClockImported,
-    ): bool {
+    private static function isStaticGetOnGlobalClock(array $tokens, int $index, array $name, array $classAliases): bool
+    {
         $operator = $tokens[$index - 1] ?? null;
         $class = $tokens[$index - 2] ?? null;
 
@@ -183,57 +177,74 @@ final class WallClockReads
             return false;
         }
 
-        if (!\is_array($class)) {
-            return false;
-        }
-
-        $spelling = \ltrim(\strtolower($class[1]), '\\');
-
-        return 'symfony\component\clock\clock' === $spelling || ('clock' === $spelling && $symfonyClockImported);
+        return \is_array($class) && self::GLOBAL_CLOCK === self::resolveClass($class[1], $classAliases);
     }
 
     /**
-     * True when the argument list starting at `(` carries no argument, or a first argument whose first token
-     * is a relative string literal.
-     *
+     * @param array{int, string, int}              $name
      * @param list<array{int, string, int}|string> $fromParenthesis
+     * @param array<string, string>                $functionAliases
      */
-    private static function readsNow(array $fromParenthesis): bool
+    private static function isGlobalRead(array $name, array $fromParenthesis, array $functionAliases): bool
     {
-        $first = ArgumentTokens::argumentAt(ArgumentTokens::insideBrackets($fromParenthesis), 1);
+        $spelling = \strtolower($name[1]);
+        $function = $functionAliases[$spelling] ?? \ltrim($spelling, '\\');
 
-        if (null === $first || [] === $first) {
+        if (self::GLOBAL_NOW === $function) {
             return true;
         }
 
-        $head = $first[0];
-
-        if (!\is_array($head) || T_CONSTANT_ENCAPSED_STRING !== $head[0]) {
+        if (T_NAME_QUALIFIED === $name[0] && !\array_key_exists($spelling, $functionAliases)) {
             return false;
         }
 
-        return 1 !== \preg_match(self::ABSOLUTE, \substr($head[1], 1, -1));
+        $arguments = DateTimeArguments::argumentCount($fromParenthesis);
+
+        return match (true) {
+            \in_array($function, self::ALWAYS, true) => true,
+            \in_array($function, self::WITHOUT_ARGUMENTS, true) => 0 === $arguments,
+            \in_array($function, self::WITH_ONE_ARGUMENT, true) => 1 === $arguments,
+            \in_array($function, self::CONSTRUCTOR_LIKE, true) => DateTimeArguments::readsNow($fromParenthesis),
+            default => false,
+        };
     }
 
     /**
-     * @param list<array{int, string, int}|string> $fromParenthesis
+     * @param list<array{int, string, int}|string> $tokens
+     * @param array{int, string, int}              $variable
      */
-    private static function argumentCount(array $fromParenthesis): int
+    private static function requestTimeRead(array $tokens, int $index, array $variable): ?int
     {
-        $inside = ArgumentTokens::insideBrackets($fromParenthesis);
+        $key = $tokens[$index + 2] ?? null;
 
-        if ([] === $inside) {
-            return 0;
+        if ('$_SERVER' !== $variable[1] || '[' !== ($tokens[$index + 1] ?? null) || !\is_array($key)) {
+            return null;
         }
 
-        return 1 + \iterator_count(ArgumentTokens::topLevelTokensOf($inside, ','));
+        return T_CONSTANT_ENCAPSED_STRING === $key[0] && \str_starts_with(\trim($key[1], '\'"'), 'REQUEST_TIME')
+            ? $variable[2]
+            : null;
     }
 
-    private static function shortName(string $name): string
+    /**
+     * @param array<string, string> $classAliases
+     */
+    private static function resolveClass(string $spelling, array $classAliases): string
     {
-        $segments = \explode('\\', \strtolower($name));
+        $name = \strtolower($spelling);
 
-        return (string) \end($segments);
+        if (\str_starts_with($name, '\\')) {
+            return \ltrim($name, '\\');
+        }
+
+        $segments = \explode('\\', $name, 2);
+        $imported = $classAliases[$segments[0]] ?? null;
+
+        if (null === $imported) {
+            return $name;
+        }
+
+        return isset($segments[1]) ? $imported . '\\' . $segments[1] : $imported;
     }
 
     /**

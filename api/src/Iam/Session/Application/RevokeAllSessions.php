@@ -31,8 +31,10 @@ final readonly class RevokeAllSessions
         Uuid::ensure($userId);
 
         $this->transactionManager->transactional(function () use ($userId): void {
-            $this->sessions->revokeAllForUser($userId);
-            $this->eventBus->publish(new AllSessionsRevoked($userId, occurredOn: $this->clock->now()));
+            $now = $this->clock->now();
+
+            $this->sessions->revokeAllForUser($userId, $now);
+            $this->eventBus->publish(new AllSessionsRevoked($userId, $now));
         });
     }
 }

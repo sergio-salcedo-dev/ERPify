@@ -34,7 +34,7 @@ final class GrantMembershipTest extends TestCase
         $memberships = new InMemoryMembershipRepository();
         $userId = Uuid::generate();
 
-        $membership = (new GrantMembership($memberships, $organizations, $clock))->grant($userId);
+        $membership = (new GrantMembership($memberships, $organizations))->grant($userId, $clock->now());
 
         $this->assertSame([$membership], $memberships->saved);
         $this->assertSame($userId, $membership->userId());
@@ -47,12 +47,11 @@ final class GrantMembershipTest extends TestCase
         $granter = new GrantMembership(
             new InMemoryMembershipRepository(),
             new InMemoryOrganizationRepository(),
-            SuiteInstant::clock(),
         );
 
         $this->expectException(OrganizationNotProvisioned::class);
 
-        $granter->grant(Uuid::generate());
+        $granter->grant(Uuid::generate(), SuiteInstant::now());
     }
 
     public function testRejectsAMalformedUserIdBeforeTouchingTheRepositories(): void
@@ -62,24 +61,23 @@ final class GrantMembershipTest extends TestCase
         $granter = new GrantMembership(
             new InMemoryMembershipRepository(),
             new InMemoryOrganizationRepository(),
-            SuiteInstant::clock(),
         );
 
         $this->expectException(InvalidUuidException::class);
 
-        $granter->grant('not-a-uuid');
+        $granter->grant('not-a-uuid', SuiteInstant::now());
     }
 
     public function testRejectsASecondMembershipForTheSameUser(): void
     {
         $memberships = new InMemoryMembershipRepository();
-        $granter = new GrantMembership($memberships, $this->organizationsWith('ACME Corp'), SuiteInstant::clock());
+        $granter = new GrantMembership($memberships, $this->organizationsWith('ACME Corp'));
         $userId = Uuid::generate();
-        $granter->grant($userId);
+        $granter->grant($userId, SuiteInstant::now());
 
         $this->expectException(UserAlreadyMember::class);
 
-        $granter->grant($userId);
+        $granter->grant($userId, SuiteInstant::now());
     }
 
     private function organizationsWith(string $name): InMemoryOrganizationRepository

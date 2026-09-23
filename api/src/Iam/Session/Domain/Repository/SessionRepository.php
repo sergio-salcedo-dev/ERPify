@@ -59,20 +59,22 @@ interface SessionRepository
 
     /**
      * Bulk-revokes every currently-active session of the user EXCEPT `$currentSessionId` — the "close the
-     * others" action, which never self-expels the session in hand.
+     * others" action, which never self-expels the session in hand. `$now` stamps `revokedAt`/`updatedAt`, and is
+     * the instant the caller records its revocation event at, so the rows and the event agree.
      *
      * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
      * @throws UnexpectedValueException                                     when the store yields no affected-row count
      */
-    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): void;
+    public function revokeOthersForUser(string $userId, SessionId $currentSessionId, DateTimeImmutable $now): void;
 
     /**
-     * Bulk-revokes every currently-active session of the user (the reset-everywhere capability).
+     * Bulk-revokes every currently-active session of the user (the reset-everywhere capability), stamped at
+     * `$now` like {@see revokeOthersForUser()}.
      *
      * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
      * @throws UnexpectedValueException                                     when the store yields no affected-row count
      */
-    public function revokeAllForUser(string $userId): void;
+    public function revokeAllForUser(string $userId, DateTimeImmutable $now): void;
 
     /**
      * Hard-deletes every session row of the user — active or not — and returns how many were removed. Unlike

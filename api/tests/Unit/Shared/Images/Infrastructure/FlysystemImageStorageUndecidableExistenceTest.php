@@ -10,6 +10,7 @@ use Erpify\Shared\Images\Domain\Storage\ImageStorageFailed;
 use Erpify\Shared\Images\Domain\Storage\StorageFailureCategory;
 use Erpify\Shared\Images\Infrastructure\FlysystemImageStorage;
 use Erpify\Tests\Double\Clock\SuiteInstant;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use League\Flysystem\Filesystem;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -234,7 +235,7 @@ final class FlysystemImageStorageUndecidableExistenceTest extends TestCase
                 new class extends \Psr\Log\AbstractLogger {
                     public function log($level, string|\Stringable $message, array $context = []): void {}
                 },
-                new FailureSignalWindow(new SymfonyClock(new \Symfony\Component\Clock\NativeClock())),
+                new FailureSignalWindow(new SymfonyClock(new \Symfony\Component\Clock\MockClock('__INSTANT__'))),
             );
 
             try {
@@ -251,7 +252,11 @@ final class FlysystemImageStorageUndecidableExistenceTest extends TestCase
             }
 
             echo json_encode($report);
-            PROBE, ['__ROOT__' => $storageRoot, '__ID__' => $imageId->toString()]));
+            PROBE, [
+            '__ROOT__' => $storageRoot,
+            '__ID__' => $imageId->toString(),
+            '__INSTANT__' => FreezeSystemClockExtension::SUITE_INSTANT,
+        ]));
         \chmod($script, 0o644);
 
         $output = [];

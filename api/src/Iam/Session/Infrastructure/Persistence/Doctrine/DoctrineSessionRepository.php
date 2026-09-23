@@ -121,15 +121,15 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     }
 
     #[Override]
-    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): void
+    public function revokeOthersForUser(string $userId, SessionId $currentSessionId, DateTimeImmutable $now): void
     {
-        $this->bulkRevokeActive($userId, $currentSessionId);
+        $this->bulkRevokeActive($userId, $currentSessionId, $now);
     }
 
     #[Override]
-    public function revokeAllForUser(string $userId): void
+    public function revokeAllForUser(string $userId, DateTimeImmutable $now): void
     {
-        $this->bulkRevokeActive($userId, null);
+        $this->bulkRevokeActive($userId, null, $now);
     }
 
     #[Override]
@@ -191,10 +191,8 @@ final readonly class DoctrineSessionRepository implements SessionRepository
      * Directed UPDATE flipping every currently-active session of the user to `REVOKED` (optionally excluding
      * the one in hand). Runs as SQL without hydrating the aggregates — the bulk path never needs their events.
      */
-    private function bulkRevokeActive(string $userId, ?SessionId $except): void
+    private function bulkRevokeActive(string $userId, ?SessionId $except, DateTimeImmutable $now): void
     {
-        $now = $this->clock->now();
-
         $queryBuilder = $this->entityManager->createQueryBuilder()
             ->update(Session::class, 's')
             ->set('s.status', ':revoked')

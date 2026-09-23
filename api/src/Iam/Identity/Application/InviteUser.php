@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application;
 
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
-use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
 use SensitiveParameter;
@@ -49,13 +49,16 @@ final readonly class InviteUser
         private UserRepository $users,
         private Validator $validator,
         private AuditLogger $auditLogger,
-        private Clock $clock,
     ) {
     }
 
-    public function invite(#[SensitiveParameter] string $email, Role ...$roles): User
+    /**
+     * A step of {@see \Erpify\Iam\Invitation\Application\SendInvitation}, never an entry point, so it takes the
+     * instant that operation read: the identity, its membership and its invitation carry one reading.
+     */
+    public function invite(#[SensitiveParameter] string $email, DateTimeImmutable $now, Role ...$roles): User
     {
-        $user = User::invite(Uuid::generate(), $email, $this->clock->now(), ...$roles);
+        $user = User::invite(Uuid::generate(), $email, $now, ...$roles);
 
         $this->validator->ensure($user);
         $this->users->save($user);

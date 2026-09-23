@@ -35,7 +35,8 @@ final class PruneHandledDomainEventsHandlerTest extends TestCase
             })
         ;
 
-        (new PruneHandledDomainEventsHandler($pruner, FixedClock::at('2050-06-15T12:00:00+00:00')))(
+        // A clock reading at +02:00 proves the threshold is converted to UTC, the zone `claimed_at` is written in.
+        (new PruneHandledDomainEventsHandler($pruner, FixedClock::at('2050-06-15T14:00:00+02:00')))(
             new PruneHandledDomainEventsMessage(7),
         );
 

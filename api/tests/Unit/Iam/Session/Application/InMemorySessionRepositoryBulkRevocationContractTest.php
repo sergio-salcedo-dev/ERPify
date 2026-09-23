@@ -47,7 +47,7 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
         $sessions = new InMemorySessionRepository(SessionMother::active(startedAt: $now));
         $sessions->clock = new FixedClock($now);
 
-        $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID);
+        $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID, $now);
 
         $this->assertNotInstanceOf(
             Session::class,
@@ -68,6 +68,7 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
         $sessions->revokeOthersForUser(
             SessionMother::DEFAULT_USER_ID,
             SessionId::fromString(SessionMother::DEFAULT_ID),
+            $now,
         );
 
         $this->assertSame([$current], $sessions->findByUserId(SessionMother::DEFAULT_USER_ID));
@@ -92,6 +93,7 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
         $sessions->revokeOthersForUser(
             \strtoupper(SessionMother::DEFAULT_USER_ID),
             SessionId::fromString(\strtoupper(SessionMother::DEFAULT_ID)),
+            $now,
         );
 
         $this->assertSame(SessionStatus::ACTIVE, $current->status(), 'the spared session is spared');
@@ -107,7 +109,7 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
         $sessions = new InMemorySessionRepository(SessionMother::active(startedAt: $now), $theirs);
         $sessions->clock = new FixedClock($now);
 
-        $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID);
+        $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID, $now);
 
         $this->assertSame([$theirs], $sessions->findByUserId($otherUserId));
     }
@@ -126,7 +128,7 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
         $sessions = new InMemorySessionRepository($lapsed);
         $sessions->clock = new FixedClock($now);
 
-        $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID);
+        $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID, $now);
 
         $this->assertSame(SessionStatus::REVOKED, $lapsed->status());
         $this->assertSame($now, $lapsed->revokedAt());
@@ -146,7 +148,7 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
 
         $this->assertSame(0, $sessions->deleteRetired($revokedBefore, $expiredBefore));
 
-        $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID);
+        $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID, $now);
 
         $this->assertSame(1, $sessions->deleteRetired($revokedBefore, $expiredBefore));
     }
@@ -162,7 +164,7 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
         // the revocation's own contribution and not a leftover.
         $session->pullDomainEvents();
 
-        $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID);
+        $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID, $now);
 
         $this->assertSame([], $session->pullDomainEvents());
     }

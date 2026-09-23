@@ -59,8 +59,8 @@ final class SendInvitationTest extends TestCase
         $eventBus = new RecordingEventBus();
 
         $sendInvitation = new SendInvitation(
-            new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger(), $clock),
-            new GrantMembership($memberships, $organizations, $clock),
+            new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger()),
+            new GrantMembership($memberships, $organizations),
             $invitations,
             new SendInvitationEmailBestEffort($emailSender, new NullLogger()),
             $eventBus,

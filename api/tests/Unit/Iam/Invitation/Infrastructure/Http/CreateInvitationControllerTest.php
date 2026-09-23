@@ -137,8 +137,8 @@ final class CreateInvitationControllerTest extends TestCase
         $organizations->save(Organization::provision(self::ORG_ID, 'ACME', $clock->now()));
 
         return new SendInvitation(
-            new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger(), $clock),
-            new GrantMembership(new InMemoryMembershipRepository(), $organizations, $clock),
+            new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger()),
+            new GrantMembership(new InMemoryMembershipRepository(), $organizations),
             $invitations,
             new SendInvitationEmailBestEffort(new SpyInvitationEmailSender(), new NullLogger()),
             new RecordingEventBus(),

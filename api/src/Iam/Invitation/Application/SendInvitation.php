@@ -67,9 +67,9 @@ final readonly class SendInvitation
 
         $recipientEmail = $this->transactionManager->transactional(
             function () use ($invitationId, $email, $generated, $roles, $now): string {
-                $user = $this->inviteUser->invite($email, ...$roles);
+                $user = $this->inviteUser->invite($email, $now, ...$roles);
                 $userId = $user->getId() ?? throw InvitedIdentityUnavailable::withoutId();
-                $membership = $this->grantMembership->grant($userId);
+                $membership = $this->grantMembership->grant($userId, $now);
 
                 $invitation = Invitation::create(
                     $invitationId,

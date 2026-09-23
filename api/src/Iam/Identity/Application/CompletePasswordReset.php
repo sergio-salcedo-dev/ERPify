@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Application;
 
 use Closure;
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
@@ -51,6 +52,11 @@ use SensitiveParameter;
  * It returns the identity's email so the HTTP adapter can establish the session (programmatic login on the
  * just-set credential, reusing the native id regeneration): a successful reset signs the user in, and every
  * prior session was already revoked above — reset everywhere, then sign in here.
+ *
+ * Its coupling sits at the threshold by what it is rather than by accretion: the refusals its contract names and
+ * the collaborators the ordering above requires, the instant that stamps the reset among them.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final readonly class CompletePasswordReset
 {
@@ -79,7 +85,10 @@ final readonly class CompletePasswordReset
      */
     public function complete(#[SensitiveParameter] string $token, Closure $hashNewPassword): string
     {
-        $resetToken = $this->resolve($token);
+        // One reading for the whole operation: the instant the token is judged live at is the instant the new
+        // credential and its fact are stamped with, so a reset can never be recorded after the expiry it passed.
+        $now = $this->clock->now();
+        $resetToken = $this->resolve($token, $now);
         $user = $this->users->findById($resetToken->userId()) ?? throw new InvalidResetToken();
 
         // Cheap first sampling of the wall: the common already-walled case is rejected without paying the
@@ -90,7 +99,7 @@ final readonly class CompletePasswordReset
         // between here and the conditional delete below is caught by the consume() affected-rows guard.
         $newPassword = $hashNewPassword();
 
-        $email = $this->transactionManager->transactional(function () use ($newPassword, $resetToken): string {
+        $email = $this->transactionManager->transactional(function () use ($newPassword, $resetToken, $now): string {
             // Re-sample the status from the LOCKED row: an admin suspension/deactivation committed between
             // the load above and this transaction must wall the reset — without the lock the check races the
             // admin write and a walled identity could still complete. The lock also serialises against the
@@ -102,7 +111,7 @@ final readonly class CompletePasswordReset
                 throw new InvalidResetToken();
             }
 
-            $user->resetPassword($newPassword, $this->clock->now());
+            $user->resetPassword($newPassword, $now);
             $user->clearLockout();
 
             $this->users->save($user);
@@ -123,7 +132,7 @@ final readonly class CompletePasswordReset
      * non-UUID selector resolves to a missing row (the repository treats a malformed id as absent, never an
      * `InvalidUuidException`), so the wire type stays uniform and knowing an id buys nothing without the secret.
      */
-    private function resolve(#[SensitiveParameter] string $token): PasswordResetToken
+    private function resolve(#[SensitiveParameter] string $token, DateTimeImmutable $now): PasswordResetToken
     {
         $parts = \explode('.', $token, 2);
 
@@ -133,7 +142,7 @@ final readonly class CompletePasswordReset
 
         $resetToken = $this->tokens->findById($parts[0]) ?? throw new InvalidResetToken();
 
-        if (!$resetToken->verify($parts[1], $this->clock->now())) {
+        if (!$resetToken->verify($parts[1], $now)) {
             throw new InvalidResetToken();
         }
 

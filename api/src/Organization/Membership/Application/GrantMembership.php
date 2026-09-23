@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Organization\Membership\Application;
 
+use DateTimeImmutable;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Membership\Domain\Exception\OrganizationNotProvisioned;
 use Erpify\Organization\Membership\Domain\Exception\UserAlreadyMember;
 use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
 use Erpify\Organization\Organization\Domain\Repository\OrganizationRepository;
-use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
@@ -24,16 +24,18 @@ final readonly class GrantMembership
     public function __construct(
         private MembershipRepository $memberships,
         private OrganizationRepository $organizations,
-        private Clock $clock,
     ) {
     }
 
     /**
+     * `$now` is the instant the onboarding operation read, so the membership carries the same stamp as the
+     * identity it binds.
+     *
      * @throws InvalidUuidException       when the user id is not a well-formed UUID
      * @throws OrganizationNotProvisioned when no organization has been provisioned yet
      * @throws UserAlreadyMember          when the user already belongs to the organization
      */
-    public function grant(string $userId): Membership
+    public function grant(string $userId, DateTimeImmutable $now): Membership
     {
         Uuid::ensure($userId);
 
@@ -44,7 +46,7 @@ final readonly class GrantMembership
             throw new UserAlreadyMember($userId);
         }
 
-        $membership = Membership::grant(Uuid::generate(), $userId, $organizationId, $this->clock->now());
+        $membership = Membership::grant(Uuid::generate(), $userId, $organizationId, $now);
 
         $this->memberships->save($membership);
 

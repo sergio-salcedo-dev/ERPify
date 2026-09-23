@@ -34,7 +34,8 @@ use RuntimeException;
  * The instant comes from the public {@see $clock} property rather than a constructor parameter, which is
  * variadic over the presets and would force a clock ahead of them. It defaults to the suite instant; a test
  * that reasons about "now" assigns its own clock and hands the same instant to the sessions it builds, so the
- * double and the aggregates never disagree about what time it is.
+ * double and the aggregates never disagree about what time it is. It governs the READS only: a bulk revocation
+ * stamps the instant its caller passes, as the adapter does.
  *
  * **The bulk revocations mutate, and what they mirror is the adapter's directed UPDATE — not the aggregate's
  * own {@see Session::revoke()}.** The two write different things and only one of them is what a consumer of
@@ -82,7 +83,7 @@ final class InMemorySessionRepository implements SessionRepository
     public ?Closure $onRevokeAll = null;
 
     /**
-     * The instant every read and bulk write evaluates against, mirroring the {@see Clock} the adapter is
+     * The instant every read evaluates admissibility against, mirroring the {@see Clock} the adapter is
      * constructed with.
      */
     public Clock $clock;
@@ -172,20 +173,20 @@ final class InMemorySessionRepository implements SessionRepository
     }
 
     #[Override]
-    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): void
+    public function revokeOthersForUser(string $userId, SessionId $currentSessionId, DateTimeImmutable $now): void
     {
         $this->revokeOthersCalls[] = $userId;
         $this->lastRevokeOthersexcept = $currentSessionId;
 
-        $this->bulkRevokeActive($userId, $currentSessionId);
+        $this->bulkRevokeActive($userId, $currentSessionId, $now);
     }
 
     #[Override]
-    public function revokeAllForUser(string $userId): void
+    public function revokeAllForUser(string $userId, DateTimeImmutable $now): void
     {
         $this->revokeAllCalls[] = $userId;
 
-        $this->bulkRevokeActive($userId, null);
+        $this->bulkRevokeActive($userId, null, $now);
 
         // Fired after the flip so the hook observes the store the revocation left behind, which is the state
         // a caller reasoning about "the sessions are gone by now" would read.
@@ -263,9 +264,8 @@ final class InMemorySessionRepository implements SessionRepository
      * comparison is on the id string rather than {@see SessionId::equals()} because what is indexed is the
      * entity's own nullable id, and a session that never got one is not addressable by the adapter either.
      */
-    private function bulkRevokeActive(string $userId, ?SessionId $except): void
+    private function bulkRevokeActive(string $userId, ?SessionId $except, DateTimeImmutable $now): void
     {
-        $now = $this->clock->now();
         $spared = $except?->toString();
 
         foreach ($this->byId as $id => $session) {

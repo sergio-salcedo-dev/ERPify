@@ -28,6 +28,15 @@ inyectado **una vez por operación** y pasa el `DateTimeImmutable` hacia dentro.
 sobre *cuándo*; pertenece al borde que ya la posee. Con ello un agregado es función de sus entradas, y `Session`
 deja de *recibir* `$now` para responder (`isExpired`, `isActive`) mientras *alcanzaba un global* para registrar.
 
+Una lectura por operación incluye lo que la operación compone. `CreateUser`, `InviteUser` y `GrantMembership` son
+pasos de un alta (`SendInvitation`, `organization:administrator:create`), nunca puntos de entrada, así que
+reciben el instante de su orquestador en lugar de leer un reloj propio: identidad, membresía e invitación llevan
+una sola lectura. Lo mismo vale para un puerto que escribe sello: `SessionRepository::revokeAllForUser()` y
+`revokeOthersForUser()` reciben el `$now` con el que el caso de uso registra el evento, porque el `UPDATE` masivo
+no hidrata agregados y, leyendo su propio reloj, estampaba `revokedAt` en un instante distinto del `occurredOn` del
+hecho que lo anuncia. Un adapter sigue leyendo el `Clock` inyectado para *consultar* (qué sesión es admisible
+ahora), nunca para *estampar*.
+
 **D2 — `DomainEvent::$occurredOn` es obligatorio y va antes que `$eventId`.** El emisor pasa el instante de la
 operación que produjo el hecho, así que un evento no puede discrepar de los sellos que el agregado registra a su
 lado. `eventId` sigue siendo opcional (replay y reintentos conservan su identidad).
@@ -42,9 +51,12 @@ auditoría en la entidad).
 DateTimeImmutable()` sin argumento o con literal relativo, `time()`/`microtime()`/`date($fmt)`, y el reloj global
 de Symfony alcanzado estáticamente. Levantarla destapó dos fuentes más en infraestructura —
 `PruneFailedMessagesHandler` y `PruneHandledDomainEventsHandler` calculaban su umbral con `new
-DateTimeImmutable('-N days')`—, que ahora leen el `Clock`. Una excepción viva: `RateLimitSnapshot` resta `\time()`
-del `getRetryAfter()` del limitador porque el limitador de Symfony sella sus ventanas con `microtime()`/`time()`;
-el delta tiene que tomarse en ese marco. La excepción se rechaza en cuanto el fichero deja de leer el reloj.
+DateTimeImmutable('-N days')`—, que ahora leen el `Clock` normalizado a UTC (la zona en que se escriben sus
+columnas). El de claims gana además el suelo de retención que el otro ya tenía: una ventana de cero o negativa
+ponía el umbral en el futuro y borraba en el primer tick los claims de eventos aún en reintento. Una excepción
+viva: `RateLimitSnapshot` resta `\time()` del `getRetryAfter()` del limitador porque el limitador de Symfony
+sella sus ventanas con `microtime()`/`time()`; el delta tiene que tomarse en ese marco. La excepción se rechaza en
+cuanto el fichero deja de leer el reloj.
 
 **D5 — El arnés de PHPUnit fija una sola fuente.** `FreezeSystemClockExtension::pin()` fija ya solo el reloj global
 de Symfony (el que lee el `clock` del contenedor). Un test que no se preocupa por la hora pasa
@@ -79,8 +91,10 @@ suyo de `Tests\DataFixtures\SeedInstant` (el reloj global, el que la aplicación
   desempate por id; un test que pasa instantes distintos vuelve a ordenar por tiempo.
 - **Un diff ancho y mecánico, y atómico.** El estático no se puede borrar hasta que cada lector toma el parámetro,
   y el parámetro no existe hasta que `AggregateRoot` lo declara; PHPStan pone en rojo cada llamada sin convertir.
-- **Producción no cambia de comportamiento.** El inicializador se borra porque ya no hay segunda fuente, no porque
-  estuviera mal.
+- **Producción apenas cambia de comportamiento.** El inicializador se borra porque ya no hay segunda fuente, no
+  porque estuviera mal. Lo que sí cambia es lo que las dos lecturas separaban por microsegundos (el `revokedAt` de
+  una revocación masiva frente al `occurredOn` de su evento; los sellos de un alta compuesta) y el suelo de
+  retención de los claims, que rechaza una ventana que antes aceptaba.
 
 **Lo que esto no afirma.** Nada sobre el reloj de Postgres, el bootstrap de Behat ni un `time()` alcanzado por un
 callable. La guarda prueba que `api/src` tiene una fuente; no dice nada de un test que fabrica un literal de fecha,

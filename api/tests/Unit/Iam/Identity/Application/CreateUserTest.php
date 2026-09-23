@@ -23,11 +23,12 @@ final class CreateUserTest extends TestCase
     public function testRegistersAndPersistsTheUser(): void
     {
         $users = new InMemoryUserRepository();
-        $creator = new CreateUser($users, $this->passingValidator(), SuiteInstant::clock());
+        $creator = new CreateUser($users, $this->passingValidator());
 
         $user = $creator->create(
             'Alice@Erpify.Test',
             HashedPassword::fromHash('a-precomputed-hash'),
+            SuiteInstant::now(),
             Role::AUDIT_READER,
         );
 
@@ -39,9 +40,9 @@ final class CreateUserTest extends TestCase
     public function testAllowsARolelessUser(): void
     {
         $users = new InMemoryUserRepository();
-        $creator = new CreateUser($users, $this->passingValidator(), SuiteInstant::clock());
+        $creator = new CreateUser($users, $this->passingValidator());
 
-        $user = $creator->create('bob@erpify.test', HashedPassword::fromHash('another-hash'));
+        $user = $creator->create('bob@erpify.test', HashedPassword::fromHash('another-hash'), SuiteInstant::now());
 
         $this->assertSame([], $user->roles());
         $this->assertCount(1, $users->saved);

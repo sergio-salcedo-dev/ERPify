@@ -12,6 +12,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordPolicyCheck;
 use Erpify\Organization\Membership\Application\GrantMembership;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Clock\Domain\Clock;
 use Override;
 use RuntimeException;
 use SensitiveParameter;
@@ -52,6 +53,7 @@ final class CreateInitialAdministratorCommand extends Command
         private readonly PasswordHasher $passwordHasher,
         private readonly EntityManagerInterface $entityManager,
         private readonly PasswordPolicyCheck $passwordPolicyCheck,
+        private readonly Clock $clock,
     ) {
         parent::__construct();
     }
@@ -129,10 +131,11 @@ final class CreateInitialAdministratorCommand extends Command
             $hashedPassword = HashedPassword::fromHash($this->passwordHasher->hash($plainPassword));
 
             $this->entityManager->wrapInTransaction(function () use ($email, $hashedPassword): void {
-                $user = $this->createUser->create($email, $hashedPassword, Role::ADMIN);
+                $now = $this->clock->now();
+                $user = $this->createUser->create($email, $hashedPassword, $now, Role::ADMIN);
                 $userId = $user->getId() ?? throw IdentityProvisionedWithoutId::afterCreation();
 
-                $this->grantMembership->grant($userId);
+                $this->grantMembership->grant($userId, $now);
             });
         } catch (Throwable $throwable) {
             $io->error(\sprintf('Could not create the administrator: %s', $throwable->getMessage()));

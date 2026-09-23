@@ -33,8 +33,8 @@ final class InviteUserTest extends TestCase
     {
         $users = new InMemoryUserRepository();
 
-        $user = (new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger(), SuiteInstant::clock()))
-            ->invite('Alice@Erpify.Test', Role::EDITOR)
+        $user = (new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger()))
+            ->invite('Alice@Erpify.Test', SuiteInstant::now(), Role::EDITOR)
         ;
 
         $this->assertSame([$user], $users->saved);
@@ -49,8 +49,8 @@ final class InviteUserTest extends TestCase
     {
         $users = new InMemoryUserRepository();
 
-        $user = (new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger(), SuiteInstant::clock()))
-            ->invite('bob@erpify.test')
+        $user = (new InviteUser($users, $this->passingValidator(), new RecordingAuditLogger()))
+            ->invite('bob@erpify.test', SuiteInstant::now())
         ;
 
         $this->assertSame([], $user->roles());
@@ -65,8 +65,8 @@ final class InviteUserTest extends TestCase
         // matter of inviting one instead of promoting one.
         $audit = new RecordingAuditLogger();
 
-        $user = (new InviteUser(new InMemoryUserRepository(), $this->passingValidator(), $audit, SuiteInstant::clock()))
-            ->invite('carol@erpify.test', Role::ADMIN, Role::EDITOR, Role::ADMIN)
+        $user = (new InviteUser(new InMemoryUserRepository(), $this->passingValidator(), $audit))
+            ->invite('carol@erpify.test', SuiteInstant::now(), Role::ADMIN, Role::EDITOR, Role::ADMIN)
         ;
 
         $this->assertCount(1, $audit->records);
@@ -95,8 +95,8 @@ final class InviteUserTest extends TestCase
     {
         $audit = new RecordingAuditLogger();
 
-        (new InviteUser(new InMemoryUserRepository(), $this->passingValidator(), $audit, SuiteInstant::clock()))
-            ->invite('dora@erpify.test', Role::VIEWER)
+        (new InviteUser(new InMemoryUserRepository(), $this->passingValidator(), $audit))
+            ->invite('dora@erpify.test', SuiteInstant::now(), Role::VIEWER)
         ;
 
         $this->assertCount(1, $audit->records);

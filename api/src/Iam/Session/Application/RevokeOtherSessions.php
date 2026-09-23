@@ -34,10 +34,10 @@ final readonly class RevokeOtherSessions
         Uuid::ensure($userId);
 
         $this->transactionManager->transactional(function () use ($userId, $currentSessionId): void {
-            $this->sessions->revokeOthersForUser($userId, $currentSessionId);
-            $this->eventBus->publish(
-                new OtherSessionsRevoked($userId, $currentSessionId->toString(), occurredOn: $this->clock->now()),
-            );
+            $now = $this->clock->now();
+
+            $this->sessions->revokeOthersForUser($userId, $currentSessionId, $now);
+            $this->eventBus->publish(new OtherSessionsRevoked($userId, $currentSessionId->toString(), $now));
         });
     }
 }

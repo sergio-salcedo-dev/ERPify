@@ -108,8 +108,8 @@ final class CreateInvitationCommandTest extends TestCase
             : CapturingInvitationEmailSender::accepting();
 
         $command = new CreateInvitationCommand(new SendInvitation(
-            new InviteUser(new InMemoryUserRepository(), $this->passingValidator(), new RecordingAuditLogger(), $clock),
-            new GrantMembership(new InMemoryMembershipRepository(), $organizations, $clock),
+            new InviteUser(new InMemoryUserRepository(), $this->passingValidator(), new RecordingAuditLogger()),
+            new GrantMembership(new InMemoryMembershipRepository(), $organizations),
             new InMemoryInvitationRepository(),
             new SendInvitationEmailBestEffort($emailSender, new NullLogger()),
             new RecordingEventBus(),

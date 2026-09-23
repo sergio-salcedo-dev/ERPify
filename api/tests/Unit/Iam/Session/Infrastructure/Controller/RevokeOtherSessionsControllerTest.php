@@ -43,7 +43,7 @@ final class RevokeOtherSessionsControllerTest extends TestCase
         $store = $this->createMock(SessionRepository::class);
         $store->expects($this->once())
             ->method('revokeOthersForUser')
-            ->with(self::SUBJECT_ID, $this->correlatedSessionId())
+            ->with(self::SUBJECT_ID, $this->correlatedSessionId(), $this->isInstanceOf(DateTimeImmutable::class))
         ;
 
         $carried = SessionMother::active(userId: self::SUBJECT_ID);

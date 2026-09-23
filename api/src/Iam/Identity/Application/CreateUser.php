@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application;
 
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Access\Domain\Role;
-use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Application\Validator;
 use SensitiveParameter;
@@ -21,19 +21,27 @@ use SensitiveParameter;
  * committed in between still reaches the unique index; the port answers that with a conflict carrying no
  * address, rather than the driver's own message, which names one. The credential arrives already hashed;
  * hashing stays in Infrastructure.
+ *
+ * It is a step of a larger operation, never an entry point, so it takes the instant its orchestrator read
+ * rather than reading a clock of its own: the user and whatever the same operation creates beside it carry one
+ * reading.
  */
 final readonly class CreateUser
 {
     public function __construct(
         private UserRepository $users,
         private Validator $validator,
-        private Clock $clock,
     ) {
     }
 
-    public function create(#[SensitiveParameter] string $email, HashedPassword $password, Role ...$roles): User
-    {
-        $user = User::register(Uuid::generate(), $email, $password, $this->clock->now(), ...$roles);
+    public function create(
+        #[SensitiveParameter]
+        string $email,
+        HashedPassword $password,
+        DateTimeImmutable $now,
+        Role ...$roles,
+    ): User {
+        $user = User::register(Uuid::generate(), $email, $password, $now, ...$roles);
 
         $this->validator->ensure($user);
         $this->users->save($user);

@@ -1,6 +1,6 @@
 ---
 title: The aggregate receives the instant, not the clock
-status: in-review
+status: done
 branch: fix/shared-aggregate-receives-the-instant-isvf
 ---
 
@@ -123,7 +123,7 @@ Stated as the repo requires:
 | Mutators reading the static, across 5 entities | **14** |
 | `Image::__construct` (not an `AggregateRoot`) | 1 |
 | `DomainEvent::$occurredOn` loses its `new DateTimeImmutable()` default (`DomainEvent.php:38`) | 1 — **the third source** |
-| Use cases that mint aggregates | 10 (4 already inject `Clock`; 6 grow the dependency) |
+| Use cases that mint aggregates | 10 (4 already inject `Clock`; 6 grow the dependency) — see *Delivered* for the real count |
 | New fixture factories | 3 — `Bank`, `BankAccount`, `Organization` |
 | Aggregates extending `AggregateRoot` | 9 |
 | Test files touching an aggregate / injecting a double / mothers | ~190 / 54 / 6 |
@@ -161,9 +161,45 @@ every caller that has not been converted, so the path is mechanical with no degr
   asserted.
 - **AC6** — `make php.stan`, `php.unit`, `php.behat`, `php.quality`, `php.quality.dry-run` each green from a
   fresh run with its exit code printed; `pwa.quality` only if `pwa/` is touched (it should not be).
-- **AC7** — the ADR states the decision, the three discarded alternatives with their measurements, and the
-  one cost kept: every aggregate a test builds no longer shares one `createdAt`, so orderings that fell to
-  the id tie-break under the pin may now order by time again.
+- **AC7** — the ADR states the decision, the discarded alternatives with their measurements, and the one cost
+  kept: tests that do not care about the instant still share `SuiteInstant`, so their orderings by `createdAt`
+  still fall to the id tie-break, while a test passing distinct instants orders by time. (Originally predicted
+  as "no longer shares one `createdAt`"; measured false once the tests were migrated — 192 `SuiteInstant::now()`
+  calls across 88 files.)
+
+## Delivered
+
+Branch `fix/shared-aggregate-receives-the-instant-isvf`, all seven steps. What differs from the plan above:
+
+- **The `Clock` count was undercounted.** Callers of the time-stamping *mutators* need the instant too, not
+  only the minters, so every use case calling one gained `Clock`. The exceptions are `CreateUser`, `InviteUser`
+  and `GrantMembership`: steps of a larger operation, never entry points, they take the instant from their
+  orchestrator (`SendInvitation`, `CreateInitialAdministratorCommand`), so one onboarding carries one reading.
+- **The gate found two more sources in Infrastructure**: `PruneFailedMessagesHandler` and
+  `PruneHandledDomainEventsHandler` built their threshold with `new DateTimeImmutable('-N days')`. Both read the
+  `Clock` in UTC now; the claims message gained the retention floor the failed-messages one already had.
+- **One live exemption**: `RateLimitSnapshot`'s `\time()`, in the rate limiter's own wall-clock frame.
+- **Test helpers**: `Tests\Double\Clock\SuiteInstant` (the instant a test hands an aggregate when it does not
+  care) and `Tests\DataFixtures\SeedInstant` (fixtures read Symfony's global clock). `FreezeSystemClockExtension`
+  stays and pins that one clock.
+- **Bulk session revocation**: `SessionRepository::revokeAllForUser()`/`revokeOthersForUser()` take the instant,
+  so the stamped rows and the published fact are one reading.
+
+## Review record
+
+Three layers, run in parallel as read-only subagents on 2026-09-23 over `7be45168..0647b3a9`, each blind to the
+others:
+
+- **Blind Hunter** — no GRAVE/MEDIUM in production code. LOW: two use cases read the clock twice
+  (`CompletePasswordReset`; `SendInvitation`'s composed steps), the handled-claims threshold not in UTC, and gate
+  false negatives/positives. All applied.
+- **Edge Case Hunter** — MEDIUM: bulk revocation stamped rows and event from two readings (applied: the port
+  takes the instant, with a functional test passing an instant distinct from the adapter's clock). MEDIUM/LOW gate
+  gaps measured by running the detector: named arguments, interpolated strings/heredoc, aliased and grouped
+  imports, trailing comma, `'@' . $ts` — closed, each with a rules case; the rest listed as blind spots in
+  `WallClockReads`. LOW: negative claim retention deleted live claims (applied: floor).
+- **Acceptance Auditor** — AC1–AC6 met; AC7 partial (the predicted cost was false; spec and ADR corrected above).
+  One change-relative comment and one wall clock left in a child-process probe — both applied.
 
 ## What this does not claim
 
