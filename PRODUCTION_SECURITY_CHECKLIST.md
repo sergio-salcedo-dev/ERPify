@@ -114,20 +114,35 @@ you change anything here.
       (write-only, browser-embeddable); the real Sentry secret is
       `SENTRY_AUTH_TOKEN`, never `NEXT_PUBLIC_`.
 - [ ] Sentry source maps are **uploaded, not published**. Upload is on only when
-      `SENTRY_AUTH_TOKEN` **and** `SENTRY_ORG` are both set at build time; the
-      project slug defaults to `erpify-pwa-${NEXT_PUBLIC_APP_ENV}` so one image
-      cannot ship its maps to the other environment's project.
-      `deleteSourcemapsAfterUpload: true` in `pwa/next.config.ts` is a **pin,
-      not a switch** — the option already defaults to `true` in @sentry/nextjs
-      10.70.0, so writing it makes a future default flip or a casual removal a
-      visible change rather than a silent republish. The option that would
-      genuinely republish the maps is `filesToDeleteAfterUpload`, which
-      **overrides** the flag outright: a narrow glob there deletes only what it
-      names and serves the rest. It must stay absent. The token reaches the build as a **BuildKit secret**
-      (`--mount=type=secret,id=sentry_auth_token`), never as a build `ARG` —
-      `docker history` prints build args, and this token grants *write* access to
-      the Sentry project. Both invariants are gated by
-      `pwa/tests/sentry-sourcemap-exposure.test.ts`; a green proves the two
+      `SENTRY_AUTH_TOKEN` is set at build time together with `SENTRY_ORG` —
+      or without it for an org-scoped `sntrys_` token, which carries its
+      organisation; the project slug defaults to `erpify-pwa-${NEXT_PUBLIC_APP_ENV}`
+      so one image cannot ship its maps to the other environment's project.
+      **Client maps** exist only while upload is on (the SDK turns
+      `productionBrowserSourceMaps` on for a Turbopack build), land in
+      `.next/static` — served at `/_next/static` — and are deleted after the
+      upload, succeeded or not. `deleteSourcemapsAfterUpload: true` in
+      `pwa/next.config.ts` is a **pin, not a switch**: the SDK already applies it
+      when it turns client maps on, and writing it makes a changed default or a
+      casual removal a visible change rather than a silent republish. Two
+      settings would genuinely publish them and must stay out:
+      `filesToDeleteAfterUpload`, which **overrides** the flag outright so a
+      narrow glob serves everything it does not name, and
+      `productionBrowserSourceMaps: true`, which generates maps in a build with
+      upload off, where nothing deletes them. **Server maps** are emitted into
+      `.next/server` on every production build and the SDK's deletion covers
+      `static/**` only, so they ship inside the standalone image; Next never
+      serves that directory (its static routes are `public/` and `.next/static`),
+      so they are readable by whoever can pull the image, never at a URL. The
+      token reaches the build as a **BuildKit secret**
+      (`--mount=type=secret,id=sentry_auth_token`), never as a build `ARG` or an
+      `ENV` — `docker history` prints args, `docker inspect` prints env, and this
+      token grants *write* access to the Sentry project. A mount that is present
+      but unreadable, or holds more than one word, fails the build; an absent or
+      empty one leaves upload off and says so in the build log, and the upload
+      step itself runs with `silent: false`, so a refused credential or a failed
+      upload is printed rather than swallowed. Gated by
+      `pwa/tests/sentry-sourcemap-exposure.test.ts`; a green proves the
       declarations, never what a real build emits, and never that a CDN or a
       workflow artifact is not serving a copy from somewhere else.
 - [ ] Sentry events are scrubbed before send: `sendDefaultPii: false` plus a

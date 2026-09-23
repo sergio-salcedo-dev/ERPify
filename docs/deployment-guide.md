@@ -62,8 +62,10 @@ client bundle, with errors routed through the same-origin `/monitoring` tunnel
 Source-map upload is wired and **opt-in**: set `SENTRY_AUTH_TOKEN` (a real
 secret — scope it to `project:releases`) and `SENTRY_ORG` in `.env.prod.local`
 and the build uploads the maps, then deletes them from the output so they are
-never served to a browser. Leave either empty and the build still succeeds with
-upload off — prod traces simply stay minified. The token travels as a BuildKit
+never served to a browser. An organization token (`sntrys_…`) carries its
+organization, so `SENTRY_ORG` may stay empty with one. Leave the token empty, or
+pair a personal token with an empty `SENTRY_ORG`, and the build still succeeds
+with upload off — prod traces simply stay minified. The token travels as a BuildKit
 secret rather than a build arg, because `docker history` prints build args.
 
 Secrets are delivered through a **gitignored root `.env.prod.local`** (copy from

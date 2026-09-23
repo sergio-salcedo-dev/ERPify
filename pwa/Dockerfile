@@ -77,12 +77,33 @@ ENV SENTRY_PROJECT=${SENTRY_PROJECT}
 # registry the deploy does not control. Mounted this way it exists only for the
 # lifetime of this RUN and lands in no layer.
 #
-# Absent secret is the normal case (local builds, CI jobs without the secret):
-# the redirect swallows the missing file, the variable stays empty, and
-# next.config.ts leaves upload off instead of failing the build.
+# No token is the normal case (local builds, CI jobs without the secret), and it
+# arrives in two shapes: a plain `docker build` without `--secret` mounts
+# nothing, while Compose mounts an EMPTY file when SENTRY_AUTH_TOKEN is unset or
+# empty. Both leave upload off and say so once in the build log. Anything else
+# at that path — a directory, an unreadable file, a file holding more than one
+# word (a whole env file pointed at by mistake) — is a broken mount, and it
+# fails the build rather than degrading into a silent build with no upload.
+#
+# An empty SENTRY_ORG is unset rather than passed on: sentry-cli inherits the
+# build environment, and an org-scoped `sntrys_` token already names its org.
 RUN --mount=type=secret,id=sentry_auth_token \
-    SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token 2>/dev/null || true)" \
-    npm run build
+    secret=/run/secrets/sentry_auth_token; \
+    token=""; \
+    if [ ! -e "$secret" ]; then \
+        echo "sentry: no sentry_auth_token secret mounted, source-map upload is off"; \
+    elif [ ! -f "$secret" ] || [ ! -r "$secret" ]; then \
+        echo "sentry: $secret is mounted but is not a readable file" >&2; exit 1; \
+    else \
+        token="$(tr -d '[:space:]' < "$secret")" || exit 1; \
+        if [ -z "$token" ]; then \
+            echo "sentry: sentry_auth_token secret is empty, source-map upload is off"; \
+        elif [ "$(wc -w < "$secret")" -ne 1 ]; then \
+            echo "sentry: $secret holds more than one word, not an auth token" >&2; exit 1; \
+        fi; \
+    fi; \
+    if [ -z "$SENTRY_ORG" ]; then unset SENTRY_ORG; fi; \
+    SENTRY_AUTH_TOKEN="$token" npm run build
 
 # Production — copy standalone output (same idea as upstream `prod` stage)
 FROM node_upstream AS prod

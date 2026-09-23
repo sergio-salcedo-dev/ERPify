@@ -1,7 +1,10 @@
 import { cn } from "@/components/cn";
 import { CopyButton } from "@/components/erpify";
 
-/** Serialized-JSON byte budget: past this the block truncates and offers "copy raw" (DESIGN delta). */
+/**
+ * Serialized-JSON byte budget: past this the block truncates, while "Copy metadata" still yields the
+ * full JSON.
+ */
 const MAX_SERIALIZED_LENGTH = 4096;
 
 interface MetadataBlockProps {
@@ -14,8 +17,8 @@ interface MetadataBlockProps {
 /**
  * Renders the audit `metadata` JSON. Every key and value is React-escaped text — **never**
  * `dangerouslySetInnerHTML`/`innerHTML` (the field is untrusted input). A size guard truncates a
- * pathological object so it cannot break the drawer layout, while «copy» always yields the full
- * raw JSON. `null` / an empty object reads as «No metadata», not an empty block.
+ * pathological object so it cannot break the drawer layout, while "Copy metadata" always yields the
+ * full raw JSON. `null` / an empty object reads as «No metadata», not an empty block.
  *
  * By invariant D4 the field carries no sensitive payload; if that ever changes the redaction policy
  * grows in the backend, not here.
@@ -51,7 +54,7 @@ export function MetadataBlock({ value, className, testId }: Readonly<MetadataBlo
       </pre>
       {truncated ? (
         <p className="text-text-subtle text-2xs">
-          Metadata truncated — use «copy» for the full JSON.
+          {'Metadata truncated — use "Copy metadata" for the full JSON.'}
         </p>
       ) : null}
     </div>

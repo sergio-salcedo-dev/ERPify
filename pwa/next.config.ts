@@ -193,7 +193,13 @@ const sentryProject =
 // error: a contributor, a fork and every CI job that only type-checks build
 // without the secret, and failing there would make the token a prerequisite for
 // compiling the app rather than for symbolicating it.
-const uploadsSourcemaps = Boolean(sentryAuthToken && sentryOrg);
+//
+// An org-scoped token (`sntrys_…`) carries its organisation, so it needs no
+// SENTRY_ORG; a user token does. The project always has a value (derived above).
+const ORG_SCOPED_TOKEN_PREFIX = "sntrys_";
+const uploadsSourcemaps = Boolean(
+  sentryAuthToken && (sentryOrg || sentryAuthToken.startsWith(ORG_SCOPED_TOKEN_PREFIX)),
+);
 
 // Wrap with Sentry. Events are routed through a same-origin tunnel
 // (`/monitoring`) so the locked-down CSP `connect-src 'self'` covers them with
@@ -203,18 +209,40 @@ const uploadsSourcemaps = Boolean(sentryAuthToken && sentryOrg);
 // source — every identifier and every comment — to any visitor who opens
 // devtools, while uploading them is the whole point of the exercise.
 //
-// `deleteSourcemapsAfterUpload` already DEFAULTS to true in @sentry/nextjs
-// (10.70.0), so writing it here does not switch the behaviour on — it pins it,
-// so a future default flip or a casual edit is a visible change rather than a
-// silent one. The thing that would genuinely republish the maps is
-// `filesToDeleteAfterUpload`, which OVERRIDES this flag entirely: a narrow glob
-// there deletes only what it names and leaves the rest served. Both are held by
-// `tests/sentry-sourcemap-exposure.test.ts`.
+// What the SDK generates and deletes is asymmetric between client and server,
+// and only the client half is public:
+//  - Client maps exist only while upload is on: under Turbopack the SDK turns
+//    `productionBrowserSourceMaps` on unless this config sets it, and only when
+//    `sourcemaps.disable` is false. They land in `.next/static`, which Next
+//    serves at `/_next/static`, and `deleteSourcemapsAfterUpload` deletes them
+//    after the upload — whether or not the upload succeeded — and strips their
+//    `sourceMappingURL` comments. Setting it here pins what the SDK would
+//    otherwise default to at build time, so a changed default or a casual edit
+//    is a visible change rather than a silent republish.
+//  - Server maps are emitted on every production build, upload or not, into
+//    `.next/server`, and the SDK's deletion glob covers `static/**` only, so
+//    they survive into the standalone image. Next never serves that directory:
+//    its static routes are `public/` and `.next/static` alone. They are image
+//    contents, readable by whoever can pull the image, not a URL.
+//
+// Two settings would genuinely publish client maps, and the gate refuses both:
+// `filesToDeleteAfterUpload`, which OVERRIDES the deletion flag so a narrow glob
+// serves everything it does not name, and `productionBrowserSourceMaps: true`,
+// which generates maps even when upload is off and nothing deletes them.
+//
+// `silent` is off so a failed upload or a refused credential is printed in the
+// build log: the SDK reports both as an error and carries on, and with `silent`
+// on it reports nothing. Keying it to `CI` would not help, because the image
+// builder never defines that variable. Gate: `tests/sentry-sourcemap-exposure.test.ts`.
 export default withSentryConfig(nextConfig, {
   tunnelRoute: "/monitoring",
-  silent: !process.env.CI,
+  silent: false,
   ...(uploadsSourcemaps
-    ? { authToken: sentryAuthToken, org: sentryOrg, project: sentryProject }
+    ? {
+        authToken: sentryAuthToken,
+        project: sentryProject,
+        ...(sentryOrg ? { org: sentryOrg } : {}),
+      }
     : {}),
   sourcemaps: {
     disable: !uploadsSourcemaps,

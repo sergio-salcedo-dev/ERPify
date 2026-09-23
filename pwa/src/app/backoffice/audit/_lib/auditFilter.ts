@@ -51,7 +51,8 @@ export function isAuditLevelValue(value: string): boolean {
 
 /**
  * Count of populated panel-hosted filters (actor + resource + action). Level and the date range live
- * in the always-visible bar, so the "Filtros (n)" badge only counts what a collapsed panel hides.
+ * in the always-visible bar, so the count badge on the "Filters" toggle only counts what a collapsed
+ * panel hides.
  */
 export function countPanelFilters(filter: AuditFilter): number {
   let count = 0;
