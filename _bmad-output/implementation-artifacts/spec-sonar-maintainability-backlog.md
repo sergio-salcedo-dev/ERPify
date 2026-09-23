@@ -1,8 +1,8 @@
 ---
-title: 'Vaciar el backlog de mantenibilidad de SonarCloud: arreglar 13, argumentar 10, ninguna supresión nueva'
+title: 'Vaciar el backlog de mantenibilidad de SonarCloud: arreglar 12, argumentar 11, ninguna supresión nueva'
 type: 'refactor'
 created: '2026-09-20'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '20acf52a'
 review_loop_iteration: 1
 context:
@@ -147,7 +147,10 @@ sin OK explícito, y no es trabajo de código.
 - [x] Filas 11–13 -- texto JSX explícito; **verificar el render en el stack vivo**, no sólo el lint.
 - [x] Cobertura -- por cada cambio, identificar la cobertura existente **de la rama o contrato que el refactor podría alterar**; se añade test sólo cuando ese comportamiento no esté ya protegido por una aserción viva.
 - [x] `tmp/sonar-justifications.md` -- redactado, aprobado y ejecutado: 11 comentarios y 3 transiciones, con preflight y read-back. Estado final medido 16/7/0.
-- [ ] Registrar en la PR el **SHA del commit** con los 13 arreglos y el **timestamp del análisis** de SonarCloud contra el que se verificó el cierre.
+- [x] Registrar el **SHA del commit** con los 12 arreglos y el **timestamp del análisis** de SonarCloud contra el
+  que se verificó el cierre: merge `e67a809c` (rama `f46cb998`, mergeada `2026-09-22T17:00:14Z`), verificado
+  contra el análisis de `main` de `2026-09-23T20:11:10Z`. El cuerpo de la PR no podía llevarlo — se escribió
+  antes de que SonarCloud analizase la rama —, así que el registro vive aquí.
 
 **Acceptance Criteria:**
 - Dado el árbol tras los arreglos, cuando corren `make php.quality` y `make pwa.quality`, entonces salen 0 con exit code impreso.
@@ -157,6 +160,23 @@ sin OK explícito, y no es trabajo de código.
 - Dadas las 10 supervivientes, cuando se consulta cada issue key con `additionalFields=comments` **después** del write, entonces cada una tiene exactamente un comentario y las filas 18–19 devuelven `ACCEPTED`.
 
 ## Spec Change Log
+
+- `2026-09-23` — **Cierre verificado contra el analizador, y la verificación es de identidad, no de recuento.**
+  El cuerpo de la PR dejaba una sola cosa pendiente *by design*: las 12 arregladas seguían silenciadas hasta
+  que SonarCloud analizase la rama, porque ese estado lo pone él y nunca una mano. Ya lo hizo. Medido contra
+  el análisis de `main` de `2026-09-23T20:11:10Z`, con `qualityGateStatus: OK` en las seis condiciones: **0
+  `OPEN` y 0 `CONFIRMED` en las tres calidades**, 22 `CLOSED` y 11 `RESOLVED` sobre 33 issues históricas.
+  **Cuadrar el 11 no prueba nada** — once cualesquiera cuadran igual —, así que la comprobación es por
+  *issue key* contra el Code Map: las 11 supervivientes son exactamente las filas 6 y 14–23, y las 12
+  destinadas a `FIXED` están todas cerradas, incluidas las dos con falsificador condicional (fila 9 `S1488`
+  y fila 10 `S112`), que podían haber degradado a `ACCEPTED` y no lo hicieron.
+  **Lo que esta verificación NO alcanza**, porque el instrumento no llega: el MCP de SonarQube colapsa
+  `ACCEPTED` y `FALSE_POSITIVE` en un único `RESOLVED` y no expone `comments`, así que desde aquí no se
+  puede confirmar ni el reparto 9/2 ni que los 11 comentarios sigan ahí. Eso sólo lo ve la UI —
+  `issueStatuses=ACCEPTED,FALSE_POSITIVE` en el proyecto — y es el único sitio donde la afirmación
+  «argumentada, no silenciada» es falsable.
+  De paso, el título llevaba el reparto anterior a la review (`13/10`) mientras el bloque congelado ya se
+  había corregido a `12/9/2`: queda `12/11`.
 
 - `2026-09-22` — **La PR se introdujo a sí misma una issue nueva, y el quality gate en verde es justo lo
   que no vale como excusa.** El análisis de SonarCloud de la PR salió `qualityGateStatus: OK` con
