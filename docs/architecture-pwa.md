@@ -2,29 +2,33 @@
 
 ## Executive summary
 
-The `pwa/` deployable is a Next.js 16.2 (App Router) + React 19.2 + TypeScript 6 application styled with Tailwind 4 (CSS-first config) and Shadcn primitives. Business logic is wired through **Inversify 8** for runtime DI and organised by **bounded context** under `src/context/`, mirroring the API's DDD layering (`domain / application / infrastructure`). Tests split between Vitest (unit) and Playwright (E2E).
+The `pwa/` deployable is a Next.js 16 (App Router) + React 19 + TypeScript 6 application styled with Tailwind 4 (CSS-first config) and Shadcn primitives. Business logic is wired through **Inversify 8** for runtime DI and organised by **bounded context** under `src/context/`, mirroring the API's DDD layering (`domain / application / infrastructure`). Tests split between Vitest (unit) and Playwright (E2E).
 
 ## Technology stack
 
-| Category        | Technology                                        | Version |
-| --------------- | ------------------------------------------------- | ------- |
-| Runtime         | Node                                              | 24      |
-| Language        | TypeScript                                        | 6.0     |
-| Framework       | Next.js (App Router, Turbopack dev)               | 16.2    |
-| UI runtime      | React / React DOM                                 | 19.2    |
-| Styling         | Tailwind CSS                                      | 4.2     |
-| Component lib   | Shadcn                                            | 4.7     |
-| Headless UI     | @base-ui/react                                    | 1.4     |
-| Icons           | lucide-react                                      | 1.x     |
-| Animation       | tw-animate-css (+ CSS)                            | 1       |
-| Forms           | @hookform/resolvers                               | 5.x     |
-| DI              | Inversify (+ reflect-metadata)                    | 8.1     |
-| Class utilities | class-variance-authority, clsx, tailwind-merge    | —       |
-| Unit tests      | Vitest (jsdom)                                    | 4.1     |
-| Testing library | @testing-library/react, @testing-library/jest-dom | 16/7    |
-| E2E             | Playwright                                        | 1.63    |
-| Linting         | ESLint + `@next/eslint-plugin-next`               | 10 / 16 |
-| Formatting      | Prettier                                          | 3.9     |
+Versions are deliberately absent here. They live in [`docs/project-context.md`](project-context.md),
+which `make php.lint.project-context` binds to the manifests that own them. A number restated in this
+table would be a second copy nothing compares against — seven of them had drifted before anyone noticed.
+
+| Category        | Technology                                        |
+| --------------- | ------------------------------------------------- |
+| Runtime         | Node                                              |
+| Language        | TypeScript                                        |
+| Framework       | Next.js (App Router, Turbopack dev)               |
+| UI runtime      | React / React DOM                                 |
+| Styling         | Tailwind CSS                                      |
+| Component lib   | Shadcn                                            |
+| Headless UI     | @base-ui/react                                    |
+| Icons           | lucide-react                                      |
+| Animation       | tw-animate-css (+ CSS)                            |
+| Forms           | @hookform/resolvers                               |
+| DI              | Inversify (+ reflect-metadata)                    |
+| Class utilities | class-variance-authority, clsx, tailwind-merge    |
+| Unit tests      | Vitest (jsdom)                                    |
+| Testing library | @testing-library/react, @testing-library/jest-dom |
+| E2E             | Playwright                                        |
+| Linting         | ESLint + `@next/eslint-plugin-next`               |
+| Formatting      | Prettier                                          |
 
 ## Architecture pattern
 
@@ -192,8 +196,8 @@ The PWA consumes the API's [RFC 9457 Problem Details](./api-error-contract.md) c
 
 | Layer         | Tool                                           | Entry                                                                                                                                              |
 | ------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit          | **Vitest 5** (jsdom)                           | `pwa/vitest.config.ts`, run via `make pwa.test.unit`                                                                                               |
-| E2E           | **Playwright 1.63**                            | `pwa/playwright.config.ts`, run via `make pwa.test.e2e`                                                                                            |
+| Unit          | **Vitest** (jsdom)                           | `pwa/vitest.config.ts`, run via `make pwa.test.unit`                                                                                               |
+| E2E           | **Playwright**                            | `pwa/playwright.config.ts`, run via `make pwa.test.e2e`                                                                                            |
 | Watch         | Vitest                                         | `make pwa.test.unit.watch`                                                                                                                         |
 | Reports       | Playwright HTML                                | `make pwa.test.e2e.reports`                                                                                                                        |
 | Lint / format | ESLint + dependency-cruiser + Prettier + `tsc` | `make pwa.quality` (all four), `make pwa.lint.graph` (graph boundaries only), `make pwa.lint` (ESLint --fix), `make pwa.format` (Prettier --write) |

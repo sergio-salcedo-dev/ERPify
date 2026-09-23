@@ -2,30 +2,34 @@
 
 ## Executive summary
 
-The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded), backed by PostgreSQL via Doctrine ORM 3.7 / DBAL 4.4, with async workflows on Symfony Messenger and real-time updates on Mercure. Code follows **DDD + Hexagonal / Clean Architecture** across top-level bounded contexts (`Backoffice/`, `Frontoffice/`, `Iam/`, `Organization/`, `Shared/`), each layered into `Domain / Application / Infrastructure`.
+The `api/` deployable is a Symfony 8 HTTP API on **FrankenPHP** (Caddy embedded), backed by PostgreSQL via Doctrine ORM 3 / DBAL 4, with async workflows on Symfony Messenger and real-time updates on Mercure. Code follows **DDD + Hexagonal / Clean Architecture** across top-level bounded contexts (`Backoffice/`, `Frontoffice/`, `Iam/`, `Organization/`, `Shared/`), each layered into `Domain / Application / Infrastructure`.
 
 ## Technology stack
 
-| Category        | Technology                                             | Version                                       |
-|-----------------|--------------------------------------------------------|-----------------------------------------------|
-| Runtime         | PHP                                                    | **8.5**                                       |
-| Framework       | Symfony (components)                                   | **8.1.x**                                     |
-| HTTP server     | FrankenPHP (Caddy)                                     | `dunglas/frankenphp:1-php8.5` (digest-pinned) |
-| ORM / DBAL      | Doctrine ORM / DBAL / Migrations / Persistence         | 3.7 / 4.4 / 4.0 / 4.2                         |
-| Database        | PostgreSQL                                             | 18 (Compose)                                  |
-| Async           | Symfony Messenger + Doctrine transport                 | 8.1.x                                         |
-| Realtime        | Symfony Mercure (+ Hub)                                | 0.7 / bundle 0.4                              |
-| Mail            | symfony/mailer                                         | 8.1.x                                         |
-| CORS            | nelmio/cors-bundle                                     | 2.6                                           |
-| Logging         | symfony/monolog-bundle                                 | 4.0                                           |
-| UID             | symfony/uid (UUIDv7)                                   | 8.1.x                                         |
-| Validation      | symfony/validator                                      | 8.1.x                                         |
-| Security        | symfony/security-core                                  | 8.1.x                                         |
-| Unit tests      | PHPUnit                                                | 13                                            |
-| E2E tests       | Behat                                                  | `api/behat.dist.php`, `api/features/`         |
-| Static analysis | PHPStan (sole gate) / Rector                           | 2 / 2                                         |
-| Style / quality | PHP-CS-Fixer / PHPCS / PHPMD                           | 3.x / 4 / —                                   |
-| Fixtures        | Hautelook Alice                                        | 2.x                                           |
+Versions are deliberately absent here. They live in [`docs/project-context.md`](project-context.md),
+which `make php.lint.project-context` binds to the manifests that own them. A number restated in this
+table would be a second copy nothing compares against — seven of them had drifted before anyone noticed.
+
+| Category        | Technology                                                                |
+|-----------------|---------------------------------------------------------------------------|
+| Runtime         | PHP                                                                       |
+| Framework       | Symfony (components)                                                      |
+| HTTP server     | FrankenPHP (Caddy), image `dunglas/frankenphp:1-php8.5` (digest-pinned)   |
+| ORM / DBAL      | Doctrine ORM / DBAL / Migrations / Persistence                            |
+| Database        | PostgreSQL (via Compose)                                                  |
+| Async           | Symfony Messenger + Doctrine transport                                    |
+| Realtime        | Symfony Mercure (+ Hub)                                                   |
+| Mail            | symfony/mailer                                                            |
+| CORS            | nelmio/cors-bundle                                                        |
+| Logging         | symfony/monolog-bundle                                                    |
+| UID             | symfony/uid (UUIDv7)                                                      |
+| Validation      | symfony/validator                                                         |
+| Security        | symfony/security-core                                                     |
+| Unit tests      | PHPUnit                                                                   |
+| E2E tests       | Behat (`api/behat.dist.php`, `api/features/`)                             |
+| Static analysis | PHPStan (sole gate) / Rector                                              |
+| Style / quality | PHP-CS-Fixer / PHPCS / PHPMD                                              |
+| Fixtures        | Hautelook Alice                                                           |
 
 Full constraint table (version gotchas, Doctrine 3 API deltas, polyfill `replace` block, Behat isolation rationale): [`project-context.md`](./project-context.md#technology-stack--versions).
 
@@ -355,9 +359,9 @@ Full reference (mapping table, header rules, observability, code map, test surfa
 
 | Layer             | Tool                                           | Entry                                                                       |
 |-------------------|------------------------------------------------|-----------------------------------------------------------------------------|
-| Unit              | **PHPUnit 13**                                 | `api/tools/phpunit/phpunit.dist.xml`, run via `make php.unit`               |
+| Unit              | **PHPUnit**                                 | `api/tools/phpunit/phpunit.dist.xml`, run via `make php.unit`               |
 | Functional        | PHPUnit (kernel/HTTP)                          | `api/tests/Functional/`, run via `make php.unit`                            |
-| E2E / BDD         | **Behat 4**                                    | `api/behat.dist.php`, features in `api/features/`, run via `make php.behat` |
+| E2E / BDD         | **Behat**                                    | `api/behat.dist.php`, features in `api/features/`, run via `make php.behat` |
 | Fixtures          | Hautelook Alice                                | `make db.load.fixtures`                                                     |
 | Static analysis   | PHPStan (`level: max`, sole type gate), Rector | `make php.stan`, `php.rector[.dry-run]`                                     |
 | Style / quality   | PHP-CS-Fixer, PHPCS, PHPMD                     | `make php.quality` (aggregate)                                              |
