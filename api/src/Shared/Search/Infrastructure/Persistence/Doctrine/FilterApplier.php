@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine;
 
 use DateTimeImmutable;
-use DateTimeInterface;
-use DateTimeZone;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\QueryBuilder;
 use Erpify\Shared\Search\Domain\Exception\InvalidSearchValue;
@@ -15,10 +13,10 @@ use Erpify\Shared\Search\Domain\Exception\UnsupportedSearchOperator;
 use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\FilterOperator;
 use Erpify\Shared\Search\Domain\Filters;
+use Erpify\Shared\Search\Domain\StrictRangeBound;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\AppliedFilters;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use InvalidArgumentException;
-use ValueError;
 
 /**
  * Translates domain {@see Filters} into `andWhere` conditions with bound parameters, governed
@@ -36,25 +34,6 @@ use ValueError;
  */
 final readonly class FilterApplier
 {
-    /**
-     * Accepted range-bound formats, tried in order. ATOM covers the `+00:00` offset and the `Z`
-     * forms at second precision; the two fractional variants accept the milli-/microsecond
-     * precision a JS `Date.prototype.toISOString()` (millis + `Z`) or a higher-precision client
-     * emits. `P` matches both an offset and `Z`, so these three span the RFC 3339 surface
-     * without falling back to a lax parse that would also accept "now"/"tomorrow".
-     */
-    private const array SUPPORTED_DATE_TIME_FORMATS = [
-        DateTimeInterface::ATOM,
-        DateTimeInterface::RFC3339_EXTENDED,
-        'Y-m-d\TH:i:s.uP',
-    ];
-
-    /** Easternmost real-world UTC offset (UTC+14, e.g. Kiribati); east of it a bound is nonsensical. */
-    private const int MAX_UTC_OFFSET_EAST_SECONDS = 14 * 3600;
-
-    /** Westernmost real-world UTC offset (UTC-12, e.g. Baker Island); west of it a bound is nonsensical. */
-    private const int MIN_UTC_OFFSET_WEST_SECONDS = -12 * 3600;
-
     /**
      * Applies the allow-listed filters to the query builder and returns the receipt of what was
      * actually applied — the {@see AppliedFilters} that feed step 4 of the engine pipeline (the
@@ -225,76 +204,8 @@ final readonly class FilterApplier
      */
     private function dateTimeBound(Filter $filter): DateTimeImmutable
     {
-        $value = $this->scalarValue($filter);
-
-        foreach (self::SUPPORTED_DATE_TIME_FORMATS as $format) {
-            $dateTime = $this->parseStrict($format, $value);
-
-            if ($dateTime instanceof DateTimeImmutable) {
-                return $dateTime->setTimezone(new DateTimeZone('UTC'));
-            }
-        }
-
-        throw InvalidSearchValue::notADateTime($filter->field, 0);
-    }
-
-    /**
-     * Strict single-format parse: returns the datetime only when the parse yields a real
-     * instant, that instant carries a real-world UTC offset, and the value round-trips
-     * byte-identically under the format ({@see self::isCanonicalUnder()} — the deterministic
-     * canonicality gate). A value with a null byte makes `createFromFormat` throw a
-     * `ValueError`; that is client input too, so it is caught and reported as a 400 rather
-     * than escaping as an engine 500.
-     */
-    private function parseStrict(string $format, string $value): ?DateTimeImmutable
-    {
-        try {
-            $dateTime = DateTimeImmutable::createFromFormat($format, $value);
-        } catch (ValueError) {
-            return null;
-        }
-
-        // A real instant is required before any offset read; createFromFormat returns false on
-        // an unparseable value (and on a hard error), so this also subsumes the error path.
-        if (false === $dateTime) {
-            return null;
-        }
-
-        // The real-world offset span is asymmetric (UTC-12 to UTC+14), so each side is checked
-        // separately; a symmetric abs() would admit the non-existent -13/-14h offsets.
-        if (
-            $dateTime->getOffset() > self::MAX_UTC_OFFSET_EAST_SECONDS
-            || $dateTime->getOffset() < self::MIN_UTC_OFFSET_WEST_SECONDS
-        ) {
-            return null;
-        }
-
-        if (!$this->isCanonicalUnder($dateTime, $format, $value)) {
-            return null;
-        }
-
-        return $dateTime;
-    }
-
-    /**
-     * Round-trip gate — the sole canonicality check: the value is canonical under `$format`
-     * only if formatting the parsed instant reproduces it byte-identically. This is what makes
-     * the parse strict without trusting either of two unreliable signals — `createFromFormat()`
-     * tolerates non-canonical digit widths (e.g. a single-digit month) without raising a
-     * warning, and `getLastErrors()` exposes global state any adjacent datetime call may
-     * clobber. A byte-identical reproduction is immune to both: trailing data, calendar
-     * rollover and defaulted-missing fields all shift the render away from the input. UTC has
-     * two canonical spellings: `P` parses both but only emits `+00:00`, while `p` emits the
-     * literal `Z` a JS toISOString() client sends — so the round-trip accepts either spelling
-     * of the same instant.
-     */
-    private function isCanonicalUnder(DateTimeImmutable $dateTime, string $format, string $value): bool
-    {
-        if ($dateTime->format($format) === $value) {
-            return true;
-        }
-
-        return $dateTime->format(\str_replace('P', 'p', $format)) === $value;
+        return StrictRangeBound::parse($this->scalarValue($filter))
+            ?? throw InvalidSearchValue::notADateTime($filter->field, 0);
     }
 
     /**

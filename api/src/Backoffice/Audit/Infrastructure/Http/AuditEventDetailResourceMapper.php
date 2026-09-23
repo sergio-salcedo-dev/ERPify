@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Audit\Infrastructure\Http;
 
+use ArrayObject;
 use Erpify\Backoffice\Audit\Application\Resource\AuditEventDetailResource;
 use Erpify\Backoffice\Audit\Domain\AuditEventDetail;
 
 /**
  * Maps an {@see AuditEventDetail} read model to the {@see AuditEventDetailResource} wire DTO — the
  * single place that knows the detail shape, so no read model reaches the serializer. `occurredOn` is
- * rendered at microsecond precision (the forensic instant), matching the timeline mapper; `metadata`
- * passes through unchanged — it is already the decoded diff and the serializer emits it verbatim.
+ * rendered at microsecond precision (the forensic instant), matching the timeline mapper; `metadata` is
+ * wrapped in an {@see ArrayObject} — the decoded diff is unchanged, but the wrapper is what makes an
+ * entry carrying none serialize as `{}` rather than `[]`, which is the shape the client's guard admits.
  */
 final readonly class AuditEventDetailResourceMapper
 {
@@ -32,7 +34,7 @@ final readonly class AuditEventDetailResourceMapper
             $detail->resourceId,
             $detail->actorErased,
             $detail->resourceErased,
-            $detail->metadata,
+            new ArrayObject($detail->metadata),
         );
     }
 }

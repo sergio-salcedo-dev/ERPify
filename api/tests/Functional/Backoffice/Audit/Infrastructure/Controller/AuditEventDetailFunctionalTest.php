@@ -174,6 +174,24 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
     }
 
     /**
+     * `metadata` is a MAP on the wire, and an entry carrying none must still say so. This asserts the
+     * response BYTES rather than the decoded body, because `json_decode` cannot tell the two apart —
+     * `{}` and `[]` both arrive as a PHP `[]` — which is exactly how the client's guard came to reject
+     * a shape every green assertion here called an array. That guard admits an object and refuses an
+     * array, so `[]` blanks the investigation drawer with no visible error.
+     */
+    public function testAnEntryWithNoMetadataSerializesItAsAnObject(): void
+    {
+        $id = $this->seedChangeRow([]);
+
+        $this->detail($id);
+        $content = (string) $this->client->getResponse()->getContent();
+
+        $this->assertStringContainsString('"metadata":{}', $content);
+        $this->assertStringNotContainsString('"metadata":[]', $content);
+    }
+
+    /**
      * @param array<string, mixed> $data
      *
      * @return array<string, mixed>

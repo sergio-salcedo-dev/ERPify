@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Cli;
 
 use Erpify\Iam\Identity\Application\EraseIdentitySubject;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
+use Erpify\Iam\Identity\Application\FulfilIdentityErasureResult;
 use Erpify\Iam\Identity\Infrastructure\Cli\EraseIdentitySubjectCommand;
 use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
@@ -49,6 +50,36 @@ use Symfony\Component\Console\Tester\CommandTester;
 final class EraseIdentitySubjectCommandConfirmationTest extends TestCase
 {
     private const string OTHER_ADMIN_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90';
+
+    /**
+     * The other half of the guard on the consent prompt. {@see FulfilIdentityErasureResultTest} holds the
+     * label map equal to the result's properties; only this asserts that the prompt is still RENDERED from
+     * that map — without it, rewriting `confirmationQuestion()` as a hand-written sentence leaves both
+     * green and reinstates the defect the map exists to prevent.
+     *
+     * `SymfonyStyle` wraps the block to the terminal width, so the display is compared with its newlines
+     * and the wrapping whitespace collapsed; each label is asserted whole rather than the sentence, which
+     * is what makes the assertion survive a reworded preamble.
+     */
+    public function testTheConfirmationPromptNamesEveryCategoryTheResultReports(): void
+    {
+        $users = new InMemoryUserRepository(UserMother::create());
+        $tester = $this->tester($users);
+        $tester->setInputs(['no']);
+
+        $tester->execute(['user-id' => UserMother::DEFAULT_ID]);
+
+        $display = \preg_replace('/\s+/', ' ', $tester->getDisplay());
+        $this->assertIsString($display);
+
+        foreach (FulfilIdentityErasureResult::ERASED_CATEGORIES as $property => $label) {
+            $this->assertStringContainsString(
+                $label,
+                $display,
+                \sprintf('the prompt must name what `%s` reports', $property),
+            );
+        }
+    }
 
     public function testDecliningTheConfirmationErasesNothing(): void
     {

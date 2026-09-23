@@ -128,6 +128,19 @@ php.lint.composer-stability: ## Composer stability gate (nothing shipped tracks 
 php.lint.event-bus: ## Application-layer framework-seam gate
 	@$(PHP_TEST) bin/phpunit --filter=EventDispatchGateTest
 
+## —— ORM sort-direction gate ——————————————————————————————————————————————
+
+# Fails CI when an ORM query builder is handed a string as its sort direction. doctrine/orm 3.7
+# deprecated the 'ASC'/'DESC' string and 4 removes it, where a survivor is a TypeError rather than a
+# notice. Nothing else reads this: failOnDeprecation is the only detector, the Behat lane has none,
+# PHPStan sees a signature that still accepts `string`, and doctrine/deprecations dedupes BY LINK, so
+# one process reports at most one such site however many are live — measured at one reported against
+# eleven. Callers of DBAL's query builder are exempt by import, because its signature still takes the
+# string; the gate's second assertion refuses a file importing both, which is what keeps that
+# exemption from covering an ORM call.
+php.lint.orm-sort-direction: ## ORM sort-direction gate (no string passed to orderBy/addOrderBy)
+	@$(PHP_TEST) bin/phpunit --filter=OrmSortDirectionGateTest
+
 ## —— Person-resource erasure gate ——————————————————————————————————————————
 
 # Fails CI when an audit `resource_type` reaches the code without being classified in
@@ -479,6 +492,9 @@ php.lint.public-access: ## Firewall public-exemption classification gate
 # importing a rule engine — and a gate it never matched has no line to go stale, which is how one sat
 # unclassified through this gate's first green run. It never judges a classification. The registry header
 # enumerates the rest, and says why the list cannot be exhaustive.
+php.lint.skills-sync: ## BMad skill-sync guardrail gate (runs the script over throwaway checkouts)
+	@$(PHP_TEST) bin/phpunit --filter=BmadSkillsSyncGuardrailGateTest
+
 php.lint.gate-placement: ## Artifact-gate placement classification gate
 	@$(PHP_TEST) bin/phpunit --filter=ArtifactGatePlacementGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ArtifactGatePlacementRulesGateTest
@@ -579,7 +595,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -603,7 +619,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -611,10 +627,10 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.md php.cs php.cs.dry-run \
         php.gherkin php.gherkin.rules \
         php.lint.doctrine php.lint.yaml \
-        php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.audit-resource php.lint.audit-evidence \
+        php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence \
         php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary \
         php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference php.lint.project-context php.lint.public-access \
-        php.lint.gate-placement php.lint.log-carriers php.lint.log-retention \
+        php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention \
         php.lint.accepted-risk php.lint.stacked-docblock \
         php.deptrac php.deptrac.baseline \
         php.quality php.quality.dry-run

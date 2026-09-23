@@ -148,6 +148,7 @@ tests/Unit/Gate/MigrationColumnDefaultGateTest.php :: home
 tests/Unit/Gate/MigrationColumnDefaultRulesGateTest.php :: home
 tests/Unit/Gate/MonologExclusionDeclarationGateTest.php :: home
 tests/Unit/Gate/ObservabilityChannelGateTest.php :: home
+tests/Unit/Gate/OrmSortDirectionGateTest.php :: home
 tests/Unit/Gate/PersistentTransportPolicyGateTest.php :: home
 tests/Unit/Gate/PersistentTransportRoutingShapeGateTest.php :: home
 tests/Unit/Gate/PersonAddressParameterGateTest.php :: home
@@ -219,3 +220,4 @@ tests/Unit/Support/TypeScriptSourceTest.php :: mirrored :: tests/Support
 # `tests/Functional/` is not in question. Recorded rather than moved, because moving it into the home would
 # file a test that needs a running stack beside tests that need nothing.
 tests/Functional/Shared/Monitoring/AccessLogQueryContainmentGateTest.php :: functional :: sends real requests through Caddy and reads the line it wrote, so it needs the running stack
+tests/Unit/Gate/BmadSkillsSyncGuardrailGateTest.php :: home

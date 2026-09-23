@@ -100,12 +100,31 @@ final class UnauthenticatedAccessListenerTest extends TestCase
         return new UnauthenticatedAccessListener($tokenStorage, $trustResolver, new ApiRequestMatcher());
     }
 
-    private function event(Throwable $throwable, string $path = '/api/v1/backoffice/banks'): ExceptionEvent
+    /**
+     * Only the main request's throwable becomes the response, so relabelling a sub-request's would
+     * rewrite an exception nobody renders while leaving the one that IS rendered untouched. Pinned
+     * because the dispatch-scope guard is the one conjunct of the predicate its name does not carry,
+     * and nothing else in this suite builds a sub-request.
+     */
+    public function testLeavesASubRequestDenialAlone(): void
     {
+        $denial = new AccessDeniedException('Nope.');
+        $event = $this->event($denial, requestType: HttpKernelInterface::SUB_REQUEST);
+
+        $this->listener(authenticated: false)->onException($event);
+
+        $this->assertSame($denial, $event->getThrowable());
+    }
+
+    private function event(
+        Throwable $throwable,
+        string $path = '/api/v1/backoffice/banks',
+        int $requestType = HttpKernelInterface::MAIN_REQUEST,
+    ): ExceptionEvent {
         return new ExceptionEvent(
             $this->createStub(HttpKernelInterface::class),
             Request::create($path),
-            HttpKernelInterface::MAIN_REQUEST,
+            $requestType,
             $throwable,
         );
     }

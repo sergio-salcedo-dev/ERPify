@@ -60,14 +60,6 @@ Note: This audit summarizes existing implementation evidence; it does not run te
   - **Actual:** {ACTUAL_VALUE}
   - **Evidence:** {EVIDENCE_SOURCE}
 
-### Scalability
-
-- **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_DESCRIPTION}
-- **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE}
-- **Findings:** {FINDINGS_DESCRIPTION}
-
 ---
 
 ## Security Assessment
@@ -178,41 +170,33 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 ### Test Coverage
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_VALUE} (e.g., ">=80%")
-- **Actual:** {ACTUAL_VALUE} (e.g., "87%")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "Coverage report - coverage/lcov-report/index.html")
-- **Findings:** {FINDINGS_DESCRIPTION}
-
-### Code Quality
-
-- **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_VALUE} (e.g., ">=85/100")
-- **Actual:** {ACTUAL_VALUE} (e.g., "92/100")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "SonarQube analysis - sonarqube-report-2025-10-14.pdf")
-- **Findings:** {FINDINGS_DESCRIPTION}
-
-### Technical Debt
-
-- **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_VALUE} (e.g., "<5% debt ratio")
-- **Actual:** {ACTUAL_VALUE} (e.g., "3.2% debt ratio")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "CodeClimate analysis - codeclimate-2025-10-14.json")
-- **Findings:** {FINDINGS_DESCRIPTION}
-
-### Documentation Completeness
-
-- **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_VALUE} (e.g., ">=90%")
-- **Actual:** {ACTUAL_VALUE} (e.g., "95%")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "Documentation audit - docs-audit-2025-10-14.md")
-- **Findings:** {FINDINGS_DESCRIPTION}
-
-### Test Quality (from test-review, if available)
-
-- **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_DESCRIPTION}
+- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "≥80% coverage")
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "Test review report - test-review-2025-10-14.md")
+- **Evidence:** {EVIDENCE_SOURCE} (e.g., "CI coverage report - coverage/lcov-report/index.html")
+- **Findings:** {FINDINGS_DESCRIPTION}
+
+### Code Duplication
+
+- **Status:** {STATUS} {STATUS_ICON}
+- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "<5% duplication")
+- **Actual:** {ACTUAL_DESCRIPTION}
+- **Evidence:** {EVIDENCE_SOURCE} (e.g., "jscpd report - reports/jscpd/jscpd-report.json")
+- **Findings:** {FINDINGS_DESCRIPTION}
+
+### Vulnerability Scan
+
+- **Status:** {STATUS} {STATUS_ICON}
+- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "0 critical, 0 high vulnerabilities")
+- **Actual:** {ACTUAL_DESCRIPTION}
+- **Evidence:** {EVIDENCE_SOURCE} (e.g., "npm audit CI job output")
+- **Findings:** {FINDINGS_DESCRIPTION}
+
+### Observability
+
+- **Status:** {STATUS} {STATUS_ICON}
+- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "structured logging + error tracking configured")
+- **Actual:** {ACTUAL_DESCRIPTION}
+- **Evidence:** {EVIDENCE_SOURCE}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ---
@@ -335,9 +319,9 @@ Note: This audit summarizes existing implementation evidence; it does not run te
   - **Owner:** {OWNER}
   - **Estimated Effort:** {EFFORT}
 
-### Smoke Tests (Maintainability)
+### Coverage/Duplication Gates (Maintainability)
 
-- [ ] {SMOKE_TEST_DESCRIPTION}
+- [ ] {COVERAGE_DUPLICATION_GATE_DESCRIPTION}
   - **Owner:** {OWNER}
   - **Estimated Effort:** {EFFORT}
 
@@ -363,7 +347,7 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 
 ## Findings Summary
 
-**Based on ADR Quality Readiness Checklist (8 categories, 29 criteria)**
+**Based on ADR Quality Readiness Checklist (8 categories, 29 criteria).**
 
 | Category                                         | Criteria Met       | PASS             | CONCERNS             | FAIL             | Overall Status                      |
 | ------------------------------------------------ | ------------------ | ---------------- | -------------------- | ---------------- | ----------------------------------- |
@@ -402,6 +386,11 @@ nfr_assessment:
     monitorability: '{MON_STATUS}'
     qos_qoe: '{QOS_STATUS}'
     deployability: '{DEP_STATUS}'
+  audited_domains: # exactly the four domains Step 4 dispatches a worker for; PASS, CONCERNS, FAIL or N/A. A custom category (custom_nfr_categories) is not named here; its status lives only in its own report section.
+    security: '{SECURITY_DOMAIN_STATUS}'
+    performance: '{PERFORMANCE_DOMAIN_STATUS}'
+    reliability: '{RELIABILITY_DOMAIN_STATUS}'
+    maintainability: '{MAINTAINABILITY_DOMAIN_STATUS}'
   overall_status: '{OVERALL_STATUS}'
   critical_issues: { CRITICAL_COUNT }
   high_priority_issues: { HIGH_COUNT }
@@ -458,9 +447,9 @@ nfr_assessment:
 
 **Next Actions:**
 
-- If PASS ✅: Proceed to `*gate` workflow or release
-- If CONCERNS ⚠️: Address HIGH/CRITICAL issues, re-run `*nfr-assess`
-- If FAIL ❌: Resolve FAIL status NFRs, re-run `*nfr-assess`
+- If PASS ✅: Run `/bmad-testarch-trace` Phase 2 for the release gate decision, or release
+- If CONCERNS ⚠️: Address HIGH/CRITICAL issues, re-run `/bmad-testarch-nfr`
+- If FAIL ❌: Resolve FAIL status NFRs, re-run `/bmad-testarch-nfr`
 
 **Generated:** {DATE}
 **Workflow:** testarch-nfr v5.0

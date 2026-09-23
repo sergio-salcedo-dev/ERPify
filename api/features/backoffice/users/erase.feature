@@ -47,8 +47,9 @@ Feature: Erase an identity (GDPR right to erasure)
     And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'GDPR_ERASURE_EXECUTED' AND actor_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
     And there should have 1 records in SQL result
     # The subject's real id survives in NO metadata of any row. Matched over the whole column as text, not by
-    # key name: a key holding the id under a different name is the same defect, and `metadata` is `[]` — an
-    # ARRAY, not an object — in most rows, so the jsonb key operators would abort or skip them silently.
+    # key name: a key holding the id under a different name is the same defect. Matching the column as text
+    # also survives its two shapes: rows written before the writer coerced an empty map to `{}` are stored as
+    # `[]`, an ARRAY, over which the jsonb key operators abort or skip silently.
     # ILIKE, not LIKE: `resource_id` is a `uuid` and Postgres normalises its case on both sides, but `metadata`
     # is jsonb TEXT and does not, while the route hands the client's exact spelling down uncanonicalised — so a
     # mixed-case request id (proven live further down this file) would hide the same leak from a LIKE.

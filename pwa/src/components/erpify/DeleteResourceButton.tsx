@@ -196,7 +196,7 @@ export function DeleteResourceButton({
                     <span className="text-foreground font-semibold break-words">
                       {resourceLabel}
                     </span>
-                    ? This cannot be undone.
+                    {"? This cannot be undone."}
                   </DialogDescription>
                 </div>
               </div>

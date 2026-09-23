@@ -439,21 +439,19 @@ final readonly class ExceptionResponder
      */
     private function safePath(string $path, array $declared): string
     {
+        // The early return is what keeps `$path` non-empty for the split below, and so keeps the
+        // first segment guaranteed to exist.
         if ('' === $path) {
             return '(root)';
         }
 
         $segments = \preg_split('/[.\[]/', $path);
 
-        if (false === $segments || !\in_array($segments[0], $declared, true)) {
-            return '(unrecognised member)';
-        }
-
-        if (\mb_strlen($path) <= self::LOGGED_PATH_LIMIT) {
-            return $path;
-        }
-
-        return \mb_substr($path, 0, self::LOGGED_PATH_LIMIT) . '…';
+        return match (true) {
+            false === $segments || !\in_array($segments[0], $declared, true) => '(unrecognised member)',
+            \mb_strlen($path) <= self::LOGGED_PATH_LIMIT => $path,
+            default => \mb_substr($path, 0, self::LOGGED_PATH_LIMIT) . '…',
+        };
     }
 
     /**
