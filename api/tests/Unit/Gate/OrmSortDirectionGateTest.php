@@ -125,18 +125,17 @@ final class OrmSortDirectionGateTest extends TestCase
     #[Test]
     public function theSweepStillReachesTheCallSitesItJudges(): void
     {
-        $files = 0;
+        $sources = \iterator_to_array($this->sweep());
         $callsPerRoot = ['src' => 0, 'tests' => 0];
 
-        foreach ($this->sweep() as $relative => $source) {
-            ++$files;
+        foreach ($sources as $relative => $source) {
             $root = \str_starts_with($relative, 'src/') ? 'src' : 'tests';
             $callsPerRoot[$root] += \count(OrderByArguments::callsIn($source));
         }
 
         $total = \array_sum($callsPerRoot);
 
-        $this->assertGreaterThanOrEqual(self::MINIMUM_FILES_SWEPT, $files, 'the file sweep collapsed');
+        $this->assertGreaterThanOrEqual(self::MINIMUM_FILES_SWEPT, \count($sources), 'the file sweep collapsed');
         $this->assertGreaterThanOrEqual(self::MINIMUM_CALL_SITES, $total, 'no order-by call sites were parsed');
         $this->assertGreaterThan(0, $callsPerRoot['src'], 'no order-by call site was parsed under api/src');
         $this->assertGreaterThan(0, $callsPerRoot['tests'], 'no order-by call site was parsed under api/tests');
