@@ -18,6 +18,11 @@ final readonly class PruneHandledDomainEventsMessage
      * A claim is what makes a redelivered event a no-op, so the window must at least outlast a redelivery. A zero
      * would put the threshold at *now* and a negative in the future, and either deletes live claims on the first
      * tick — every event still being retried is then handled a second time, silently.
+     *
+     * The floor need not reach the `failed` queue's 30-day window. A handler that succeeded leaves a `HandledStamp`
+     * on the envelope, which travels with it into the retry and the `failed` queue, so Messenger itself skips it on
+     * any later retry; a claim only covers a handler that ran but whose acknowledgement was lost, and the Doctrine
+     * transport redelivers that within its one-hour `redeliver_timeout`.
      */
     private const int MINIMUM_RETENTION_DAYS = 1;
 
