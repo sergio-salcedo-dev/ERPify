@@ -33,7 +33,9 @@
 # {implementation_artifacts}/{story_key}.md. Si divergen, la historia queda a la vista aquí y es INENCONTRABLE
 # por tooling (bmad-dev-story, bmad-dev-auto, bmad-sprint-status). Al renombrar una, renombra LA OTRA en el
 # mismo commit. Una clave en `backlog` sin fichero NO es una divergencia: backlog significa que la historia
-# solo existe en el fichero de épica.
+# solo existe en el fichero de épica. Una en `done` TAMPOCO: su artefacto pudo podarse al cerrarse, y nadie
+# vuelve a resolver una historia terminada. Medido hoy: 65 claves `done` sin fichero y ni una sola fuera de
+# ese estado — enunciar la exención solo para `backlog` invita a "arreglar" 65 no-problemas.
 
 # WORKFLOW NOTES:
 # ===============
@@ -448,6 +450,11 @@ development_status:
   img-1-2-persistir-imagen-borrado-fiable-de-bytes: done
   img-1-3-leer-representacion-canonica-de-forma-segura: done
   epic-images-retrospective: done
+
+  # Derivada de GitHub #925, sin épica: trabajo suelto que el issue dejó especificado y sin hacer.
+  # La clave ES el nombre del fichero (ver INVARIANTE DE NOMBRES arriba):
+  # gh-925-repository-root-marker.md
+  gh-925-repository-root-marker: ready-for-dev
 
 # Action items — retrospectiva users-admin (2026-07-21). Principio: resolver, no acumular.
 # Detalle y triaje en epic-users-admin-retro-2026-07-21.md.

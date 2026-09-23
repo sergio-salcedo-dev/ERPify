@@ -14,10 +14,12 @@ use PHPUnit\Framework\TestCase;
  * Static gate over the part of `docs/project-context.md` that can be falsified mechanically: every version
  * it claims must be the one its manifest declares, and every version it claims must be claimed here.
  *
- * That page is read far more widely than its history suggests — 60 of the 90 installed skills name it in
- * `persistent_facts`, so it is loaded as foundational context at the start of an agent session rather than
- * consulted on demand. A stale line there is therefore not inert documentation rot: it is a false premise
- * handed to the agent before it reads any code, asserted with exactly the confidence of a true one.
+ * That page is read more widely than its history suggests, though the route changed under it: until BMAD
+ * 6.12 every skill's `customize.toml` shipped a `persistent_facts` entry globbing the page, and 62 loaded
+ * the page outright, where 6.12 ships that array empty — measured on the current tree, 0 of the 75 installed
+ * skills carry a non-empty one, and 11 name the page directly. A stale line there is therefore not inert
+ * documentation rot: it is a false premise handed to the agent before it reads any code, asserted with
+ * exactly the confidence of a true one.
  *
  * The numbers are what a cheap check can falsify, and they have needed it: fourteen second-column version
  * numbers have been corrected over the page's history, twelve of them in one commit. The page also states
