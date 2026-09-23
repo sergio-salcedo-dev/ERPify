@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -30,9 +30,9 @@ import { describe, expect, it } from "vitest";
  *     SDK spreads its `sourcemaps` LAST over the block it built, replacing it
  *     whole, deletion glob included (top-level spelling too — the SDK migrates it
  *     under `webpack`). Both are refused under any key spelling (identifier,
- *     string, computed, shorthand, member access) anywhere in the file, and the
- *     `sourcemaps` object may hold no spread, because a spread is where they
- *     would hide.
+ *     string, computed, shorthand, `a.key`, `a["key"]`) anywhere in the file,
+ *     and the `sourcemaps` object may hold no spread, because a spread is where
+ *     they would hide.
  *  3. `productionBrowserSourceMaps` is absent or `false`. The SDK sets it to
  *     `true` itself only while upload is on, which is exactly when the deletion
  *     runs; set to `true` by hand it generates client maps in a build with
@@ -44,18 +44,28 @@ import { describe, expect, it } from "vitest";
  *     false; with the hook off they are generated and never deleted — (1)–(3)
  *     green, every map served.
  *  5. `Dockerfile` takes the auth token as a BuildKit **secret**, never through
- *     an `ARG` or an `ENV` (an `ONBUILD` one included), and every `npm run
- *     build` step mounts it. An `ARG` is recorded in the image metadata and
- *     printed by `docker history`; an `ENV` is baked into the image config and
- *     printed by `docker inspect`. Either way the token leaks to anyone who can
- *     pull the image — a worse failure than (1)–(4), because it grants WRITE
- *     access to the Sentry project rather than read access to the source. The
- *     token name is refused anywhere in either instruction, whichever of the
- *     names on the line it is.
- *  6. `SENTRY_AUTH_TOKEN` is never an object KEY in `next.config.ts`. Reading
+ *     an `ARG`, an `ENV` or a `LABEL` (an `ONBUILD` one included), and every
+ *     `npm run build` step mounts it and runs as `sh docker/read-sentry-token.sh
+ *     npm run build`, naming the token nowhere else on the line. An `ARG` is
+ *     recorded in the image metadata and printed by `docker history`; an `ENV`
+ *     and a `LABEL` are baked into the image config and printed by `docker
+ *     inspect`. Either way the token leaks to anyone who can pull the image — a
+ *     worse failure than (1)–(4), because it grants WRITE access to the Sentry
+ *     project rather than read access to the source. The token name is refused
+ *     anywhere in those instructions, whichever of the names on the line it is.
+ *     What the script accepts and refuses is exercised by
+ *     `tests/read-sentry-token.test.ts`, which runs it.
+ *  6. `SENTRY_AUTH_TOKEN` is never an object KEY in `next.config.ts`, and
+ *     Next's `env` option is an object literal with no spread. Reading
  *     `process.env.SENTRY_AUTH_TOKEN` is how the config learns the token; a key
- *     is how it would publish it, since Next's `env` option inlines every entry
- *     into the browser bundle as a literal.
+ *     is how it would publish it, since `env` inlines every entry into the
+ *     browser bundle as a literal — and an `env` built from `process.env`, a
+ *     spread or a call inlines entries nobody wrote out, the token among them.
+ *
+ * The credentials `next.config.ts` spreads into the options come from
+ * `sentry-upload-options.ts`, whose return type admits `authToken`, `org` and
+ * `project` alone; the config-side rules run over that module too, so the one
+ * variable spread into the options is read rather than trusted.
  *
  * Every rule is a pure function over source text, run once against the real
  * file and once against synthetic fixtures it must reject: a detector that
@@ -79,15 +89,19 @@ import { describe, expect, it } from "vitest";
  * A green proves the declarations are what they claim. It proves nothing about
  * what a build actually emits — no build runs here — nor about a map served by
  * something other than Next (a CDN copy, an artifact upload in a workflow).
- * Blind spots of the rules themselves: a top-level spread of a variable into
- * the `withSentryConfig` options (only literal spreads are read); a setting
- * reached through anything but a property or a direct assignment; a token fed
- * into the build line through a differently named `ARG` or `ENV` (the name is
- * matched, not the value's provenance); a Dockerfile whose `# escape=`
+ * Blind spots of the rules themselves: a top-level spread into the
+ * `withSentryConfig` options of any variable other than the credentials module
+ * above (only literal spreads are read); a setting reached through anything but
+ * a property or an assignment to `a.key` / `a["key"]` (a destructuring, an
+ * `Object.assign`, a key held in a variable); a token fed into the build line
+ * through a differently named `ARG` or `ENV` (the name is matched, not the
+ * value's provenance); a Dockerfile whose `# escape=`
  * directive changes the continuation character or that sets the token in a
  * heredoc. A `withSentryConfig` imported under an alias or called through a
  * namespace is not matched — that fails CLOSED by design (zero calls found is
- * a violation), so the rule cannot pass over a call it cannot see.
+ * a violation), so the rule cannot pass over a call it cannot see. In the other
+ * direction a compound assignment (`||=`, `??=`, `&&=`) to a guarded setting is
+ * refused whatever its value, since its result depends on the value it replaces.
  *
  * Server maps are outside these invariants on purpose: they are emitted into
  * `.next/server` on every production build, the SDK does not delete them, and
@@ -106,6 +120,9 @@ const BROWSER_SOURCE_MAPS = "productionBrowserSourceMaps";
 const POST_COMPILE_HOOK = "useRunAfterProductionCompileHook";
 const UNSTABLE_WEBPACK_OPTIONS = "unstable_sentryWebpackPluginOptions";
 const SECRET_MOUNT = /--mount=type=secret,id=sentry_auth_token(?:[,\s]|$)/;
+const TOKEN_SCRIPT = "docker/read-sentry-token.sh";
+const TOKEN_SCRIPT_BUILD = /(?:^|\s)sh\s+docker\/read-sentry-token\.sh\s+npm run build(?:\s|$)/;
+const UPLOAD_OPTIONS = path.join(PWA_ROOT, "sentry-upload-options.ts");
 
 function parse(source: string): ts.SourceFile {
   return ts.createSourceFile("next.config.ts", source, ts.ScriptTarget.Latest, true);
@@ -173,17 +190,43 @@ function sentryOptions(file: ts.SourceFile): ts.ObjectLiteralExpression | string
   return options;
 }
 
+/** The key a member access reads — `a.key`, `a["key"]` or ``a[`key`]`` — when it is written literally. */
+function accessedKey(node: ts.Node): string | undefined {
+  if (ts.isPropertyAccessExpression(node)) return node.name.text;
+  if (ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression)) {
+    return node.argumentExpression.text;
+  }
+  return undefined;
+}
+
 /** The name an object member or a member access declares, whatever its spelling. */
 function memberName(node: ts.Node, includeAccess: boolean): string | undefined {
   if (
     ts.isPropertyAssignment(node) ||
     ts.isShorthandPropertyAssignment(node) ||
-    ts.isMethodDeclaration(node) ||
-    (includeAccess && ts.isPropertyAccessExpression(node))
+    ts.isMethodDeclaration(node)
   ) {
     return keyName(node.name);
   }
-  return undefined;
+  return includeAccess ? accessedKey(node) : undefined;
+}
+
+/** Every assignment operator: `=` and the compound ones (`||=`, `??=`, `&&=`, `+=`, …). */
+function isAssignment(node: ts.Node): node is ts.BinaryExpression {
+  return (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+    node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+  );
+}
+
+/**
+ * The value an assignment stores, when it is readable as one expression. A
+ * compound assignment's result depends on the value it replaces, so it has
+ * none and is reported as unreadable.
+ */
+function assignedValue(node: ts.BinaryExpression): ts.Expression | undefined {
+  return node.operatorToken.kind === ts.SyntaxKind.EqualsToken ? node.right : undefined;
 }
 
 const DELETION_OVERRIDES: ReadonlyMap<string, string> = new Map([
@@ -199,18 +242,23 @@ const DELETION_OVERRIDES: ReadonlyMap<string, string> = new Map([
   ],
 ]);
 
-/** Violations of invariants 1 and 2 in a `next.config.ts` source. */
-function sourcemapDeletionViolations(source: string): string[] {
-  const file = parse(source);
+/** Violations of invariant 2's name half: a deletion override anywhere in a source. */
+function deletionOverrideViolations(source: string): string[] {
   const violations: string[] = [];
-
-  walk(file, (node) => {
+  walk(parse(source), (node) => {
     const name = memberName(node, true);
     const reason = name === undefined ? undefined : DELETION_OVERRIDES.get(name);
     if (reason !== undefined) {
       violations.push(`${name} must not appear: ${reason}`);
     }
   });
+  return violations;
+}
+
+/** Violations of invariants 1 and 2 in a `next.config.ts` source. */
+function sourcemapDeletionViolations(source: string): string[] {
+  const file = parse(source);
+  const violations = deletionOverrideViolations(source);
 
   const options = sentryOptions(file);
   if (typeof options === "string") return [...violations, options];
@@ -256,8 +304,9 @@ function sourcemapDeletionViolations(source: string): string[] {
 
 /**
  * Every place a source sets `key` — a property of any spelling, a shorthand, or
- * a direct assignment — whose value is not the literal `allowed`. A shorthand
- * and a non-literal value are violations: neither can be read as the literal.
+ * an assignment through any operator to `a.key` / `a["key"]` — whose value is
+ * not the literal `allowed`. A shorthand, a non-literal value and a compound
+ * assignment are violations: none can be read as the literal.
  */
 function settingViolations(
   source: string,
@@ -276,15 +325,8 @@ function settingViolations(
       refuse(node.initializer);
     } else if (ts.isShorthandPropertyAssignment(node) && node.name.text === key) {
       refuse(undefined);
-    } else if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ((ts.isPropertyAccessExpression(node.left) && node.left.name.text === key) ||
-        (ts.isElementAccessExpression(node.left) &&
-          ts.isStringLiteralLike(node.left.argumentExpression) &&
-          node.left.argumentExpression.text === key))
-    ) {
-      refuse(node.right);
+    } else if (isAssignment(node) && accessedKey(node.left) === key) {
+      refuse(assignedValue(node));
     }
   });
   return violations;
@@ -326,6 +368,41 @@ function tokenAsConfigKeyViolations(source: string): string[] {
   return violations;
 }
 
+const ENV_OPTION = "env";
+
+/**
+ * Violations of invariant 6's second half: Next's `env` option must be an
+ * object literal whose every entry is written out. Anything else — a spread,
+ * `process.env` itself, `Object.fromEntries(…)`, a variable — inlines entries
+ * nobody listed into the browser bundle, the token among them.
+ */
+function envInliningViolations(source: string): string[] {
+  const violations: string[] = [];
+  const refuse = (value: ts.Expression | undefined): void => {
+    const literal = value === undefined ? undefined : unwrap(value);
+    if (
+      literal === undefined ||
+      !ts.isObjectLiteralExpression(literal) ||
+      literal.properties.some(ts.isSpreadAssignment)
+    ) {
+      violations.push(
+        `\`${ENV_OPTION}\` in next.config must be an object literal with no spread: Next inlines ` +
+          "every entry into the browser bundle, so an entry nobody wrote out can be the auth token.",
+      );
+    }
+  };
+  walk(parse(source), (node) => {
+    if (ts.isPropertyAssignment(node) && keyName(node.name) === ENV_OPTION) {
+      refuse(node.initializer);
+    } else if (ts.isShorthandPropertyAssignment(node) && node.name.text === ENV_OPTION) {
+      refuse(undefined);
+    } else if (isAssignment(node) && accessedKey(node.left) === ENV_OPTION) {
+      refuse(assignedValue(node));
+    }
+  });
+  return violations;
+}
+
 /**
  * Dockerfile instructions, continuations joined, comments and blanks dropped.
  * A comment or blank line inside a continuation is skipped rather than joined,
@@ -352,15 +429,19 @@ function dockerInstructions(dockerfile: string): string[] {
 /** Violations of invariant 5's image half in a Dockerfile source. */
 function tokenInImageViolations(dockerfile: string): string[] {
   return dockerInstructions(dockerfile)
-    .filter((line) => /^(ONBUILD\s+)?(ARG|ENV)\s/i.test(line) && line.includes(TOKEN_VAR))
+    .filter((line) => /^(ONBUILD\s+)?(ARG|ENV|LABEL)\s/i.test(line) && line.includes(TOKEN_VAR))
     .map(
       (line) =>
-        `${TOKEN_VAR} must not reach an ARG or ENV (\`${line}\`): \`docker history\` prints ` +
-        "build args and `docker inspect` prints env, so the token leaks to anyone who can pull the image.",
+        `${TOKEN_VAR} must not reach an ARG, ENV or LABEL (\`${line}\`): \`docker history\` prints ` +
+        "build args and `docker inspect` prints env and labels, so the token leaks to anyone who can pull the image.",
     );
 }
 
-/** Violations of invariant 5's build half: every `npm run build` step mounts the token secret. */
+/**
+ * Violations of invariant 5's build half: every `npm run build` step mounts the
+ * token secret and runs the build through the script that validates it, and no
+ * build step sets the token itself — the script is the one place it is read.
+ */
 function secretMountViolations(dockerfile: string): string[] {
   const buildSteps = dockerInstructions(dockerfile).filter(
     (line) => /^RUN\s/i.test(line) && line.includes("npm run build"),
@@ -369,17 +450,22 @@ function secretMountViolations(dockerfile: string): string[] {
     return ["the Dockerfile must still run `npm run build` in a RUN step"];
   }
   return buildSteps
-    .filter((line) => !SECRET_MOUNT.test(line) || !line.includes(TOKEN_VAR))
+    .filter(
+      (line) =>
+        !SECRET_MOUNT.test(line) || !TOKEN_SCRIPT_BUILD.test(line) || line.includes(TOKEN_VAR),
+    )
     .map(
       (line) =>
-        `the build step must mount ${TOKEN_VAR} as the BuildKit secret sentry_auth_token and ` +
-        `hand it to the build (\`${line.slice(0, 80)}…\`)`,
+        "the build step must mount the BuildKit secret sentry_auth_token and run " +
+        `\`sh ${TOKEN_SCRIPT} npm run build\`, naming ${TOKEN_VAR} nowhere else ` +
+        `(\`${line.slice(0, 80)}…\`)`,
     );
 }
 
 describe("Sentry source maps are uploaded, never published", () => {
   const nextConfig = readFileSync(NEXT_CONFIG, "utf8");
   const dockerfile = readFileSync(DOCKERFILE, "utf8");
+  const uploadOptions = readFileSync(UPLOAD_OPTIONS, "utf8");
 
   it("deletes the maps after upload, from the options the SDK receives, and nothing overrides it", () => {
     expect(sourcemapDeletionViolations(nextConfig)).toEqual([]);
@@ -397,12 +483,28 @@ describe("Sentry source maps are uploaded, never published", () => {
     expect(tokenAsConfigKeyViolations(nextConfig)).toEqual([]);
   });
 
+  it("never hands Next an `env` whose entries are not written out", () => {
+    expect(envInliningViolations(nextConfig)).toEqual([]);
+  });
+
+  it("holds the credentials module spread into the options to the same rules", () => {
+    expect(nextConfig).toContain('from "./sentry-upload-options"');
+    expect([
+      ...deletionOverrideViolations(uploadOptions),
+      ...browserSourceMapViolations(uploadOptions),
+      ...postCompileHookViolations(uploadOptions),
+      ...tokenAsConfigKeyViolations(uploadOptions),
+      ...envInliningViolations(uploadOptions),
+    ]).toEqual([]);
+  });
+
   it("never takes the auth token as a build ARG or an image ENV", () => {
     expect(tokenInImageViolations(dockerfile)).toEqual([]);
   });
 
-  it("passes the auth token to the build through a secret mount", () => {
+  it("passes the auth token to the build through a secret mount and the script that reads it", () => {
     expect(secretMountViolations(dockerfile)).toEqual([]);
+    expect(existsSync(path.join(PWA_ROOT, TOKEN_SCRIPT))).toBe(true);
   });
 
   it("keeps the token server-only — it never carries the public prefix", () => {
@@ -486,6 +588,14 @@ describe("the source-map rules reject what they exist to reject", () => {
   });
 
   it.each([
+    ["||=", "nextConfig.productionBrowserSourceMaps ||= true;"],
+    ["??=", "nextConfig.productionBrowserSourceMaps ??= true;"],
+    ["&&=", `nextConfig["productionBrowserSourceMaps"] &&= true;`],
+  ])("refuses productionBrowserSourceMaps set through %s", (_label, statement) => {
+    expect(browserSourceMapViolations(`${config(PINNED)}\n${statement}`)).toHaveLength(1);
+  });
+
+  it.each([
     ["absent", PINNED],
     [
       "true",
@@ -513,6 +623,14 @@ describe("the source-map rules reject what they exist to reject", () => {
   });
 
   it.each([
+    ["&&=", "options.useRunAfterProductionCompileHook &&= false;"],
+    ["??=", `options["useRunAfterProductionCompileHook"] ??= false;`],
+  ])("refuses the post-compile hook set through %s", (_label, statement) => {
+    const source = `const options = ${PINNED};\n${statement}`;
+    expect(postCompileHookViolations(source)).toHaveLength(1);
+  });
+
+  it.each([
     ["under webpack", `webpack: { unstable_sentryWebpackPluginOptions: { sourcemaps: {} } }`],
     ["at the top level", `unstable_sentryWebpackPluginOptions: { sourcemaps: {} }`],
     ["with a string key", `webpack: { "unstable_sentryWebpackPluginOptions": {} }`],
@@ -524,6 +642,15 @@ describe("the source-map rules reject what they exist to reject", () => {
   it("refuses unstable_sentryWebpackPluginOptions assigned after the options are built", () => {
     const source = `${config(PINNED)}\nopts.webpack.unstable_sentryWebpackPluginOptions = {};`;
     expect(sourcemapDeletionViolations(source).join("\n")).toContain(UNSTABLE_WEBPACK_OPTIONS);
+  });
+
+  it.each([
+    [UNSTABLE_WEBPACK_OPTIONS, `opts.webpack["unstable_sentryWebpackPluginOptions"] = {};`],
+    [FILES_TO_DELETE, `opts.sourcemaps["filesToDeleteAfterUpload"] = ["x"];`],
+    [FILES_TO_DELETE, "opts.sourcemaps[`filesToDeleteAfterUpload`] ??= [];"],
+  ])("refuses %s reached through a string element access", (name, statement) => {
+    const source = `${config(PINNED)}\n${statement}`;
+    expect(sourcemapDeletionViolations(source).join("\n")).toContain(name);
   });
 
   it.each([
@@ -568,11 +695,37 @@ describe("the source-map rules reject what they exist to reject", () => {
   ])("refuses SENTRY_AUTH_TOKEN as %s", (_label, nextConfig) => {
     expect(tokenAsConfigKeyViolations(config(PINNED, nextConfig))).toHaveLength(1);
   });
+
+  it.each([
+    ["no env", "{ reactStrictMode: true }"],
+    ["a literal env", `{ env: { FOO: "x" } }`],
+    ["a wrapped literal env", `{ env: { FOO: "x" } satisfies Record<string, string> }`],
+  ])("accepts %s", (_label, nextConfig) => {
+    expect(envInliningViolations(config(PINNED, nextConfig))).toEqual([]);
+  });
+
+  it.each([
+    ["a spread of process.env", "{ env: { ...process.env } }"],
+    ["a spread beside a written entry", `{ env: { FOO: "x", ...extra } }`],
+    ["process.env itself", "{ env: process.env }"],
+    ["a computed object", "{ env: Object.fromEntries(Object.entries(process.env)) }"],
+    ["a variable", "{ env: publicEnv }"],
+    ["a shorthand", "{ env }"],
+  ])("refuses an env built from %s", (_label, nextConfig) => {
+    expect(envInliningViolations(config(PINNED, nextConfig))).toHaveLength(1);
+  });
+
+  it.each([
+    ["=", "nextConfig.env = process.env;"],
+    ["??=", `nextConfig["env"] ??= { FOO: "x" };`],
+  ])("refuses an env assigned through %s", (_label, statement) => {
+    expect(envInliningViolations(`${config(PINNED)}\n${statement}`)).toHaveLength(1);
+  });
 });
 
 describe("the Dockerfile rule rejects the token in every image-visible instruction", () => {
   const MOUNTED_BUILD = `RUN --mount=type=secret,id=sentry_auth_token \\
-    SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token)" npm run build`;
+    sh docker/read-sentry-token.sh npm run build`;
 
   it("accepts the token confined to a secret-mounted RUN", () => {
     expect(tokenInImageViolations(`FROM node\nARG SENTRY_ORG=\n${MOUNTED_BUILD}\n`)).toEqual([]);
@@ -597,6 +750,8 @@ describe("the Dockerfile rule rejects the token in every image-visible instructi
     ],
     ["an ONBUILD ARG", "ONBUILD ARG SENTRY_AUTH_TOKEN"],
     ["a lower-case ONBUILD ENV", "onbuild env SENTRY_AUTH_TOKEN=sntrys_x"],
+    ["a LABEL value", `LABEL build.token="$SENTRY_AUTH_TOKEN"`],
+    ["a LABEL key", "LABEL SENTRY_AUTH_TOKEN=sntrys_x"],
   ])("refuses %s", (_label, instruction) => {
     expect(tokenInImageViolations(`FROM node\n${instruction}\n${MOUNTED_BUILD}\n`)).toHaveLength(1);
   });
@@ -616,15 +771,31 @@ describe("the Dockerfile rule rejects the token in every image-visible instructi
   });
 
   it.each([
-    ["no mount at all", `RUN SENTRY_AUTH_TOKEN="" npm run build`],
+    ["no mount at all", "RUN sh docker/read-sentry-token.sh npm run build"],
     ["a bare build", "RUN npm run build"],
     [
       "another secret id",
-      `RUN --mount=type=secret,id=sentry_auth_token_old SENTRY_AUTH_TOKEN="$t" npm run build`,
+      "RUN --mount=type=secret,id=sentry_auth_token_old sh docker/read-sentry-token.sh npm run build",
     ],
     [
       "the mount without handing the token over",
       "RUN --mount=type=secret,id=sentry_auth_token npm run build",
+    ],
+    [
+      "the token read inline, its failures folded into an empty value",
+      `RUN --mount=type=secret,id=sentry_auth_token SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token 2>/dev/null || true)" npm run build`,
+    ],
+    [
+      "the token emptied inline",
+      `RUN --mount=type=secret,id=sentry_auth_token SENTRY_AUTH_TOKEN="" npm run build`,
+    ],
+    [
+      "the script bypassed by an inline token",
+      `RUN --mount=type=secret,id=sentry_auth_token SENTRY_AUTH_TOKEN=x sh docker/read-sentry-token.sh npm run build`,
+    ],
+    [
+      "the script wrapping something other than the build",
+      "RUN --mount=type=secret,id=sentry_auth_token sh docker/read-sentry-token.sh true && npm run build",
     ],
   ])("refuses a build step with %s", (_label, step) => {
     expect(secretMountViolations(`FROM node\n${step}\n`)).toHaveLength(1);

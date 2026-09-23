@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
+import { sentryUploadOptions } from "./sentry-upload-options";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -175,40 +176,13 @@ const nextConfig: NextConfig = {
   },
 };
 
-// Source-map upload credentials. All three are server-only and must NEVER take
-// the `NEXT_PUBLIC_` prefix: the token grants write access to the Sentry
-// project, and Next inlines every prefixed literal into the browser bundle.
-//
-// The project slug is derived per environment (`erpify-pwa-dev` /
-// `erpify-pwa-prod`) from the same `NEXT_PUBLIC_APP_ENV` that selects the DSN,
-// so one image build cannot upload its maps to the other environment's project
-// while reporting events to this one. An explicit `SENTRY_PROJECT` overrides it.
-const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN?.trim();
-const sentryOrg = process.env.SENTRY_ORG?.trim();
-const sentryProject =
-  process.env.SENTRY_PROJECT?.trim() ||
-  `erpify-pwa-${process.env.NEXT_PUBLIC_APP_ENV?.trim() || "dev"}`;
-
-// Upload is opt-in on the credentials being present, and its absence is not an
-// error: a contributor, a fork and every CI job that only type-checks build
-// without the secret, and failing there would make the token a prerequisite for
-// compiling the app rather than for symbolicating it.
-//
-// An org-scoped token (`sntrys_…`) carries its organisation, so it needs no
-// SENTRY_ORG; a user token does. The project always has a value (derived above).
-const ORG_SCOPED_TOKEN_PREFIX = "sntrys_";
-const uploadsSourcemaps = Boolean(
-  sentryAuthToken && (sentryOrg || sentryAuthToken.startsWith(ORG_SCOPED_TOKEN_PREFIX)),
-);
-
-// A token that cannot upload is a misconfiguration the build would otherwise
-// carry out in silence: the image builds, traces stay minified, and nothing says
-// why. The warning names the missing piece and never the token.
-if (sentryAuthToken && !uploadsSourcemaps) {
-  console.warn(
-    "sentry: SENTRY_AUTH_TOKEN is set but SENTRY_ORG is empty and the token is not an " +
-      `organisation token (${ORG_SCOPED_TOKEN_PREFIX}…), so source-map upload is off.`,
-  );
+// Source-map upload credentials and the upload decision: see
+// `sentry-upload-options.ts`. A token that cannot upload is a misconfiguration
+// the build would otherwise carry out in silence — the image builds, traces stay
+// minified, and nothing says why — so it is warned about here.
+const sentryUpload = sentryUploadOptions(process.env);
+if (sentryUpload.warning !== null) {
+  console.warn(sentryUpload.warning);
 }
 
 // Wrap with Sentry. Events are routed through a same-origin tunnel
@@ -247,11 +221,7 @@ if (sentryAuthToken && !uploadsSourcemaps) {
 // spreads last over its own and so replaces the deletion glob wholesale.
 //
 // The token is used for exactly two things, both in the post-compile hook: the
-// source-map upload, and creating the release those maps are attached to. With
-// upload off the options pass an EMPTY `authToken` rather than none, because an
-// absent one makes the upload plugin fall back to the `SENTRY_AUTH_TOKEN`
-// environment variable — which the image build always sets — and still create
-// a release and associate commits with it.
+// source-map upload, and creating the release those maps are attached to.
 //
 // `silent` is off so a failed upload or a refused credential is printed in the
 // build log: the SDK reports both as an error and carries on, and with `silent`
@@ -260,15 +230,9 @@ if (sentryAuthToken && !uploadsSourcemaps) {
 export default withSentryConfig(nextConfig, {
   tunnelRoute: "/monitoring",
   silent: false,
-  ...(uploadsSourcemaps
-    ? {
-        authToken: sentryAuthToken,
-        project: sentryProject,
-        ...(sentryOrg ? { org: sentryOrg } : {}),
-      }
-    : { authToken: "" }),
+  ...sentryUpload.options,
   sourcemaps: {
-    disable: !uploadsSourcemaps,
+    disable: !sentryUpload.uploadsSourcemaps,
     deleteSourcemapsAfterUpload: true,
   },
 });

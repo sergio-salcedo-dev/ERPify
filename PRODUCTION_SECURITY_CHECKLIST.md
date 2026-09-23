@@ -142,11 +142,11 @@ you change anything here.
       token reaches the build as a **BuildKit secret**
       (`--mount=type=secret,id=sentry_auth_token`), never as a build `ARG` or an
       `ENV` — `docker history` prints args, `docker inspect` prints env, and this
-      token grants *write* access to the Sentry project. A mount that is present
-      but unreadable, holds more than one word, or carries an `=` or a quote
-      fails the build; an absent or
-      empty one — or a personal token with no `SENTRY_ORG` — leaves upload off
-      and says so in the build log, and the upload
+      token grants *write* access to the Sentry project. An absent or empty
+      mount — or a personal token with no `SENTRY_ORG` — leaves upload off and
+      says so in the build log, while a broken one fails the build; the exact
+      cases are listed once, in `docs/rules/security.md` → "Build-time secrets",
+      and run by `pwa/tests/read-sentry-token.test.ts`. The upload
       step itself runs with `silent: false`, so a refused credential or a failed
       upload is printed rather than swallowed. Gated by
       `pwa/tests/sentry-sourcemap-exposure.test.ts`; a green proves the

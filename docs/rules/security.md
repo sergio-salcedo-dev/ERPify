@@ -211,12 +211,20 @@ actually reaches a sink.
   `compose.prod.yaml` and `pwa/Dockerfile`.
 - **An absent secret and a broken one are different outcomes.** Compose mounts an EMPTY file when the variable
   is unset or empty, and a plain `docker build` without `--secret` mounts nothing — both mean "not provided"
-  and may legitimately switch a feature off, said once in the build log. A path that is a directory, cannot be
-  read, or does not hold what the secret should is a misconfiguration and fails the build; `2>/dev/null ||
+  and may legitimately switch a feature off, which the build log then says. A path that is a directory, cannot
+  be read, or does not hold what the secret should is a misconfiguration and fails the build; `2>/dev/null ||
   true` folds the second case into the first and ships a silently degraded image.
-- Gate: `pwa/tests/sentry-sourcemap-exposure.test.ts` refuses the token name in any `ARG` or `ENV` of
-  `pwa/Dockerfile` and requires the secret mount on the build step. It reads that one file; a new image
-  taking a secret needs the same rule pointed at it.
+- **The Sentry auth token's cases — this list is the one every other document points to.** Absent, empty or
+  whitespace-only → source-map upload is off, the build continues and its log says so. A directory, an
+  unreadable file, more than one word (an env file mounted by mistake), an env-line shape (a leading `NAME=`
+  where `NAME` is `[A-Za-z_][A-Za-z0-9_]*`) or a quote (`"` or `'`) → the build fails, naming the reason and
+  never the value. An `=` elsewhere is not refused: an organisation token is `sntrys_<base64 payload>_<secret>`
+  and its payload keeps base64 `=` padding, so a `sntrys_` token is exempt from the env-line check. A blank
+  `SENTRY_ORG` is unset rather than passed on as an org slug. Implemented by `pwa/docker/read-sentry-token.sh`,
+  the only place the Dockerfile reads the mount; every case above is run by `pwa/tests/read-sentry-token.test.ts`.
+- Gate: `pwa/tests/sentry-sourcemap-exposure.test.ts` refuses the token name in any `ARG`, `ENV` or `LABEL` of
+  `pwa/Dockerfile` and requires every build step to mount the secret and run through that script. It reads
+  that one file; a new image taking a secret needs the same rule pointed at it.
 
 ## Security Checklist Maintenance
 - The `PRODUCTION_SECURITY_CHECKLIST.md` file MUST be kept up-to-date at all times

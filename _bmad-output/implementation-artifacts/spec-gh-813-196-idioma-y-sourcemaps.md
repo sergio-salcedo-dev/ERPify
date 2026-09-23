@@ -192,3 +192,34 @@ patch es una enmienda; todos requieren rama de seguimiento.
 - [x] [Review][Defer] Las cabeceras de día de auditoría renderizan fechas en español vía `Intl` — ningún barrido de cadenas puede verlo [pwa/src/context/shared/date-time-provider/infrastructure/DateFnsDateTimeProvider.ts:42] — resolved: en-GB (user decision)
 - [x] [Review][Defer] El literal `10.70.0` se afirma en cuatro sitios sin nada que lo ate al manifiesto [pwa/next.config.ts:207; pwa/CLAUDE.md:72; PRODUCTION_SECURITY_CHECKLIST.md:112; pwa/tests/sentry-sourcemap-exposure.test.ts:21] — resolved: no version literal in prose
 - [x] [Review][Defer] La lectura independiente aterrizó post-PR y sin `ADVERSARIAL_PASS_ACK` — el orden no es corregible retroactivamente [CLAUDE.md → Security review → Process] — moot: rule retired 2026-08-31
+
+### Review Findings — seguimiento #981 (2026-09-23)
+
+Dos rondas sobre la rama `fix/pwa-834-review-followups`. **Ronda 1** (tres capas ad hoc en paralelo, sobre
+`fbe9a255..80631745`): aplicada en `b80b61a9`. **Ronda 2** (`bmad-code-review`, cuatro capas — Blind Hunter,
+Edge Case Hunter, Verification Gap, Acceptance Auditor — sobre `fbe9a255..b80b61a9`), triada abajo.
+
+- [ ] [Review][Decision] Alcance del token personal — `project:releases` puede no bastar (¿`org:read`?); no verificable en la documentación consultada. Decidir si se investiga o se deja el consejo como está.
+- [x] [Review][Patch] El Dockerfile rechaza tokens de organización válidos: el payload base64 de `sntrys_` conserva el relleno `=` (medido en `sentry/utils/security/orgauthtoken_token.py`) [pwa/Dockerfile]
+- [x] [Review][Patch] El script de lectura del secreto no lo ejecuta ningún test ni lo lee shellcheck; CI no construye esa etapa [pwa/Dockerfile]
+- [x] [Review][Patch] La decisión de subida de `next.config.ts` (`sntrys_` sin org, `authToken: ""`, aviso) no la fija ningún test [pwa/next.config.ts]
+- [x] [Review][Patch] El gate no ve el acceso por corchetes ni la asignación compuesta (`||=`, `??=`), y la cabecera afirma que sí [pwa/tests/sentry-sourcemap-exposure.test.ts:177,281]
+- [x] [Review][Patch] `env: { ...process.env }` / `env: process.env` meten el token en el bundle del navegador con el gate en verde [pwa/tests/sentry-sourcemap-exposure.test.ts]
+- [x] [Review][Patch] `LABEL` no se revisa aunque también queda en la imagen [pwa/tests/sentry-sourcemap-exposure.test.ts]
+- [x] [Review][Patch] Cinco documentos listan casos de fallo distintos; uno debe ser el dueño [PRODUCTION_SECURITY_CHECKLIST.md, .env.prod.example, pwa/docs/production-deployment.md, pwa/CLAUDE.md, docs/rules/security.md]
+- [x] [Review][Patch] «dicho una vez en el log» no está medido; el plugin añade su propio aviso [pwa/Dockerfile:83; docs/rules/security.md:214]
+- [x] [Review][Patch] El aviso de truncado nombra un nombre accesible que no se ve en pantalla (botón solo icono) [pwa/src/context/backoffice/audit/infrastructure/ui/MetadataBlock.tsx]
+- [x] [Review][Patch] `en-GB` solo está fijado para la fecha larga; los formatos numéricos no [pwa/tests/context/shared/date-time-provider/auditFormatters.test.ts]
+- [x] [Review][Patch] Las listas de palabras «deliberadamente ausentes» difieren en tres sitios [CLAUDE.md, pwa/CLAUDE.md, pwa/tests/ui-copy-language.test.ts]
+- [x] [Review][Patch] La cabecera del gate de idioma no nombra todos los escapes conocidos («quality + tests en push/PR», «tabla domain_event») [pwa/tests/ui-copy-language.test.ts]
+- [x] [Review][Patch] Comentarios nuevos que narran historia («shipped past…») [pwa/tests/ui-copy-language.test.ts]
+- [x] [Review][Patch] La galería de errores aún dice «Short name already in use» [pwa/src/app/backoffice/dev-tools/error-gallery/page.tsx:136]
+- [x] [Review][Patch] Texto en NFD (tilde como marca combinante) escapa a las señales de tilde y al léxico [pwa/tests/ui-copy-language.test.ts]
+
+Rechazados:
+- Getter/setter declarando `productionBrowserSourceMaps` — `low`, improbable y el arreglo añade ramas.
+- `SENTRY_ORG` en blanco fuera de Docker — `low`, el build de prod solo corre en la imagen, que ya lo limpia.
+- `wc -w` que falla — `low`, despreciable; además el script pasa a tener tests.
+- Items del registro de 2026-08-22 marcados como arreglados en ficheros que esta rama no toca; la corrección «clave:valor» incompleta — su arreglo es editar el spec en revisión.
+- Etiqueta `shortName` repetida en seis sitios sin fuente común — refactor fuera del hallazgo.
+- `tabla` fuera del léxico — informativo; mantenerla fuera es correcto (también es inglés).

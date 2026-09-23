@@ -20,7 +20,7 @@ describe("MetadataBlock", () => {
     const big = { blob: "x".repeat(6000) };
     render(<MetadataBlock value={big} />);
     expect(
-      screen.getByText('Metadata truncated — use "Copy metadata" for the full JSON.'),
+      screen.getByText("Metadata truncated — use the copy button for the full JSON."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /copy metadata/i })).toBeInTheDocument();
   });

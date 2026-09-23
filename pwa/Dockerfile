@@ -77,40 +77,14 @@ ENV SENTRY_PROJECT=${SENTRY_PROJECT}
 # registry the deploy does not control. Mounted this way it exists only for the
 # lifetime of this RUN and lands in no layer.
 #
-# No token is the normal case (local builds, CI jobs without the secret), and it
-# arrives in two shapes: a plain `docker build` without `--secret` mounts
-# nothing, while Compose mounts an EMPTY file when SENTRY_AUTH_TOKEN is unset or
-# empty. Both leave upload off and say so once in the build log. Anything else
-# at that path — a directory, an unreadable file, a file holding more than one
-# word (a whole env file pointed at by mistake), a token carrying an `=` or a
-# quote (one `SENTRY_AUTH_TOKEN=…` line, or a value copied with its quotes) — is
-# a broken mount, and it fails the build rather than degrading into a build that
-# sends Sentry a credential it will refuse. The message never prints the value.
-#
-# A SENTRY_ORG with no non-blank character is unset rather than passed on: the
-# upload plugin falls back to the SENTRY_ORG environment variable when the
-# config names no org, and a blank one would reach Sentry as an org slug; an
-# org-scoped `sntrys_` token already names its org.
+# docker/read-sentry-token.sh (copied in by the `COPY . .` above) reads and
+# validates the mount and execs the build with SENTRY_AUTH_TOKEN in that
+# process's environment alone. With no token the build log says upload is off;
+# a broken mount fails the build without printing the value. Which shapes are
+# which is owned by docs/rules/security.md ("Build-time secrets") and exercised
+# by tests/read-sentry-token.test.ts.
 RUN --mount=type=secret,id=sentry_auth_token \
-    secret=/run/secrets/sentry_auth_token; \
-    token=""; \
-    if [ ! -e "$secret" ]; then \
-        echo "sentry: no sentry_auth_token secret mounted, source-map upload is off"; \
-    elif [ ! -f "$secret" ] || [ ! -r "$secret" ]; then \
-        echo "sentry: $secret is mounted but is not a readable file" >&2; exit 1; \
-    else \
-        token="$(tr -d '[:space:]' < "$secret")" || exit 1; \
-        if [ -z "$token" ]; then \
-            echo "sentry: sentry_auth_token secret is empty, source-map upload is off"; \
-        elif [ "$(wc -w < "$secret")" -ne 1 ]; then \
-            echo "sentry: $secret holds more than one word, not an auth token" >&2; exit 1; \
-        fi; \
-        case "$token" in \
-            *=*|*\"*|*\'*) echo "sentry: $secret holds an '=' or a quote, not a bare auth token" >&2; exit 1 ;; \
-        esac; \
-    fi; \
-    case "${SENTRY_ORG:-}" in *[![:space:]]*) ;; *) unset SENTRY_ORG ;; esac; \
-    SENTRY_AUTH_TOKEN="$token" npm run build
+    sh docker/read-sentry-token.sh npm run build
 
 # Production — copy standalone output (same idea as upstream `prod` stage)
 FROM node_upstream AS prod

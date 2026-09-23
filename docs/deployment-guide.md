@@ -67,8 +67,10 @@ token to `project:releases`; an organization token (`sntrys_…`) comes with a
 fixed scope set that cannot be narrowed, and carries its organization, so
 `SENTRY_ORG` may stay empty with one. Leave the token empty, or pair a personal
 token with an empty `SENTRY_ORG`, and the build still succeeds with upload off
-and says so in its log — prod traces simply stay minified. The token travels as a BuildKit
-secret rather than a build arg, because `docker history` prints build args.
+and says so in its log — prod traces simply stay minified; a malformed token
+fails the build (cases: [`rules/security.md`](rules/security.md) → "Build-time
+secrets"). The token travels as a BuildKit secret rather than a build arg,
+because `docker history` prints build args.
 
 Secrets are delivered through a **gitignored root `.env.prod.local`** (copy from
 [`../.env.prod.example`](../.env.prod.example)), loaded via `--env-file` for

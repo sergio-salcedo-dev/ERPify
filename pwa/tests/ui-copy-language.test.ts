@@ -63,11 +63,18 @@ import { describe, expect, it } from "vitest";
  * concatenation from parts that are individually clean; nothing about copy that arrives from
  * the API at runtime; nothing about text passed through an attribute on the skip list (a
  * Spanish `name` is never read); nothing about Spanish written only in words no list here
- * carries — `"Blue/green o rolling deploy"` and `"Extension hooks en domain events"` shipped
- * past all three signals: `o` is a single letter, excluded for Tailwind's sake, and even a
- * listed `en` would be one function word with no diacritic, under every threshold; and
- * nothing about whether the English that replaced a string is any GOOD. Review remains the
- * only control on that last direction.
+ * carries. The general shape of that last escape: a string whose only Spanish is one short
+ * function word (`o`, `en` — a single letter is excluded for Tailwind's sake, and one listed
+ * function word with no diacritic is under every threshold) or a word that is also English
+ * (`tabla`, deliberately absent from the lexicon), carrying no diacritic, clears every signal.
+ * `"Blue/green o rolling deploy"`, `"Extension hooks en domain events"`,
+ * `"quality + tests en push/PR"` and `"tabla domain_event"` are strings of that shape. And a
+ * green proves nothing about whether the English that replaced a string is any GOOD. Review
+ * remains the only control on those directions.
+ *
+ * Text is normalised to NFC before it is matched, so an accent typed as a combining mark
+ * (`i` + U+0301) reads as the precomposed letter the diacritic class and the accented entries
+ * spell.
  */
 const PWA_ROOT = path.resolve(__dirname, "..");
 const SRC_ROOT = path.join(PWA_ROOT, "src");
@@ -83,8 +90,7 @@ const DIACRITIC = /[áéíóúñ¿¡ÁÉÍÓÚÑ]/;
  * `ningún` and `aún` are listed beside their unaccented spellings because the match is not
  * diacritic-folded. Both unaccented forms stay on purpose: `aun` is correct Spanish in its own
  * right ("aun así", "even so"), and `ningun` is how `ningún` arrives from a keyboard with no
- * Spanish layout — the way `"El plan por fases y modulos"` shipped without the accent on
- * `módulos`.
+ * Spanish layout, as `módulos` does in `"El plan por fases y modulos"`.
  */
 const FUNCTION_WORDS = [
   "que",
@@ -346,7 +352,8 @@ function sourceFiles(dir: string): string[] {
 }
 
 /** Returns why the text reads as Spanish, or `null` when it does not. */
-function spanishReason(text: string): string | null {
+function spanishReason(raw: string): string | null {
+  const text = raw.normalize("NFC");
   const content = new Set((text.match(CONTENT_WORD_RE) ?? []).map((word) => word.toLowerCase()));
   if (content.size > 0) {
     return `the Spanish word(s) ${[...content].join(", ")}`;
@@ -442,9 +449,9 @@ describe("rendered copy speaks the language the document declares", () => {
   });
 
   it("recognises the short labels an independent review found it green over", () => {
-    // Every one of these shipped past the function-word signals: too short for a diacritic, too
-    // short for two function words. They are kept verbatim so the content-word signal can never
-    // quietly stop covering the case that earned it.
+    // Each is too short for a diacritic and too short for two function words, so only the
+    // content-word signal sees it. Kept verbatim so that signal can never quietly stop covering
+    // this shape.
     const missed = [
       "Todo",
       "Cambios",
@@ -459,9 +466,8 @@ describe("rendered copy speaks the language the document declares", () => {
       // word, no diacritic — which is the shape the function-word signals cannot see.
       "entrada",
       "entradas",
-      // Rendered on the audit surface past every other signal, which is what the lexicon is a floor
-      // against. They are pinned here AND listed as lexicon members, so the fixture proves the
-      // member is live rather than decorative.
+      // Audit-surface vocabulary no other signal sees. Pinned here AND listed as lexicon members,
+      // so the fixture proves the member is live rather than decorative.
       "anonimizado",
       "identificable",
       // Rendered from a template literal with substitutions — a node type a walk over plain
@@ -478,7 +484,7 @@ describe("rendered copy speaks the language the document declares", () => {
   });
 
   it("reads a template literal that has substitutions, joined across its holes", () => {
-    // The exact two shapes that shipped in `docs/flow/page.tsx`. Each is reported only when both
+    // The joined static text of two templates of this shape. Each is reported only when both
     // halves are live: the node type has to be read AND the words have to be listed.
     expect(spanishReason("Mapa del flujo:")).not.toBeNull();
     expect(spanishReason("Ir al paso :")).not.toBeNull();
@@ -509,7 +515,7 @@ describe("rendered copy speaks the language the document declares", () => {
     );
   });
 
-  it("recognises the Spanish the roadmap page rendered past every signal", () => {
+  it("recognises roadmap copy that only the lexicon sees", () => {
     // The page's chrome and the data behind it, verbatim, template literals as their joined static
     // text. Each is a lone label or one function word beside English, so only the lexicon sees it.
     const roadmap = [
@@ -551,6 +557,15 @@ describe("rendered copy speaks the language the document declares", () => {
         "Forecasting engine (rule-based at first)",
       ].filter((text) => spanishReason(text) !== null),
     ).toEqual([]);
+  });
+
+  it("reads a decomposed accent as the precomposed letter", () => {
+    // NFD spellings: the accent is a combining U+0301 after the base letter.
+    const lexicon = "Registro de auditori\u0301a";
+    const diacritic = "Para quie\u0301n es";
+    expect(lexicon).not.toBe(lexicon.normalize("NFC"));
+    expect(spanishReason(lexicon)).toContain("auditoría");
+    expect(spanishReason(diacritic)).toContain("diacritic");
   });
 
   it("does not claim the English it would otherwise report", () => {

@@ -45,6 +45,12 @@ describe("DateFnsDateTimeProvider", () => {
     `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 
   describe("formatToDisplay", () => {
+    // Built from local wall-clock fields, so the expected string holds in every runner timezone;
+    // day 05 and month 04 differ, so a month-first order reds, and 19h reds a 12-hour clock.
+    it("renders day first, then month, then a 24-hour time", () => {
+      expect(provider.formatToDisplay(new Date(2026, 3, 5, 19, 8, 9))).toBe("05/04/2026, 19:08:09");
+    });
+
     it("returns dd/MM/yyyy, HH:mm:ss in 24-hour time", () => {
       const out = provider.formatToDisplay(new Date("2026-04-15T15:30:45Z"));
       expect(out).toMatch(/^\d{2}\/\d{2}\/\d{4},\s\d{2}:\d{2}:\d{2}$/);
@@ -58,6 +64,10 @@ describe("DateFnsDateTimeProvider", () => {
   });
 
   describe("formatToDate", () => {
+    it("renders day first, then month", () => {
+      expect(provider.formatToDate(new Date(2026, 3, 5, 19, 8, 9))).toBe("05/04/2026");
+    });
+
     it("returns dd/MM/yyyy", () => {
       const out = provider.formatToDate(new Date("2026-04-15T00:00:00Z"));
       expect(out).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
