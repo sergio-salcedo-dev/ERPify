@@ -69,8 +69,8 @@ final readonly class DbalAuditTimelineRepository implements AuditTimelineReposit
             ->from(self::TABLE, self::ALIAS)
         ;
 
-        /** @var Page<AuditTimelineEntry> $page */
-        $page = $this->paginator->paginate(
+        /** @phpstan-var Page<AuditTimelineEntry> */
+        return $this->paginator->paginate(
             $queryBuilder,
             self::ALIAS,
             $criteria,
@@ -78,8 +78,6 @@ final readonly class DbalAuditTimelineRepository implements AuditTimelineReposit
             $this->sortFieldMap(),
             $this->hydrate(...),
         );
-
-        return $page;
     }
 
     /**

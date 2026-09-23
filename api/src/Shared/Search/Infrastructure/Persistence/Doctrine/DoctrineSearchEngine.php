@@ -386,7 +386,10 @@ final readonly class DoctrineSearchEngine
         $queryBuilder->resetDQLPart('orderBy');
 
         foreach ($columns->all() as $column) {
-            $queryBuilder->addOrderBy($this->qualifyColumn($column['column'], $alias), $column['direction']->value);
+            $queryBuilder->addOrderBy(
+                $this->qualifyColumn($column['column'], $alias),
+                DoctrineSortDirection::from($column['direction']),
+            );
         }
     }
 

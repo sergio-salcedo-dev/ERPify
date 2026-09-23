@@ -11,6 +11,7 @@ use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
 use Erpify\Shared\Persistence\Infrastructure\AffectedRows;
 use Override;
+use SortDirection as NativeSortDirection;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
@@ -22,6 +23,13 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 #[AsAlias(InvitationRepository::class)]
 final readonly class DoctrineInvitationRepository implements InvitationRepository
 {
+    /**
+     * The predicate selecting one invitee's invitations. The three statements below take OVERLAPPING
+     * sets of the same table — the `FOR UPDATE` read narrows further with a status — which is why their
+     * lock direction has to agree; each states its half of that argument at its own declaration.
+     */
+    private const string INVITED_USER_PREDICATE = 'i.invitedUserId = :userId';
+
     public function __construct(private EntityManagerInterface $entityManager)
     {
     }
@@ -71,9 +79,9 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
         return $this->entityManager->createQueryBuilder()
             ->select('i')
             ->from(Invitation::class, 'i')
-            ->where('i.invitedUserId = :userId')
+            ->where(self::INVITED_USER_PREDICATE)
             ->andWhere('i.status = :status')
-            ->orderBy('i.id', 'ASC')
+            ->orderBy('i.id', NativeSortDirection::Ascending)
             ->setParameter('userId', $userId)
             ->setParameter('status', InvitationStatus::SENT->value)
             ->getQuery()
@@ -103,7 +111,7 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
 
         $affected = $this->entityManager->createQueryBuilder()
             ->delete(Invitation::class, 'i')
-            ->where('i.invitedUserId = :userId')
+            ->where(self::INVITED_USER_PREDICATE)
             ->setParameter('userId', $userId)
             ->getQuery()
             ->execute()
@@ -122,8 +130,8 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
         $this->entityManager->createQueryBuilder()
             ->select('i.id')
             ->from(Invitation::class, 'i')
-            ->where('i.invitedUserId = :userId')
-            ->orderBy('i.id', 'ASC')
+            ->where(self::INVITED_USER_PREDICATE)
+            ->orderBy('i.id', NativeSortDirection::Ascending)
             ->setParameter('userId', $userId)
             ->getQuery()
             ->setLockMode(LockMode::PESSIMISTIC_WRITE)

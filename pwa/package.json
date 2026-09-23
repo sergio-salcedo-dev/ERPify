@@ -25,10 +25,10 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
-    "@google/genai": "^2.17.1",
+    "@google/genai": "^2.22.0",
     "@hookform/resolvers": "^5.9.0",
-    "@playwright/test": "^1.62.0",
-    "@sentry/nextjs": "^10.72.0",
+    "@playwright/test": "^1.63.0",
+    "@sentry/nextjs": "^10.74.0",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.1.1",
@@ -51,7 +51,7 @@
     "tailwind-merge": "^3.6.0",
     "uuid": "^14.0.2",
     "vitest": "^5.0.0",
-    "zod": "^4.5.4"
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",

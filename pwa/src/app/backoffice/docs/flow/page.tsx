@@ -19,7 +19,7 @@ function FlowMap({ flow }: Readonly<{ flow: Flow }>) {
   return (
     <nav
       className="flow__map border-border bg-card overflow-x-auto rounded-xl border p-4 shadow-sm"
-      aria-label={`Mapa del flujo: ${flow.title}`}
+      aria-label={`Flow map: ${flow.title}`}
       data-testid={`docs-flow__map-${flow.id}`}
     >
       <ol className="flow__map-track flex items-start gap-1.5">
@@ -31,7 +31,7 @@ function FlowMap({ flow }: Readonly<{ flow: Flow }>) {
               <a
                 href={`#${flow.id}-step-${index + 1}`}
                 className="hover:bg-muted/60 focus-visible:ring-ring flex w-21 flex-col items-center gap-1 rounded-lg p-1.5 text-center focus-visible:ring-2 focus-visible:outline-none"
-                title={`Ir al paso ${index + 1}: ${step.title}`}
+                title={`Go to step ${index + 1}: ${step.title}`}
                 data-testid={`docs-flow__map-link-${flow.id}-${step.id}`}
               >
                 <span
@@ -197,11 +197,11 @@ function FlowChart({ flow }: Readonly<{ flow: Flow }>) {
       <figcaption className="flow__chart-legend text-muted-foreground mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
         <span className="flex items-center gap-2">
           <span className="border-muted-foreground w-5 border-t" aria-hidden="true" />
-          Your request&apos;s path (there and back)
+          {"Your request's path (there and back)"}
         </span>
         <span className="flex items-center gap-2">
           <span className="border-muted-foreground w-5 border-t border-dashed" aria-hidden="true" />
-          In the background (asynchronous)
+          {"In the background (asynchronous)"}
         </span>
       </figcaption>
     </figure>
@@ -247,7 +247,7 @@ function FlowJourney({ flow }: Readonly<{ flow: Flow }>) {
 
               <div className={cn("flow__step-body min-w-0 flex-1", isLast ? "pb-0" : "pb-8")}>
                 <p className="text-muted-foreground text-2xs font-semibold tracking-wider uppercase">
-                  Paso {index + 1}
+                  Step {index + 1}
                 </p>
                 <h3 className="text-foreground text-base font-semibold tracking-tight">
                   {step.title}
@@ -255,7 +255,7 @@ function FlowJourney({ flow }: Readonly<{ flow: Flow }>) {
                 <p className="text-foreground mt-1 text-sm leading-relaxed">{step.plain}</p>
                 {step.tech ? (
                   <p className="text-muted-foreground mt-1.5 text-xs leading-relaxed">
-                    <span className="font-medium">Entre bastidores:</span> {step.tech}
+                    <span className="font-medium">Behind the scenes:</span> {step.tech}
                   </p>
                 ) : null}
               </div>

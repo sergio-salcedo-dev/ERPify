@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Audit\Infrastructure\Persistence\Dbal;
 
 use DateTimeImmutable;
-use DateTimeInterface;
-use DateTimeZone;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Query\QueryBuilder;
 use Erpify\Shared\Search\Domain\Exception\InvalidSearchValue;
@@ -15,11 +13,11 @@ use Erpify\Shared\Search\Domain\Exception\UnsupportedSearchOperator;
 use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\FilterOperator;
 use Erpify\Shared\Search\Domain\Filters;
+use Erpify\Shared\Search\Domain\StrictRangeBound;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FieldMapping;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use InvalidArgumentException;
-use ValueError;
 
 /**
  * Translates the generic {@see Filters} into DBAL `andWhere` conditions over the raw `audit_log`
@@ -33,18 +31,6 @@ use ValueError;
  */
 final readonly class AuditTimelineFilterApplier
 {
-    /**
-     * Accepted range-bound formats, tried in order: ATOM (`+00:00`/`Z` at second precision), the
-     * milli-second `toISOString()` a JS client emits, and the microsecond form the audit timeline
-     * carries. `P` matches both an offset and `Z`, spanning the RFC 3339 surface without a lax parse
-     * that would also accept "now"/"tomorrow".
-     */
-    private const array SUPPORTED_DATE_TIME_FORMATS = [
-        DateTimeInterface::ATOM,
-        DateTimeInterface::RFC3339_EXTENDED,
-        'Y-m-d\TH:i:s.uP',
-    ];
-
     public function apply(QueryBuilder $queryBuilder, Filters $filters, SearchFieldMap $fieldMap): void
     {
         $index = 0;
@@ -154,38 +140,8 @@ final readonly class AuditTimelineFilterApplier
      */
     private function dateTimeBound(Filter $filter): DateTimeImmutable
     {
-        $value = $this->scalarValue($filter);
-
-        foreach (self::SUPPORTED_DATE_TIME_FORMATS as $format) {
-            $dateTime = $this->parseStrict($format, $value);
-
-            if ($dateTime instanceof DateTimeImmutable) {
-                return $dateTime->setTimezone(new DateTimeZone('UTC'));
-            }
-        }
-
-        throw InvalidSearchValue::notADateTime($filter->field, 0);
-    }
-
-    private function parseStrict(string $format, string $value): ?DateTimeImmutable
-    {
-        try {
-            $dateTime = DateTimeImmutable::createFromFormat($format, $value);
-        } catch (ValueError) {
-            return null;
-        }
-
-        if (!$dateTime instanceof DateTimeImmutable) {
-            return null;
-        }
-
-        // UTC has two canonical spellings: `P` parses both but emits `+00:00`, while `p` emits the
-        // literal `Z` a JS toISOString() sends — accept either rendering of the same instant.
-        if ($dateTime->format($format) !== $value && $dateTime->format(\str_replace('P', 'p', $format)) !== $value) {
-            return null;
-        }
-
-        return $dateTime;
+        return StrictRangeBound::parse($this->scalarValue($filter))
+            ?? throw InvalidSearchValue::notADateTime($filter->field, 0);
     }
 
     private function scalarValue(Filter $filter): string

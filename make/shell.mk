@@ -63,12 +63,12 @@
 #
 # THE SUBJECT IS TRACKED SHELL, NOT FILES NAMED *.sh
 #
-# Selecting on the extension alone would leave five tracked scripts unlinted —
-# `api/bin/sf`, `binaries/composer`, `binaries/sf` and two skill runners — and
+# Selecting on the extension alone would leave four tracked scripts unlinted —
+# `api/bin/sf`, `binaries/composer`, `binaries/sf` and one skill runner — and
 # "the gate covers shell" would be false in the way this repository keeps paying
 # for: nothing goes red, the claim just quietly stops being true. So the list is
 # the union of tracked `*.sh` and every tracked file whose FIRST line is a
-# sh/bash shebang. `git grep` supplies the second half in ~50 ms over 7.5k files;
+# sh/bash shebang. `git grep` supplies the second half in ~50 ms over 6.2k files;
 # a `head -1` loop over the whole index would not be worth running.
 #
 # What it still cannot see is an UNTRACKED script: `git ls-files` is the source

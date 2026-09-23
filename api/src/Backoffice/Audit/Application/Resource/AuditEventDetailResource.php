@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\Audit\Application\Resource;
 
+use ArrayObject;
+
 /**
  * Wire contract of the audit-event detail (`GET /audit/events/{id}`). The serialized object is this
  * DTO, never an entity. The leading fields mirror the timeline row — including both erasure booleans,
@@ -24,7 +26,13 @@ namespace Erpify\Backoffice\Audit\Application\Resource;
 final readonly class AuditEventDetailResource
 {
     /**
-     * @param array<string, mixed> $metadata
+     * `metadata` is an {@see ArrayObject} rather than an `array` because an empty PHP array encodes as
+     * `[]`, and this field is a MAP on the wire: the client's guard admits an object and rejects an array,
+     * so an entry carrying no metadata — the bulk of the `activity` timeline — would fail the envelope and
+     * blank the drawer with no visible error. `ArrayObject` is the one shape that survives normalization as
+     * an object, and only while the normalizer preserves it; {@see ResourceNormalizer} is where that is set.
+     *
+     * @param ArrayObject<string, mixed> $metadata
      */
     public function __construct(
         public string $id,
@@ -38,7 +46,7 @@ final readonly class AuditEventDetailResource
         public ?string $resourceId,
         public bool $actorErased,
         public bool $resourceErased,
-        public array $metadata,
+        public ArrayObject $metadata,
     ) {
     }
 }

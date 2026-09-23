@@ -252,6 +252,11 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
         yield 'null byte' => ["2026-01-01T00:00:00+00:00\0evil"];
         yield 'out-of-range east utc offset' => ['2026-01-01T00:00:00+25:00'];
         yield 'out-of-range west utc offset' => ['2026-01-01T00:00:00-13:00'];
+        // Parses, carries offset 0 and round-trips byte-identically, so every other gate admits it —
+        // and PostgreSQL has no year zero, so the bound reached the driver as a 22008 and surfaced as a
+        // 500 on input any client can send for free. Measured against the running server: `0001-01-01`
+        // and `9999-12-31` both store.
+        yield 'year zero, which the database calendar does not have' => ['0000-01-01T00:00:00+00:00'];
     }
 
     public function testRangeOperatorOnANonDateTimeFieldIsRejectedAsProgrammerError(): void
