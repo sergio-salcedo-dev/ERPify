@@ -10,7 +10,7 @@ describe("MetadataBlock", () => {
     expect(screen.getByText("No metadata")).toBeInTheDocument();
   });
 
-  it("renders the JSON as escaped text with a copy-raw control", () => {
+  it("renders the JSON as escaped text with a copy control", () => {
     render(<MetadataBlock value={{ route: "/api/v1/backoffice/banks", method: "GET" }} />);
     expect(screen.getByText(/"route": "\/api\/v1\/backoffice\/banks"/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /copy metadata/i })).toBeInTheDocument();
@@ -19,7 +19,9 @@ describe("MetadataBlock", () => {
   it("truncates a pathological object but keeps the full raw JSON copyable", () => {
     const big = { blob: "x".repeat(6000) };
     render(<MetadataBlock value={big} />);
-    expect(screen.getByText(/Metadata truncated/)).toBeInTheDocument();
+    expect(
+      screen.getByText("Metadata truncated — use the copy button for the full JSON."),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /copy metadata/i })).toBeInTheDocument();
   });
 });

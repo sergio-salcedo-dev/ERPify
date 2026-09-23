@@ -77,12 +77,14 @@ ENV SENTRY_PROJECT=${SENTRY_PROJECT}
 # registry the deploy does not control. Mounted this way it exists only for the
 # lifetime of this RUN and lands in no layer.
 #
-# Absent secret is the normal case (local builds, CI jobs without the secret):
-# the redirect swallows the missing file, the variable stays empty, and
-# next.config.ts leaves upload off instead of failing the build.
+# docker/read-sentry-token.sh (copied in by the `COPY . .` above) reads and
+# validates the mount and execs the build with SENTRY_AUTH_TOKEN in that
+# process's environment alone. With no token the build log says upload is off;
+# a broken mount fails the build without printing the value. Which shapes are
+# which is owned by docs/rules/security.md ("Build-time secrets") and exercised
+# by tests/read-sentry-token.test.ts.
 RUN --mount=type=secret,id=sentry_auth_token \
-    SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token 2>/dev/null || true)" \
-    npm run build
+    sh docker/read-sentry-token.sh npm run build
 
 # Production — copy standalone output (same idea as upstream `prod` stage)
 FROM node_upstream AS prod

@@ -60,11 +60,17 @@ client bundle, with errors routed through the same-origin `/monitoring` tunnel
 `pwa/.env.local` (empty keeps the SDK inert).
 
 Source-map upload is wired and **opt-in**: set `SENTRY_AUTH_TOKEN` (a real
-secret — scope it to `project:releases`) and `SENTRY_ORG` in `.env.prod.local`
-and the build uploads the maps, then deletes them from the output so they are
-never served to a browser. Leave either empty and the build still succeeds with
-upload off — prod traces simply stay minified. The token travels as a BuildKit
-secret rather than a build arg, because `docker history` prints build args.
+secret) and `SENTRY_ORG` in `.env.prod.local` and the build uploads the maps,
+then deletes the client maps from `.next/static`, so they are never served;
+server maps stay inside the image, which Next never serves. Scope a personal
+token to `project:releases`; an organization token (`sntrys_…`) comes with a
+fixed scope set that cannot be narrowed, and carries its organization, so
+`SENTRY_ORG` may stay empty with one. Leave the token empty, or pair a personal
+token with an empty `SENTRY_ORG`, and the build still succeeds with upload off
+and says so in its log — prod traces simply stay minified; a malformed token
+fails the build (cases: [`rules/security.md`](rules/security.md) → "Build-time
+secrets"). The token travels as a BuildKit secret rather than a build arg,
+because `docker history` prints build args.
 
 Secrets are delivered through a **gitignored root `.env.prod.local`** (copy from
 [`../.env.prod.example`](../.env.prod.example)), loaded via `--env-file` for
