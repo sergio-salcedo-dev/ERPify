@@ -9,7 +9,7 @@
  */
 const CURATED_LABELS: Readonly<Record<string, string>> = {
   name: "Name",
-  shortName: "Short name",
+  shortName: "Code",
   holderName: "Holder",
   iban: "IBAN",
   bic: "BIC",

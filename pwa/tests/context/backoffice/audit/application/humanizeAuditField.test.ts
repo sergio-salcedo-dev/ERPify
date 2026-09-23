@@ -4,7 +4,7 @@ import { humanizeAuditField } from "@/context/backoffice/audit/application/human
 describe("humanizeAuditField", () => {
   it("uses the curated label for an audited Bank field", () => {
     expect(humanizeAuditField("name")).toBe("Name");
-    expect(humanizeAuditField("shortName")).toBe("Short name");
+    expect(humanizeAuditField("shortName")).toBe("Code");
   });
 
   it("uses the curated label for an audited BankAccount field", () => {

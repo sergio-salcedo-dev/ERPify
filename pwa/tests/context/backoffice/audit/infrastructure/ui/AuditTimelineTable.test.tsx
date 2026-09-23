@@ -35,7 +35,7 @@ const SECURITY = entryOf({
 const ACTIVITY = entryOf({ id: "b" });
 
 function groupsOf(entries: AuditEntry[]): AuditTimelineGroup[] {
-  return [{ key: "12 de junio de 2026", header: "12 de junio de 2026", entries }];
+  return [{ key: "12 June 2026", header: "12 June 2026", entries }];
 }
 
 function renderTable(overrides: Partial<Parameters<typeof AuditTimelineTable>[0]> = {}) {
@@ -54,7 +54,7 @@ function renderTable(overrides: Partial<Parameters<typeof AuditTimelineTable>[0]
 describe("AuditTimelineTable", () => {
   it("renders each group under its header inside a rowgroup", () => {
     renderTable();
-    expect(screen.getByText("12 de junio de 2026")).toBeInTheDocument();
+    expect(screen.getByText("12 June 2026")).toBeInTheDocument();
     expect(screen.getByTestId("audit-timeline__row-a")).toBeInTheDocument();
     expect(screen.getByTestId("audit-timeline__row-b")).toBeInTheDocument();
   });

@@ -101,7 +101,7 @@ function ModuleCard({ module }: Readonly<{ module: RoadmapModule }>) {
 
       <div className="roadmap__needs bg-muted/40 border-border flex flex-col gap-1.5 rounded-lg border p-3">
         <p className="roadmap__needs-title text-foreground text-2xs font-semibold tracking-wider uppercase">
-          Necesidades que cubre
+          Needs it covers
         </p>
         <ul className="roadmap__needs-list flex flex-col gap-1">
           {module.userNeeds.map((need) => (
@@ -117,10 +117,10 @@ function ModuleCard({ module }: Readonly<{ module: RoadmapModule }>) {
       </div>
 
       <div className="roadmap__module-meta flex flex-wrap items-center gap-1.5">
-        <Chip>Prioridad: {PRIORITY_LABEL[module.priority]}</Chip>
-        <Chip>Complejidad: {COMPLEXITY_LABEL[module.complexity]}</Chip>
-        {module.boundedContext ? <Chip>Contexto: {module.boundedContext}</Chip> : null}
-        {module.dependsOn?.length ? <Chip>Depende de: {module.dependsOn.join(", ")}</Chip> : null}
+        <Chip>Priority: {PRIORITY_LABEL[module.priority]}</Chip>
+        <Chip>Complexity: {COMPLEXITY_LABEL[module.complexity]}</Chip>
+        {module.boundedContext ? <Chip>Context: {module.boundedContext}</Chip> : null}
+        {module.dependsOn?.length ? <Chip>Depends on: {module.dependsOn.join(", ")}</Chip> : null}
       </div>
 
       <ul className="roadmap__submodules flex flex-col gap-1.5 pt-1">
@@ -167,7 +167,7 @@ function PhaseSection({ phase }: Readonly<{ phase: RoadmapPhase }>) {
       <header className="roadmap__phase-head flex flex-col gap-2">
         <div className="flex items-baseline gap-2">
           <span className="text-muted-foreground text-sm font-semibold tracking-wider">
-            Fase {phase.code}
+            Phase {phase.code}
           </span>
           <h2 className="text-foreground text-lg font-semibold tracking-tight">{phase.label}</h2>
         </div>
@@ -175,7 +175,7 @@ function PhaseSection({ phase }: Readonly<{ phase: RoadmapPhase }>) {
         <div className="roadmap__phase-progress flex items-center gap-3">
           <ProgressBar
             percent={progress.donePercent}
-            label={`Progreso fase ${phase.code}: ${phase.label}`}
+            label={`Phase ${phase.code} progress: ${phase.label}`}
           />
           <span className="text-muted-foreground text-2xs font-medium whitespace-nowrap">
             {progress.done}/{progress.total} ({progress.donePercent}%)

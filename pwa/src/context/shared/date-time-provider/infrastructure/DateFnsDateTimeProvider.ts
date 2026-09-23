@@ -30,16 +30,18 @@ import type { AddUnit, DateTimeProvider, DurationUnit } from "../domain/DateTime
 /**
  * `date-fns`-backed adapter for {@link DateTimeProvider}.
  *
- * - Display formatting uses the `es-ES` locale and 24-hour time, rendered in
- *   the viewer's own local timezone (a UTC instant from the API is shown as
- *   Madrid time for a user in Spain, London time for a user in the UK, …).
+ * - Display formatting is English throughout, matching the document's
+ *   `lang="en"`: `en-GB` for the `Intl` formatters, which keeps the day-first
+ *   order and 24-hour time, rendered in the viewer's own local timezone (a UTC
+ *   instant from the API is shown as Madrid time for a user in Spain, London
+ *   time for a user in the UK, …).
  * - Working-day policy is Mon-Fri. Calendar holidays are NOT applied here;
  *   subclass or wrap this provider if a calendar-aware policy is required.
  * - All methods that return a `Date` return a fresh instance; inputs are
  *   never mutated.
  */
 export class DateFnsDateTimeProvider implements DateTimeProvider {
-  private static readonly DISPLAY_LOCALE = "es-ES";
+  private static readonly DISPLAY_LOCALE = "en-GB";
 
   // No `timeZone` option: `Intl.DateTimeFormat` then renders in the runtime's
   // local zone — i.e. each end user sees timestamps in their own timezone,
@@ -111,8 +113,8 @@ export class DateFnsDateTimeProvider implements DateTimeProvider {
   }
 
   public formatToRelative(date: Date, baseDate?: Date): string {
-    // No locale option: date-fns defaults to English ("about 3 hours ago").
-    // Display methods use es-ES via Intl; relative time is intentionally English.
+    // No locale option: date-fns defaults to English ("about 3 hours ago"),
+    // the same language the `Intl` display formatters render in.
     return formatDistance(date, baseDate ?? this.now(), { addSuffix: true });
   }
 
