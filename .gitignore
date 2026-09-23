@@ -107,3 +107,7 @@ pnpm-debug.log*
 /tmp/
 
 /next-steps-audit-trail-crosswalk.md
+.bmad-loop/runs/
+.bmad-loop/cache/
+.bmad-loop/policy.toml
+_bmad/render/

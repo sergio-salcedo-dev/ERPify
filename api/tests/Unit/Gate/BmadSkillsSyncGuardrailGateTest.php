@@ -81,6 +81,48 @@ final class BmadSkillsSyncGuardrailGateTest extends TestCase
         $this->assertDirectoryExists($this->fixture . '/.claude/skills/bmad-retired');
     }
 
+    /**
+     * `bmad-loop init` installs bmad-loop-* skills into .claude/skills, and the BMad installer
+     * that writes the source neither creates nor knows them. Without the exemption they classify
+     * as unknown provenance, which aborts every sync on a checkout that uses bmad-loop — and
+     * `restore()` rm -rf's every inventoried name, so the replace path is where they die.
+     */
+    #[Test]
+    public function aForeignProductsNamespaceNeitherBlocksTheRunNorIsSweptByIt(): void
+    {
+        $this->givenACheckoutWhereTheInstallerOnceHad(null);
+        $this->write('.claude/skills/bmad-alpha/SKILL.md', "stale, so the run reaches the replace path\n");
+        $this->write('.claude/skills/bmad-loop-sweep/SKILL.md', "installed by bmad-loop, not by BMad\n");
+
+        $run = $this->sync();
+
+        $this->assertSame(0, $run->getExitCode(), $this->explain($run));
+        $this->assertDirectoryExists(
+            $this->fixture . '/.claude/skills/bmad-loop-sweep',
+            "the replace path must leave another product's namespace alone",
+        );
+        $this->assertStringEqualsFile($this->fixture . '/.claude/skills/bmad-alpha/SKILL.md', "alpha\n");
+    }
+
+    /**
+     * The exemption is a hole exactly as wide as it is named. A third product arriving in this
+     * glob must still fail closed, and the message must not launder it in with the foreign one.
+     */
+    #[Test]
+    public function theForeignExemptionLeavesTheGuardrailArmedForEverythingElse(): void
+    {
+        $this->givenACheckoutWhereTheInstallerOnceHad('bmad-retired');
+        $this->write('.claude/skills/bmad-retired/SKILL.md', "written by a person\n");
+        $this->write('.claude/skills/bmad-loop-sweep/SKILL.md', "installed by bmad-loop\n");
+
+        $run = $this->sync();
+
+        $this->assertSame(1, $run->getExitCode(), $this->explain($run));
+        $this->assertStringContainsString('bmad-retired', $run->getErrorOutput());
+        $this->assertStringNotContainsString('bmad-loop-sweep', $run->getErrorOutput());
+        $this->assertDirectoryExists($this->fixture . '/.claude/skills/bmad-loop-sweep');
+    }
+
     #[Test]
     public function forceRemovesHandWrittenContentOnlyAfterArchivingIt(): void
     {
