@@ -147,6 +147,46 @@ final class ProjectContextVersionGateTest extends TestCase
     }
 
     /**
+     * The architecture pages name the same technologies and must not restate their versions.
+     *
+     * Both carried a `Version` column until this gate, and it drifted precisely because the gate could not
+     * see it: those tables put the product in one column and the number in the next, so the name-adjacent
+     * extraction {@see ProjectContextVersions::claimsIn()} performs found nothing there. Seven numbers in
+     * `architecture-pwa.md` were falsified by a single dependency batch with every check green.
+     *
+     * Widening the extractor was measured and rejected. Pairing the two columns positionally has to split
+     * them on `/`, which is also inside the package names — `@base-ui/react`, `symfony/uid`,
+     * `@testing-library/react` — so legitimate rows came back mismatched, and prose tables elsewhere on the
+     * page parsed as version claims. What is refused instead is the duplication: one page owns the numbers
+     * and this one points at it.
+     *
+     * **The check is scoped to table cells, and that is a limit rather than an oversight.** Extending it to
+     * the whole text was measured too: 93 matches on one page and 21 on the other, almost all HTTP status
+     * codes (`answers 400`, `a 422`), RFC numbers and `Level 1`. Prose on these pages may still name a
+     * version, so the convention beside this gate is that prose names a MAJOR — stable for years, and the
+     * idiom `docs/project-context.md` already uses for "Doctrine ORM 3 / DBAL 4".
+     */
+    #[Test]
+    public function testTheArchitecturePagesRestateNoVersion(): void
+    {
+        $restated = [];
+
+        foreach (ProjectContextVersions::MIRROR_PAGES as $page) {
+            foreach (ProjectContextVersions::claimsIn($this->read($this->repoRoot() . '/' . $page)) as $claim) {
+                $restated[] = \sprintf('%s:%d restates "%s"', $page, $claim['line'], $claim['claim']);
+            }
+        }
+
+        $this->assertSame([], $restated, \sprintf(
+            "A version returned to an architecture page's table. %s owns the numbers and is bound to the "
+            . 'manifests; a copy here is compared against nothing and drifts in silence, which is how seven '
+            . "of them went stale unnoticed. State the technology and let the reader follow the link:\n%s",
+            ProjectContextVersions::PAGE,
+            \implode("\n", $restated),
+        ));
+    }
+
+    /**
      * A silent empty registry, or a page that has quietly become a stub, would make the check above
      * vacuously green — the exact shape this gate exists to refuse elsewhere.
      */

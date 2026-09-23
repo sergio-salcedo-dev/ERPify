@@ -44,6 +44,21 @@ final class ProjectContextVersions
     public const string PAGE = 'docs/project-context.md';
 
     /**
+     * The architecture pages, which name the same technologies and must NOT restate their versions.
+     *
+     * They used to carry a `Version` column each, and it drifted exactly as an ungated copy does: seven
+     * numbers in `architecture-pwa.md` alone were falsified by one dependency batch and nobody noticed,
+     * because {@see claimsIn()} could not see them — those tables put the product in one column and its
+     * version in the next, so no name-adjacent match exists to extract. Repairing the numbers would have
+     * restored the same arrangement that hid them.
+     *
+     * So the fix is ownership rather than a wider parser: {@see PAGE} states versions and this gate binds
+     * it to the manifests; these pages state the technologies and point there. A number returning to one
+     * of their tables is what {@see MIRROR_PAGES} refuses.
+     */
+    public const array MIRROR_PAGES = ['docs/architecture-api.md', 'docs/architecture-pwa.md'];
+
+    /**
      * The manifest name a claim carries when no manifest can own it. The middle column then holds the
      * reason instead of a dotted path, so the exemption is readable at the line that grants it.
      */
