@@ -25,8 +25,12 @@
 #                   via app.dev (the sub-make re-derives its own erpify-<slug>
 #                   project — see config.mk on why it isn't inherited).
 #                   After checkout the recipe seeds the worktree's .claude/skills/
-#                   with the bmad-* skills from the MAIN checkout's .agent/skills/,
-#                   the same place _bmad is linked from. Every skill root is
+#                   with the bmad-* skills from the MAIN checkout, trying
+#                   .agent/skills then .claude/skills then .agents/skills — the
+#                   installer writes all three and a `git pull` of the commit that
+#                   untracked them DELETES the ones that were tracked, so naming
+#                   only one root was measured leaving new worktrees empty. Every
+#                   skill root is
 #                   gitignored — they are installer output regenerated from _bmad/,
 #                   which git does not carry either — so a fresh checkout has none
 #                   and /bmad-* slash commands would otherwise
@@ -175,12 +179,16 @@ worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main
 	baseref="$${BASE:-main}"; \
 	echo "→ creating worktree $$path on new branch $$branch (from $$baseref)"; \
 	git -C "$$main" worktree add -b "$$branch" "$$path" "$$baseref" || { echo "✗ git worktree add failed"; exit 1; }; \
-	if ls -d "$$main"/.agent/skills/bmad-*/ >/dev/null 2>&1; then \
+	src=""; \
+	for root in .agent/skills .claude/skills .agents/skills; do \
+		if ls -d "$$main/$$root"/bmad-*/ >/dev/null 2>&1; then src="$$main/$$root"; break; fi; \
+	done; \
+	if [ -n "$$src" ]; then \
 		mkdir -p "$$path/.claude/skills"; \
-		cp -a "$$main"/.agent/skills/bmad-*/ "$$path/.claude/skills/"; \
-		echo "→ seeded .claude/skills/bmad-* from the main checkout's install (every skill root is gitignored)"; \
+		cp -a "$$src"/bmad-*/ "$$path/.claude/skills/"; \
+		echo "→ seeded .claude/skills/bmad-* from $${src#$$main/} in the main checkout (every skill root is gitignored)"; \
 	else \
-		echo "! $$main/.agent/skills holds no bmad-* skills — run the BMad installer there; /bmad-* will be Unknown command here"; \
+		echo "! the main checkout holds no bmad-* skills in any root — run the BMad installer there; /bmad-* will be Unknown command in this worktree"; \
 	fi; \
 	if [ -d "$$main/_bmad" ] && [ ! -e "$$path/_bmad" ]; then \
 		ln -s ../../../_bmad "$$path/_bmad"; \

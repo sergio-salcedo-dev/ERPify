@@ -184,9 +184,9 @@ stating: the universe is `bmad-*/`, so a hand-written skill under any other name
 glob rather than by this check — `git-worktree-code-review`, cited in earlier versions as the precedent,
 is exactly that case and could never have reached it — and the comparison prunes `__pycache__`/`*.pyc`,
 because a skill that has merely been *run* would otherwise report as drift for ever, with a destructive
-replace as its only offered remedy. Of the ~92 skills the installer writes, 77 carry the `bmad-` prefix;
-the other 15 (`memory`, `sync`, `wds-*`) are tracked under `.claude/skills` too — `.gitignore` ignores
-only `/.claude/skills/bmad-*/` — so they travel through git in both roots and need no sync.
+replace as its only offered remedy. All 75 skills the installer writes carry the `bmad-` prefix, and none of
+them is tracked: the `wds` and `automator` modules that supplied the other 15 were retired, and every
+skill root is gitignored.
 
 Nothing in the merge path moves a marker in `sprint-status.yaml`: a PR squash-merges on GitHub and the file keeps saying `review` / `in-progress`. The audit is offline (no network, no `gh`) and reports two things — an epic still open whose stories are all `done`, and a story below `done` whose tag (`RM-6`, `U-4`, `II-5`, `AF-1.1`…) already appears in a commit subject on the base branch. Story keys with no letter prefix carry no commit tag, so they are listed as unchecked rather than passed silently.
 
