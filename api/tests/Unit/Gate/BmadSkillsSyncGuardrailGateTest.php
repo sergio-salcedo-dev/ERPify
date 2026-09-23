@@ -19,9 +19,10 @@ use Symfony\Component\Process\Process;
  * defects this gate pins were measured on the shipped version, each with every gate in the repository green
  * and the `Shell (ShellCheck)` job passing:
  *
- *  - hand-written content sitting at a path the installer had once occupied classified as **retired** and was
- *    deleted with **exit 0**, because the guardrail asked whether the PATH had history rather than whether the
- *    BYTES still matched what git recorded there — path history separates paths, not authors;
+ *  - a directory the source lacked was deleted with **exit 0** whenever git had history at the same path,
+ *    which separates PATHS rather than AUTHORS, so hand-written content at a retired skill's name went with
+ *    it. The tracked tree that arbitration relied on is gone — every skill root is installer output now —
+ *    so the rule is conservative: anything the source lacks stops the run, whatever it looks like;
  *  - a copy that failed after the delete loop aborted under `set -e` **before** the verification loop, so the
  *    run exited **1** over a gutted tree — and 1 is the code the script's own contract gives to outcomes that
  *    touch nothing, so a caller reads a half-written tree as a safe no-op.
@@ -53,7 +54,7 @@ final class BmadSkillsSyncGuardrailGateTest extends TestCase
     }
 
     #[Test]
-    public function handWrittenContentAtARetiredPathStopsTheRun(): void
+    public function anythingTheSourceLacksStopsTheRun(): void
     {
         $this->givenACheckoutWhereTheInstallerOnceHad('bmad-retired');
         $this->write('.claude/skills/bmad-retired/SKILL.md', "written by a person, held nowhere else\n");
@@ -62,19 +63,22 @@ final class BmadSkillsSyncGuardrailGateTest extends TestCase
 
         $this->assertSame(1, $run->getExitCode(), $this->explain($run));
         $this->assertDirectoryExists($this->fixture . '/.claude/skills/bmad-retired');
-        $this->assertStringContainsString('not what git recorded', $run->getErrorOutput());
+        $this->assertStringContainsString('absent from', $run->getErrorOutput());
     }
 
     #[Test]
-    public function contentStillMatchingWhatGitRecordedIsRemovedAsRetired(): void
+    public function anExtraThatLooksExactlyLikeInstallerOutputIsRefusedToo(): void
     {
         $this->givenACheckoutWhereTheInstallerOnceHad('bmad-retired');
         $this->write('.claude/skills/bmad-retired/SKILL.md', "retired\n");
 
         $run = $this->sync();
 
-        $this->assertSame(0, $run->getExitCode(), $this->explain($run));
-        $this->assertDirectoryDoesNotExist($this->fixture . '/.claude/skills/bmad-retired');
+        // Byte-identical to what the installer shipped, and still refused: that is the whole
+        // point of the conservative rule. Nothing left in the tree can tell this apart from a
+        // person's own file, so the run stops rather than guessing in the unrecoverable direction.
+        $this->assertSame(1, $run->getExitCode(), $this->explain($run));
+        $this->assertDirectoryExists($this->fixture . '/.claude/skills/bmad-retired');
     }
 
     #[Test]
@@ -107,7 +111,7 @@ final class BmadSkillsSyncGuardrailGateTest extends TestCase
         $run = $this->sync(['--dry-run']);
 
         $this->assertSame(1, $run->getExitCode(), $this->explain($run));
-        $this->assertStringContainsString('hand-written', $run->getOutput());
+        $this->assertStringContainsString('unknown', $run->getOutput());
         $this->assertDirectoryExists($this->fixture . '/.claude/skills/bmad-retired');
     }
 

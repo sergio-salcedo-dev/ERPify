@@ -92,7 +92,10 @@ pnpm-debug.log*
 
 # BMad generated artifacts
 /_bmad/
-/.agents/skills/bmad-*/
+# The installer regenerates every skill root from _bmad/, which is itself ignored, so a
+# clone that carried them would hold files it cannot run. They are output, not source.
+/.agent/skills/
+/.agents/skills/
 /.claude/skills/bmad-*/
 # .qwen/ is no longer an install target; ignored so a stray regeneration stays out.
 /.qwen/
