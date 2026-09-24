@@ -152,6 +152,16 @@ you change anything here.
       `pwa/tests/sentry-sourcemap-exposure.test.ts`; a green proves the
       declarations, never what a real build emits, and never that a CDN or a
       workflow artifact is not serving a copy from somewhere else.
+- [ ] Associating Sentry releases with commits is **opt-in** on
+      `SENTRY_REPOSITORY`, and it needs the Sentry **GitHub integration**, which
+      is a third party granted read access to the repository's code and history.
+      Install it only on this repository, never on the whole account. The
+      release name is the commit SHA `make` exports (`make/config.mk`), which is
+      public by design: it is inlined into the client and server bundles and
+      set in the API containers' runtime environment (the shipped `pwa` image
+      carries no such `ENV`; only its builder stage did). With
+      `SENTRY_REPOSITORY` empty, nothing is associated: the plugin's `auto`
+      fallback reads a `.git` the build context does not contain.
 - [ ] Sentry events are scrubbed before send: `sendDefaultPii: false` plus a
       `beforeSend` denylist scrub in parity with the API's `SentryEventScrubber`
       (`scrubSentryEvent` / shared `redaction` keys); deliberate `telemetry.*`
