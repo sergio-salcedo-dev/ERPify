@@ -540,6 +540,10 @@ deptrac:
             - Erpify\Iam\Session\Application\CurrentSessionReference
             - Erpify\Iam\Session\Application\RevokeSession
             - Erpify\Iam\Session\Domain\SessionId
+        Erpify\Iam\Identity\Application\KeepOnlyCurrentSession:
+            - Erpify\Iam\Session\Application\CurrentSessionReference
+            - Erpify\Iam\Session\Application\EvictOtherSessions
+            - Erpify\Iam\Session\Domain\SessionId
         Erpify\Iam\Identity\Application\FulfilIdentityErasure:
             - Erpify\Iam\Session\Application\PurgeUserSessions
             - Erpify\Organization\Membership\Application\PurgeUserMembership

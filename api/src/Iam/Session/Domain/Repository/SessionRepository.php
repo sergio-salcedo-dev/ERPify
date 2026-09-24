@@ -58,6 +58,33 @@ interface SessionRepository
     public function findByUserId(string $userId): array;
 
     /**
+     * Takes a row lock on every `status = ACTIVE` session of the user, in ascending id order, and returns the
+     * ids it holds. MUST run inside a transaction — the locks are held until it ends, and outside one they
+     * would be released by the same statement that took them.
+     *
+     * It exists so that "revoke the others" can be decided on a set nobody else can move until the decision
+     * commits. The bulk UPDATE alone cannot give that: it never reads the row it spares, so two concurrent
+     * revocations of the others — one per session — each spare their own row and revoke the other's, and both
+     * commit. With every caller locking the SAME set in the SAME order, the second one waits, finds its own
+     * row revoked when it wakes, and can act on that instead of on what it saw when it was admitted.
+     *
+     * The selection is the lifecycle half of admissibility alone, exactly the set the bulk revocations flip:
+     * an expired-but-`ACTIVE` row is locked as it is revoked. The order is total — `id` is the primary key —
+     * which is what keeps two lockers of one user's set from waiting on each other in a cycle. That holds only
+     * while every multi-row writer of a user's active sessions takes this lock BEFORE its bulk statement, whose
+     * own scan meets equal index keys in heap order, not id order: the two "revoke the others" paths, the
+     * revoke-everything teardown and the erasure purge all do. Two writers stay outside it, each named rather
+     * than silently exempt — revoking one session by id holds a single row and cannot close a cycle, and the
+     * retention sweep deletes across every user in one unordered statement, the exposure its own docblock
+     * accepts; either one losing a deadlock surfaces as a retryable 503 and loses nothing.
+     *
+     * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
+     *
+     * @return list<SessionId>
+     */
+    public function lockActiveForUser(string $userId): array;
+
+    /**
      * Bulk-revokes every currently-active session of the user EXCEPT `$currentSessionId` — the "close the
      * others" action, which never self-expels the session in hand.
      *

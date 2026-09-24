@@ -41,6 +41,13 @@ final class RevokeOtherSessionsControllerTest extends TestCase
         $this->assertTheSubjectDisagreesWithTheCorrelation();
 
         $store = $this->createMock(SessionRepository::class);
+        // The locked set holds the correlated session, so the use case finds the caller still alive; what this
+        // case pins is WHICH id the controller hands over, not the liveness check the use case owns.
+        $store->expects($this->once())
+            ->method('lockActiveForUser')
+            ->with(self::SUBJECT_ID)
+            ->willReturn([$this->correlatedSessionId()])
+        ;
         $store->expects($this->once())
             ->method('revokeOthersForUser')
             ->with(self::SUBJECT_ID, $this->correlatedSessionId())

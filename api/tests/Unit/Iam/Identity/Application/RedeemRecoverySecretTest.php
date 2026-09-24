@@ -11,6 +11,7 @@ use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Event\RecoverySecretRedeemed;
 use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Domain\Exception\InvalidRecoverySecret;
+use Erpify\Iam\Session\Domain\Event\OtherSessionsRevoked;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use Override;
@@ -66,10 +67,13 @@ final class RedeemRecoverySecretTest extends TestCase
             'the lockout the redemption exists to lift is still standing',
         );
         // Published inside the same transaction as the retire, so the durable record of the redemption
-        // cannot exist without the consumption and the consumption cannot commit without it.
-        $this->assertCount(1, $eventBus->publishedEvents);
-        $this->assertInstanceOf(RecoverySecretRedeemed::class, $eventBus->publishedEvents[0]);
-        $this->assertSame(UserMother::DEFAULT_ID, $eventBus->publishedEvents[0]->aggregateId());
+        // cannot exist without the consumption and the consumption cannot commit without it — and the
+        // eviction's own fact rides in that same unit of work, ahead of it.
+        $this->assertCount(2, $eventBus->publishedEvents);
+        $this->assertInstanceOf(OtherSessionsRevoked::class, $eventBus->publishedEvents[0]);
+        $this->assertInstanceOf(RecoverySecretRedeemed::class, $eventBus->publishedEvents[1]);
+        $this->assertSame(UserMother::DEFAULT_ID, $eventBus->publishedEvents[1]->aggregateId());
+        $this->assertSame(['RECOVERY_SECRET_REDEEMED'], $this->auditedActions());
     }
 
     #[Test]
@@ -85,11 +89,14 @@ final class RedeemRecoverySecretTest extends TestCase
         $journal = new LockOrderJournal();
         $users->lockOrderJournal = $journal;
         $secrets->lockOrderJournal = $journal;
+        // The sessions come last: the identity erasure takes `identity_user` before `iam_session` too, and
+        // "sign out my other devices" takes `iam_session` alone, so appending it keeps the graph acyclic.
+        $this->sessions->lockOrderJournal = $journal;
 
         $this->useCase($users, $secrets)->redeem($generated->plaintext(), $this->sessionSeam());
 
         $this->assertSame(
-            [LockOrderJournal::IDENTITY_USER, LockOrderJournal::RECOVERY_SECRET],
+            [LockOrderJournal::IDENTITY_USER, LockOrderJournal::RECOVERY_SECRET, LockOrderJournal::IAM_SESSION],
             $journal->crossTableOrder(),
         );
     }

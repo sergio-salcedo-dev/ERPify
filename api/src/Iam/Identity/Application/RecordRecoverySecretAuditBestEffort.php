@@ -61,6 +61,8 @@ final readonly class RecordRecoverySecretAuditBestEffort
 
     private const string REDEMPTION_COMPENSATED_ACTION = 'RECOVERY_SECRET_REDEMPTION_COMPENSATED';
 
+    private const string REDEMPTION_INTERRUPTED_ACTION = 'RECOVERY_SECRET_REDEMPTION_INTERRUPTED';
+
     public function __construct(
         private AuditLogger $auditLogger,
         private LoggerInterface $logger,
@@ -92,6 +94,18 @@ final readonly class RecordRecoverySecretAuditBestEffort
     public function recordRedemptionCompensated(string $userId): void
     {
         $this->record(self::REDEMPTION_COMPENSATED_ACTION, $userId);
+    }
+
+    /**
+     * A redemption verified its secret under lock, found the session it had established already revoked by
+     * another session of the identity, and evicted every session without consuming. A valid presentation that
+     * signed every device out is a security fact whatever its outcome, and nothing else attributes it to this
+     * channel: the consumption was withheld, so no `RECOVERY_SECRET_REDEEMED` row follows, and the event store
+     * holds only a session-context `AllSessionsRevoked` naming no cause.
+     */
+    public function recordRedemptionInterrupted(string $userId): void
+    {
+        $this->record(self::REDEMPTION_INTERRUPTED_ACTION, $userId);
     }
 
     /**

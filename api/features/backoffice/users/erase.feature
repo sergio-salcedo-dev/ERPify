@@ -94,8 +94,9 @@ Feature: Erase an identity (GDPR right to erasure)
     # delete, the reset-token delete, the recovery-secret delete, the two-axis row lock, the actor-axis
     # anonymisation UPDATE, the
     # GDPR_SUBJECT_ERASED insert, the resource-axis anonymisation UPDATE, the event-store anonymisation UPDATE,
-    # the session delete, the membership delete and the GDPR_ERASURE_EXECUTED insert
-    # (= 18). There are TWO administrator readings and their positions are the point: the unlocked one refuses
+    # the ordered lock on the subject's active sessions, the session delete, the membership delete and the
+    # GDPR_ERASURE_EXECUTED insert (= 19). The session lock precedes its delete so the delete meets the active
+    # rows in the id order a concurrent "sign out my other devices" takes them in, never the scan's own. There are TWO administrator readings and their positions are the point: the unlocked one refuses
     # early and takes no write lock, and the locked one — which is the one that decides — cannot run before
     # the invitation lock without inverting the order the accept path is unable to reverse. Its round trip is
     # the price of the refusal holding at commit rather than only at the instant it was asked. The three table-touching deletes are listed in the order they run because that order is itself an
@@ -121,7 +122,7 @@ Feature: Erase an identity (GDPR right to erasure)
     # assumed: it is one directed DELETE beside the reset-token one, it costs +1 whether it matches a row or
     # none, and it sits last among the identity module's own deletes because nothing else reaches both that
     # table and the reset tokens — its only fixed constraint is that it follows the identity row.
-    And 22 requests got executed for doctrine connection "default"
+    And 23 requests got executed for doctrine connection "default"
 
   Scenario: Erasure forgets the subject where the trail NAMES them, not only where they acted
     # The crosswalk row: the subject is both actor and resource, which is what a self-service role change

@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Http;
 
+use Erpify\Iam\Identity\Application\RedeemedSessionRevokedInFlight;
 use Erpify\Iam\Identity\Application\RedeemRecoverySecret;
 use Erpify\Iam\Identity\Domain\Exception\InvalidRecoverySecret;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordRecoveryThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice;
 use Erpify\Shared\Http\Infrastructure\StrictRequestPayload;
+use Erpify\Shared\Persistence\Domain\Exception\TransientTransactionFailure;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
@@ -72,6 +75,7 @@ final readonly class RedeemRecoverySecretController
     public function __invoke(
         #[StrictRequestPayload]
         RedeemRecoverySecretRequest $request,
+        Request $httpRequest,
     ): Response {
         // Spent on the selector half alone, before the use case resolves anything, and case-folded so one
         // row cannot answer to thousands of buckets. A malformed presentation has no selector to key, so it
@@ -89,10 +93,24 @@ final readonly class RedeemRecoverySecretController
         // named parameter, and closure frames carry their arguments into `Throwable::getTrace()`. The
         // method it forwards to is already classified `sensitive` in `api/.person-address-parameter-policy`;
         // forwarding directly keeps the address's declaration sites exactly where that registry can see them.
-        $this->redeemRecoverySecret->redeem(
-            $request->secret,
-            $this->reauthenticateDevice->reauthenticate(...),
-        );
+        try {
+            $this->redeemRecoverySecret->redeem(
+                $request->secret,
+                $this->reauthenticateDevice->reauthenticate(...),
+            );
+        } catch (TransientTransactionFailure $transientTransactionFailure) {
+            // The 503 invites a retry, and this device's native session still carries the token and the
+            // correlation of the session another device just revoked. Left in place, the retry is admitted by
+            // nothing: the gate reads that dead row on the way in and answers 401 before this route runs. So the
+            // session is dropped here — exactly what the gate would do — and only on this cause: a deadlock
+            // answering the same 503 leaves the session this request established alive, and signing the device
+            // out of it would be a loss the retry does not need.
+            if ($transientTransactionFailure->getPrevious() instanceof RedeemedSessionRevokedInFlight) {
+                $httpRequest->getSession()->invalidate();
+            }
+
+            throw $transientTransactionFailure;
+        }
 
         return new Response(status: Response::HTTP_NO_CONTENT);
     }

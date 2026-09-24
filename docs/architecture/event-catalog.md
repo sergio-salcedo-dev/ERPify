@@ -97,7 +97,10 @@ than an ordering habit. One recovery-secret audit row projects no event at all â
 `RECOVERY_SECRET_REDEMPTION_COMPENSATED`, written when a redemption's session was admitted and then revoked
 because the consuming transaction refused. The event died with that rollback, so there the prunable
 projection is the *only* durable trace, and the asymmetry is the point rather than an oversight: nothing
-persisted for an event to attest.
+persisted for an event to attest. `RECOVERY_SECRET_REDEMPTION_INTERRUPTED` is its sibling for the one
+redemption that commits without consuming â€” its own session was revoked before the lock, so it evicted every
+session and withheld the consumption. What persisted there is a session-context `erpify.iam.session.all-revoked`
+naming no cause, so the audit row is the only record attributing that eviction to the recovery channel.
 
 | `eventName` | ver | Producer (use case) | Payload |
 |-------------|:---:|---------------------|---------|

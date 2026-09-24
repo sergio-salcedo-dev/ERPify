@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Http;
 
 use DateTimeImmutable;
+use Erpify\Iam\Identity\Application\KeepOnlyCurrentSession;
 use Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort;
 use Erpify\Iam\Identity\Application\RedeemRecoverySecret;
 use Erpify\Iam\Identity\Application\RevokeCurrentSessionBestEffort;
@@ -15,6 +16,7 @@ use Erpify\Iam\Identity\Infrastructure\Http\RedeemRecoverySecretController;
 use Erpify\Iam\Identity\Infrastructure\Http\RedeemRecoverySecretRequest;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordRecoveryThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice;
+use Erpify\Iam\Session\Application\EvictOtherSessions;
 use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
@@ -31,6 +33,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\DependencyInjection\Container;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 
@@ -78,7 +81,7 @@ final class RedeemRecoverySecretControllerTest extends TestCase
         $this->expectException(InvalidRecoverySecret::class);
 
         try {
-            $controller(new RedeemRecoverySecretRequest($generated->plaintext()));
+            $controller(new RedeemRecoverySecretRequest($generated->plaintext()), new Request());
         } finally {
             $this->assertSame([], $secrets->removed, 'the row was consumed by a caller that was over budget');
         }
@@ -100,7 +103,7 @@ final class RedeemRecoverySecretControllerTest extends TestCase
         $this->expectException(InvalidRecoverySecret::class);
 
         try {
-            $controller(new RedeemRecoverySecretRequest($generated->plaintext()));
+            $controller(new RedeemRecoverySecretRequest($generated->plaintext()), new Request());
         } finally {
             $this->assertSame([], $secrets->removed);
         }
@@ -119,7 +122,7 @@ final class RedeemRecoverySecretControllerTest extends TestCase
         $this->spend($controller, $selector . '.first-guess');
 
         $this->expectException(InvalidRecoverySecret::class);
-        $controller(new RedeemRecoverySecretRequest($selector . '.second-guess'));
+        $controller(new RedeemRecoverySecretRequest($selector . '.second-guess'), new Request());
     }
 
     #[Test]
@@ -136,7 +139,7 @@ final class RedeemRecoverySecretControllerTest extends TestCase
         $this->spend($controller, \strtolower($selector) . '.guess');
 
         $this->expectException(InvalidRecoverySecret::class);
-        $controller(new RedeemRecoverySecretRequest(\strtoupper($selector) . '.guess'));
+        $controller(new RedeemRecoverySecretRequest(\strtoupper($selector) . '.guess'), new Request());
     }
 
     #[Test]
@@ -151,7 +154,7 @@ final class RedeemRecoverySecretControllerTest extends TestCase
         $this->spend($controller, 'no-separator-at-all');
 
         $this->expectException(InvalidRecoverySecret::class);
-        $controller(new RedeemRecoverySecretRequest('no-separator-at-all'));
+        $controller(new RedeemRecoverySecretRequest('no-separator-at-all'), new Request());
     }
 
     /**
@@ -162,7 +165,7 @@ final class RedeemRecoverySecretControllerTest extends TestCase
     private function spend(RedeemRecoverySecretController $controller, string $presentation): void
     {
         try {
-            $controller(new RedeemRecoverySecretRequest($presentation));
+            $controller(new RedeemRecoverySecretRequest($presentation), new Request());
             $this->fail('The attempt was expected to be refused.');
         } catch (InvalidRecoverySecret) {
             // Expected — the point is that the attempt was PAID for, not that it failed.
@@ -207,6 +210,14 @@ final class RedeemRecoverySecretControllerTest extends TestCase
                     new InlineTransactionManager(),
                 ),
                 new NullLogger(),
+            ),
+            new KeepOnlyCurrentSession(
+                new RecordingCurrentSessionReference(),
+                new EvictOtherSessions(
+                    new InMemorySessionRepository(),
+                    new RecordingEventBus(),
+                    FixedClock::at(self::NOW),
+                ),
             ),
             new RecordingEventBus(),
             new InlineTransactionManager(),
