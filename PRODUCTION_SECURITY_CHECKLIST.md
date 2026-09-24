@@ -749,9 +749,10 @@ you change anything here.
       attacker retrying continuously inside the window. An attempt the aggregate ignores still costs no write
       and emits nothing; what it costs is the BEGIN/COMMIT **and the row lock**, so concurrent failed attempts
       against one already-locked address serialise on that identity's row — bounded by an attempt that already
-      ran a credential verification. **An unknown address is the one path that opens no transaction at all** —
-      which leaves no durable trace to tell it from a real one, and makes the transaction itself an existence
-      signal whose latency cost nobody has measured (§7).
+      ran a credential verification. **An unknown address takes the same transaction and the same locked read**,
+      over a row that is not there, and commits without writing — so the transaction is not an existence signal
+      and leaves no durable trace to tell the two apart. What an unknown address still skips is the counter's
+      UPDATE on an `ACTIVE` identity and the hydration of a row (§7).
 - [ ] **A third recovery edge for the persisted lockout above: `POST /backoffice/users/{id}/unlock`**
       (`ADMIN`-only, `#[IsGranted('users.unlock')]`, `users` opts out of tier auto-grant). #602 named the two
       existing recovery edges — a successful login, a completed password reset — as both attacker-cuttable by
@@ -1208,21 +1209,50 @@ mitigated state. Accepting one means recording who accepted it and against which
       the redemption flow, whose first act has to be `revoke-others`.
       `revoke-others` carrying no limiter is deliberate and load-bearing: it is the one edge an adversary
       cannot spend. **Do not "harden" it.**
-- [ ] **The failed-login path carries an existence signal shaped like a transaction, and its magnitude is
-      UNMEASURED.** `LoginAttemptRegistrar::recordFailure()` probes for the address on an unlocked read and
-      returns at once when it resolves to no row; an address that DOES resolve pays `BEGIN` +
-      `SELECT … FOR UPDATE` + `COMMIT` whatever the aggregate then decides. The transaction is therefore taken
-      on exactly the condition "this address exists" — where a shape that also skipped it for a locked or
-      non-`ACTIVE` identity kept "locked" and "unknown" together on this axis. **The 401 body is unaffected**
-      and stays the single normalised "Invalid credentials."; what is open is the **latency**, and the
-      plausible answer is that the equalised KDF the `UserProvider` pays on every branch is a large enough
-      constant to bury one round trip on the same connection. That is a hypothesis, not evidence — nobody has
-      run it, and "bounded by a larger constant elsewhere" is exactly the shape of claim this repo requires to
-      be measured rather than asserted. Tracked in
-      [#881](https://github.com/sergio-salcedo-dev/ERPify/issues/881), which states what the measurement must
-      produce and what each outcome obliges. Deliberately **not** tagged `@accepted-risk`: this is a gap to
-      close by measuring, not a risk accepted standing, and the tag's live-state job would red the day #881
-      closes on a successful measurement.
+- [x] **A failed login no longer carries an existence signal shaped like a transaction, a seed cost or an
+      over-long password.** Three differentials on one path, each closed by construction.
+      **(1) The transaction.** Measured against the running dev stack before the fix (n≈35 per class,
+      production-cost bcrypt; p50 and ROC AUC only — p95/p99 and the already-locked and same-identity-concurrency
+      cases #881 listed were not measured, because the fix makes both branches issue the same round trips rather
+      than arguing the gap is small): with `LoginAttemptRegistrar::recordFailure()` skipping its transaction for
+      an address that resolved to no row, a failed login for an unknown address answered ~20 ms faster at p50
+      than one for an existing `ACTIVE` identity, separable at AUC ≈ 0.60 — small, and classifiable with enough
+      samples, the outcome #881 said obliges both branches to pay the same. Every well-formed address now opens
+      the transaction and runs the same `SELECT … FOR UPDATE`, and an unknown one commits without writing —
+      pinned in `LoginAttemptRegistrarExistenceShapeTest`, which compares the port calls of a known and an
+      unknown address and asserts the locked read runs inside the transaction. The price is a transaction per
+      failed login against a non-existent address; the locking read over no row locks nothing, and the attempt
+      has already paid a credential verification and passed the login throttle. A deadlock or referential fault
+      only an existing identity can meet is absorbed like any store fault, so it cannot surface as a 503/409
+      where an unknown address gets the 401 (`ProblemDetailsAuthenticationFailureHandlerTest`).
+      **(2) The seed cost.** The fixture seed hashed every identity at bcrypt cost 4 while the timing floor pays
+      one verification of the hasher the environment configures — cost 13 under `auto` in dev — so on any
+      environment loaded from the fixtures a known address answered a wrong password in ~53 ms and an unknown
+      one in ~594 ms. Seeds are minted through that same configured hasher (`SeedCredentialProvider`), pinned
+      by `SeededCredentialCostFunctionalTest` (the floor's dummy and every seeded hash cost what the configured
+      hasher costs, and every credentialed entry in `User.yaml` routes through the provider) and
+      `SeedCredentialProviderTest` (at a cost the tree does not configure). The fixtures never reach production;
+      a production hash minted at an older cost is the general form of the same fault, and nothing rehashes one
+      on login (`UserProvider` implements no `PasswordUpgraderInterface`).
+      **(3) The over-long password.** `NativePasswordHasher::verify()` returns false without hashing for a
+      password over `PasswordHasherInterface::MAX_PASSWORD_LENGTH` (4096) bytes, and nothing in the firewall
+      bounded it first — measured on the dev stack, one request: a known address answered ~18 ms, an unknown
+      one ~320 ms. `OverlongPasswordTimingListener` refuses such a password on `CheckPassportEvent` ahead of
+      the first listener that resolves the user, paying the floor once, so both answer ~320 ms (measured) and
+      the refusal still counts against the login throttle (`OverlongPasswordTimingListenerTest`).
+- [ ] **What a failed login for an existing identity still pays that an unknown address does not is UNMEASURED.**
+      An `ACTIVE` identity below the threshold pays the counter's UPDATE (plus its `event_store`/outbox rows on
+      the attempt that trips the lock); every existing identity pays the hydration of its row inside the locked
+      read; and its locked read can WAIT behind another transaction holding that row — a concurrent failed
+      attempt against the same address, a successful login's clear, an unlock or a redemption — where a read
+      over no row never waits. An attacker controls that concurrency, though each wait is short because the
+      KDF runs before the transaction. All of it sits under a KDF of hundreds of milliseconds and rides the same
+      transaction, so the plausible answer is noise — but the transaction differential above was ALSO plausibly
+      noise and measured classifiable, so this is a hypothesis, not a claim. `security.yaml` states it at that
+      strength. Closing it by construction would mean writing on behalf of an address that names no row, which
+      is not on the table. **Related, and also open:** `PasswordHashingTimingFloor` mints its dummy hash lazily,
+      so the first floor paid by each FrankenPHP worker costs a hash plus a verification — one slower answer per
+      worker lifetime, on whichever pre-identity branch reaches it first.
 - [ ] **A credential change can sign a second browser tab out of the application, and it is accepted.** Both
       flows that replace a credential from a live browser — `ChangeMyPassword` and `CompletePasswordReset` —
       revoke **every** session and mint a replacement onto the requesting tab. A request already in flight from

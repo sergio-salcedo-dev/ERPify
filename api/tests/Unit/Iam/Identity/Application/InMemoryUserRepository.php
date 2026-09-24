@@ -133,7 +133,7 @@ final class InMemoryUserRepository implements UserRepository
     /**
      * Journals its acquisition and honours {@see $goneUnderLock}, exactly as the id-keyed locked finder does:
      * the failed-login path resolves its identity by address, so a test staging the row vanishing between the
-     * unlocked probe and the lock has to be able to stage it on THIS lookup too.
+     * provider's unlocked read and the lock has to be able to stage it on THIS lookup too.
      */
     #[Override]
     public function findByEmailForUpdate(Email $email): ?User
