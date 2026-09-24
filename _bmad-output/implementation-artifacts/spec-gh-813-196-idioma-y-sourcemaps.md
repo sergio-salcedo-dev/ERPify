@@ -199,7 +199,7 @@ Dos rondas sobre la rama `fix/pwa-834-review-followups`. **Ronda 1** (tres capas
 `fbe9a255..80631745`): aplicada en `b80b61a9`. **Ronda 2** (`bmad-code-review`, cuatro capas — Blind Hunter,
 Edge Case Hunter, Verification Gap, Acceptance Auditor — sobre `fbe9a255..b80b61a9`), triada abajo.
 
-- [ ] [Review][Decision] Alcance del token personal — `project:releases` puede no bastar (¿`org:read`?); no verificable en la documentación consultada. Decidir si se investiga o se deja el consejo como está.
+- [x] [Review][Decision] Alcance del token personal — `project:releases` puede no bastar (¿`org:read`?) — resuelto investigando (decisión de Sergio): basta. Los endpoints que usa la subida (chunk-upload, ensamblado del artifact bundle, creación de release) comprueban `OrganizationReleasePermission`, que acepta `project:releases` (y `org:ci` para tokens de organización); solo asociar commits pediría `org:read` (`OrganizationIntegrationsLoosePermission` sobre los repositorios), y el build no lo hace porque `.git` queda fuera del contexto. Registrado en `docs/deployment-guide.md`.
 - [x] [Review][Patch] El Dockerfile rechaza tokens de organización válidos: el payload base64 de `sntrys_` conserva el relleno `=` (medido en `sentry/utils/security/orgauthtoken_token.py`) [pwa/Dockerfile]
 - [x] [Review][Patch] El script de lectura del secreto no lo ejecuta ningún test ni lo lee shellcheck; CI no construye esa etapa [pwa/Dockerfile]
 - [x] [Review][Patch] La decisión de subida de `next.config.ts` (`sntrys_` sin org, `authToken: ""`, aviso) no la fija ningún test [pwa/next.config.ts]
