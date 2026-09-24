@@ -651,7 +651,7 @@ ejes no es enumerable contra nada, mientras que bajo ① se puede atar al regist
 
 **Forma del puerto dentro de ① — CERRADA (Sergio, 2026-08-03), con tres enmiendas que el corte no preveía.**
 La épica dejaba abierta la forma; la decide el contexto de la historia
-([`g-1c-…-cross-context.md`](../implementation-artifacts/g-1c-control-detective-referencias-cross-context.md)),
+(`g-1c-control-detective-referencias-cross-context.md` (en el historial de git)),
 que es donde vive el argumento completo. **(a)** un contrato en `Shared/Privacy/Application` recogido por
 iterador etiquetado, con una implementación por contexto dueño; descartada **(b)** cuatro puertos distintos.
 Lo decide un hecho medido que el corte no registra: **bajo (a) no hay ningún import cross-context**, luego son

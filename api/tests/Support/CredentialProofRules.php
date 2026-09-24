@@ -16,6 +16,10 @@ use RuntimeException;
  * guessing that password from a stolen session, and a route with a bucket of its own (or none) hands the
  * holder of that session more guesses.
  *
+ * Calls are read ({@see PhpCallSites}) inside ONE method body at each level — the action the route is bound to,
+ * and the use-case method that action invokes. A call reached through a helper method, a sibling action or a
+ * second-level collaborator lies outside the body read, so it reds rather than passing.
+ *
  * @internal test support
  */
 final class CredentialProofRules
@@ -30,7 +34,11 @@ final class CredentialProofRules
 
     public const string PROOF = \Erpify\Iam\Identity\Application\ProveCurrentPassword::class;
 
+    public const string HASHER = \Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher::class;
+
     private const string SEPARATOR = ' :: ';
+
+    private const string ROUTE_KEY_PREFIX = 'route:';
 
     /**
      * @param list<string> $lines
@@ -49,14 +57,14 @@ final class CredentialProofRules
 
             $shapeIsValid = match ($class) {
                 self::CREDENTIAL_AFFECTING, self::ORDINARY => 2 === \count($fields),
-                self::ANONYMOUS => 3 === \count($fields) && '' !== $reason,
+                self::ANONYMOUS => 3 === \count($fields) && '' !== $reason && !\str_contains((string) $reason, '::'),
                 default => false,
             };
 
             if ('' === $route || !$shapeIsValid) {
                 throw new RuntimeException(\sprintf(
                     'Malformed .credential-proof-policy line "%s": expected "<route> :: %s", "<route> :: %s"'
-                    . ' or "<route> :: %s :: <reason>".',
+                    . ' or "<route> :: %s :: <reason>" (no field may contain "::").',
                     $line,
                     self::CREDENTIAL_AFFECTING,
                     self::ORDINARY,
@@ -112,11 +120,11 @@ final class CredentialProofRules
 
     /**
      * `anonymous` is the one class that exempts a route from the question, so it must not be available to an
-     * authenticated route: its path has to match a pattern the firewall exempts.
+     * authenticated route: its path has to match a pattern the firewall exempts, or its name a `route:` key.
      *
      * @param array<string, array{class: string, reason: ?string}> $registry
      * @param array<string, string>                                $paths          route name => path
-     * @param list<string>                                         $publicPatterns `access_control` path regexes
+     * @param list<string>                                         $publicPatterns `access_control` keys
      *
      * @return list<string>
      */
@@ -132,10 +140,9 @@ final class CredentialProofRules
             $path = $paths[$route];
             $admitted = \array_any(
                 $publicPatterns,
-                static fn (string $pattern): bool => 1 === \preg_match(
-                    '#' . \str_replace('#', '\#', $pattern) . '#',
-                    $path,
-                ),
+                static fn (string $pattern): bool => \str_starts_with($pattern, self::ROUTE_KEY_PREFIX)
+                    ? self::ROUTE_KEY_PREFIX . $route === $pattern
+                    : 1 === \preg_match('#' . \str_replace('#', '\#', $pattern) . '#', $path),
             );
 
             if (!$admitted) {
@@ -143,7 +150,7 @@ final class CredentialProofRules
                     'Route "%s" (%s) is classified anonymous but no api/.public-access-exemptions pattern admits it'
                     . ' — an authenticated route cannot opt out of the proof.',
                     $route,
-                    $paths[$route],
+                    $path,
                 );
             }
         }
@@ -152,10 +159,34 @@ final class CredentialProofRules
     }
 
     /**
-     * The proof itself, over the controller of one `credential-affecting` route.
+     * A `credential-affecting` route must resolve to exactly one controller action to be judged at all.
+     *
+     * @param list<array{class: string, method: string}> $actions
+     *
+     * @return list<string>
+     */
+    public static function actionViolations(string $route, array $actions): array
+    {
+        return match (\count($actions)) {
+            1 => [],
+            0 => [\sprintf(
+                'Route "%s" resolves to no #[Route] under src/ — declare its name explicitly (`name:`), since an'
+                . ' auto-generated name cannot be resolved back to its controller.',
+                $route,
+            )],
+            default => [\sprintf(
+                'Route "%s" is declared by %d #[Route] attributes under src/, expected exactly one.',
+                $route,
+                \count($actions),
+            )],
+        };
+    }
+
+    /**
+     * The proof itself, over the ACTION one `credential-affecting` route is bound to.
      *
      * `$controllerCollaborators` maps each constructor parameter name to the types it names; `$useCases` maps a
-     * parameter name to that collaborator's source and its own collaborators.
+     * parameter name to that collaborator's class source and its own collaborators.
      *
      * @param array<string, list<string>>                                                      $controllerCollaborators
      * @param array<string, array{source: string, collaborators: array<string, list<string>>}> $useCases
@@ -165,55 +196,120 @@ final class CredentialProofRules
     public static function proofViolations(
         string $route,
         string $controllerSource,
+        string $action,
         array $controllerCollaborators,
         array $useCases,
     ): array {
-        $code = PhpSource::withoutComments($controllerSource);
+        $bodies = PhpCallSites::methodBodies($controllerSource);
+
+        if (!isset($bodies[$action])) {
+            return [\sprintf('Route "%s": its controller declares no method %s().', $route, $action)];
+        }
+
         $throttle = self::parameterTyped($controllerCollaborators, self::THROTTLE);
 
         if (null === $throttle) {
             return [\sprintf('Route "%s": its controller does not inject CurrentPasswordProofThrottle.', $route)];
         }
 
-        $spend = \strpos($code, '$this->' . $throttle . '->ensureWithinBudget(');
+        $calls = PhpCallSites::calls($bodies[$action]);
+        $violations = [];
+        $spend = self::firstCall($calls, $throttle, 'ensureWithinBudget');
 
-        if (false === $spend) {
-            return [\sprintf(
-                'Route "%s": its controller injects CurrentPasswordProofThrottle but never calls ensureWithinBudget().',
+        if (null === $spend) {
+            $violations[] = \sprintf(
+                'Route "%s": its %s() never calls ensureWithinBudget() on CurrentPasswordProofThrottle.',
                 $route,
-            )];
+                $action,
+            );
         }
 
-        foreach ($useCases as $parameter => $useCase) {
-            $proof = self::parameterTyped($useCase['collaborators'], self::PROOF);
+        if (null === self::firstCall($calls, self::parameterTyped($controllerCollaborators, self::HASHER), 'verify')) {
+            $violations[] = \sprintf(
+                'Route "%s": its %s() never calls PasswordHasher::verify(), so nothing checks the submitted'
+                . ' password against the stored one before the proof accepts it.',
+                $route,
+                $action,
+            );
+        }
 
-            $useCaseCode = PhpSource::withoutComments($useCase['source']);
+        $provingCalls = self::provingCalls($calls, $useCases);
 
-            if (null === $proof || !\str_contains($useCaseCode, '$this->' . $proof . '->ensure(')) {
+        if ([] === $provingCalls) {
+            $violations[] = \sprintf(
+                'Route "%s": no use-case method its %s() invokes calls ProveCurrentPassword::ensure().',
+                $route,
+                $action,
+            );
+        }
+
+        return [...$violations, ...self::orderViolations($route, $spend, $provingCalls)];
+    }
+
+    /**
+     * Positions, in the action's call list, of every call into a use-case method whose own body proves.
+     *
+     * @param list<array{string, string}>                                                      $calls
+     * @param array<string, array{source: string, collaborators: array<string, list<string>>}> $useCases
+     *
+     * @return list<int>
+     */
+    private static function provingCalls(array $calls, array $useCases): array
+    {
+        $proving = [];
+
+        foreach ($calls as $position => [$property, $method]) {
+            $useCase = $useCases[$property] ?? null;
+            $proof = null === $useCase ? null : self::parameterTyped($useCase['collaborators'], self::PROOF);
+
+            if (null === $useCase || null === $proof) {
                 continue;
             }
 
-            $invocation = \strpos($code, '$this->' . $parameter . '->');
+            $body = PhpCallSites::methodBodies($useCase['source'])[$method] ?? null;
 
-            if (false === $invocation) {
-                continue;
+            if (null !== $body && null !== self::firstCall(PhpCallSites::calls($body), $proof, 'ensure')) {
+                $proving[] = $position;
             }
+        }
 
-            if ($invocation < $spend) {
-                return [\sprintf(
-                    'Route "%s": its controller reaches the proving use case before it spends the'
-                    . ' CurrentPasswordProofThrottle budget.',
-                    $route,
-                )];
-            }
+        return $proving;
+    }
 
+    /**
+     * @param list<int> $provingCalls
+     *
+     * @return list<string>
+     */
+    private static function orderViolations(string $route, ?int $spend, array $provingCalls): array
+    {
+        if (null === $spend || [] === $provingCalls || \min($provingCalls) > $spend) {
             return [];
         }
 
         return [\sprintf(
-            'Route "%s": no use case its controller invokes calls ProveCurrentPassword::ensure().',
+            'Route "%s": its controller reaches the proving use case before it spends the'
+            . ' CurrentPasswordProofThrottle budget.',
             $route,
         )];
+    }
+
+    /**
+     * @param list<array{string, string}> $calls
+     */
+    private static function firstCall(array $calls, ?string $property, string $method): ?int
+    {
+        if (null === $property) {
+            return null;
+        }
+
+        foreach ($calls as $position => $call) {
+            if ([$property, $method] === $call) {
+                return $position;
+            }
+        }
+
+        return null;
     }
 
     /**
