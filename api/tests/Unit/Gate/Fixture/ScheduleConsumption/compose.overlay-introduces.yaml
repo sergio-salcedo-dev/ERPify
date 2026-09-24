@@ -1,0 +1,6 @@
+# A service that exists only in the overlay — the shape of scheduler_worker in a prod overlay. Its command is
+# part of the merged stack even though the base never mentions the service.
+services:
+  scheduler_worker:
+    image: alpine
+    command: ["php", "bin/console", "messenger:consume", "scheduler_beta", "--time-limit=3600"]

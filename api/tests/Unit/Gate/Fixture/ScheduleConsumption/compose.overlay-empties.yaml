@@ -1,0 +1,4 @@
+# `command: []` in an overlay replaces the base's command with an empty one — the service consumes nothing.
+services:
+  messenger_worker:
+    command: []

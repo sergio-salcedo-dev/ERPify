@@ -1,0 +1,5 @@
+# `command: ~` in an overlay removes the inherited command, so the service falls back to the image default and
+# consumes nothing. An `isset` check reads the null as "not declared" and keeps the base's receivers.
+services:
+  messenger_worker:
+    command: ~

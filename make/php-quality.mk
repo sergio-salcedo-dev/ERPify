@@ -253,6 +253,7 @@ php.lint.schedule-consumption: ## Schedule transport-consumption gate
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleConsumptionGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleConsumptionRulesGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleReplicaRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=ScheduleStackMergeRulesGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleDeclarationRulesGateTest
 
 ## —— Prod-container compile gate ———————————————————————————————————————————

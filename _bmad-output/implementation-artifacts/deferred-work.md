@@ -95,7 +95,9 @@ resolution-undo: 6ceb7fb97093ce893838d60471c9b3ca85d52b3c9446bfd8b89cc312d387e40
 origin: migrated from legacy ledger ("Deferred from: code review of g-3b-agendado-observable-reconciliador-referencias-borradas (2026-08-04)"), 2026-09-24
 location: api/tests/Support/ScheduleConsumption.php:24
 reason: COMPOSE_FILES is compose.yaml + compose.prod.yaml while compose.dev.yaml already overrides messenger_worker; a one-line command: there would supersede compose.yaml:129 unseen. Hypothetical today (no command: in the overlay). Trigger: the first command: in compose.dev.yaml.
-status: open
+status: done 2026-09-24
+resolution: resolved by sweep bundle dw-schedule-gate-dev-overlay
+resolution-undo: cacf4b726cf8c87a9729aa42d7cfa36c84e944695a00b0988301d0ce7cfdc33f 2026-09-24 7374617475733a206f70656e
 
 **(api/tests — cobertura del gate) `compose.dev.yaml` está fuera de `COMPOSE_FILES`, así que un `command:` en el overlay de dev sería invisible.** `ScheduleConsumption::COMPOSE_FILES` es `['compose.yaml', 'compose.prod.yaml']`, pero `compose.dev.yaml` ya redefine `messenger_worker` (imagen, build, environment, volumes) y es el fichero cuyo trabajo es sobrescribir servicios en dev: añadirle un `command:` es un cambio de una línea e idiomático, y supersedería `compose.yaml:129` sin que el gate lo notara. Hipotético hoy — el overlay no declara `command:` — por eso queda diferido y no como parche. Trigger: el primer `command:` en `compose.dev.yaml`. Ref: `api/tests/Support/ScheduleConsumption.php:24`.
 
@@ -516,4 +518,20 @@ location: CLAUDE.md (Required checks)
 source_spec: `spec-dw-9-sanctioned-mutation-gate.md`
 severity: low
 reason: Blind Hunter / Intent Auditor: los ADR y el quickref ya lo dicen, pero el fichero que los agentes leen primero no; el arreglo edita un fichero de contexto de agente, que el triage manda diferir.
+status: open
+
+### DW-54: El merge de pila sólo modela `command`; `include:`, `extends:`, `profiles:`, `entrypoint:` y `deploy.replicas: 0` en un overlay se ignoran en silencio.
+origin: spec-deferred e0a580f06eae
+location: api/tests/Support/ComposeStackCommands.php:34
+source_spec: `spec-dw-10-schedule-gate-dev-overlay.md`
+severity: medium
+reason: Son claves YAML planas: parsean sin error y ComposeStackCommands::of() no las mira, así que un consume heredado por extends o traído por include se lee como "no consume nada", y un servicio bajo profiles se cuenta como consumidor aunque no arranque. Preexistente: el lector por fichero tenía el mismo punto ciego (el docblock del gate ya nombra extends). BoundedContainerLogRetentionGateTest ya rechaza include; el mismo rechazo aquí cerraría esa mitad.
+status: open
+
+### DW-55: El bullet "Declaring an #[AsSchedule]" del CLAUDE.md raíz no menciona que un `command:` en un overlay reemplaza el de la base.
+origin: spec-deferred ea851dd8e2c3
+location: CLAUDE.md
+source_spec: `spec-dw-10-schedule-gate-dev-overlay.md`
+severity: low
+reason: Sigue siendo correcto para el árbol actual (añadir el transporte en compose.yaml y compose.prod.yaml), pero no avisa de la trampa que este cambio cierra. Editar ficheros de contexto de agente se difiere por regla del workflow.
 status: open

@@ -1,0 +1,5 @@
+# An overlay that redefines the service without touching `command`. Compose keeps the base's command, so
+# scheduler_alpha is still consumed.
+services:
+  messenger_worker:
+    restart: unless-stopped
