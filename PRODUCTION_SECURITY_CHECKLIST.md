@@ -725,8 +725,9 @@ you change anything here.
       `self-unlock-forbidden`, refused before any row is touched): granting that would make `users.unlock` a
       second, credential-independent path into one's own account, defeating the lockout it exists to recover
       from. **The residual this left — an installation with a single administrator has nobody to invoke the lever —
-      is closed by the recovery secret below**, which is the edge that depends on no peer. #602 stays open on
-      the detection/notification half (`NotifyLockedIdentities`), tracked separately.
+      is closed by the recovery secret below**, which is the edge that depends on no peer. The
+      detection/notification half (`NotifyLockedIdentities`) shipped in #683 and #857; #602 stays open on the
+      stolen-session composition recorded under the recovery secret below.
 - [ ] **The recovery secret (`identity_recovery_secret`): the lockout edge that depends on no peer.** A
       `<selector>.<secret>` credential in its own aggregate, one row per identity (UNIQUE on `user_id`).
       **Minted** from a live session against a re-proof of the current password and shown in clear exactly
@@ -1846,6 +1847,21 @@ mitigated state. Accepting one means recording who accepted it and against which
       a chore, a hotfix or a docs PR over auth code has no story to attach a debt to, and the PR that
       retired the gate was itself exactly that shape. **Re-assess before the first customer**:
       decide whether an unenforced convention is the control you want over auth, erasure and audit code.
+
+- [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
+      accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
+      artefact that holds the revisit trigger, and two of them are the target of an `@accepted-risk` tag that
+      `.github/workflows/accepted-risk-live-state.yml` requires to point at an open issue. Closing one means
+      either fixing the risk or re-deciding it — never tidying the backlog. The reasoning lives in each issue;
+      this list exists so a reader of §7 sees every watched acceptance in one place.
+
+      | Issue | Accepted risk | Revisit when |
+      |---|---|---|
+      | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `ip`/`user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review |
+      | [#860](https://github.com/sergio-salcedo-dev/ERPify/issues/860) | A GDPR erasure racing `NotifyLockedIdentities::notifyOwner()` writes an `ACCOUNT_LOCKOUT_NOTIFIED` row naming the erased subject; the daily reconciler reports it | The reconciler reports that divergence, or a second job adopts the same read → save → audit shape on `User` |
+      | [#864](https://github.com/sergio-salcedo-dev/ERPify/issues/864) | A second `scheduler_identity_maintenance` replica duplicates the lockout notice **and** its audit row (no `->lock()`) | Two `ACCOUNT_LOCKOUT_NOTIFIED` rows for one resource within one day, or any deploy scaling that consumer past 1 |
+      | [#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870) | The administrative recovery secret is a bearer credential valid for ten years | See its row under the recovery secret above |
+      | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no gate can pin | Before the first deploy: adopt a deploy-time smoke check or boot-time assertion on the resolved transport class |
 
 ## 8. Deploy & verify
 
