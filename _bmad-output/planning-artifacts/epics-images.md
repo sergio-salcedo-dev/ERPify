@@ -841,7 +841,7 @@ de un `ImageId` ya creado (solo `UploadImage` y `delete`, nunca un update in-pla
 
 **Redacción original, conservada porque el cambio es de requisito**: el valor era `max-age=31536000` (un
 año). **Enmendado el 2026-08-30** a 3600 s; el argumento completo vive en la AC 11 de
-[`img-1-3-…`](../implementation-artifacts/img-1-3-leer-representacion-canonica-de-forma-segura.md).
+`img-1-3-leer-representacion-canonica-de-forma-segura.md` (en el historial de git).
 En corto: la inmutabilidad del **identificador** no implica cacheabilidad indefinida de los **bytes**. El
 razonamiento del épico acierta en el eje de *corrección* —no hay update in-place, así que la representación
 nunca cambia— pero el contrato del módulo **es el borrado fiable**, y el borrado es un evento de ciclo de

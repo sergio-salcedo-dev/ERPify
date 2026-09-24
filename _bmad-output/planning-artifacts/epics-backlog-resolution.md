@@ -60,7 +60,7 @@ revisor pueda leer el PR entero con un solo modelo mental en la cabeza.
 > declarado: #601 dejó la regla del vocabulario en prosa sin mecanismo, y esa prosa ya había derivado en las
 > tres afirmaciones que hacía. Cerrarlo trajo el registro `api/.behat-step-vocabulary` y su gate. Detalle,
 > evidencia y las seis vacuidades que ningún issue registraba, en la historia
-> [`br-1-behat-vocabulario-falsabilidad.md`](../implementation-artifacts/br-1-behat-vocabulario-falsabilidad.md).
+> `br-1-behat-vocabulario-falsabilidad.md` (en el historial de git).
 
 ### BR-2 · Residuos del eje de referencias a persona
 
