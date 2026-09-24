@@ -5,7 +5,8 @@
 origin: migrated from legacy ledger ("Deferred from: retiring the named review bot from the code-review rule (2026-09-19)"), 2026-09-24
 location: CLAUDE.md (Code review section, commit feafdddb)
 reason: #943 retired a security control from the instructions as a no-story change and merged 2026-09-18 without the three review layers; a post-hoc Blind Hunter / Edge Case Hunter / Acceptance Auditor pass over feafdddb is the remaining option, checking the numbers it wrote into CLAUDE.md against the tree.
-status: open
+status: done 2026-09-24
+resolution: already resolved: 4bb9638d (#965) ran the Acceptance Auditor half of the post-hoc pass over feafdddb: corrected '21 merged' to 14 and the '#903 last review' claim (CLAUDE.md:306), with its own three review layers over that correction
 
 Section note: Session closed with the thread unfinished; at filing time everything in this section was open and nothing blocked.
 
@@ -25,7 +26,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: retiring the named review bot from the code-review rule (2026-09-19)"), 2026-09-24
 location: n/a
 reason: The review debt was named in-session and the PR merged anyway between two turns; the note meant to record it was committed to the branch after it had merged and been deleted, so it is filed on main instead.
-status: open
+status: done 2026-09-24
+resolution: already resolved: Lesson now recorded in CLAUDE.md:258 ('A PR that is open is a PR that can merge…') and the note itself landed on main via 37e8ea61 (#947)
 
 **How it merged unreviewed is itself the second lesson.** The review debt was named in the session, the PR was open, and it merged anyway between two turns — an open PR is a PR that can merge, and nothing in the tooling distinguishes "open, awaiting its review" from "open, ready". The note that was meant to record all this was committed to the PR's own branch AFTER that branch had already merged and been deleted, so it reached nobody; that is why it is filed here on `main` instead.
 
@@ -43,7 +45,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: retiring the named review bot from the code-review rule (2026-09-19)"), 2026-09-24
 location: n/a
 reason: Filed as context only: #929 merged as 4a692aab with its three review layers run, all patch findings applied, both decision-needed items settled, and its worktree and branch cleaned up.
-status: open
+status: done 2026-09-24
+resolution: already resolved: Context-only entry: 4a692aab (#929) is on main with its review layers run; nothing was ever owed
 
 Context, already finished and needing nothing: PR #929 (the suite clock pin) merged as `4a692aab`, with its three review layers run, all `patch` findings applied, and its two `decision-needed` items settled after consulting three independent readers. Its worktree and branch are cleaned up.
 
