@@ -428,6 +428,34 @@ you change anything here.
       adapter (used by the `organization:administrator:create` CLI that bootstraps the first admin);
       the plaintext is never printed or logged, and credentials are never seeded through migrations
       (dev/test use a fixture with a bcrypt hash).
+- [ ] **A stored hash is upgraded to the configured hasher on the first login that proves it.** `UserProvider`
+      implements `PasswordUpgraderInterface`, which is what makes `json_login` attach the upgrade badge, so
+      Symfony's `PasswordMigratingListener` re-encodes the submitted password whenever the configured hasher
+      reports the stored hash `needsRehash()` — a bcrypt cost other than the configured one (`auto` defaults to
+      13), or an algorithm `auto` still verifies but no longer mints. It runs on `LoginSuccessEvent`, after the
+      credential was verified and the identity admitted, so a **failed login pays nothing new** and the
+      pre-identity timing floor is untouched; a successful login pays one extra hash, once per account, plus a
+      one-row `UPDATE` that can wait behind a concurrent credential write on the same row.
+      `RehashPasswordBestEffort` stores it through `UserRepository::replacePasswordHashIfUnchanged()`, a
+      compare-and-swap **the store decides in one statement** — only over the exact hash the login verified.
+      A reset or a change committing in between is therefore never overwritten by an encoding of the secret it
+      superseded, and — the half that matters for containment — a refusal hydrates nothing, so the session the
+      login mints still carries the hash it proved and is signed out on its next request by
+      `SecurityUser::isEqualTo`. A locked re-read of the aggregate would have advanced that session onto the new
+      credential and kept it alive past the reset. **Its accepted cost:** the loser of two simultaneous first
+      logins on one legacy hash is refused as well and signed out once, since a refusal cannot tell a re-encoding
+      of the same secret from a new one. It is not a credential change: no domain event, no audit row, no mail,
+      no session revoke, no lockout relief and no `updated_at` touch. It is best-effort — a store fault rolls
+      back, leaves the old hash (which still verifies) and an untouched aggregate, and is reported on
+      `observability` by exception **class** only, since the failed statement carried both hashes. **What it
+      does not cover:** an account whose owner never logs in again keeps its old hash for ever, and
+      `needsRehash()` is symmetric — lowering the cost in `security.yaml` rolls out a downgrade the same way
+      raising it rolls out an upgrade. Pinned by `LoginPasswordRehashFunctionalTest` (real firewall, real
+      Postgres: bcrypt at a foreign cost and argon2id land at the configured cost, the session survives its
+      next request read against the row and is signed out when the row moves under it, a Postgres-raised fault
+      still admits the login, clears the lockout and mints one session, a failed login and a current hash are
+      left byte-for-byte alone), `DoctrineUserRepositoryTest` (the refusal leaves the managed aggregate
+      untouched), `RehashPasswordBestEffortTest` and `UserProviderTest`.
 - [ ] **Single-use tokens (`Shared/Token/SingleUseToken`):** the one building block invitation and
       password reset share, so their token security cannot diverge. High-entropy (256-bit CSPRNG),
       **hashed at rest** (SHA-256 — the raw token is handed to the bearer once and **never** persisted or

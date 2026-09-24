@@ -116,6 +116,10 @@ services:
     # level that says what its line means. On the default channel the level would decide instead, and both of
     # its answers are wrong — below `error` the line is discarded, at `error` it arrives by flushing the
     # request's other records.
+    Erpify\Iam\Identity\Application\RehashPasswordBestEffort:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
     Erpify\Iam\Identity\Application\RevokeSessionsBestEffort:
         arguments:
             $logger: '@monolog.logger.observability'

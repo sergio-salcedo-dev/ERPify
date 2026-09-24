@@ -7,9 +7,11 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 use Closure;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use Override;
+use ReflectionProperty;
 
 /**
  * In-memory {@see UserRepository} that records every mutation, so a test can assert which user a use case
@@ -56,6 +58,12 @@ final class InMemoryUserRepository implements UserRepository
      * would — the failure a sweep's per-row boundary exists to absorb, and one no mailer double can stage.
      */
     public ?Closure $onSave = null;
+
+    /** Runs before the compare-and-swap decides, so a test can make the store fault exactly there. */
+    public ?Closure $onReplacePasswordHash = null;
+
+    /** @var list<string> ids the compare-and-swap was asked about, whatever it answered */
+    public array $replacePasswordHashCalls = [];
 
     /**
      * Set when a test is asserting WHERE this table's lock falls among the others. Both members below write
@@ -137,6 +145,34 @@ final class InMemoryUserRepository implements UserRepository
         }
 
         return $this->goneUnderLock ? null : $this->byEmail($email);
+    }
+
+    /**
+     * Mirrors the store's guarantee: a refusal touches no aggregate, a success moves the one it holds. The
+     * aggregate exposes no mutator for a re-encoding — the production swap is a statement, not a method —
+     * so the double writes the mapped property the way the ORM's refresh would.
+     */
+    #[Override]
+    public function replacePasswordHashIfUnchanged(
+        string $id,
+        HashedPassword $expected,
+        HashedPassword $replacement,
+    ): bool {
+        $this->replacePasswordHashCalls[] = $id;
+
+        if ($this->onReplacePasswordHash instanceof Closure) {
+            ($this->onReplacePasswordHash)();
+        }
+
+        $user = $this->goneUnderLock ? null : $this->findById($id);
+
+        if (!$user instanceof User || !$user->passwordHash()?->equals($expected)) {
+            return false;
+        }
+
+        (new ReflectionProperty(User::class, 'passwordHash'))->setValue($user, $replacement->toString());
+
+        return true;
     }
 
     private function byEmail(Email $email): ?User
