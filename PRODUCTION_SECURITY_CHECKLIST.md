@@ -1152,12 +1152,32 @@ mitigated state. Accepting one means recording who accepted it and against which
       **The attacker holds the same weapon and the race still resolves for the owner:** either party can fire
       `revoke-others` and evict the other, with no budget on either side, but **re-entry is not symmetric** —
       the owner returns with the credential, while a revoked cookie is dead and no path re-mints one without
-      the password. Each round costs the owner one login.
+      the password. Each round costs the owner one login. That asymmetry holds for a non-administrator; an
+      _administrator's_ stolen session can mint its own re-entry — invite an address it controls and grant it
+      `ADMIN` (`users.invite`, `users.grantAdmin`) — which evicting the stolen session does not reach.
       **What survives is the composition, and it belongs to
       [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602), not here:** an attacker who _also_
       drives the per-email lockout (10 failures → `PT15M`, needing ≥2 source addresses to clear the per-IP
-      throttle) denies the owner the very session eviction requires. Until #602 closes, what the product owes
-      is **ordering guidance — evict first, rotate second** — in the UI copy and the password-changed mail.
+      throttle) denies the owner the very session eviction requires. **A live recovery secret buys the owner
+      one re-entry, not immunity.** Any `ACTIVE` identity can mint one from its own session against a re-proof
+      of its current password (`POST /me/recovery-secret`; a second mint answers 409, never a replacement), so
+      a stolen session can neither mint nor displace one, and it cannot revoke one either, because revocation
+      re-proves the password too. Redeeming it clears the lock and establishes a session the admission gate
+      keeps through every later re-locking — but redemption **consumes** the secret and evicts no other
+      session, so the stolen session survives it and can fire `revoke-others` at the redeemed session before
+      the owner's own lands. An attacker who loops it wins that race and leaves the owner locked out again with
+      the secret spent, and a replacement needs the very session just lost. The composition therefore survives
+      for an identity with no live secret **and** for one whose single redemption the attacker out-races.
+      Without a secret, another administrator's `users.unlock` clears the lock only until the attacker's next
+      ten failures re-seal it — seconds, not a lockout window — and an administrator's stolen session can
+      suspend or demote every other administrator first (only the last active one is protected). For a
+      **sole administrator** with no secret, even that lever is absent: nobody else holds `users.unlock`, and
+      the product refuses it over one's own identity (`self-unlock-forbidden`). Until #602 closes, what the
+      product owes is **(1) getting every administrator to mint a recovery secret, re-mint after every
+      redemption, and warning while none is live** — a lapsed row counts as none, although
+      `GET /me/recovery-secret` still reports it and minting over it answers 409 until it is revoked — and
+      **(2) ordering guidance — evict first, rotate second** — in the UI copy, the password-changed mail and
+      the redemption flow, whose first act has to be `revoke-others`.
       `revoke-others` carrying no limiter is deliberate and load-bearing: it is the one edge an adversary
       cannot spend. **Do not "harden" it.**
 - [ ] **The failed-login path carries an existence signal shaped like a transaction, and its magnitude is
@@ -1869,17 +1889,20 @@ mitigated state. Accepting one means recording who accepted it and against which
       `api/src` that `.github/workflows/accepted-risk-live-state.yml` requires to point at an open issue; #872's
       tags sit in `docs/adr/image-deletion-signal-transport.md` and a story artifact, outside that job's scan,
       so closing it reds nothing. Closing one means either fixing the risk or re-deciding it — never tidying the
-      backlog. The reasoning, and who weighed the acceptance, live in each issue; this list exists so a reader
-      of §7 sees every watched acceptance in one place.
+      backlog. The reasoning lives in each issue; this list exists so a reader of §7 sees every watched
+      acceptance in one place. **Accepted** states who accepted it and when **only where the issue records it**;
+      `not recorded` is a gap in the record to close, never an acceptance by default. No row is accepted against
+      a customer, because none exists yet — each has to be re-affirmed or closed before the first one.
 
-  | Issue | Accepted risk | Revisit when |
-  |---|---|---|
-  | [#418](https://github.com/sergio-salcedo-dev/ERPify/issues/418) | `dek-destroyed` / `decryption-failed` carry no marker and map to 500 — correct while no decrypt/read route exists, wrong once one does (`dek-destroyed` becomes an expected post-erasure outcome) | The first caller of `EnvelopeEncryptor::decrypt()` outside `api/src/Shared/Crypto/` |
-  | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review |
-  | [#860](https://github.com/sergio-salcedo-dev/ERPify/issues/860) | A GDPR erasure racing `NotifyLockedIdentities::notifyOwner()` writes an `ACCOUNT_LOCKOUT_NOTIFIED` row naming the erased subject; the daily reconciler reports it | The reconciler reports that divergence close to a `NotifyLockedIdentitiesMessage` tick (compatible with, not proof of), or a second job adopts the same read → save → audit shape on `User` |
-  | [#864](https://github.com/sergio-salcedo-dev/ERPify/issues/864) | A second `scheduler_identity_maintenance` replica duplicates the lockout notice **and** its audit row (no `->lock()`) | Two `ACCOUNT_LOCKOUT_NOTIFIED` rows for one resource within one day, or any deploy scaling that consumer past 1; closes with a fix of the email-duplication race it rides on |
-  | [#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870) | The administrative recovery secret is a bearer credential valid for ten years (residual (a) of the recovery-secret item in §6) | A `RECOVERY_SECRET_REDEEMED` for a secret minted years earlier, or a live secret nearing expiry never redeemed nor revoked; a second bearer credential adopting a multi-year lifetime; or customers gaining shell/console access, or a second administrator the software can rely on |
-  | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of an `async` event; the issue's candidate mitigations (deploy-time smoke check, boot-time assertion on the resolved transport class, a §8 verification step) are none adopted |
+  | Issue | Accepted risk | Revisit when | Accepted |
+  |---|---|---|---|
+  | [#418](https://github.com/sergio-salcedo-dev/ERPify/issues/418) | `dek-destroyed` / `decryption-failed` carry no marker and map to 500 — correct while no decrypt/read route exists, wrong once one does (`dek-destroyed` becomes an expected post-erasure outcome) | The first caller of `EnvelopeEncryptor::decrypt()` outside `api/src/Shared/Crypto/` | not recorded (opened 2026-07-02; reclassified as a watch 2026-08-13) |
+  | [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602) | An identity whose lockout an attacker holding a stolen session keeps re-driving cannot get the session eviction requires unless it holds a **live recovery secret** — and even then only once, since redemption consumes the secret and evicts nobody, so a `revoke-others` loop from the stolen session can out-race it; `users.unlock` holds only until ten more failures re-seal the lock, and a **sole administrator** has not even that (see *A stolen session can deny the owner a credential rotation* above) | Before the first customer: the product gets every administrator to mint (and re-mint after redemption) a recovery secret and warns while none is live; or a lockout is observed on an identity with no live secret, or right after a redemption | not named; accepted as-is 2026-07-29, narrowed 2026-09-24 (opened 2026-07-28) |
+  | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review | the product owner, per the issue — not named, no date (opened 2026-08-14) |
+  | [#860](https://github.com/sergio-salcedo-dev/ERPify/issues/860) | A GDPR erasure racing `NotifyLockedIdentities::notifyOwner()` writes an `ACCOUNT_LOCKOUT_NOTIFIED` row naming the erased subject; the daily reconciler reports it | The reconciler reports that divergence close to a `NotifyLockedIdentitiesMessage` tick (compatible with, not proof of), or a second job adopts the same read → save → audit shape on `User` | Sergio, closing the #857 review — date not recorded (opened 2026-08-27) |
+  | [#864](https://github.com/sergio-salcedo-dev/ERPify/issues/864) | A second `scheduler_identity_maintenance` replica duplicates the lockout notice **and** its audit row (no `->lock()`) | Two `ACCOUNT_LOCKOUT_NOTIFIED` rows for one resource within one day, or any deploy scaling that consumer past 1; closes with a fix of the email-duplication race it rides on | not recorded (opened 2026-08-27) |
+  | [#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870) | The administrative recovery secret is a bearer credential valid for ten years (residual (a) of the recovery-secret item in §6) | A `RECOVERY_SECRET_REDEEMED` for a secret minted years earlier, or a live secret nearing expiry never redeemed nor revoked; a second bearer credential adopting a multi-year lifetime; or customers gaining shell/console access, or a second administrator the software can rely on | no person named; approved by the second external spec review on condition of this record (opened 2026-08-28) |
+  | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of an `async` event; the issue's candidate mitigations (deploy-time smoke check, boot-time assertion on the resolved transport class, a §8 verification step) are none adopted | not recorded (opened 2026-08-28) |
 
 ## 8. Deploy & verify
 
