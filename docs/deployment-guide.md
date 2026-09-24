@@ -63,8 +63,12 @@ Source-map upload is wired and **opt-in**: set `SENTRY_AUTH_TOKEN` (a real
 secret) and `SENTRY_ORG` in `.env.prod.local` and the build uploads the maps,
 then deletes the client maps from `.next/static`, so they are never served;
 server maps stay inside the image, which Next never serves. Scope a personal
-token to `project:releases`; an organization token (`sntrys_…`) comes with a
-fixed scope set that cannot be narrowed, and carries its organization, so
+token to `project:releases`, which is enough: chunk upload, artifact-bundle
+assembly and release creation all check Sentry's `OrganizationReleasePermission`,
+which accepts it. Associating commits with the release would also need
+`org:read` (it lists the organization's repositories), and the build never does
+it, because `.git` is outside the build context. An organization token
+(`sntrys_…`) comes with a fixed scope set that cannot be narrowed, and carries its organization, so
 `SENTRY_ORG` may stay empty with one. Leave the token empty, or pair a personal
 token with an empty `SENTRY_ORG`, and the build still succeeds with upload off
 and says so in its log — prod traces simply stay minified; a malformed token
