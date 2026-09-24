@@ -119,6 +119,8 @@ tests/Unit/Gate/AdministratorSetLockStatementGateTest.php :: home
 tests/Unit/Gate/ArtifactGateDetectionRulesGateTest.php :: home
 tests/Unit/Gate/ArtifactGatePlacementGateTest.php :: home
 tests/Unit/Gate/ArtifactGatePlacementRulesGateTest.php :: home
+tests/Unit/Gate/AuditActionOperationAgreementGateTest.php :: home
+tests/Unit/Gate/AuditActionOperationAgreementRulesGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRegistryGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRulesGateTest.php :: home
 tests/Unit/Gate/AuditPruneStatementGateTest.php :: home
