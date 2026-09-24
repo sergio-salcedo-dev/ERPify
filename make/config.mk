@@ -90,6 +90,18 @@ else
   ENV_FILE_ARGS :=
 endif
 
+# The Sentry release of a prod/staging deploy: the checkout's commit SHA, handed
+# to compose (and from there to the API services and the pwa build) so the API
+# and the PWA report one release and an issue maps to the deploy that shipped
+# it. Nothing inside the build can derive it — `.git` is outside both build
+# contexts. `SENTRY_RELEASE=… make …` overrides; outside a git checkout it is
+# empty and events simply carry no release. The SHA names the commit, not the
+# working tree, so a deploy from a dirty tree reports the commit it started from.
+ifneq ($(filter $(ENV),prod staging),)
+  SENTRY_RELEASE ?= $(shell git -C '$(PROJECT_ROOT)' rev-parse HEAD 2>/dev/null)
+  export SENTRY_RELEASE
+endif
+
 DOCKER_COMPOSE := cd $(PROJECT_ROOT) && docker compose -p $(COMPOSE_PROJECT_NAME) $(ENV_FILE_ARGS) $(COMPOSE_FILES)
 DOCKER_COMPOSE_EXEC := $(DOCKER_COMPOSE) exec
 

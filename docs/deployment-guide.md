@@ -118,6 +118,34 @@ To stand up a prod host:
 
 The Sentry `environment` tag is just `APP_ENV` (`dev` / `prod`) — no extra var.
 
+**Release.** For `ENV=prod|staging`, `make` exports the checkout's commit SHA as
+`SENTRY_RELEASE` (`make/config.mk`). Nothing inside a build can derive it
+because `.git` is outside both build contexts. Compose hands it to the `php`,
+`messenger_worker` and `scheduler_worker` services (the bundle reads
+`%env(default::SENTRY_RELEASE)%`) and to the `pwa` build, which bakes it into
+both bundles. Every event from one deploy therefore carries one release, and
+Sentry can say which deploy introduced an issue, reopen a resolved one as a
+regression, and act on "resolve in next release". It is empty outside a git
+checkout, and an event with no release is still captured. A deploy from a dirty
+tree reports the commit it started from. To override it, run
+`SENTRY_RELEASE=… make …`: a shell value beats `.env.prod.local`, so setting it
+there has no effect.
+
+**Commits.** Set `SENTRY_REPOSITORY=<owner>/<name>` (exactly as the Sentry GitHub
+integration lists the repository) and the PWA build, which holds the upload
+token, associates the release with its commit. That association drives suspect
+commits and resolving an issue from a `Fixes <SHORT-ID>` commit message. It
+needs the integration installed first. With the variable empty, nothing is
+associated: the plugin falls back to its `auto` mode, which reads a `.git` the
+build context does not contain and logs that failure only at debug level. It
+cannot be pinned off, because `@sentry/nextjs` does not type `setCommits: false`.
+A repository with no full-SHA release is warned about in the build log. Whether the
+`project:releases` token scope is enough for this call has not been verified
+against Sentry. If Sentry refuses the call, the build log prints the error
+(`silent: false`), the build still succeeds, and the release is left
+unfinalized. That is loud on purpose, because the plugin's
+`shouldNotThrowOnFailure` would log the refusal only at debug level.
+
 `send_default_pii: false` + the `SentryEventScrubber` `before_send` keep
 PII/secrets off events (see [`../PRODUCTION_SECURITY_CHECKLIST.md`](../PRODUCTION_SECURITY_CHECKLIST.md)).
 
