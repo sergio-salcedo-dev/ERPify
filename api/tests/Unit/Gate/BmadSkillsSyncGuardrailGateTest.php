@@ -101,7 +101,11 @@ final class BmadSkillsSyncGuardrailGateTest extends TestCase
             $this->fixture . '/.claude/skills/bmad-loop-sweep',
             "the replace path must leave another product's namespace alone",
         );
-        $this->assertStringEqualsFile($this->fixture . '/.claude/skills/bmad-alpha/SKILL.md', "alpha\n");
+        $this->assertSame(
+            "alpha\n",
+            \file_get_contents($this->fixture . '/.claude/skills/bmad-alpha/SKILL.md'),
+            'the replace path must still restore the skills the installer does own',
+        );
     }
 
     /**
