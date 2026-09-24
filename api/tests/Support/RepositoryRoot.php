@@ -28,12 +28,15 @@ namespace Erpify\Tests\Support;
 final class RepositoryRoot
 {
     /**
-     * Files the repository root carries in a checkout and in a linked worktree alike. More than one so a
-     * single rename cannot turn every caller into a silent refusal; any one of them is enough.
+     * Files the repository root carries in a checkout and in a linked worktree alike, and that NO directory
+     * below it carries. More than one so a single rename cannot turn every caller into a silent refusal; any
+     * one of them is enough — which is exactly why each must be root-only: one marker a subdirectory also
+     * holds is enough to resolve that subdirectory as the root. `CLAUDE.md` is the counterexample: it nests
+     * deliberately in `api/` and `pwa/`, so a candidate list that ever reached either would stop there.
      *
      * @var non-empty-list<string>
      */
-    private const array MARKERS = ['compose.yaml', 'Makefile', 'CLAUDE.md'];
+    private const array MARKERS = ['compose.yaml', 'compose.dev.yaml', 'Makefile'];
 
     /**
      * The repository root, or `null` when no candidate carries a marker — which inside the container means
