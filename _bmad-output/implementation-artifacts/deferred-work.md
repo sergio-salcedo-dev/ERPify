@@ -84,7 +84,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of g-5-ids-de-persona-fuera-del-event-store (2026-08-04)"), 2026-09-24
 location: docs/adr/event-store-and-projections.md:294
 reason: Four mutations live (one UPDATE on event_store, two UPDATEs plus the retention DELETE on audit_log); AuditPruneStatementGateTest guards only the DELETE, so a new UPDATE enters unnoticed while the ADR promises a closed set. Trigger: the first proposal of another mutation on either table.
-status: open
+status: done 2026-09-24
+resolution: resolved by sweep bundle dw-sanctioned-mutation-gate
+resolution-undo: 6ceb7fb97093ce893838d60471c9b3ca85d52b3c9446bfd8b89cc312d387e409 2026-09-24 7374617475733a206f70656e
 
 **(api/Shared/Event — gobierno) El «conjunto cerrado de mutaciones sancionadas» que D12 declara es prosa con un gate a medias, y su disparador ya había saltado cuando se escribió esta bala.** Medido el 2026-09-20: viven **cuatro** mutaciones, no una — `event_store` tiene un `UPDATE` (`DbalEventStoreSubjectAnonymiser:63`) y `audit_log` tiene **tres**, los dos `UPDATE` de los ejes actor y recurso (`DbalAuditActorAnonymiser:74`, `DbalAuditResourceAnonymiser:99`) más el `DELETE` de retención (`DbalAuditLogPruner:144`). Las tres de `audit_log` son **anteriores** a esta bala (2026-06-25, 2026-06-26 y 2026-07-27 contra 2026-08-04), así que «la primera propuesta de una segunda mutación» nunca fue futuro. Y el gate existe sólo para una: `AuditPruneStatementGateTest` rechaza un segundo `DELETE FROM audit_log` en todo `src`, pero **nada vigila los `UPDATE`**. Nada cierra el conjunto: `git grep "UPDATE event_store"` es el único control y no está automatizado, así que una segunda mutación entra sin que ninguna puerta lo note, mientras el ADR sigue prometiendo que el conjunto es cerrado. El hueco es simétrico con `audit_log` (mismo patrón, mismo agujero), y por eso es preexistente y no un defecto de esta PR. Trigger: la primera propuesta de una segunda mutación sobre cualquiera de las dos tablas. Ref: `docs/adr/event-store-and-projections.md:294`.
 
@@ -506,4 +508,12 @@ location: api/src/Backoffice/Audit/Infrastructure/Http/AuditEventDetailResourceM
 source_spec: `spec-audit-change-metadata-shape.md`
 severity: low
 reason: Preexistente: AuditEventDetailResourceMapper sólo sella arrays; isAuditEventMetadata exige isAuditChanges cuando la clave existe. El listener nunca escribe null/escalar, así que sólo lo produciría otra vía de escritura o una fila corrupta.
+status: open
+
+### DW-53: CLAUDE.md "Required checks" no nombra que añadir una mutación sobre event_store/audit_log exige una línea en SANCTIONED de SanctionedLogMutationGateTest más la decisión en el ADR.
+origin: spec-deferred 95691e997eda
+location: CLAUDE.md (Required checks)
+source_spec: `spec-dw-9-sanctioned-mutation-gate.md`
+severity: low
+reason: Blind Hunter / Intent Auditor: los ADR y el quickref ya lo dicen, pero el fichero que los agentes leen primero no; el arreglo edita un fichero de contexto de agente, que el triage manda diferir.
 status: open

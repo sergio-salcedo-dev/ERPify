@@ -300,7 +300,8 @@ llevan además en el `payload`. Nada en la cadena de erasure toca esta tabla, de
 persona **sobrevive a su propio borrado, para siempre**. Eso es incompatible con SI-21.
 
 **Decisión: el log deja de ser estrictamente inmutable y pasa a ser _append-only con un conjunto cerrado de
-mutaciones de primera clase_ — hoy exactamente una.** Es la misma forma que
+mutaciones de primera clase_ — hoy exactamente una sobre `event_store`, cuatro entre los dos logs, cerradas por
+el gate descrito más abajo (§ «Qué cierra el conjunto»).** Es la misma forma que
 [`audit-activity-log.md`](./audit-activity-log.md) ya adoptó para el log hermano de PII, y **no introduce un
 principio nuevo**: lo extiende al log de negocio.
 
@@ -403,18 +404,30 @@ un rebuild. Un read model que pase ese gate sigue expuesto al fallo que este pá
 que decían «append-only» a secas dicen «append-only, con un conjunto cerrado de mutaciones sancionadas»,
 como ya hace `audit_log`.
 
-**Qué cierra el conjunto, dicho con precisión: la revisión, no un gate — y la palabra «cerrado» se lee así.**
-No existe control automatizado que impida una segunda mutación: `git grep "UPDATE event_store"` es todo lo que
-hay, y no lo ejecuta nadie más que quien se acuerde. El conjunto es cerrado **por decisión**, y una propuesta
-de ampliarlo se detecta leyendo el diff, no rompiendo el build. Se declara aquí porque la frase anterior
-—«conjunto cerrado»— se lee con naturalidad como una garantía mecánica, y prometer un control que no existe es
-el defecto que esta épica entera se dedicó a eliminar. El hueco es **simétrico** con
-[`audit-activity-log.md`](./audit-activity-log.md), que tiene el mismo conjunto declarado y el mismo control
-ausente, así que ampliarlo a un gate es un trabajo para las dos tablas o para ninguna.
+**Qué cierra el conjunto: un gate, sobre las dos tablas a la vez.** El conjunto tiene **cuatro miembros** entre
+los dos logs —este `UPDATE event_store` (`DbalEventStoreSubjectAnonymiser`), los dos `UPDATE audit_log` de los
+ejes actor y recurso y el `DELETE` de la poda de [`audit-activity-log.md`](./audit-activity-log.md) D4—, y
+`SanctionedLogMutationGateTest` los declara como constante y exige **igualdad** con lo que `api/src` emite:
+cualquier `UPDATE`, `DELETE`, `TRUNCATE`, `MERGE` o upsert (`INSERT … ON CONFLICT … DO UPDATE`) nuevo sobre
+cualquiera de las dos tablas lo pone rojo nombrando el fichero, y también la desaparición de un miembro, que es
+la dirección que impide que un extractor roto dé el verde más limpio posible. Ampliar el conjunto es, por tanto,
+un diff visible a ese gate además de una decisión en el ADR de la tabla. El motor
+(`api/tests/Support/SanctionedLogMutations.php`) tokeniza, une literales concatenados con `.`, resuelve
+constantes `self::`/`static::` del mismo fichero y lee heredocs y la API `->update()`/`->delete()` de DBAL;
+`SanctionedLogMutationRulesGateTest` lo falsifica sobre fuente sintética.
 
-**Trigger para construir ese gate:** la primera propuesta de una **segunda** mutación sobre cualquiera de las
-dos tablas. Mientras el conjunto tenga un solo miembro por tabla, un gate cuesta registro, fixtures y su propia
-cabecera de puntos ciegos para vigilar una lista que no ha cambiado nunca — y la Regla de Tres no se cumple.
+**Lo que un verde no prueba** —las formas de SQL que el motor no reconstruye, el SQL fuera de `api/src`
+(migraciones, tests: el purgador de fixtures trunca legítimamente), los escritores del lado de la base de datos
+y la corrección de cada miembro— se enumera en **un solo sitio**, la cabecera de `SanctionedLogMutationGateTest`,
+y `SanctionedLogMutationRulesGateTest` fija los puntos ciegos del motor para que la lista no prometa menos de lo
+que el motor ve. **La dirección segura es la del rojo**: un literal de `src` que se lea como una mutación pone el
+gate en rojo, y su mensaje lo advierte para que un falso positivo no se tome por un cambio de política.
+`AuditPruneStatementGateTest` se conserva porque fija las cláusulas de la poda, que este gate no lee.
+
+**Por qué el gate no esperó a una segunda mutación sobre `event_store`.** El trigger que se escribió para él
+—la primera propuesta de una segunda mutación sobre cualquiera de las dos tablas— ya había saltado al
+escribirse: `audit_log` tenía entonces tres, todas anteriores a esa frase. Esperar habría sido esperar a algo
+que ya había ocurrido.
 
 **Trigger de revisita:** (a) que un agregado-persona pase a ser **event-sourced de verdad** —una clave de stream
 reescrita cambiaría la identidad de un agregado vivo—, o (b) que aterrice el **relay externo** de D8: un `UPDATE`
