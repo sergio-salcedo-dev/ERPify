@@ -486,14 +486,17 @@ php.lint.public-access: ## Firewall public-exemption classification gate
 
 # Fails CI when a route in api/.route-manifest.json has no line in api/.credential-proof-policy, when a line
 # names a route the router no longer declares, when an `anonymous` route is not one the firewall exempts, or
-# when a `credential-affecting` route's controller does not spend CurrentPasswordProofThrottle BEFORE reaching
-# a use case that calls ProveCurrentPassword::ensure(). Creating, replacing or destroying the caller's own
-# credential re-proves the current password against the one per-identity budget — a rule that lived in a
-# docblock until a third route shipped without it. Two classes, each selected by exact name in its own run so
-# a vanished one is an empty suite rather than a green subset; the registry header enumerates the blind spots.
+# when a `credential-affecting` route's action does not spend CurrentPasswordProofThrottle and call
+# PasswordHasher::verify() BEFORE invoking a use-case method that calls ProveCurrentPassword::ensure().
+# Creating, replacing or destroying the caller's own credential re-proves the current password against the one
+# per-identity budget — a rule that lived in a docblock until a third route shipped without it. Four classes — the tree, the registry-side rules, the proof
+# over an action, and the token reader deciding what a call is — each selected by name in its own run so a
+# vanished one is an empty suite rather than a green subset; the registry header enumerates the blind spots.
 php.lint.credential-proof: ## Credential-affecting route current-password proof gate
 	@$(PHP_TEST) bin/phpunit --filter=CredentialProofGateTest
 	@$(PHP_TEST) bin/phpunit --filter=CredentialProofRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=CredentialProofActionRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=PhpCallSitesTest
 
 ## —— Artifact-gate placement gate ——————————————————————————————————————————
 

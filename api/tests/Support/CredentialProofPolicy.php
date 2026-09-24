@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Support;
 
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
@@ -38,8 +39,15 @@ final readonly class CredentialProofPolicy
      */
     public function routePaths(): array
     {
-        $json = (string) \file_get_contents($this->apiRoot . '/.route-manifest.json');
-        $manifest = \json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        $file = $this->apiRoot . '/.route-manifest.json';
+
+        if (!\is_file($file)) {
+            throw new RuntimeException(
+                'api/.route-manifest.json is missing — regenerate it with `make sf.routes.manifest`.',
+            );
+        }
+
+        $manifest = \json_decode((string) \file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
 
         if (!\is_array($manifest)) {
             throw new RuntimeException('api/.route-manifest.json is not a JSON object.');
@@ -48,9 +56,15 @@ final readonly class CredentialProofPolicy
         $paths = [];
 
         foreach ($manifest as $name => $route) {
-            if (\is_string($name) && \is_array($route) && \is_string($route['path'] ?? null)) {
-                $paths[$name] = $route['path'];
+            if (!\is_string($name) || !\is_array($route) || !\is_string($route['path'] ?? null)) {
+                throw new RuntimeException(\sprintf(
+                    'api/.route-manifest.json entry "%s" has no string path — regenerate it with'
+                    . ' `make sf.routes.manifest`.',
+                    $name,
+                ));
             }
+
+            $paths[$name] = $route['path'];
         }
 
         return $paths;
@@ -65,8 +79,8 @@ final readonly class CredentialProofPolicy
     }
 
     /**
-     * The exact and prefix PATH patterns of `.public-access-exemptions` — the registry that gate holds equal
-     * to `security.yaml`'s anonymous rules. A `route:` key is kept as-is and matches nothing here.
+     * The keys of `.public-access-exemptions` — the registry that gate holds equal to `security.yaml`'s
+     * anonymous rules: exact and prefix PATH patterns, and `route:<name>` keys, kept as written.
      *
      * @return list<string>
      */
@@ -82,18 +96,18 @@ final readonly class CredentialProofPolicy
     }
 
     /**
-     * Every `#[Route]` name declared under `src/`, mapped to the class carrying it.
+     * Every `#[Route]` name declared under `src/`, mapped to the action serving it, named as Symfony's
+     * attribute loader names it: a method-level route's name is prefixed by its class-level route's name, and a
+     * class-level route on a class without method-level routes is served by `__invoke`.
      *
-     * @return array<string, list<class-string>>
+     * @return array<string, list<array{class: class-string, method: string}>>
      */
-    public function controllersByRoute(): array
+    public function actionsByRoute(): array
     {
         $byRoute = [];
 
         foreach (ApiSourceFiles::phpFiles($this->apiRoot . '/src') as $file) {
-            $source = (string) \file_get_contents($file->getPathname());
-
-            if (!\str_contains($source, '#[Route')) {
+            if (!\str_contains((string) \file_get_contents($file->getPathname()), 'Route')) {
                 continue;
             }
 
@@ -103,19 +117,8 @@ final readonly class CredentialProofPolicy
                 continue;
             }
 
-            $reflection = new ReflectionClass($class);
-            $attributes = $reflection->getAttributes(Route::class);
-
-            foreach ($reflection->getMethods() as $method) {
-                $attributes = [...$attributes, ...$method->getAttributes(Route::class)];
-            }
-
-            foreach ($attributes as $attribute) {
-                $name = $attribute->newInstance()->name;
-
-                if (null !== $name) {
-                    $byRoute[$name][] = $class;
-                }
+            foreach ($this->actionsOf($class) as $name => $method) {
+                $byRoute[$name][] = ['class' => $class, 'method' => $method];
             }
         }
 
@@ -175,6 +178,43 @@ final readonly class CredentialProofPolicy
         $file = (new ReflectionClass($class))->getFileName();
 
         return false === $file ? '' : (string) \file_get_contents($file);
+    }
+
+    /**
+     * @param class-string $class
+     *
+     * @return array<string, string> route name => method name
+     */
+    private function actionsOf(string $class): array
+    {
+        $reflection = new ReflectionClass($class);
+        $classRoutes = \array_map(
+            static fn (ReflectionAttribute $attribute): Route => $attribute->newInstance(),
+            $reflection->getAttributes(Route::class),
+        );
+        $actions = [];
+
+        foreach ($reflection->getMethods() as $reflectionMethod) {
+            foreach ($reflectionMethod->getAttributes(Route::class) as $attribute) {
+                $name = $attribute->newInstance()->name;
+
+                if (null !== $name) {
+                    $actions[($classRoutes[0]->name ?? '') . $name] = $reflectionMethod->getName();
+                }
+            }
+        }
+
+        if ([] !== $actions || !$reflection->hasMethod('__invoke')) {
+            return $actions;
+        }
+
+        foreach ($classRoutes as $classRoute) {
+            if (null !== $classRoute->name) {
+                $actions[$classRoute->name] = '__invoke';
+            }
+        }
+
+        return $actions;
     }
 
     /**
