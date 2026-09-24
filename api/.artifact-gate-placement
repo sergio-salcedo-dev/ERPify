@@ -113,6 +113,7 @@
 
 tests/Unit/Gate/AcceptedRiskTagGateTest.php :: home
 tests/Unit/Gate/ConfigReferenceGateReadsHeadGateTest.php :: home
+tests/Unit/Gate/SentryReleaseWiringGateTest.php :: home
 tests/Unit/Gate/TestDatabaseGuardGateTest.php :: home
 tests/Unit/Gate/AcceptedRiskTagRulesGateTest.php :: home
 tests/Unit/Gate/AdministratorSetLockStatementGateTest.php :: home
@@ -140,6 +141,9 @@ tests/Unit/Gate/ConsoleCommandCarrierGateTest.php :: home
 tests/Unit/Gate/ConstraintMessageValueGateTest.php :: home
 tests/Unit/Gate/ConstraintValidatorResolutionGateTest.php :: home
 tests/Unit/Gate/CorrelationIdOwnershipGateTest.php :: home
+tests/Unit/Gate/CredentialProofActionRulesGateTest.php :: home
+tests/Unit/Gate/CredentialProofGateTest.php :: home
+tests/Unit/Gate/CredentialProofRulesGateTest.php :: home
 tests/Unit/Gate/DeptracSeamSyncGateTest.php :: home
 tests/Unit/Gate/DomainPresentationSeparationGateTest.php :: home
 tests/Unit/Gate/EnumWireContractGateTest.php :: home
@@ -209,6 +213,7 @@ tests/Unit/Shared/ErrorContract/Application/NativeJsonEncodeContractTest.php :: 
 tests/Unit/Shared/ErrorContract/Domain/Exception/TaxonomyArchitectureTest.php :: mirrored :: src/Shared/ErrorContract
 tests/Unit/Shared/Serialization/ResourceDtoContractTest.php :: mirrored :: src/Shared/Serialization
 tests/Unit/Support/PHPUnit/FreezeSystemClockExtensionTest.php :: mirrored :: tests/Support/PHPUnit
+tests/Unit/Support/PhpCallSitesTest.php :: mirrored :: tests/Support
 tests/Unit/Support/PhpSourceTest.php :: mirrored :: tests/Support
 tests/Unit/Support/PublicSignaturesTest.php :: mirrored :: tests/Support
 tests/Unit/Support/RepositoryRootTest.php :: mirrored :: tests/Support

@@ -220,8 +220,9 @@ if (sentryUpload.warning !== null) {
 // off; and `unstable_sentryWebpackPluginOptions`, whose `sourcemaps` the SDK
 // spreads last over its own and so replaces the deletion glob wholesale.
 //
-// The token is used for exactly two things, both in the post-compile hook: the
-// source-map upload, and creating the release those maps are attached to.
+// The token is used for exactly three things, all in the post-compile hook: the
+// source-map upload, creating the release those maps are attached to, and
+// associating that release with its commit when `SENTRY_REPOSITORY` is set.
 //
 // `silent` is off so a failed upload or a refused credential is printed in the
 // build log: the SDK reports both as an error and carries on, and with `silent`
