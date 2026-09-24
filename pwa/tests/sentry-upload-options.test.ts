@@ -4,7 +4,7 @@ import { sentryUploadOptions } from "../sentry-upload-options";
 describe("sentryUploadOptions", () => {
   it("keeps upload off with an empty authToken and no warning when there is no token", () => {
     expect(sentryUploadOptions({})).toEqual({
-      options: { authToken: "", release: { create: false } },
+      options: { authToken: "" },
       uploadsSourcemaps: false,
       warning: null,
     });
@@ -31,7 +31,7 @@ describe("sentryUploadOptions", () => {
 
   it("keeps upload off and warns, without naming the token, for a personal token with no org", () => {
     const result = sentryUploadOptions({ SENTRY_AUTH_TOKEN: "sntryu_abc" });
-    expect(result.options).toEqual({ authToken: "", release: { create: false } });
+    expect(result.options).toStrictEqual({ authToken: "" });
     expect(result.uploadsSourcemaps).toBe(false);
     expect(result.warning).toContain("SENTRY_ORG is empty");
     expect(result.warning).not.toContain("sntryu_abc");
@@ -51,7 +51,7 @@ describe("sentryUploadOptions", () => {
 
   it("treats a whitespace-only token as absent", () => {
     expect(sentryUploadOptions({ SENTRY_AUTH_TOKEN: " \n\t", SENTRY_ORG: "acme" })).toEqual({
-      options: { authToken: "", release: { create: false } },
+      options: { authToken: "" },
       uploadsSourcemaps: false,
       warning: null,
     });
@@ -97,11 +97,11 @@ describe("sentryUploadOptions", () => {
       });
     });
 
-    it("treats a whitespace-only release as absent", () => {
-      expect(sentryUploadOptions({ SENTRY_RELEASE: "  " }).options).toEqual({
+    it("leaves release out with upload off and no name, so the SDK keeps its CI and git fallback", () => {
+      expect(sentryUploadOptions({ SENTRY_RELEASE: "  " }).options).toStrictEqual({
         authToken: "",
-        release: { create: false },
       });
+      expect(sentryUploadOptions({}).options).toStrictEqual({ authToken: "" });
     });
 
     it("leaves commit association to the plugin's default without a repository", () => {
@@ -125,6 +125,7 @@ describe("sentryUploadOptions", () => {
       ["a release that is not a SHA", { SENTRY_RELEASE: "1.2.0" }],
       ["an abbreviated SHA", { SENTRY_RELEASE: SHA.slice(0, 12) }],
       ["an upper-case SHA", { SENTRY_RELEASE: SHA.toUpperCase() }],
+      ["an id between the two object formats", { SENTRY_RELEASE: `${SHA}0` }],
     ])("keeps association off and warns for a repository with %s", (_label, release) => {
       const result = sentryUploadOptions({
         SENTRY_AUTH_TOKEN: "sntrys_x",
@@ -137,14 +138,53 @@ describe("sentryUploadOptions", () => {
       expect(result.warning).not.toContain("sntrys_x");
     });
 
-    it("ignores the repository while upload is off, since association needs the token", () => {
-      expect(
-        sentryUploadOptions({ SENTRY_RELEASE: SHA, SENTRY_REPOSITORY: "acme/erpify" }),
-      ).toEqual({
-        options: { authToken: "", release: { name: SHA, create: false } },
-        uploadsSourcemaps: false,
-        warning: null,
+    it("warns about a repository while upload is off, since association needs the token", () => {
+      const result = sentryUploadOptions({ SENTRY_RELEASE: SHA, SENTRY_REPOSITORY: "acme/erpify" });
+      expect(result.options).toStrictEqual({
+        authToken: "",
+        release: { name: SHA, create: false },
       });
+      expect(result.uploadsSourcemaps).toBe(false);
+      expect(result.warning).toContain("SENTRY_REPOSITORY is set but source-map upload is off");
+    });
+
+    it("reports both misconfigurations when a personal token lacks its org and a repository is set", () => {
+      const warning = sentryUploadOptions({
+        SENTRY_AUTH_TOKEN: "sntryu_abc",
+        SENTRY_REPOSITORY: "acme/erpify",
+      }).warning;
+      expect(warning).toContain("SENTRY_ORG is empty");
+      expect(warning).toContain("SENTRY_REPOSITORY is set but source-map upload is off");
+      expect(warning).not.toContain("sntryu_abc");
+    });
+
+    it("treats a whitespace-only repository as absent", () => {
+      const result = sentryUploadOptions({ ...UPLOAD, SENTRY_REPOSITORY: "  " });
+      expect(result.options.release).toStrictEqual({ name: SHA, create: true });
+      expect(result.warning).toBeNull();
+    });
+
+    it("creates an unnamed release when upload is on without a name, leaving the name to the SDK", () => {
+      const result = sentryUploadOptions({
+        SENTRY_AUTH_TOKEN: "sntrys_x",
+        SENTRY_REPOSITORY: "acme/erpify",
+      });
+      expect(result.options.release).toStrictEqual({ create: true });
+    });
+
+    it("accepts a SHA-256 object id as a full commit", () => {
+      const sha256 = SHA + SHA.slice(0, 24);
+      const result = sentryUploadOptions({
+        SENTRY_AUTH_TOKEN: "sntrys_x",
+        SENTRY_RELEASE: sha256,
+        SENTRY_REPOSITORY: "acme/erpify",
+      });
+      expect(result.options.release?.setCommits).toStrictEqual({
+        repo: "acme/erpify",
+        commit: sha256,
+        ignoreMissing: true,
+      });
+      expect(result.warning).toBeNull();
     });
   });
 });

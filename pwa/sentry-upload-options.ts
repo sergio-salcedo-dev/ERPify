@@ -30,7 +30,9 @@ import type { SentryBuildOptions } from "@sentry/nextjs";
  * The release is named by `SENTRY_RELEASE`, the commit SHA `make` exports for a
  * prod/staging build, and the name is injected into both bundles whether or not
  * upload is on, so the API and the PWA report the same release. It is created in
- * Sentry only when upload is on, because creating it needs the token.
+ * Sentry only when upload is on, because creating it needs the token. With no
+ * name and upload off, `release` is left out entirely, so the SDK keeps its own
+ * fallback (`GITHUB_SHA` and other CI variables, then the git revision).
  *
  * Commits are associated by naming the commit and the repository, which
  * happens only when `SENTRY_REPOSITORY` is set (as Sentry's GitHub integration
@@ -39,8 +41,10 @@ import type { SentryBuildOptions } from "@sentry/nextjs";
  * `.git`, which is excluded from the image build context, so it associates
  * nothing and logs the failure only at debug level. It cannot be pinned off from
  * here, because `SentryBuildOptions` does not type `false`, even though the
- * plugin underneath accepts it. A repository with no SHA to pin is a
- * misconfiguration and is warned about.
+ * plugin underneath accepts it. A repository that cannot take effect (upload
+ * off, or no SHA to pin) is a misconfiguration and is warned about.
+ * `ignoreMissing` lets the first release, which has no predecessor to diff
+ * against, associate its own commit instead of failing.
  */
 export type SentryUploadOptions = {
   readonly options: Pick<SentryBuildOptions, "authToken" | "org" | "project" | "release">;
@@ -53,7 +57,8 @@ export type SentryUploadOptions = {
 type SentryEnvironment = Readonly<Record<string, string | undefined>>;
 
 const ORG_SCOPED_TOKEN_PREFIX = "sntrys_";
-const COMMIT_SHA = /^[0-9a-f]{40}$/;
+/** A full object id: 40 hex digits for SHA-1, 64 for a SHA-256 repository. */
+const COMMIT_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
 export function sentryUploadOptions(env: SentryEnvironment): SentryUploadOptions {
   const authToken = env.SENTRY_AUTH_TOKEN?.trim();
@@ -80,13 +85,23 @@ export function sentryUploadOptions(env: SentryEnvironment): SentryUploadOptions
       warning: commits.warning,
     };
   }
-  return {
-    options: { authToken: "", release: { ...name, create: false } },
-    uploadsSourcemaps: false,
-    warning: authToken
+  const warnings = [
+    authToken
       ? "sentry: SENTRY_AUTH_TOKEN is set but SENTRY_ORG is empty and the token is not an " +
         `organisation token (${ORG_SCOPED_TOKEN_PREFIX}…), so source-map upload is off.`
       : null,
+    env.SENTRY_REPOSITORY?.trim()
+      ? "sentry: SENTRY_REPOSITORY is set but source-map upload is off, so no commits are " +
+        "associated with the release."
+      : null,
+  ].filter((warning) => warning !== null);
+  return {
+    options: {
+      authToken: "",
+      ...(releaseName === undefined ? {} : { release: { name: releaseName, create: false } }),
+    },
+    uploadsSourcemaps: false,
+    warning: warnings.length > 0 ? warnings.join(" ") : null,
   };
 }
 
