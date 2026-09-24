@@ -18,7 +18,7 @@ namespace Erpify\Shared\Audit\Domain;
  *
  * The vocabulary is the module's, its SPELLING is not: the listener stamps `metadata.operation` with the
  * operation's case name beside the action this method returns, so each action must end in `_<CASE>` after one
- * non-empty root shared by all three operations, or a row states two different facts about one write. That is
+ * non-empty root shared by every operation, or a row states two different facts about one write. That is
  * held by `AuditActionOperationAgreementGateTest`, which discovers every implementer under `api/src`.
  */
 interface AuditedEntity

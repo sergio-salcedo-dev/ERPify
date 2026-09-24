@@ -81,7 +81,7 @@ final class AuditEventDetailResourceMapperTest extends TestCase
         );
     }
 
-    public function testToResourcePassesNullableFieldsAndAnEmptyDiffThrough(): void
+    public function testToResourcePassesNullableFieldsAndEmptyMetadataThrough(): void
     {
         $resource = $this->mapper()->toResource(new AuditEventDetail(
             '0190abcd-1234-7abc-8def-001122334455',
