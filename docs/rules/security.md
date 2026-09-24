@@ -46,10 +46,17 @@
 - **Constant-time floor, on the IDENTITY-KEYED surfaces:** a rejection keyed by something the caller claims
   about an account — an email address at login or at forgot — pays one unit of password-hashing work through
   the shared `PreIdentityTimingFloor` port before answering, so response latency never correlates with whether
-  an account exists or what state it is in. Measured, the port is reached from exactly three places:
-  `UserProvider` and `UserChecker` (login) and `RequestPasswordReset` (forgot). New identity-keyed branches
+  an account exists or what state it is in. The port is reached from four places: `UserProvider`, `UserChecker`
+  and `OverlongPasswordTimingListener` (login) and `RequestPasswordReset` (forgot). New identity-keyed branches
   (future magic-link, MFA, …) must pay the same floor. The proof is always a STRUCTURAL test (the work is
   invoked on every branch) — wall-clock timing assertions are banned as flaky.
+- **Equal cost is only as true as the work each branch reaches, so check what the known branch SKIPS.** A known
+  address pays one verification of its stored hash, and a verification can refuse without hashing: Symfony's
+  hasher returns false for a password over `PasswordHasherInterface::MAX_PASSWORD_LENGTH` bytes at once, which
+  answered a known address in ~18 ms against an unknown one's ~320 ms floor. A refusal of that kind happens
+  before the identity is resolved and pays the floor itself. The same reading covers the store: the failed-login
+  recorder takes the same transaction and locked read whether or not the address resolves, and seeded hashes are
+  minted through the configured hasher, never at a cost chosen by the seed.
 - **The token-consuming surfaces do NOT pay it, and that is the next bullet rather than an omission.** Reset
   complete, invitation accept and recovery-secret redeem are keyed by a secret the caller either holds or does
   not, so there is no account-existence oracle for a floor to flatten; paying one would mean hashing for a

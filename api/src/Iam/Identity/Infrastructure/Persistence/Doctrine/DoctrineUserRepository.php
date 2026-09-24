@@ -81,10 +81,10 @@ final readonly class DoctrineUserRepository implements UserRepository
     #[Override]
     public function findByEmailForUpdate(#[SensitiveParameter] Email $email): ?User
     {
-        // Same shape and same reason as findByIdForUpdate: its caller has already resolved this identity
-        // unlocked in the same request, and on a managed entity a plain lock leaves the pre-lock snapshot
-        // hydrated — so the decision this lock exists to serialise would be taken against exactly the stale
-        // state it was taken to rule out. The refresh hint re-hydrates from the locked row in one statement.
+        // Same shape and same reason as findByIdForUpdate: the login request has usually already resolved this identity
+        // unlocked (the user provider's lookup), and on a managed entity a plain lock leaves the pre-lock snapshot
+        // hydrated — so the decision this lock exists to serialise would be taken against exactly the stale state it
+        // was taken to rule out. The refresh hint re-hydrates from the locked row in one statement.
         $user = $this->entityManager->createQueryBuilder()
             ->select('u')
             ->from(User::class, 'u')

@@ -11,17 +11,31 @@ use Erpify\Shared\Access\Domain\Role;
 
 /**
  * Fixture factory for {@see User}. Unlike `Bank::create`, `User::register` takes a {@see HashedPassword}
- * value object (never a raw string), so this test-only factory hashes the seed plaintext and wraps it — the
- * domain factory keeps its typed contract, and the fixture YAML carries a readable plaintext (a bcrypt hash's
- * `$` would collide with Alice's variable syntax). A low cost keeps fixture loading fast; the firewall's
- * "auto" hasher verifies it by detecting the bcrypt prefix.
+ * value object (never a raw string), so this test-only factory wraps an already-minted hash and keeps the
+ * domain factory's typed contract.
  *
- * `$status` seeds the lifecycle state: `INVITED` and `REVOKED` are built credential-less (the seed password is
+ * Two entry points, told apart by who can reach the configured hasher. The Alice seed calls
+ * {@see self::createWithPasswordHash()} with a hash minted by {@see Provider\SeedCredentialProvider}, i.e. by
+ * the hasher the firewall configures for the environment being seeded — a seed hashed cheaper than that
+ * configuration would answer a wrong password faster than the login's timing floor answers an unknown address,
+ * which is an existence signal on every environment built from these fixtures. Kernel-free and functional tests
+ * call {@see self::create()}, which hashes a plaintext itself at the test environment's configured parameters,
+ * because a unit test has no container to ask; that the two agree is pinned, not assumed
+ * ({@see \Erpify\Tests\Functional\Iam\Identity\SeededCredentialCostFunctionalTest}).
+ *
+ * `$status` seeds the lifecycle state: `INVITED` and `REVOKED` are built credential-less (the seed hash is
  * unused), the second by withdrawing the first; `SUSPENDED` / `DEACTIVATED` are built as an active identity
  * then transitioned, so their credential still authenticates before the post-identity wall rejects them.
  */
 final class UserFixtureFactory
 {
+    /**
+     * The bcrypt cost the test environment configures for the firewall's hasher. A plaintext hashed here must
+     * cost what a hash minted by the container costs in that environment, or a test comparing the two paths
+     * would compare different work.
+     */
+    public const int TEST_ENVIRONMENT_BCRYPT_COST = 4;
+
     /**
      * @param list<string> $roleValues
      */
@@ -29,6 +43,21 @@ final class UserFixtureFactory
         string $id,
         string $email,
         string $plainPassword,
+        array $roleValues = [],
+        string $status = 'ACTIVE',
+    ): User {
+        $passwordHash = \password_hash($plainPassword, PASSWORD_BCRYPT, ['cost' => self::TEST_ENVIRONMENT_BCRYPT_COST]);
+
+        return self::createWithPasswordHash($id, $email, $passwordHash, $roleValues, $status);
+    }
+
+    /**
+     * @param list<string> $roleValues
+     */
+    public static function createWithPasswordHash(
+        string $id,
+        string $email,
+        string $passwordHash,
         array $roleValues = [],
         string $status = 'ACTIVE',
     ): User {
@@ -42,7 +71,12 @@ final class UserFixtureFactory
             IdentityStatus::INVITED, IdentityStatus::REVOKED => User::invite($id, $email, ...$roles),
             IdentityStatus::ACTIVE,
             IdentityStatus::SUSPENDED,
-            IdentityStatus::DEACTIVATED => self::credentialed($id, $email, $plainPassword, ...$roles),
+            IdentityStatus::DEACTIVATED => User::register(
+                $id,
+                $email,
+                HashedPassword::fromHash($passwordHash),
+                ...$roles,
+            ),
         };
 
         match ($identityStatus) {
@@ -53,16 +87,5 @@ final class UserFixtureFactory
         };
 
         return $user;
-    }
-
-    private static function credentialed(
-        string $id,
-        string $email,
-        string $plainPassword,
-        Role ...$roles,
-    ): User {
-        $passwordHash = \password_hash($plainPassword, PASSWORD_BCRYPT, ['cost' => 4]);
-
-        return User::register($id, $email, HashedPassword::fromHash($passwordHash), ...$roles);
     }
 }
