@@ -7,6 +7,7 @@ namespace Erpify\Tests\Functional\Iam\Identity;
 use Closure;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Override;
 
@@ -77,5 +78,14 @@ final readonly class ProbingUserRepository implements UserRepository
     public function findByEmailForUpdate(Email $email): ?User
     {
         return $this->inner->findByEmailForUpdate($email);
+    }
+
+    #[Override]
+    public function replacePasswordHashIfUnchanged(
+        string $id,
+        HashedPassword $expected,
+        HashedPassword $replacement,
+    ): bool {
+        return $this->inner->replacePasswordHashIfUnchanged($id, $expected, $replacement);
     }
 }
