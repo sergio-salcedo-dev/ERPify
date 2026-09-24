@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\ErrorContract\Application;
+namespace Erpify\Shared\ErrorContract\Infrastructure\Http;
 
+use Erpify\Shared\ErrorContract\Application\ProblemBodyTooLargeException;
+use Erpify\Shared\ErrorContract\Application\ProblemDetails;
+use Erpify\Shared\ErrorContract\Application\RedactionDenylist;
 use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
@@ -83,7 +86,7 @@ use Throwable;
  *      {@see ProblemBodyTooLargeException} so the listener's outer try/catch
  *      escalates to the static last-resort body.
  * The cap operates on serialised byte length using `\json_encode` with `JSON_UNESCAPED_UNICODE
- * | JSON_THROW_ON_ERROR` (mirrors {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsResponder}).
+ * | JSON_THROW_ON_ERROR` (mirrors {@see ProblemDetailsResponder}).
  *
  * constant-time branching for 401/403 paths. The four error routes that
  * yield 401/403 (`Unauthenticated` / `Forbidden` markers on a `DomainException` plus the
@@ -96,11 +99,11 @@ use Throwable;
  *
  * Out of scope (explicit): application-level timing — database lookup latency, controller-
  * side resource resolution, repository / API client round trips — is the controller's
- * concern, not the listener's. NFR9 only covers the listener / factory's own contribution
- * to response time, which this contract pins via two source-text reflection tests
- * ({@see \Erpify\Tests\Unit\Shared\ErrorContract\Application\ConstantTimeAuthBranchingContractTest})
+ * concern, not the listener's. The constant-time requirement only covers the listener / factory's own
+ * contribution to response time, which this contract pins via two source-text reflection tests
+ * ({@see \Erpify\Tests\Unit\Shared\ErrorContract\Infrastructure\Http\ConstantTimeAuthBranchingContractTest})
  * and one informational microbenchmark
- * ({@see \Erpify\Tests\Unit\Shared\ErrorContract\Application\ConstantTimeAuthBranchingBenchmarkTest})
+ * ({@see \Erpify\Tests\Unit\Shared\ErrorContract\Infrastructure\Http\ConstantTimeAuthBranchingBenchmarkTest})
  * with a generous 2x asymmetry threshold so it stays informative on shared CI hardware
  * without false-positive flakiness.
  *
@@ -369,9 +372,7 @@ final readonly class ProblemDetailsFactory
 
     /**
      * Resolves the wire `type` for a `DomainException`: explicit `type()` wins, otherwise
-     * the marker default, otherwise the generic `'domain-error'` literal. Extracted to remove
-     * the `else` clause and the chained `if/elseif/else` that previously lived inside
-     * {@see fromThrowable}.
+     * the marker default, otherwise the generic `'domain-error'` literal.
      *
      * @param key-of<self::MARKER_STATUS_MAP>|null $firstMarker
      */

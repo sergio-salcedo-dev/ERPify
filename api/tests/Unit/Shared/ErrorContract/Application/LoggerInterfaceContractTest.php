@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\ErrorContract\Application;
 
-use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use FilesystemIterator;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -38,7 +38,8 @@ use SplFileInfo;
  *      explicitly out-of-scope.
  *
  * Mirrors the curated-grep + reflection pattern from
- * {@see NoDatabaseDependenciesContractTest} and {@see BannedDoctrineApisTest}
+ * {@see \Erpify\Tests\Unit\Shared\ErrorContract\Infrastructure\Http\NoDatabaseDependenciesContractTest}
+ * and {@see BannedDoctrineApisTest}
  * so a future contributor adding a Messenger-based async log on the error
  * path fails the build before merge.
  *
@@ -218,9 +219,10 @@ final class LoggerInterfaceContractTest extends TestCase
     }
 
     /**
-     * Yields the explicit Problem Details error-contract files / directory: the entire
-     * `Shared/ErrorContract/Application/` subtree plus the responder and listener that emit
-     * the wire body. Legacy search-path classes are intentionally excluded — they
+     * Yields every file of the Problem Details error contract outside `Domain/`: the
+     * `Shared/ErrorContract/Application/` and `Shared/ErrorContract/Infrastructure/Http/`
+     * subtrees (factory, responder, listeners) that build and emit the wire body. Legacy search-path
+     * classes are intentionally excluded — they
      * predate the error contract and live in `Shared/Http/Infrastructure/` but are not
      * part of the listener / factory / responder triple.
      *
@@ -230,9 +232,16 @@ final class LoggerInterfaceContractTest extends TestCase
     {
         $apiRoot = \dirname(__DIR__, 5);
 
-        $directoryRoot = $apiRoot . '/src/Shared/ErrorContract/Application';
+        // Directories, never a file list: a named file that moves drops out of a list in silence, and a
+        // missing root fails rather than shrinking the sweep.
+        $directoryRoots = [
+            $apiRoot . '/src/Shared/ErrorContract/Application',
+            $apiRoot . '/src/Shared/ErrorContract/Infrastructure/Http',
+        ];
 
-        if (\is_dir($directoryRoot)) {
+        foreach ($directoryRoots as $directoryRoot) {
+            $this->assertDirectoryExists($directoryRoot, 'Error-path directory moved or renamed; update this sweep.');
+
             $iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($directoryRoot, FilesystemIterator::SKIP_DOTS),
             );
@@ -252,19 +261,6 @@ final class LoggerInterfaceContractTest extends TestCase
 
                 yield $file;
             }
-        }
-
-        $explicitFiles = [
-            $apiRoot . '/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsResponder.php',
-            $apiRoot . '/src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php',
-        ];
-
-        foreach ($explicitFiles as $explicitFile) {
-            if (!\is_file($explicitFile)) {
-                continue;
-            }
-
-            yield new SplFileInfo($explicitFile);
         }
     }
 

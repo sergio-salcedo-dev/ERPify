@@ -51,7 +51,7 @@ use Sentry\Event;
  * is commented out — so it guards the shape rather than a measured leak.
  *
  * Reusing the SAME denylist as the RFC 9457 pipeline
- * ({@see \Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory}) keeps scrub
+ * ({@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory}) keeps scrub
  * parity between the HTTP error body and the Sentry event.
  *
  * Lives under the `Shared/Monitoring` module: vendor-specific glue (`Sentry/`)

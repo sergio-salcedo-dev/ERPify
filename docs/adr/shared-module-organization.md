@@ -140,8 +140,10 @@ The error-representation protocol, spanning three layers:
 
 - **Domain** — `Exception` taxonomy (`DomainException`, `ClientError` + markers); `InvalidSearchCriteria`
   (a protocol marker, **not** Search feature logic).
-- **Application** — `ProblemDetailsFactory`, `ProblemDetails`, `RedactionDenylist`, `ProblemBodyTooLargeException`.
-- **Infrastructure** — under `Infrastructure/Http/`: `ProblemDetailsResponder` (a plain responder, kept
+- **Application** — `ProblemDetails`, `RedactionDenylist`, `ProblemBodyTooLargeException`.
+- **Infrastructure** — under `Infrastructure/Http/`: `ProblemDetailsFactory` (the throwable→wire mapping
+  site; it reads Symfony's exception types, so it is an HTTP adapter — see
+  [`external-dependencies-in-domain.md`](external-dependencies-in-domain.md) D6), `ProblemDetailsResponder` (a plain responder, kept
   flat) and `EventListener/{ExceptionResponder, RateLimitListener}` (Symfony event listeners, grouped
   under `EventListener/` so the tree states what they are); plus the `CorrelationIdListener::ATTRIBUTE_KEY`
   integration (use of the HTTP edge, not ownership). **The listener/responder split is deliberate** —

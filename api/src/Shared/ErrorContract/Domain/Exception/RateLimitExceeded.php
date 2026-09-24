@@ -10,7 +10,7 @@ use Throwable;
  * Concrete domain exception emitted when a {@see \Symfony\Component\RateLimiter\LimiterInterface}
  * rejects a request. Implements the {@see RateLimited} marker so the existing Problem Details
  * pipeline maps it to HTTP 429 with `type=rate-limited` via the marker→status table in
- * {@see \Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory::MARKER_STATUS_MAP}.
+ * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory::MARKER_STATUS_MAP}.
  *
  * The exception is thrown framework-free: no HTTP / Symfony imports in the constructor signature.
  * The transport-facing surface (Retry-After, X-RateLimit-* headers) is owned by the response

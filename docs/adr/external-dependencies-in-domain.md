@@ -53,7 +53,7 @@ Allowlist explícita de namespaces permitidos en `Domain/Application` (patrón h
 
 Reversión del wrapper de #299 y este ADR aterrizaron juntos en la rama del propio PR.
 
-El gate de la allowlist (D4, issue **#301**) lo implementa **deptrac** (`api/tools/deptrac/deptrac.yaml`, `make php.deptrac`, gating en `php.quality.dry-run`): `Domain`/`Application` solo pueden depender de `Psr\*`, `Symfony\Component\Uid\*` y los namespaces de **metadato pasivo** que [`../rules/architecture.md`](../rules/architecture.md) bendice (`Doctrine\ORM\Mapping`, `Doctrine\DBAL\Types`, `Symfony\Component\Validator\Constraints`, `Symfony\Bridge\Doctrine\Validator\Constraints`); todo framework con runtime (Doctrine/Symfony-salvo-uid/Monolog/API Platform/Guzzle) solo es importable desde `Infrastructure`. Desde la adopción de DTOs de recurso por vista (ADR [`api-resource-dtos.md`](api-resource-dtos.md)) el `#[Groups]` desapareció del dominio y el pin `#[Serializer\Context]` (formato ATOM) se retiró del trait `Timestamped`: el formato ATOM lo posee el mapper de `Infrastructure` y `ResourceDtoContractTest` mantiene cada DTO de `Application/Resource/` plano y escalar-only. Por eso `Symfony\Component\Serializer\Attribute` **ya no entra hacia dentro** — sale del colector `Vendor.PassiveMetadata` y cae a `Vendor.Symfony` (solo-Infrastructure); cualquier uso nuevo hacia dentro falla. El colector y la lista de [`../rules/architecture.md`](../rules/architecture.md) se mueven juntos para no divergir de la gobernanza. El allowlist literal de #301 (`Symfony\*` prohibido salvo uid) habría dado falsos positivos sobre la excepción de metadato pasivo: el gate la modela explícitamente. La deuda preexistente queda *grandfathered* en `tools/deptrac/deptrac.baseline.yaml` como ratchet: verde hoy, falla ante cualquier fuga nueva. Lo que el baseline indulta hoy es el runtime de `ProblemDetailsFactory` desde `Shared/ErrorContract/Application`, y `EnumType` referenciado desde la entidad `BankAccount` de `Domain`. El runtime del `Validator` **no** es deuda sino un seam bendecido (D5), y por eso no vive en el baseline: el baseline es solo deuda. La deuda del MessageBus de Symfony Messenger (D2) **ya no está ahí**: se pagó con el puerto `Erpify\Shared\Event\Domain\EventBus` y el import lo refutan ahora dos lectores independientes — deptrac desde su ruleset `*.Application` y `make php.lint.event-bus`, que además cubre la familia de managers de Doctrine y los módulos que deptrac aún no tiene registrados ([`event-driven-architecture.md`](./event-driven-architecture.md) D4).
+El gate de la allowlist (D4, issue **#301**) lo implementa **deptrac** (`api/tools/deptrac/deptrac.yaml`, `make php.deptrac`, gating en `php.quality.dry-run`): `Domain`/`Application` solo pueden depender de `Psr\*`, `Symfony\Component\Uid\*` y los namespaces de **metadato pasivo** que [`../rules/architecture.md`](../rules/architecture.md) bendice (`Doctrine\ORM\Mapping`, `Doctrine\DBAL\Types`, `Symfony\Component\Validator\Constraints`, `Symfony\Bridge\Doctrine\Validator\Constraints`); todo framework con runtime (Doctrine/Symfony-salvo-uid/Monolog/API Platform/Guzzle) solo es importable desde `Infrastructure`. Desde la adopción de DTOs de recurso por vista (ADR [`api-resource-dtos.md`](api-resource-dtos.md)) el `#[Groups]` desapareció del dominio y el pin `#[Serializer\Context]` (formato ATOM) se retiró del trait `Timestamped`: el formato ATOM lo posee el mapper de `Infrastructure` y `ResourceDtoContractTest` mantiene cada DTO de `Application/Resource/` plano y escalar-only. Por eso `Symfony\Component\Serializer\Attribute` **ya no entra hacia dentro** — sale del colector `Vendor.PassiveMetadata` y cae a `Vendor.Symfony` (solo-Infrastructure); cualquier uso nuevo hacia dentro falla. El colector y la lista de [`../rules/architecture.md`](../rules/architecture.md) se mueven juntos para no divergir de la gobernanza. El allowlist literal de #301 (`Symfony\*` prohibido salvo uid) habría dado falsos positivos sobre la excepción de metadato pasivo: el gate la modela explícitamente. La deuda preexistente queda *grandfathered* en `tools/deptrac/deptrac.baseline.yaml` como ratchet: verde hoy, falla ante cualquier fuga nueva. Lo que el baseline indulta hoy es solo `EnumType` referenciado desde la entidad `BankAccount` de `Domain` (deuda argumentada más abajo); el runtime de `ProblemDetailsFactory` se pagó moviendo la clase a `Infrastructure/Http/` (D6). El runtime del `Validator` **no** es deuda sino un seam bendecido (D5), y por eso no vive en el baseline: el baseline es solo deuda. La deuda del MessageBus de Symfony Messenger (D2) **ya no está ahí**: se pagó con el puerto `Erpify\Shared\Event\Domain\EventBus` y el import lo refutan ahora dos lectores independientes — deptrac desde su ruleset `*.Application` y `make php.lint.event-bus`, que además cubre la familia de managers de Doctrine y los módulos que deptrac aún no tiene registrados ([`event-driven-architecture.md`](./event-driven-architecture.md) D4).
 
 El colector `Vendor.PassiveMetadata` bendice además **una clase exacta y anclada**,
 `Symfony\Component\Validator\Context\ExecutionContextInterface`, documentada en
@@ -142,3 +142,34 @@ it inward. The scope is therefore exact on both ends — one importer, six types
 class importing one of them still fails, as does `Validator` importing a seventh Symfony runtime type. deptrac
 evaluates each depender layer independently, so both carve-outs are load-bearing: a class left in both
 `Shared.Application` and the seam layer is still refused by the former.
+
+### D6 — `ProblemDetailsFactory` se mueve a `Infrastructure/Http/`; no se bendice (issue #305)
+
+`ProblemDetailsFactory` vivía en `Shared/ErrorContract/Application/` importando **siete** tipos de runtime de
+Symfony (`Autowire`, `Response`, `HttpExceptionInterface`, `AccessDeniedException`, `AuthenticationException`,
+`ConstraintViolationInterface`, `ValidationFailedException`) y eran sus siete entradas de baseline. Traduce
+excepciones del framework al cuerpo RFC 9457: es un adaptador HTTP, y su **único consumidor de código** es
+`Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder` (los demás ficheros de `api/src`
+que la nombran lo hacen solo en docblocks). Se mueve a `Erpify\Shared\ErrorContract\Infrastructure\Http\`
+y el baseline pierde las siete entradas. `ProblemDetails` (VO sin imports), `RedactionDenylist` y
+`ProblemBodyTooLargeException` se quedan en `Application/`: `Infrastructure → Application` es la dirección legal.
+
+Descartado:
+
+- **(b) Bendecirla con una capa deptrac de una sola clase, como `Shared.ValidatorSeam` (D5).** El `Validator`
+  se bendice porque sus tipos de framework forman parte de una firma que **consume `Application`**; aquí no hay
+  consumidor interior, así que la capa codificaría una excepción que nadie necesita y difuminaría la regla.
+- **(c) Dejarla en el baseline.** El baseline solo encoge y el dueño está claro: no es deuda que espere
+  decisión, es una clase en la capa equivocada.
+- **Partirla y dejar una parte de «mapeo puro» en `Application/`.** YAGNI: esa mitad no tendría consumidor.
+
+**Criterio para la próxima: una clase interior que importa runtime de framework se mueve, no se bendice,
+cuando ninguna capa interior la consume.** Bendecir es para un seam cuya firma cruza hacia dentro (D5); si el
+único consumidor ya es `Infrastructure`, la clase pertenece allí. El criterio no alcanza a las clases *sin*
+framework: `ProblemDetails`, `RedactionDenylist`, `RequestUriRedaction` o `EmailAddressRedaction` solo tienen
+consumidores en `Infrastructure` y se quedan, porque la dirección de la dependencia es legal y no hay deuda que
+pagar.
+
+Los barridos de la ruta de error (`NativeJsonEncodeContractTest`, `LoggerInterfaceContractTest`) recorren
+directorios (`Application/` e `Infrastructure/Http/`), no una lista de ficheros, y una raíz ausente falla: una
+lista que salta en silencio un fichero movido es justo lo que este movimiento habría dejado en verde.

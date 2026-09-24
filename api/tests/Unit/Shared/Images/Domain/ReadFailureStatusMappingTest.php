@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Domain;
 
-use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use Erpify\Shared\Images\Domain\Read\ImageNotAvailable;
 use Erpify\Shared\Images\Domain\Read\ImageTemporarilyUnavailable;
 use Erpify\Shared\Images\Domain\Read\UnservableImage;
