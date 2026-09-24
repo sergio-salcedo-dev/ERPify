@@ -1142,8 +1142,15 @@ mitigated state. Accepting one means recording who accepted it and against which
       **What survives is the composition, and it belongs to
       [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602), not here:** an attacker who _also_
       drives the per-email lockout (10 failures → `PT15M`, needing ≥2 source addresses to clear the per-IP
-      throttle) denies the owner the very session eviction requires. Until #602 closes, what the product owes
-      is **ordering guidance — evict first, rotate second** — in the UI copy and the password-changed mail.
+      throttle) denies the owner the very session eviction requires. **It survives only for an identity with
+      no live recovery secret.** Any identity can mint one from its own session (`POST /me/recovery-secret`),
+      redeeming it establishes a session the admission gate keeps through every later re-locking, and a
+      stolen session cannot revoke it, because revocation re-proves the current password. Without a secret,
+      an administrator's `users.unlock` reopens the door for one lockout window, which a determined attacker
+      can close again; for a **sole administrator** with no secret, even that lever is absent
+      (`self-unlock-forbidden`). Until #602 closes, what the product owes is **(1) getting every
+      administrator to mint a recovery secret, and warning while none is live**, and **(2) ordering
+      guidance — evict first, rotate second** — in the UI copy and the password-changed mail.
       `revoke-others` carrying no limiter is deliberate and load-bearing: it is the one edge an adversary
       cannot spend. **Do not "harden" it.**
 - [ ] **The failed-login path carries an existence signal shaped like a transaction, and its magnitude is
@@ -1855,17 +1862,20 @@ mitigated state. Accepting one means recording who accepted it and against which
       `api/src` that `.github/workflows/accepted-risk-live-state.yml` requires to point at an open issue; #872's
       tags sit in `docs/adr/image-deletion-signal-transport.md` and a story artifact, outside that job's scan,
       so closing it reds nothing. Closing one means either fixing the risk or re-deciding it — never tidying the
-      backlog. The reasoning, and who weighed the acceptance, live in each issue; this list exists so a reader
-      of §7 sees every watched acceptance in one place.
+      backlog. The reasoning lives in each issue; this list exists so a reader of §7 sees every watched
+      acceptance in one place. **Accepted** states who accepted it and when **only where the issue records it**;
+      `not recorded` is a gap in the record to close, never an acceptance by default. No row is accepted against
+      a customer, because none exists yet — each has to be re-affirmed or closed before the first one.
 
-  | Issue | Accepted risk | Revisit when |
-  |---|---|---|
-  | [#418](https://github.com/sergio-salcedo-dev/ERPify/issues/418) | `dek-destroyed` / `decryption-failed` carry no marker and map to 500 — correct while no decrypt/read route exists, wrong once one does (`dek-destroyed` becomes an expected post-erasure outcome) | The first caller of `EnvelopeEncryptor::decrypt()` outside `api/src/Shared/Crypto/` |
-  | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review |
-  | [#860](https://github.com/sergio-salcedo-dev/ERPify/issues/860) | A GDPR erasure racing `NotifyLockedIdentities::notifyOwner()` writes an `ACCOUNT_LOCKOUT_NOTIFIED` row naming the erased subject; the daily reconciler reports it | The reconciler reports that divergence close to a `NotifyLockedIdentitiesMessage` tick (compatible with, not proof of), or a second job adopts the same read → save → audit shape on `User` |
-  | [#864](https://github.com/sergio-salcedo-dev/ERPify/issues/864) | A second `scheduler_identity_maintenance` replica duplicates the lockout notice **and** its audit row (no `->lock()`) | Two `ACCOUNT_LOCKOUT_NOTIFIED` rows for one resource within one day, or any deploy scaling that consumer past 1; closes with a fix of the email-duplication race it rides on |
-  | [#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870) | The administrative recovery secret is a bearer credential valid for ten years (residual (a) of the recovery-secret item in §6) | A `RECOVERY_SECRET_REDEEMED` for a secret minted years earlier, or a live secret nearing expiry never redeemed nor revoked; a second bearer credential adopting a multi-year lifetime; or customers gaining shell/console access, or a second administrator the software can rely on |
-  | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of an `async` event; the issue's candidate mitigations (deploy-time smoke check, boot-time assertion on the resolved transport class, a §8 verification step) are none adopted |
+  | Issue | Accepted risk | Revisit when | Accepted |
+  |---|---|---|---|
+  | [#418](https://github.com/sergio-salcedo-dev/ERPify/issues/418) | `dek-destroyed` / `decryption-failed` carry no marker and map to 500 — correct while no decrypt/read route exists, wrong once one does (`dek-destroyed` becomes an expected post-erasure outcome) | The first caller of `EnvelopeEncryptor::decrypt()` outside `api/src/Shared/Crypto/` | not recorded (watch opened 2026-07-02) |
+  | [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602) | An identity with **no live recovery secret**, whose lockout an attacker holding a stolen session keeps re-driving, cannot get the session eviction requires; `users.unlock` reopens the door for one lockout window only, and a **sole administrator** has not even that (see *A stolen session can deny the owner a credential rotation* above) | Before the first customer: the product gets every administrator to mint a recovery secret and warns while none is live; or a lockout is observed on an identity with no live secret | Sergio, 2026-09-24 (narrowed to this residual) |
+  | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review | Sergio as product owner, per the issue (opened 2026-08-14) |
+  | [#860](https://github.com/sergio-salcedo-dev/ERPify/issues/860) | A GDPR erasure racing `NotifyLockedIdentities::notifyOwner()` writes an `ACCOUNT_LOCKOUT_NOTIFIED` row naming the erased subject; the daily reconciler reports it | The reconciler reports that divergence close to a `NotifyLockedIdentitiesMessage` tick (compatible with, not proof of), or a second job adopts the same read → save → audit shape on `User` | Sergio, closing the #857 review (2026-08-27) |
+  | [#864](https://github.com/sergio-salcedo-dev/ERPify/issues/864) | A second `scheduler_identity_maintenance` replica duplicates the lockout notice **and** its audit row (no `->lock()`) | Two `ACCOUNT_LOCKOUT_NOTIFIED` rows for one resource within one day, or any deploy scaling that consumer past 1; closes with a fix of the email-duplication race it rides on | not recorded (opened 2026-08-27) |
+  | [#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870) | The administrative recovery secret is a bearer credential valid for ten years (residual (a) of the recovery-secret item in §6) | A `RECOVERY_SECRET_REDEEMED` for a secret minted years earlier, or a live secret nearing expiry never redeemed nor revoked; a second bearer credential adopting a multi-year lifetime; or customers gaining shell/console access, or a second administrator the software can rely on | not recorded (opened 2026-08-28) |
+  | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of an `async` event; the issue's candidate mitigations (deploy-time smoke check, boot-time assertion on the resolved transport class, a §8 verification step) are none adopted | not recorded (opened 2026-08-28) |
 
 ## 8. Deploy & verify
 
