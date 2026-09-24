@@ -174,7 +174,33 @@ forma permanente, no es trabajo pendiente de #305.
 
 14 entradas en 3 clases:
 
-1. ~~**El seam de validación** (6)~~ — resuelto arriba: bless documentado, se queda en el baseline.
-2. **`ProblemDetailsFactory`** (7) — mover a `Infrastructure/Http/`. Sólo lo consume `Infrastructure/`
-   (`ExceptionResponder`), así que es un movimiento sin ripple hacia dentro, pero necesita gates para confirmarlo.
+1. ~~**El seam de validación** (6)~~ — resuelto: bendecido como capa en `deptrac.yaml` (`Shared.ValidatorSeam`,
+   ADR D5), fuera del baseline.
+2. ~~**`ProblemDetailsFactory`** (7)~~ — movida a `Infrastructure/Http/` (ADR D6); ver la actualización de abajo.
 3. ~~**`EnumType`** (1)~~ — no es un ítem abierto; ver la corrección arriba.
+
+## Actualización — `ProblemDetailsFactory` movida a `Infrastructure/Http/` (ADR D6)
+
+Opción (a), aprobada por Sergio tras consulta externa y debate Winston/Amelia: mover, no bendecir, porque su único
+consumidor de código es `ExceptionResponder` (Infrastructure). Las 7 entradas salen del baseline regenerado, que
+queda solo con `BankAccount → EnumType` (deuda argumentada en la ADR). Con eso **#305 no tiene ítems abiertos**.
+
+- Seis tests de la factoría se movieron a `tests/Unit/Shared/ErrorContract/Infrastructure/Http/`; el registro
+  `api/.artifact-gate-placement` sigue a `ConstantTimeAuthBranchingContractTest`.
+- **Hallazgo medido del movimiento:** `NativeJsonEncodeContractTest` y `LoggerInterfaceContractTest` recorrían
+  `Application/` más una lista de ficheros que saltaba en silencio uno ausente; tras el `git mv` quedaron **verdes
+  sobre una violación plantada** en la factoría (import de Messenger, `json_encode` sin flag). Ahora recorren
+  `Application/` e `Infrastructure/Http/` como directorios y una raíz ausente falla. Falsificado: rojos con la
+  violación plantada, verdes restaurada.
+- Cada lector por ruta se probó rojo con la ruta vieja (`ProblemDetailsFactoryTest`, los dos barridos,
+  `php.lint.gate-placement` con el registro viejo) y rojo sobre violaciones plantadas (`BannedDoctrineApisTest`,
+  `ConstantTimeAuthBranchingContractTest`, `client-minted-problem-types` de la PWA).
+
+**Code review (tres capas, en paralelo, sesión del 2026-09-24, sobre el árbol de trabajo antes del commit):**
+Blind Hunter, Edge Case Hunter y Acceptance Auditor. Sin `decision-needed` tras triage; parches aplicados: docblock
+de `DoctrineTransactionManager` que afirmaba que la factoría vivía en `Application`; alcance del checklist y de
+NFR4 en `docs/api-error-contract.md`; citas por número de línea sustituidas por nombres; guarda `is_dir`
+silenciosa y lista de ficheros de los dos barridos sustituidas por recorrido de directorios (el Blind Hunter lo
+planteó como decisión lista-vs-recorrido; se resolvió por el mecanismo, que es la regla del repo); criterio de D6
+acotado a clases con runtime de framework; limpieza boy-scout de un comentario relativo al cambio y un ID de
+requisito en la factoría.

@@ -1,6 +1,6 @@
 # API Error Contract — RFC 9457 Problem Details
 
-> Authoritative one-pager for the uniform error contract every `/api/*` non-2xx response is expected to honour. Single mapping site: [`api/src/Shared/ErrorContract/Application/ProblemDetailsFactory.php`](../api/src/Shared/ErrorContract/Application/ProblemDetailsFactory.php). Single listener: [`api/src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php`](../api/src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php).
+> Authoritative one-pager for the uniform error contract every `/api/*` non-2xx response is expected to honour. Single mapping site: [`api/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php`](../api/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php). Single listener: [`api/src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php`](../api/src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php).
 
 ## Body shape
 
@@ -42,7 +42,7 @@ Encoding: `\json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSO
 
 ## Marker interface → HTTP status table
 
-The mapping is the constant `ProblemDetailsFactory::MARKER_STATUS_MAP` (see [`api/src/Shared/ErrorContract/Application/ProblemDetailsFactory.php`](../api/src/Shared/ErrorContract/Application/ProblemDetailsFactory.php)). The default `type` per marker is `MARKER_DEFAULT_TYPE_MAP`. **Do not duplicate the values here — this table is a navigation aid; the source is the constant** (NFR25).
+The mapping is the constant `ProblemDetailsFactory::MARKER_STATUS_MAP` (see [`api/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php`](../api/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php)). The default `type` per marker is `MARKER_DEFAULT_TYPE_MAP`. **Do not duplicate the values here — this table is a navigation aid; the source is the constant** (NFR25).
 
 | Marker (`api/src/Shared/ErrorContract/Domain/Exception/`) | HTTP status | Default `type`            |
 |---------------------------------------------|-------------|---------------------------|
@@ -83,7 +83,7 @@ The remaining two are [`Organization/Membership/.../UserAlreadyMember`](../api/s
 
 The Session Admission Gate has two deliberately distinct outcomes for an authenticated `/api` request whose registry session is not admissible: a **missing, revoked or time-expired** session throws [`SessionNoLongerActive`](../api/src/Iam/Session/Domain/Exception/SessionNoLongerActive.php) — the existing `Unauthenticated` marker with `type()` overridden to **`session-expired`** → **401** "re-login" (reusing `Unauthenticated`, not a Symfony `AuthenticationException`, keeps it Sentry-suppressed and lets the PWA route to sign-in preserving `?next=`); a **store it cannot reach** surfaces as the `ServiceUnavailable` 503 above. Confusing the two (a 5xx operational fault vs a 4xx identity error) is the exact failure the fail-closed design forbids.
 
-Marker resolution honours implements-clause order, intersected with the canonical marker list (`firstMatchingMarker`, lines 444–456). Subclasses may override `DomainException::type()` to return a more specific opaque identifier. A concrete exception implementing two or more markers must declare an explicit `TYPE` constant / `type()` override — enforced by a CI gate test (`MarkerStatusMapContractTest`) — so its resolution never silently depends on implements-clause order. Markers are framework-free — no HTTP / ORM / transport imports allowed inside `Shared/ErrorContract/Domain/Exception/`.
+Marker resolution honours implements-clause order, intersected with the canonical marker list (`ProblemDetailsFactory::firstMatchingMarker()`). Subclasses may override `DomainException::type()` to return a more specific opaque identifier. A concrete exception implementing two or more markers must declare an explicit `TYPE` constant / `type()` override — enforced by a CI gate test (`MarkerStatusMapContractTest`) — so its resolution never silently depends on implements-clause order. Markers are framework-free — no HTTP / ORM / transport imports allowed inside `Shared/ErrorContract/Domain/Exception/`.
 
 > **Adding a marker interface or changing its mapping requires updating this page.** `ErrorContractGateTest` enforces the first half: every `.php` at any depth under `api/src/Shared/ErrorContract/Domain/Exception/` must be cited on this page as a backticked token (`` `Forbidden` ``), checked against the directory's current contents — so a marker this page never names fails the gate in any checkout, on any branch. A citation anywhere in the prose satisfies it — the gate reads presence, not placement — but a name appearing only inside a fenced code sample does not count. On top of that, the table above must hold exactly one row per marker in `MARKER_STATUS_MAP`: a marker with no row fails, and so does a row left behind by a marker that no longer exists. Only the **status value** in a row escapes machine checking — the constant is the source, the table a navigation aid — so changing a mapping stays manual discipline.
 
@@ -227,7 +227,7 @@ Not every `DomainException` carries a marker. The crypto-shredding capability (`
 | `InvalidEncryptionScopeId` | `invalid-encryption-scope-id` | `EncryptionScopeId::of` on a malformed scope built from trusted internal data                          | No             |
 | `InvalidKek`               | `invalid-kek`                 | `SodiumEnvelopeEncryptor` constructor — `AUDIT_KEK` length check                                       | No (misconfig) |
 
-Declaring no marker, they map through [`ProblemDetailsFactory`](../api/src/Shared/ErrorContract/Application/ProblemDetailsFactory.php) to **500** (`firstMatchingMarker` → `null`). Each carries an explicit `TYPE`, so the wire `type` is its own identifier — **not** the `domain-error` default of the marker-less row above, which applies only when `type()` is empty (`resolveDomainType`). Being marker-less they are **not** `ClientError`: they are **not** suppressed in Sentry, log at `error` (status ≥ 500), and carry `exception_category=domain_error`. That is correct — one firing signals corrupted or tampered stored state, an integrity fault operators must see, never a client mistake.
+Declaring no marker, they map through [`ProblemDetailsFactory`](../api/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php) to **500** (`firstMatchingMarker` → `null`). Each carries an explicit `TYPE`, so the wire `type` is its own identifier — **not** the `domain-error` default of the marker-less row above, which applies only when `type()` is empty (`resolveDomainType`). Being marker-less they are **not** `ClientError`: they are **not** suppressed in Sentry, log at `error` (status ≥ 500), and carry `exception_category=domain_error`. That is correct — one firing signals corrupted or tampered stored state, an integrity fault operators must see, never a client mistake.
 
 None is HTTP-reachable with real inputs today. `InvalidKek` guards a misconfigured `AUDIT_KEK` — a *missing* key fails at boot (env resolution), while a *wrong-length* key trips on first use of the lazily-instantiated encryptor (the first audited PII mutation), surfaced as a 500; never a client input. `InvalidEncryptionScopeId` derives from trusted internal audit-resource data — a wiring fault, not client input (the audit boundary enforces UUID resource ids, so no non-UUID scope reaches this call). `DekDestroyed` / `DecryptionFailed` reach HTTP only through the write/seal path ([`PiiDiffSealer::seal`](../api/src/Shared/Audit/Infrastructure/Persistence/PiiDiffSealer.php) → `encrypt`, during the Doctrine flush of any PII-bearing mutation — the DEK unwrap and keystore read run there), and there only on corrupted stored state or a should-never-happen tombstone race — where a 500 is the right answer. The decrypt/read path that would surface these as an *expected* outcome has no HTTP route yet; it belongs to Epic 3 (authorized audit-trail read).
 
@@ -360,7 +360,7 @@ When QA reports an intermittent 500, `problem.instance` pasted into the ticket l
 
 ## Extending the redaction denylist
 
-The denylist of context keys stripped before serialization lives at [`api/src/Shared/ErrorContract/Application/RedactionDenylist.php`](../api/src/Shared/ErrorContract/Application/RedactionDenylist.php) — the `RedactionDenylist::KEYS` constant (lines 42–50). Match scope is exact-key, case-insensitive ASCII, single-level (no recursion into nested arrays). **Strip semantics, not sentinel** — a denylisted key is removed entirely; its value is NOT replaced with `[redacted]`. The presence of a key labelled `password` is itself a signal.
+The denylist of context keys stripped before serialization lives at [`api/src/Shared/ErrorContract/Application/RedactionDenylist.php`](../api/src/Shared/ErrorContract/Application/RedactionDenylist.php) — the `RedactionDenylist::KEYS` constant. Match scope is exact-key, case-insensitive ASCII, single-level (no recursion into nested arrays). **Strip semantics, not sentinel** — a denylisted key is removed entirely; its value is NOT replaced with `[redacted]`. The presence of a key labelled `password` is itself a signal.
 
 Procedure to add a key:
 
@@ -369,7 +369,7 @@ Procedure to add a key:
 3. Run `make php.unit c='--filter RedactionDenylist'`. The assertion `testDataProviderRowCountMatchesKeysCountTimesFour` fails CI if the rows are missing (NFR8).
 4. Update this section if the procedure itself changes.
 
-The denylist is applied AFTER the reserved-key `unset()` layer and BEFORE the whitelist branch, so a denylisted `JsonSerializable` value cannot survive via the whitelist (`ProblemDetailsFactory::redactKeys`, lines 417–423).
+The denylist is applied AFTER the reserved-key `unset()` layer and BEFORE the whitelist branch, so a denylisted `JsonSerializable` value cannot survive via the whitelist (`ProblemDetailsFactory::redactKeys()`).
 
 ## Redacting the logged `request_uri`
 
@@ -409,7 +409,7 @@ An axis is matched **whole**, so the match has to run against what the key names
 
 ## Environment-aware `debug` extension
 
-Behavior is keyed off `%kernel.environment%` (injected via `#[Autowire('%kernel.environment%')]` — never `$_ENV` / `getenv()`). The decision lives in `ProblemDetailsFactory::buildDebugExtension()` (lines 482–504) and `resolveDebugMode()` (lines 464–471).
+Behavior is keyed off `%kernel.environment%` (injected via `#[Autowire('%kernel.environment%')]` — never `$_ENV` / `getenv()`). The decision lives in `ProblemDetailsFactory::buildDebugExtension()` and `resolveDebugMode()`.
 
 | Env                                                         | `debug` extension shape                                                                                                                              |
 |-------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -419,7 +419,7 @@ Behavior is keyed off `%kernel.environment%` (injected via `#[Autowire('%kernel.
 | `prod`                                                      | omitted entirely; the terminal `unhandled-exception` branch's `title` is replaced by the safe literal `"An unexpected error occurred."` (FR35, NFR7) |
 | anything else (`'ci'`, `'production'`, empty, uppercase, …) | falls through to `prod` semantics (default-deny — NFR13)                                                                                             |
 
-Anonymous-class FQCNs are sanitised (`\0/path:line$N` suffix stripped) so the embedded path cannot leak through `exception_class` in staging mode (`sanitiseExceptionClass`, lines 546–551).
+Anonymous-class FQCNs are sanitised (`\0/path:line$N` suffix stripped) so the embedded path cannot leak through `exception_class` in staging mode (`ProblemDetailsFactory::sanitiseExceptionClass()`).
 
 ## Observability: `instance` vs `correlation-id` (FR49)
 
@@ -547,9 +547,9 @@ Each path runs 100 warm-up iterations to seed opcache / classloader, then 1000 m
 
 ### Hard contractual invariants
 
-These are pinned by always-on PHPUnit contract tests under `api/tests/Unit/Shared/ErrorContract/Application/` (NOT the opt-in benchmark group):
+These are pinned by always-on PHPUnit contract tests under `api/tests/Unit/Shared/ErrorContract/Application/` and `api/tests/Unit/Shared/ErrorContract/Infrastructure/Http/` (NOT the opt-in benchmark group):
 
-- **NFR4 — body serialisation:** native `\json_encode` with `JSON_THROW_ON_ERROR` only. No Symfony Serializer component, no normalizer, no reflection-based encoder anywhere under `Shared/ErrorContract/Application/` or `Shared/Http/Infrastructure/`. Pinned by `NativeJsonEncodeContractTest::testNoSerializerImports` and `NativeJsonEncodeContractTest::testEveryJsonEncodeUsesJsonThrowOnError`.
+- **NFR4 — body serialisation:** native `\json_encode` with `JSON_THROW_ON_ERROR` only. No Symfony Serializer component, no normalizer, no reflection-based encoder anywhere under `Shared/ErrorContract/Application/` or `Shared/ErrorContract/Infrastructure/Http/`. Pinned by `NativeJsonEncodeContractTest::testNoSerializerImports` and `NativeJsonEncodeContractTest::testEveryJsonEncodeUsesJsonThrowOnError`.
 - **NFR5 — log write path:** the injected `Psr\Log\LoggerInterface` is the only logger contract on the error path. No Symfony Messenger dispatch, no `react/async`, no `amphp`, no `spatie/async`, no Swoole — synchronous PSR-3 writes (Monolog default stderr) are the contract. Pinned by `LoggerInterfaceContractTest::testListenerLoggerDepIsPsr3Only` (reflection on the constructor) and `LoggerInterfaceContractTest::testNoCustomAsyncInfrastructureInListenerOrFactory` (source-text grep).
 
 ### Running the benchmark
@@ -583,7 +583,7 @@ Behat features under `api/features/shared/error_contract/` pin the wire contract
 
 ## Review checklist
 
-Use this when reviewing a PR that touches `api/src/Shared/ErrorContract/Domain/Exception/` or `api/src/Shared/ErrorContract/Application/`, or that adds a `DomainException` anywhere that can reach HTTP:
+Use this when reviewing a PR that touches `api/src/Shared/ErrorContract/Domain/Exception/`, `api/src/Shared/ErrorContract/Application/` or `api/src/Shared/ErrorContract/Infrastructure/Http/`, or that adds a `DomainException` anywhere that can reach HTTP:
 
 - [ ] Did the PR add a new marker interface? **Update the marker → HTTP status table above.**
 - [ ] Did the PR change a value in `MARKER_STATUS_MAP` or `MARKER_DEFAULT_TYPE_MAP`? **Update the table above** (the table is a navigation aid; the values themselves come from the constant).

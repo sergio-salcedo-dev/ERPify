@@ -21,7 +21,9 @@
 #      Platform, Guzzle, Twig, Sentry) is confined
 #      to Infrastructure, each permitted only in the layers that use it. Inner-layer
 #      framework usage that predates this gate is grandfathered in the baseline
-#      (deptrac.baseline.yaml) — a ratchet, not a blessing.
+#      (deptrac.baseline.yaml) — a ratchet, not a blessing. A BLESSED inner-layer
+#      framework dependency is never a baseline entry: it is a one-class layer with its
+#      own ruleset here, documented where it is declared (Shared.ValidatorSeam).
 #
 # The `Shared` kernel is always importable (it is the shared kernel, never a
 # bounded context), so every layer may depend on its matching Shared layer.
@@ -135,7 +137,19 @@ deptrac:
         - name: Shared.Domain
           collectors: [{ type: directory, value: src/Shared/(.*/)?Domain/.* }]
         - name: Shared.Application
-          collectors: [{ type: directory, value: src/Shared/(.*/)?Application/.* }]
+          collectors:
+              - type: bool
+                must: [{ type: directory, value: src/Shared/(.*/)?Application/.* }]
+                must_not: [{ type: layer, value: Shared.ValidatorSeam }]
+        # The validation seam, carved out of Shared.Application as ONE exact class so that the
+        # Symfony Validator runtime it is blessed to touch (Vendor.SymfonyValidatorRuntime below)
+        # is granted to it and to nothing else in an inner layer. Blessed, not grandfathered —
+        # ADR docs/adr/external-dependencies-in-domain.md D5: Constraint and its siblings are the
+        # value types ensure()'s own signature accepts, so a port would add a type, not remove one.
+        # Every ruleset that may reach Shared.Application may reach this layer too: to its callers
+        # it IS Shared.Application.
+        - name: Shared.ValidatorSeam
+          collectors: [{ type: classLike, value: ^Erpify\\Shared\\Validation\\Application\\Validator$ }]
         - name: Shared.Infrastructure
           collectors: [{ type: directory, value: src/Shared/(.*/)?Infrastructure/.* }]
 
@@ -194,6 +208,16 @@ deptrac:
                 must_not:
                     - { type: layer, value: Vendor.SymfonyUid }
                     - { type: layer, value: Vendor.PassiveMetadata }
+                    - { type: layer, value: Vendor.SymfonyValidatorRuntime }
+        # The exact Symfony Validator runtime types Shared.ValidatorSeam is blessed to touch, each
+        # ANCHORED for the reason the ExecutionContextInterface entry above gives. Carved out of
+        # Vendor.Symfony, so every ruleset admitting Vendor.Symfony admits this layer too; the only
+        # inner-layer ruleset admitting it is Shared.ValidatorSeam's.
+        - name: Vendor.SymfonyValidatorRuntime
+          collectors:
+              - type: classLike
+                value: >-
+                    ^Symfony\\Component\\Validator\\(Constraint|ConstraintViolation|ConstraintViolationList|ConstraintViolationListInterface|Exception\\ValidationFailedException|Validator\\ValidatorInterface)$
         - name: Vendor.Monolog
           collectors: [{ type: classLike, value: ^Monolog\\.* }]
         - name: Vendor.ApiPlatform
@@ -258,6 +282,7 @@ deptrac:
             - Backoffice.Bank.Domain
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
@@ -265,6 +290,7 @@ deptrac:
             - Backoffice.Audit.Domain
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
@@ -272,6 +298,7 @@ deptrac:
             - Backoffice.BankAccount.Domain
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
@@ -279,6 +306,7 @@ deptrac:
             - Backoffice.Health.Domain
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
@@ -286,6 +314,7 @@ deptrac:
             - Iam.Identity.Domain
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
@@ -293,6 +322,7 @@ deptrac:
             - Iam.Invitation.Domain
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
@@ -300,6 +330,7 @@ deptrac:
             - Iam.Session.Domain
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
@@ -307,6 +338,7 @@ deptrac:
             - Organization.Organization.Domain
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
@@ -314,14 +346,23 @@ deptrac:
             - Organization.Membership.Domain
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
         Shared.Application:
             - Shared.Domain
+            - Shared.ValidatorSeam
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
+        Shared.ValidatorSeam:
+            - Shared.Domain
+            - Shared.Application
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.SymfonyValidatorRuntime
 
         # Infrastructure wires the framework: it may use its own Domain + Application,
         # the whole shared kernel, and every framework vendor.
@@ -330,12 +371,14 @@ deptrac:
             - Backoffice.Bank.Application
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Shared.Infrastructure
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
             - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
@@ -344,12 +387,14 @@ deptrac:
             - Backoffice.Audit.Application
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Shared.Infrastructure
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
             - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
@@ -358,12 +403,14 @@ deptrac:
             - Backoffice.BankAccount.Application
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Shared.Infrastructure
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
             - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
@@ -372,12 +419,14 @@ deptrac:
             - Backoffice.Health.Application
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Shared.Infrastructure
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
             - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
@@ -386,12 +435,14 @@ deptrac:
             - Iam.Identity.Application
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Shared.Infrastructure
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
             - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
@@ -400,12 +451,14 @@ deptrac:
             - Iam.Invitation.Application
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Shared.Infrastructure
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
             - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
@@ -415,12 +468,14 @@ deptrac:
             - Iam.Session.Application
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Shared.Infrastructure
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
             - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
@@ -430,12 +485,14 @@ deptrac:
             - Organization.Organization.Application
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Shared.Infrastructure
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
             - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
@@ -444,24 +501,28 @@ deptrac:
             - Organization.Membership.Application
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Shared.Infrastructure
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
             - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
         Frontoffice.Dev.Infrastructure:
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Shared.Infrastructure
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
             - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
@@ -469,23 +530,27 @@ deptrac:
         Frontoffice.Health.Infrastructure:
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Shared.Infrastructure
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
             - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
         Shared.Infrastructure:
             - Shared.Domain
             - Shared.Application
+            - Shared.ValidatorSeam
             - Vendor.Psr
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
             - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle

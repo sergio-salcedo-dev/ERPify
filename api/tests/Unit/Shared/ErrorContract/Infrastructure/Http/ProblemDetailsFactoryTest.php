@@ -2,11 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\ErrorContract\Application;
+namespace Erpify\Tests\Unit\Shared\ErrorContract\Infrastructure\Http;
 
 use Erpify\Shared\ErrorContract\Application\ProblemBodyTooLargeException;
 use Erpify\Shared\ErrorContract\Application\ProblemDetails;
-use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Application\RedactionDenylist;
 use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
@@ -18,6 +17,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
 use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use Erpify\Shared\Search\Domain\Exception\UnknownSearchField;
 use Erpify\Shared\Search\Domain\Exception\UnsupportedSearchOperator;
 use Erpify\Shared\Search\Domain\FilterOperator;
@@ -648,7 +648,7 @@ final class ProblemDetailsFactoryTest extends TestCase
      */
     public function testSourceFileContainsNoBannedImports(): void
     {
-        $sourcePath = \dirname(__DIR__, 5) . '/src/Shared/ErrorContract/Application/ProblemDetailsFactory.php';
+        $sourcePath = \dirname(__DIR__, 6) . '/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php';
         $this->assertFileExists($sourcePath);
 
         $contents = \file_get_contents($sourcePath);
@@ -1442,7 +1442,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $json = \json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $data = \json_decode($json, associative: false, flags: JSON_THROW_ON_ERROR);
 
-        $schemaPath = __DIR__ . '/../../../../Fixtures/Problem/rfc-9457.schema.json';
+        $schemaPath = __DIR__ . '/../../../../../Fixtures/Problem/rfc-9457.schema.json';
         $this->assertFileExists($schemaPath, 'RFC 9457 schema fixture must be bundled.');
 
         $resolvedPath = \realpath($schemaPath);

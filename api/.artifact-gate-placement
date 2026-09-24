@@ -203,7 +203,7 @@ tests/Unit/Shared/Images/ImageTransportSurfaceGateTest.php :: mirrored :: src/Sh
 tests/Unit/Shared/Images/ImageWriterSurfaceGateTest.php :: mirrored :: src/Shared/Images
 tests/Unit/Iam/Session/SessionSubstitutabilitySeamTest.php :: mirrored :: src/Iam/Session
 tests/Unit/Shared/ErrorContract/Application/BannedDoctrineApisTest.php :: mirrored :: src/Shared/ErrorContract
-tests/Unit/Shared/ErrorContract/Application/ConstantTimeAuthBranchingContractTest.php :: mirrored :: src/Shared/ErrorContract
+tests/Unit/Shared/ErrorContract/Infrastructure/Http/ConstantTimeAuthBranchingContractTest.php :: mirrored :: src/Shared/ErrorContract
 tests/Unit/Shared/ErrorContract/Application/ErrorContractGateTest.php :: mirrored :: src/Shared/ErrorContract
 tests/Unit/Shared/ErrorContract/Application/LoggerInterfaceContractTest.php :: mirrored :: src/Shared/ErrorContract
 tests/Unit/Shared/ErrorContract/Application/NativeJsonEncodeContractTest.php :: mirrored :: src/Shared/ErrorContract

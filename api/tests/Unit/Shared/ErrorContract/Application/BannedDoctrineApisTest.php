@@ -14,8 +14,8 @@ use SplFileInfo;
 
 /**
  * Pins the "no banned Doctrine 3 / DBAL 4 APIs on the error path" invariant.
- * The error-path source tree (`Shared/ErrorContract/Application/` plus
- * `Shared/Http/Infrastructure/`) MUST contain no occurrence of:
+ * The error-path source tree (`Shared/ErrorContract/Application/`,
+ * `Shared/ErrorContract/Infrastructure/Http/` and `Shared/Http/Infrastructure/`) MUST contain no occurrence of:
  *
  *   - `flush($entity)` — the per-entity overload removed in Doctrine ORM 3.0.
  *   - `fetchAll(`     — DBAL 3.0 removal; replaced by `fetchAllAssociative` / etc.

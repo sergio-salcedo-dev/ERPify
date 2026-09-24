@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Shared\Monitoring;
 
-use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsResponder;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Erpify\Tests\Functional\ResolvesContainerServices;

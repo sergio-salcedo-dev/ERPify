@@ -18,7 +18,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
  *
  * Decorated with `#[Assert\…]`; consumed by Symfony `#[MapQueryString]`
  * and validated automatically — failures emit `ValidationFailedException`,
- * which {@see \Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory} maps
+ * which {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory} maps
  * to a 422 `validation-failed` Problem Details body via
  * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder}.
  *
