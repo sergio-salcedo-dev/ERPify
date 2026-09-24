@@ -15,7 +15,8 @@ use Erpify\Iam\Identity\Domain\HashedPassword;
  * from a live session: replacing the password ({@see ChangeMyPassword}), minting a recovery secret
  * ({@see MintRecoverySecret}) and revoking one ({@see RevokeRecoverySecret}). The membership is the invariant
  * — every act that creates, replaces or destroys a credential and is reachable from a live session re-proves
- * it, and destroying a capability is as sensitive as granting one.
+ * it, and destroying a capability is as sensitive as granting one. The membership is held by
+ * `api/.credential-proof-policy` (`make php.lint.credential-proof`).
  *
  * **What is shared is a security policy, not four lines of convenience.** A stored credential that cannot be
  * read — absent, or corrupt enough that {@see User::passwordHash()} refuses it — is answered as a WRONG one

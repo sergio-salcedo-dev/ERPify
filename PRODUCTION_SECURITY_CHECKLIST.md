@@ -757,7 +757,11 @@ you change anything here.
       credential answers. Destroying a recovery capability is as sensitive as granting one. Minting, the
       password change and the revoke share ONE per-identity credential-proof budget
       (`CurrentPasswordProofThrottle`) — a bucket of its own would hand a stolen session twice the guesses
-      against the same password, since none of the three feeds the persisted lockout. Full record:
+      against the same password, since none of the three feeds the persisted lockout. The membership is
+      gated: every route of `api/.route-manifest.json` is classified in `api/.credential-proof-policy`, and
+      `make php.lint.credential-proof` fails when a `credential-affecting` route's action does not spend that
+      budget and verify the submitted password before invoking a use-case method that calls
+      `ProveCurrentPassword::ensure()` (blind spots in the registry header). Full record:
       [`docs/adr/administrative-recovery-channel.md`](docs/adr/administrative-recovery-channel.md) D7.
       **Four residuals, each accepted rather than closed:**
       **(a)** the secret is valid for **ten years** — `SingleUseToken` makes "no expiry" unrepresentable and a

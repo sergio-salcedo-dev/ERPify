@@ -11,93 +11,23 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 /**
- * Falsifiability of the rules the sibling gate applies over a correct tree: each one is driven over input
- * that violates it, so a rule that could detect nothing would red here rather than read green there.
+ * Falsifiability of the registry-side rules the sibling gate applies over a correct tree — the line format,
+ * completeness and staleness, the `anonymous` escape and the route-to-action resolution: each one is driven
+ * over input that violates it, so a rule that could detect nothing would red here rather than read green there.
+ * The proof over a controller action is {@see CredentialProofActionRulesGateTest}'s.
  *
  * @internal
  */
 #[CoversClass(CredentialProofRules::class)]
 final class CredentialProofRulesGateTest extends TestCase
 {
-    private const string USE_CASE = \Erpify\Iam\Identity\Application\RevokeRecoverySecret::class;
-
-    private const string PROVING_USE_CASE = <<<'PHP'
-        <?php
-        final class RevokeRecoverySecret {
-            public function revoke(): void { $this->proveCurrentPassword->ensure($user, $verify); }
-        }
-        PHP;
-
-    private const string CONTROLLER = <<<'PHP'
-        <?php
-        final class RevokeController {
-            public function __invoke(): void {
-                $this->currentPasswordProofThrottle->ensureWithinBudget($id);
-                $this->revokeRecoverySecret->revoke($id, $verify);
-            }
-        }
-        PHP;
-
-    public function testACorrectControllerPasses(): void
+    public function testARouteResolvingToNoneOrSeveralActionsReds(): void
     {
-        $this->assertSame([], $this->violations(self::CONTROLLER));
-    }
+        $action = ['class' => self::class, 'method' => '__invoke'];
 
-    public function testAControllerWithoutTheThrottleReds(): void
-    {
-        $this->assertStringContainsString(
-            'does not inject CurrentPasswordProofThrottle',
-            \implode("\n", CredentialProofRules::proofViolations(
-                'r',
-                self::CONTROLLER,
-                ['revokeRecoverySecret' => [self::USE_CASE]],
-                $this->useCases(self::PROVING_USE_CASE),
-            )),
-        );
-    }
-
-    /**
-     * A call that survives only in a comment is not a call.
-     */
-    public function testAThrottleThatIsNeverSpentReds(): void
-    {
-        $spend = '$this->currentPasswordProofThrottle->ensureWithinBudget($id);';
-        $controller = \str_replace($spend, '// ' . $spend, self::CONTROLLER);
-
-        $this->assertStringContainsString(
-            'never calls ensureWithinBudget()',
-            \implode("\n", $this->violations($controller)),
-        );
-    }
-
-    public function testAUseCaseThatDoesNotProveReds(): void
-    {
-        $useCase = \str_replace('$this->proveCurrentPassword->ensure($user, $verify);', '', self::PROVING_USE_CASE);
-
-        $this->assertStringContainsString(
-            'calls ProveCurrentPassword::ensure()',
-            \implode("\n", CredentialProofRules::proofViolations(
-                'r',
-                self::CONTROLLER,
-                $this->controllerCollaborators(),
-                $this->useCases($useCase),
-            )),
-        );
-    }
-
-    public function testSpendingTheBudgetAfterReachingTheProofReds(): void
-    {
-        $controller = <<<'PHP'
-            <?php
-            final class RevokeController {
-                public function __invoke(): void {
-                    $this->revokeRecoverySecret->revoke($id, $verify);
-                    $this->currentPasswordProofThrottle->ensureWithinBudget($id);
-                }
-            }
-            PHP;
-
-        $this->assertStringContainsString('before it spends', \implode("\n", $this->violations($controller)));
+        $this->assertSame([], CredentialProofRules::actionViolations('r', [$action]));
+        $this->assertViolation('declare its name explicitly', CredentialProofRules::actionViolations('r', []));
+        $this->assertViolation('expected exactly one', CredentialProofRules::actionViolations('r', [$action, $action]));
     }
 
     public function testCompletenessAndStalenessBothRed(): void
@@ -117,6 +47,7 @@ final class CredentialProofRulesGateTest extends TestCase
     {
         $registry = CredentialProofRules::parse([
             'identity_login :: anonymous :: proves the password it is handed',
+            'iam_webhook :: anonymous :: exempted by name',
             'iam_me_revoke_recovery_secret :: anonymous :: dodging the proof',
         ]);
 
@@ -124,9 +55,10 @@ final class CredentialProofRulesGateTest extends TestCase
             $registry,
             [
                 'identity_login' => '/api/v1/backoffice/login',
+                'iam_webhook' => '/api/v1/webhook',
                 'iam_me_revoke_recovery_secret' => '/api/v1/me/recovery-secret/revoke',
             ],
-            ['^/api/v1/backoffice/login$', '^/api/test/'],
+            ['^/api/v1/backoffice/login$', '^/api/test/', 'route:iam_webhook'],
         );
 
         $this->assertCount(1, $violations);
@@ -148,6 +80,7 @@ final class CredentialProofRulesGateTest extends TestCase
     {
         yield 'unknown class' => ['iam_me :: exempt'];
         yield 'anonymous without a reason' => ['identity_login :: anonymous'];
+        yield 'anonymous with a separator inside its reason' => ['identity_login :: anonymous :: :: y'];
         yield 'ordinary with a trailing field' => ['iam_me :: ordinary :: because'];
         yield 'no class' => ['iam_me'];
     }
@@ -160,37 +93,10 @@ final class CredentialProofRulesGateTest extends TestCase
     }
 
     /**
-     * @return list<string>
+     * @param list<string> $violations
      */
-    private function violations(string $controller): array
+    private function assertViolation(string $expected, array $violations): void
     {
-        return CredentialProofRules::proofViolations(
-            'r',
-            $controller,
-            $this->controllerCollaborators(),
-            $this->useCases(self::PROVING_USE_CASE),
-        );
-    }
-
-    /**
-     * @return array<string, list<string>>
-     */
-    private function controllerCollaborators(): array
-    {
-        return [
-            'revokeRecoverySecret' => [self::USE_CASE],
-            'currentPasswordProofThrottle' => [CredentialProofRules::THROTTLE],
-        ];
-    }
-
-    /**
-     * @return array<string, array{source: string, collaborators: array<string, list<string>>}>
-     */
-    private function useCases(string $source): array
-    {
-        return ['revokeRecoverySecret' => [
-            'source' => $source,
-            'collaborators' => ['proveCurrentPassword' => [CredentialProofRules::PROOF]],
-        ]];
+        $this->assertStringContainsString($expected, \implode("\n", $violations));
     }
 }
