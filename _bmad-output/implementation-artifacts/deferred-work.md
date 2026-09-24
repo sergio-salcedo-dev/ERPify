@@ -106,7 +106,9 @@ resolution-undo: cacf4b726cf8c87a9729aa42d7cfa36c84e944695a00b0988301d0ce7cfdc33
 origin: migrated from legacy ledger ("Deferred from: code review of g-3b-agendado-observable-reconciliador-referencias-borradas (2026-08-04)"), 2026-09-24
 location: api/src/Iam/Identity/Application/ReconcileErasedSubjectReferences.php:106, api/src/Iam/Identity/Domain/Repository/LiveIdentityDirectory.php
 reason: existingIdsAmong() binds one parameter per id in a single statement; past ~65 536 distinct ids each daily tick fails loudly (PersonReferenceProbeFailed). Far-off scale and a loud failure, hence deferrable. Fix: chunk inside liveAmong().
-status: open
+status: done 2026-09-24
+resolution: resolved by sweep bundle dw-reconciler-scale-bounds
+resolution-undo: 6033fe42be6e27d58bb581a1bfcf05a1707cf2ed0af97f1a8e9ac09e18008873 2026-09-24 7374617475733a206f70656e
 
 **(api/Iam/Identity — escala) El techo de 65535 parámetros ligados no tiene dueño: nadie trocea.** `ReconcileErasedSubjectReferences:106` pasa la unión deduplicada de todos los ejes a `existingIdsAmong()` (vía `liveAmong()`, `:221`), que la expande a un parámetro ligado por id en una sola sentencia, y es el único llamador. Al cruzar ~65 536 ids distintos cada tick diario pasa a fallar y el CLI responde `INVALID` hasta que alguien implemente el troceo. Escala muy lejana, y el fallo es **ruidoso** (`PersonReferenceProbeFailed`) en vez de silencioso, que es lo que lo hace diferible. El docblock del puerto ya no afirma que un llamador trocee — decir la verdad sobre esto es lo que evita que el siguiente llamador dé el problema por resuelto. Fix: trocear en lotes por debajo del techo dentro de `liveAmong()`. Ref: `api/src/Iam/Identity/Application/ReconcileErasedSubjectReferences.php:106`, `api/src/Iam/Identity/Domain/Repository/LiveIdentityDirectory.php`.
 
@@ -115,7 +117,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of g-3b-agendado-observable-reconciliador-referencias-borradas (2026-08-04)"), 2026-09-24
 location: api/src/**/Dbal*PersonReferences.php (six PersonReferenceSource implementations)
 reason: Each source SELECTs its entire table into PHP memory; DbalRecoverySecretPersonReferences even lacks DISTINCT. Degrades (slower daily task) rather than failing hard. Fix: keyset per user_id/resource_id, as DbalAuditLogPruner does. Trigger: the first reconciler tick that overruns its window.
-status: open
+status: done 2026-09-24
+resolution: resolved by sweep bundle dw-reconciler-scale-bounds
+resolution-undo: 6033fe42be6e27d58bb581a1bfcf05a1707cf2ed0af97f1a8e9ac09e18008873 2026-09-24 7374617475733a206f70656e
 
 **(api — escala del control detective) Las seis fuentes de referencias a persona leen su columna entera, sin `LIMIT` ni keyset.** Eran cinco cuando se escribió esta bala; **re-medido el 2026-09-20 son seis**, y la nueva es la que menos acota: `DbalRecoverySecretPersonReferences:48` (#877) hace `SELECT user_id FROM identity_recovery_secret ORDER BY user_id` **sin `DISTINCT`**, así que su resultado crece con las filas y no con las personas — el argumento «`DISTINCT` acota el resultado al número de personas» que sigue abajo no le aplica. Ninguna de las seis tiene `LIMIT`, `setMaxResults`, `OFFSET` ni continuación por keyset. Cada `PersonReferenceSource` hace un `SELECT DISTINCT` sobre toda su tabla y materializa el resultado en memoria PHP antes de que el reconciliador una los ejes: `DbalPersonResourceReferences:37` (`audit_log`, el más grande con diferencia — una fila por evento auditado, no por persona), `DbalMembershipPersonReferences:42`, `DbalSessionPersonReferences:47`, `DbalInvitationPersonReferences:41` y `DbalPasswordResetTokenPersonReferences:48`. `DISTINCT` acota el resultado al número de personas, no al de filas, así que el coste que crece sin techo es el del **scan**, no el del array. Es el mismo eje de escala que el techo de 65535 de la bala anterior y se cruzará antes, pero degrada (una tarea diaria más lenta) en vez de fallar en duro, que es lo que lo hace la menos urgente de las dos. Fix: keyset por `user_id`/`resource_id` en cada fuente, o `LIMIT` con continuación — lo mismo que ya practica `DbalAuditLogPruner`. Trigger: el primer tick del reconciliador que se salga de su ventana.
 
