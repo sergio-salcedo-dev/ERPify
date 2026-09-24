@@ -10,6 +10,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Search\Domain\Exception\InvalidSearchValue;
 use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\FilterOperator;
@@ -19,6 +20,8 @@ use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FilterApplier;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\NormalizedTextFieldNormalizer;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use InvalidArgumentException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -294,11 +297,15 @@ final class FilterApplierTemporalRangeTest extends KernelTestCase
         ];
     }
 
+    /**
+     * Built under the ambient clock frozen at `$instant`, which stamps both timestamps, then the suite's
+     * instant is restored.
+     */
     private function createBankAt(string $name, string $shortName, DateTimeImmutable $instant): Bank
     {
+        SystemClock::set(new FixedClock($instant));
         $bank = Bank::create(Uuid::generate(), $name, $shortName);
-        $bank->setCreatedAt($instant);
-        $bank->setUpdatedAt($instant);
+        FreezeSystemClockExtension::pin();
 
         $this->entityManager->persist($bank);
         $this->entityManager->flush();

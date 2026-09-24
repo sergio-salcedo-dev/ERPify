@@ -13,6 +13,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\RevokedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Iam\Identity\Infrastructure\Security\SuspendedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\UserChecker;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\CountingPreIdentityTimingFloor;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
@@ -35,6 +36,12 @@ use Symfony\Component\Security\Core\User\UserInterface;
 final class UserCheckerTest extends TestCase
 {
     private const string NOW = '2026-07-11T12:00:00+00:00';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     public function testPreAuthRejectsAnInvitedIdentityBeforeAnyPasswordCheck(): void
     {
@@ -116,9 +123,9 @@ final class UserCheckerTest extends TestCase
         $this->expectNotToPerformAssertions();
 
         $lockedAt = new DateTimeImmutable(self::NOW);
-        $afterExpiry = $lockedAt->modify('+16 minutes');
+        $user = $this->lockedActiveUser($lockedAt);
 
-        $this->checker($afterExpiry)->checkPostAuth(new SecurityUser($this->lockedActiveUser($lockedAt)));
+        $this->checker($lockedAt->modify('+16 minutes'))->checkPostAuth(new SecurityUser($user));
     }
 
     public function testPostAuthRaisesTheSuspendedWallEvenForALockedIdentity(): void
@@ -152,12 +159,16 @@ final class UserCheckerTest extends TestCase
         $checker->checkPostAuth($foreign);
     }
 
+    /**
+     * Installs the checker's instant as the ambient clock too, so a test that moves time past a lock moves it
+     * for everything that reads "now" — build the identity first, then ask for the later checker.
+     */
     private function checker(?DateTimeImmutable $now = null): UserChecker
     {
-        return new UserChecker(
-            new FixedClock($now ?? new DateTimeImmutable(self::NOW)),
-            new CountingPreIdentityTimingFloor(),
-        );
+        $clock = new FixedClock($now ?? new DateTimeImmutable(self::NOW));
+        SystemClock::set($clock);
+
+        return new UserChecker($clock, new CountingPreIdentityTimingFloor());
     }
 
     private function suspended(): User

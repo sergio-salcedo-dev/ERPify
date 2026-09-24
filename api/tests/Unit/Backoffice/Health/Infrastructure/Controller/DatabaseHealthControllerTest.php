@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\Health\Infrastructure\Controller;
 use Erpify\Backoffice\Health\Application\CheckDatabaseHealth;
 use Erpify\Backoffice\Health\Domain\DatabaseHealthChecker;
 use Erpify\Backoffice\Health\Infrastructure\Controller\DatabaseHealthController;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Http\Infrastructure\Responder\JsonResponder;
 use Erpify\Tests\Double\Clock\FixedClock;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -22,6 +23,12 @@ use Symfony\Component\HttpFoundation\Response;
 final class DatabaseHealthControllerTest extends TestCase
 {
     private const string FROZEN_INSTANT = '2026-06-14T12:00:00+00:00';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::FROZEN_INSTANT));
+    }
 
     #[Test]
     #[DataProvider('provideItReportsTheProbeOutcomeWithTheClockInstantCases')]

@@ -11,6 +11,7 @@ use Erpify\Iam\Identity\Application\SendPasswordChangedEmailBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
@@ -40,6 +41,12 @@ final class CompletePasswordResetNotificationTest extends TestCase
     private const string NOW = '2026-07-13T12:00:00+00:00';
 
     private const string TOKEN_ID = '0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e01';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     public function testTheNotificationIsSentOnlyOnceTheResetHasCommitted(): void
     {

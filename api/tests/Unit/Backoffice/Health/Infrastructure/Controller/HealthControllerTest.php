@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\Health\Infrastructure\Controller;
 
 use Erpify\Backoffice\Health\Infrastructure\Controller\HealthController;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Http\Infrastructure\Responder\JsonResponder;
 use Erpify\Tests\Double\Clock\FixedClock;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -19,6 +20,12 @@ use Symfony\Component\HttpFoundation\Response;
 final class HealthControllerTest extends TestCase
 {
     private const string FROZEN_INSTANT = '2026-06-14T12:00:00+00:00';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::FROZEN_INSTANT));
+    }
 
     #[Test]
     public function itReportsTheClockInstantAsTheHealthDatetime(): void

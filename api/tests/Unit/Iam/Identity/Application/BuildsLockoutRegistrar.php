@@ -9,10 +9,12 @@ use Erpify\Iam\Identity\Application\LoginAttemptRegistrar;
 use Erpify\Iam\Identity\Application\RecordLockoutAuditBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Shared\Audit\Application\AuditLogger;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
+use Override;
 use Psr\Log\NullLogger;
 
 /**
@@ -27,6 +29,18 @@ use Psr\Log\NullLogger;
 trait BuildsLockoutRegistrar
 {
     private const string REGISTRAR_NOW = '2026-07-11T12:00:00+00:00';
+
+    /**
+     * Installs the registrar's instant as the ambient clock before any identity is built, so the rows the
+     * mothers stamp and the lock the registrar computes read one clock.
+     */
+    #[Override]
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        SystemClock::set(FixedClock::at(self::REGISTRAR_NOW));
+    }
 
     private function registrarWith(
         InMemoryUserRepository $repository,

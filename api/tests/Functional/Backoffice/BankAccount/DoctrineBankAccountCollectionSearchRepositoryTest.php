@@ -12,6 +12,7 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Backoffice\BankAccount\Domain\Projection\BankAccountCollectionRow;
 use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountCollectionSearchRepository;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
 use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\Filters;
@@ -20,6 +21,8 @@ use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
+use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -256,18 +259,14 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
         $alphaId = Uuid::v7()->toRfc4122();
         $betaId = Uuid::v7()->toRfc4122();
 
-        // Stamped, because the suite pins one instant and the frozen double answers every read with the
-        // SAME object: two unstamped aggregates come out exactly tied, where the wall clock used to give
-        // them distinct microseconds and order them by construction. No choice of pinned instant fixes
-        // that — only saying when each row was created does.
-        $this->entityManager->persist(
-            Bank::create($alphaId, self::BANK_ALPHA_NAME, self::BANK_ALPHA_SHORT)
-                ->setCreatedAt(new DateTimeImmutable('2026-01-01 09:00:00')),
-        );
-        $this->entityManager->persist(
-            Bank::create($betaId, self::BANK_BETA_NAME, self::BANK_BETA_SHORT)
-                ->setCreatedAt(new DateTimeImmutable('2026-01-01 09:30:00')),
-        );
+        // Each row is built under its own frozen instant, because the suite pins one and the frozen double
+        // answers every read with the SAME object: two aggregates built under it come out exactly tied, where
+        // the wall clock used to give them distinct microseconds and order them by construction. No choice of
+        // pinned instant fixes that — only saying when each row was created does.
+        SystemClock::set(FixedClock::at('2026-01-01 09:00:00'));
+        $this->entityManager->persist(Bank::create($alphaId, self::BANK_ALPHA_NAME, self::BANK_ALPHA_SHORT));
+        SystemClock::set(FixedClock::at('2026-01-01 09:30:00'));
+        $this->entityManager->persist(Bank::create($betaId, self::BANK_BETA_NAME, self::BANK_BETA_SHORT));
         $this->entityManager->flush();
 
         $this->persistAccount(
@@ -294,6 +293,7 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
 
         $this->entityManager->flush();
         $this->entityManager->clear();
+        FreezeSystemClockExtension::pin();
 
         return ['alpha' => $alphaId, 'beta' => $betaId];
     }
@@ -307,6 +307,7 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
         ?string $alias = null,
         BankAccountStatus $status = BankAccountStatus::ACTIVE,
     ): void {
+        SystemClock::set(new FixedClock($createdAt));
         $account = BankAccount::create(
             Uuid::v7()->toRfc4122(),
             $bankId,
@@ -317,7 +318,6 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
             Currency::EUR,
             $status,
         );
-        $account->setCreatedAt($createdAt);
 
         $this->entityManager->persist($account);
     }

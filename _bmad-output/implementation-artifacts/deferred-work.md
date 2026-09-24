@@ -256,7 +256,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of ii-7-session-lifecycle-registry-gate-failclosed (2026-07-10)"), 2026-09-24
 location: api/src/Shared (AggregateRoot, SystemClock, DomainEvent:38), api/src/Iam/Session
 reason: expiresAt comes from the injected Clock while createdAt/updatedAt and mutator stamps read static SystemClock::now(); since #929 a test session can be created in 2050 and expire in 2026, green. Production unaffected (SystemClockInitializer). Two readings disagree (pass the instant and delete SystemClock vs seed tests from the same clock in 5 files) and the decision is not the implementer's.
-status: open
+status: done 2026-09-24
+resolution: resolved by sweep bundle dw-suite-clock-seed-alignment
+resolution-undo: 50bf58aed32c39a16719ba9d0928cafec956e63e0ca154fc6e26c8044b0f5547 2026-09-24 7374617475733a206f70656e
 
 **(api — testabilidad) Dos relojes en cada agregado, y el pin de la suite AGRANDÓ la divergencia en vez de cerrarla. Decisión abierta, del product owner.** `expiresAt` se computa del `Clock` inyectado (vía el caso de uso), mientras `createdAt`/`updatedAt` (`AggregateRoot::__construct`) y los sellos de los mutadores leen el `SystemClock::now()` estático. Esta bala decía «bajo un `FixedClock` en test los timestamps quedan mutuamente inconsistentes» y estimaba la incoherencia en microsegundos; desde #929 son **24 años**: la suite fija el ambiental en `2050-06-15` y `StartSessionTest:26,35` inyecta un `FixedClock` en `2026-07-10`, así que la sesión sale con `createdAt = 2050` y `expiresAt = 2026` — una caducidad anterior a su propia creación, en verde. El salto no es accidente: #929 eligió ese año a propósito, buscando uno que el árbol no usara, y el docblock de `FreezeSystemClockExtension` ya declara que el pin agranda esta divergencia.
 
@@ -538,4 +540,28 @@ location: CLAUDE.md
 source_spec: `spec-dw-10-schedule-gate-dev-overlay.md`
 severity: low
 reason: Sigue siendo correcto para el árbol actual (añadir el transporte en compose.yaml y compose.prod.yaml), pero no avisa de la trampa que este cambio cierra. Editar ficheros de contexto de agente se difiere por regla del workflow.
+status: open
+
+### DW-56: El bullet «Reading the clock in a test» del CLAUDE.md raíz no menciona el guardarraíl de FixedClock ni la retirada de los setters de Timestamped.
+origin: spec-deferred e33d5b51c137
+location: CLAUDE.md
+source_spec: `spec-dw-25-suite-clock-seed-alignment.md`
+severity: low
+reason: Sigue siendo correcto (SystemClock::set / pin), pero no avisa de la regla nueva que ahora impone el doble. Editar ficheros de contexto de agente se difiere por regla del workflow; docs/rules/testing.md ya la documenta.
+status: open
+
+### DW-57: Cinco tests preexistentes siguen llamando a SystemClock::reset(), que docs/rules/testing.md prohíbe.
+origin: spec-deferred b9870c785d25
+location: api/tests/Unit/Backoffice/Bank/Domain/Entity/BankTest.php:28
+source_spec: `spec-dw-25-suite-clock-seed-alignment.md`
+severity: low
+reason: BankRenameNoOpTest:40, BankTest:28, BankAccountWriteEventTest:33, StoredBankAccountFixture:32, RevokeCurrentSessionBestEffortTest:63. Inocuos hoy (el pin de Finished restaura), no introducidos por este cambio; basta sustituirlos por FreezeSystemClockExtension::pin() o borrar el tearDown.
+status: open
+
+### DW-58: Los tests que construyen sesiones ya caducadas con SessionMother::active(expiresAt: <pasado>) siguen produciendo filas con caducidad anterior a su createdAt, y el guardarraíl no lo ve.
+origin: spec-deferred c8d88fb2b946
+location: api/tests/Unit/Iam/Session/Domain/Entity/Mother/SessionMother.php
+source_spec: `spec-dw-25-suite-clock-seed-alignment.md`
+severity: medium
+reason: El guardarraíl compara relojes en la lectura; una caducidad explícita pasada a la Mother no pasa por ningún reloj. Ej.: PruneRetiredSessionsTest::activeSession('-91 days') sella createdAt=NOW y expiresAt=NOW-91d. Preexistente. Lo resolvería construir cada sesión bajo un reloj ambiental en expiresAt-TTL, o una aserción createdAt<=expiresAt en la Mother.
 status: open

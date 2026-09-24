@@ -9,6 +9,7 @@ use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\SealedAuditEntryFactory;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Http\Infrastructure\CorrelationIdListener;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
@@ -27,6 +28,12 @@ final class SealedAuditEntryFactoryTest extends TestCase
     private const string CORRELATION_ID = '019877c2-1f3a-7b8c-8d2e-1a2b3c4d5e6f';
 
     private const string OCCURRED_ON = '2026-06-23T12:34:56.123456+00:00';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::OCCURRED_ON));
+    }
 
     public function testItSealsActorClockResourceAndAdoptsTheRequestCorrelationId(): void
     {

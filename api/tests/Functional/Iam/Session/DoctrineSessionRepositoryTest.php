@@ -10,6 +10,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Iam\Session\Infrastructure\Persistence\Doctrine\DoctrineSessionRepository;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Override;
@@ -44,7 +45,8 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
         $this->assertInstanceOf(EntityManagerInterface::class, $entityManager);
         $this->entityManager = $entityManager;
         $this->connection = $entityManager->getConnection();
-        $clock = new FixedClock(new DateTimeImmutable(self::NOW));
+        $clock = FixedClock::at(self::NOW);
+        SystemClock::set($clock);
         $this->repository = new DoctrineSessionRepository($entityManager, $clock);
     }
 
@@ -121,9 +123,9 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
             $newest = Uuid::generate();
 
             // Saved in an order that matches neither the expectation nor its reverse, so dropping the
-            // ORDER BY cannot pass by coincidence. `createdAt` is stamped rather than left to three
-            // `SystemClock::now()` calls landing microseconds apart: the claim under test is the ordering
-            // clause, not how fast the three saves ran.
+            // ORDER BY cannot pass by coincidence. Each row is built under its own frozen instant rather than
+            // left to three `SystemClock::now()` calls landing microseconds apart: the claim under test is the
+            // ordering clause, not how fast the three saves ran.
             $this->saveSessionCreatedAt($oldest, $userId, '2026-07-08T09:00:00+00:00');
             $this->saveSessionCreatedAt($newest, $userId, '2026-07-10T09:00:00+00:00');
             $this->saveSessionCreatedAt($middle, $userId, '2026-07-09T09:00:00+00:00');
@@ -218,10 +220,15 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
         });
     }
 
+    /**
+     * Builds the row under the ambient clock frozen at `$createdAt`, which is what stamps it, then hands the
+     * ambient clock back to `NOW` — the instant the repository's reads compare against.
+     */
     private function saveSessionCreatedAt(string $id, string $userId, string $createdAt): void
     {
+        SystemClock::set(FixedClock::at($createdAt));
         $session = $this->activeSession($id, $userId, '+1 hour');
-        $session->setCreatedAt(new DateTimeImmutable($createdAt));
+        SystemClock::set(FixedClock::at(self::NOW));
 
         $this->repository->save($session);
     }

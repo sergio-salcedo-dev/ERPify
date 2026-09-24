@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Erpify\Iam\Session\Application\RevokeOtherSessions;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Infrastructure\Controller\RevokeOtherSessionsController;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Session\Application\RecordingEventBus;
@@ -32,8 +33,14 @@ final class RevokeOtherSessionsControllerTest extends TestCase
 {
     use AdmitsASessionRequest;
 
-    /** The instant the use case's own clock is given; nothing ambient is frozen here. */
+    /** The instant the use case's own clock is given, installed as the ambient one too. */
     private const string USE_CASE_INSTANT = '2026-07-10T12:00:00+00:00';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::USE_CASE_INSTANT));
+    }
 
     public function testItSparesTheCorrelatedSessionAndNeverTheOneTheRequestCarries(): void
     {

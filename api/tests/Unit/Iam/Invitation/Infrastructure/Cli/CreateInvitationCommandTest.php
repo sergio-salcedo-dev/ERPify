@@ -11,6 +11,7 @@ use Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort;
 use Erpify\Iam\Invitation\Infrastructure\Cli\CreateInvitationCommand;
 use Erpify\Organization\Membership\Application\GrantMembership;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Validation\Application\Validator;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
@@ -50,6 +51,12 @@ final class CreateInvitationCommandTest extends TestCase
     private const string NOW = '2026-07-13T10:00:00+00:00';
 
     private const string EMAIL = 'newbie@erpify.test';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     #[Test]
     public function itKeepsTheTokenOffStdoutWhenTheMailerAcceptedTheSend(): void
