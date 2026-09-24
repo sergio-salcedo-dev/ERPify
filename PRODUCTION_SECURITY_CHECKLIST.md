@@ -152,6 +152,16 @@ you change anything here.
       `pwa/tests/sentry-sourcemap-exposure.test.ts`; a green proves the
       declarations, never what a real build emits, and never that a CDN or a
       workflow artifact is not serving a copy from somewhere else.
+- [ ] Associating Sentry releases with commits is **opt-in** on
+      `SENTRY_REPOSITORY`, and it needs the Sentry **GitHub integration**, which
+      is a third party granted read access to the repository's code and history.
+      Install it only on this repository, never on the whole account. The
+      release name is the commit SHA `make` exports (`make/config.mk`), which is
+      public by design: it is inlined into the client and server bundles and
+      set in the API containers' runtime environment (the shipped `pwa` image
+      carries no such `ENV`; only its builder stage did). With
+      `SENTRY_REPOSITORY` empty, nothing is associated: the plugin's `auto`
+      fallback reads a `.git` the build context does not contain.
 - [ ] Sentry events are scrubbed before send: `sendDefaultPii: false` plus a
       `beforeSend` denylist scrub in parity with the API's `SentryEventScrubber`
       (`scrubSentryEvent` / shared `redaction` keys); deliberate `telemetry.*`
@@ -418,6 +428,34 @@ you change anything here.
       adapter (used by the `organization:administrator:create` CLI that bootstraps the first admin);
       the plaintext is never printed or logged, and credentials are never seeded through migrations
       (dev/test use a fixture with a bcrypt hash).
+- [ ] **A stored hash is upgraded to the configured hasher on the first login that proves it.** `UserProvider`
+      implements `PasswordUpgraderInterface`, which is what makes `json_login` attach the upgrade badge, so
+      Symfony's `PasswordMigratingListener` re-encodes the submitted password whenever the configured hasher
+      reports the stored hash `needsRehash()` — a bcrypt cost other than the configured one (`auto` defaults to
+      13), or an algorithm `auto` still verifies but no longer mints. It runs on `LoginSuccessEvent`, after the
+      credential was verified and the identity admitted, so a **failed login pays nothing new** and the
+      pre-identity timing floor is untouched; a successful login pays one extra hash, once per account, plus a
+      one-row `UPDATE` that can wait behind a concurrent credential write on the same row.
+      `RehashPasswordBestEffort` stores it through `UserRepository::replacePasswordHashIfUnchanged()`, a
+      compare-and-swap **the store decides in one statement** — only over the exact hash the login verified.
+      A reset or a change committing in between is therefore never overwritten by an encoding of the secret it
+      superseded, and — the half that matters for containment — a refusal hydrates nothing, so the session the
+      login mints still carries the hash it proved and is signed out on its next request by
+      `SecurityUser::isEqualTo`. A locked re-read of the aggregate would have advanced that session onto the new
+      credential and kept it alive past the reset. **Its accepted cost:** the loser of two simultaneous first
+      logins on one legacy hash is refused as well and signed out once, since a refusal cannot tell a re-encoding
+      of the same secret from a new one. It is not a credential change: no domain event, no audit row, no mail,
+      no session revoke, no lockout relief and no `updated_at` touch. It is best-effort — a store fault rolls
+      back, leaves the old hash (which still verifies) and an untouched aggregate, and is reported on
+      `observability` by exception **class** only, since the failed statement carried both hashes. **What it
+      does not cover:** an account whose owner never logs in again keeps its old hash for ever, and
+      `needsRehash()` is symmetric — lowering the cost in `security.yaml` rolls out a downgrade the same way
+      raising it rolls out an upgrade. Pinned by `LoginPasswordRehashFunctionalTest` (real firewall, real
+      Postgres: bcrypt at a foreign cost and argon2id land at the configured cost, the session survives its
+      next request read against the row and is signed out when the row moves under it, a Postgres-raised fault
+      still admits the login, clears the lockout and mints one session, a failed login and a current hash are
+      left byte-for-byte alone), `DoctrineUserRepositoryTest` (the refusal leaves the managed aggregate
+      untouched), `RehashPasswordBestEffortTest` and `UserProviderTest`.
 - [ ] **Single-use tokens (`Shared/Token/SingleUseToken`):** the one building block invitation and
       password reset share, so their token security cannot diverge. High-entropy (256-bit CSPRNG),
       **hashed at rest** (SHA-256 — the raw token is handed to the bearer once and **never** persisted or
@@ -726,8 +764,10 @@ you change anything here.
       `self-unlock-forbidden`, refused before any row is touched): granting that would make `users.unlock` a
       second, credential-independent path into one's own account, defeating the lockout it exists to recover
       from. **The residual this left — an installation with a single administrator has nobody to invoke the lever —
-      is closed by the recovery secret below**, which is the edge that depends on no peer. #602 stays open on
-      the detection/notification half (`NotifyLockedIdentities`), tracked separately.
+      is closed by the recovery secret below**, which is the edge that depends on no peer. The
+      detection/notification half (`NotifyLockedIdentities`) shipped in #683 and #857; #602 stays open on the
+      stolen-session composition recorded in §7 (*A stolen session can deny the owner a credential rotation,
+      but not an eviction*).
 - [ ] **The recovery secret (`identity_recovery_secret`): the lockout edge that depends on no peer.** A
       `<selector>.<secret>` credential in its own aggregate, one row per identity (UNIQUE on `user_id`).
       **Minted** from a live session against a re-proof of the current password and shown in clear exactly
@@ -746,7 +786,11 @@ you change anything here.
       credential answers. Destroying a recovery capability is as sensitive as granting one. Minting, the
       password change and the revoke share ONE per-identity credential-proof budget
       (`CurrentPasswordProofThrottle`) — a bucket of its own would hand a stolen session twice the guesses
-      against the same password, since none of the three feeds the persisted lockout. Full record:
+      against the same password, since none of the three feeds the persisted lockout. The membership is
+      gated: every route of `api/.route-manifest.json` is classified in `api/.credential-proof-policy`, and
+      `make php.lint.credential-proof` fails when a `credential-affecting` route's action does not spend that
+      budget and verify the submitted password before invoking a use-case method that calls
+      `ProveCurrentPassword::ensure()` (blind spots in the registry header). Full record:
       [`docs/adr/administrative-recovery-channel.md`](docs/adr/administrative-recovery-channel.md) D7.
       **Four residuals, each accepted rather than closed:**
       **(a)** the secret is valid for **ten years** — `SingleUseToken` makes "no expiry" unrepresentable and a
@@ -1137,12 +1181,32 @@ mitigated state. Accepting one means recording who accepted it and against which
       **The attacker holds the same weapon and the race still resolves for the owner:** either party can fire
       `revoke-others` and evict the other, with no budget on either side, but **re-entry is not symmetric** —
       the owner returns with the credential, while a revoked cookie is dead and no path re-mints one without
-      the password. Each round costs the owner one login.
+      the password. Each round costs the owner one login. That asymmetry holds for a non-administrator; an
+      _administrator's_ stolen session can mint its own re-entry — invite an address it controls and grant it
+      `ADMIN` (`users.invite`, `users.grantAdmin`) — which evicting the stolen session does not reach.
       **What survives is the composition, and it belongs to
       [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602), not here:** an attacker who _also_
       drives the per-email lockout (10 failures → `PT15M`, needing ≥2 source addresses to clear the per-IP
-      throttle) denies the owner the very session eviction requires. Until #602 closes, what the product owes
-      is **ordering guidance — evict first, rotate second** — in the UI copy and the password-changed mail.
+      throttle) denies the owner the very session eviction requires. **A live recovery secret buys the owner
+      one re-entry, not immunity.** Any `ACTIVE` identity can mint one from its own session against a re-proof
+      of its current password (`POST /me/recovery-secret`; a second mint answers 409, never a replacement), so
+      a stolen session can neither mint nor displace one, and it cannot revoke one either, because revocation
+      re-proves the password too. Redeeming it clears the lock and establishes a session the admission gate
+      keeps through every later re-locking — but redemption **consumes** the secret and evicts no other
+      session, so the stolen session survives it and can fire `revoke-others` at the redeemed session before
+      the owner's own lands. An attacker who loops it wins that race and leaves the owner locked out again with
+      the secret spent, and a replacement needs the very session just lost. The composition therefore survives
+      for an identity with no live secret **and** for one whose single redemption the attacker out-races.
+      Without a secret, another administrator's `users.unlock` clears the lock only until the attacker's next
+      ten failures re-seal it — seconds, not a lockout window — and an administrator's stolen session can
+      suspend or demote every other administrator first (only the last active one is protected). For a
+      **sole administrator** with no secret, even that lever is absent: nobody else holds `users.unlock`, and
+      the product refuses it over one's own identity (`self-unlock-forbidden`). Until #602 closes, what the
+      product owes is **(1) getting every administrator to mint a recovery secret, re-mint after every
+      redemption, and warning while none is live** — a lapsed row counts as none, although
+      `GET /me/recovery-secret` still reports it and minting over it answers 409 until it is revoked — and
+      **(2) ordering guidance — evict first, rotate second** — in the UI copy, the password-changed mail and
+      the redemption flow, whose first act has to be `revoke-others`.
       `revoke-others` carrying no limiter is deliberate and load-bearing: it is the one edge an adversary
       cannot spend. **Do not "harden" it.**
 - [x] **A failed login no longer carries an existence signal shaped like a transaction, a seed cost or an
@@ -1876,6 +1940,27 @@ mitigated state. Accepting one means recording who accepted it and against which
       a chore, a hotfix or a docs PR over auth code has no story to attach a debt to, and the PR that
       retired the gate was itself exactly that shape. **Re-assess before the first customer**:
       decide whether an unenforced convention is the control you want over auth, erasure and audit code.
+
+- [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
+      accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
+      artefact that holds the revisit trigger. Two of them (#860, #870) carry an `@accepted-risk` tag under
+      `api/src` that `.github/workflows/accepted-risk-live-state.yml` requires to point at an open issue; #872's
+      tags sit in `docs/adr/image-deletion-signal-transport.md` and a story artifact, outside that job's scan,
+      so closing it reds nothing. Closing one means either fixing the risk or re-deciding it — never tidying the
+      backlog. The reasoning lives in each issue; this list exists so a reader of §7 sees every watched
+      acceptance in one place. **Accepted** states who accepted it and when **only where the issue records it**;
+      `not recorded` is a gap in the record to close, never an acceptance by default. No row is accepted against
+      a customer, because none exists yet — each has to be re-affirmed or closed before the first one.
+
+  | Issue | Accepted risk | Revisit when | Accepted |
+  |---|---|---|---|
+  | [#418](https://github.com/sergio-salcedo-dev/ERPify/issues/418) | `dek-destroyed` / `decryption-failed` carry no marker and map to 500 — correct while no decrypt/read route exists, wrong once one does (`dek-destroyed` becomes an expected post-erasure outcome) | The first caller of `EnvelopeEncryptor::decrypt()` outside `api/src/Shared/Crypto/` | not recorded (opened 2026-07-02; reclassified as a watch 2026-08-13) |
+  | [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602) | An identity whose lockout an attacker holding a stolen session keeps re-driving cannot get the session eviction requires unless it holds a **live recovery secret** — and even then only once, since redemption consumes the secret and evicts nobody, so a `revoke-others` loop from the stolen session can out-race it; `users.unlock` holds only until ten more failures re-seal the lock, and a **sole administrator** has not even that (see *A stolen session can deny the owner a credential rotation* above) | Before the first customer: the product gets every administrator to mint (and re-mint after redemption) a recovery secret and warns while none is live; or a lockout is observed on an identity with no live secret, or right after a redemption | not named; accepted as-is 2026-07-29, narrowed 2026-09-24 (opened 2026-07-28) |
+  | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review | the product owner, per the issue — not named, no date (opened 2026-08-14) |
+  | [#860](https://github.com/sergio-salcedo-dev/ERPify/issues/860) | A GDPR erasure racing `NotifyLockedIdentities::notifyOwner()` writes an `ACCOUNT_LOCKOUT_NOTIFIED` row naming the erased subject; the daily reconciler reports it | The reconciler reports that divergence close to a `NotifyLockedIdentitiesMessage` tick (compatible with, not proof of), or a second job adopts the same read → save → audit shape on `User` | Sergio, closing the #857 review — date not recorded (opened 2026-08-27) |
+  | [#864](https://github.com/sergio-salcedo-dev/ERPify/issues/864) | A second `scheduler_identity_maintenance` replica duplicates the lockout notice **and** its audit row (no `->lock()`) | Two `ACCOUNT_LOCKOUT_NOTIFIED` rows for one resource within one day, or any deploy scaling that consumer past 1; closes with a fix of the email-duplication race it rides on | not recorded (opened 2026-08-27) |
+  | [#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870) | The administrative recovery secret is a bearer credential valid for ten years (residual (a) of the recovery-secret item in §6) | A `RECOVERY_SECRET_REDEEMED` for a secret minted years earlier, or a live secret nearing expiry never redeemed nor revoked; a second bearer credential adopting a multi-year lifetime; or customers gaining shell/console access, or a second administrator the software can rely on | no person named; approved by the second external spec review on condition of this record (opened 2026-08-28) |
+  | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of an `async` event; the issue's candidate mitigations (deploy-time smoke check, boot-time assertion on the resolved transport class, a §8 verification step) are none adopted | not recorded (opened 2026-08-28) |
 
 ## 8. Deploy & verify
 

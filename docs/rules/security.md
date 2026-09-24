@@ -207,6 +207,14 @@ actually reaches a sink.
   those characters are made of. The resulting credential cannot be reliably retyped.
 - **Never trim a password anywhere.** Verification runs through `json_login`, framework-owned, which does not
   trim. Storing `hash(trim(x))` while verifying `x` is a permanent, irreversible lockout.
+- **A stored hash follows the configured hasher, one login at a time.** `UserProvider` is the firewall's
+  `PasswordUpgraderInterface`, so a hash the configured hasher reports `needsRehash()` is re-encoded on the next
+  successful login. The write replaces only the hash that login verified — a compare-and-swap the store
+  decides (`UserRepository::replacePasswordHashIfUnchanged()`), never `changePassword()` and never a locked
+  re-read of the aggregate, which would move the session's copy onto a credential it did not prove — records
+  no fact and revokes nothing: re-encoding the same secret is not a credential change. Raising the cost in `security.yaml` is therefore enough to roll it out;
+  a credential flow that bypasses the firewall (`Security::login()`) carries no upgrade badge and upgrades
+  nothing.
 
 ## Build-time secrets
 - **A secret reaches an image build only through `RUN --mount=type=secret`, never an `ARG` or an `ENV`.** An

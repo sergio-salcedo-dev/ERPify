@@ -6,6 +6,7 @@ namespace Erpify\Iam\Identity\Domain\Repository;
 
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Iam\Identity\Domain\HashedPassword;
 use SensitiveParameter;
 
 /**
@@ -45,4 +46,26 @@ interface UserRepository
      * followed by a write that puts `locked_until` back.
      */
     public function findByEmailForUpdate(#[SensitiveParameter] Email $email): ?User;
+
+    /**
+     * Replaces the stored credential with `$replacement` if, and only if, the row still holds `$expected`, and
+     * answers whether it did — a compare-and-swap decided by the store in one statement. Callable only inside
+     * a transaction. For a re-encoding of the SAME secret (a hash upgraded to the configured hasher), never for
+     * a credential change: it records no fact and leaves `updated_at` alone, because nothing about the secret
+     * moved and that column is the user register's keyset sort key.
+     *
+     * It is a store operation rather than an aggregate method because the aggregate is the wrong place to read
+     * the current credential from: loading it under the lock re-hydrates the instance the caller already
+     * holds — on the login path, the one the session serialises — so a refusal would leave that instance
+     * advanced to a credential the caller never proved. Here a refusal touches no instance at all; on success
+     * an already-loaded aggregate is brought in line with the row, so a copy of it compared against the row
+     * later agrees.
+     */
+    public function replacePasswordHashIfUnchanged(
+        string $id,
+        #[SensitiveParameter]
+        HashedPassword $expected,
+        #[SensitiveParameter]
+        HashedPassword $replacement,
+    ): bool;
 }

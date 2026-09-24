@@ -482,6 +482,22 @@ php.lint.public-access: ## Firewall public-exemption classification gate
 	@$(PHP_TEST) bin/phpunit --filter=PublicAccessExemptionGateTest
 	@$(PHP_TEST) bin/phpunit --filter=PublicAccessExemptionRulesGateTest
 
+## —— Credential-proof gate ———————————————————————————————————————————————
+
+# Fails CI when a route in api/.route-manifest.json has no line in api/.credential-proof-policy, when a line
+# names a route the router no longer declares, when an `anonymous` route is not one the firewall exempts, or
+# when a `credential-affecting` route's action does not spend CurrentPasswordProofThrottle and call
+# PasswordHasher::verify() BEFORE invoking a use-case method that calls ProveCurrentPassword::ensure().
+# Creating, replacing or destroying the caller's own credential re-proves the current password against the one
+# per-identity budget — a rule that lived in a docblock until a third route shipped without it. Four classes — the tree, the registry-side rules, the proof
+# over an action, and the token reader deciding what a call is — each selected by name in its own run so a
+# vanished one is an empty suite rather than a green subset; the registry header enumerates the blind spots.
+php.lint.credential-proof: ## Credential-affecting route current-password proof gate
+	@$(PHP_TEST) bin/phpunit --filter=CredentialProofGateTest
+	@$(PHP_TEST) bin/phpunit --filter=CredentialProofRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=CredentialProofActionRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=PhpCallSitesTest
+
 ## —— Artifact-gate placement gate ——————————————————————————————————————————
 
 # Fails CI when an artifact gate — a kernel-free test whose subject is a repository artifact rather than a
@@ -612,7 +628,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.credential-proof php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -636,7 +652,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.credential-proof php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -646,7 +662,7 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence \
         php.lint.persistent-transport php.lint.person-reference php.lint.schedule-consumption php.lint.step-vocabulary \
-        php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference php.lint.project-context php.lint.public-access \
+        php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference php.lint.project-context php.lint.public-access php.lint.credential-proof \
         php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention \
         php.lint.accepted-risk php.lint.stacked-docblock \
         php.deptrac php.deptrac.baseline \

@@ -15,6 +15,11 @@ namespace Erpify\Shared\Audit\Domain;
  * class refactors, and the owning module — not a central convention in `Shared` — is the authority on how it
  * names a change. A new audited aggregate adds its mapping in its own class without touching the shared
  * capture listener, mirroring how {@see AuditPolicy} holds no catalogue of concrete module routes.
+ *
+ * The vocabulary is the module's, its SPELLING is not: the listener stamps `metadata.operation` with the
+ * operation's case name beside the action this method returns, so each action must end in `_<CASE>` after one
+ * non-empty root shared by every operation, or a row states two different facts about one write. That is
+ * held by `AuditActionOperationAgreementGateTest`, which discovers every implementer under `api/src`.
  */
 interface AuditedEntity
 {

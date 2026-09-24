@@ -10,6 +10,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Override;
@@ -97,5 +98,42 @@ final readonly class DoctrineUserRepository implements UserRepository
         ;
 
         return $user instanceof User ? $user : null;
+    }
+
+    #[Override]
+    public function replacePasswordHashIfUnchanged(
+        string $id,
+        #[SensitiveParameter]
+        HashedPassword $expected,
+        #[SensitiveParameter]
+        HashedPassword $replacement,
+    ): bool {
+        // A DQL UPDATE bypasses the unit of work, so no managed instance is hydrated or dirtied by the attempt:
+        // the predicate on the old hash is the whole comparison, and the row lock it takes lasts to the commit.
+        $affected = $this->entityManager->createQueryBuilder()
+            ->update(User::class, 'u')
+            ->set('u.passwordHash', ':replacement')
+            ->where('u.id = :id')
+            ->andWhere('u.passwordHash = :expected')
+            ->setParameter('replacement', $replacement->toString())
+            ->setParameter('id', $id)
+            ->setParameter('expected', $expected->toString())
+            ->getQuery()
+            ->execute()
+        ;
+
+        if (1 !== $affected) {
+            return false;
+        }
+
+        // Re-read under the lock this statement still holds, so the refreshed instance can only see the value
+        // just written — and its original data moves with it, so a later flush has nothing to write back.
+        $managed = $this->entityManager->getUnitOfWork()->tryGetById($id, User::class);
+
+        if ($managed instanceof User) {
+            $this->entityManager->refresh($managed);
+        }
+
+        return true;
     }
 }

@@ -71,6 +71,16 @@ ENV SENTRY_ORG=${SENTRY_ORG}
 ARG SENTRY_PROJECT=
 ENV SENTRY_PROJECT=${SENTRY_PROJECT}
 
+# The release both bundles report: the commit SHA `make` exports for a
+# prod/staging build, shared with the API so an issue maps to one deploy. Empty
+# leaves events untagged. SENTRY_REPOSITORY (owner/name, as Sentry's GitHub
+# integration lists it) turns on associating the release with that commit, which
+# needs the upload token too.
+ARG SENTRY_RELEASE=
+ENV SENTRY_RELEASE=${SENTRY_RELEASE}
+ARG SENTRY_REPOSITORY=
+ENV SENTRY_REPOSITORY=${SENTRY_REPOSITORY}
+
 # The auth token is a BuildKit SECRET, deliberately not an ARG. An ARG is
 # recorded in the image metadata and `docker history` prints it, so a token
 # passed that way leaks to anyone who can pull the image — including through a
