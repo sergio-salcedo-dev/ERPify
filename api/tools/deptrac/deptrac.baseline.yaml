@@ -5,7 +5,9 @@
 # Domain/Application class touching a framework runtime the architecture confines to
 # Infrastructure (ADR docs/adr/external-dependencies-in-domain.md, issue #301). They
 # predate the gate; it stays green today and fails on any NEW inner-layer leak.
-# Paying this down is tracked in issue #305.
+# Paying this down is tracked in issue #305. A dependency the ADR has decided to KEEP
+# is not debt and never lands here: it is blessed as a layer in deptrac.yaml
+# (Shared.ValidatorSeam is the example).
 #
 # Published cross-context seams are NOT here — they live in `skip_violations` in
 # deptrac.yaml (mirror of api/.bounded-context-allowlist). A new cross-context import
@@ -24,10 +26,3 @@ deptrac:
       - Symfony\Component\Security\Core\Exception\AuthenticationException
       - Symfony\Component\Validator\ConstraintViolationInterface
       - Symfony\Component\Validator\Exception\ValidationFailedException
-    Erpify\Shared\Validation\Application\Validator:
-      - Symfony\Component\Validator\Constraint
-      - Symfony\Component\Validator\ConstraintViolation
-      - Symfony\Component\Validator\ConstraintViolationList
-      - Symfony\Component\Validator\ConstraintViolationListInterface
-      - Symfony\Component\Validator\Exception\ValidationFailedException
-      - Symfony\Component\Validator\Validator\ValidatorInterface
