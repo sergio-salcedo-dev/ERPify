@@ -1,6 +1,6 @@
 # ERPify PWA Design System
 
-Lean implementation-facing reference for polishing the ERPify back-office PWA. Day-to-day artifact for engineers, and the **visual authority**: the per-axis UX runs under `_bmad-output/planning-artifacts/ux-designs/` are deltas that inherit from this file and define only what they add.
+Lean implementation-facing reference for polishing the ERPify back-office PWA. Day-to-day artifact for engineers, and the **visual authority**: a surface axis (audit, access) inherits everything here and states only what it adds, in its own section below, together with the reason for each rule.
 
 > **Status:** v1, brownfield-safe, applied iteratively. Tokens land first; components consume tokens; composites wrap Shadcn primitives. No big-bang rewrite.
 > **Inspiration:** Linear's restraint principles and palette discipline, applied to an ERP back-office that runs **light-mode by default**. Dark mode is a fully supported variant on a navy-slate band (GitHub-dimmed undertone / Stripe-Vercel navy).
@@ -532,6 +532,30 @@ Both modes are authored as tokens in `globals.css` (`:root` light + `.dark`, eac
 
 ---
 
+## Audit surfaces
+
+Read-only investigation UI over `audit_log` (`context/backoffice/audit/`). Stated elsewhere and not repeated here: the level is not a severity and never takes `{color.danger}` (`AuditLevelBadge.tsx`); state lives only in the URL, `[REDACTED]` is never collapsed into «—», pivots are suppressed on an erased axis, and the `security` row carries a 2 px lateral accent (`docs/architecture-pwa.md` → _Audit investigation (Backoffice)_).
+
+- **Legible text in the anonymised chip and in `[REDACTED]` is `{color.text-muted}`** over `{color.bg-subtle}`; `{color.text-subtle}` / `{color.text-faint}` colour only the icon or the background. Both lighter greys are sub-AA as text; the inertness is carried by the background and the mono treatment, not by a grey nobody can read.
+- **An actor never takes the brand tint or `<MonogramAvatar>`.** An audit actor is a subject of evidence, not a business identity, and an erased actor must never look like a live one; the monogram exception above is for records.
+- **The raw `action` token is always rendered in `{font.mono}` beside the humanised label**, in the row and in the drawer. The token is the evidence and the label only a reading aid; the two tiers that produce the label are `application/humanizeAuditAction.ts`.
+- **The resource is `resourceType · resourceId`, copyable, never a link to its business page.** The record may be deleted or erased by the time anyone reads the trail, and a link would turn an investigation into navigation into business data.
+- **The action filter is free text.** Any suggestion is derived from the data, never a frozen catalogue: the `ROUTE_*` family is open-ended and the taxonomy is meant to emerge from what investigators actually query.
+- **Time is local**: `HH:mm:ss.SSS` in the row under its per-day divider; in the drawer the local date-time, the relative distance, and the full ISO value (microseconds and offset) verbatim and copyable. No UTC toggle — the ISO string already carries the unambiguous instant, so a second rendering would only be a second thing to compare.
+
+## Access surfaces
+
+Login, recovery, invitation acceptance, the status walls and the security emails. The trust contract behind them — pre-identity indistinguishability, token opacity, error specificity by trust level — is [`docs/adr/identity-invitation-lifecycle.md`](../docs/adr/identity-invitation-lifecycle.md) (D10–D12) and [`docs/rules/security.md`](../docs/rules/security.md); it is not restated here. Also already stated at the component: input preserved offline (`OfflineNotice.tsx`), double-submit guard and idempotent retry (`ConnectivityButton.tsx`), focus to the `<h1>` on the success transition (`SecuritySignal.tsx`).
+
+- **Status walls (suspended, deactivated, locked, invalid link) are never `{color.danger}`**, nor alarm icons. They report account state, not an error; `{color.danger}` stays reserved for a real failure of the UI itself (`<ProblemDisplay>`, `<MutationError>`).
+- **Every `AccessWall` variant offers "Sign in"**, besides its specific action. Offered unconditionally it discloses nothing, and it rescues the person whose link died because it had already worked.
+- **Body copy is `--text-md` (16 px), titles Heading 1 / Heading 2** — the one sanctioned exception to the 14 px density default. These screens are read once, in a hurry, often on a phone. The `(auth)` layout does not apply it yet: the forms still inherit the 14 px body.
+- **One-hand ergonomics.** Touch-height inputs (≥ 44 px), the primary action below the fields within thumb reach, the soft keyboard never covering it, autofocus on the first field and focus back on the first invalid field after an error.
+- **A security action confirms with `SecuritySignal` and its next step**, inside `AuthLayout`, never with a toast (see _Never_): a confirmation that disappears leaves the person unsure whether the credential changed.
+- **Security emails are plain and banking-grade**: flat header, one sentence of purpose, one prominent bulletproof CTA, minimal footer, no hero or marketing imagery; system font stack; the button is a literal light/dark pair (`#2f5cd9` / `#6c9bff`), because mail clients load neither webfonts nor CSS variables. The chrome is `api/src/Shared/Mailer/Infrastructure/BulletproofEmailChrome.php`; the replyable sender, `SecuritySenderAddress.php` beside it.
+
+---
+
 ## Governance — when each pattern wins
 
 | Decision                               | Rule                                                                                                                                                                                                                                                                                                                                      |
@@ -639,4 +663,4 @@ A long-term goal is an ESLint rule that flags raw Shadcn primitive use where an 
 - **Light-mode ramp tuning.** The light-mode neutrals (`#f7f8f8`, `#f3f4f5`, `#e9eaec`, `#dcdfe3`, `#bfc3ca`) are first-pass. Refine after the first feature surface ships and we see them in context.
 - **`--color-warning` light value `#d97706`** is provisional; pick a final low-chroma amber when the first warning surface ships.
 
-Updates to this file: PRs that change tokens, primitives, or patterns must update the relevant section here. Rationale for a given axis lives in that axis's UX run (`_bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-06-26/DESIGN.md` for the audit surfaces, `.../ux-ERPify-2026-07-06/DESIGN.md` for access and identity); where a run and this file disagree, this file wins.
+Updates to this file: PRs that change tokens, primitives, or patterns must update the relevant section here. The rationale for a surface axis lives in its section here (_Audit surfaces_, _Access surfaces_), next to the rule it justifies; provenance is the PR history — the audit surfaces shipped in #377 and lost their journey view in #928, the access surfaces arrived in #458.

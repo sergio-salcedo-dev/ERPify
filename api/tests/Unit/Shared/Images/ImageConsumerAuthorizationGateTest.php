@@ -18,8 +18,8 @@ use SplFileInfo;
  * **The decision is the epic's and is not reopened here.** A session is the whole authorization story for
  * this slice: the module holds no owner, cannot tell a company logo from a person's avatar, and there is no
  * consumer relation to vote on — so a voter would be a permission invented ahead of the thing it governs
- * (`epics-images.md`, decision 3 and item 17 of its firewall). What makes that defensible is the SECOND
- * half of the same decision, that the first real consumer brings its own authorization policy.
+ * (`docs/adr/image-read-route-contract.md`, D1). What makes that defensible is the SECOND half of the same
+ * decision, that the first real consumer brings its own authorization policy.
  *
  * **That second half was prose, and prose is not a control.** An external security review named the exact
  * failure it permits: the first consumer wired without an owner check turns a documented provisional
@@ -76,8 +76,8 @@ final class ImageConsumerAuthorizationGateTest extends TestCase
             . 'that no consumer relation exists to vote on. This is the change that ends that argument, so '
             . "it is the change that has to answer it:\n"
             . "  - decide whether this consumer's images are person-denoting, and\n"
-            . '  - give the route an authorization policy, or record in `epics-images.md` why this '
-            . "particular consumer still does not need one.\n"
+            . '  - give the route an authorization policy, or record in `docs/adr/image-read-route-contract.md` '
+            . "(D1) why this particular consumer still does not need one.\n"
             . 'Deleting this test is not one of the options.',
             \implode("\n  ", $consumers),
         ));
