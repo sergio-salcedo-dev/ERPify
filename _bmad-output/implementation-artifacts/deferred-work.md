@@ -55,7 +55,9 @@ Context, already finished and needing nothing: PR #929 (the suite clock pin) mer
 origin: migrated from legacy ledger ("Deferred from: code review of PR #853 — audit write-operation snapshot header (2026-08-26)"), 2026-09-24
 location: api/src/Shared/Audit/Domain/AuditedEntity.php, api/src/Backoffice/Bank/Domain/Entity/Bank.php:118-125
 reason: Both auditAction() implementations suffix _CREATED/_UPDATED/_DELETED mechanically so the two agree today, but nothing stops a future module diverging; not blocking with two audited modules. Trigger: the first auditAction() whose suffix is not one of the three verbs.
-status: open
+status: done 2026-09-24
+resolution: resolved by sweep bundle dw-audit-change-metadata-shape
+resolution-undo: 83fdd0c39cf8bd1d2b727223562a30b0190f4386896a08a9d24f7158115f442b 2026-09-24 7374617475733a206f70656e
 
 **(api/Shared/Audit — redundancia latente) `entry.action` y `metadata.operation` codifican la misma información sin ningún mecanismo que los mantenga de acuerdo.** Ambas implementaciones de `auditAction()` (`Bank`, `BankAccount`) sufijan mecánicamente `_CREATED`/`_UPDATED`/`_DELETED`, así que hoy el kind de escritura es recuperable también del final de `action`. Nada impide que un módulo futuro nombre su acción de otra forma y deje las dos fuentes divergiendo. No bloqueante hoy porque solo hay dos módulos auditados y ambos siguen la convención. Trigger: el primer `auditAction()` cuyo sufijo no termine en uno de los tres verbos. Ref: `api/src/Shared/Audit/Domain/AuditedEntity.php` (contrato), `api/src/Backoffice/Bank/Domain/Entity/Bank.php:118-125`.
 
@@ -308,7 +310,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of the metadata-shape fix (2026-09-22)"), 2026-09-24
 location: api/src/Shared/Audit/Application/AuditChangeDiff.php, api/src/Shared/Audit/Infrastructure/Persistence/AuditWriteCaptureListener.php
 reason: AuditChangeDiff::of() can return ['changes' => []] and the listener writes it unguarded, so isAuditChanges([]) fails into a mute drawer. Not measured that Doctrine delivers such a changeset — a code-constructible branch, not an observed defect. Cheap fix: a non-empty guard in the listener or sealing changes as an object.
-status: open
+status: done 2026-09-24
+resolution: resolved by sweep bundle dw-audit-change-metadata-shape
+resolution-undo: 83fdd0c39cf8bd1d2b727223562a30b0190f4386896a08a9d24f7158115f442b 2026-09-24 7374617475733a206f70656e
 
 **(pwa/backoffice/audit — contrato de cable) Un `changes` vacío anidado sigue viajando como array, y el guard lo rechaza igual.** La mitad de raíz está cerrada — el recurso de detalle expresa hoy `metadata` como `ArrayObject` y el normalizador conserva el objeto vacío, medido contra el stack vivo: `{}` en el cable para una fila sin metadata. Lo que la coacción de raíz no alcanza es una clave anidada: `AuditChangeDiff::of()` devuelve `['changes' => []]` cuando el changeset viene vacío o cuando se descartan todas sus entradas (los tres `continue` del recorrido), y `AuditWriteCaptureListener::capture()` escribe la entrada sin guarda de no-vacío, así que la fila se almacena y se sirve como `{"changes": [], "operation": "UPDATED"}` — y `isAuditChanges([])` cae en el mismo `isObjectRecord` que rechaza arrays, con el mismo drawer mudo. **No está medido que Doctrine llegue a entregar un changeset vacío o íntegramente descartable a esa ruta** (`getScheduledEntityUpdates()` normalmente implica changeset no vacío), así que es una rama construible por el código y no un defecto observado. Arreglo barato si se acepta: una guarda de no-vacío en el listener, o sellar `changes` como objeto. Ref: `api/src/Shared/Audit/Application/AuditChangeDiff.php`, `api/src/Shared/Audit/Infrastructure/Persistence/AuditWriteCaptureListener.php`.
 
@@ -495,3 +499,11 @@ reason: Once hidden while pending, a claim stays preemptible after re-show, so c
 status: open
 
 **(hardNavigate seam) `preemptible` is sticky for the life of the claim, which partly gives back the determinism #830 bought.** Once the document has been hidden while a navigation is pending, that claim stays preemptible even after the tab is visible again and its budget resumes — so for the rest of its life an ordinary concurrent race resolves last-wins rather than first-wins. Deliberate: #831's own scenario is "the user comes back and clicks Sign out", so clearing the flag on re-show would leave that item open. The cost is real and is recorded rather than implied away; revisit if a third `hardNavigate` caller appears, since two callers is what makes the window unobservable today. Ref: `hardNavigate.ts` (`NavigationClaim.preemptible`).
+
+### DW-52: Un metadata.changes almacenado como null o escalar se sirve tal cual y el guard PWA rechaza todo el sobre del detalle.
+origin: spec-deferred 0d11259c1d42
+location: api/src/Backoffice/Audit/Infrastructure/Http/AuditEventDetailResourceMapper.php
+source_spec: `spec-audit-change-metadata-shape.md`
+severity: low
+reason: Preexistente: AuditEventDetailResourceMapper sólo sella arrays; isAuditEventMetadata exige isAuditChanges cuando la clave existe. El listener nunca escribe null/escalar, así que sólo lo produciría otra vía de escritura o una fila corrupta.
+status: open
