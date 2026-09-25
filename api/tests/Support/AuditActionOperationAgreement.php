@@ -17,7 +17,7 @@ use Throwable;
  * two different facts about one write, and a reader filtering by either sees a different trail.
  *
  * The rule, per aggregate: every operation's action ends in `_<OPERATION>` (the case name), and what precedes
- * that suffix — the root — is non-empty and the same for all three operations. It is a spelling convention,
+ * that suffix — the root — is non-empty and the same for every operation. It is a spelling convention,
  * not a vocabulary: the root is the aggregate's own (`BANK`, `BANK_ACCOUNT`), which is what
  * {@see AuditedEntity} leaves to the owning module.
  *

@@ -38,7 +38,9 @@
 #                   The bmad-loop-* skills are seeded separately, from the main
 #                   checkout's .claude/skills only: `bmad-loop init` installs them
 #                   there and the BMad installer never writes them to .agent/skills,
-#                   so the first root above always wins without them. Measured: a
+#                   so the bmad-* seed above, which copies from one root only,
+#                   never carries them. Each is seeded on its own, and one a
+#                   worktree already holds is left alone. Measured: a
 #                   sweep run from a worktree seeded without them answered
 #                   "Unknown command: /bmad-loop-sweep" twice and sat idle until
 #                   its session timeout, and `bmad-loop validate` reported ok.
@@ -197,11 +199,17 @@ worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main
 	else \
 		echo "! the main checkout holds no bmad-* skills in any root — run the BMad installer there; /bmad-* will be Unknown command in this worktree"; \
 	fi; \
-	if ls -d "$$main/.claude/skills"/bmad-loop-*/ >/dev/null 2>&1 && ! ls -d "$$path/.claude/skills"/bmad-loop-*/ >/dev/null 2>&1; then \
+	for skill in "$$main/.claude/skills"/bmad-loop-*/; do \
+		[ -d "$$skill" ] || continue; \
+		name=$$(basename "$$skill"); \
+		[ -e "$$path/.claude/skills/$$name" ] && continue; \
 		mkdir -p "$$path/.claude/skills"; \
-		cp -a "$$main/.claude/skills"/bmad-loop-*/ "$$path/.claude/skills/"; \
-		echo "→ seeded .claude/skills/bmad-loop-* from the main checkout (bmad-loop init installs them there, never in .agent/skills)"; \
-	fi; \
+		if cp -a "$$skill" "$$path/.claude/skills/"; then \
+			echo "→ seeded .claude/skills/$$name from the main checkout (bmad-loop init installs it there, never in .agent/skills)"; \
+		else \
+			echo "! could not seed .claude/skills/$$name — /bmad-loop-* will be Unknown command in this worktree"; \
+		fi; \
+	done; \
 	if [ -d "$$main/_bmad" ] && [ ! -e "$$path/_bmad" ]; then \
 		ln -s ../../../_bmad "$$path/_bmad"; \
 		echo "→ linked _bmad -> the main checkout's install (gitignored; every bmad skill reads it on activation)"; \
