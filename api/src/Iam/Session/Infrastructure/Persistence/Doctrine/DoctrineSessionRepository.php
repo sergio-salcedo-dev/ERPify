@@ -6,6 +6,7 @@ namespace Erpify\Iam\Session\Infrastructure\Persistence\Doctrine;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Exception as DbalException;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Erpify\Iam\Session\Domain\Entity\Session;
@@ -31,13 +32,20 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  *   - any DBAL failure on any statement (a lost connection, a statement timeout, an exhausted pool — all
  *     {@see DbalException}) is converted to the domain {@see SessionStoreUnavailable} (→ 503) by
  *     {@see convertingStoreFailure()}, so a store outage lets the gate fail closed instead of leaking a raw
- *     500. All six methods go through it — reads, the persist/flush, the bulk revokes and the two hard
- *     deletes — because a single request reaches several of them: revoke-others runs a read and then an
+ *     500. All seven methods go through it — reads, the locked read, the persist/flush, the bulk revokes and
+ *     the two hard deletes — because a single request reaches several of them: revoke-others runs a read and then an
  *     UPDATE, and the erasure path admits through `findActiveById` and then deletes through
  *     `deleteAllForUser`. Guarding a subset answers one outage with two different statuses. Every statement
  *     is fixed DQL with no user-supplied fragment, so a DBAL exception here is always infrastructural — a 503
  *     (which still reaches Sentry) is the honest outcome, never masking an application bug. The bulk
  *     revocations are directed DQL UPDATEs (no aggregate hydration, no per-row event).
+ *
+ * Its object coupling reaches PHPMD's threshold of 13 by counting the ORM's own vocabulary — the entity
+ * manager, the query builder, the lock mode, the sort direction, the DBAL failure it converts — which is what
+ * an adapter is for. Splitting the locked read into a second repository to satisfy the metric would put the
+ * one set two eviction paths must agree on behind two classes that could drift apart.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[AsAlias(SessionRepository::class)]
 final readonly class DoctrineSessionRepository implements SessionRepository
@@ -118,6 +126,30 @@ final readonly class DoctrineSessionRepository implements SessionRepository
                 ->getResult()
             ;
         });
+    }
+
+    /**
+     * `SELECT … ORDER BY id FOR UPDATE`: PostgreSQL applies the row locks after the sort, so the rows are
+     * acquired in id order, and a row another transaction revokes while this one waits on it is re-checked
+     * against `status = ACTIVE` when the wait ends and dropped from the result rather than returned stale.
+     */
+    #[Override]
+    public function lockActiveForUser(string $userId): array
+    {
+        /** @var list<string> $ids */
+        $ids = $this->convertingStoreFailure(fn (): mixed => $this->entityManager->createQueryBuilder()
+            ->select('s.id')
+            ->from(Session::class, 's')
+            ->where(self::USER_ID_FILTER)
+            ->andWhere(self::ACTIVE_STATUS_FILTER)
+            ->orderBy('s.id', NativeSortDirection::Ascending)
+            ->setParameter('userId', $userId)
+            ->setParameter('active', SessionStatus::ACTIVE->value)
+            ->getQuery()
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->getSingleColumnResult());
+
+        return \array_map(SessionId::fromString(...), $ids);
     }
 
     #[Override]

@@ -65,8 +65,8 @@
   removal path is the actor-axis erasure below, which matches on `actor_id` and so reaches an acting
   administrator's row only if that administrator's trail is erased. Only the *identity* route is gated: it
   is **refused while they carry `ADMIN`**, so it needs a demotion first, which the ≥1-admin invariant permits
-  only while a second active administrator **exists** — it never requires one to perform it, since
-  self-demotion is unguarded. The `audit:gdpr:erase` command below carries no role check, so it stays a
+  only while a second active administrator **exists**, and needs that administrator to **perform** it, since
+  a self-targeted role change is refused (409 `self-role-change-forbidden`). The `audit:gdpr:erase` command below carries no role check, so it stays a
   removal path even on a single-administrator installation (a separate fact from the CLI writing `ip` and
   `user_agent` null on the rows it mints, which it does, running off-request as `system`). The cost is
   weighed, and carries a revisit trigger, at `AuditErasureEvidence`; what *observes* that trigger is issue

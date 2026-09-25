@@ -161,7 +161,8 @@ folds into it too rather than answering 429.
 | Dead presentation (malformed / unknown selector / lapsed / wrong secret / already consumed / **budget exhausted**) | **400 `invalid-token`** | Six death cases, one byte-identical response — [`InvalidRecoverySecret`](../api/src/Iam/Identity/Domain/Exception/InvalidRecoverySecret.php), an `InvalidInput` `DomainException` overriding `type()` to the shared `invalid-token`. Sharing the type with a dead reset link is the point: this endpoint is anonymous and the whole channel rests on a selector buying denial and never knowledge, so a redemption failure must not even be distinguishable from a dead reset. A per-selector 429 would confirm the selector exists, which is why exhaustion joins the set instead of grading. |
 | Valid secret, identity `SUSPENDED` / `DEACTIVATED` | **403 `account-suspended`** / **`account-deactivated`** | The one IDENTIFIED refusal here. The presenter has already proven possession, so naming the wall reveals nothing they could not learn by redeeming a working secret; the row is **not** consumed and stays live for an attempt after reinstatement. |
 | Session cannot be established | **503 `service-unavailable`** | Raised by the session-minting listener as `SessionStoreUnavailable`. The re-login runs BEFORE the row is retired, so nothing is consumed and the secret is intact — the opposite ordering to the reset surface above, and deliberately: there the mutation had already committed, here it has not. |
-| Session established, the later mutation fails | **5xx**, and the secret stays redeemable | Three state machines and no transaction spanning them. The session is NOT rolled back — the owner has recovered access, which is the objective — but the endpoint does not promise 204 through it. The partial state is retryable: a second redemption completes the persisted cleanup with no fresh mint. |
+| Session established, the later mutation fails | **5xx**, and the secret stays redeemable | Three state machines and no transaction spanning them. The session is NOT rolled back — the owner has recovered access, which is the objective — but the endpoint does not promise 204 through it. The partial state is retryable: a second redemption completes the persisted cleanup with no fresh mint. The eviction of the identity's other sessions is part of that mutation and not best-effort, so a failure there withholds the consumption too. |
+| The redeemed session was revoked before the consuming transaction locked the identity's sessions | **503 `transient-transaction-failure`**, and the secret stays redeemable | [`TransientTransactionFailure`](../api/src/Shared/Persistence/Domain/Exception/TransientTransactionFailure.php), raised by the use case rather than by a database retry — the class's own meaning, "interrupted by a concurrent operation, retry", is exactly this. Another session of the identity signed the fresh one out a moment early; the redemption still evicts every other session (the secret was re-verified under lock) but does not consume, because spending the secret over an owner holding no session is the lockout this edge ends. The endpoint also drops the device's native session on this cause (and only on it — a deadlock answering the same 503 leaves the minted session alive), so the retry is not refused by the admission gate over the revoked session's correlation, and then succeeds. On the `revoke-others` side the same race answers **401 `session-expired`**: a caller whose own row was revoked while its request waited on the lock is refused and revokes nothing. |
 
 Minting (`POST /api/v1/me/recovery-secret`) is authenticated and grades per identity:
 
@@ -200,6 +201,28 @@ No new marker interface joins the contract — the opaque wall reuses `InvalidIn
 not fire and these three tables are the manual NFR26 record. Exactly **one** new `type` is minted across all
 three surfaces, `recovery-secret-already-exists`; every other value here is an existing one reused,
 `invalid-token` deliberately so.
+
+### Users administration — refusals aimed at oneself (`/api/v1/backoffice/users/{id}/…`)
+
+Three administrative writes refuse a target that is the acting administrator's own identity, and erasure a
+fourth. Each is a `Conflict` (**409**) with a `type()` of its own, raised by the use case **before its
+transaction opens**, so a refused call takes no lock, touches no row, publishes no event and writes no audit
+entry. The actor is read from the sealed session through `ActorContextFactory`, never from the request, and
+compared to the route id **case-insensitively** (`ActorContext::isUser()`), so re-casing one's own id does not
+slip past. Only a `user` actor can trip one: the CLI's `system` actor carries no id, and an API key's id names
+the key.
+
+| Route | Wire result | Why |
+|-------|-------------|-----|
+| `PATCH …/{id}/roles` | **409 `self-role-change-forbidden`** | [`SelfRoleChangeForbidden`](../api/src/Iam/Identity/Domain/Exception/SelfRoleChangeForbidden.php). A committed role change revokes every session of its target after the commit without re-checking the caller's own session, so a stolen administrator session admitted before a recovery-secret redemption evicted it could otherwise sign out the session that redemption just established. Refused whatever the set — a widening that keeps `ADMIN`, and a redundant re-send, included. |
+| `PATCH …/{id}/status` | **409 `self-status-change-forbidden`** | [`SelfStatusChangeForbidden`](../api/src/Iam/Identity/Domain/Exception/SelfStatusChangeForbidden.php), for `SUSPENDED` and `DEACTIVATED` alike. Same teardown, same race; and an identity cannot reinstate itself, so no legitimate self-transition is lost. |
+| `POST …/{id}/unlock` | **409 `self-unlock-forbidden`** | [`SelfUnlockForbidden`](../api/src/Iam/Identity/Domain/Exception/SelfUnlockForbidden.php). Unlocking oneself would be a second, credential-independent way into one's own account. |
+| `DELETE …/{id}` (erasure) | **409 `self-erasure-forbidden`** | [`SelfErasureForbidden`](../api/src/Iam/Identity/Domain/Exception/SelfErasureForbidden.php). The subject cannot also survive as the actor its own erasure evidence names. |
+
+These refusals precede **409 `last-active-administrator-protected`**, which therefore answers only a target
+other than the actor — in practice the concurrent case, two administrators acting on each other. No marker
+interface is added (all four reuse `Conflict`), so the drift gate does not fire and this table is the manual
+NFR26 record.
 
 ### Authenticated password change (`POST /api/v1/me/password`)
 

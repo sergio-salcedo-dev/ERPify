@@ -10,6 +10,7 @@ use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -35,6 +36,22 @@ final class PurgeUserSessionsTest extends TestCase
 
         $this->assertSame(2, $deleted);
         $this->assertSame([$userId], $sessions->deleteAllCalls);
+    }
+
+    public function testLocksTheActiveSetInIdOrderBeforeTheDelete(): void
+    {
+        // Same reason as the teardown: the DELETE's scan order is not id order, and the active rows are the
+        // ones a concurrent revocation holds in id order.
+        $sessions = new InMemorySessionRepository();
+        $deletesSeenAtLock = null;
+        $sessions->beforeLockActive = static function () use ($sessions, &$deletesSeenAtLock): void {
+            $deletesSeenAtLock = \count($sessions->deleteAllCalls);
+        };
+
+        (new PurgeUserSessions($sessions))->purge(SessionMother::DEFAULT_USER_ID);
+
+        $this->assertSame(0, $deletesSeenAtLock, 'the rows were deleted before the ordered lock was taken');
+        $this->assertSame([SessionMother::DEFAULT_USER_ID], $sessions->deleteAllCalls);
     }
 
     public function testRejectsAMalformedUserIdBeforeTouchingTheStore(): void

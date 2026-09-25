@@ -6,9 +6,11 @@ namespace Erpify\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
+use Erpify\Iam\Identity\Domain\Exception\SelfStatusChangeForbidden;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
+use Erpify\Shared\Audit\Application\ActorContextFactory;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -38,6 +40,13 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * de-authentication paths never fire; suspending is an access control that must cut live access at once, and
  * the fail-closed session gate only walls the suspended identity once its registry rows are gone. Swallowing a
  * revoke failure (logged for ops) mirrors {@see CompletePasswordReset}: the change already committed.
+ *
+ * **An administrator may never transition their own identity.** The refusal reads the trusted actor from
+ * {@see ActorContextFactory} and runs before the transaction opens, so a self-targeted call touches no row and
+ * takes no lock. That teardown revokes every session of the target without re-checking the caller's own
+ * session, so a self-targeted suspension fired by a stolen administrator session admitted before a
+ * recovery-secret redemption evicted it would sign out the session that redemption has just established. An
+ * identity cannot reinstate itself either, so no legitimate self-targeted transition is lost.
  */
 final readonly class ChangeUserStatus
 {
@@ -47,10 +56,12 @@ final readonly class ChangeUserStatus
         private RevokeSessionsBestEffort $revokeSessions,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
+        private ActorContextFactory $actorContext,
     ) {
     }
 
     /**
+     * @throws SelfStatusChangeForbidden        when the acting administrator targets their own identity (409)
      * @throws LastActiveAdministratorProtected when this is the last active administrator (409)
      * @throws UserNotFound                     when the id resolves to no identity (404)
      */
@@ -62,6 +73,7 @@ final readonly class ChangeUserStatus
     }
 
     /**
+     * @throws SelfStatusChangeForbidden        when the acting administrator targets their own identity (409)
      * @throws LastActiveAdministratorProtected when this is the last active administrator (409)
      * @throws UserNotFound                     when the id resolves to no identity (404)
      */
@@ -78,6 +90,10 @@ final readonly class ChangeUserStatus
     private function transition(string $userId, callable $applyTransition): User
     {
         Uuid::ensure($userId);
+
+        if ($this->actorContext->current()->isUser($userId)) {
+            throw SelfStatusChangeForbidden::forActor($userId);
+        }
 
         $user = $this->transactionManager->transactional(function () use ($userId, $applyTransition): User {
             // Before the target row, never after: the guard below locks the active-admin set in `id` order,

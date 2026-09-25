@@ -10,12 +10,16 @@ use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
+use Erpify\Iam\Identity\Domain\Exception\SelfStatusChangeForbidden;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
+use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -198,11 +202,68 @@ final class ChangeUserStatusTest extends TestCase
         $this->makeUseCase($repository, $directory, $eventBus, $sessions)->suspend(UserMother::DEFAULT_ID);
     }
 
+    // UserMother's id carries hex letters, so the upper-cased rows are the same UUID in a different case.
+    #[TestWith(['suspend', UserMother::DEFAULT_ID])]
+    #[TestWith(['deactivate', UserMother::DEFAULT_ID])]
+    #[TestWith(['suspend', '0190A1B2-C3D4-7E5F-8A9B-0C1D2E3F4A5B'])]
+    #[TestWith(['deactivate', '0190A1B2-C3D4-7E5F-8A9B-0C1D2E3F4A5B'])]
+    public function testAnAdministratorCannotTransitionTheirOwnIdentity(string $transition, string $targetId): void
+    {
+        $user = UserMother::create();
+        $repository = new InMemoryUserRepository($user);
+        $eventBus = new RecordingEventBus();
+        $sessions = new InMemorySessionRepository();
+        // Other administrators remain, so the last-admin guard would let this through: only the self-target
+        // refusal stands between the request and the transition.
+        $directory = new InMemoryActiveAdministratorDirectory([
+            UserMother::DEFAULT_ID => true,
+            self::OTHER_ADMIN_ID => true,
+        ]);
+        $useCase = $this->makeUseCase(
+            $repository,
+            $directory,
+            $eventBus,
+            $sessions,
+            ActorContext::forUser(UserMother::DEFAULT_ID),
+        );
+
+        try {
+            'suspend' === $transition ? $useCase->suspend($targetId) : $useCase->deactivate($targetId);
+            $this->fail('Expected SelfStatusChangeForbidden.');
+        } catch (SelfStatusChangeForbidden) {
+            // refused before the transaction opens
+        }
+
+        $this->assertSame(0, $directory->setLocksTaken);
+        $this->assertSame([], $repository->forUpdateCalls);
+        $this->assertSame(IdentityStatus::ACTIVE, $user->status());
+        $this->assertSame([], $repository->saved);
+        $this->assertSame([], $eventBus->publishedEvents);
+        $this->assertSame([], $sessions->revokeAllCalls);
+    }
+
+    public function testAnAdministratorMaySuspendAnotherIdentity(): void
+    {
+        $user = UserMother::create();
+        $directory = new InMemoryActiveAdministratorDirectory([]);
+
+        $changed = $this->makeUseCase(
+            new InMemoryUserRepository($user),
+            $directory,
+            new RecordingEventBus(),
+            new InMemorySessionRepository(),
+            ActorContext::forUser(self::OTHER_ADMIN_ID),
+        )->suspend(UserMother::DEFAULT_ID);
+
+        $this->assertSame(IdentityStatus::SUSPENDED, $changed->status());
+    }
+
     private function makeUseCase(
         InMemoryUserRepository $repository,
         InMemoryActiveAdministratorDirectory $directory,
         RecordingEventBus $eventBus,
         InMemorySessionRepository $sessions,
+        ?ActorContext $actor = null,
     ): ChangeUserStatus {
         return new ChangeUserStatus(
             $repository,
@@ -210,6 +271,7 @@ final class ChangeUserStatusTest extends TestCase
             $this->revokeSessions($sessions),
             $eventBus,
             new InlineTransactionManager(),
+            new FixedActorContextFactory($actor ?? ActorContext::system()),
         );
     }
 

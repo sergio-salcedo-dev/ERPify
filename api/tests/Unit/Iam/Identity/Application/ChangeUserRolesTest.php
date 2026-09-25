@@ -9,16 +9,20 @@ use Erpify\Iam\Identity\Application\ChangeUserRoles;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
+use Erpify\Iam\Identity\Domain\Exception\SelfRoleChangeForbidden;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -290,12 +294,80 @@ final class ChangeUserRolesTest extends TestCase
         ;
     }
 
+    /**
+     * @param list<Role> $roles
+     */
+    #[DataProvider('provideAnAdministratorCannotChangeTheirOwnRolesCases')]
+    public function testAnAdministratorCannotChangeTheirOwnRoles(string $targetId, array $roles): void
+    {
+        $user = UserMother::create(roles: [Role::ADMIN]);
+        $repository = new InMemoryUserRepository($user);
+        $directory = new InMemoryActiveAdministratorDirectory([
+            UserMother::DEFAULT_ID => true,
+            self::OTHER_ADMIN_ID => true,
+        ]);
+        $eventBus = new RecordingEventBus();
+        $sessions = new InMemorySessionRepository();
+        $audit = new RecordingAuditLogger();
+
+        try {
+            $this->makeUseCase(
+                $repository,
+                $directory,
+                $eventBus,
+                $sessions,
+                $audit,
+                ActorContext::forUser(UserMother::DEFAULT_ID),
+            )->run($targetId, ...$roles);
+            $this->fail('Expected SelfRoleChangeForbidden.');
+        } catch (SelfRoleChangeForbidden) {
+            // refused before the transaction opens
+        }
+
+        // Nothing is touched: no lock (set or row), no write, no event, no compliance row, no teardown.
+        $this->assertSame(0, $directory->setLocksTaken);
+        $this->assertSame([], $repository->forUpdateCalls);
+        $this->assertSame([Role::ADMIN], $user->roles());
+        $this->assertSame([], $repository->saved);
+        $this->assertSame([], $eventBus->publishedEvents);
+        $this->assertSame([], $audit->records);
+        $this->assertSame([], $sessions->revokeAllCalls);
+    }
+
+    /**
+     * @return iterable<string, array{string, list<Role>}>
+     */
+    public static function provideAnAdministratorCannotChangeTheirOwnRolesCases(): iterable
+    {
+        // A demotion, a widening and a redundant re-send: the refusal is about WHO is targeted, never about
+        // what the set would do, so the one shape the administrator invariant allows is refused too.
+        yield 'demotion' => [UserMother::DEFAULT_ID, [Role::EDITOR]];
+        yield 'widening' => [UserMother::DEFAULT_ID, [Role::ADMIN, Role::EDITOR]];
+        yield 'redundant re-send' => [UserMother::DEFAULT_ID, [Role::ADMIN]];
+        // UserMother's id carries hex letters, so upper-casing it is the same UUID in a different case.
+        yield 'own id re-cased' => [\strtoupper(UserMother::DEFAULT_ID), [Role::EDITOR]];
+    }
+
+    public function testAnAdministratorMayChangeAnotherIdentitysRoles(): void
+    {
+        $user = UserMother::create(roles: [Role::VIEWER]);
+
+        $changed = $this->makeUseCase(
+            new InMemoryUserRepository($user),
+            new InMemoryActiveAdministratorDirectory([]),
+            actor: ActorContext::forUser(self::OTHER_ADMIN_ID),
+        )->run(UserMother::DEFAULT_ID, Role::EDITOR);
+
+        $this->assertSame([Role::EDITOR], $changed->roles());
+    }
+
     private function makeUseCase(
         InMemoryUserRepository $repository,
         InMemoryActiveAdministratorDirectory $directory,
         ?RecordingEventBus $eventBus = null,
         ?InMemorySessionRepository $sessions = null,
         ?RecordingAuditLogger $audit = null,
+        ?ActorContext $actor = null,
     ): ChangeUserRoles {
         return new ChangeUserRoles(
             $repository,
@@ -304,6 +376,7 @@ final class ChangeUserRolesTest extends TestCase
             $eventBus ?? new RecordingEventBus(),
             $audit ?? new RecordingAuditLogger(),
             new InlineTransactionManager(),
+            new FixedActorContextFactory($actor ?? ActorContext::system()),
         );
     }
 

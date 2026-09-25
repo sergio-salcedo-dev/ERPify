@@ -26,6 +26,11 @@ final readonly class PurgeUserSessions
     {
         Uuid::ensure($userId);
 
+        // The active rows are the ones a concurrent revocation contends for, so they are taken first in the id
+        // order every such revocation uses; the DELETE then meets only rows this transaction already holds or
+        // that no revocation reaches. The lock needs the caller's transaction, which the erasure provides.
+        $this->sessions->lockActiveForUser($userId);
+
         return $this->sessions->deleteAllForUser($userId);
     }
 }

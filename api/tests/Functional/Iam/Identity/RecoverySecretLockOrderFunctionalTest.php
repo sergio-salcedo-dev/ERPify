@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Iam\Identity;
 
+use Closure;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\ORM\EntityManagerInterface;
+use Erpify\Iam\Identity\Application\KeepOnlyCurrentSession;
 use Erpify\Iam\Identity\Application\ProveCurrentPassword;
 use Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort;
 use Erpify\Iam\Identity\Application\RedeemRecoverySecret;
@@ -18,11 +20,16 @@ use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\RecoverySecretRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
+use Erpify\Iam\Session\Application\EvictOtherSessions;
+use Erpify\Iam\Session\Domain\Entity\Session;
+use Erpify\Iam\Session\Domain\Repository\SessionRepository;
+use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -67,6 +74,10 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  *     rather than false — which the first question catches, and is why the two mutations are not the same
  *     experiment.
  *
+ * Redemption also takes a third table, `iam_session`, last: its eviction of the identity's other sessions is
+ * observed here from the same second connection, because the in-memory journal can only say the locked read
+ * RAN, never that the adapter held the survivor's row while it decided.
+ *
  * The audit logger is doubled: it sits past the observation point and would otherwise leave `security` rows
  * in a table other functional tests read. Everything touching the two tables under test is the container's
  * own service.
@@ -85,6 +96,12 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
 
     private ?Connection $outside = null;
 
+    /**
+     * The request's session correlation, which the session seam writes and the eviction reads back — the
+     * double of the Symfony session bag a kernel test has no request to hold.
+     */
+    private RecordingCurrentSessionReference $correlation;
+
     #[Override]
     protected function setUp(): void
     {
@@ -94,6 +111,7 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
         $this->assertInstanceOf(EntityManagerInterface::class, $entityManager);
         $this->entityManager = $entityManager;
         $this->connection = $entityManager->getConnection();
+        $this->correlation = new RecordingCurrentSessionReference();
     }
 
     protected function tearDown(): void
@@ -125,9 +143,7 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
         $signedIn = [];
         // The seam records rather than ignores: this test is about locks, but a redemption that never
         // reached its login would take those locks and prove nothing about the flow they belong to.
-        $redeem->redeem($plaintext, static function (string $email) use (&$signedIn): void {
-            $signedIn[] = $email;
-        });
+        $redeem->redeem($plaintext, $this->sessionSeam($userId, $signedIn));
 
         $this->assertCount(1, $signedIn, 'the flow never reached the session seam');
 
@@ -199,6 +215,46 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
     }
 
     /**
+     * The eviction against the real adapter: every other session of the identity is revoked in the same
+     * transaction as the consumption, the redeemed one survives, and — the half no in-memory double can show —
+     * the survivor's row is really held under a row lock while the decision is taken. The UPDATE locks the rows
+     * it flips on its own; the survivor is locked ONLY by the ordered locked read, so a probe finding it free is
+     * a read that stopped locking, which would reopen the race with a concurrent "sign out my other devices".
+     */
+    #[Test]
+    public function redeemingEvictsEveryOtherSessionUnderTheLockAndKeepsTheRedeemedOne(): void
+    {
+        [$userId, $plaintext] = $this->seedIdentityHoldingASecret();
+        $stolen = $this->persistActiveSession($userId);
+
+        $survivorLockedWhileEvicting = null;
+        $redeem = $this->redeemWithProbe(
+            static function (): void {
+            },
+            static function (): void {
+            },
+            function () use (&$survivorLockedWhileEvicting): void {
+                $survivor = $this->correlation->get();
+                $this->assertInstanceOf(SessionId::class, $survivor);
+                $survivorLockedWhileEvicting = $this->isLocked('iam_session', $survivor->toString());
+            },
+        );
+
+        $signedIn = [];
+        $redeem->redeem($plaintext, $this->sessionSeam($userId, $signedIn));
+
+        $redeemed = $this->correlation->get();
+        $this->assertInstanceOf(SessionId::class, $redeemed);
+        $this->assertSame('ACTIVE', $this->sessionStatus($redeemed->toString()), 'the redemption evicted its own');
+        $this->assertSame('REVOKED', $this->sessionStatus($stolen), 'a session predating the redemption survived');
+        $this->assertTrue(
+            $survivorLockedWhileEvicting,
+            'the survivor was not held while the others were revoked, so a concurrent revoke can still take it',
+        );
+        $this->assertSame(0, $this->countSecretsFor($userId), 'the secret survived a redemption that succeeded');
+    }
+
+    /**
      * An `ACTIVE`, credentialed identity holding one recovery secret — the starting state of both flows.
      *
      * @return array{string, string, string} user id, the `<selector>.<secret>` plaintext, and the selector
@@ -230,11 +286,59 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
     }
 
     /**
-     * @param callable(): void $onArrival
-     * @param callable(): void $onLeaving
+     * What `SessionMintingSuccessListener` does on a real login — insert the `iam_session` row and stash its
+     * id as the request's correlation — against the real table, so the eviction has a real survivor to keep.
+     *
+     * @param list<string> $signedIn
+     *
+     * @return Closure(string): void
      */
-    private function redeemWithProbe(callable $onArrival, callable $onLeaving): RedeemRecoverySecret
+    private function sessionSeam(string $userId, array &$signedIn): Closure
     {
+        return function (string $email) use ($userId, &$signedIn): void {
+            $signedIn[] = $email;
+            $this->correlation->set(SessionId::fromString($this->persistActiveSession($userId)));
+        };
+    }
+
+    private function persistActiveSession(string $userId): string
+    {
+        $clock = self::getContainer()->get(Clock::class);
+        $this->assertInstanceOf(Clock::class, $clock);
+
+        $id = SessionId::generate()->toString();
+        $session = Session::start($id, $userId, Uuid::generate(), 'test-device', null, $clock->now()->modify('+1 day'));
+        $session->pullDomainEvents();
+
+        $this->entityManager->persist($session);
+        $this->entityManager->flush();
+        $this->entityManager->clear();
+
+        return $id;
+    }
+
+    private function sessionStatus(string $sessionId): string
+    {
+        $status = $this->connection->fetchOne(
+            'SELECT status FROM iam_session WHERE id = CAST(:id AS UUID)',
+            ['id' => $sessionId],
+        );
+        $this->assertIsString($status);
+
+        return $status;
+    }
+
+    /**
+     * @param callable(): void      $onArrival
+     * @param callable(): void      $onLeaving
+     * @param callable(): void|null $onEvicting runs when the eviction publishes its fact — after the locked read
+     *                                          and the UPDATE, before the consuming transaction commits
+     */
+    private function redeemWithProbe(
+        callable $onArrival,
+        callable $onLeaving,
+        ?callable $onEvicting = null,
+    ): RedeemRecoverySecret {
         $users = self::getContainer()->get(UserRepository::class);
         $secrets = self::getContainer()->get(RecoverySecretRepository::class);
         $transactions = self::getContainer()->get(TransactionManager::class);
@@ -249,11 +353,23 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
         $this->assertInstanceOf(EventBus::class, $eventBus);
         $this->assertInstanceOf(Clock::class, $clock);
 
+        $sessions = self::getContainer()->get(SessionRepository::class);
+        $this->assertInstanceOf(SessionRepository::class, $sessions);
+
         return new RedeemRecoverySecret(
             $users,
             ProbingRecoverySecretRepository::aroundSelectorLock($secrets, $onArrival(...), $onLeaving(...)),
             new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
             $revokeSessions,
+            new KeepOnlyCurrentSession(
+                $this->correlation,
+                new EvictOtherSessions(
+                    $sessions,
+                    new ProbingEventBus($eventBus, ($onEvicting ?? static function (): void {
+                    })(...)),
+                    $clock,
+                ),
+            ),
             $eventBus,
             $transactions,
             $clock,

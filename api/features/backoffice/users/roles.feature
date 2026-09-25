@@ -15,8 +15,8 @@ Feature: Assign an identity's roles
 
   # Fixtures are restored per feature, not per scenario, so every mutated target below (trent, sam, dan) is one
   # this feature never logs in as — a committed change revokes that identity's registry session, which would
-  # strand a later scenario that needs it. The single exception is the administrator, mutated only by the last
-  # scenario for exactly this reason.
+  # strand a later scenario that needs it. The exceptions are the administrator, suspended, and victor — the
+  # viewer login — promoted, both by SQL and only in the last scenario for exactly this reason.
   Scenario: An administrator replaces a member's role set
     Given I am logged in as an administrator
     And the stored events are cleared
@@ -48,13 +48,14 @@ Feature: Assign an identity's roles
     And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_CHANGED' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d' AND metadata = jsonb_build_object('previous_roles', jsonb_build_array('MANAGER'), 'new_roles', jsonb_build_array('AUDIT_READER', 'EDITOR'))"
     And there should have 1 records in SQL result
     # Budget canary: the admission gate read, the active-admin set lock, the wrapped write (+2 BEGIN/COMMIT)
-    # and the wrapped session revoke (+2), with NO guard read — the target is not an administrator, so the
+    # and the wrapped session revoke (+3, the ordered lock on its active sessions included), with NO
+    # guard read — the target is not an administrator, so the
     # directory is never ASKED its question, only told to take the lock. That lock is unconditional on purpose:
     # it fixes the order in which this transaction and a concurrent one acquire `identity_user` rows, and an
     # order that only holds when the guard happens to run is not an order.
     # One of the writes is the USER_ROLES_CHANGED insert, written synchronously because it is `security`.
     # A shift means an added round trip; re-measure rather than nudging the number.
-    And 23 requests got executed for doctrine connection "default"
+    And 24 requests got executed for doctrine connection "default"
 
   # Roles are orthogonal to the identity lifecycle, so a suspended member is re-roled like any other — the new
   # set simply stays inert until the identity can act again.
@@ -132,20 +133,37 @@ Feature: Assign an identity's roles
     Then the response status code should be 403
     And the JSON node "type" should be equal to "forbidden"
 
-  Scenario: Demoting the last active administrator is refused with 409 and nothing changes
+  # A committed change revokes every session of its target after the commit, so a change aimed at oneself signs
+  # the actor out everywhere — including a session a recovery-secret redemption has just established, when the
+  # request came from a stolen session admitted before the redemption evicted it. Refused before any row is
+  # touched, whatever the set: a widening that keeps ADMIN, which the administrator invariant would allow, is
+  # refused too.
+  Scenario Outline: An administrator cannot change their own roles — 409 self-role-change-forbidden
     Given I am logged in as an administrator
     And the stored events are cleared
-    When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66/roles" with body:
+    When I send a PATCH request to "/backoffice/users/<id>/roles" with body:
     """
     {
-      "roles": ["EDITOR"]
+      "roles": <roles>
     }
     """
     Then the response status code should be 409
     And the header "Content-Type" should be equal to "application/problem+json"
-    And the JSON node "type" should be equal to "last-active-administrator-protected"
+    And the JSON node "type" should be equal to "self-role-change-forbidden"
     And there should be 0 events stored named "erpify.iam.identity.roles-changed"
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
+    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'USER_ROLES_CHANGED' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
+    And there should have 0 records in SQL result
+    And I execute the SQL query "SELECT id FROM identity_user WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66' AND roles::jsonb = jsonb_build_array('ADMIN')"
+    And there should have 1 records in SQL result
+
+    # The second row spells the actor's own id in upper case: RFC 4122 hex is case-insensitive, so it is the
+    # same identity and must not slip past the refusal.
+    Examples:
+      | id                                   | roles               |
+      | 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66 | ["EDITOR"]          |
+      | 0190A1B2-C3D4-7E5F-8A9B-0C1D2E3F4A66 | ["ADMIN", "EDITOR"] |
+      | 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66 | ["ADMIN"]           |
 
   Scenario Outline: A malformed set is a 422, before the domain is touched
     Given I am logged in as an administrator
@@ -241,21 +259,27 @@ Feature: Assign an identity's roles
     And there should be 0 events stored named "erpify.iam.identity.roles-changed"
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
 
-  # The administrator seeded here is the only ACTIVE one, so an unconditionally-evaluated guard would refuse
-  # this with a 409. Keeping ADMIN takes nobody out of the active-admin pool, so the guard is never consulted
-  # and the widening is allowed. Kept LAST in the feature: it is the one scenario that mutates the identity
-  # every other scenario logs in as, and the commit revokes that identity's registry session.
-  Scenario: The sole administrator may widen its own set because the guard does not apply
+  # Since an actor may not target itself, the last-admin guard can only be met over sequential HTTP by an actor that no
+  # longer counts: the seeded administrator is suspended beneath its live session (the admission gate reads the
+  # session row, never the status), and victor is promoted to be the one ACTIVE administrator left. Demoting
+  # him would drain the pool. The shape the guard exists for — two administrators acting on each other
+  # concurrently — is not drivable here. Kept LAST in the feature: it suspends the identity every other
+  # scenario logs in as.
+  Scenario: Demoting the last active administrator is refused with 409 and nothing changes
     Given I am logged in as an administrator
     And the stored events are cleared
-    When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66/roles" with body:
+    And I execute the SQL query "UPDATE identity_user SET roles = jsonb_build_array('ADMIN')::json WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e'"
+    And I execute the SQL query "UPDATE identity_user SET status = 'SUSPENDED' WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
+    And I execute the SQL query "SELECT id FROM identity_user WHERE status = 'ACTIVE' AND roles::jsonb @> jsonb_build_array('ADMIN')"
+    And there should have 1 records in SQL result
+    When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/roles" with body:
     """
     {
-      "roles": ["ADMIN", "EDITOR"]
+      "roles": ["EDITOR"]
     }
     """
-    Then the response status code should be 200
-    And the JSON node "data.roles" should have 2 elements
-    And the JSON node "data.roles[0]" should be equal to "ADMIN"
-    And the JSON node "data.roles[1]" should be equal to "EDITOR"
-    And there should be 1 event stored for aggregate "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66" named "erpify.iam.identity.roles-changed"
+    Then the response status code should be 409
+    And the header "Content-Type" should be equal to "application/problem+json"
+    And the JSON node "type" should be equal to "last-active-administrator-protected"
+    And there should be 0 events stored named "erpify.iam.identity.roles-changed"
+    And there should be 0 events stored named "erpify.iam.session.all-revoked"

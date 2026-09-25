@@ -61,7 +61,8 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * being merged into one operation.
  *
  * Erasing only the actor axis would leave the fresh pseudonym beside the real id in any row where the subject
- * is both — a user changing their own roles — which is a reversible crosswalk, not a cosmetic gap. A failure
+ * is both — a role change the subject once made to their own identity is such a row — which is a reversible
+ * crosswalk, not a cosmetic gap. A failure
  * in any link rolls everything back — no half-erased identity, no half-anonymised trail, no orphaned session
  * PII — and re-running is safe.
  *
@@ -313,11 +314,7 @@ final readonly class FulfilIdentityErasure
 
     private function refuseSelfErasure(string $subjectId): void
     {
-        $actorId = $this->actorContext->current()->actorId;
-
-        // RFC 4122 hex is case-insensitive: the route id and the sealed actor id can spell one UUID in different
-        // case, so compare case-insensitively (as the ≥1-admin directory does) — a `===` here would be bypassable.
-        if (null !== $actorId && 0 === \strcasecmp($actorId, $subjectId)) {
+        if ($this->actorContext->current()->isUser($subjectId)) {
             throw SelfErasureForbidden::forActor($subjectId);
         }
     }

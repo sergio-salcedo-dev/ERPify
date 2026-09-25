@@ -6,10 +6,12 @@ namespace Erpify\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
+use Erpify\Iam\Identity\Domain\Exception\SelfRoleChangeForbidden;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Audit\Application\ActorContextFactory;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
@@ -41,6 +43,15 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  *    unidirectional the way the identity lifecycle is. It short-circuits before mutating, so a redundant save
  *    neither writes, nor emits an event, nor — the reason this matters — tears down live sessions.
  *
+ * **An administrator may never change their own roles.** The refusal reads the trusted actor from
+ * {@see ActorContextFactory} and runs before the transaction opens, so a self-targeted call touches no row,
+ * takes no lock and writes no audit entry — whatever set it asks for, a widening or a redundant re-send
+ * included. The reason is the teardown below: it revokes every session of the target after the commit without
+ * re-checking that the caller's own session is still alive, so a self-targeted change fired by a stolen
+ * administrator session that was admitted before a recovery-secret redemption evicted it would revoke the
+ * session that redemption has just established. Nothing a self-targeted change could legitimately buy is worth
+ * that; another administrator makes it.
+ *
  * The post-commit revoke is defence in depth here, not the only barrier. A changed role set already
  * de-authenticates at the firewall — `SecurityUser::isEqualTo()` compares the role set the session carries
  * against the one just reloaded, so the next request of the affected identity drops its session — but that
@@ -69,16 +80,22 @@ final readonly class ChangeUserRoles
         private EventBus $eventBus,
         private AuditLogger $auditLogger,
         private TransactionManager $transactionManager,
+        private ActorContextFactory $actorContext,
     ) {
     }
 
     /**
+     * @throws SelfRoleChangeForbidden          when the acting administrator targets their own identity (409)
      * @throws LastActiveAdministratorProtected when demoting the last active administrator (409)
      * @throws UserNotFound                     when the id resolves to no identity (404)
      */
     public function run(string $userId, Role ...$roles): User
     {
         Uuid::ensure($userId);
+
+        if ($this->actorContext->current()->isUser($userId)) {
+            throw SelfRoleChangeForbidden::forActor($userId);
+        }
 
         [$user, $replaced] = $this->transactionManager->transactional(
             function () use ($userId, $roles): array {

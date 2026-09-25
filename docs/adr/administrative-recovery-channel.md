@@ -160,7 +160,7 @@ replaces B1 without changing a line here.
 
 Raising the floor to ≥2 is the only variant that breaks something. Erasure refuses any subject holding
 `ADMIN` (`FulfilIdentityErasure.php:135-137`), so erasing an administrator requires demoting them first,
-and demotion consults `survivesRemovalOf` (`ChangeUserRoles.php:186`, `ChangeUserStatus.php:91`).
+and demotion consults `survivesRemovalOf` (`ChangeUserRoles::guardActiveAdministratorsSurvive()`, `ChangeUserStatus::transition()`).
 With a floor of 2, neither of exactly two administrators is demotable and erasing one would need a
 **third**. An invariant that radiates side effects into an unrelated process is mis-chosen: it should
 close the problem that motivated it, and this one does not close #602 at all.
@@ -212,8 +212,9 @@ nothing exercisable travels on it.
 *Amendment (2026-08-28, on delivering the channel.)* B1 is what shipped, as an aggregate of its own
 (`identity_recovery_secret`, one row per identity): minted from a live session against a re-proof of the
 current password, shown in clear exactly once in the minting response, redeemed anonymously to establish a
-session and clear the lockout. **This does not promote B1 from mechanism to invariant** — D3 still stands,
-and anything satisfying I-1 and I-2 replaces it without changing a line above.
+session and clear the lockout (and, since D10, to evict every other session). **This does not promote B1 from
+mechanism to invariant** — D3 still stands, and anything satisfying I-1 and I-2 replaces it without changing a line
+above.
 
 How it meets the two invariants, concretely: the redemption path spends `token_action_per_selector` and
 nothing else, so no budget on it is keyed by an address or an identity (I-1); and minting is reachable only
@@ -277,10 +278,12 @@ Discarded, each for a measured reason:
   no body on `delete`, and widening a shared port for a single caller is the abstraction the Rule of Three
   refuses. Hence `POST /me/recovery-secret/revoke`, spelled as a verb like every other action sub-path here.
 
-What it costs: an owner who has just exhausted the shared budget by mistyping waits out the window before
-they can revoke a secret they believe is compromised. That residual is **self-inflicted only** — all three
-routes that drain the bucket require a live session, so it cannot be induced from outside — and it is bounded
-and self-healing, against a loss that was permanent.
+What it costs: an owner whose shared budget has just been spent waits out the window before they can revoke a
+secret they believe is compromised. All three routes that drain the bucket require a live session, so it
+cannot be induced from _outside_ — but it is **not** self-inflicted only: a stolen session is a live session,
+and it spends the bucket with any value of `currentPassword`, because the controller consumes before the
+proof. It is bounded and self-healing — it ends when that session is evicted (`revoke-others`, or a
+redemption per D10), and eviction spends no budget — against a loss that was permanent.
 
 A second-order consequence, named because it is the expensive one: reading the credential forces the user
 row, so revocation becomes the third path taking both locks and must take them in the order minting and
@@ -313,6 +316,65 @@ would be compatible with I-1 and is the shape to reach for if this ever needs ob
 built now: the `observability` stream has no rotation, no TTL and no declared owner of deletion — the same
 reason a caller's string was refused that stream elsewhere in this repository — so adding a channel there is a
 decision of its own and not a detail of this one.
+
+## D10 — Redemption evicts every other session, atomically with the consumption
+
+*Amendment (2026-09-24, #602.)* Before this amendment, redemption consumed the secret and established a session
+while evicting nobody. `POST /sessions/revoke-others` carries no budget by design, so a stolen session survived the
+redemption and could revoke the owner's fresh session in a loop: owner locked out again, secret spent, and a
+replacement needing the very session just lost.
+
+**The decision: the consuming transaction revokes every other active session of the identity, after the
+secret is re-verified under lock and before it is retired, so neither commits without the other.** Lock
+order is `identity_user` → `identity_recovery_secret` → `iam_session`, the order the identity erasure already
+takes the first and last in. The seam is Session's `EvictOtherSessions`, reached from Identity through
+`KeepOnlyCurrentSession`, which names the survivor from the correlation the login stashed — no session id
+crosses the login seam and Identity never touches the session store.
+
+Two properties the placement alone does not give, each pinned:
+
+- **The race is closed on both sides of one lock.** Every multi-row writer of an identity's active sessions — both
+  "revoke the others" paths, the revoke-everything teardown and the erasure purge — first takes them `status =
+  ACTIVE ORDER BY id FOR UPDATE`, so no two of them can wait on each other in a cycle. `revoke-others` refuses (401
+  `session-expired`) a caller whose own row was revoked while it waited; without that, a request admitted a moment
+  before the eviction revoked the redeemed session after it committed. And a redemption whose own session was
+  revoked before it took the lock evicts the rest, **withholds** the consumption and answers 503
+  `transient-transaction-failure`: the retry meets nobody left to interfere, where consuming would have stranded the
+  owner. The endpoint drops the device's native session on that cause, or the retry would carry the revoked
+  session's correlation into the admission gate and be refused before reaching the route. That outcome records `AllSessionsRevoked` (nothing was kept) and a `RECOVERY_SECRET_REDEMPTION_INTERRUPTED`
+  audit row.
+- **It is not best-effort**, unlike the credential-change teardown. That one can swallow its failure because
+  `refreshUser` de-authenticates the old sessions anyway; a redemption changes no credential, so the eviction
+  is the property itself and its failure rolls the consumption back, leaving the new session and a live
+  secret.
+
+Discarded: evicting **before** consuming, in its own transaction — a redemption that then fails because the
+owner revoked the secret mid-flight would have signed the owner out through an interleaving an attacker can
+provoke, the radius D7's compensation exists to avoid; evicting **after** the commit, best-effort — the
+consumption would stand over sessions still alive, which is the defect; and a limiter on `revoke-others` —
+it is the one edge an adversary cannot spend.
+
+**A self-targeted role or status change is refused (2026-09-25).** Those two writes tear down every session of
+their target after their own commit without re-checking the caller, so an administrator's stolen session
+admitted before the eviction could aim one at its OWN identity, queue on the user row, and revoke the redeemed
+session once the redemption committed. Both now answer 409 (`self-role-change-forbidden`,
+`self-status-change-forbidden`) before their transaction opens when the target is the acting user, compared
+case-insensitively — the shape `self-unlock-forbidden` and `self-erasure-forbidden` already had. Discarded:
+re-checking the caller's session under the ordered `iam_session` lock inside each write, which would put a
+session lock into two Identity use cases for a target nobody legitimately needs, and would still have to
+decide what a self-change that survives the re-check may do; a self-targeted change has no use worth that
+(another administrator makes it, and an identity cannot reinstate itself).
+
+What still survives: everything the stolen session aims at somebody else — identities and grants it planted,
+administrators it demoted or suspended — which no eviction reaches; and an administrator it planted keeps
+sessions the owner's redemption does not evict, so it can still suspend or demote the owner afterwards,
+revoking the redeemed session (§7 of the security checklist).
+
+What it costs: a **leaked** secret now signs the owner out as well as admitting its holder, and while the
+same attacker holds the email-keyed lockout the owner's password cannot bring them back. Before, the owner
+kept their session through a thief's redemption and could evict the thief, who had nothing left to return
+with. The trade is taken because the secret is shown once and held offline, while a session cookie rides
+every request; what remains open for #602 is recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §7.
 
 ## Falsification
 

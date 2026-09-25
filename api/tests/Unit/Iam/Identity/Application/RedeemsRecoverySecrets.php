@@ -6,12 +6,14 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use Closure;
 use DateTimeImmutable;
+use Erpify\Iam\Identity\Application\KeepOnlyCurrentSession;
 use Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort;
 use Erpify\Iam\Identity\Application\RedeemRecoverySecret;
 use Erpify\Iam\Identity\Application\RevokeCurrentSessionBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\GeneratedRecoverySecret;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Iam\Session\Application\EvictOtherSessions;
 use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\SessionId;
@@ -189,6 +191,8 @@ trait RedeemsRecoverySecrets
         InMemoryRecoverySecretRepository $secrets,
         ?RecordingEventBus $eventBus = null,
     ): RedeemRecoverySecret {
+        $eventBus ??= new RecordingEventBus();
+
         return new RedeemRecoverySecret(
             $users,
             $secrets,
@@ -202,7 +206,13 @@ trait RedeemsRecoverySecrets
                 ),
                 $this->logger,
             ),
-            $eventBus ?? new RecordingEventBus(),
+            // The eviction publishes onto the redemption's own bus, because production publishes both inside
+            // one transaction: a case asserting what a redemption emitted sees the eviction's fact beside it.
+            new KeepOnlyCurrentSession(
+                $this->currentSession,
+                new EvictOtherSessions($this->sessions, $eventBus, FixedClock::at(self::NOW)),
+            ),
+            $eventBus,
             new InlineTransactionManager(),
             FixedClock::at(self::NOW),
         );
