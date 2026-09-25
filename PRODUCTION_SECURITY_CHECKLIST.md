@@ -470,7 +470,7 @@ you change anything here.
       because minting runs only **after** the retire-then-act transaction commits). The opaque
       `<invitationId>.<secret>` token is **never rendered, logged, or persisted raw** — only its SHA-256 digest is
       stored (`iam_invitation.token_hash`). Every dead-token case (used, revoked, expired, already-accepted,
-      non-existent) collapses to one **byte-identical `400 invalid-token`** (SI-13 opacity); the invited email is
+      non-existent) collapses to one **byte-identical `400 invalid-token`** (token opacity, `docs/adr/identity-invitation-lifecycle.md` D11); the invited email is
       never surfaced. **CSRF is defence-in-depth, not the primary control:** the primary same-origin gate is
       `AcceptInvitationOriginListener` (403, mirror of the login guard) plus the opaque single-use token; the
       **stateless CSRF token** (`framework.csrf_protection.stateless_token_ids: [invitation_accept]` +
@@ -528,10 +528,10 @@ you change anything here.
 - [ ] **Password reset (`POST /api/v1/backoffice/forgot-password` · `/reset-password`):** the credential-recovery
       surface, mirroring the invitation flow. Forgot answers a **uniform 202** for every email/identity state
       (only an `ACTIVE` identity mints a token, and that work is never observable to the anonymous requester) — no
-      account enumeration (SI-12). The reset link is a selector-verifier `<id>.<secret>`: only the SHA-256 digest
+      account enumeration (`docs/adr/identity-invitation-lifecycle.md` D10). The reset link is a selector-verifier `<id>.<secret>`: only the SHA-256 digest
       is stored (`identity_password_reset_token.token_hash`), the raw token is **never rendered, logged, or
       persisted**. Every dead-token case (used, expired, unknown, malformed) collapses to one **byte-identical
-      `400 invalid-token`** (SI-13, cross-surface opacity with the invitation link — a distinct exception class
+      `400 invalid-token`** (D11 of that ADR, cross-surface opacity with the invitation link — a distinct exception class
       per context, one wire type). A successful reset **consumes the token atomically** (a conditional delete
       whose affected-row count is the single-use guard, so a concurrent replay collapses to `invalid-token`), sets
       the credential, clears the lockout, and **revokes every session** (best-effort teardown; a store outage is
@@ -624,8 +624,8 @@ you change anything here.
 - [ ] **Pre-identity cross-cutting hardening (login · invitation accept · forgot/reset):**
       every pre-identity rejection pays the same **constant-time floor** (`PreIdentityTimingFloor`, one password
       verification of the firewall's own hasher) — malformed/unknown login identifiers, the `INVITED` pre-auth
-      rejection and **every** forgot outcome, so latency correlates with nothing (SI-12). A dead reset/accept
-      link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (SI-13):
+      rejection and **every** forgot outcome, so latency correlates with nothing (`identity-invitation-lifecycle.md` D10). A dead reset/accept
+      link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (same ADR, D11):
       `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password` + `/backoffice/audit` and its
       subtree (the audit URL names the people under investigation, so it leaves the tab no more readily than a
       token does). **Read that header for what it is:** it is delivered with a DOCUMENT, so it governs a deep

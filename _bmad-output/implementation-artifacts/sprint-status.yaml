@@ -53,7 +53,7 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 
 development_status:
   # Tracks the REGULATORY audit trail: docs/adr/regulatory-audit-trail.md +
-  # _bmad-output/planning-artifacts/epics-regulatory-audit-trail.md (E1 pre-auth · E2 gated-by-data · E3 gated-auth).
+  # epics de #392 (E1 pre-auth · E2 gated-by-data · E3 gated-auth).
   # It supersedes the tracking of the operational/actor axis (audit-activity-log.md), whose epics
   # shipped (PRs up to #402); that axis's record lives in git history and its PRs, not here.
 
@@ -77,7 +77,7 @@ development_status:
   epic-2-retrospective: done
 
   # Epic auth-foundation (AF): Fundación auth/RBAC — prerequisite de E3, gated on nada (greenfield)
-  # docs/adr/auth-rbac-subsystem.md + _bmad-output/planning-artifacts/epics-auth-foundation.md. DAG: AF → 3.1 → 3.2 → 3.3
+  # docs/adr/auth-rbac-subsystem.md + epics de #414. DAG: AF → 3.1 → 3.2 → 3.3
   epic-auth-foundation: done
   af-1-1-user-aggregate-backoffice-identity-persistencia: done
   af-1-2-firewall-sesion-securityuser-authenticator-csrf: done
@@ -97,7 +97,7 @@ development_status:
   epic-3-retrospective: done
 
   # Epic rbac-authorization-model (RM): modelo RBAC transversal Permission=(resource,action).
-  # docs/adr/rbac-authorization-model.md (D1–D9) + _bmad-output/planning-artifacts/epics-rbac-authorization-model.md.
+  # docs/adr/rbac-authorization-model.md (D1–D9) + epics de #456.
   # Extiende el subsistema auth/RBAC (SI-1…SI-9); no revoca el hermano. #437 co-requisito de RM-2/RM-4.
   # Orden de merge safe-first (aditivo → comportamiento): RM-1 → RM-2 → RM-5 → RM-3 → RM-4; RM-6 tras RM-1.
   # Las historias van en ese orden de merge (no en RM-N numérico): «siguiente backlog» de arriba-abajo es
@@ -113,8 +113,8 @@ development_status:
 
   # Epic identity-invitation-lifecycle (II): ciclo de vida de identidad/invitación — onboarding invitation-first,
   # admisión de tres momentos (credenciales → identidad → admisión → sesión), registro de sesiones fail-closed.
-  # docs/adr/identity-invitation-lifecycle.md (D1–D12) + _bmad-output/planning-artifacts/{arch-addendum-identity-
-  # invitation.md, epics-identity-invitation-lifecycle.md}. Extiende auth/RBAC (SI-1…SI-9) sin revocarlo; ortogonal
+  # docs/adr/identity-invitation-lifecycle.md (D1–D12) + addendum y epics de #458.
+  # Extiende auth/RBAC (SI-1…SI-9) sin revocarlo; ortogonal
   # al plano RBAC. Multi-tenant-ready, tenancy operativa diferida. Orden de merge safe-first (las historias van en
   # ese orden, no en II-N numérico): II-0 → II-1·II-2·II-3·II-7 → II-6 → II-4 → II-5 → II-8. II-0 co-mueve Identity
   # + core RBAC (opción b; RM-1 ya en main vía #456). II-4/II-5 exigen II-7 (registro/revoca-todas).
@@ -131,8 +131,8 @@ development_status:
   epic-identity-invitation-lifecycle-retrospective: done
 
   # Epic users-admin (U): Administración de usuarios (back-office/Iam) — conectar la consola PWA /backoffice/users
-  # (hoy mock CrudRepository) al backend real Iam/Identity (invitation-based). arch-addendum-users-admin.md (SI-16…20)
-  # + epics-users-admin.md. PR #500. Orden de merge safe-first (las historias van en ese orden, no en U-N numérico):
+  # (hoy mock CrudRepository) al backend real Iam/Identity (invitation-based). addendum (SI-16…20) y epics
+  # de #500. Orden de merge safe-first (las historias van en ese orden, no en U-N numérico):
   # U-0 → U-1 → (U-2 · U-3) → U-4 · [U-5a → U-5b]. U-5b (borrado GDPR) tiene gate DURO en U-5a (cerrar #376).
   # U-4 (edición de roles) es candidato. erase gana UI (SI-19 enmendado). Cada historia = su propia rama (gate de ramas).
   epic-users-admin: done
@@ -148,7 +148,7 @@ development_status:
   # Epic gdpr-hardening (G): garantías de borrado ejecutables — convertir las garantías de borrado de datos
   # personales de prosa en mecanismo con control capaz de fallar, sobre Iam/Identity, Iam/Invitation,
   # Organization/Membership, Shared/Audit y los transportes Messenger persistidos.
-  # arch-addendum-gdpr-hardening.md (SI-21…SI-23, #606/#607) + epics-gdpr-hardening.md (PR #609).
+  # addendum (SI-21…SI-23, #606/#607) + epics (#609).
   # No introduce principio nuevo: extiende el patrón ya institucionalizado (registro declarativo + gate
   # obligatorio, 6 instancias). Unidad = EJE de garantía, no issue: cada historia instala declaración +
   # mecanismo + control capaz de fallar. Orden de merge safe-first (las historias van en ese orden, no en
@@ -314,7 +314,7 @@ development_status:
   # conserva el id real del sujeto a perpetuidad (aggregate_id de 6 eventos + payload de SessionStarted y los
   # seis Invitation*), ningún routing lo cambia y la cadena de erasure no toca la tabla — luego G-4a persigue la
   # fuga MENOR. No se abrió issue (decisión de Sergio, 2026-07-30: el contador ya está saturado); vive aquí y en
-  # epics-gdpr-hardening.md. La decisión de ESTRATEGIA DE PERSISTENCIA está TOMADA (Sergio, 2026-08-01) y
+  # los epics de #609. La decisión de ESTRATEGIA DE PERSISTENCIA está TOMADA (Sergio, 2026-08-01) y
   # registrada en D12 de docs/adr/event-store-and-projections.md: el log pasa a append-only CON UN CONJUNTO
   # CERRADO DE MUTACIONES SANCIONADAS —hoy una, el borrado GDPR—, igual que su hermano audit_log. Un único
   # UPDATE reescribe el id del sujeto con un UUID aleatorio nuevo acuñado en el borrado, EN LA COLUMNA Y EN EL
@@ -339,7 +339,7 @@ development_status:
   g-5-ids-de-persona-fuera-del-event-store: done
   epic-gdpr-hardening-retrospective: done
 
-  # Épica de resolución del backlog de issues — _bmad-output/planning-artifacts/epics-backlog-resolution.md
+  # Épica de resolución del backlog de issues — epics de #646
   # Cada clave es UN PR. Agrupan por fichero y concepto compartido, no por etiqueta: el criterio es que un
   # revisor pueda leer el PR entero con un solo modelo mental.
   #
@@ -353,7 +353,7 @@ development_status:
   # corrigió otros 4. Los 11 eran recientes, no viejos: el backlog se pudre por lo que se entrega, no por el
   # tiempo. Un issue solo se cierra con evidencia medida en el comentario de cierre.
   # Cerrada el 2026-08-17 con BR-8: las diez claves de historia están en `done` y el criterio de cierre
-  # (barrer el backlog otra vez contra `main`) está ejecutado y registrado en br-8-operabilidad.md. Sin clave
+  # (barrer el backlog otra vez contra `main`) está ejecutado y registrado en br-8-operabilidad.md (fuera del árbol desde #994; `git show b626be75^:<ruta>`). Sin clave
   # de retrospectiva: si se corre una, se añade aquí.
   epic-backlog-resolution: done
   br-1-behat-vocabulario-falsabilidad: done
@@ -382,7 +382,7 @@ development_status:
   # sesión ANTES de consumir la fila. Clave propia por la misma razón que br-4b/4c/4d.
   #
   # `done` desde f69e94f9, cuando terminó la primera review de código de la tarea completa — que es el
-  # disparador que fija este repo, no el merge. La spec (spec-gh-602-secreto-de-recuperacion.md, rama
+  # disparador que fija este repo, no el merge. La spec (spec-gh-602-secreto-de-recuperacion.md, fuera del árbol desde #994, rama
   # feat/iam-recovery-secret-iu9p) sigue en `in-progress` mientras una segunda review tiene decisiones
   # abiertas. **Un `done` aquí NO es evidencia de que la rama se haya mergeado**: el marcador corre por
   # delante del merge por diseño, así que para eso se lee git, no este fichero.
@@ -433,7 +433,7 @@ development_status:
 
   # Épica Shared/Images — seam compartido de subida y servido de representaciones fungibles (logos,
   # avatares, miniaturas). ADR docs/adr/images-vs-documents-conservation-contract.md (D6) +
-  # _bmad-output/planning-artifacts/epics-images.md. Distinta del contexto Documents (evidencia, #268).
+  # epics de #850. Distinta del contexto Documents (evidencia, #268).
   # Refundida aquí desde `sprint-status-images.yaml`, que es el tablero propio de la épica y sigue vivo:
   # esta es la vista canónica que la tooling BMAD resuelve, no un reemplazo de aquél.
   # Primera rebanada por decisión del corte: SIN consumidor real cableado (Bank.logoImageId y

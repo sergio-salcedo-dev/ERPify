@@ -1,6 +1,6 @@
 # ADR — Authorization model boundaries: what will never be a `Role`, and who may read the trail
 
-> **Status:** accepted · **Date:** 2026-07-23 · **Scope:** `api/src/Shared/Access`, `api/src/Iam/Identity/Infrastructure/Security`, `api/src/Backoffice/Audit`, `api/src/Organization` — and any future platform/tenancy work.
+> **Status:** accepted · **Date:** 2026-07-23 · **Scope:** `api/src/Shared/Access`, `api/src/Iam/Identity` (security and the identity console), `pwa/src/app/backoffice/users`, `api/src/Backoffice/Audit`, `api/src/Organization` — and any future platform/tenancy work.
 
 ## Context
 
@@ -206,6 +206,51 @@ before an organization exists with two administrators who are not the same perso
 *Discarded:* auditing `User` through the write-capture CDC to record the demotion. It would put `password_hash`
 in the trail, which is why the aggregate opted out in the first place. The demotion is recorded by an explicit,
 field-selective row instead.
+
+## D4 — Administering identities is not CRUD, and friction follows irreversibility
+
+The `users` console is the first resource on the RBAC plane whose subject is a person's identity rather than
+business data, and the generic list-and-edit toolkit it started from answers every question here wrongly. The
+authorization mechanics — `users` opted out of tiering, one ADMIN-only grant per action — are stated where they
+live (`StaticAuthorizationPolicy::EXPLICIT_GRANTS`), and the "each action its own permission, byte-identical on
+both sides" rule in the PWA's `Permission` docblock. What neither states is the shape of the plane.
+
+**Mutations are domain use cases, never a generic write.** Onboarding is an invitation, lifecycle is
+`ChangeUserStatus` (one-directional, ≥1 active `ADMIN`), roles are `ChangeUserRoles` (set semantics, the guard
+evaluated over the resulting set), erasure is `FulfilIdentityErasure`. No `PUT`/`PATCH` of an identity exists,
+because it would be the one path that mutates status, email or roles without their invariants. **Email is
+immutable today** as the identity's anchor; making it mutable behind a verification step is a feature to build,
+not a principle this decision forbids. **Permissions are a derived read-model** — `/me` expands roles through
+the policy — and never persisted state: there is no `User.permissions`, and adding one would create a second
+authority the policy cannot see.
+
+**An irreversible action carries friction proportional to its irreversibility, and never a surface easier than
+its reversible sibling.** `deactivate` is the everyday action (block access, keep attribution); `erase`
+hard-deletes the identity and is a separate, ADMIN-only compliance surface behind a typed confirmation
+(`PRODUCTION_SECURITY_CHECKLIST.md`, GDPR identity erasure entry). Friction means a strong confirmation, not the
+absence of UI: leaving the right to erasure reachable only through a CLI a developer runs externalises a legal
+obligation onto whoever holds shell access. The CLI stays, as an additional entry to the same use case. And the
+erasure **de-identifies the identity and its trail as one unit** — an erase that removes the row but leaves
+`actor_id` in `audit_log` is incomplete, not partial, which is why the chain is one transaction.
+
+**Thresholds that reopen this, stated so they are recognised when they arrive:**
+
+- *A `USER_ADMIN` role* — when someone must administer identities without being a full `ADMIN` (delegation,
+  a helpdesk, several organizations). Until then the seam is one grant row, not a role.
+- *`TIER_OPT_OUT` as the mechanism* — healthy while it lists a handful of resources (~5; two today). Towards
+  ~15 the opt-out is the rule rather than the exception, and the policy should move to pure capabilities.
+- *`users.erase` under `users`* — placed there by locality, but it is a compliance act. If erasure spreads to
+  other subjects (customers, employees), it becomes one `compliance.*` resource rather than an `*.erase` per
+  resource.
+- *Filtering the register by role* — excluded from the search field map. It costs the first custom DQL
+  function (JSONB containment), a GIN index and a new operator in the shared search grammar, over a column
+  tenancy may move to `Membership`. It is reopened by a real, present need to segment hundreds of users by role —
+  not by a mock that happened to have the filter.
+
+*Discarded:* one coarse `users.write`. It merges reading the register with mutating it and makes the
+irreversible action as cheap to grant as the reversible one. *Discarded:* read with field-level redaction of
+roles. `users.read` means access to the console as one unit; redacting a column per reader is a cost no reader
+yet justifies.
 
 ## What this ADR does not decide
 

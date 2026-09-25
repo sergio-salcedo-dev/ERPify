@@ -2,7 +2,7 @@
 
 > **Status:** accepted · **Date:** 2026-08-30 · **Scope:** the observability signal emitted by `ImageStorage::read()` failures in `Shared/Images`, and the epic acceptance criterion it supersedes.
 >
-> This record exists because it **overrides a written requirement**. `epics-images.md` ordered the read path's confirmed-absence signal to be bounded, and a code review of the previous story deferred that finding into the story that exposes `read()`. Measuring the complete logging path changed the answer, and a story does not get to reinterpret its own acceptance criterion from inside — hence an argued exception here rather than an edit and a shrug.
+> This record exists because it **overrides a written requirement**. The acceptance criteria of the `Shared/Images` epic breakdown (introduced by PR #850; git history keeps it) ordered the read path's confirmed-absence signal to be bounded, and a code review of the previous story deferred that finding into the story that exposes `read()`. Measuring the complete logging path changed the answer, and a story does not get to reinterpret its own acceptance criterion from inside — hence an argued exception here rather than an edit and a shrug.
 >
 > **Amended 2026-08-31, and the amendment reverses D2.** The story's own code review found two things this record could not have known when it was written: the read path had grown to **five** producers while every document describing it still said three, and D2's decisive discarding argument — that worker mode offers no state for free — is false. The signal is now bounded. The original reasoning is kept below rather than rewritten, because what makes the new decision trustworthy is seeing exactly which premise failed.
 
@@ -86,7 +86,7 @@ Stated so nothing here is ever read as a mitigation:
 
 ## Consequences
 
-- `epics-images.md` carries an amended acceptance criterion pointing here, so no requirement in the tree still orders a bound that the code deliberately does not implement.
+- The epic's acceptance criterion was amended to point here, so no requirement orders a bound that the code deliberately does not implement. The read route's other durable decisions — authorization frontier, audit, cache window — live in [`image-read-route-contract.md`](./image-read-route-contract.md).
 - The implementing story's acceptance criterion becomes a **declaration plus the cost-per-event measurement**, not a bound, and cites this record.
 - The residual joins the `Shared/Images` block of `PRODUCTION_SECURITY_CHECKLIST.md` §7, whose framing changes from "too many logs" to **shared-sink eviction between independent producers**.
 - The infrastructure concern of D4 is tracked on its own, outside this epic.

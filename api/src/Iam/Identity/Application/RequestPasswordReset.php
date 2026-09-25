@@ -19,7 +19,8 @@ use SensitiveParameter;
  * The "forgot my password" use case. Its whole contract is a UNIFORM outcome: whatever the email — unknown,
  * `INVITED`, `SUSPENDED`, `DEACTIVATED` or `ACTIVE` — the caller observes the same thing, because only an
  * `ACTIVE` identity does any work and that work (a token row, an outbox event, a mailed link) is never visible
- * to the anonymous requester. So the response cannot be used to enumerate accounts (SI-12).
+ * to the anonymous requester. So the response cannot be used to enumerate accounts — before identity is proven,
+ * status, shape and timing are uniform (`docs/adr/identity-invitation-lifecycle.md` D10).
  *
  * Only an `ACTIVE` identity mints a {@see SingleUseToken}, supersedes any pending token, persists the digest
  * and records {@see PasswordResetRequested}; every other case returns silently having touched nothing. Every
