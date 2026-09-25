@@ -160,7 +160,7 @@ replaces B1 without changing a line here.
 
 Raising the floor to ≥2 is the only variant that breaks something. Erasure refuses any subject holding
 `ADMIN` (`FulfilIdentityErasure.php:135-137`), so erasing an administrator requires demoting them first,
-and demotion consults `survivesRemovalOf` (`ChangeUserRoles.php:186`, `ChangeUserStatus.php:91`).
+and demotion consults `survivesRemovalOf` (`ChangeUserRoles::guardActiveAdministratorsSurvive()`, `ChangeUserStatus::transition()`).
 With a floor of 2, neither of exactly two administrators is demotable and erasing one would need a
 **third**. An invariant that radiates side effects into an unrelated process is mis-chosen: it should
 close the problem that motivated it, and this one does not close #602 at all.
@@ -354,11 +354,21 @@ provoke, the radius D7's compensation exists to avoid; evicting **after** the co
 consumption would stand over sessions still alive, which is the defect; and a limiter on `revoke-others` —
 it is the one edge an adversary cannot spend.
 
-What it does not close: an administrator's stolen session changing its OWN identity's roles or status. Those
-writes carry no self-target guard and tear down every session after their own commit without re-checking the
-caller, so one admitted before the eviction revokes the redeemed session after it. Refusing a self-targeted
-role or status change, or re-checking the caller under the same ordered lock, would close it; neither is
-decided here (§7 of the security checklist records it).
+**A self-targeted role or status change is refused (2026-09-25).** Those two writes tear down every session of
+their target after their own commit without re-checking the caller, so an administrator's stolen session
+admitted before the eviction could aim one at its OWN identity, queue on the user row, and revoke the redeemed
+session once the redemption committed. Both now answer 409 (`self-role-change-forbidden`,
+`self-status-change-forbidden`) before their transaction opens when the target is the acting user, compared
+case-insensitively — the shape `self-unlock-forbidden` and `self-erasure-forbidden` already had. Discarded:
+re-checking the caller's session under the ordered `iam_session` lock inside each write, which would put a
+session lock into two Identity use cases for a target nobody legitimately needs, and would still have to
+decide what a self-change that survives the re-check may do; a self-targeted change has no use worth that
+(another administrator makes it, and an identity cannot reinstate itself).
+
+What still survives: everything the stolen session aims at somebody else — identities and grants it planted,
+administrators it demoted or suspended — which no eviction reaches; and an administrator it planted keeps
+sessions the owner's redemption does not evict, so it can still suspend or demote the owner afterwards,
+revoking the redeemed session (§7 of the security checklist).
 
 What it costs: a **leaked** secret now signs the owner out as well as admitting its holder, and while the
 same attacker holds the email-keyed lockout the owner's password cannot bring them back. Before, the owner

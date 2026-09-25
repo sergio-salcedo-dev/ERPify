@@ -82,12 +82,7 @@ final readonly class UnlockUserAccount
 
     private function refuseSelfUnlock(string $userId): void
     {
-        $actorId = $this->actorContext->current()->actorId;
-
-        // RFC 4122 hex is case-insensitive: the route id and the sealed actor id can spell one UUID in
-        // different case, so compare case-insensitively (as the self-erasure guard does) — a `===` here
-        // would be bypassable by an admin who merely re-cased their own id in the request path.
-        if (null !== $actorId && 0 === \strcasecmp($actorId, $userId)) {
+        if ($this->actorContext->current()->isUser($userId)) {
             throw SelfUnlockForbidden::forActor($userId);
         }
     }

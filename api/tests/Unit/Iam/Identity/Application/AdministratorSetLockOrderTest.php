@@ -10,9 +10,11 @@ use Erpify\Iam\Identity\Application\ChangeUserStatus;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -58,6 +60,7 @@ final class AdministratorSetLockOrderTest extends TestCase
             new RecordingEventBus(),
             new RecordingAuditLogger(),
             new InlineTransactionManager(),
+            new FixedActorContextFactory(ActorContext::system()),
         ))->run(UserMother::DEFAULT_ID, Role::EDITOR);
 
         $this->assertSame([0], $directory->rowLocksTakenBeforeEachSetLock);
@@ -75,6 +78,7 @@ final class AdministratorSetLockOrderTest extends TestCase
             $this->revokeSessions(),
             new RecordingEventBus(),
             new InlineTransactionManager(),
+            new FixedActorContextFactory(ActorContext::system()),
         ))->suspend(UserMother::DEFAULT_ID);
 
         $this->assertSame([0], $directory->rowLocksTakenBeforeEachSetLock);
@@ -98,6 +102,7 @@ final class AdministratorSetLockOrderTest extends TestCase
             new RecordingEventBus(),
             new RecordingAuditLogger(),
             new InlineTransactionManager(),
+            new FixedActorContextFactory(ActorContext::system()),
         ))->run(UserMother::DEFAULT_ID, Role::EDITOR);
 
         $this->assertSame(1, $directory->setLocksTaken);

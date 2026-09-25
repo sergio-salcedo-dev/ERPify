@@ -202,6 +202,28 @@ not fire and these three tables are the manual NFR26 record. Exactly **one** new
 three surfaces, `recovery-secret-already-exists`; every other value here is an existing one reused,
 `invalid-token` deliberately so.
 
+### Users administration — refusals aimed at oneself (`/api/v1/backoffice/users/{id}/…`)
+
+Three administrative writes refuse a target that is the acting administrator's own identity, and erasure a
+fourth. Each is a `Conflict` (**409**) with a `type()` of its own, raised by the use case **before its
+transaction opens**, so a refused call takes no lock, touches no row, publishes no event and writes no audit
+entry. The actor is read from the sealed session through `ActorContextFactory`, never from the request, and
+compared to the route id **case-insensitively** (`ActorContext::isUser()`), so re-casing one's own id does not
+slip past. Only a `user` actor can trip one: the CLI's `system` actor carries no id, and an API key's id names
+the key.
+
+| Route | Wire result | Why |
+|-------|-------------|-----|
+| `PATCH …/{id}/roles` | **409 `self-role-change-forbidden`** | [`SelfRoleChangeForbidden`](../api/src/Iam/Identity/Domain/Exception/SelfRoleChangeForbidden.php). A committed role change revokes every session of its target after the commit without re-checking the caller's own session, so a stolen administrator session admitted before a recovery-secret redemption evicted it could otherwise sign out the session that redemption just established. Refused whatever the set — a widening that keeps `ADMIN`, and a redundant re-send, included. |
+| `PATCH …/{id}/status` | **409 `self-status-change-forbidden`** | [`SelfStatusChangeForbidden`](../api/src/Iam/Identity/Domain/Exception/SelfStatusChangeForbidden.php), for `SUSPENDED` and `DEACTIVATED` alike. Same teardown, same race; and an identity cannot reinstate itself, so no legitimate self-transition is lost. |
+| `POST …/{id}/unlock` | **409 `self-unlock-forbidden`** | [`SelfUnlockForbidden`](../api/src/Iam/Identity/Domain/Exception/SelfUnlockForbidden.php). Unlocking oneself would be a second, credential-independent way into one's own account. |
+| `DELETE …/{id}` (erasure) | **409 `self-erasure-forbidden`** | [`SelfErasureForbidden`](../api/src/Iam/Identity/Domain/Exception/SelfErasureForbidden.php). The subject cannot also survive as the actor its own erasure evidence names. |
+
+These refusals precede **409 `last-active-administrator-protected`**, which therefore answers only a target
+other than the actor — in practice the concurrent case, two administrators acting on each other. No marker
+interface is added (all four reuse `Conflict`), so the drift gate does not fire and this table is the manual
+NFR26 record.
+
 ### Authenticated password change (`POST /api/v1/me/password`)
 
 The self-service credential change is post-identity by construction — the caller already holds a session — so it grades on the two things the recovery flow cannot express: whether the caller still knows the credential it is replacing, and whether the replacement is a replacement at all.
