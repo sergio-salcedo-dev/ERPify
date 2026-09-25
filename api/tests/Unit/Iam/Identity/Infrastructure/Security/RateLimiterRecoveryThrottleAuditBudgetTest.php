@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
 use Erpify\Iam\Identity\Infrastructure\Security\RateLimiterRecoveryThrottleAuditBudget;
+use Erpify\Iam\Identity\Infrastructure\Security\RecoveryBudgetKey;
+use Erpify\Tests\Double\Clock\RateLimiterClock;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\RateLimiter\Policy\SlidingWindow;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 
@@ -20,6 +24,16 @@ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 final class RateLimiterRecoveryThrottleAuditBudgetTest extends TestCase
 {
     private const string TARGET = 'victim@erpify.test';
+
+    private const string LIMITER_ID = 'recovery_throttle_audit_per_email';
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        RateLimiterClock::release();
+
+        parent::tearDown();
+    }
 
     public function testTheFirstClaimOfAWindowIsGranted(): void
     {
@@ -64,40 +78,49 @@ final class RateLimiterRecoveryThrottleAuditBudgetTest extends TestCase
         // reaching it. Swapping `consume()` for `reserve(1)` — which admits the wait and so runs that
         // `add()` — pushes the window out once per refused attempt and turns this assertion red.
         //
-        // The two seconds are not padding. A shorter window cannot tell this apart from bucket eviction:
-        // InMemoryStorage keeps an entry for `getExpirationTime()` seconds, which truncates to `(int)` and so
-        // collapses onto the window itself at one second — the entry vanishes, a fresh window is minted, and
-        // every implementation looks alive. At two seconds the roll (2.0s) and the eviction (~3.0s) separate,
-        // and this probe reads between them.
-        $budget = $this->budget(intervalInSeconds: 2);
+        // Timed on a frozen clock, because the property is window arithmetic and a real sleep bought only a
+        // floor of seconds and a band a slow runner could fall out of. What the sleep's band protected against
+        // is asserted directly instead: InMemoryStorage evicts an entry after `getExpirationTime()` seconds, and
+        // an evicted entry is granted by ANY implementation, so the probe also proves the window it rolled is
+        // still stored.
+        RateLimiterClock::freeze();
+        $storage = new InMemoryStorage();
+        $budget = $this->budget(intervalInSeconds: 2, storage: $storage);
         $budget->claimFor(self::TARGET);
 
         for ($refused = 0; $refused < 20; ++$refused) {
             $budget->claimFor(self::TARGET);
         }
 
-        $probeAt = \microtime(true);
-        \usleep(2_200_000);
-        $elapsed = \microtime(true) - $probeAt;
+        RateLimiterClock::advance(1.9);
+        $this->assertFalse($budget->claimFor(self::TARGET), 'The slot returned before the window rolled.');
 
-        // Past ~3.0s InMemoryStorage evicts the entry, a fresh window is minted and the claim is granted
-        // whatever the implementation does — so a slow runner would turn this gate green instead of red.
-        // Assert the probe landed inside the discriminating band rather than trusting that it did.
-        $this->assertLessThan(3.0, $elapsed, 'Probed after the storage entry could have been evicted: not evidence.');
-        $this->assertGreaterThan(2.0, $elapsed, 'Probed before the window rolled: not evidence.');
+        RateLimiterClock::advance(0.2);
+        $this->assertInstanceOf(
+            SlidingWindow::class,
+            $storage->fetch(self::LIMITER_ID . '-' . RecoveryBudgetKey::forEmail(self::TARGET)),
+            'The storage entry was evicted before the probe: a grant now is not evidence.',
+        );
         $this->assertTrue($budget->claimFor(self::TARGET));
+        $this->assertGreaterThan(
+            0,
+            RateLimiterClock::reads(),
+            'The limiter never read the frozen clock: the microtime() shim is not loaded ahead of it.',
+        );
     }
 
-    private function budget(int $intervalInSeconds = 3600): RateLimiterRecoveryThrottleAuditBudget
-    {
+    private function budget(
+        int $intervalInSeconds = 3600,
+        InMemoryStorage $storage = new InMemoryStorage(),
+    ): RateLimiterRecoveryThrottleAuditBudget {
         return new RateLimiterRecoveryThrottleAuditBudget(new RateLimiterFactory(
             [
-                'id' => 'recovery_throttle_audit_per_email',
+                'id' => self::LIMITER_ID,
                 'policy' => 'sliding_window',
                 'limit' => 1,
                 'interval' => $intervalInSeconds . ' seconds',
             ],
-            new InMemoryStorage(),
+            $storage,
         ));
     }
 }

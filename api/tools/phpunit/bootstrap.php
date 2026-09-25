@@ -10,6 +10,11 @@ $apiRoot = dirname(__DIR__, 2);
 
 require_once $apiRoot . '/vendor/autoload.php';
 
+// Before anything can run a rate limiter: PHP binds an unqualified `microtime()` call site to whatever it
+// resolves on first execution, so a shim declared later is silently bypassed. Why the shim exists at all is
+// on Erpify\Tests\Double\Clock\RateLimiterClock.
+require_once $apiRoot . '/tests/Double/Clock/rate-limiter-microtime.php';
+
 // Signals Erpify\Kernel to compile this runner's container into its own directory, so a
 // `bin/console` invocation under the same env cannot warm the container out from under the
 // deprecation gate. Set all three ways because Kernel::getCacheDir() reads it with getenv(),
