@@ -30,7 +30,8 @@
 # to, move it in the canonical file; the audit now reads both, so a divergence surfaces
 # as a duplicated report rather than silently. The prose above and below the keys is
 # what this file is for now — the epic's own history. The ~4400-line planning record
-# is NOT here: it is the three `img-1-*.md` artifacts (895 + 1606 + 1894 lines).
+# is NOT here: it is the three `img-1-*.md` artifacts (895 + 1606 + 1894 lines), out of the
+# tree since #994 and readable with `git show b626be75^:<path>`.
 
 # STATUS DEFINITIONS:
 # ==================
@@ -71,14 +72,14 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 development_status:
   # Epic images (Shared/Images): seam compartido de subida y servido de representaciones
   # fungibles (logos, avatares, imágenes de producto, miniaturas) — docs/adr/images-vs-
-  # documents-conservation-contract.md (D6) + _bmad-output/planning-artifacts/epics-images.md.
+  # documents-conservation-contract.md (D6); epics en #850.
   # Primera rebanada: sin cablear consumidor real (Bank.logoImageId / User.avatarImageId no
   # existen aún) y sin auditar la ruta de lectura — ambas decisiones confirmadas con Sergio,
   # quedan para una épica de consumidor aparte. Distinto del contexto Documents (evidencia,
   # issue #268), fuera de esta épica. Requisitos revisados adversarialmente (2026-08-23): 30
   # hallazgos triados, uno rechazado con cita del ADR, el resto incorporado.
   # Story 1.1 ya tiene fichero propio
-  # (img-1-1-subir-imagen-obtener-representacion-canonica.md: bmad-create-story, una vuelta de
+  # (img-1-1-subir-imagen-obtener-representacion-canonica.md, en git desde #994: bmad-create-story, una vuelta de
   # revisión externa y las decisiones de canonicalización cerradas con Sergio el 2026-08-27) —
   # por eso pasa a ready-for-dev y la épica a in-progress.
   # img-1-2: implementada y en review desde 2026-08-29. Tres pases adversariales registrados en su
@@ -87,7 +88,7 @@ development_status:
   # que encontró dos GRAVE con todas las puertas en verde — la existencia indecidible un nivel por
   # encima del directorio guardado, y la raíz de almacenamiento que ningún despliegue creaba.
   # img-1-3: ya tiene fichero propio
-  # (img-1-3-leer-representacion-canonica-de-forma-segura.md: bmad-create-story, 2026-08-29) — por eso pasa a
+  # (img-1-3-leer-representacion-canonica-de-forma-segura.md, en git desde #994: bmad-create-story, 2026-08-29) — por eso pasa a
   # ready-for-dev. Su análisis midió el árbol en 202767ab y encontró catorce desajustes con el corte del
   # épico, cuatro capaces de dejar una decisión del épico falsa con todas las puertas en verde: la auditoría
   # genérica se activa por defecto sobre todo GET 2xx bajo /api/ y sólo se desactiva por el NOMBRE de la ruta

@@ -14,8 +14,8 @@ use RecursiveIteratorIterator;
 use SplFileInfo;
 
 /**
- * Every real `@accepted-risk #<issue>` tag under `api/src` and the implementation-artifact specs must be
- * well-formed and co-located with enough prose to be more than a floating reference. See
+ * Every real `@accepted-risk #<issue>` tag under `api/src`, the implementation-artifact specs and the ADRs
+ * must be well-formed and co-located with enough prose to be more than a floating reference. See
  * {@see AcceptedRiskTagRulesGateTest} for the falsification of those rules against fixtures -- this test
  * only asserts them over the real tree, and asserts PROPERTIES rather than a tag count, because the
  * inventory legitimately grows.
@@ -38,6 +38,21 @@ final class AcceptedRiskTagGateTest extends TestCase
     public function everyTagInTheImplementationArtifactSpecsIsWellFormedAndMeetsTheContentFloor(): void
     {
         $this->assertEveryTagValid($this->specFiles());
+    }
+
+    /**
+     * The ADRs are scanned because they are where a tag outlives the working artifact that first carried
+     * it: once a story artifact leaves the tree, a risk accepted in it keeps its watched record only if the
+     * tag also lives in `api/src` or here. The universe is asserted non-empty, or a moved `docs/adr/` would
+     * read as a directory with no tags in it.
+     */
+    #[Test]
+    public function everyTagInTheArchitectureDecisionRecordsIsWellFormedAndMeetsTheContentFloor(): void
+    {
+        $files = \glob($this->repositoryDirectory('docs/adr') . '/*.md') ?: [];
+        $this->assertNotEmpty($files, 'docs/adr holds no ADR, so this check would pass over nothing.');
+
+        $this->assertEveryTagValid($files);
     }
 
     /**
@@ -113,27 +128,27 @@ final class AcceptedRiskTagGateTest extends TestCase
      */
     private function specFiles(): array
     {
-        $files = \glob($this->implementationArtifactsDirectory() . '/spec-*.md');
+        $files = \glob($this->repositoryDirectory('_bmad-output/implementation-artifacts') . '/spec-*.md');
 
         return false === $files ? [] : $files;
     }
 
     /**
-     * Where the implementation-artifact specs are reachable from, which differs by how the suite is
-     * invoked: with the whole checkout present they sit beside `api/`, while inside the dev container
-     * `/app` holds only `api/`, `public/` and the mounts, so they arrive through the read-only root bind
+     * Where a repository directory outside `api/` is reachable from, which differs by how the suite is
+     * invoked: with the whole checkout present it sits beside `api/`, while inside the dev container
+     * `/app` holds only `api/`, `public/` and the mounts, so it arrives through the read-only root bind
      * mount declared in `compose.dev.yaml` -- the same resolution {@see ScheduleConsumptionGateTest} uses
      * for the root compose files.
      *
      * An unresolvable directory FAILS rather than skipping -- a check that quietly does nothing when its
      * input is absent reports the same green as a real pass.
      */
-    private function implementationArtifactsDirectory(): string
+    private function repositoryDirectory(string $relativePath): string
     {
         $apiRoot = \dirname(__DIR__, 3);
 
         foreach ([\dirname($apiRoot), \dirname($apiRoot) . '/repo'] as $candidate) {
-            $target = $candidate . '/_bmad-output/implementation-artifacts';
+            $target = $candidate . '/' . $relativePath;
 
             if (\is_dir($target)) {
                 return $target;
@@ -141,7 +156,7 @@ final class AcceptedRiskTagGateTest extends TestCase
         }
 
         $this->fail(
-            'The implementation-artifacts directory is not reachable, so this gate cannot check spec files. '
+            \sprintf('`%s` is not reachable, so this gate cannot check the tags it holds. ', $relativePath)
             . 'Inside the container it comes from the read-only `./` bind mount at /app/repo declared in '
             . 'compose.dev.yaml -- restore it rather than relaxing this failure into a skip.',
         );

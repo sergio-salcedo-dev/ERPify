@@ -101,8 +101,8 @@ final class SingleUseTokenTest extends TestCase
         $expiredButCorrect = $generated->token->verify($generated->plaintext(), $expiresAt->modify('+1 second'));
         $wrongButUnexpired = $generated->token->verify('not-the-token', $expiresAt->modify('-1 second'));
 
-        // Token opacity (SI-13): both deaths collapse to the same plain false — the API never reveals
-        // which cause failed.
+        // Token opacity: both deaths collapse to the same plain false — the API never reveals which cause
+        // failed (`docs/adr/identity-invitation-lifecycle.md` D11).
         $this->assertFalse($expiredButCorrect);
         $this->assertFalse($wrongButUnexpired);
     }

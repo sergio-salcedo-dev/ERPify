@@ -297,7 +297,8 @@ proyector esa maquinaria es puro coste sin beneficio.
 así que ocurre con `async`, con `sync` y sin enrutar. Para los eventos cuyo agregado **es una persona**, el
 `aggregate_id` **es** el id real del sujeto; y `SessionStarted`, `SessionRevoked` y los seis `Invitation*` lo
 llevan además en el `payload`. Nada en la cadena de erasure toca esta tabla, de modo que el identificador de una
-persona **sobrevive a su propio borrado, para siempre**. Eso es incompatible con SI-21.
+persona **sobrevive a su propio borrado, para siempre**. Eso es incompatible con la regla de que toda referencia persistida a una persona tiene un dueño de borrado
+que la ejecuta (`api/.person-reference-policy`, CLAUDE.md → «Persisting a person's id»).
 
 **Decisión: el log deja de ser estrictamente inmutable y pasa a ser _append-only con un conjunto cerrado de
 mutaciones de primera clase_ — hoy exactamente una.** Es la misma forma que
@@ -448,7 +449,7 @@ Tres piezas, y ninguna es prescindible:
    agregado registró. **Appendea, no publica**, y ésa es la decisión: publicar por el `EventBus` convertiría la
    carga de fixtures en una operación con efectos — filas de outbox, entregas `async`, difusiones realtime y todo
    handler en proceso. Además cierra un riesgo en vez de esquivarlo: encolar un evento sobre una persona en un
-   transporte persistente está prohibido aquí (D12, SI-21), y una siembra que publicase empezaría a encolar ids de
+   transporte persistente está prohibido aquí (D12; `api/.persistent-transport-policy`), y una siembra que publicase empezaría a encolar ids de
    persona el día que alguien enrutase uno, en silencio. Sin despacho, ninguna decisión de routing la alcanza. El
    `event_store` sí es terreno admisible para ese dato, porque tiene camino de borrado y las tablas de cola no
    — con la precisión que los registros ya hacen y que conviene no perder aquí: `DbalEventStoreSubjectAnonymiser`

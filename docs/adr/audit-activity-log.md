@@ -450,6 +450,11 @@ propuesta de una mutación adicional sobre cualquiera de las dos tablas es cuand
   cuenta de «una novena clave libre» de más arriba: aquélla cuenta las ocho claves de la fila
   `GDPR_ERASURE_EXECUTED` **que escribe `FulfilIdentityErasure`**, no las del JSON en general — y nombrar el
   camino importa porque esa acción tiene dos escritores, y el del CLI de actor escribe sólo dos claves.
+  **En el cable, `changes` es siempre un objeto JSON** —`{}` cuando el diff queda vacío—. `json_decode(…, true)`
+  colapsa `{}` y `[]` en el mismo array PHP, así que la forma la fija `AuditEventDetailResourceMapper`, el único
+  mapper que sirve `metadata`, tanto para filas nuevas como para las históricas; el guard de la PWA rechaza una
+  lista y con ella el sobre entero. Un `changes` almacenado como `null` o escalar no lo produce el capturador y
+  se sirve tal cual.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
 `X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando

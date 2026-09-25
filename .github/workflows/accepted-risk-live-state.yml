@@ -97,7 +97,7 @@ jobs:
             esac
           }
 
-          for root in api/src _bmad-output/implementation-artifacts; do
+          for root in api/src _bmad-output/implementation-artifacts docs/adr; do
             if [ ! -d "$root" ]; then
               echo "::error::GATE ERROR -- expected directory '$root' is missing from this checkout; a scan that quietly skipped it would report the same green as a real pass."
               exit 1
@@ -108,8 +108,8 @@ jobs:
           while IFS= read -r -d '' file; do
             found="$(extract "$file" | grep -oE '#[1-9][0-9]*' | tr -d '#')" || true
             issues="${issues}${found}"$'\n'
-          done < <(find api/src _bmad-output/implementation-artifacts -type f \
-            \( -name '*.php' -o -name 'spec-*.md' \) -print0)
+          done < <(find api/src _bmad-output/implementation-artifacts docs/adr -type f \
+            \( -name '*.php' -o -name 'spec-*.md' -o -path 'docs/adr/*.md' \) -print0)
 
           unique_issues="$(printf '%s\n' "$issues" | grep -E '^[0-9]+$' | sort -un)" || true
 

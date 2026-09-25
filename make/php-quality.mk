@@ -573,8 +573,8 @@ php.lint.log-retention: ## Bounded container-log retention gate (compose `loggin
 
 # An "accept, don't fix" disposition recorded only in prose (a docblock, a spec paragraph) has no open,
 # searchable tracking record -- the acceptance is invisible to audit. This is the offline half only: it
-# validates that every `@accepted-risk #<issue>` tag under api/src and the implementation-artifact specs is
-# well-formed and co-located with real rationale (a content floor, never a semantic "disposition sentence"
+# validates that every `@accepted-risk #<issue>` tag under api/src, the implementation-artifact specs and
+# docs/adr is well-formed and co-located with real rationale (a content floor, never a semantic "disposition sentence"
 # lookup -- this gate cannot know which sentence that is). Whether the referenced issue is still OPEN is a
 # separate, independent GitHub Actions job (.github/workflows/accepted-risk-live-state.yml) with network
 # access -- deliberately not merged into this target, which stays zero-network like every other php.lint.*.
