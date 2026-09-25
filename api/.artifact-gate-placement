@@ -178,10 +178,14 @@ tests/Unit/Gate/PublicAccessExemptionRulesGateTest.php :: home
 tests/Unit/Gate/QueryBudgetExclusionMarkerGateTest.php :: home
 tests/Unit/Gate/ReadSideProjectionGateTest.php :: home
 tests/Unit/Gate/RedactionVocabularyParityTest.php :: home
+tests/Unit/Gate/SanctionedLogMutationBlindSpotGateTest.php :: home
+tests/Unit/Gate/SanctionedLogMutationGateTest.php :: home
+tests/Unit/Gate/SanctionedLogMutationRulesGateTest.php :: home
 tests/Unit/Gate/ScheduleConsumptionGateTest.php :: home
 tests/Unit/Gate/ScheduleConsumptionRulesGateTest.php :: home
 tests/Unit/Gate/ScheduleDeclarationRulesGateTest.php :: home
 tests/Unit/Gate/ScheduleReplicaRulesGateTest.php :: home
+tests/Unit/Gate/ScheduleStackMergeRulesGateTest.php :: home
 tests/Unit/Gate/SearchOperatorSurfaceGateTest.php :: home
 tests/Unit/Gate/SeededProjectionRebuildGateTest.php :: home
 tests/Unit/Gate/SensitiveRecipientAddressGateTest.php :: home

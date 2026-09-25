@@ -9,6 +9,7 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountUpdatedDomainEvent;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 
 /**
@@ -29,7 +30,7 @@ trait StoredBankAccountFixture
 
     protected function tearDown(): void
     {
-        SystemClock::reset();
+        FreezeSystemClockExtension::pin();
 
         parent::tearDown();
     }

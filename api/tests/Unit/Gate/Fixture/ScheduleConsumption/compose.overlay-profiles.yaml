@@ -1,0 +1,5 @@
+# A service under `profiles:` does not start by default. Counting its command as consumption would report a
+# schedule as live over a stack that never runs its consumer — the read must refuse instead.
+services:
+  messenger_worker:
+    profiles: ["workers"]

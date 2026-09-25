@@ -14,7 +14,9 @@ use ReflectionClassConstant;
 /**
  * Static gate over the one property that makes "this control is scheduled" falsifiable: every
  * `#[AsSchedule]` in `api/src` must have its derived `scheduler_*` transport named in a `messenger:consume`
- * command of BOTH root compose files.
+ * command of BOTH deployable stacks — dev (`compose.yaml + compose.dev.yaml`) and prod
+ * (`compose.yaml + compose.prod.yaml`), each merged the way Compose merges it, because a `command:` in an
+ * overlay replaces the base's and a file read on its own never shows that.
  *
  * Nothing else in the repo checks it, and nothing at runtime complains. Symfony's `AddScheduleMessengerPass`
  * creates `messenger.transport.scheduler_<name>` from the attribute alone, so the schedule registers, the
@@ -77,15 +79,15 @@ final class ScheduleConsumptionGateTest extends TestCase
     }
 
     #[Test]
-    #[DataProvider('composeFiles')]
-    public function everyDeclaredScheduleHasItsTransportConsumed(string $composeFile): void
+    #[DataProvider('composeStacks')]
+    public function everyDeclaredScheduleHasItsTransportConsumed(string $environment): void
     {
-        $path = $this->composeDirectory() . '/' . $composeFile;
-        // A compose file added to the sweep without naming which service may consume a scheduler transport
-        // would otherwise be checked against nothing at all.
-        $this->assertArrayHasKey($composeFile, ScheduleConsumption::SCHEDULER_CONSUMER);
-        $consumer = ScheduleConsumption::SCHEDULER_CONSUMER[$composeFile];
-        $consumed = ScheduleConsumption::consumedTransportsByServiceIn($path)[$consumer] ?? [];
+        // A stack added to the sweep without naming which service may consume a scheduler transport would
+        // otherwise be checked against nothing at all.
+        $this->assertArrayHasKey($environment, ScheduleConsumption::SCHEDULER_CONSUMER);
+        $consumer = ScheduleConsumption::SCHEDULER_CONSUMER[$environment];
+        $consumed = ScheduleConsumption::consumedTransportsByServiceIn(...$this->stackPaths($environment))[$consumer]
+            ?? [];
 
         $missing = [];
 
@@ -98,30 +100,33 @@ final class ScheduleConsumptionGateTest extends TestCase
         }
 
         $this->assertSame([], $missing, self::FAILURE_PREAMBLE . "\n" . \sprintf(
-            "These schedule transports are not consumed by `%s` in %s:\n  %s\nAdd them to its "
-            . '`messenger:consume` command.',
+            "These schedule transports are not consumed by `%s` in the %s stack (%s):\n  %s\nAdd them to its "
+            . '`messenger:consume` command — in the overlay if the overlay declares one, since it replaces the '
+            . "base's whole.",
             $consumer,
-            $composeFile,
+            $environment,
+            $this->stackLabel($environment),
             \implode("\n  ", $missing),
         ));
     }
 
     #[Test]
-    #[DataProvider('composeFiles')]
-    public function noOtherServiceConsumesASchedulerTransport(string $composeFile): void
+    #[DataProvider('composeStacks')]
+    public function noOtherServiceConsumesASchedulerTransport(string $environment): void
     {
         // Presence is not the invariant; the pairing is. Every tick comes from an in-process clock, so a
         // scheduler transport consumed by the horizontally scalable pool emits one per replica — N
         // reconciliations a day instead of one. `compose.prod.yaml` says exactly this beside `replicas: 1`,
         // and nothing enforced it: a transport moved onto the wrong service satisfied a file-wide scan just
         // as well as correct wiring.
-        // A compose file added to the sweep without naming which service may consume a scheduler transport
-        // would otherwise be checked against nothing at all.
-        $this->assertArrayHasKey($composeFile, ScheduleConsumption::SCHEDULER_CONSUMER);
-        $consumer = ScheduleConsumption::SCHEDULER_CONSUMER[$composeFile];
-        $byService = ScheduleConsumption::consumedTransportsByServiceIn(
-            $this->composeDirectory() . '/' . $composeFile,
-        );
+        // Read over the merged stack, not the overlay alone: prod's `messenger_worker` is kept off the
+        // scheduler transports only because `compose.prod.yaml` replaces the base's command, and dropping
+        // that replacement would hand the scalable pool every receiver the base names.
+        // A stack added to the sweep without naming which service may consume a scheduler transport would
+        // otherwise be checked against nothing at all.
+        $this->assertArrayHasKey($environment, ScheduleConsumption::SCHEDULER_CONSUMER);
+        $consumer = ScheduleConsumption::SCHEDULER_CONSUMER[$environment];
+        $byService = ScheduleConsumption::consumedTransportsByServiceIn(...$this->stackPaths($environment));
 
         $misplaced = [];
 
@@ -138,29 +143,32 @@ final class ScheduleConsumptionGateTest extends TestCase
         }
 
         $this->assertSame([], $misplaced, \sprintf(
-            "These scheduler transports are consumed by a service other than `%s` in %s:\n  %s\n"
+            "These scheduler transports are consumed by a service other than `%s` in the %s stack (%s):\n  %s\n"
             . 'Scheduler ticks are generated per process, so any service that can run more than one '
             . 'replica turns one scheduled run into one per replica.',
             $consumer,
-            $composeFile,
+            $environment,
+            $this->stackLabel($environment),
             \implode("\n  ", $misplaced),
         ));
     }
 
     #[Test]
-    #[DataProvider('composeFiles')]
-    public function noConsumeCommandNamesATransportNoScheduleProduces(string $composeFile): void
+    #[DataProvider('composeStacks')]
+    public function noConsumeCommandNamesATransportNoScheduleProduces(string $environment): void
     {
         $unbacked = ScheduleConsumption::unbackedSchedulerTransportsIn(
-            $this->composeDirectory() . '/' . $composeFile,
             ScheduleConsumption::declaredScheduleNames(),
+            ...$this->stackPaths($environment),
         );
 
         $this->assertSame([], $unbacked, \sprintf(
-            "These scheduler transports are consumed in %s but no #[AsSchedule] produces them:\n  %s\n"
+            'These scheduler transports are consumed in the %s stack (%s) but no #[AsSchedule] produces them:'
+            . "\n  %s\n"
             . 'Messenger cannot resolve an unknown receiver, so the worker fails to boot on the next '
             . 'restart rather than degrading — a deleted schedule takes its consume argument with it.',
-            $composeFile,
+            $environment,
+            $this->stackLabel($environment),
             \implode("\n  ", $unbacked),
         ));
     }
@@ -168,11 +176,45 @@ final class ScheduleConsumptionGateTest extends TestCase
     /**
      * @return iterable<string, array{string}>
      */
-    public static function composeFiles(): iterable
+    public static function composeStacks(): iterable
     {
-        foreach (ScheduleConsumption::COMPOSE_FILES as $composeFile) {
-            yield $composeFile => [$composeFile];
+        foreach (\array_keys(ScheduleConsumption::COMPOSE_STACKS) as $environment) {
+            yield $environment => [$environment];
         }
+    }
+
+    #[Test]
+    public function theStacksAreTheOnesMakeHandsToCompose(): void
+    {
+        // COMPOSE_STACKS is a copy of `make/config.mk`, and a copy nothing ties to its source drifts in
+        // silence: a stack reverted to the base alone, or a pair reordered so the base wins, reads what
+        // Compose never runs with every other assertion here green.
+        $configMk = \file_get_contents($this->composeDirectory() . '/make/config.mk');
+        $this->assertIsString($configMk, 'make/config.mk is not readable, so the stacks cannot be checked.');
+
+        \preg_match_all('/^\s*COMPOSE_FILES\s*:=\s*(?<files>.+)$/m', $configMk, $matches);
+        // Branch order in the file: prod, staging, then the `else` that dev and every other ENV fall into.
+        $environments = ['prod', 'prod', 'dev'];
+        $this->assertCount(\count($environments), $matches['files'], 'Expected exactly three COMPOSE_FILES '
+            . 'assignments in make/config.mk (prod, staging, else=dev); the branch layout changed, so re-derive '
+            . 'COMPOSE_STACKS from it.');
+
+        foreach ($matches['files'] as $index => $line) {
+            \preg_match_all('/-f\s+(\S+)/', $line, $files);
+            $this->assertSame(
+                ScheduleConsumption::COMPOSE_STACKS[$environments[$index]],
+                $files[1],
+                \sprintf('COMPOSE_STACKS[%s] disagrees with make/config.mk: %s', $environments[$index], $line),
+            );
+        }
+
+        // Both directions of the key pairing, through a variable so PHPStan cannot fold two literals into an
+        // always-true: a stack without a consumer, or a consumer without a stack, is checked against nothing.
+        $stackEnvironments = \array_keys(ScheduleConsumption::COMPOSE_STACKS);
+        $consumerEnvironments = \array_keys(ScheduleConsumption::SCHEDULER_CONSUMER);
+        \sort($stackEnvironments);
+        \sort($consumerEnvironments);
+        $this->assertSame($stackEnvironments, $consumerEnvironments);
     }
 
     #[Test]
@@ -257,6 +299,36 @@ final class ScheduleConsumptionGateTest extends TestCase
     }
 
     /**
+     * The absolute paths of one environment's stack, in the order Compose layers them.
+     *
+     * @return list<string>
+     */
+    private function stackPaths(string $environment): array
+    {
+        $directory = $this->composeDirectory();
+
+        return \array_map(
+            static fn (string $composeFile): string => $directory . '/' . $composeFile,
+            $this->stackFiles($environment),
+        );
+    }
+
+    private function stackLabel(string $environment): string
+    {
+        return \implode(' + ', $this->stackFiles($environment));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stackFiles(string $environment): array
+    {
+        $this->assertArrayHasKey($environment, ScheduleConsumption::COMPOSE_STACKS);
+
+        return ScheduleConsumption::COMPOSE_STACKS[$environment];
+    }
+
+    /**
      * Where the root compose files are reachable from, which differs by how the suite is invoked: with the
      * whole checkout present they sit beside `api/`, while inside the dev container `/app` holds only
      * `api/`, `public/` and the mounts, so they arrive through the read-only root bind mount declared in
@@ -271,7 +343,7 @@ final class ScheduleConsumptionGateTest extends TestCase
         $apiRoot = \dirname(__DIR__, 3);
 
         foreach ([\dirname($apiRoot), \dirname($apiRoot) . '/repo'] as $candidate) {
-            if (\is_file($candidate . '/' . ScheduleConsumption::COMPOSE_FILES[0])) {
+            if (\is_file($candidate . '/' . ScheduleConsumption::BASE_COMPOSE_FILE)) {
                 return $candidate;
             }
         }

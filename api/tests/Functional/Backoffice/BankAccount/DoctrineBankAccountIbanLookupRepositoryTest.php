@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Backoffice\BankAccount;
 
-use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
@@ -115,7 +114,6 @@ final class DoctrineBankAccountIbanLookupRepositoryTest extends KernelTestCase
             null,
             Currency::EUR,
         );
-        $account->setCreatedAt(new DateTimeImmutable('2026-01-01 10:00:00'));
 
         $this->entityManager->persist($account);
         $this->entityManager->flush();

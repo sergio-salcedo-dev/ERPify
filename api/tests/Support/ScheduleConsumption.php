@@ -17,15 +17,30 @@ use Symfony\Component\Yaml\Yaml;
 final class ScheduleConsumption
 {
     /**
-     * The compose files a schedule's transport has to be named in. Both, not either: the dev stack folds the
-     * scheduler transports into `messenger_worker` while prod isolates them on a single-replica
-     * `scheduler_worker`, so a transport present in one file and missing from the other ships a schedule that
-     * is alive in exactly one environment — and the one it is usually missing from is prod.
+     * The shared base every stack layers an overlay on. It is never run alone, which is why it is not a key
+     * of {@see COMPOSE_STACKS}; it is only the file whose presence says where the root compose files live.
      */
-    public const array COMPOSE_FILES = ['compose.yaml', 'compose.prod.yaml'];
+    public const string BASE_COMPOSE_FILE = 'compose.yaml';
 
     /**
-     * The service that is allowed to consume scheduler transports, per compose file.
+     * The compose stacks a schedule's transport has to be consumed in, keyed by environment, each listed in
+     * the order `make/config.mk` hands the files to `docker compose -f`. Both environments, not either: dev
+     * folds the scheduler transports into `messenger_worker` while prod isolates them on a single-replica
+     * `scheduler_worker`, so a transport wired in one stack and not the other ships a schedule that is alive
+     * in exactly one environment — and the one it is usually missing from is prod.
+     *
+     * Stacks rather than files because Compose runs stacks: a `command:` in `compose.dev.yaml` replaces the
+     * base's consume command outright, and `compose.prod.yaml` dropping its own `messenger_worker` command
+     * would hand prod the base's scheduler receivers on the scalable pool. A sweep reading each file on its
+     * own is blind to both. Staging is omitted because it runs the prod pair.
+     */
+    public const array COMPOSE_STACKS = [
+        'dev' => [self::BASE_COMPOSE_FILE, 'compose.dev.yaml'],
+        'prod' => [self::BASE_COMPOSE_FILE, 'compose.prod.yaml'],
+    ];
+
+    /**
+     * The service that is allowed to consume scheduler transports, per environment.
      *
      * The pairing is the invariant, not the presence: Symfony Scheduler derives every tick from an in-process
      * clock, so a scheduler transport consumed by the horizontally scalable `messenger_worker` pool in prod
@@ -34,8 +49,8 @@ final class ScheduleConsumption
      * as well as the correct wiring does.
      */
     public const array SCHEDULER_CONSUMER = [
-        'compose.yaml' => 'messenger_worker',
-        'compose.prod.yaml' => 'scheduler_worker',
+        'dev' => 'messenger_worker',
+        'prod' => 'scheduler_worker',
     ];
 
     /**
@@ -53,10 +68,11 @@ final class ScheduleConsumption
      * Every root compose file that can give the scheduler-consuming service a replica count, and which
      * service that is in each.
      *
-     * Wider than {@see COMPOSE_FILES} by one, and the extra entry is the point: `make/config.mk` composes dev
-     * as `compose.yaml + compose.dev.yaml`, so a `deploy.replicas: 2` written into the dev overlay runs two
-     * clocks over the same nine ticks while a sweep limited to the consumption pair stays green. The overlay
-     * declares `messenger_worker` in order to extend it, which is why the same reader works on all three.
+     * Read per file rather than per stack, unlike {@see COMPOSE_STACKS}, and on purpose: here the strictest
+     * reading is that no file contradicts the pin, whichever overlay it lands under. `make/config.mk` composes
+     * dev as `compose.yaml + compose.dev.yaml`, so a `deploy.replicas: 2` written into the dev overlay runs two
+     * clocks over the same nine ticks. The overlay declares `messenger_worker` in order to extend it, which is
+     * why the same reader works on all three.
      */
     public const array REPLICA_SCOPE = [
         'compose.yaml' => 'messenger_worker',
@@ -142,40 +158,28 @@ final class ScheduleConsumption
     }
 
     /**
-     * The transports each service's `messenger:consume` command names, keyed by service.
+     * The transports each service's `messenger:consume` command names once a stack of compose files is
+     * merged, keyed by service.
      *
      * Parsed as YAML rather than scanned as bytes, and that is the whole difference between checking wiring
      * and grepping for a word. A byte scan reads a commented-out command as live wiring, cannot see a
      * command written as a plain string or a block sequence, and has no idea which service a receiver
-     * belongs to — three ways for a schedule to ship dead behind a green gate.
+     * belongs to — three ways for a schedule to ship dead behind a green gate. The merge itself — an
+     * overlay's `command` replacing the base's, `command: ~` removing it — is {@see ComposeStackCommands}.
      *
      * @throws RuntimeException
      *
      * @return array<string, list<string>>
      */
-    public static function consumedTransportsByServiceIn(string $composeFile): array
+    public static function consumedTransportsByServiceIn(string ...$composeFiles): array
     {
-        $parsed = Yaml::parseFile($composeFile);
-
-        if (!\is_array($parsed) || !\is_array($parsed['services'] ?? null)) {
-            throw new RuntimeException(\sprintf('"%s" declares no services to read.', $composeFile));
-        }
-
         $byService = [];
 
-        foreach ($parsed['services'] as $service => $definition) {
-            if (!\is_array($definition)) {
-                continue;
-            }
-
-            if (!isset($definition['command'])) {
-                continue;
-            }
-
-            $receivers = self::receiversIn(self::tokensOf($definition['command']));
+        foreach (ComposeStackCommands::of(...$composeFiles) as $service => $command) {
+            $receivers = self::receiversIn(self::tokensOf($command));
 
             if ([] !== $receivers) {
-                $byService[(string) $service] = $receivers;
+                $byService[$service] = $receivers;
             }
         }
 
@@ -183,7 +187,7 @@ final class ScheduleConsumption
     }
 
     /**
-     * Every transport consumed anywhere in one compose file, regardless of which service consumes it.
+     * Every transport consumed anywhere in a merged stack, regardless of which service consumes it.
      *
      * The right shape for the stale direction — an argument no schedule backs stops the worker booting
      * whichever service carries it — and the wrong shape for the forward one, which has to care about the
@@ -193,9 +197,9 @@ final class ScheduleConsumption
      *
      * @return list<string>
      */
-    public static function consumedTransportsIn(string $composeFile): array
+    public static function consumedTransportsIn(string ...$composeFiles): array
     {
-        $consumed = \array_merge(...\array_values(self::consumedTransportsByServiceIn($composeFile)));
+        $consumed = \array_merge(...\array_values(self::consumedTransportsByServiceIn(...$composeFiles)));
 
         return \array_values(\array_unique($consumed));
     }
@@ -271,7 +275,7 @@ final class ScheduleConsumption
     }
 
     /**
-     * Schedule transports named in a compose file that no `#[AsSchedule]` produces — the stale half of the
+     * Schedule transports named in a merged stack that no `#[AsSchedule]` produces — the stale half of the
      * comparison. A consume command keeps a removed schedule's transport alive as a name Messenger cannot
      * resolve, and the worker then fails to boot rather than degrading, so this direction is a deploy
      * outage waiting for the next restart.
@@ -282,12 +286,12 @@ final class ScheduleConsumption
      *
      * @return list<string>
      */
-    public static function unbackedSchedulerTransportsIn(string $composeFile, array $declaredScheduleNames): array
+    public static function unbackedSchedulerTransportsIn(array $declaredScheduleNames, string ...$composeFiles): array
     {
         $expected = \array_map(self::transportOf(...), $declaredScheduleNames);
 
         return \array_values(\array_filter(
-            self::consumedTransportsIn($composeFile),
+            self::consumedTransportsIn(...$composeFiles),
             static fn (string $transport): bool => \str_starts_with($transport, 'scheduler_')
                 && !\in_array($transport, $expected, true),
         ));

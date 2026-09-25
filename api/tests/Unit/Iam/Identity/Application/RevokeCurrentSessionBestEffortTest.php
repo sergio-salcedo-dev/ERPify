@@ -12,6 +12,7 @@ use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingLogger;
@@ -60,7 +61,7 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
 
     protected function tearDown(): void
     {
-        SystemClock::reset();
+        FreezeSystemClockExtension::pin();
         parent::tearDown();
     }
 

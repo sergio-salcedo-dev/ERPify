@@ -24,13 +24,11 @@ interface LiveIdentityDirectory
     /**
      * The subset of `$ids` that resolves to a row in `identity_user`, in the spelling given.
      *
-     * One statement per call rather than one per id: the caller holds every identifier some other table
-     * still names, which is bounded by the number of people the installation has ever had. That bound is
-     * also the limit — an implementation binding one parameter per id meets PostgreSQL's 65535-parameter
-     * ceiling there and fails outright rather than degrading. **No caller chunks**, and this contract does
-     * not ask one to: reaching the ceiling takes 65 536 distinct people referenced at once, in a product
-     * that provisions one organization per installation. Chunking is the change to make when a measurement
-     * says the count is close, not before — say so here when it becomes true.
+     * One call for the whole list rather than one per id, and the list may be of ANY size: the caller holds
+     * every identifier some other table still names, which grows with the number of people the installation
+     * has ever had and has no bound of its own. Whatever limit the store puts on a single query — PostgreSQL's
+     * 65535 bound parameters, for one — is the implementation's to split around, never the caller's, so no
+     * caller chunks. Each id still receives exactly one answer, however the implementation cuts the list.
      *
      * Returning the caller's own spelling keeps the comparison exact for the caller — UUID hex is
      * case-insensitive, so an adapter echoing the database's canonical form would make a correct id look

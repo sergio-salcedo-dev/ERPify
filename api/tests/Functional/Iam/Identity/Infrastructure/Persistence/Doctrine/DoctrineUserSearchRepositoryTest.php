@@ -11,6 +11,7 @@ use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Projection\UserRow;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineUserSearchRepository;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\Filters;
 use Erpify\Shared\Search\Domain\Page;
@@ -18,6 +19,8 @@ use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
+use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -187,6 +190,9 @@ final class DoctrineUserSearchRepositoryTest extends KernelTestCase
     }
 
     /**
+     * Builds the identity under the ambient clock frozen at `$createdAt`, which is what stamps it, then
+     * restores the suite's instant.
+     *
      * @param list<string> $roleValues
      */
     private function persistUser(
@@ -195,8 +201,9 @@ final class DoctrineUserSearchRepositoryTest extends KernelTestCase
         array $roleValues,
         string $status = 'ACTIVE',
     ): void {
+        SystemClock::set(new FixedClock($createdAt));
         $user = UserFixtureFactory::create(Uuid::v7()->toRfc4122(), $email, 'seed-password', $roleValues, $status);
-        $user->setCreatedAt($createdAt);
+        FreezeSystemClockExtension::pin();
 
         $this->entityManager->persist($user);
     }

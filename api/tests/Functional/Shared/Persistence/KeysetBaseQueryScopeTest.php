@@ -10,6 +10,7 @@ use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Search\Domain\Exception\InvalidCursor;
 use Erpify\Shared\Search\Domain\Exception\InvalidCursorCause;
 use Erpify\Shared\Search\Domain\Filter;
@@ -32,6 +33,8 @@ use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\RowUniquenessGuard;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SortFieldMap;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -222,19 +225,18 @@ final class KeysetBaseQueryScopeTest extends KernelTestCase
 
         foreach (self::SECOND_OFFSETS as $index => $offset) {
             $id = Uuid::generate();
+            SystemClock::set(new FixedClock($base->modify(\sprintf('+%d seconds', $offset))));
             $bank = Bank::create(
                 $id,
                 \sprintf('scope bank %d %s', $index, $suffix),
                 \strtoupper(\sprintf('SC%d%s', $index, \substr($suffix, 0, 3))),
             );
-            $createdAt = $base->modify(\sprintf('+%d seconds', $offset));
-            $bank->setCreatedAt($createdAt);
-            $bank->setUpdatedAt($createdAt);
 
             $this->entityManager->persist($bank);
             $ids[] = $id;
         }
 
+        FreezeSystemClockExtension::pin();
         $this->entityManager->flush();
 
         return $ids;

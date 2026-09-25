@@ -18,8 +18,10 @@ use PHPUnit\Framework\TestCase;
  * a comment or an env var, a whole command parked in a comment, a command written as a plain string, a
  * receiver written after an option, and consumption by the wrong service.
  *
- * The replica axis of the same gate is falsified in {@see ScheduleReplicaRulesGateTest}, and the declaration
- * half — which schedules the tree declares at all — in {@see ScheduleDeclarationRulesGateTest}.
+ * How a base and an overlay merge into the stack Compose runs is falsified in
+ * {@see ScheduleStackMergeRulesGateTest}. The replica axis of the same gate is falsified in
+ * {@see ScheduleReplicaRulesGateTest}, and the declaration half — which schedules the tree declares at all —
+ * in {@see ScheduleDeclarationRulesGateTest}.
  *
  * @internal
  */
@@ -103,7 +105,7 @@ final class ScheduleConsumptionRulesGateTest extends TestCase
     {
         $this->assertSame(
             ['scheduler_ghost'],
-            ScheduleConsumption::unbackedSchedulerTransportsIn(self::FIXTURES . '/compose.stale.yaml', ['alpha']),
+            ScheduleConsumption::unbackedSchedulerTransportsIn(['alpha'], self::FIXTURES . '/compose.stale.yaml'),
         );
     }
 
@@ -114,7 +116,7 @@ final class ScheduleConsumptionRulesGateTest extends TestCase
         // stale direction is about scheduler transports only.
         $this->assertSame(
             [],
-            ScheduleConsumption::unbackedSchedulerTransportsIn(self::FIXTURES . '/compose.consumed.yaml', ['alpha']),
+            ScheduleConsumption::unbackedSchedulerTransportsIn(['alpha'], self::FIXTURES . '/compose.consumed.yaml'),
         );
     }
 }

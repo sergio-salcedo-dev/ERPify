@@ -1,0 +1,6 @@
+# A service that inherits its definition through `extends:`. The reader does not resolve it, so the command it
+# would inherit is invisible — the read must refuse instead of reporting the service as consuming nothing.
+services:
+  scheduler_worker:
+    extends:
+      service: messenger_worker

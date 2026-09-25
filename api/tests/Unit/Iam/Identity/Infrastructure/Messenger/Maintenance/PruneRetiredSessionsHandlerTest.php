@@ -11,7 +11,6 @@ use Erpify\Iam\Session\Application\PruneRetiredSessions;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
-use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -25,17 +24,19 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(PruneRetiredSessionsHandler::class)]
 final class PruneRetiredSessionsHandlerTest extends TestCase
 {
-    #[Override]
-    protected function tearDown(): void
+    private const string NOW = '2026-07-10T12:00:00+00:00';
+
+    protected function setUp(): void
     {
-        SystemClock::reset();
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
     }
 
     public function testATickRunsTheRetentionSweepExactlyOnce(): void
     {
         $sessions = new InMemorySessionRepository();
         $handler = new PruneRetiredSessionsHandler(
-            new PruneRetiredSessions($sessions, new FixedClock(new DateTimeImmutable('2026-07-10T12:00:00+00:00'))),
+            new PruneRetiredSessions($sessions, FixedClock::at(self::NOW)),
         );
 
         $handler(new PruneRetiredSessionsMessage());
@@ -45,7 +46,7 @@ final class PruneRetiredSessionsHandlerTest extends TestCase
 
     public function testTheSweepIsAskedForBothRetentionWindowsAndNotOneOfThem(): void
     {
-        $now = new DateTimeImmutable('2026-07-10T12:00:00+00:00');
+        $now = new DateTimeImmutable(self::NOW);
         $sessions = new InMemorySessionRepository();
         $handler = new PruneRetiredSessionsHandler(new PruneRetiredSessions($sessions, new FixedClock($now)));
 

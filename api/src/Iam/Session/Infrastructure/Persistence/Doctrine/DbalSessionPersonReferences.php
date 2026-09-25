@@ -6,13 +6,15 @@ namespace Erpify\Iam\Session\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\DBAL\Connection;
 use Erpify\Iam\Session\Domain\Entity\Session;
+use Erpify\Shared\Persistence\Infrastructure\KeysetDistinctIds;
 use Erpify\Shared\Privacy\Application\PersonReferenceSource;
 use Erpify\Shared\Privacy\Domain\PersonReferenceAxis;
 use Override;
 
 /**
- * {@link PersonReferenceSource} over `iam_session.user_id` via plain DBAL — a `DISTINCT` read, never a
- * mutation and never a hydration.
+ * {@link PersonReferenceSource} over `iam_session.user_id` via plain DBAL — a `DISTINCT` read in bounded keyset
+ * pages ({@see KeysetDistinctIds}), never a mutation and never a hydration. `user_id` leads
+ * `idx_iam_session_user_id_status`, so each page is a range scan over it.
  *
  * Deliberately WITHOUT the temporal-validity predicate every other read of this table carries. Expiry is a
  * read-side predicate rather than a persisted transition, so `SessionRepository::findByUserId()` — the only
@@ -46,8 +48,11 @@ use Override;
  */
 final readonly class DbalSessionPersonReferences implements PersonReferenceSource
 {
-    public function __construct(private Connection $connection)
+    private KeysetDistinctIds $ids;
+
+    public function __construct(Connection $connection, int $pageSize = KeysetDistinctIds::DEFAULT_PAGE_SIZE)
     {
+        $this->ids = new KeysetDistinctIds($connection, $pageSize);
     }
 
     #[Override]
@@ -59,10 +64,6 @@ final readonly class DbalSessionPersonReferences implements PersonReferenceSourc
     #[Override]
     public function retainedPersonIds(): array
     {
-        $ids = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT user_id FROM iam_session ORDER BY user_id',
-        );
-
-        return \array_values(\array_filter($ids, \is_string(...)));
+        return $this->ids->idsOf('iam_session', 'user_id');
     }
 }

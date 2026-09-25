@@ -16,6 +16,7 @@ use Erpify\Iam\Identity\Infrastructure\Http\RedeemRecoverySecretRequest;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordRecoveryThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice;
 use Erpify\Iam\Session\Application\RevokeSession;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
@@ -61,6 +62,12 @@ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 final class RedeemRecoverySecretControllerTest extends TestCase
 {
     private const string NOW = '2026-08-28T12:00:00+00:00';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     #[Test]
     public function aSpentSelectorBudgetAnswersTheOpaqueRefusalRatherThanA429(): void

@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Cli;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Infrastructure\Cli\PruneExpiredPasswordResetTokensCommand;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryPasswordResetTokenRepository;
@@ -26,6 +27,12 @@ final class PruneExpiredPasswordResetTokensCommandTest extends TestCase
     private const string EXPIRED_ID = '0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e31';
 
     private const string LIVE_ID = '0190e1f2-a3b4-7c5d-8e6f-1a2b3c4d5e32';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     public function testPrunesOnlyExpiredTokensAndReportsTheCount(): void
     {

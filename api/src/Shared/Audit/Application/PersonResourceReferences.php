@@ -25,7 +25,11 @@ namespace Erpify\Shared\Audit\Application;
 interface PersonResourceReferences
 {
     /**
-     * @return list<string> distinct `resource_id`s of not-yet-erased rows of this type (empty when none)
+     * Read in bounded pages rather than one statement, so the list is not a snapshot: a row written mid-read
+     * may or may not be listed, but each id appears once.
+     *
+     * @return list<string> distinct, ascending `resource_id`s of not-yet-erased rows of this type (empty when
+     *                      none)
      */
     public function unerasedIdsOfType(string $resourceType): array;
 }

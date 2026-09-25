@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Http;
 
-use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\RecordRecoveryThrottleAuditBestEffort;
 use Erpify\Iam\Identity\Application\RequestPasswordReset;
 use Erpify\Iam\Identity\Application\SendPasswordResetEmailBestEffort;
@@ -13,6 +12,7 @@ use Erpify\Iam\Identity\Infrastructure\Http\RecoveryThrottleAuditListener;
 use Erpify\Iam\Identity\Infrastructure\Http\RequestPasswordResetController;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordRecoveryThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\RateLimiterRecoveryThrottleAuditBudget;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\CountingPreIdentityTimingFloor;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
@@ -179,7 +179,7 @@ final class RequestPasswordResetControllerTest extends TestCase
             $tokens,
             new RecordingEventBus(),
             new InlineTransactionManager(),
-            new FixedClock(new DateTimeImmutable('2026-07-14T12:00:00+00:00')),
+            new FixedClock(SystemClock::now()),
             new SendPasswordResetEmailBestEffort(new RecordingPasswordResetEmailSender(), new NullLogger()),
             $floor,
         );

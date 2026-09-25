@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Session\Application;
 
 use DateInterval;
-use DateTimeImmutable;
 use Erpify\Iam\Session\Application\StartSession;
 use Erpify\Iam\Session\Domain\Enum\SessionStatus;
 use Erpify\Iam\Session\Domain\Event\SessionStarted;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -21,9 +21,17 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(StartSession::class)]
 final class StartSessionTest extends TestCase
 {
+    private const string NOW = '2026-07-10T12:00:00+00:00';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
+
     public function testMintsAnActiveSessionPublishesStartedAndWritesTheCorrelation(): void
     {
-        $now = new DateTimeImmutable('2026-07-10T12:00:00+00:00');
+        $clock = FixedClock::at(self::NOW);
         $sessions = new InMemorySessionRepository();
         $eventBus = new RecordingEventBus();
         $currentSession = new RecordingCurrentSessionReference();
@@ -32,7 +40,7 @@ final class StartSessionTest extends TestCase
             $currentSession,
             $eventBus,
             new InlineTransactionManager(),
-            new FixedClock($now),
+            $clock,
         );
 
         $sessionId = $startSession->start(
@@ -47,7 +55,12 @@ final class StartSessionTest extends TestCase
         $this->assertSame($sessionId->toString(), $session->getId());
         $this->assertSame(SessionStatus::ACTIVE, $session->status());
         $this->assertSame(
-            $now->add(new DateInterval('P7D'))->format('c'),
+            $clock->now()->add(new DateInterval('P7D'))->format('c'),
+            $session->expiresAt()->format('c'),
+        );
+        // The row's own stamp and its expiry come from one clock, so the lifetime is readable off the row.
+        $this->assertSame(
+            $session->getCreatedAt()->add(new DateInterval('P7D'))->format('c'),
             $session->expiresAt()->format('c'),
         );
 
@@ -63,7 +76,7 @@ final class StartSessionTest extends TestCase
             $currentSession,
             new RecordingEventBus(),
             new InlineTransactionManager(),
-            new FixedClock(new DateTimeImmutable('2026-07-10T12:00:00+00:00')),
+            FixedClock::at(self::NOW),
         );
 
         $sessionId = $startSession->start(

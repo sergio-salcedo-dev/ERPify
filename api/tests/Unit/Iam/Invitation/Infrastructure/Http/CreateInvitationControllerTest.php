@@ -14,6 +14,7 @@ use Erpify\Iam\Invitation\Infrastructure\Http\InviteUserRequest;
 use Erpify\Organization\Membership\Application\GrantMembership;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Validation\Application\Validator;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
@@ -59,6 +60,12 @@ final class CreateInvitationControllerTest extends TestCase
     private const string NOW = '2026-07-17T10:00:00+00:00';
 
     private const string GRANT_ADMIN = 'users.grantAdmin';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     #[Test]
     public function itInvitesTheMemberAndAnswersABodylessCreated(): void

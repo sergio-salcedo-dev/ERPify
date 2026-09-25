@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
-use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\ChangeUserStatus;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
@@ -12,6 +11,7 @@ use Erpify\Iam\Identity\Domain\Exception\InvalidIdentityTransition;
 use Erpify\Iam\Identity\Domain\Exception\LastActiveAdministratorProtected;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
@@ -215,7 +215,7 @@ final class ChangeUserStatusTest extends TestCase
 
     private function revokeSessions(InMemorySessionRepository $sessions): RevokeSessionsBestEffort
     {
-        $clock = new FixedClock(new DateTimeImmutable('2026-07-18T12:00:00+00:00'));
+        $clock = new FixedClock(SystemClock::now());
 
         return new RevokeSessionsBestEffort(
             new RevokeAllSessions($sessions, new RecordingEventBus(), new InlineTransactionManager(), $clock),

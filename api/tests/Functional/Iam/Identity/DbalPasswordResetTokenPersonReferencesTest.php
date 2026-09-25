@@ -11,6 +11,7 @@ use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalPasswordResetTokenPersonReferences;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\AssertsKeysetPagedIds;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -32,6 +33,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(DbalPasswordResetTokenPersonReferences::class)]
 final class DbalPasswordResetTokenPersonReferencesTest extends KernelTestCase
 {
+    use AssertsKeysetPagedIds;
+
     private EntityManagerInterface $entityManager;
 
     private Connection $connection;
@@ -64,6 +67,24 @@ final class DbalPasswordResetTokenPersonReferencesTest extends KernelTestCase
             $ids = (new DbalPasswordResetTokenPersonReferences($this->connection))->retainedPersonIds();
 
             $this->assertCount(1, \array_keys($ids, $userId, true), 'DISTINCT collapses the rows');
+        });
+    }
+
+    public function testItPagesThroughTheColumnOneIdAtATime(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $seeded = [Uuid::generate(), Uuid::generate(), Uuid::generate()];
+
+            foreach ($seeded as $userId) {
+                $this->seedResetToken($userId);
+            }
+
+            $this->seedResetToken($seeded[2]);
+
+            $this->assertKeysetPagedIds(
+                $seeded,
+                (new DbalPasswordResetTokenPersonReferences($this->connection, 1))->retainedPersonIds(),
+            );
         });
     }
 
