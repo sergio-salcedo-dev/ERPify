@@ -203,15 +203,9 @@ final class ScheduleConsumptionGateTest extends TestCase
             $consumer,
         );
 
-        // Only `DEPLOYED_COMPOSE_FILE` is required to state a count; the other two are held to not
-        // contradicting it, and Compose supplies the one when they say nothing.
-        if (null === $declared) {
-            $this->assertNotSame(ScheduleConsumption::DEPLOYED_COMPOSE_FILE, $composeFile);
-
-            return;
-        }
-
-        $this->assertSame(ScheduleConsumption::SCHEDULER_CONSUMER_REPLICAS, $declared, \sprintf(
+        // Saying nothing contradicts nothing — Compose then supplies the one. Whether the deployed file may
+        // stay silent is a different rule, owned by `theDeployedComposeFilePinsTheSchedulerConsumerInWriting`.
+        $this->assertContains($declared, [null, ScheduleConsumption::SCHEDULER_CONSUMER_REPLICAS], \sprintf(
             'Service `%s` in %s declares %d replicas, and only %d is permitted. Every tick comes from an '
             . 'in-process clock and no schedule carries `->lock()`, so a second replica can duplicate a tick '
             . 'rather than share it — and one of the nine mails a person. A count of 0 fails here too: a '

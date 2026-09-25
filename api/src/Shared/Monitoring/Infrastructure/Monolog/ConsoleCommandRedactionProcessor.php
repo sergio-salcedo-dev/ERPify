@@ -142,20 +142,12 @@ final readonly class ConsoleCommandRedactionProcessor implements ProcessorInterf
             return $record;
         }
 
-        if (!\is_string($command)) {
-            return $record->with(context: [...$record->context, self::FIELD => self::SENTINEL]);
-        }
+        $redacted = \is_string($command) ? $this->redact($command) : self::SENTINEL;
 
-        $redacted = $this->redact($command);
-
-        if ($redacted === $command) {
-            return $record;
-        }
-
-        $context = $record->context;
-        $context[self::FIELD] = $redacted;
-
-        return $record->with(context: $context);
+        // A value the rule leaves as it is — a bare command name — keeps the record it arrived in, unrebuilt.
+        return $redacted === $command
+            ? $record
+            : $record->with(context: [...$record->context, self::FIELD => $redacted]);
     }
 
     /**
@@ -168,34 +160,38 @@ final readonly class ConsoleCommandRedactionProcessor implements ProcessorInterf
     {
         $tokens = \preg_split(self::SEPARATOR, \trim($command), -1, PREG_SPLIT_NO_EMPTY);
 
-        // `false` is invalid UTF-8 under the `u` modifier, which is a value nothing here can read — same
-        // verdict as any other unreadable carrier.
-        if (false === $tokens || [] === $tokens) {
-            return self::SENTINEL;
-        }
-
-        // A leading option means the name cannot be located without the command's input definition — see the
-        // class docblock. Redact whole rather than guess, which is the direction that fails safe.
-        if (\str_starts_with($tokens[0], '-')) {
-            return self::SENTINEL;
-        }
-
-        // The surviving token is kept only if it LOOKS like a command name, and that check is what closes the
-        // single-token leak: `identity:gdpr:erase-subject=<uuid>` and
-        // `organization:administrator:create:alice@example.test` are each ONE token — the shape an operator
-        // produces by typing the separator wrong, and the shape `Application::run()` hands to
-        // `ConsoleErrorEvent` on `CommandNotFoundException`, where no command bound and the whole token is
-        // operator input. Both used to be returned verbatim at CRITICAL.
-        if (1 !== \preg_match(self::COMMAND_NAME, $tokens[0])) {
+        if (!$this->leadsWithCommandName($tokens)) {
             return self::SENTINEL;
         }
 
         // Nothing followed the name, so there is nothing to stand in for. Appending the sentinel here would
         // assert that arguments were hidden when none were passed.
-        if (1 === \count($tokens)) {
-            return $tokens[0];
-        }
+        return 1 === \count($tokens) ? $tokens[0] : $tokens[0] . ' ' . self::SENTINEL;
+    }
 
-        return $tokens[0] . ' ' . self::SENTINEL;
+    /**
+     * Whether the first token is a command name this rule can vouch for — the one thing it keeps. Every way
+     * of answering no is redacted whole, which is the direction that fails safe:
+     *
+     *   - `false` is invalid UTF-8 under the `u` modifier, a value nothing here can read — the same verdict
+     *     as any other unreadable carrier.
+     *   - A leading option (`--env prod …`, `-vvv …`) means the name cannot be located without the command's
+     *     input definition — see the class docblock. {@see COMMAND_NAME} refuses it by its first character,
+     *     so it needs no clause of its own; that is the degradation the class declares, not a gap.
+     *   - A single token that merely starts like a name: `identity:gdpr:erase-subject=<uuid>` and
+     *     `organization:administrator:create:alice@example.test` are each ONE token — the shape an operator
+     *     produces by typing the separator wrong, and the shape `Application::run()` hands to
+     *     `ConsoleErrorEvent` on `CommandNotFoundException`, where no command bound and the whole token is
+     *     operator input. The shape check is what keeps either from being returned verbatim at CRITICAL.
+     *
+     * @param false|list<string> $tokens
+     *
+     * @phpstan-assert-if-true non-empty-list<string> $tokens
+     */
+    private function leadsWithCommandName(array|false $tokens): bool
+    {
+        return false !== $tokens
+            && [] !== $tokens
+            && 1 === \preg_match(self::COMMAND_NAME, $tokens[0]);
     }
 }

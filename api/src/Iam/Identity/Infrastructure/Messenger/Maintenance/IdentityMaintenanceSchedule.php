@@ -84,6 +84,14 @@ use Symfony\Contracts\Cache\CacheInterface;
 #[AsSchedule('identity_maintenance')]
 final readonly class IdentityMaintenanceSchedule implements ScheduleProviderInterface
 {
+    /**
+     * The one cadence two members share on purpose: the reconciliation and the stored-identity inspection
+     * both observe state that stays wrong until an operator repairs it, so they are re-asked at the same
+     * pace and move together. The session prune happens to tick daily as well, for an unrelated reason, and
+     * spells its own period so that retuning these two never retunes it.
+     */
+    private const string DURABLE_STATE_PERIOD = '1 day';
+
     public function __construct(
         #[Autowire(service: 'cache.scheduler_checkpoint')]
         private CacheInterface $checkpointState,
@@ -95,9 +103,9 @@ final readonly class IdentityMaintenanceSchedule implements ScheduleProviderInte
     {
         return (new Schedule())
             ->stateful($this->checkpointState)
-            ->add(RecurringMessage::every('1 day', new ReconcilePersonReferencesMessage()))
+            ->add(RecurringMessage::every(self::DURABLE_STATE_PERIOD, new ReconcilePersonReferencesMessage()))
             ->add(RecurringMessage::every('5 minutes', new NotifyLockedIdentitiesMessage()))
-            ->add(RecurringMessage::every('1 day', new InspectStoredIdentityMessage()))
+            ->add(RecurringMessage::every(self::DURABLE_STATE_PERIOD, new InspectStoredIdentityMessage()))
             ->add(RecurringMessage::every('1 day', new PruneRetiredSessionsMessage()))
         ;
     }
