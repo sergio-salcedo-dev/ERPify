@@ -83,8 +83,6 @@ final readonly class DoctrineSearchEngine
      *                                       integrity binding, never consulted for navigation (AR21)
      *
      * @return Page<object>
-     *
-     * @SuppressWarnings("PHPMD.ExcessiveParameterList")
      */
     public function paginate(
         QueryBuilder $queryBuilder,

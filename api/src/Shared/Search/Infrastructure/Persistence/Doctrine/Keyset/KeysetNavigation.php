@@ -7,8 +7,8 @@ namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset;
 /**
  * The resolved state of one navigation step, settled before any row is fetched: which columns order the walk,
  * the boundary it starts from (none on a first page), the direction it walks in and the fingerprint every
- * cursor it emits is signed under. The fetch, the page flags and every outbound cursor read all four, and read
- * them together, so they travel as one value rather than as four arguments that could be passed out of step.
+ * cursor it emits is signed under. The fetch, the page flags and the outbound cursors between them read all
+ * four, so they travel as one value rather than as four arguments that could be passed out of step.
  *
  * The direction is held once, as the wire string, and {@see isBefore()} derives from it: carrying the same fact
  * a second time as a separate boolean is how two readers of one step come to disagree about which way it went.

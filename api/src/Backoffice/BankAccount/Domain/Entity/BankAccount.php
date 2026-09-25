@@ -99,9 +99,10 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
     }
 
     /**
-     * Every account is born `ACTIVE`. Any other status is reached through {@see changeStatus()}, which is what
-     * records the transition — a factory accepting a status would let an account start life somewhere its
-     * history never says it went.
+     * Every account is born `ACTIVE`. Any other status is a transition, reached through {@see changeStatus()},
+     * which is the one place a {@see BankAccountStatusChangedDomainEvent} carrying the from/to pair is recorded:
+     * an account born `INACTIVE` or `CLOSED` would be a transition no consumer of that event ever sees, and no
+     * production caller needs one — the creation request carries no status.
      */
     public static function create(
         string $id,

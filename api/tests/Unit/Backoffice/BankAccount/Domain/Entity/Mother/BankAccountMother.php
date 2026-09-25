@@ -31,8 +31,9 @@ final class BankAccountMother
     }
 
     /**
-     * A created account with its create event already pulled, so a subsequent update/delete test
-     * observes exactly one new event.
+     * A created account with every event it recorded already pulled — the creation, plus the status change
+     * when a non-`ACTIVE` status was asked for — so a subsequent update/delete test observes exactly one new
+     * event.
      */
     public static function drained(
         string $id = self::DEFAULT_ID,
