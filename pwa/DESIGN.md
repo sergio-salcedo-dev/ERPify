@@ -325,7 +325,7 @@ slow      240ms    page-level transition (rare)
 
 Live in `pwa/src/components/erpify/`. Wrap Shadcn primitives via slots and `cn()`. Forkable; Shadcn primitives are not.
 
-> **Status (v1):** all 9 mandatory composites are built and unit-tested, plus three supporting primitives (`<CopyButton>`, `<DateField>`, `<DatePickerField>` — see below). Import via `@/components/erpify`. Tests at `pwa/tests/components/erpify/*.test.tsx` (12 files, 69 tests passing).
+> **Status (v1):** all 9 mandatory composites are built and unit-tested, plus three supporting primitives (`<CopyButton>`, `<DateField>`, `<DatePickerField>` — see below). Import via `@/components/erpify`. Tests at `pwa/tests/components/erpify/*.test.tsx`.
 
 ### `<ProblemDisplay>`
 
@@ -380,7 +380,7 @@ Values are mode-aware via tokens; the table shows the alias each variant consume
 
 Exported from the same `@/components/erpify` barrel. Not part of the "mandatory four-state / error / form" contract, but cross-entity enough to live beside the composites rather than being re-implemented per feature.
 
-- **`<CopyButton value testId>`** — canonical copy-to-clipboard control. Owns the success/error feedback flip, the icon swap, the `sr-only` fallback, and the async-clipboard → `execCommand` degradation path. Never trusts the value as HTML. `<CorrelationIdChip>` builds on it; entity components must use it instead of calling `navigator.clipboard.writeText` directly.
+- **`<CopyButton value testId>`** — canonical copy-to-clipboard control. Owns the success/error feedback flip, the icon swap and the `sr-only` fallback; copies through the async Clipboard API only and reports a failed copy on an insecure origin rather than degrading to the deprecated `execCommand`. Never trusts the value as HTML. Entity components must use it instead of calling `navigator.clipboard.writeText` directly.
 - **`<DateField testId>`** — the canonical `dd/mm/yyyy` text input: correct `pattern` / `inputMode` / `placeholder` / tooltip and the `(dd/mm/yyyy)` label hint, exported alongside the `DD_MM_YYYY_*` constants. Pairs with the `dateTimeProvider.parseDdMmYyyyToStartTimestamp` / `parseDdMmYyyyToEndTimestamp` methods (from `@/context/shared/date-time-provider/infrastructure`) for inclusive filter bounds.
 - **`<DatePickerField>`** — wraps the **native** `<input type="date">` (`yyyy-mm-dd`) inside `<FormField>`, with `min` / `max` bounds and `violations[]` wiring. Zero added dependency — distinct from the deferred third-party date-picker _library_ (see "Out of scope"); use it where a native picker is acceptable and `<DateField>`'s free-text `dd/mm/yyyy` is not.
 - **`<ThemeToggle testId>`** — the canonical light → dark → system switch. Cycles the active mode via `next-themes` (`useTheme`), shows the current theme's `Sun` / `Moon` / `Monitor` icon, and names the next action in `title` / `aria-label` (with an `sr-only` fallback). It only flips the mode — see "Theming & mode activation" below for the wiring it relies on.

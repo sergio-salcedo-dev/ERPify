@@ -85,22 +85,23 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
             return $this->reportMiswiredControl($io, $logicException);
         }
 
-        if ($verdict->isEmpty()) {
-            // The places checked BY NAME, not a bare "all clear" and not a bare count: nothing at runtime
-            // fails when the collection of sources shrinks, so a control silently reduced to one axis would
-            // print what a full clean sweep prints and a monitoring check reading the exit code would never
-            // know. Naming them puts the drop in the output, where a diffing alert sees it with no expected
-            // count for anyone to maintain — and it is also what keeps the success line from reading as a
-            // guarantee about every person id in the database.
-            $io->success('No erased identity is still named by its real id in the axes checked.');
-            $io->listing($verdict->axesCheckedKeys());
+        return $verdict->isEmpty() ? $this->reportClean($io, $verdict) : $this->reportFindings($io, $verdict);
+    }
 
-            return Command::SUCCESS;
-        }
+    /**
+     * The places checked BY NAME, not a bare "all clear" and not a bare count: nothing at runtime fails when
+     * the collection of sources shrinks, so a control silently reduced to one axis would print what a full
+     * clean sweep prints and a monitoring check reading the exit code would never know. Naming them puts the
+     * drop in the output, where a diffing alert sees it with no expected count for anyone to maintain — and
+     * it is also what keeps the success line from reading as a guarantee about every person id in the
+     * database.
+     */
+    private function reportClean(SymfonyStyle $io, UnreconciledPersonReferences $verdict): int
+    {
+        $io->success('No erased identity is still named by its real id in the axes checked.');
+        $io->listing($verdict->axesCheckedKeys());
 
-        $this->report($io, $verdict);
-
-        return Command::FAILURE;
+        return Command::SUCCESS;
     }
 
     /**
@@ -150,7 +151,11 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
         return Command::INVALID;
     }
 
-    private function report(SymfonyStyle $io, UnreconciledPersonReferences $verdict): void
+    /**
+     * `FAILURE` and nothing else means "a person survived their erasure, go repair them" — the one code an
+     * operator is sent to `identity:gdpr:erase-subject` on.
+     */
+    private function reportFindings(SymfonyStyle $io, UnreconciledPersonReferences $verdict): int
     {
         $findings = $verdict->findings();
 
@@ -188,5 +193,7 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
             . 'completed under a separate pseudonym — the original one is irreversible and cannot be reused. '
             . 'Neither reverts to the person, so this still completes the erasure.',
         ]);
+
+        return Command::FAILURE;
     }
 }

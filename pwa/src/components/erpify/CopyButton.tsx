@@ -34,31 +34,17 @@ export interface CopyButtonProps {
 
 const DEFAULT_FEEDBACK_MS = 2000;
 
+/**
+ * The async Clipboard API is the only path. It needs a secure context, which every surface of this app is —
+ * production and staging are served over HTTPS and `localhost` counts as secure — so a missing API means an
+ * insecure origin such as plain HTTP on a LAN address, and the button reports a failed copy there instead
+ * of reaching for the deprecated `document.execCommand("copy")`.
+ */
 async function writeToClipboard(value: string): Promise<void> {
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return;
-  }
-  // Fallback for non-secure contexts and old browsers without the async API.
-  if (typeof document === "undefined") {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
     throw new TypeError("Clipboard API unavailable.");
   }
-  const ta = document.createElement("textarea");
-  ta.value = value;
-  ta.setAttribute("readonly", "");
-  ta.style.position = "absolute";
-  ta.style.left = "-9999px";
-  document.body.appendChild(ta);
-  ta.select();
-  try {
-    // execCommand("copy") is deprecated but is the only fallback for non-secure
-    // contexts where navigator.clipboard is unavailable. The async Clipboard API
-    // is already preferred above.
-    const ok = document.execCommand("copy");
-    if (!ok) throw new Error("execCommand('copy') returned false");
-  } finally {
-    ta.remove();
-  }
+  await navigator.clipboard.writeText(value);
 }
 
 export function CopyButton({
