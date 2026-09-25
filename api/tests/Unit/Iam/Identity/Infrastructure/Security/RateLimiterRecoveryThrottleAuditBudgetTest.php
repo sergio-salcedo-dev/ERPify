@@ -7,7 +7,6 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 use Erpify\Iam\Identity\Infrastructure\Security\RateLimiterRecoveryThrottleAuditBudget;
 use Erpify\Iam\Identity\Infrastructure\Security\RecoveryBudgetKey;
 use Erpify\Tests\Double\Clock\RateLimiterClock;
-use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\RateLimiter\Policy\SlidingWindow;
@@ -27,12 +26,9 @@ final class RateLimiterRecoveryThrottleAuditBudgetTest extends TestCase
 
     private const string LIMITER_ID = 'recovery_throttle_audit_per_email';
 
-    #[Override]
     protected function tearDown(): void
     {
         RateLimiterClock::release();
-
-        parent::tearDown();
     }
 
     public function testTheFirstClaimOfAWindowIsGranted(): void
