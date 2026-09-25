@@ -9,6 +9,8 @@ Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount:
                 - 'DEUTDEFFXXX'
                 - 'Globex Treasury'
                 - !php/enum Erpify\Shared\Kernel\Domain\Enum\Currency::EUR
+        __calls:
+            - changeStatus:
                 - !php/enum Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus::INACTIVE
     bank_account_initech_llc:
         __factory:

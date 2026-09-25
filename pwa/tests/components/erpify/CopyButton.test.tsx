@@ -64,6 +64,22 @@ describe("CopyButton", () => {
     expect(screen.getByRole("button")).toHaveTextContent("Copy failed");
   });
 
+  it("reports an error rather than copying through the deprecated execCommand when no async clipboard exists", async () => {
+    Object.assign(navigator, { clipboard: undefined });
+    const execCommand = vi.fn().mockReturnValue(true);
+    Object.assign(document, { execCommand });
+    const onCopyResult = vi.fn();
+
+    render(<CopyButton value="x" onCopyResult={onCopyResult} feedbackTimeoutMs={5000} />);
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button")).toHaveAttribute("data-copy-status", "error");
+    });
+    expect(onCopyResult).toHaveBeenCalledWith("error");
+    expect(execCommand).not.toHaveBeenCalled();
+  });
+
   it("uses sr-only text in icon-only mode and still announces the label", () => {
     render(<CopyButton value="x" iconOnly label="Copy bank ID" testId="banks-detail__copy-id" />);
     const btn = screen.getByTestId("banks-detail__copy-id");

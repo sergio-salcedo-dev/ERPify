@@ -24,7 +24,10 @@ final class BankAccountMother
         Currency $currency = Currency::EUR,
         BankAccountStatus $status = BankAccountStatus::ACTIVE,
     ): BankAccount {
-        return BankAccount::create($id, $bankId, $holderName, $iban, $bic, $alias, $currency, $status);
+        $account = BankAccount::create($id, $bankId, $holderName, $iban, $bic, $alias, $currency);
+        $account->changeStatus($status);
+
+        return $account;
     }
 
     /**

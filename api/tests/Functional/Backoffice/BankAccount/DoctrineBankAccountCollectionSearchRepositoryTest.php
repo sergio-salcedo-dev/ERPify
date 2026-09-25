@@ -316,8 +316,8 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
             $bic,
             $alias,
             Currency::EUR,
-            $status,
         );
+        $account->changeStatus($status);
 
         $this->entityManager->persist($account);
     }
