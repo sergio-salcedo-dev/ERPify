@@ -145,9 +145,16 @@ final readonly class ConsoleCommandRedactionProcessor implements ProcessorInterf
         $redacted = \is_string($command) ? $this->redact($command) : self::SENTINEL;
 
         // A value the rule leaves as it is — a bare command name — keeps the record it arrived in, unrebuilt.
-        return $redacted === $command
-            ? $record
-            : $record->with(context: [...$record->context, self::FIELD => $redacted]);
+        if ($redacted === $command) {
+            return $record;
+        }
+
+        // Assigned rather than spread: `[...$context]` renumbers integer keys, which would detach a `{5}`
+        // placeholder the message processor resolves downstream from the value it names.
+        $context = $record->context;
+        $context[self::FIELD] = $redacted;
+
+        return $record->with(context: $context);
     }
 
     /**
