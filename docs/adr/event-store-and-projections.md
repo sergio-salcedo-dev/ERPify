@@ -419,7 +419,7 @@ constantes `self::`/`static::` del mismo fichero y lee heredocs y la API `->upda
 **Lo que un verde no prueba** —las formas de SQL que el motor no reconstruye, el SQL fuera de `api/src`
 (migraciones, tests: el purgador de fixtures trunca legítimamente), los escritores del lado de la base de datos
 y la corrección de cada miembro— se enumera en **un solo sitio**, la cabecera de `SanctionedLogMutationGateTest`,
-y `SanctionedLogMutationRulesGateTest` fija los puntos ciegos del motor para que la lista no prometa menos de lo
+y `SanctionedLogMutationBlindSpotGateTest` fija los puntos ciegos del motor para que la lista no prometa menos de lo
 que el motor ve. **La dirección segura es la del rojo**: un literal de `src` que se lea como una mutación pone el
 gate en rojo, y su mensaje lo advierte para que un falso positivo no se tome por un cambio de política.
 `AuditPruneStatementGateTest` se conserva porque fija las cláusulas de la poda, que este gate no lee.

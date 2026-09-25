@@ -22,7 +22,8 @@ use PHPUnit\Framework\TestCase;
  *
  * The comparison is EQUALITY, not "found is a subset of declared". The missing direction is the one that keeps
  * the sweep honest: an extractor broken into seeing nothing would otherwise report the cleanest tree possible.
- * {@see SanctionedLogMutationRulesGateTest} falsifies the extractor against synthetic source.
+ * {@see SanctionedLogMutationRulesGateTest} falsifies the extractor against synthetic source, and
+ * {@see SanctionedLogMutationBlindSpotGateTest} pins the shapes it does not reconstruct, listed below.
  *
  * {@see AuditPruneStatementGateTest} is not superseded: it pins the clauses of the prune (`ORDER BY id LIMIT
  * :batch FOR UPDATE`), which this gate does not read.

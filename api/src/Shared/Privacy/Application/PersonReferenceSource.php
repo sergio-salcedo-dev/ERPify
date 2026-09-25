@@ -52,7 +52,8 @@ interface PersonReferenceSource
      * the same set differently, so any alert that diffs this control's output fires on noise.
      *
      * The read is made in bounded pages, never as one statement over the whole column: paging bounds what each
-     * statement returns and scans, so no single query grows with the table. It does not bound memory — the
+     * statement RETURNS, not what it walks — a `DISTINCT` page still visits every row of the people it covers,
+     * so a subject with many rows makes that page longer. It does not bound memory either — the
      * returned list is still proportional to the distinct people the column references. Pages are not a
      * snapshot — a row written mid-read may or may not be listed — but each id still appears once.
      *

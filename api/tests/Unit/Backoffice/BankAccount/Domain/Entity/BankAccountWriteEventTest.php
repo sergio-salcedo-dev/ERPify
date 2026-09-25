@@ -14,6 +14,7 @@ use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotClosedException
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
 use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -30,7 +31,7 @@ final class BankAccountWriteEventTest extends TestCase
 {
     protected function tearDown(): void
     {
-        SystemClock::reset();
+        FreezeSystemClockExtension::pin();
 
         parent::tearDown();
     }

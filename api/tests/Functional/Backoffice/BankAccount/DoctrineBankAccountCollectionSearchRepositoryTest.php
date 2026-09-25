@@ -260,9 +260,9 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
         $betaId = Uuid::v7()->toRfc4122();
 
         // Each row is built under its own frozen instant, because the suite pins one and the frozen double
-        // answers every read with the SAME object: two aggregates built under it come out exactly tied, where
-        // the wall clock used to give them distinct microseconds and order them by construction. No choice of
-        // pinned instant fixes that — only saying when each row was created does.
+        // answers every read with the SAME object: two aggregates built under it come out exactly tied, so
+        // construction order alone orders nothing. No choice of pinned instant fixes that — only saying when
+        // each row was created does.
         SystemClock::set(FixedClock::at('2026-01-01 09:00:00'));
         $this->entityManager->persist(Bank::create($alphaId, self::BANK_ALPHA_NAME, self::BANK_ALPHA_SHORT));
         SystemClock::set(FixedClock::at('2026-01-01 09:30:00'));

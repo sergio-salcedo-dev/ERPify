@@ -16,12 +16,12 @@ use Symfony\Component\Yaml\Yaml;
  * fixtures in `tests/Unit/Gate/Fixture/ScheduleConsumption/`: the last file declaring `command` wins it whole
  * (an overlay's list replaces the base's and is never concatenated), `command: []` replaces it with an empty
  * one, `command: ~` removes the inherited command, and an overlay redefining a service without the key
- * inherits it. Presence is therefore
- * tested with `array_key_exists` — `isset` reads an explicit null as "not declared" and would hand the
- * overlay the very command it removed.
+ * inherits it. Presence is therefore tested with `array_key_exists` — `isset` reads an explicit null as
+ * "not declared" and would hand the overlay the very command it removed.
  *
- * Only `command` is merged. `extends`, `include` and the `!reset`/`!override` tags are not modelled; a custom
- * tag makes the YAML parser throw a `ParseException`, which is a failure rather than a green.
+ * Only `command` is merged. A top-level `include:`, a service's `extends:` or `profiles:` are refused with a
+ * `RuntimeException`, and a `!reset`/`!override` tag makes the YAML parser throw a `ParseException` — each a
+ * failure rather than a green. `entrypoint:` and `deploy.replicas: 0` are still read past.
  *
  * @internal test support
  */
@@ -46,6 +46,8 @@ final class ComposeStackCommands
 
         foreach ($composeFiles as $composeFile) {
             foreach (self::servicesIn($composeFile) as $service => $definition) {
+                self::refuseUnmodelledKeys($composeFile, (string) $service, $definition);
+
                 if (\is_array($definition) && \array_key_exists('command', $definition)) {
                     $commands[(string) $service] = $definition['command'];
                 }
@@ -68,6 +70,38 @@ final class ComposeStackCommands
             throw new RuntimeException(\sprintf('"%s" declares no services to read.', $composeFile));
         }
 
+        if (\array_key_exists('include', $parsed)) {
+            throw new RuntimeException(\sprintf(
+                '"%s" declares a top-level `include:`, whose services this reader cannot see; resolve it before '
+                . 'adding one, or an included consumer reads as consuming nothing.',
+                $composeFile,
+            ));
+        }
+
         return $parsed['services'];
+    }
+
+    /**
+     * `extends:` hides an inherited command and `profiles:` keeps a service from starting by default; read past,
+     * the first reports a consumer as consuming nothing and the second counts one that never runs.
+     *
+     * @throws RuntimeException
+     */
+    private static function refuseUnmodelledKeys(string $composeFile, string $service, mixed $definition): void
+    {
+        if (!\is_array($definition)) {
+            return;
+        }
+
+        foreach (['extends', 'profiles'] as $key) {
+            if (\array_key_exists($key, $definition)) {
+                throw new RuntimeException(\sprintf(
+                    'Service "%s" in "%s" declares `%s:`, which this reader does not model.',
+                    $service,
+                    $composeFile,
+                    $key,
+                ));
+            }
+        }
     }
 }

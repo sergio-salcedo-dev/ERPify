@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Gate;
 
 use Erpify\Tests\Support\ScheduleConsumption;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -101,18 +102,6 @@ final class ScheduleStackMergeRulesGateTest extends TestCase
     }
 
     #[Test]
-    public function aStackMemberDeclaringNoServicesIsRefused(): void
-    {
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageIsOrContains('declares no services to read.');
-
-        ScheduleConsumption::consumedTransportsByServiceIn(
-            self::FIXTURES . '/compose.overlay-base.yaml',
-            self::FIXTURES . '/compose.no-services.yaml',
-        );
-    }
-
-    #[Test]
     public function anOverlayEmptyingTheCommandLeavesTheServiceConsumingNothing(): void
     {
         $this->assertArrayNotHasKey(
@@ -135,5 +124,29 @@ final class ScheduleStackMergeRulesGateTest extends TestCase
             self::FIXTURES . '/compose.overlay-base.yaml',
             self::FIXTURES . '/compose.overlay-reset.yaml',
         );
+    }
+
+    #[Test]
+    #[DataProvider('provideAStackMemberTheReaderCannotReadIsRefusedCases')]
+    public function aStackMemberTheReaderCannotReadIsRefused(string $overlay, string $message): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIsOrContains($message);
+
+        ScheduleConsumption::consumedTransportsByServiceIn(
+            self::FIXTURES . '/compose.overlay-base.yaml',
+            self::FIXTURES . '/' . $overlay,
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function provideAStackMemberTheReaderCannotReadIsRefusedCases(): iterable
+    {
+        yield 'no services' => ['compose.no-services.yaml', 'declares no services to read.'];
+        yield 'top-level include' => ['compose.overlay-include.yaml', 'top-level `include:`'];
+        yield 'service extends' => ['compose.overlay-extends.yaml', 'declares `extends:`'];
+        yield 'service profiles' => ['compose.overlay-profiles.yaml', 'declares `profiles:`'];
     }
 }

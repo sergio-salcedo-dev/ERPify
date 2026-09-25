@@ -8,6 +8,8 @@ use DateInterval;
 use DateTimeImmutable;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Tests\Double\Clock\FixedClock;
+use ReflectionProperty;
 
 final class SessionMother
 {
@@ -36,13 +38,40 @@ final class SessionMother
         string $device = self::DEFAULT_DEVICE,
         ?string $ip = self::DEFAULT_IP,
     ): Session {
-        return Session::start(
-            $id,
-            $userId,
-            $organizationId,
-            $device,
-            $ip,
-            $expiresAt ?? SystemClock::now()->add(new DateInterval(self::DEFAULT_TTL_SPEC)),
-        );
+        $ttl = new DateInterval(self::DEFAULT_TTL_SPEC);
+        $expiresAt ??= SystemClock::now()->add($ttl);
+
+        if ($expiresAt > SystemClock::now()) {
+            return Session::start($id, $userId, $organizationId, $device, $ip, $expiresAt);
+        }
+
+        return self::startedBefore($expiresAt->sub($ttl), $id, $userId, $organizationId, $device, $ip, $expiresAt);
+    }
+
+    /**
+     * A session whose expiry has already passed was started one TTL before it, so its `createdAt` precedes its
+     * `expiresAt` the way a minted one does. The ambient clock is moved for the construction alone and the very
+     * object that was there is put back — not a fresh clock at the same instant, which would detach a test that
+     * holds its clock and advances it afterwards.
+     */
+    private static function startedBefore(
+        DateTimeImmutable $startedAt,
+        string $id,
+        string $userId,
+        string $organizationId,
+        string $device,
+        ?string $ip,
+        DateTimeImmutable $expiresAt,
+    ): Session {
+        $ambient = new ReflectionProperty(SystemClock::class, 'clock');
+        $previous = $ambient->getValue();
+
+        SystemClock::set(new FixedClock($startedAt));
+
+        try {
+            return Session::start($id, $userId, $organizationId, $device, $ip, $expiresAt);
+        } finally {
+            $ambient->setValue(null, $previous);
+        }
     }
 }

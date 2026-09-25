@@ -532,7 +532,8 @@ location: api/tests/Support/ComposeStackCommands.php:34
 source_spec: `spec-dw-10-schedule-gate-dev-overlay.md`
 severity: medium
 reason: Son claves YAML planas: parsean sin error y ComposeStackCommands::of() no las mira, así que un consume heredado por extends o traído por include se lee como "no consume nada", y un servicio bajo profiles se cuenta como consumidor aunque no arranque. Preexistente: el lector por fichero tenía el mismo punto ciego (el docblock del gate ya nombra extends). BoundedContainerLogRetentionGateTest ya rechaza include; el mismo rechazo aquí cerraría esa mitad.
-status: open
+status: done 2026-09-25
+resolution: fixed in #997 (review pass): ComposeStackCommands refuses a top-level `include:` and a service's `extends:` / `profiles:`, falsified by ScheduleStackMergeRulesGateTest; `entrypoint:` and `deploy.replicas: 0` stay read past, as its docblock states
 
 ### DW-55: El bullet "Declaring an #[AsSchedule]" del CLAUDE.md raíz no menciona que un `command:` en un overlay reemplaza el de la base.
 origin: spec-deferred ea851dd8e2c3
@@ -556,7 +557,8 @@ location: api/tests/Unit/Backoffice/Bank/Domain/Entity/BankTest.php:28
 source_spec: `spec-dw-25-suite-clock-seed-alignment.md`
 severity: low
 reason: BankRenameNoOpTest:40, BankTest:28, BankAccountWriteEventTest:33, StoredBankAccountFixture:32, RevokeCurrentSessionBestEffortTest:63. Inocuos hoy (el pin de Finished restaura), no introducidos por este cambio; basta sustituirlos por FreezeSystemClockExtension::pin() o borrar el tearDown.
-status: open
+status: done 2026-09-25
+resolution: fixed in #997 (review pass): the five tearDown() calls restore with FreezeSystemClockExtension::pin(); only SystemClock's own tests still call reset()
 
 ### DW-58: Los tests que construyen sesiones ya caducadas con SessionMother::active(expiresAt: <pasado>) siguen produciendo filas con caducidad anterior a su createdAt, y el guardarraíl no lo ve.
 origin: spec-deferred c8d88fb2b946
@@ -564,4 +566,5 @@ location: api/tests/Unit/Iam/Session/Domain/Entity/Mother/SessionMother.php
 source_spec: `spec-dw-25-suite-clock-seed-alignment.md`
 severity: medium
 reason: El guardarraíl compara relojes en la lectura; una caducidad explícita pasada a la Mother no pasa por ningún reloj. Ej.: PruneRetiredSessionsTest::activeSession('-91 days') sella createdAt=NOW y expiresAt=NOW-91d. Preexistente. Lo resolvería construir cada sesión bajo un reloj ambiental en expiresAt-TTL, o una aserción createdAt<=expiresAt en la Mother.
-status: open
+status: done 2026-09-25
+resolution: fixed in #997 (review pass): SessionMother builds an already-expired session one TTL before its expiry and restores the exact ambient clock object, pinned by SessionMotherTest
