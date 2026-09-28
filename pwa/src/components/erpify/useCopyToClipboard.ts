@@ -37,13 +37,15 @@ export function useCopyToClipboard(
 ): { status: CopyStatus; copy: () => Promise<void> } {
   const [status, setStatus] = useState<CopyStatus>("idle");
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
       if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
-    },
-    [],
-  );
+    };
+  }, []);
 
   async function copy(): Promise<void> {
     let next: CopyStatus;
@@ -53,10 +55,15 @@ export function useCopyToClipboard(
     } catch {
       next = "error";
     }
+    // A control unmounted while the write was in flight has no feedback left to show and no cleanup
+    // left to run, so arming a timer here would leave one nothing ever clears.
+    if (!mountedRef.current) return;
     setStatus(next);
-    onCopyResult?.(next);
+    // Armed before the caller is told, so a callback that throws cannot strand the control in its
+    // copied/error state.
     if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => setStatus("idle"), feedbackTimeoutMs);
+    onCopyResult?.(next);
   }
 
   return { status, copy };

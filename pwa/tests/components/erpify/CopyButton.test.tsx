@@ -93,6 +93,33 @@ describe("CopyButton", () => {
     },
   );
 
+  it("reports nothing and arms no timer when it unmounts before the write settles", async () => {
+    let settle: () => void = () => undefined;
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    Object.assign(navigator, { clipboard: { writeText } });
+    const onCopyResult = vi.fn();
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+
+    const { unmount } = render(<CopyButton value="x" onCopyResult={onCopyResult} />);
+    fireEvent.click(screen.getByRole("button"));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalled();
+    });
+    unmount();
+    const timersBefore = setTimeoutSpy.mock.calls.length;
+    settle();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onCopyResult).not.toHaveBeenCalled();
+    expect(setTimeoutSpy.mock.calls.length).toBe(timersBefore);
+  });
+
   it("uses sr-only text in icon-only mode and still announces the label", () => {
     render(<CopyButton value="x" iconOnly label="Copy bank ID" testId="banks-detail__copy-id" />);
     const btn = screen.getByTestId("banks-detail__copy-id");

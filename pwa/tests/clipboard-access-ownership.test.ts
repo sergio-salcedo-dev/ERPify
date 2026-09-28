@@ -4,28 +4,39 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 /**
- * `useCopyToClipboard` is the only file under `src/` that reaches the clipboard.
+ * `useCopyToClipboard` is the only file under `src/` that reaches the clipboard, and only
+ * `src/components/erpify/` imports it.
  *
- * Why: the rule lived in prose (`pwa/CLAUDE.md` → "Clipboard / navigator APIs") and
- * `CorrelationIdChip` broke it with every gate green — its own `navigator.clipboard.writeText`
- * swallowed a failed copy in silence while `CopyButton` reported one. One writer means one answer
- * to "what happens when the clipboard is unavailable", and a second writer is how that answer
- * quietly forks.
+ * Why: one writer means one answer to "what happens when the clipboard is unavailable", and a
+ * second writer is how that answer quietly forks — a copy control that writes for itself can
+ * swallow a failure in silence while its sibling reports one, and nothing else in the suite sees
+ * the difference. The import half keeps screens on `CopyButton`: the hook is kept out of the barrel,
+ * and a direct path import would otherwise walk around that.
  *
- * **What is detected.** A member named `clipboard` reached by property access (`navigator.clipboard`,
- * `globalThis.navigator.clipboard`, `x?.clipboard`), by element access with a literal key
- * (`navigator["clipboard"]`), or bound by destructuring (`const { clipboard } = navigator`). The AST
- * is read, not the text, so the word in a comment, a string or a JSX label never counts.
+ * **What is detected.** A member that writes to the clipboard — `clipboard` (the async API),
+ * `clipboardData` (a `copy` event handler) and `execCommand` (the deprecated `document` command) —
+ * reached by property access (`navigator.clipboard`, `x?.clipboard`, `e.clipboardData`), by element
+ * access with a literal key (`navigator["clipboard"]`), bound by destructuring with a plain or a
+ * literal computed key (`const { clipboard } = navigator`, `const { ["clipboard"]: c } = navigator`),
+ * or probed with `in` (`"clipboard" in navigator`). The AST is read, not the text, so the word in a
+ * comment, a string or a JSX label never counts, and each file is parsed as its own extension so a
+ * `.ts` generic arrow is never mistaken for JSX.
  *
- * **Blind spots.** A key built at runtime (`navigator["clip" + "board"]`), a reference passed in from
- * outside `src/`, `document.execCommand("copy")` (a different API, refused by `CopyButton.test.tsx`
- * rather than here), and any file outside `src/` or the four extensions below. A green proves no
- * other file under `src/` names the clipboard member — not that the owner handles it correctly.
+ * **Blind spots.** A key built at runtime (`navigator["clip" + "board"]`), a reflective read
+ * (`Reflect.get(navigator, "clipboard")`), a reference handed in from outside `src/`, and any file outside `src/` or the four extensions below. The detector is by member
+ * NAME, so an unrelated property that happens to be called `clipboard` also counts — none exists
+ * today, and the remedy for one is to rename it or narrow this walk, never an exemption. A green
+ * proves no other file under `src/` names these members and no file outside the component folder
+ * imports the hook — not that the owner handles the clipboard correctly.
  */
 const PWA_ROOT = path.resolve(__dirname, "..");
 const SRC_ROOT = path.join(PWA_ROOT, "src");
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
-const MEMBER = "clipboard";
+const MEMBERS = new Set(["clipboard", "clipboardData", "execCommand"]);
+const HOOK_MODULE = "useCopyToClipboard";
+
+/** The only folder allowed to import the hook, relative to `pwa/`. */
+const HOOK_IMPORTERS = "src/components/erpify/";
 
 /** The single file allowed to reach the clipboard, relative to `pwa/`. */
 const OWNER = "src/components/erpify/useCopyToClipboard.ts";
@@ -38,31 +49,46 @@ const MIN_FILES = 300;
 
 const toPosix = (file: string): string => file.split(path.sep).join("/");
 
+const SCRIPT_KIND_BY_EXTENSION: Record<string, ts.ScriptKind> = {
+  ".ts": ts.ScriptKind.TS,
+  ".tsx": ts.ScriptKind.TSX,
+  ".js": ts.ScriptKind.JS,
+  ".jsx": ts.ScriptKind.JSX,
+};
+
+function isMemberLiteral(node: ts.Node): boolean {
+  return (
+    (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && MEMBERS.has(node.text)
+  );
+}
+
 function namesClipboard(node: ts.Node): boolean {
   if (ts.isPropertyAccessExpression(node)) {
-    return node.name.text === MEMBER;
+    return MEMBERS.has(node.name.text);
   }
   if (ts.isElementAccessExpression(node)) {
-    const key = node.argumentExpression;
-    return (
-      (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key)) && key.text === MEMBER
-    );
+    return isMemberLiteral(node.argumentExpression);
   }
   if (ts.isBindingElement(node)) {
     const key = node.propertyName ?? node.name;
-    return (ts.isIdentifier(key) || ts.isStringLiteral(key)) && key.text === MEMBER;
+    if (ts.isComputedPropertyName(key)) {
+      return isMemberLiteral(key.expression);
+    }
+    return (ts.isIdentifier(key) || ts.isStringLiteral(key)) && MEMBERS.has(key.text);
+  }
+  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.InKeyword) {
+    return isMemberLiteral(node.left);
   }
   return false;
 }
 
+function parse(code: string, fileName: string): ts.SourceFile {
+  const kind = SCRIPT_KIND_BY_EXTENSION[path.extname(fileName)] ?? ts.ScriptKind.TSX;
+  return ts.createSourceFile(fileName, code, ts.ScriptTarget.Latest, true, kind);
+}
+
 function clipboardLines(code: string, fileName: string): number[] {
-  const source = ts.createSourceFile(
-    fileName,
-    code,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const source = parse(code, fileName);
   const lines: number[] = [];
   const visit = (node: ts.Node): void => {
     if (namesClipboard(node)) {
@@ -72,6 +98,17 @@ function clipboardLines(code: string, fileName: string): number[] {
   };
   visit(source);
   return lines;
+}
+
+/** Whether the file imports or re-exports the hook module, by any path spelling. */
+function importsHook(code: string, fileName: string): boolean {
+  return parse(code, fileName).statements.some(
+    (statement) =>
+      (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) &&
+      statement.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      path.posix.basename(statement.moduleSpecifier.text) === HOOK_MODULE,
+  );
 }
 
 function sourceFiles(): string[] {
@@ -111,8 +148,41 @@ describe("clipboard access ownership", () => {
     ["element access", 'navigator["clipboard"].writeText(v);'],
     ["destructuring", "const { clipboard } = navigator;"],
     ["renamed destructuring", "const { clipboard: c } = navigator;"],
+    ["a literal computed key", 'const { ["clipboard"]: c } = navigator;'],
+    ["an in probe", 'const ok = "clipboard" in navigator;'],
+    ["a copy event's clipboardData", 'e.clipboardData.setData("text/plain", v);'],
+    ["the deprecated execCommand", 'document.execCommand("copy");'],
+    [
+      "an access after a .ts generic arrow",
+      "const f = <T,>(v: T) => v;\nnavigator.clipboard.writeText(s);",
+    ],
   ])("detects %s", (_shape, code) => {
     expect(clipboardLines(code, "fixture.ts")).not.toEqual([]);
+  });
+
+  it("parses a .ts file as TypeScript, so an angle-bracket assertion does not hide what follows", () => {
+    const code = "const n = <number>value;\nnavigator.clipboard.writeText(s);";
+    expect(clipboardLines(code, "fixture.ts")).toEqual([2]);
+  });
+
+  it("finds the hook imported only from the component folder", () => {
+    const importers = files.filter(
+      (file) =>
+        !file.startsWith(HOOK_IMPORTERS) &&
+        importsHook(readFileSync(path.join(PWA_ROOT, file), "utf8"), file),
+    );
+    expect(importers, "screens copy through CopyButton, never the hook").toEqual([]);
+  });
+
+  it.each([
+    ["a relative import", 'import { useCopyToClipboard } from "./useCopyToClipboard";'],
+    [
+      "an aliased path import",
+      'import { useCopyToClipboard } from "@/components/erpify/useCopyToClipboard";',
+    ],
+    ["a re-export", 'export { useCopyToClipboard } from "./useCopyToClipboard";'],
+  ])("recognises the hook through %s", (_shape, code) => {
+    expect(importsHook(code, "fixture.ts")).toBe(true);
   });
 
   it.each([

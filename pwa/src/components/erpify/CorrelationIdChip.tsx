@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, X } from "lucide-react";
+import { type ReactNode } from "react";
 import { cn } from "@/components/cn";
 import { useCopyToClipboard, type CopyStatus } from "./useCopyToClipboard";
 
@@ -17,6 +18,16 @@ interface CorrelationIdChipProps {
   size?: "xs" | "sm";
   className?: string;
 }
+
+/**
+ * The failure has a visible mark of its own, as the success does: the live region reaches assistive
+ * technology only, and the native tooltip is not refreshed while the pointer is already on the token.
+ */
+const ICON_BY_STATUS: Record<CopyStatus, ReactNode> = {
+  idle: <Copy className="size-3 shrink-0 opacity-70 group-hover:opacity-100" aria-hidden="true" />,
+  copied: <Check className="text-success size-3 shrink-0" aria-hidden="true" />,
+  error: <X className="text-destructive size-3 shrink-0" aria-hidden="true" />,
+};
 
 const ANNOUNCEMENT_BY_STATUS: Record<CopyStatus, string> = {
   idle: "",
@@ -67,11 +78,7 @@ export function CorrelationIdChip({
         <span className="min-w-0 text-left break-words" data-testid="correlation-id-display">
           {id}
         </span>
-        {status === "copied" ? (
-          <Check className="text-success size-3 shrink-0" aria-hidden="true" />
-        ) : (
-          <Copy className="size-3 shrink-0 opacity-70 group-hover:opacity-100" aria-hidden="true" />
-        )}
+        {ICON_BY_STATUS[status]}
         <span className="sr-only" role="status" aria-live="polite">
           {ANNOUNCEMENT_BY_STATUS[status]}
         </span>

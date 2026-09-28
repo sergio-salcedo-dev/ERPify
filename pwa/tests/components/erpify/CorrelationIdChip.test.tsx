@@ -43,6 +43,8 @@ describe("CorrelationIdChip", () => {
       expect(screen.getByRole("status")).toHaveTextContent("Copy failed");
     });
     expect(screen.getByRole("button")).toHaveAttribute("data-copy-status", "error");
+    // A sighted user without a screen reader gets the failure from the icon, not the live region.
+    expect(screen.getByRole("button").querySelector("svg.lucide-x")).not.toBeNull();
   });
 
   it("renders the optional label prefix when supplied", () => {
