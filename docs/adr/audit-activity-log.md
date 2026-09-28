@@ -342,7 +342,13 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   **anonimiza de forma irreversible la identidad del actor conservando la traza de seguridad**. Un único
   `UPDATE` reescribe `actor_id` en todas las filas del sujeto con **un UUID aleatorio nuevo acuñado en el
   borrado** —sin valor original, sin tabla de mapeo, sin derivación determinista— y redige
-  `ip`/`user_agent` al centinela `[REDACTED]`. No borra filas; la traza (`action`, `level`, `occurred_on`,
+  `ip`/`user_agent` al centinela `[REDACTED]` —literal **reservado** a las dos sentencias de supresión:
+  `AuditLogEntry::create()` reescribe un valor capturado que lo iguale (sin espacios en los extremos, sin
+  distinguir mayúsculas) como `[client-supplied] <valor>`, así que una cabecera `User-Agent: [REDACTED]` no
+  fabrica evidencia de una redacción en las filas capturadas desde que esa regla se desplegó (las
+  anteriores no se reescribieron y pueden conservar un literal enviado por el cliente; los flags lo
+  atribuyen igual, ver más abajo; y el prefijo también es forjable: sólo garantiza que el valor difiere del
+  centinela)—. No borra filas; la traza (`action`, `level`, `occurred_on`,
   recurso, correlación) sobrevive y queda **correlacionada intra-sujeto** porque las N filas comparten el
   nuevo id. Al no quedar nada que invierta el reemplazo, el vínculo con la persona se rompe de verdad
   (anonimización efectiva, Recital 26), no una pseudonimización con clave reversible (Art. 4(5)).
@@ -410,8 +416,12 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   cualquier salto dentro de `SYMFONY_TRUSTED_PROXIES`—, pero Symfony descarta todo valor reenviado que
   falle `FILTER_VALIDATE_IP`, así que el centinela en concreto no es forjable en esa columna. Un centinela
   ahí solo puede venir, por tanto, de uno de los dos pases, y `actor_erased` los distingue (`true` el de
-  actor; `false` junto a `resource_erased = true`, éste). `user_agent` no tiene ese filtro y sí es forjable
-  como literal: la inferencia se apoya solo en `ip`. Un investigador ve que allí
+  actor; `false` junto a `resource_erased = true` y `actor_type = 'anonymous'`, éste). `user_agent` no tiene
+  ese filtro, pero el literal exacto tampoco es forjable ahí en las filas capturadas desde que se desplegó
+  `AuditRedaction::neutraliseCaptured()`, que prefija `[client-supplied] ` a todo valor que equivalga al
+  centinela; las anteriores pueden conservar un literal enviado por el cliente, y el mismo predicado lo
+  atribuye bien también en ellas, porque cada pase sobrescribe todo valor no vacío de las columnas que
+  redacta. Un investigador ve que allí
   había algo y que una erasure lo quitó. Errar al revés no es la opción segura que parece: el reconciliador
   solo lee `resource_erased = FALSE`, así que una dirección que se deje aquí es una que ninguna
   reconciliación podrá sacar nunca. **Es una capacidad nueva del insider, no una ampliada:** el pase de
@@ -448,7 +458,10 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   y almacenarlo sería una segunda fuente de verdad.** El mismo `UPDATE` escribe el pseudónimo y la
   redacción, y `GDPR_ERASURE_EXECUTED` sella ese pseudónimo, así que las filas se recuperan por
   `resource_id = <pseudónimo> AND resource_erased AND actor_type = 'anonymous' AND NOT actor_erased AND
-  (ip = '[REDACTED]' OR user_agent = '[REDACTED]')` —indexado, retroactivo a toda erasure aún en retención,
+  (ip = '[REDACTED]' OR user_agent = '[REDACTED]')` —el brazo de `user_agent` no depende de la
+  neutralización en captura: sobre filas anónimas este pase sobrescribe todo `user_agent` no vacío, un
+  literal falsificado incluido, así que la consulta vale también para filas anteriores a
+  `AuditRedaction::neutraliseCaptured()`; indexado, retroactivo a toda erasure aún en retención,
   cobertura que un campo nuevo no tendría—. Un entero almacenado, en cambio, sobrevive a las filas que
   cuenta: son más antiguas que la entrada de cumplimiento, luego la poda las retira primero y deja un número
   infalsificable. **Lo que esto no es:** la derivación es una consulta que nadie ha escrito todavía, no un
