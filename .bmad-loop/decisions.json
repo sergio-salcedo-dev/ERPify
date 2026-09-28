@@ -43,5 +43,14 @@
     "key": "2",
     "label": "Keep open for a dedicated PR outside the sweep",
     "resolution": ""
+  },
+  "DW-39": {
+    "answered_at": "2026-09-28",
+    "bundle_name": "",
+    "effect": "build",
+    "intent": "Use useSession() in the public Navbar to hide 'Sign in' and show a backoffice entry for authenticated users, with unit tests for both states.",
+    "key": "1",
+    "label": "Make the access cluster session-aware",
+    "resolution": ""
   }
 }
