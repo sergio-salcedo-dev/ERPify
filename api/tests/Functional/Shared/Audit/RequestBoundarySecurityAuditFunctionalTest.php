@@ -14,8 +14,10 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
  * Proves against real Postgres that a request-boundary `security` row is durable on its own: it is committed
- * the moment the seam returns, so no later rollback on the container's connection can take it, and inside an
- * open transaction the seam refuses rather than writing a row that rollback would erase.
+ * the moment the seam returns — another session sees it before anything else runs, which only a committed
+ * row allows — and inside an open transaction the seam refuses rather than writing a row a rollback would
+ * erase. Which listener calls the seam, and in what order against the responder, is not proven here: that is
+ * the listeners' unit tests and the `security_denial` acceptance feature.
  *
  * Visibility is judged from a SECOND connection. The container's own connection would see its uncommitted
  * writes and report a row that no other session — and no crash recovery — ever will. The durable case

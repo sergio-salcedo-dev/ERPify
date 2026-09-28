@@ -6,7 +6,6 @@ namespace Erpify\Backoffice\Audit\Infrastructure\Http\EventListener;
 
 use Erpify\Backoffice\Audit\Infrastructure\Controller\AuditEventDetailController;
 use Erpify\Backoffice\Audit\Infrastructure\Controller\AuditTimelineSearchController;
-use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,7 +16,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * Records every authorized read of the audit trail as its own `security` entry, so accessing the audit
  * log is itself auditable. It mirrors the sibling `AccessDeniedAuditListener` on the success path: on
  * `kernel.response`, for a 2xx main-request read of one of the two audit routes, it emits
- * `AUDIT_TRAIL_READ` at {@see AuditLevel::SECURITY} through {@see RequestBoundarySecurityAudit} — a
+ * `AUDIT_TRAIL_READ` at the `security` level through {@see RequestBoundarySecurityAudit} — a
  * synchronous write-before-send in autocommit, so the access record survives even if the process dies after
  * the response, and is refused rather than written when a transaction is still open on the audit connection.
  * The actor, correlation id and instant are sealed by the adapter; this listener only names the action and the

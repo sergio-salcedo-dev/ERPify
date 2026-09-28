@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Event\Application;
 
+use Closure;
 use Erpify\Shared\Event\Application\SubjectPseudonym;
 use Erpify\Shared\Event\Application\SubjectPseudonymisation;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
@@ -56,6 +57,22 @@ final class SubjectPseudonymisationTest extends TestCase
         // The replacement string has its own syntax in Postgres — `\1`…`\9` and `\&` — so it needs the same
         // guard as the pattern, and for a different reason.
         SubjectPseudonym::fromString('\1');
+    }
+
+    #[Test]
+    public function itRechecksAPseudonymBuiltWithoutItsFactory(): void
+    {
+        // The shape reflection or `unserialize()` can produce: `fromString()` never ran, so only `of()` is
+        // left to refuse the value before the adapter interpolates it into a regular expression.
+        $forged = Closure::bind(
+            static fn (): SubjectPseudonym => new SubjectPseudonym('\1'),
+            null,
+            SubjectPseudonym::class,
+        )();
+
+        $this->expectException(InvalidUuidException::class);
+
+        SubjectPseudonymisation::of(subjectId: self::SUBJECT_ID, pseudonym: $forged);
     }
 
     #[Test]

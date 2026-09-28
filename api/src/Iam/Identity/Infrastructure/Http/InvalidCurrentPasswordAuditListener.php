@@ -11,7 +11,6 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
-use Throwable;
 
 /**
  * Records a rejected current password as a `security` audit entry, closing the one credential-guessing
@@ -75,13 +74,7 @@ final readonly class InvalidCurrentPasswordAuditListener
             return;
         }
 
-        try {
-            $this->securityAudit->record(self::ACTION, ['route' => $this->routeOf($request)], $event->getThrowable());
-        } catch (Throwable $throwable) {
-            // Handed to the event, never thrown: a throwable leaving a `kernel.exception` listener escapes
-            // HttpKernel with no Problem Details at all. The responder renders this one as the 5xx it is.
-            $event->setThrowable($throwable);
-        }
+        $this->securityAudit->recordOnException($event, self::ACTION, ['route' => $this->routeOf($request)]);
     }
 
     private function routeOf(Request $request): ?string

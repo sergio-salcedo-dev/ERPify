@@ -2,7 +2,7 @@
 title: 'DW-29 + DW-34 — la denegación `security` se escribe fuera de toda transacción, y eso se hace cumplir'
 type: 'bugfix'
 created: '2026-09-28'
-status: 'blocked'
+status: 'done'
 baseline_revision: '640dae1f5beee20c6339bddc2433b689f3b88061'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -82,3 +82,19 @@ Blocking condition: límite de uso alcanzado durante el triaje de la revisión (
 - Implementación completa y sin commit: seam `RequestBoundarySecurityAudit` + tres listeners de frontera + tests unitarios/funcional + ADR D3 + ampliación de forwarders en `AuditEvidenceActions`.
 - Verificación: `php.unit` (filtro del spec + gates de evidencia) 45 OK; Behat `security_denial` + `self_audit` OK; `php.lint.audit-evidence` OK; `php.quality` exit 0.
 - Hallazgos pendientes de triaje (las cuatro capas): (1) el `LogicException` lanzado en `kernel.exception` escapa de `handleThrowable` sin Problem Details y sin encadenar la excepción original; (2) en prod (worker FrankenPHP) una transacción filtrada persiste entre requests → 5xx en cada frontera hasta reiniciar; el ADR no lo dice; (3) el test "durable" hace rollback de una transacción vacía DESPUÉS de escribir, sin probar el camino del listener; (4) falta el test de propagación de fallo en `InvalidCurrentPasswordAuditListenerTest` y `AuditTrailReadAuditListenerTest`; (5) la regla de forwarder promueve cualquier consumidor sin tokens (p.ej. `AccessLogAuditListener`) y no tiene tests de fixture (profundidad ≥2); (6) el ADR no clasifica los productores `Record*AuditBestEffort` ni los comandos CLI; (7) una línea del ADR demasiado larga; (8) ningún gate obliga a que los listeners de frontera pasen por el seam.
+
+## Review Triage Log
+
+The dev session hit the usage limit during review triage (step 4), with the four layers run and their eight findings not yet triaged. They were verified against the tree and triaged by hand in #1026.
+
+| # | Finding | Outcome |
+|---|---|---|
+| 1 | A refusal or failed write thrown from a `kernel.exception` listener escapes `HttpKernel::handleThrowable()` with no Problem Details and loses the original exception. | **Fixed.** The seam's `recordOnException()` hands the failure to the event, and the refusal chains the original throwable. Falsified. |
+| 2 | In the FrankenPHP worker, a leaked transaction outlives its request, so every audited boundary on that worker answers 5xx until it recycles. | **Measured and recorded.** DoctrineBundle resets the entity managers, not the connection. Recorded in ADR D3 as a conscious cost. Whether to roll back at request end is the **owner's decision**, still open. |
+| 3 | The "durable" test rolls back an empty transaction after writing. | **Fixed.** Autocommit is proven by visibility from a second session. |
+| 4 | No failure-propagation tests for the password and trail-read listeners. | **Fixed.** All three listeners have them. |
+| 5 | The forwarder rule admits any token-free `AuditLogger` consumer, and it has no fixture tests. | **Rejected.** Depth 1 is pinned by the registry gate's staleness check, and depth 2 has no instance. Over-inclusion errs toward demanding a classification, which fails loud. |
+| 6 | The ADR does not classify the `Record*AuditBestEffort` producers or the CLI commands. | **Fixed** in ADR D3. |
+| 7 | An ADR line is too long. | **Fixed.** |
+| 8 | No gate forces the boundary listeners through the seam. | **Fixed.** `BoundarySecurityAuditSeamGateTest`: under `Infrastructure/Http/` only the seam names `AuditLevel::SECURITY` in code, and no `kernel.exception` listener calls `record()`. Both rules falsified. |
+

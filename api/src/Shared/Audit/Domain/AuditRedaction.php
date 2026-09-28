@@ -40,8 +40,8 @@ namespace Erpify\Shared\Audit\Domain;
  * `FILTER_VALIDATE_IP`, so neutralising it too is defence in depth. {@see neutraliseCaptured()} rewrites
  * such a value with a prefix rather than nulling it — NULL means "never captured", and a header did arrive.
  * The prefix is itself forgeable: it guarantees only that the stored value differs from the sentinel, never
- * that the server minted it. Rows persisted before this rule shipped were not rewritten and may still hold
- * a client-sent literal, which the flag predicate above still attributes correctly.
+ * that the server minted it. A row stored without the rewrite may still hold a client-sent literal, which the
+ * flag predicate above still attributes correctly.
  */
 final class AuditRedaction
 {

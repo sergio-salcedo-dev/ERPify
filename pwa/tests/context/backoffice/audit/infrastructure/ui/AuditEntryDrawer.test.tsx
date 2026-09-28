@@ -80,6 +80,46 @@ describe("AuditEntryDrawer", () => {
     expect(screen.queryByText("No changes recorded")).not.toBeInTheDocument();
   });
 
+  it("says no change record was stored, never that nothing changed, when a change entry carries no changes", () => {
+    const changeEntry: AuditEntry = {
+      ...ENTRY,
+      level: "change",
+      action: "BANK_UPDATED",
+      resourceType: "Bank",
+    };
+    render(
+      <AuditEntryDrawer
+        entry={changeEntry}
+        open
+        onClose={vi.fn()}
+        detail={{ ...changeEntry, metadata: { operation: "UPDATED" } }}
+      />,
+    );
+
+    expect(screen.getByTestId("audit-entry-drawer__diff--absent")).toHaveTextContent(
+      "No change record was stored with this entry.",
+    );
+    expect(screen.queryByText("No changes recorded")).not.toBeInTheDocument();
+  });
+
+  it("still names an unreadable changes on an entry that is not a change, where no Changes section exists", () => {
+    render(
+      <AuditEntryDrawer
+        entry={ENTRY}
+        open
+        onClose={vi.fn()}
+        detail={{
+          ...ENTRY,
+          metadata: { route: "backoffice_bank_update" },
+          changesUnreadable: true,
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("audit-entry-drawer__diff--unreadable")).toBeInTheDocument();
+    expect(screen.queryByTestId("audit-entry-drawer__diff")).not.toBeInTheDocument();
+  });
+
   it("still reports a legitimately empty diff as no changes recorded", () => {
     const changeEntry: AuditEntry = {
       ...ENTRY,

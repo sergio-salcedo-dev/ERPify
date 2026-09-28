@@ -842,7 +842,9 @@ you change anything here.
       **Mislaying it is permanent loss of the channel**, which is the cost B1 was chosen with; what follows
       contractually (vendor rescue by writing to the database, or reinstallation) is not settled here.
 - [ ] **Server-side session registry & admission gate (`iam_session`):** login mints a `Session` aggregate and the
-      **Session Admission Gate** re-reads it on every authenticated `/api` request, so "authenticated" means "has a
+      **Session Admission Gate** re-reads it on every authenticated `/api` request — the `^/api` boundary of
+      `ApiRequestMatcher`, matched over the **decoded** path as the firewall and router match it, so a
+      percent-encoded `/%61pi/…` is inside it rather than past it — so "authenticated" means "has a
       **live, revocable** session", not merely "holds a cookie". The gate is **fail-closed**: a revoked or
       time-expired session → **401 `session-expired`** (re-login), an unreachable store → **503 `service-unavailable`**
       (never a fail-open pass-through). **Sign-out revokes server-side:** `POST /sessions/revoke-current` (this

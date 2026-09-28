@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Event\Application\SubjectPseudonymisation;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use InvalidArgumentException;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -63,6 +64,11 @@ final readonly class DbalEventStoreSubjectAnonymiser implements EventStoreSubjec
         $pseudonym = $pseudonymisation->pseudonym;
         Uuid::ensure($subjectId);
         Uuid::ensure($pseudonym);
+
+        if (0 === \strcasecmp($subjectId, $pseudonym)) {
+            // A pair that bypassed its factory: rewriting the id to itself would report every row anonymised.
+            throw new InvalidArgumentException('A subject cannot be pseudonymised under its own identifier.');
+        }
 
         return (int) $this->connection->executeStatement(
             'UPDATE event_store SET '

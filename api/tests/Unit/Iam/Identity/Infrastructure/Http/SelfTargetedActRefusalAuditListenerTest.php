@@ -11,6 +11,7 @@ use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAuditDoubles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -25,6 +26,8 @@ use Throwable;
 #[CoversClass(SelfTargetedActRefusalAuditListener::class)]
 final class SelfTargetedActRefusalAuditListenerTest extends TestCase
 {
+    use RequestBoundarySecurityAuditDoubles;
+
     private const string ACTOR_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66';
 
     public function testRecordsASelfTargetedRefusalAsOneResourceLessSecurityEntry(): void
@@ -101,15 +104,30 @@ final class SelfTargetedActRefusalAuditListenerTest extends TestCase
         $this->listener($logger)->onException($this->event(SelfUnlockForbidden::forActor(self::ACTOR_ID), route: null));
     }
 
-    public function testAFailedWritePropagatesRatherThanLettingTheRefusalCompleteUnrecorded(): void
+    public function testHandsAFailedWriteToTheEventRatherThanLettingTheRefusalCompleteUnrecorded(): void
     {
+        // Thrown from a `kernel.exception` listener the failure would escape HttpKernel with no Problem Details.
         $failure = new RuntimeException('audit store down');
         $logger = $this->createStub(AuditLogger::class);
         $logger->method('log')->willThrowException($failure);
+        $event = $this->event(SelfUnlockForbidden::forActor(self::ACTOR_ID));
 
-        $this->expectExceptionObject($failure);
+        $this->listener($logger)->onException($event);
 
-        $this->listener($logger)->onException($this->event(SelfUnlockForbidden::forActor(self::ACTOR_ID)));
+        $this->assertSame($failure, $event->getThrowable());
+        $this->assertFalse($event->hasResponse(), 'the responder, not this listener, answers the 5xx');
+    }
+
+    public function testHandsTheLeakedTransactionRefusalToTheEventChainedToTheRefusal(): void
+    {
+        $logger = $this->createMock(AuditLogger::class);
+        $logger->expects($this->never())->method('log');
+        $refusal = SelfUnlockForbidden::forActor(self::ACTOR_ID);
+        $event = $this->event($refusal);
+
+        $this->listenerOverALeakedTransaction($logger)->onException($event);
+
+        $this->assertRefusalOf($refusal, $event->getThrowable());
     }
 
     public function testRunsBeforeTheProblemDetailsResponder(): void
@@ -121,7 +139,15 @@ final class SelfTargetedActRefusalAuditListenerTest extends TestCase
 
     private function listener(AuditLogger $logger): SelfTargetedActRefusalAuditListener
     {
-        return new SelfTargetedActRefusalAuditListener($logger, new ApiRequestMatcher());
+        return new SelfTargetedActRefusalAuditListener($this->boundaryAudit($logger), new ApiRequestMatcher());
+    }
+
+    private function listenerOverALeakedTransaction(AuditLogger $logger): SelfTargetedActRefusalAuditListener
+    {
+        return new SelfTargetedActRefusalAuditListener(
+            $this->leakedTransactionBoundaryAudit($logger),
+            new ApiRequestMatcher(),
+        );
     }
 
     private function event(

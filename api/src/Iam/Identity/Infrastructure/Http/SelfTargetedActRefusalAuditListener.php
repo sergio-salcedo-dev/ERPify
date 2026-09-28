@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Http;
 
 use Erpify\Iam\Identity\Domain\Exception\SelfTargetedActForbidden;
-use Erpify\Shared\Audit\Application\AuditLogger;
-use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
@@ -46,11 +45,14 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * target, or per 403. The action is `ordinary`, so the retention prune bounds how long a row lives — not how
  * many such a session writes between two sweeps, which is as unbounded here as on those routes.
  *
- * **The write propagates, as every `security` write does**
- * ({@see \Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger}): a failed write surfaces as a 5xx instead of
- * the 409, rather than letting a refusal complete unrecorded. The best-effort writers in this context swallow
- * because their work has already committed and a 5xx would invite a retry of something that happened; a refusal
- * has committed nothing, so the only thing a swallow would save is the status code, at the price of the record.
+ * **A failed write is never swallowed**, as no `security` write is: it replaces the event's throwable
+ * through {@see RequestBoundarySecurityAudit::recordOnException()}, so the responder answers a Problem Details
+ * 5xx instead of the 409, rather than letting a refusal complete unrecorded. It is handed to the event and
+ * never thrown, because a throwable leaving a `kernel.exception` listener escapes HttpKernel with no Problem
+ * Details at all; and the seam refuses to write inside a leaked transaction, whose rollback would take the row
+ * with it. The best-effort writers in this context swallow because their work has already committed and a 5xx
+ * would invite a retry of something that happened; a refusal has committed nothing, so the only thing a
+ * swallow would save is the status code, at the price of the record.
  *
  * Priority above the Problem Details responder, which stops propagation once it sets the response; this
  * listener only reads and never sets one, so the 409 body is untouched. The throwable is matched directly: the
@@ -63,7 +65,7 @@ final readonly class SelfTargetedActRefusalAuditListener
     private const string ACTION = 'SELF_TARGETED_ACT_REFUSED';
 
     public function __construct(
-        private AuditLogger $auditLogger,
+        private RequestBoundarySecurityAudit $securityAudit,
         private ApiRequestMatcher $apiRequestMatcher,
     ) {
     }
@@ -87,10 +89,10 @@ final readonly class SelfTargetedActRefusalAuditListener
             return;
         }
 
-        $this->auditLogger->log(
+        $this->securityAudit->recordOnException(
+            $event,
             self::ACTION,
-            AuditLevel::SECURITY,
-            metadata: ['refusal' => $refusal->type(), 'route' => $this->routeOf($request)],
+            ['refusal' => $refusal->type(), 'route' => $this->routeOf($request)],
         );
     }
 

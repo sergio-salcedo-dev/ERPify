@@ -43,7 +43,7 @@ deferred:
 
 | Scenario | Input / State | Expected Output / Behavior | Error Handling |
 |----------|--------------|---------------------------|----------------|
-| null | fila con `metadata = {"changes": null}` | API sirve `"changes":null`; PWA admite el sobre, `detail.metadata.changes` ausente, drawer pinta diff vacío | ninguno |
+| null | fila con `metadata = {"changes": null}` | API sirve `"changes":null`; PWA admite el sobre, `detail.metadata.changes` ausente con `changesUnreadable`, drawer pinta el aviso «Diff unavailable — …» | ninguno |
 | escalar | `changes` = `"x"`, `7`, `1.5`, `true`/`false` | API lo sirve verbatim; PWA admite y retira el slot | ninguno |
 | lista | `changes` = `[]` o `[{…}]` | sin cambios: PWA rechaza | `MALFORMED_RESPONSE_ENVELOPE` |
 | mapa roto | `changes` = `{name: {old: "a"}}` | sin cambios: PWA rechaza | `MALFORMED_RESPONSE_ENVELOPE` |
