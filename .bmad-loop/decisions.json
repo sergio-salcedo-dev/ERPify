@@ -1,0 +1,11 @@
+{
+  "DW-16": {
+    "answered_at": "2026-09-28",
+    "bundle_name": "",
+    "effect": "build",
+    "intent": "Retire the optimistic-concurrency claim from DbalEventStore's docblock, remove the unreachable catch and EventStreamConcurrencyConflict, and document aggregate_version as informative in the event-store ADR.",
+    "key": "1",
+    "label": "Informative: retire the promise",
+    "resolution": ""
+  }
+}
