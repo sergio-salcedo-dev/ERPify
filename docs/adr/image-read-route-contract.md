@@ -1,6 +1,6 @@
 # ADR — The image read route: a provisional authorization frontier, no audit, a bounded cache
 
-> **Status:** accepted · **Date:** 2026-08-31 · **Scope:** `GET /api/v1/images/{imageId}` in `Shared/Images` — who may read it, whether a read is audited, how long a client may reuse the response, and what the digest in its `ETag` commits to.
+> **Status:** accepted · **Date:** 2026-09-25 (decided 2026-08-31, when the images epic closed) · **Scope:** `GET /api/v1/images/{imageId}` in `Shared/Images` — who may read it, whether a read is audited, how long a client may reuse the response, and what the digest in its `ETag` commits to.
 >
 > Narrows the read-path paragraph of [`images-vs-documents-conservation-contract.md`](./images-vs-documents-conservation-contract.md) D6, which asked the serving story to declare a voter or argue the route public, and to audit the read "like any other". The first slice ships no consumer, and both halves of that sentence turn out to need one. The failure signal of the same route is a separate record: [`image-read-failure-signal-bound.md`](./image-read-failure-signal-bound.md).
 
@@ -44,6 +44,10 @@ The `resource_id` crosswalk (issue #555), which the conservation ADR named as th
 - **`immutable`** because the slice exposes no operation that replaces the bytes of an existing `ImageId` — only creation and deletion, never an in-place update.
 - **One hour, not one year.** Immutability of the **identifier** does not imply indefinite cacheability of the **bytes**. The correctness argument for a year is sound — the representation never changes — but the module's contract is *reliable deletion*, and deletion is a lifecycle event distinct from mutation: with a year, every viewer keeps serving a deleted image for up to a year with no request reaching the server. That is indefensible in a module that cannot tell a logo from an avatar.
 
+- **`Vary: Cookie`** because `private` bounds *who* may hold the copy, not *when* it stops describing the request that made it: authentication is a session cookie, so without it the browser keeps serving the bytes to whoever holds the tab after logout, with no request reaching a server that could refuse. The same argument as the hour, applied to a trust boundary the hour does not reach.
+
+What leaves the process is not this string: the `main` firewall is stateful, so Symfony's session listener rewrites the header on `kernel.response`, adding `must-revalidate` and an `Expires`. That is accepted rather than opted out of — `immutable` governs the fresh phase and `must-revalidate` the stale one, and the rewrite shortens a copy's life after an erasure rather than lengthening it.
+
 `3600` is a **prior, not a measurement**: there is no deletion SLA and no consumer from which to derive a reuse window. If that SLA turns out to be zero, the answer is `no-store`, not a smaller number.
 
 **Discarded: `max-age=31536000`.** The value the requirement originally asked for; right on the correctness axis, wrong on the erasure axis.
@@ -53,6 +57,8 @@ A conditional request is answered `304` only after the same verified read as a `
 ### D4 — `Range` is ignored
 
 A `Range` header is ignored and the full body is always returned with `200` — never `206`, never `416` — and no `Accept-Ranges` is advertised. Nobody has asked for partial content, and a partial implementation of that contract commits the route to edge cases (multipart ranges, `If-Range`, the interaction with a verified read) that nothing exercises. Declared, not forgotten; the first consumer serving large images reopens it.
+
+**Discarded: honouring single ranges only.** It looks like the cheap half of the contract, but a `206` still has to be served from a verified read of the whole object, so it saves transfer without saving I/O, and it binds the route to `If-Range` semantics before anything needs them.
 
 ### D5 — The canonicalization is an implicit version 1
 

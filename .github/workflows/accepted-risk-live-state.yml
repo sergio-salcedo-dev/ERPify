@@ -104,12 +104,17 @@ jobs:
             fi
           done
 
+          # One selection per root, each the same as AcceptedRiskTagGateTest's: every `.php` under api/src,
+          # and only the TOP LEVEL of the other two (the gate globs `spec-*.md` and `docs/adr/*.md`).
           issues=""
           while IFS= read -r -d '' file; do
             found="$(extract "$file" | grep -oE '#[1-9][0-9]*' | tr -d '#')" || true
             issues="${issues}${found}"$'\n'
-          done < <(find api/src _bmad-output/implementation-artifacts docs/adr -type f \
-            \( -name '*.php' -o -name 'spec-*.md' -o -path 'docs/adr/*.md' \) -print0)
+          done < <(
+            find api/src -type f -name '*.php' -print0
+            find _bmad-output/implementation-artifacts -maxdepth 1 -type f -name 'spec-*.md' -print0
+            find docs/adr -maxdepth 1 -type f -name '*.md' -print0
+          )
 
           unique_issues="$(printf '%s\n' "$issues" | grep -E '^[0-9]+$' | sort -un)" || true
 

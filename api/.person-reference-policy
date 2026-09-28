@@ -53,7 +53,7 @@
 #     half the automation cannot reach.
 #   - It does not reach references born in CONFIGURATION. A person id that arrives through a route default, a
 #     service argument or a YAML parameter is declared by no property, so no reflection over properties sees
-#     it. Closing that is FR9 of the GDPR-hardening epic, deferred with the ownership question it opens.
+#     it. Open in PRODUCTION_SECURITY_CHECKLIST.md §7 ("A person's id persisted through configuration").
 #   - It does not reach TABLES WITH NO DOCTRINE ENTITY. `audit_log.actor_id`, `audit_log.resource_id`,
 #     `audit_log.metadata` and `event_store.aggregate_id` are injected by `postGenerateSchema` listeners and
 #     written through raw SQL: no domain property declares them, so this sweep is structurally blind to all

@@ -1,6 +1,6 @@
-# ADR — Authorization model boundaries: what will never be a `Role`, and who may read the trail
+# ADR — Authorization model boundaries: what will never be a `Role`, who may read the trail, and how identities are administered
 
-> **Status:** accepted · **Date:** 2026-07-23 · **Scope:** `api/src/Shared/Access`, `api/src/Iam/Identity` (security and the identity console), `pwa/src/app/backoffice/users`, `api/src/Backoffice/Audit`, `api/src/Organization` — and any future platform/tenancy work.
+> **Status:** accepted · **Date:** 2026-07-23, D4 added 2026-09-25 · **Scope:** `api/src/Shared/Access`, `api/src/Iam/Identity` (security and the identity console), `pwa/src/app/backoffice/users`, `api/src/Backoffice/Audit`, `api/src/Organization` — and any future platform/tenancy work.
 
 ## Context
 

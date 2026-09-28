@@ -120,7 +120,7 @@ Solo lo abierto. Ordenados por coste/beneficio, no por severidad:
 **Higiene de artefactos (barrido único):**
 - Actualizar las cabeceras `Status` de `docs/adr/auth-rbac-subsystem.md` (+ su línea `Scope`, que sigue diciendo `Backoffice/Identity`), `docs/adr/identity-invitation-lifecycle.md` y los addenda.
 - ~~Reconciliar `epics-identity-invitation-lifecycle.md` con lo enviado (modelo de `Session`, emails síncronos, `UserLocked` vs `AccountLocked`) o marcarlo explícitamente como histórico.~~ Cerrado: el artefacto salió del árbol (git lo conserva, #458).
-- Corregir las rutas `Backoffice/Identity/...` en el ADR, addendum y épica de RM.
+- Corregir las rutas `Backoffice/Identity/...` en el ADR, addendum y épica de RM. El addendum y la épica salieron del árbol con #999; queda el ADR.
 - Aplicar la regla de poda a ii-4 e ii-5 (`Status: done`) y actualizar el fichero de ii-5 para reflejar #493.
 
 **Deuda con issue (los 10 abiertos):** #435, #436, #438, #462, #468, #470, #474, #495, #505 — más **#376**, que arrastra desde la retro de E1 y hoy es el gate duro de U-5a.

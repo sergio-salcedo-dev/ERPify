@@ -15,7 +15,7 @@ use SplFileInfo;
  * `GET /api/v1/images/{imageId}` carries no `#[IsGranted]`, and this is what stops that staying true by
  * accident once it stops being safe.
  *
- * **The decision is the epic's and is not reopened here.** A session is the whole authorization story for
+ * **The decision is recorded in the ADR and is not reopened here.** A session is the whole authorization story for
  * this slice: the module holds no owner, cannot tell a company logo from a person's avatar, and there is no
  * consumer relation to vote on — so a voter would be a permission invented ahead of the thing it governs
  * (`docs/adr/image-read-route-contract.md`, D1). What makes that defensible is the SECOND half of the same
@@ -28,12 +28,12 @@ use SplFileInfo;
  * answers 403 to every caller, which does not defer the decision, it deletes the slice.
  *
  * So the tripwire is on the PRECONDITION rather than on the route. While no aggregate outside this module
- * references an image, the frontier is exactly as wide as the epic says it is. The moment one does, this
+ * references an image, the frontier is exactly as wide as D1 says it is. The moment one does, this
  * goes red in the diff that introduces it — which is the diff where the authorization question has an
  * answer, and the only one where it can be asked honestly.
  *
  * **Blind spots, stated because a green here is narrower than it reads.** It matches a property NAME ending
- * in `ImageId` — the two shapes the epic names (`Bank.logoImageId`, `User.avatarImageId`) and anything
+ * in `ImageId` — the two shapes the images epic named (`Bank.logoImageId`, `User.avatarImageId`) and anything
  * spelled like them. A consumer holding the value under another name, in a join table, in a JSON column, or
  * reached through a service rather than a field, is invisible. It is a floor on the accidental case, never a
  * ceiling on the deliberate one, and it says nothing about whether an authorization policy that DOES arrive
@@ -72,8 +72,9 @@ final class ImageConsumerAuthorizationGateTest extends TestCase
 
         $this->assertSame([], $consumers, \sprintf(
             "An aggregate outside Shared/Images now references an image:\n  %s\n\n"
-            . "`GET /api/v1/images/{imageId}` carries no `#[IsGranted]`, and the epic's argument for that is "
-            . 'that no consumer relation exists to vote on. This is the change that ends that argument, so '
+            . '`GET /api/v1/images/{imageId}` carries no `#[IsGranted]`, and the argument for that '
+            . '(`docs/adr/image-read-route-contract.md`, D1) is that no consumer relation exists to vote on. '
+            . 'This is the change that ends that argument, so '
             . "it is the change that has to answer it:\n"
             . "  - decide whether this consumer's images are person-denoting, and\n"
             . '  - give the route an authorization policy, or record in `docs/adr/image-read-route-contract.md` '

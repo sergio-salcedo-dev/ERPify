@@ -5,6 +5,14 @@
 # tracking_system: file-system
 # story_location: {project-root}/_bmad-output/implementation-artifacts
 
+# SI-<n> labels below are the frozen invariants of architecture addenda that left the tree with their
+# epics; each is now owned by a durable record, which is where to read it:
+#   SI-1…SI-5   docs/adr/auth-rbac-subsystem.md (SI-5 = D3)
+#   SI-6…SI-9   docs/adr/rbac-authorization-model.md (D1, D4, D5, D8, D9 and its tripwires)
+#   SI-10…SI-15 docs/adr/identity-invitation-lifecycle.md (SI-12 = D10, SI-13 = D11)
+#   SI-16…SI-20 docs/adr/authorization-model-boundaries.md D4, with the Role.ts and Permission.ts docblocks
+#   SI-21…SI-23 CLAUDE.md "Persisting a person's id" and docs/rules/testing.md "what makes one able to fail"
+
 # STATUS DEFINITIONS:
 # ==================
 # Epic Status:

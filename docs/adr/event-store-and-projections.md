@@ -297,8 +297,10 @@ proyector esa maquinaria es puro coste sin beneficio.
 así que ocurre con `async`, con `sync` y sin enrutar. Para los eventos cuyo agregado **es una persona**, el
 `aggregate_id` **es** el id real del sujeto; y `SessionStarted`, `SessionRevoked` y los seis `Invitation*` lo
 llevan además en el `payload`. Nada en la cadena de erasure toca esta tabla, de modo que el identificador de una
-persona **sobrevive a su propio borrado, para siempre**. Eso es incompatible con la regla de que toda referencia persistida a una persona tiene un dueño de borrado
-que la ejecuta (`api/.person-reference-policy`, CLAUDE.md → «Persisting a person's id»).
+persona **sobrevive a su propio borrado, para siempre**. Eso es incompatible con la regla de que toda referencia
+persistida a una persona —y el `aggregate_id` de un evento cuyo agregado **es** una persona lo es, aunque
+`api/.person-reference-policy` solo alcance columnas de entidad— tiene un dueño de borrado que la ejecuta
+(`api/.person-reference-policy`, CLAUDE.md → «Persisting a person's id»).
 
 **Decisión: el log deja de ser estrictamente inmutable y pasa a ser _append-only con un conjunto cerrado de
 mutaciones de primera clase_ — hoy exactamente una sobre `event_store`, cuatro entre los dos logs, cerradas por
