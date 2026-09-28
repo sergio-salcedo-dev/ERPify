@@ -64,16 +64,18 @@ final class InMemorySessionRepositoryContractTest extends TestCase
     public function testFindByUserIdListsTheUsersSessionsNewestFirst(): void
     {
         $now = new DateTimeImmutable(self::NOW);
-        SystemClock::set(new FixedClock($now));
 
+        // Each session is minted under the instant that stamps its `createdAt`; the reads then run at `$now`.
+        SystemClock::set(new FixedClock($now->modify('-3 days')));
         $oldest = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
-        $oldest->setCreatedAt($now->modify('-3 days'));
 
+        SystemClock::set(new FixedClock($now->modify('-1 day')));
         $newest = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
-        $newest->setCreatedAt($now->modify('-1 day'));
 
+        SystemClock::set(new FixedClock($now->modify('-2 days')));
         $middle = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
-        $middle->setCreatedAt($now->modify('-2 days'));
+
+        SystemClock::set(new FixedClock($now));
 
         // Preset in an order matching neither the expectation nor its reverse, so answering in insertion
         // order cannot pass by coincidence.
@@ -93,8 +95,7 @@ final class InMemorySessionRepositoryContractTest extends TestCase
         // here and a coin flip in production, which is the divergence the mirroring exists to prevent.
         $lower = SessionMother::active(id: '0190c1d2-e3f4-7a5b-8c6d-000000000001', expiresAt: $now->modify('+1 hour'));
         $higher = SessionMother::active(id: '0190c1d2-e3f4-7a5b-8c6d-000000000002', expiresAt: $now->modify('+1 hour'));
-        $lower->setCreatedAt($now);
-        $higher->setCreatedAt($now);
+        $this->assertSame($lower->getCreatedAt(), $higher->getCreatedAt(), 'both are minted at the frozen instant');
 
         $sessions = new InMemorySessionRepository($lower, $higher);
 

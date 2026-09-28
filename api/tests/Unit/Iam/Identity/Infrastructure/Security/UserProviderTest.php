@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
+use Erpify\Iam\Identity\Application\RehashPasswordBestEffort;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
 use Erpify\Tests\Unit\Iam\Identity\Application\CountingPreIdentityTimingFloor;
+use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -61,7 +64,7 @@ final class UserProviderTest extends TestCase
     public function testAnUnknownEmailStillPaysTheTimingFloorSoLatencyDoesNotLeakExistence(): void
     {
         $floor = new CountingPreIdentityTimingFloor();
-        $provider = new UserProvider(new InMemoryUserRepository(), $floor);
+        $provider = $this->provider(new InMemoryUserRepository(), $floor);
 
         $this->expectException(UserNotFoundException::class);
 
@@ -75,7 +78,7 @@ final class UserProviderTest extends TestCase
     public function testAMalformedIdentifierStillPaysTheTimingFloor(): void
     {
         $floor = new CountingPreIdentityTimingFloor();
-        $provider = new UserProvider(new InMemoryUserRepository(), $floor);
+        $provider = $this->provider(new InMemoryUserRepository(), $floor);
 
         $this->expectException(UserNotFoundException::class);
 
@@ -89,7 +92,7 @@ final class UserProviderTest extends TestCase
     public function testAKnownUserPaysNoFloorBecauseItsRealCredentialCheckFollows(): void
     {
         $floor = new CountingPreIdentityTimingFloor();
-        $provider = new UserProvider(new InMemoryUserRepository(UserMother::create()), $floor);
+        $provider = $this->provider(new InMemoryUserRepository(UserMother::create()), $floor);
 
         $provider->loadUserByIdentifier(UserMother::DEFAULT_EMAIL);
 
@@ -123,8 +126,14 @@ final class UserProviderTest extends TestCase
         $this->assertFalse($provider->supportsClass(UserInterface::class));
     }
 
-    private function provider(InMemoryUserRepository $repository): UserProvider
-    {
-        return new UserProvider($repository, new CountingPreIdentityTimingFloor());
+    private function provider(
+        InMemoryUserRepository $repository,
+        CountingPreIdentityTimingFloor $floor = new CountingPreIdentityTimingFloor(),
+    ): UserProvider {
+        return new UserProvider(
+            $repository,
+            $floor,
+            new RehashPasswordBestEffort($repository, new InlineTransactionManager(), new NullLogger()),
+        );
     }
 }

@@ -11,7 +11,6 @@ use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
-use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -34,12 +33,10 @@ final class PruneRetiredSessionsTest extends TestCase
 {
     private const string NOW = '2026-07-10T12:00:00+00:00';
 
-    #[Override]
-    protected function tearDown(): void
+    protected function setUp(): void
     {
-        // The revocation stamp comes from the ambient clock, so every case sets it; leaving it set would hand
-        // the next test in the process a frozen "now" it never asked for.
-        SystemClock::reset();
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
     }
 
     public function testDeletesASessionRevokedBeforeTheRetentionWindow(): void
@@ -117,11 +114,15 @@ final class PruneRetiredSessionsTest extends TestCase
 
     private function revokedSession(string $revokedOffset, string $expiryOffset = '+1 hour'): Session
     {
+        // The revocation stamp comes from the ambient clock, so the row is built and revoked at that instant,
+        // then the ambient clock returns to `NOW` for every row built after it and for the sweep.
         $now = new DateTimeImmutable(self::NOW);
-        $session = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify($expiryOffset));
-
         SystemClock::set(new FixedClock($now->modify($revokedOffset)));
+
+        $session = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify($expiryOffset));
         $session->revoke();
+
+        SystemClock::set(new FixedClock($now));
 
         return $session;
     }
@@ -135,6 +136,9 @@ final class PruneRetiredSessionsTest extends TestCase
 
     private function pruner(InMemorySessionRepository $sessions): PruneRetiredSessions
     {
-        return new PruneRetiredSessions($sessions, new FixedClock(new DateTimeImmutable(self::NOW)));
+        $clock = FixedClock::at(self::NOW);
+        SystemClock::set($clock);
+
+        return new PruneRetiredSessions($sessions, $clock);
     }
 }

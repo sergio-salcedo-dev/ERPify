@@ -121,6 +121,13 @@ describe("ApiAuditEventDetailRepository response guard", () => {
         data: { ...DETAIL, metadata: { ...DETAIL.metadata, operation: "UPDATED" } },
       }),
     ).toBe(true);
+    // An empty diff — a write whose every field was discarded — is still a MAP on the wire: the API
+    // guarantees `"changes":{}` for it, and this is the shape that must keep validating.
+    expect(
+      isAuditEventDetailResponse({
+        data: { ...DETAIL, metadata: { changes: {}, operation: "UPDATED" } },
+      }),
+    ).toBe(true);
     // A row with no diff still validates a legitimate operation on its own.
     expect(
       isAuditEventDetailResponse({ data: { ...DETAIL, metadata: { operation: "CREATED" } } }),
@@ -141,6 +148,10 @@ describe("ApiAuditEventDetailRepository response guard", () => {
     // contract is a map, and accepting `[]` here would make the client the place that hides a
     // contract drift rather than the place that reports it.
     expect(isAuditEventDetailResponse({ data: { ...DETAIL, metadata: [] } })).toBe(false);
+    // The same holds one level down: `changes` is a map, so an empty ARRAY there is drift too.
+    expect(isAuditEventDetailResponse({ data: { ...DETAIL, metadata: { changes: [] } } })).toBe(
+      false,
+    );
     // Drift: a change side is an object, not a scalar/null.
     expect(
       isAuditEventDetailResponse({

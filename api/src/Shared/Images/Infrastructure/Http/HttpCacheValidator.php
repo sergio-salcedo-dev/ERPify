@@ -19,7 +19,7 @@ use Symfony\Component\HttpFoundation\Request;
  *
  * The name drops "content-addressed" on purpose. Nothing in this module addresses content by its hash — the
  * digest is used as an ATTRIBUTE of a representation identified by its `ImageId`, never as its address —
- * and carrying the old name forward would have implied a storage model this epic explicitly refused.
+ * and carrying the old name forward would have implied a storage model this module explicitly refused.
  */
 final readonly class HttpCacheValidator
 {

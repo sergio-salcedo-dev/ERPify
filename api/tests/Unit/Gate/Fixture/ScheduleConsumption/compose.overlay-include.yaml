@@ -1,0 +1,7 @@
+# A top-level `include:` merges another file's services into the stack. The reader sees only this file's own
+# `services:` key, so an included consumer would read as "consumes nothing" — the read must refuse instead.
+include:
+  - compose.overlay-base.yaml
+services:
+  messenger_worker:
+    image: alpine

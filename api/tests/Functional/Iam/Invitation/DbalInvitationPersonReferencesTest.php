@@ -11,6 +11,7 @@ use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Infrastructure\Persistence\Doctrine\DbalInvitationPersonReferences;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\AssertsKeysetPagedIds;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -27,6 +28,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(DbalInvitationPersonReferences::class)]
 final class DbalInvitationPersonReferencesTest extends KernelTestCase
 {
+    use AssertsKeysetPagedIds;
+
     private EntityManagerInterface $entityManager;
 
     private Connection $connection;
@@ -60,6 +63,24 @@ final class DbalInvitationPersonReferencesTest extends KernelTestCase
 
             // An operator must be handed one id to repair, not one per invitation ever addressed.
             $this->assertCount(1, \array_keys($ids, $invitedUserId, true), 'DISTINCT collapses the rows');
+        });
+    }
+
+    public function testItPagesThroughTheColumnOneIdAtATime(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $seeded = [Uuid::generate(), Uuid::generate(), Uuid::generate()];
+
+            foreach ($seeded as $invitedUserId) {
+                $this->seedInvitation($invitedUserId);
+            }
+
+            $this->seedInvitation($seeded[1]);
+
+            $this->assertKeysetPagedIds(
+                $seeded,
+                (new DbalInvitationPersonReferences($this->connection, 1))->retainedPersonIds(),
+            );
         });
     }
 

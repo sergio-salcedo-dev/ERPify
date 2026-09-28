@@ -18,6 +18,7 @@ use Erpify\Iam\Identity\Domain\Exception\NewPasswordMustDiffer;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
@@ -43,6 +44,12 @@ use Throwable;
 final class ChangeMyPasswordTest extends TestCase
 {
     private const string NEW_HASH = 'new-argon2id-hash';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(new FixedClock($this->now()));
+    }
 
     public function testReplacesTheCredentialRevokesEverySessionEmitsAndNotifies(): void
     {

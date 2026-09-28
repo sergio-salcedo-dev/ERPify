@@ -253,6 +253,7 @@ php.lint.schedule-consumption: ## Schedule transport-consumption gate
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleConsumptionGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleConsumptionRulesGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleReplicaRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=ScheduleStackMergeRulesGateTest
 	@$(PHP_TEST) bin/phpunit --filter=ScheduleDeclarationRulesGateTest
 
 ## —— Prod-container compile gate ———————————————————————————————————————————
@@ -486,14 +487,17 @@ php.lint.public-access: ## Firewall public-exemption classification gate
 
 # Fails CI when a route in api/.route-manifest.json has no line in api/.credential-proof-policy, when a line
 # names a route the router no longer declares, when an `anonymous` route is not one the firewall exempts, or
-# when a `credential-affecting` route's controller does not spend CurrentPasswordProofThrottle BEFORE reaching
-# a use case that calls ProveCurrentPassword::ensure(). Creating, replacing or destroying the caller's own
-# credential re-proves the current password against the one per-identity budget — a rule that lived in a
-# docblock until a third route shipped without it. Two classes, each selected by exact name in its own run so
-# a vanished one is an empty suite rather than a green subset; the registry header enumerates the blind spots.
+# when a `credential-affecting` route's action does not spend CurrentPasswordProofThrottle and call
+# PasswordHasher::verify() BEFORE invoking a use-case method that calls ProveCurrentPassword::ensure().
+# Creating, replacing or destroying the caller's own credential re-proves the current password against the one
+# per-identity budget — a rule that lived in a docblock until a third route shipped without it. Four classes — the tree, the registry-side rules, the proof
+# over an action, and the token reader deciding what a call is — each selected by name in its own run so a
+# vanished one is an empty suite rather than a green subset; the registry header enumerates the blind spots.
 php.lint.credential-proof: ## Credential-affecting route current-password proof gate
 	@$(PHP_TEST) bin/phpunit --filter=CredentialProofGateTest
 	@$(PHP_TEST) bin/phpunit --filter=CredentialProofRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=CredentialProofActionRulesGateTest
+	@$(PHP_TEST) bin/phpunit --filter=PhpCallSitesTest
 
 ## —— Artifact-gate placement gate ——————————————————————————————————————————
 
@@ -570,8 +574,8 @@ php.lint.log-retention: ## Bounded container-log retention gate (compose `loggin
 
 # An "accept, don't fix" disposition recorded only in prose (a docblock, a spec paragraph) has no open,
 # searchable tracking record -- the acceptance is invisible to audit. This is the offline half only: it
-# validates that every `@accepted-risk #<issue>` tag under api/src and the implementation-artifact specs is
-# well-formed and co-located with real rationale (a content floor, never a semantic "disposition sentence"
+# validates that every `@accepted-risk #<issue>` tag under api/src, the implementation-artifact specs and
+# docs/adr is well-formed and co-located with real rationale (a content floor, never a semantic "disposition sentence"
 # lookup -- this gate cannot know which sentence that is). Whether the referenced issue is still OPEN is a
 # separate, independent GitHub Actions job (.github/workflows/accepted-risk-live-state.yml) with network
 # access -- deliberately not merged into this target, which stays zero-network like every other php.lint.*.

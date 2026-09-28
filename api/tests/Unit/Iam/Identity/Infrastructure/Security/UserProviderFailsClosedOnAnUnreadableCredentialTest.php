@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
+use Erpify\Iam\Identity\Application\RehashPasswordBestEffort;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
 use Erpify\Tests\Unit\Iam\Identity\Application\CountingPreIdentityTimingFloor;
+use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use ReflectionProperty;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
 
@@ -38,7 +41,12 @@ final class UserProviderFailsClosedOnAnUnreadableCredentialTest extends TestCase
         $user = UserMother::create();
         (new ReflectionProperty(User::class, 'passwordHash'))->setValue($user, '');
         $timingFloor = new CountingPreIdentityTimingFloor();
-        $provider = new UserProvider(new InMemoryUserRepository($user), $timingFloor);
+        $users = new InMemoryUserRepository($user);
+        $provider = new UserProvider(
+            $users,
+            $timingFloor,
+            new RehashPasswordBestEffort($users, new InlineTransactionManager(), new NullLogger()),
+        );
 
         try {
             $provider->loadUserByIdentifier(UserMother::DEFAULT_EMAIL);

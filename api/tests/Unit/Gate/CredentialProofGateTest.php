@@ -13,7 +13,8 @@ use PHPUnit\Framework\TestCase;
  * The gate over the real tree: every route the router declares is classified in
  * `api/.credential-proof-policy`, no line outlives its route, an `anonymous` route is one the firewall
  * actually exempts, and every `credential-affecting` route's controller spends the shared
- * `CurrentPasswordProofThrottle` budget before reaching a use case that calls `ProveCurrentPassword`.
+ * `CurrentPasswordProofThrottle` budget in the action bound to it, verifies the submitted password, and only
+ * then invokes a use-case method that calls `ProveCurrentPassword::ensure()`.
  *
  * The failure it exists for is a fourth credential route arriving with every other gate green.
  *
@@ -38,7 +39,7 @@ final class CredentialProofGateTest extends TestCase
         );
         $this->assertArrayHasKey(
             'iam_me_change_password',
-            $policy->controllersByRoute(),
+            $policy->actionsByRoute(),
             'The #[Route] reflection no longer reaches the Identity controllers.',
         );
     }
@@ -81,7 +82,7 @@ final class CredentialProofGateTest extends TestCase
     public function testEveryCredentialAffectingRouteSpendsTheBudgetAndProvesTheCurrentPassword(): void
     {
         $policy = $this->policy();
-        $controllers = $policy->controllersByRoute();
+        $actions = $policy->actionsByRoute();
         $violations = [];
 
         foreach ($policy->registry() as $route => $entry) {
@@ -89,14 +90,12 @@ final class CredentialProofGateTest extends TestCase
                 continue;
             }
 
-            $classes = $controllers[$route] ?? [];
+            $targets = $actions[$route] ?? [];
+            $unresolved = CredentialProofRules::actionViolations($route, $targets);
+            $target = $targets[0] ?? null;
 
-            if (1 !== \count($classes)) {
-                $violations[] = \sprintf(
-                    'Route "%s" resolves to %d controllers under src/, expected exactly one.',
-                    $route,
-                    \count($classes),
-                );
+            if ([] !== $unresolved || null === $target) {
+                $violations = [...$violations, ...$unresolved];
 
                 continue;
             }
@@ -105,9 +104,10 @@ final class CredentialProofGateTest extends TestCase
                 ...$violations,
                 ...CredentialProofRules::proofViolations(
                     $route,
-                    CredentialProofPolicy::sourceOf($classes[0]),
-                    CredentialProofPolicy::collaborators($classes[0]),
-                    CredentialProofPolicy::useCasesOf($classes[0]),
+                    CredentialProofPolicy::sourceOf($target['class']),
+                    $target['method'],
+                    CredentialProofPolicy::collaborators($target['class']),
+                    CredentialProofPolicy::useCasesOf($target['class']),
                 ),
             ];
         }

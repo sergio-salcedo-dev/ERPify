@@ -10,6 +10,7 @@ use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\FilterOperator;
 use Erpify\Shared\Search\Domain\Filters;
@@ -32,6 +33,8 @@ use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\RowUniquenessGuard;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SortFieldMap;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -295,14 +298,15 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
         $ids = [];
 
         foreach ($insertionOrder as $row) {
+            // The ambient clock stamps both timestamps, so each row is built under its planned instant.
+            SystemClock::set(new FixedClock($row['createdAt']));
             $bank = Bank::create($row['id'], $row['name'], $row['shortName']);
-            $bank->setCreatedAt($row['createdAt']);
-            $bank->setUpdatedAt($row['updatedAt']);
 
             $this->entityManager->persist($bank);
             $ids[] = $row['id'];
         }
 
+        FreezeSystemClockExtension::pin();
         $this->entityManager->flush();
 
         return $ids;
@@ -314,7 +318,6 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
      *     name: string,
      *     shortName: string,
      *     createdAt: DateTimeImmutable,
-     *     updatedAt: DateTimeImmutable,
      * }>
      */
     private function plannedRows(): array
@@ -339,7 +342,6 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
                 'name' => \sprintf('bank %s %s', $token, $suffix),
                 'shortName' => \strtoupper($token . \substr($suffix, 0, 3)),
                 'createdAt' => $createdAt,
-                'updatedAt' => $createdAt,
             ];
         }
 

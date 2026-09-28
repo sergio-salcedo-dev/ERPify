@@ -8,6 +8,7 @@ use DateInterval;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\NotifyLockedIdentities;
 use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -38,6 +39,12 @@ final class NotifyLockedIdentitiesTest extends TestCase
     private const string SECOND_ID = '0190a1b2-c3d4-7e5f-8a9b-000000000002';
 
     private const string THIRD_ID = '0190a1b2-c3d4-7e5f-8a9b-000000000003';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     #[Test]
     public function notifiesTheOwnerOfEveryLockedIdentityAndStampsTheWindow(): void

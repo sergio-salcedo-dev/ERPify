@@ -219,7 +219,7 @@ ruta caliente sólo inserta.
 `audit_log` **es PII** (`actor_id`, `ip`, `user_agent`). Las mutaciones no-append **no** son scripts
 operativos sueltos: el log admite un **conjunto cerrado de tres políticas de mutación de primera clase**
 —la poda, el borrado GDPR del eje **actor** y el del eje **recurso**—, cada una con semántica definida y
-disparador propio; cualquier otra escritura es append.
+disparador propio; cualquier otra escritura es append (cerrado por gate: ver «Cerrado» más abajo).
 
 **La poda exime la evidencia del propio borrado, y eso no la convierte en una cuarta política.** Sigue
 siendo un solo `DELETE` con un disparador; lo que cambia es su predicado, que ahora excluye
@@ -280,12 +280,11 @@ lleva el predicado candidato y es el artefacto que tiene bandeja de entrada. Un 
 ficheros es memoria, nunca un despertador — y no se automatiza porque no hay sumidero correcto: a `error`
 alarmaría a diario sobre comportamiento aceptado, y por debajo de `error` producción lo descarta.
 
-**«Cerrado» significa cerrado por revisión, no por gate.** Nada automatizado impide una cuarta política:
-`git grep` sobre la tabla es el único control y no está cableado a ninguna puerta, de modo que una mutación
-nueva entra si el diff pasa desapercibido. Se declara porque la frase se lee como una garantía mecánica y no
-lo es. El hueco es **idéntico y simétrico** al de D12 en
-[`event-store-and-projections.md`](./event-store-and-projections.md), con el mismo trigger: la primera
-propuesta de una mutación adicional sobre cualquiera de las dos tablas es cuando el gate compra algo.
+**«Cerrado» significa cerrado por gate.** `SanctionedLogMutationGateTest` declara las tres políticas junto con
+el único `UPDATE` de `event_store` y exige **igualdad** entre ese conjunto y lo que `api/src` emite sobre las dos
+tablas: una cuarta política pone el build en rojo, y también la desaparición de una de las tres. Lo que un verde
+**no** prueba está en la cabecera de ese gate; la decisión, en D12 de
+[`event-store-and-projections.md`](./event-store-and-projections.md).
 
 - **Política de retención (la poda) — la *única* `DELETE`.** Retención **por nivel** (`security` >
   `activity`), expresada como dato por una `AuditRetentionPolicy` de dominio (`thresholdsAt(now)` → un
@@ -450,6 +449,12 @@ propuesta de una mutación adicional sobre cualquiera de las dos tablas es cuand
   cuenta de «una novena clave libre» de más arriba: aquélla cuenta las ocho claves de la fila
   `GDPR_ERASURE_EXECUTED` **que escribe `FulfilIdentityErasure`**, no las del JSON en general — y nombrar el
   camino importa porque esa acción tiene dos escritores, y el del CLI de actor escribe sólo dos claves.
+  **En el cable, un `changes` vacío o con claves es un objeto JSON** —`{}` cuando el diff queda vacío—.
+  `json_decode(…, true)` colapsa `{}` y `[]` en el mismo array PHP, así que la forma la fija
+  `AuditEventDetailResourceMapper`, el único mapper que sirve `metadata`, tanto para filas nuevas como para las
+  históricas. Tres formas se sirven tal cual, y ninguna la produce el capturador: una **lista no vacía**, a
+  propósito —envolverla la serviría como `{"0": …}`, un mapa que el cliente aceptaría ocultando la deriva—, y un
+  `null` o un escalar. El guard de la PWA rechaza cualquiera de las tres y con ella el sobre entero.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
 `X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando

@@ -30,7 +30,7 @@ final class ImageRouteDeclarationTest extends KernelTestCase
     public function testTheRouteIsRegisteredUnderTheApiPrefixTheFirewallCovers(): void
     {
         // `/api/v1` is what puts it under the `^/api` catch-all, so it needs no `access_control` line of its
-        // own. The path the epic first wrote — `/images/{imageId}` — would have been anonymous by
+        // own. The path first specified — `/images/{imageId}` — would have been anonymous by
         // construction.
         $route = $this->route();
 

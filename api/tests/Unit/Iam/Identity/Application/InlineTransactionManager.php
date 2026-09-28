@@ -21,10 +21,22 @@ final class InlineTransactionManager implements TransactionManager
     /** True once a unit of work has returned, so an effect can be pinned to the far side of the boundary. */
     public bool $committed = false;
 
+    /**
+     * True only while a unit of work is running. `committed` cannot tell "inside" from "not yet entered" —
+     * both read false — so an effect that must happen WITHIN the boundary is pinned on this one instead.
+     */
+    public bool $inside = false;
+
     #[Override]
     public function transactional(callable $operation): mixed
     {
-        $result = $operation();
+        $this->inside = true;
+
+        try {
+            $result = $operation();
+        } finally {
+            $this->inside = false;
+        }
 
         $this->committed = true;
 

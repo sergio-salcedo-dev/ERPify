@@ -24,7 +24,8 @@ use Symfony\Component\Routing\Attribute\Route;
  * **The route name is load-bearing.** Generic activity auditing is opt-OUT: `AuditPolicy` records every
  * successful `GET` under `/api/` unless the route name matches one of its five non-business shapes, and
  * `shared_` is the one that fits object serving. Rename this route and every read starts writing an
- * `audit_log` row — the epic's "zero audit rows" decision is a property of this string.
+ * `audit_log` row — the "zero audit rows" decision (`docs/adr/image-read-route-contract.md`, D2) is a
+ * property of this string.
  *
  * Two artefacts refuse that rename, and it is worth naming which, because the general gates do not:
  * `ImageRouteDeclarationTest` resolves the route by this exact name, so all four of its cases fail on a
@@ -52,7 +53,7 @@ use Symfony\Component\Routing\Attribute\Route;
 final readonly class ImageGetController
 {
     /**
-     * Chosen over `max-age=31536000`, which is what the epic wrote and what the retired helper emitted. The
+     * Chosen over `max-age=31536000`, the value first asked for and what the retired helper emitted. The
      * identifier is immutable — this module has no replace operation, so the representation behind an
      * `ImageId` never changes — but its contract is RELIABLE DELETION, and deletion is a different
      * life-cycle event from mutation. At a year, a viewer keeps serving an image for a year after its bytes
@@ -166,7 +167,7 @@ final readonly class ImageGetController
     /**
      * `private` because the response is authenticated and no shared cache may hold it.
      *
-     * `immutable` earns its place on its own terms rather than on the year the epic paired it with: over a
+     * `immutable` earns its place on its own terms rather than on the year it was first paired with: over a
      * bare `max-age` it suppresses the revalidation some browsers fire on reload WITHIN the window. Small,
      * and not nothing.
      *

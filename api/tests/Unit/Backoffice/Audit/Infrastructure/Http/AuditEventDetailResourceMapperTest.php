@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Audit\Infrastructure\Http;
 
+use ArrayObject;
 use DateTimeImmutable;
 use Erpify\Backoffice\Audit\Application\Resource\AuditEventDetailResource;
 use Erpify\Backoffice\Audit\Domain\AuditEventDetail;
@@ -49,11 +50,38 @@ final class AuditEventDetailResourceMapperTest extends TestCase
         $this->assertSame('Bank', $resource->resourceType);
         $this->assertFalse($resource->actorErased);
         $this->assertFalse($resource->resourceErased);
-        // The structured diff reaches the wire unaltered — the mapper formats time, never the payload.
-        $this->assertSame($changes, $resource->metadata->getArrayCopy());
+        // The structured diff reaches the wire unaltered — the mapper formats time, never the payload; the
+        // `changes` map only changes CONTAINER, so its content is compared through the wrapper.
+        $this->assertSame(['changes'], \array_keys($resource->metadata->getArrayCopy()));
+        $this->assertSame($changes['changes'], $this->changesOf($resource)->getArrayCopy());
     }
 
-    public function testToResourcePassesNullableFieldsAndAnEmptyDiffThrough(): void
+    /**
+     * `json_decode(…, true)` on the read side hands a stored `{"changes":{}}` back as `['changes' => []]`,
+     * which would encode as `"changes":[]` — a list the client's guard refuses, failing the whole envelope.
+     * The wrapper is what keeps the empty diff a map; the bytes are asserted in the functional test.
+     */
+    public function testToResourceKeepsAnEmptyDiffAMapAndLeavesItsSiblingsAlone(): void
+    {
+        $resource = $this->mapper()->toResource($this->detail(['changes' => [], 'operation' => 'UPDATED']));
+
+        $this->assertSame([], $this->changesOf($resource)->getArrayCopy());
+        $this->assertSame('UPDATED', $resource->metadata['operation']);
+    }
+
+    /**
+     * A record with no `changes` key gets none invented, and a `changes` that is not an array is not
+     * rewritten into one — the mapper seals a shape, it never manufactures one.
+     */
+    public function testToResourceNeverInventsAChangesKey(): void
+    {
+        $this->assertArrayNotHasKey('changes', $this->mapper()->toResource($this->detail([]))->metadata);
+        $this->assertNull(
+            $this->mapper()->toResource($this->detail(['changes' => null]))->metadata['changes'],
+        );
+    }
+
+    public function testToResourcePassesNullableFieldsAndEmptyMetadataThrough(): void
     {
         $resource = $this->mapper()->toResource(new AuditEventDetail(
             '0190abcd-1234-7abc-8def-001122334455',
@@ -78,6 +106,31 @@ final class AuditEventDetailResourceMapperTest extends TestCase
         // The property's own type is what guarantees the wire MAP; that an empty one reaches the
         // response as `{}` is asserted over the bytes in `AuditEventDetailFunctionalTest`.
         $this->assertSame([], $resource->metadata->getArrayCopy(), 'a non-change record carries no diff');
+    }
+
+    /**
+     * A non-empty LIST is not a diff: wrapping it would serve `{"0": {…}}`, which the client's guard admits
+     * and renders as a field named "0". Left as a list, it reaches the wire as one and the guard refuses it.
+     */
+    public function testToResourceLeavesAListShapedChangesUnwrapped(): void
+    {
+        $list = [['old' => 'BBVA', 'new' => 'BBVA S.A.']];
+
+        $changes = $this->mapper()->toResource($this->detail(['changes' => $list]))->metadata['changes'];
+
+        $this->assertNotInstanceOf(ArrayObject::class, $changes);
+        $this->assertSame($list, $changes);
+    }
+
+    /**
+     * @return ArrayObject<array-key, mixed>
+     */
+    private function changesOf(AuditEventDetailResource $resource): ArrayObject
+    {
+        $changes = $resource->metadata['changes'] ?? null;
+        $this->assertInstanceOf(ArrayObject::class, $changes, 'a `changes` map must reach the wire as a map');
+
+        return $changes;
     }
 
     private function mapper(): AuditEventDetailResourceMapper

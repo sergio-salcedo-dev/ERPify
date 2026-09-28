@@ -10,6 +10,7 @@ use Doctrine\ORM\QueryBuilder;
 use Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Iam\Session\Infrastructure\Persistence\Doctrine\DoctrineSessionRepository;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Infrastructure\Persistence\Doctrine\Fixtures\DbalStoreFailure;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -40,6 +41,12 @@ use Throwable;
 final class DoctrineSessionRepositoryStoreUnavailableTest extends TestCase
 {
     private const string NOW = '2026-07-10T12:00:00+00:00';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     public function testConvertsADbalFailureOnTheGatesReadToSessionStoreUnavailable(): void
     {

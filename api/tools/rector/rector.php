@@ -74,9 +74,10 @@ return RectorConfig::configure()
         RenameParamToMatchTypeRector::class,
         // PDepend (bundled by phpmd 2.15) cannot parse `new readonly class` —
         // keep the explicit `readonly` on the inner property in the affected
-        // file instead, so `make php.md` does not abort on a parser error.
+        // files instead, so `make php.md` does not abort on a parser error.
         ReadOnlyAnonymousClassRector::class => [
             __DIR__ . '/../../tests/Unit/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponderTest.php',
+            __DIR__ . '/../../tests/Unit/Gate/AuditActionOperationAgreementRulesGateTest.php',
         ],
         RenamePropertyToMatchTypeRector::class,
         // Non-convergent against php-cs-fixer's `fully_qualified_strict_types`, which is on: Rector adds

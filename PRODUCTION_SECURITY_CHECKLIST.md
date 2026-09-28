@@ -428,6 +428,34 @@ you change anything here.
       adapter (used by the `organization:administrator:create` CLI that bootstraps the first admin);
       the plaintext is never printed or logged, and credentials are never seeded through migrations
       (dev/test use a fixture with a bcrypt hash).
+- [ ] **A stored hash is upgraded to the configured hasher on the first login that proves it.** `UserProvider`
+      implements `PasswordUpgraderInterface`, which is what makes `json_login` attach the upgrade badge, so
+      Symfony's `PasswordMigratingListener` re-encodes the submitted password whenever the configured hasher
+      reports the stored hash `needsRehash()` — a bcrypt cost other than the configured one (`auto` defaults to
+      13), or an algorithm `auto` still verifies but no longer mints. It runs on `LoginSuccessEvent`, after the
+      credential was verified and the identity admitted, so a **failed login pays nothing new** and the
+      pre-identity timing floor is untouched; a successful login pays one extra hash, once per account, plus a
+      one-row `UPDATE` that can wait behind a concurrent credential write on the same row.
+      `RehashPasswordBestEffort` stores it through `UserRepository::replacePasswordHashIfUnchanged()`, a
+      compare-and-swap **the store decides in one statement** — only over the exact hash the login verified.
+      A reset or a change committing in between is therefore never overwritten by an encoding of the secret it
+      superseded, and — the half that matters for containment — a refusal hydrates nothing, so the session the
+      login mints still carries the hash it proved and is signed out on its next request by
+      `SecurityUser::isEqualTo`. A locked re-read of the aggregate would have advanced that session onto the new
+      credential and kept it alive past the reset. **Its accepted cost:** the loser of two simultaneous first
+      logins on one legacy hash is refused as well and signed out once, since a refusal cannot tell a re-encoding
+      of the same secret from a new one. It is not a credential change: no domain event, no audit row, no mail,
+      no session revoke, no lockout relief and no `updated_at` touch. It is best-effort — a store fault rolls
+      back, leaves the old hash (which still verifies) and an untouched aggregate, and is reported on
+      `observability` by exception **class** only, since the failed statement carried both hashes. **What it
+      does not cover:** an account whose owner never logs in again keeps its old hash for ever, and
+      `needsRehash()` is symmetric — lowering the cost in `security.yaml` rolls out a downgrade the same way
+      raising it rolls out an upgrade. Pinned by `LoginPasswordRehashFunctionalTest` (real firewall, real
+      Postgres: bcrypt at a foreign cost and argon2id land at the configured cost, the session survives its
+      next request read against the row and is signed out when the row moves under it, a Postgres-raised fault
+      still admits the login, clears the lockout and mints one session, a failed login and a current hash are
+      left byte-for-byte alone), `DoctrineUserRepositoryTest` (the refusal leaves the managed aggregate
+      untouched), `RehashPasswordBestEffortTest` and `UserProviderTest`.
 - [ ] **Single-use tokens (`Shared/Token/SingleUseToken`):** the one building block invitation and
       password reset share, so their token security cannot diverge. High-entropy (256-bit CSPRNG),
       **hashed at rest** (SHA-256 — the raw token is handed to the bearer once and **never** persisted or
@@ -442,7 +470,7 @@ you change anything here.
       because minting runs only **after** the retire-then-act transaction commits). The opaque
       `<invitationId>.<secret>` token is **never rendered, logged, or persisted raw** — only its SHA-256 digest is
       stored (`iam_invitation.token_hash`). Every dead-token case (used, revoked, expired, already-accepted,
-      non-existent) collapses to one **byte-identical `400 invalid-token`** (SI-13 opacity); the invited email is
+      non-existent) collapses to one **byte-identical `400 invalid-token`** (token opacity, `docs/adr/identity-invitation-lifecycle.md` D11); the invited email is
       never surfaced. **CSRF is defence-in-depth, not the primary control:** the primary same-origin gate is
       `AcceptInvitationOriginListener` (403, mirror of the login guard) plus the opaque single-use token; the
       **stateless CSRF token** (`framework.csrf_protection.stateless_token_ids: [invitation_accept]` +
@@ -500,10 +528,10 @@ you change anything here.
 - [ ] **Password reset (`POST /api/v1/backoffice/forgot-password` · `/reset-password`):** the credential-recovery
       surface, mirroring the invitation flow. Forgot answers a **uniform 202** for every email/identity state
       (only an `ACTIVE` identity mints a token, and that work is never observable to the anonymous requester) — no
-      account enumeration (SI-12). The reset link is a selector-verifier `<id>.<secret>`: only the SHA-256 digest
+      account enumeration (`docs/adr/identity-invitation-lifecycle.md` D10). The reset link is a selector-verifier `<id>.<secret>`: only the SHA-256 digest
       is stored (`identity_password_reset_token.token_hash`), the raw token is **never rendered, logged, or
       persisted**. Every dead-token case (used, expired, unknown, malformed) collapses to one **byte-identical
-      `400 invalid-token`** (SI-13, cross-surface opacity with the invitation link — a distinct exception class
+      `400 invalid-token`** (D11 of that ADR, cross-surface opacity with the invitation link — a distinct exception class
       per context, one wire type). A successful reset **consumes the token atomically** (a conditional delete
       whose affected-row count is the single-use guard, so a concurrent replay collapses to `invalid-token`), sets
       the credential, clears the lockout, and **revokes every session** (best-effort teardown; a store outage is
@@ -596,8 +624,8 @@ you change anything here.
 - [ ] **Pre-identity cross-cutting hardening (login · invitation accept · forgot/reset):**
       every pre-identity rejection pays the same **constant-time floor** (`PreIdentityTimingFloor`, one password
       verification of the firewall's own hasher) — malformed/unknown login identifiers, the `INVITED` pre-auth
-      rejection and **every** forgot outcome, so latency correlates with nothing (SI-12). A dead reset/accept
-      link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (SI-13):
+      rejection and **every** forgot outcome, so latency correlates with nothing (`identity-invitation-lifecycle.md` D10). A dead reset/accept
+      link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (same ADR, D11):
       `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password` + `/backoffice/audit` and its
       subtree (the audit URL names the people under investigation, so it leaves the tab no more readily than a
       token does). **Read that header for what it is:** it is delivered with a DOCUMENT, so it governs a deep
@@ -721,9 +749,10 @@ you change anything here.
       attacker retrying continuously inside the window. An attempt the aggregate ignores still costs no write
       and emits nothing; what it costs is the BEGIN/COMMIT **and the row lock**, so concurrent failed attempts
       against one already-locked address serialise on that identity's row — bounded by an attempt that already
-      ran a credential verification. **An unknown address is the one path that opens no transaction at all** —
-      which leaves no durable trace to tell it from a real one, and makes the transaction itself an existence
-      signal whose latency cost nobody has measured (§7).
+      ran a credential verification. **An unknown address takes the same transaction and the same locked read**,
+      over a row that is not there, and commits without writing — so the transaction is not an existence signal
+      and leaves no durable trace to tell the two apart. What an unknown address still skips is the counter's
+      UPDATE on an `ACTIVE` identity and the hydration of a row (§7).
 - [ ] **A third recovery edge for the persisted lockout above: `POST /backoffice/users/{id}/unlock`**
       (`ADMIN`-only, `#[IsGranted('users.unlock')]`, `users` opts out of tier auto-grant). #602 named the two
       existing recovery edges — a successful login, a completed password reset — as both attacker-cuttable by
@@ -757,7 +786,11 @@ you change anything here.
       credential answers. Destroying a recovery capability is as sensitive as granting one. Minting, the
       password change and the revoke share ONE per-identity credential-proof budget
       (`CurrentPasswordProofThrottle`) — a bucket of its own would hand a stolen session twice the guesses
-      against the same password, since none of the three feeds the persisted lockout. Full record:
+      against the same password, since none of the three feeds the persisted lockout. The membership is
+      gated: every route of `api/.route-manifest.json` is classified in `api/.credential-proof-policy`, and
+      `make php.lint.credential-proof` fails when a `credential-affecting` route's action does not spend that
+      budget and verify the submitted password before invoking a use-case method that calls
+      `ProveCurrentPassword::ensure()` (blind spots in the registry header). Full record:
       [`docs/adr/administrative-recovery-channel.md`](docs/adr/administrative-recovery-channel.md) D7.
       **Four residuals, each accepted rather than closed:**
       **(a)** the secret is valid for **ten years** — `SingleUseToken` makes "no expiry" unrepresentable and a
@@ -950,8 +983,18 @@ mitigated state. Accepting one means recording who accepted it and against which
       over a person's id passes, and review is the only control on that direction — and it derives from
       entity properties, so references born in configuration and tables with no Doctrine entity
       (`audit_log.*`, `event_store.aggregate_id`) are outside it.
-- [ ] **The person-reference axis has no DETECTIVE control and no backfill.** The gate above is static: it
-      proves a deletion is _written_, never that a row _went_. Two consequences, both open. (1) Any subject
+- [ ] **A person's id persisted through configuration has no owner of its erasure.** The axis above is
+      derived from entity properties, so an id that reaches storage along a path no property declares — a
+      Messenger route, a scheduled message, a route default, a service argument, an integration or an
+      external event — is declared by nothing, and no rule names who erases it. Deferred for sequencing,
+      not excluded: closing it means deciding who owns a reference whose writer is configuration rather than
+      a context, a question the property-derived registry cannot answer. The transport half is fenced by
+      `api/.persistent-transport-policy` only by `aggregate_id`: a person-aggregate event stays unrouted,
+      but one whose id is safe while its PAYLOAD names a person (`SessionStarted`, `SessionRevoked`) is out
+      of its reach. The rest is unmeasured.
+      Revisit when a person's id is first seen reaching storage through configuration.
+- [x] **The person-reference axis has no DETECTIVE control and no backfill.** The gate above is static: it
+      proves a deletion is _written_, never that a row _went_. Two consequences, both now closed. (1) Any subject
       erased before this shipped left its `membership.user_id` / `iam_invitation.invited_user_id` row behind,
       and nothing in the codebase would ever name those rows again — they are not migrated or swept here.
       (2) A future write path that creates a person-referencing row without going through the erasure chain
@@ -961,14 +1004,14 @@ mitigated state. Accepting one means recording who accepted it and against which
       **four** columns, not the two this axis closed: `membership.user_id`, `iam_invitation.invited_user_id`,
       `iam_session.user_id` and `identity_password_reset_token.user_id` carry the same defect exactly, and
       none of them has a foreign key — nothing in the schema references `identity_user` at all.
-      Tracked as **G-1c** in the GDPR-hardening epic. The ordering note against G-3b — which schedules the
-      same reconciler — is **moot under the option G-1c ships**: one reconciler extended with a lister per
+      Closed by #634, which gives each of the four columns a `PersonReferenceSource` the reconciler collects,
+      and #635, which schedules it with an alarm. The ordering note against G-3b — which schedules the
+      same reconciler — is **moot under the option #634 ships**: one reconciler extended with a lister per
       owning context, so a schedule created first picks the new axis up with no revisit. It bites only if
       that decision is reopened toward one reconciler per context, and is kept as that tripwire. The
       **backfill half is measured away** — no production environment exists, so there are no real erased
-      subjects with surviving orphan rows; the story is prospective. Close it before claiming the axis is
-      enforced at runtime rather than at build time.
-- [ ] **`event_store` retains a person's real id past their own erasure.** Every dispatched event is
+      subjects with surviving orphan rows; the story is prospective.
+- [x] **`event_store` retains a person's real id past their own erasure.** Every dispatched event is
       appended with its real `aggregate_id`, and no erasure path touches the table. As the `aggregate_id`:
       `PasswordResetCompleted`, `UserSuspended`, `UserDeactivated`, `UserRolesChanged`, `UserLocked`,
       `PasswordResetRequested`, plus `AllSessionsRevoked` and `OtherSessionsRevoked` — those last two are
@@ -980,13 +1023,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       list of columns or keys.
       It is not reachable by the crypto-shredding used in `audit_log`: `aggregate_id` is `UUID NOT NULL`, a
       stream key and an index (`event_store_stream_version_uniq`, `event_store_aggregate_idx`), and a
-      lookup table is barred by [`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4. The
-      only viable route — the id being born a per-subject derived substitute whose derivation secret the
-      erasure destroys — touches every event, projection replay and checkpoint, so it is a persistence
-      strategy decision and ADR material, tracked as a story in the GDPR-hardening epic. Nothing in the
-      repo declares `event_store` erasable today
-      ([`docs/adr/regulatory-audit-trail.md`](docs/adr/regulatory-audit-trail.md) separates it, as the
-      business log, from the retention-bound PII-erasable trail).
+      lookup table is barred by [`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4.
+      Closed by #640 with a different route: inside the erasure transaction, one parameterised `UPDATE`
+      rewrites the subject's id to a fresh random UUID in the column and in the serialised `payload` and
+      `metadata`, by value and case-insensitively, so it reaches every event holding it without anyone
+      listing them. It is the log's one sanctioned mutation, recorded as D12 of
+      [`docs/adr/event-store-and-projections.md`](docs/adr/event-store-and-projections.md).
 - [ ] **`audit:gdpr:erase` is not atomic.** The anonymisation `UPDATE` commits and the
       `GDPR_ERASURE_EXECUTED` self-audit is written _after_, outside any transaction — a crash
       between them leaves the erasure done with no evidence of it, and the original id no longer
@@ -1176,21 +1218,50 @@ mitigated state. Accepting one means recording who accepted it and against which
       the redemption flow, whose first act has to be `revoke-others`.
       `revoke-others` carrying no limiter is deliberate and load-bearing: it is the one edge an adversary
       cannot spend. **Do not "harden" it.**
-- [ ] **The failed-login path carries an existence signal shaped like a transaction, and its magnitude is
-      UNMEASURED.** `LoginAttemptRegistrar::recordFailure()` probes for the address on an unlocked read and
-      returns at once when it resolves to no row; an address that DOES resolve pays `BEGIN` +
-      `SELECT … FOR UPDATE` + `COMMIT` whatever the aggregate then decides. The transaction is therefore taken
-      on exactly the condition "this address exists" — where a shape that also skipped it for a locked or
-      non-`ACTIVE` identity kept "locked" and "unknown" together on this axis. **The 401 body is unaffected**
-      and stays the single normalised "Invalid credentials."; what is open is the **latency**, and the
-      plausible answer is that the equalised KDF the `UserProvider` pays on every branch is a large enough
-      constant to bury one round trip on the same connection. That is a hypothesis, not evidence — nobody has
-      run it, and "bounded by a larger constant elsewhere" is exactly the shape of claim this repo requires to
-      be measured rather than asserted. Tracked in
-      [#881](https://github.com/sergio-salcedo-dev/ERPify/issues/881), which states what the measurement must
-      produce and what each outcome obliges. Deliberately **not** tagged `@accepted-risk`: this is a gap to
-      close by measuring, not a risk accepted standing, and the tag's live-state job would red the day #881
-      closes on a successful measurement.
+- [x] **A failed login no longer carries an existence signal shaped like a transaction, a seed cost or an
+      over-long password.** Three differentials on one path, each closed by construction.
+      **(1) The transaction.** Measured against the running dev stack before the fix (n≈35 per class,
+      production-cost bcrypt; p50 and ROC AUC only — p95/p99 and the already-locked and same-identity-concurrency
+      cases #881 listed were not measured, because the fix makes both branches issue the same round trips rather
+      than arguing the gap is small): with `LoginAttemptRegistrar::recordFailure()` skipping its transaction for
+      an address that resolved to no row, a failed login for an unknown address answered ~20 ms faster at p50
+      than one for an existing `ACTIVE` identity, separable at AUC ≈ 0.60 — small, and classifiable with enough
+      samples, the outcome #881 said obliges both branches to pay the same. Every well-formed address now opens
+      the transaction and runs the same `SELECT … FOR UPDATE`, and an unknown one commits without writing —
+      pinned in `LoginAttemptRegistrarExistenceShapeTest`, which compares the port calls of a known and an
+      unknown address and asserts the locked read runs inside the transaction. The price is a transaction per
+      failed login against a non-existent address; the locking read over no row locks nothing, and the attempt
+      has already paid a credential verification and passed the login throttle. A deadlock or referential fault
+      only an existing identity can meet is absorbed like any store fault, so it cannot surface as a 503/409
+      where an unknown address gets the 401 (`ProblemDetailsAuthenticationFailureHandlerTest`).
+      **(2) The seed cost.** The fixture seed hashed every identity at bcrypt cost 4 while the timing floor pays
+      one verification of the hasher the environment configures — cost 13 under `auto` in dev — so on any
+      environment loaded from the fixtures a known address answered a wrong password in ~53 ms and an unknown
+      one in ~594 ms. Seeds are minted through that same configured hasher (`SeedCredentialProvider`), pinned
+      by `SeededCredentialCostFunctionalTest` (the floor's dummy and every seeded hash cost what the configured
+      hasher costs, and every credentialed entry in `User.yaml` routes through the provider) and
+      `SeedCredentialProviderTest` (at a cost the tree does not configure). The fixtures never reach production;
+      a production hash minted at an older cost is the general form of the same fault, and nothing rehashes one
+      on login (`UserProvider` implements no `PasswordUpgraderInterface`).
+      **(3) The over-long password.** `NativePasswordHasher::verify()` returns false without hashing for a
+      password over `PasswordHasherInterface::MAX_PASSWORD_LENGTH` (4096) bytes, and nothing in the firewall
+      bounded it first — measured on the dev stack, one request: a known address answered ~18 ms, an unknown
+      one ~320 ms. `OverlongPasswordTimingListener` refuses such a password on `CheckPassportEvent` ahead of
+      the first listener that resolves the user, paying the floor once, so both answer ~320 ms (measured) and
+      the refusal still counts against the login throttle (`OverlongPasswordTimingListenerTest`).
+- [ ] **What a failed login for an existing identity still pays that an unknown address does not is UNMEASURED.**
+      An `ACTIVE` identity below the threshold pays the counter's UPDATE (plus its `event_store`/outbox rows on
+      the attempt that trips the lock); every existing identity pays the hydration of its row inside the locked
+      read; and its locked read can WAIT behind another transaction holding that row — a concurrent failed
+      attempt against the same address, a successful login's clear, an unlock or a redemption — where a read
+      over no row never waits. An attacker controls that concurrency, though each wait is short because the
+      KDF runs before the transaction. All of it sits under a KDF of hundreds of milliseconds and rides the same
+      transaction, so the plausible answer is noise — but the transaction differential above was ALSO plausibly
+      noise and measured classifiable, so this is a hypothesis, not a claim. `security.yaml` states it at that
+      strength. Closing it by construction would mean writing on behalf of an address that names no row, which
+      is not on the table. **Related, and also open:** `PasswordHashingTimingFloor` mints its dummy hash lazily,
+      so the first floor paid by each FrankenPHP worker costs a hash plus a verification — one slower answer per
+      worker lifetime, on whichever pre-identity branch reaches it first.
 - [ ] **A credential change can sign a second browser tab out of the application, and it is accepted.** Both
       flows that replace a credential from a live browser — `ChangeMyPassword` and `CompletePasswordReset` —
       revoke **every** session and mint a replacement onto the requesting tab. A request already in flight from
@@ -1751,9 +1822,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       multi-worker deployment behind a balancer needs a shared Redis), and with `lock_factory: null`
       concurrent workers *"may over- or under-count"*. What does not exist is a limit **per identity and per
       route**. `ImageId` is never an authorization mechanism and never a secret.
-      **What defends the frontier is now a tripwire rather than a promise.** The epic's argument for having
-      no voter is that no consumer relation exists to vote on, and its second half — that the first real
-      consumer brings its own policy — was prose that nothing enforced; an external security review named
+      **What defends the frontier is now a tripwire rather than a promise.** The argument for having no voter
+      (D1 of [`docs/adr/image-read-route-contract.md`](docs/adr/image-read-route-contract.md)) is that no
+      consumer relation exists to vote on, and its second half — that the first real consumer brings its
+      own policy — was prose that nothing enforced; an external security review named
       the exact failure that permits, a consumer wired without an owner check turning a documented
       provisional frontier into a silent cross-user read. `ImageConsumerAuthorizationGateTest` refuses any
       aggregate outside `Shared/Images` holding an image reference, so that question is forced into the diff
@@ -1774,7 +1846,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Six — a cached copy outlives the erasure, shortened to an hour rather than closed.** A conforming
       client does not revalidate while the response is fresh, so once the bytes and the row are gone every
       viewer keeps serving the image for up to `max-age` with no request reaching a server that could answer
-      404. The route emits `max-age=3600` rather than the year the epic wrote, which shortens the exposure
+      404. The route emits `max-age=3600` rather than the year first asked for (D3 of the same ADR), which shortens the exposure
       without turning every view into a full read; it is still the residual with the most personal-data
       content this route adds, and it is not immediate deletion. What the hour does **not** cover, said
       rather than implied: a copy the viewer downloaded, a screenshot, a page already open with the bytes in
@@ -1810,7 +1882,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       bounded by `PHP_MEM_LIMIT` — where an overrun is an OOM-kill of the container, not of one request.
       Nothing sizes that today, and nothing can until an upload endpoint exists to generate the load; it
       belongs to the epic that exposes one.
-      **Eight — nothing records who read what.** Deliberate and decided by the epic: the route name begins
+      **Eight — nothing records who read what.** Deliberate, and recorded as D2 of the same ADR: the route name begins
       `shared_`, which is the one exclusion of the generic activity audit that fits object serving, so a
       successful read writes no `audit_log` row. A single `resource_type` cannot be both person-denoting (an
       avatar) and not (a logo), and there is no consumer relation to vote on yet. It is a scope boundary, not
@@ -1882,9 +1954,9 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
       accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
       artefact that holds the revisit trigger. Two of them (#860, #870) carry an `@accepted-risk` tag under
-      `api/src` that `.github/workflows/accepted-risk-live-state.yml` requires to point at an open issue; #872's
-      tags sit in `docs/adr/image-deletion-signal-transport.md` and a story artifact, outside that job's scan,
-      so closing it reds nothing. Closing one means either fixing the risk or re-deciding it — never tidying the
+      `api/src` and #872 two in `docs/adr/image-deletion-signal-transport.md`, and
+      `.github/workflows/accepted-risk-live-state.yml` requires every such tag to point at an open issue, so
+      closing any of the three while its tag stands reds that job. Closing one means either fixing the risk or re-deciding it — never tidying the
       backlog. The reasoning lives in each issue; this list exists so a reader of §7 sees every watched
       acceptance in one place. **Accepted** states who accepted it and when **only where the issue records it**;
       `not recorded` is a gap in the record to close, never an acceptance by default. No row is accepted against

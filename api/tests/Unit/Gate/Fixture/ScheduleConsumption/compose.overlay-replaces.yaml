@@ -1,0 +1,5 @@
+# An overlay `command` REPLACES the base's list whole; Compose never concatenates it. The merged stack
+# therefore consumes async and nothing else, while each file read on its own still shows scheduler_alpha.
+services:
+  messenger_worker:
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600"]
