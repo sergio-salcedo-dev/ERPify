@@ -77,18 +77,18 @@ final class RequestBoundarySecurityAuditFunctionalTest extends KernelTestCase
         $this->assertSame(0, $this->rowsVisibleOutside($marker), 'a refused write leaves no row behind');
     }
 
-    public function testCommitsTheRowSoALaterRollbackCannotTakeIt(): void
+    public function testCommitsTheRowTheMomentItReturnsVisibleToAnotherSession(): void
     {
         self::bootKernel();
         $marker = $this->marker();
-        $connection = $this->containerConnection();
+
+        $this->assertFalse($this->containerConnection()->isTransactionActive(), 'the write must start outside one');
 
         $this->seam()->record(self::ACTION, ['route' => $marker]);
 
-        // A business transaction that opens and reverts AFTER the write: the row was never enlisted in it.
-        $connection->beginTransaction();
-        $connection->rollBack();
-
+        // Read from a SEPARATE connection before anything else runs: a row still inside an uncommitted
+        // transaction is invisible to another session, so a count of one proves the autocommit rather than
+        // asserting it. Which listener calls the seam is proven end to end by the security_denial feature.
         $this->assertSame(
             1,
             $this->rowsVisibleOutside($marker),

@@ -11,6 +11,7 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Throwable;
 
 /**
  * Records a rejected current password as a `security` audit entry, closing the one credential-guessing
@@ -35,8 +36,8 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * keeping the audit call out of the handler is what stops audit concerns scattering through the domain. This
  * listener only reads and never sets a response, so the 403 body is untouched. The write goes through
  * {@see RequestBoundarySecurityAudit}, which commits it in autocommit and refuses when a transaction is still
- * open on the audit connection. A failed `security` write, or that refusal, propagates by design — a denial is
- * never lost in silence, at the price of surfacing as a 5xx.
+ * open on the audit connection. A failed `security` write, or that refusal, replaces the event's throwable — a
+ * denial is never lost in silence, at the price of a Problem Details 5xx instead of the 403.
  *
  * The throwable is matched directly rather than walked down the `previous` chain: unlike the firewall's
  * `AccessDeniedException`, nothing wraps this one — it travels from the use case to the responder untouched.
@@ -74,7 +75,13 @@ final readonly class InvalidCurrentPasswordAuditListener
             return;
         }
 
-        $this->securityAudit->record(self::ACTION, ['route' => $this->routeOf($request)]);
+        try {
+            $this->securityAudit->record(self::ACTION, ['route' => $this->routeOf($request)], $event->getThrowable());
+        } catch (Throwable $throwable) {
+            // Handed to the event, never thrown: a throwable leaving a `kernel.exception` listener escapes
+            // HttpKernel with no Problem Details at all. The responder renders this one as the 5xx it is.
+            $event->setThrowable($throwable);
+        }
     }
 
     private function routeOf(Request $request): ?string

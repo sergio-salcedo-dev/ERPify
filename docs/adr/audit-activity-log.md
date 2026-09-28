@@ -134,14 +134,37 @@ de su transacción a propósito: su fila debe revertirse con el cambio que descr
 `isTransactionActive()` a la **misma** `Connection` por defecto que usa `DbalAuditLogWriter`: sin
 transacción, escribe en autocommit y la fila está commiteada cuando el listener vuelve (antes de que el
 responder fije la respuesta); con una abierta —que sólo puede ser una fuga, porque `wrapInTransaction`
-revierte antes de relanzar— **rehúsa** con `LogicException` sin escribir, y un fallo de persistencia se
-propaga intacto. Se elige la lectura «probar que se escribe fuera de toda transacción» y se descarta la
+revierte antes de relanzar— **rehúsa** con `LogicException` sin escribir. Ese rehúso, y un fallo de
+persistencia, **no se lanzan desde un listener de `kernel.exception`**: `HttpKernel::handleThrowable()` no
+envuelve a sus listeners en ningún `try`, así que un throwable que saliera de ahí escaparía del kernel sin
+Problem Details y perdería la excepción original. Esos dos listeners se lo entregan al evento
+(`setThrowable()`), el rehúso encadena la excepción de la request como `previous`, y el responder contesta
+el 5xx como RFC 9457 y lo registra; el de `kernel.response` sí lanza, porque desde ahí el kernel lo reconduce
+por su propio manejo de excepciones. Se elige la lectura «probar que se escribe fuera de toda transacción» y se descarta la
 de «commitear aparte» (segunda conexión DBAL o `REQUIRES_NEW`): una segunda conexión duplica el pool y
 el sellado para un caso que no debería ocurrir, y ocultaría la fuga en vez de hacerla visible; hacer
 rollback de la transacción ajena destruiría trabajo que no es del listener. D3 prefiere un 5xx a una
 pérdida silenciosa, y eso es lo que produce el rehúso. Lo prueban `RequestBoundarySecurityAuditTest`
 (unitario) y `RequestBoundarySecurityAuditFunctionalTest` (contra Postgres, visibilidad desde una
-segunda conexión).
+segunda conexión), y `BoundarySecurityAuditSeamGateTest` impide que un fichero de `Infrastructure/Http/`
+distinto del seam escriba `AuditLevel::SECURITY` por su cuenta.
+
+**Coste en el worker, medido en el código y no supuesto.** DoctrineBundle sólo reinicia entre peticiones el
+registro `doctrine` (los entity managers) y su recolector de depuración, **no la conexión**: en el worker
+de FrankenPHP una transacción filtrada sobrevive a la petición que la abrió, y desde entonces cada frontera
+auditada de **ese** worker responde 5xx hasta que se recicla. Es el precio consciente de hacer visible la
+fuga en lugar de absorberla; revertirla al final de cada petición contendría el radio a una sola, pero
+cambia lo que prueban los tests funcionales que abren una transacción y después hacen peticiones, y queda
+como decisión abierta.
+
+**Quién queda fuera del seam, y por qué.** Los productores `security` de caso de uso escriben dentro de su
+transacción (arriba). Los `Record*AuditBestEffort` (`RecordLockoutAuditBestEffort`,
+`RecordRecoveryThrottleAuditBestEffort`, `RecordLockoutNoticeAuditBestEffort`) escriben **después** del
+commit de su caso de uso y tragan el fallo por decisión —su fila proyecta un hecho que ya persiste el
+`event_store`—, así que no son frontera HTTP ni se enrutan por aquí. Los comandos de operador
+(`EraseActorAuditTrailCommand`, `InspectStoredIdentityIntegrityCommand`) escriben en su propio proceso y
+no pierden el fallo en silencio: lo cuentan por la salida de error al operador, y `audit:gdpr:erase` lo
+distingue además con su propio código de salida (`ERASED_UNRECORDED`).
 
 El sistema es, por diseño, **observabilidad operativa con pérdida parcial tolerada en `activity`**,
 **no** logging forense uniforme: `security` es traza *compliance-grade* (durable), `activity` es
@@ -749,7 +772,8 @@ registra `ACCESS_DENIED` síncrono sellando la ruta objetivo en `metadata` para 
 recurso (la `action` permanece de cardinalidad 1 —indexable y agregable—; la ruta es la dimensión, no el
 nombre del evento); satisface el invariante de D3 escribiendo a través de `RequestBoundarySecurityAudit`,
 que comprueba que no queda transacción abierta en la conexión compartida y, si la hay, rehúsa en lugar de
-escribir una fila que un rollback posterior se llevaría (ver la revisión en D3). El contrato de `ip` de D4 se cumple con
+escribir una fila que un rollback posterior se llevaría (ver la revisión en D3). El contrato de `ip` de D4
+se cumple con
 `Request::getClientIp()` (misma decisión de *trusted proxies* que el rate-limiter), sellado en
 `SealedAuditEntryFactory` junto con `user_agent` (recortado al ancho de columna). La frontera `^/api` que
 acota ambos listeners se declara una sola vez, en `ApiRequestMatcher::PATH_PATTERN`: la misma regex que nombra

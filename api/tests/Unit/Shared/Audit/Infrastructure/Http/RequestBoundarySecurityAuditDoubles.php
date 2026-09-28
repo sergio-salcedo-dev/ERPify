@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit;
 use LogicException;
+use Throwable;
 
 /**
  * The three states of the audit connection a request-boundary listener can meet, wrapped around the logger the
@@ -45,6 +46,15 @@ trait RequestBoundarySecurityAuditDoubles
     private function expectRefusal(): void
     {
         $this->expectException(LogicException::class);
+    }
+
+    /**
+     * The leaked-transaction refusal a `kernel.exception` listener hands to its event, chained to what it refused.
+     */
+    private function assertRefusalOf(Throwable $refused, ?Throwable $handed): void
+    {
+        $this->assertInstanceOf(LogicException::class, $handed);
+        $this->assertSame($refused, $handed->getPrevious(), 'the refusal names what it refused');
     }
 
     private function connection(bool $transactionActive): Connection

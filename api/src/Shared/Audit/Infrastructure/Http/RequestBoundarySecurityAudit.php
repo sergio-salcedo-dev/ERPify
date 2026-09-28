@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use LogicException;
+use Throwable;
 
 /**
  * The one place a request-boundary listener records a `security` entry, and the one place the assumption that
@@ -30,6 +31,11 @@ use LogicException;
  *
  * Only for rows recording something at the request boundary. A use case writing `security` inside its own
  * transaction must keep calling {@see AuditLogger} directly; routed through here it would be refused.
+ *
+ * A caller on `kernel.exception` must not let what this throws escape: `HttpKernel::handleThrowable()` has no
+ * `try` around its listeners, so a throwable leaving one bypasses the Problem Details pipeline entirely. It
+ * hands the failure to the event instead, where the responder renders it as the 5xx it is and logs it. The
+ * refusal chains the request's own throwable as `$cause`, so the log line still names what was being recorded.
  */
 final readonly class RequestBoundarySecurityAudit
 {
@@ -41,10 +47,11 @@ final readonly class RequestBoundarySecurityAudit
 
     /**
      * @param array<string, mixed> $metadata
+     * @param Throwable|null       $cause    the throwable the entry records, chained into a refusal
      *
      * @throws LogicException when a transaction is open on the audit connection; nothing is written
      */
-    public function record(string $action, array $metadata): void
+    public function record(string $action, array $metadata, ?Throwable $cause = null): void
     {
         if ($this->connection->isTransactionActive()) {
             // The action only: metadata may carry ids, and this message reaches the error log.
@@ -52,7 +59,7 @@ final readonly class RequestBoundarySecurityAudit
                 'Refusing to record the "%s" security audit entry: a transaction is still open on the audit '
                 . 'connection at the request boundary, so the row could be rolled back with it.',
                 $action,
-            ));
+            ), 0, $cause);
         }
 
         $this->auditLogger->log($action, AuditLevel::SECURITY, metadata: $metadata);

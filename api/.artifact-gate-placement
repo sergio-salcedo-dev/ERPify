@@ -234,3 +234,4 @@ tests/Unit/Support/TypeScriptSourceTest.php :: mirrored :: tests/Support
 tests/Functional/Shared/Monitoring/AccessLogQueryContainmentGateTest.php :: functional :: sends real requests through Caddy and reads the line it wrote, so it needs the running stack
 tests/Unit/Gate/BmadLoopSkillSeedGateTest.php :: home
 tests/Unit/Gate/BmadSkillsSyncGuardrailGateTest.php :: home
+tests/Unit/Gate/BoundarySecurityAuditSeamGateTest.php :: home

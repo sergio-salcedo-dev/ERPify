@@ -266,7 +266,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of stories 1.3 & 1.4 (2026-06-24)"), 2026-09-24
 location: api/src/Shared/Audit/Infrastructure/SymfonyAuditLogger.php (writeSecurity), DbalAuditLogWriter.php
 reason: The synchronous security INSERT uses the shared DBAL connection without its own transaction, so a caller's rollback would revert the denial row, weakening ADR-D3. Low probability; fix the assumption (no business transaction, or a separately committed write). Extends the 're-review the security failure contract' item.
-status: open
+status: done 2026-09-29
+resolution: fixed in the round-2 sweep PR — bundle 3 (d864f3b8) routed every request-boundary security write through RequestBoundarySecurityAudit, and its review findings were applied by hand after the dev session hit the usage limit (see the next commit)
 
 **(Epic 2 / Story 2.3) Durabilidad de la rama `security` (write-before-send) frente a una transacción del llamador.** El `INSERT` síncrono de `security` va por la `Connection` DBAL compartida sin transacción propia; si el llamador de Epic 2 abre una transacción de negocio que luego hace rollback, la fila de la denegación se revierte con ella, debilitando "una denegación nunca se pierde" (ADR-D3). Baja probabilidad (un `AccessDeniedException` rara vez tiene transacción de negocio abierta), pero al cablear 2.3 fijar la asunción: o no hay transacción de negocio al escribir la denegación, o la escritura `security` usa una conexión/transacción que commitea aparte. Extiende el item "re-revisar el contrato de fallo de `security` en 2.3". Ref: `api/src/Shared/Audit/Infrastructure/SymfonyAuditLogger.php` (writeSecurity), `DbalAuditLogWriter.php`.
 
@@ -314,7 +315,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of Epic 1 audit specs (2026-06-23)"), 2026-09-24
 location: api/src/Shared/Audit/Infrastructure/Http/EventListener/AccessDeniedAuditListener.php:64
 reason: The awaited condition is met — AccessDeniedAuditListener emits ACCESS_DENIED at AuditLevel::SECURITY on real /api requests — but D1's 'propagate on persistence failure' contract was never checked against that live use case.
-status: open
+status: done 2026-09-29
+resolution: fixed in the round-2 sweep PR — bundle 3 (d864f3b8) routed every request-boundary security write through RequestBoundarySecurityAudit, and its review findings were applied by hand after the dev session hit the usage limit (see the next commit)
 
 **(Epic 2) El contrato de fallo de la rama `security` sigue sin re-revisarse, y su disparador ya saltó.** La condición que este item esperaba —un productor real en vez de fixtures sintéticos— se cumple: `AccessDeniedAuditListener:64` emite `ACCESS_DENIED` con `AuditLevel::SECURITY` sobre peticiones `/api` reales. Lo que queda pendiente es la revisión que eso habilitaba: el contrato de fallo decidido en D1 (propagar cuando falle la persistencia) nunca se ha contrastado contra ese caso de uso vivo. Ref: `api/src/Shared/Audit/Infrastructure/Http/EventListener/AccessDeniedAuditListener.php:64`.
 

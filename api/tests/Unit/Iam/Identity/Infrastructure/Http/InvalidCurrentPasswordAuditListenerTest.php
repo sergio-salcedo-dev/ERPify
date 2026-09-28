@@ -94,16 +94,30 @@ final class InvalidCurrentPasswordAuditListenerTest extends TestCase
         $this->listener($logger)->onException($this->event(new InvalidCurrentPassword(), route: null));
     }
 
-    public function testRefusesToRecordInsideALeakedTransaction(): void
+    public function testHandsTheLeakedTransactionRefusalToTheEventChainedToTheRejection(): void
     {
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
+        $rejection = new InvalidCurrentPassword();
+        $event = $this->event($rejection);
 
-        $this->expectRefusal();
+        $this->listener($logger, $this->leakedTransactionBoundaryAudit($logger))->onException($event);
 
-        $this->listener($logger, $this->leakedTransactionBoundaryAudit($logger))
-            ->onException($this->event(new InvalidCurrentPassword()))
-        ;
+        $this->assertRefusalOf($rejection, $event->getThrowable());
+    }
+
+    public function testHandsAFailedSecurityWriteToTheEventInsteadOfThrowingIt(): void
+    {
+        // Thrown from a `kernel.exception` listener the failure would escape HttpKernel with no Problem Details.
+        $failure = new RuntimeException('audit_log is unreachable');
+        $logger = $this->createStub(AuditLogger::class);
+        $logger->method('log')->willThrowException($failure);
+        $event = $this->event(new InvalidCurrentPassword());
+
+        $this->listener($logger)->onException($event);
+
+        $this->assertSame($failure, $event->getThrowable());
+        $this->assertFalse($event->hasResponse(), 'the responder, not this listener, answers the 5xx');
     }
 
     public function testRunsBeforeTheProblemDetailsResponder(): void

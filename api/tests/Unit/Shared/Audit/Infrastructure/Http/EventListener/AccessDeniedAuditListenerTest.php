@@ -95,34 +95,31 @@ final class AccessDeniedAuditListenerTest extends TestCase
         ));
     }
 
-    public function testPropagatesAFailedSecurityWriteUntouched(): void
+    public function testHandsAFailedSecurityWriteToTheEventInsteadOfThrowingIt(): void
     {
-        // A denial is never lost in silence: the writer's own failure reaches the caller as the same
-        // instance, so the request surfaces as a 5xx rather than a 403 with no trail behind it.
+        // A denial is never lost in silence, and the failure must still reach the Problem Details responder:
+        // thrown from here it would escape HttpKernel::handleThrowable(), which wraps no try around its listeners.
         $failure = new RuntimeException('audit_log is unreachable');
         $logger = $this->createStub(AuditLogger::class);
         $logger->method('log')->willThrowException($failure);
+        $event = $this->event(new AccessDeniedException('Nope.'));
 
-        try {
-            $this->listener($logger)
-                ->onException($this->event(new AccessDeniedException('Nope.')))
-            ;
-            $this->fail('a failed security write must propagate');
-        } catch (RuntimeException $runtimeException) {
-            $this->assertSame($failure, $runtimeException);
-        }
+        $this->listener($logger)->onException($event);
+
+        $this->assertSame($failure, $event->getThrowable());
+        $this->assertFalse($event->hasResponse(), 'the responder, not this listener, answers the 5xx');
     }
 
-    public function testRefusesToRecordADenialInsideALeakedTransaction(): void
+    public function testHandsTheLeakedTransactionRefusalToTheEventChainedToTheDenial(): void
     {
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
+        $denial = new AccessDeniedException('Nope.');
+        $event = $this->event($denial);
 
-        $this->expectRefusal();
+        $this->listener($logger, $this->leakedTransactionBoundaryAudit($logger))->onException($event);
 
-        $this->listener($logger, $this->leakedTransactionBoundaryAudit($logger))
-            ->onException($this->event(new AccessDeniedException('Nope.')))
-        ;
+        $this->assertRefusalOf($denial, $event->getThrowable());
     }
 
     public function testRunsBeforeTheProblemDetailsResponder(): void

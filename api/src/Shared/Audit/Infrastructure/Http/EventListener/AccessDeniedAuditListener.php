@@ -28,8 +28,8 @@ use Throwable;
  * `setResponse()` stops propagation, so a listener after the Problem Details responder never sees the
  * throwable. This one runs first, only reads, and never sets a response — the 403 body is left
  * untouched. The one exception is durability: a failed `security` write, or a refusal to write one inside
- * a leaked transaction, propagates by design rather than letting a denial complete unrecorded, so it may
- * surface as a 5xx.
+ * a leaked transaction, replaces the event's throwable rather than letting a denial complete unrecorded, so
+ * the responder answers a Problem Details 5xx instead of the 403.
  */
 final readonly class AccessDeniedAuditListener
 {
@@ -64,7 +64,13 @@ final readonly class AccessDeniedAuditListener
         // cardinality-1 `ACCESS_DENIED` (so "all denials" remains an indexed equality, and dashboards
         // and alerts aggregate over it), while the route lives in `metadata` for the per-resource
         // drill-down an investigation actually runs.
-        $this->securityAudit->record(self::ACTION, ['route' => $this->routeOf($request)]);
+        try {
+            $this->securityAudit->record(self::ACTION, ['route' => $this->routeOf($request)], $event->getThrowable());
+        } catch (Throwable $throwable) {
+            // Handed to the event, never thrown: a throwable leaving a `kernel.exception` listener escapes
+            // HttpKernel with no Problem Details at all. The responder renders this one as the 5xx it is.
+            $event->setThrowable($throwable);
+        }
     }
 
     private function routeOf(Request $request): ?string

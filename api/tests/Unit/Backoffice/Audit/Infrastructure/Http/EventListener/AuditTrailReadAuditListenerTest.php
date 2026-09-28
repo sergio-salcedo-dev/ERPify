@@ -13,6 +13,7 @@ use Erpify\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAuditDoubles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
@@ -110,6 +111,24 @@ final class AuditTrailReadAuditListenerTest extends TestCase
         $this->listener($logger, $this->leakedTransactionBoundaryAudit($logger))->onResponse(
             $this->event(AuditTimelineSearchController::ROUTE_NAME, path: '/api/v1/backoffice/audit/timeline'),
         );
+    }
+
+    public function testPropagatesAFailedSecurityWriteUntouched(): void
+    {
+        // Thrown from `kernel.response` the failure re-enters HttpKernel's own handling and reaches the Problem
+        // Details responder, so a read of the trail never completes without its row.
+        $failure = new RuntimeException('audit_log is unreachable');
+        $logger = $this->createStub(AuditLogger::class);
+        $logger->method('log')->willThrowException($failure);
+
+        try {
+            $this->listener($logger)->onResponse(
+                $this->event(AuditTimelineSearchController::ROUTE_NAME, path: '/api/v1/backoffice/audit/timeline'),
+            );
+            $this->fail('a failed security write must propagate');
+        } catch (RuntimeException $runtimeException) {
+            $this->assertSame($failure, $runtimeException);
+        }
     }
 
     private function listener(
