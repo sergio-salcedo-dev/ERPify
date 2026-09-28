@@ -4,7 +4,7 @@
 
 ## Body shape
 
-The wire body is a JSON object owned by [`ProblemDetails`](../api/src/Shared/ErrorContract/Application/ProblemDetails.php) (`toArray()` lines 34–50). Deterministic key order is `type, title, status, detail?, instance, correlation-id, <extensions>`:
+The wire body is a JSON object owned by [`ProblemDetails`](../api/src/Shared/ErrorContract/Application/ProblemDetails.php) (`toArray()`). Deterministic key order is `type, title, status, detail?, instance, correlation-id, <extensions>`:
 
 ```json
 {

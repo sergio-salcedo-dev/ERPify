@@ -144,6 +144,7 @@ tests/Unit/Gate/CorrelationIdOwnershipGateTest.php :: home
 tests/Unit/Gate/CredentialProofActionRulesGateTest.php :: home
 tests/Unit/Gate/CredentialProofGateTest.php :: home
 tests/Unit/Gate/CredentialProofRulesGateTest.php :: home
+tests/Unit/Gate/DeptracBlessedLayerGateTest.php :: home
 tests/Unit/Gate/DeptracSeamSyncGateTest.php :: home
 tests/Unit/Gate/DomainPresentationSeparationGateTest.php :: home
 tests/Unit/Gate/EnumWireContractGateTest.php :: home
