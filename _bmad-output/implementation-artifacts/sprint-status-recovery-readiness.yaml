@@ -1,0 +1,28 @@
+# generated: 2026-09-28
+# last_updated: 2026-09-28
+# project: ERPify
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+
+# SCOPED SPRINT FILE — the recovery-readiness epic only (the product half of GitHub #602).
+# Separate from sprint-status.yaml on purpose: bmad-build/bmad-sprint-planning resolve the canonical file
+# by convention and must be pointed here explicitly; `make bmad.status.audit` reads it on its own.
+# Branch feat/backoffice-recovery-readiness-vj1x. Keys are the story file names.
+#
+# Story Status: backlog → ready-for-dev → in-progress → review → done
+# A story moves to `done` when the three-layer code review of the complete task is done.
+# RR-2 stays `backlog` until #1001 merges: its redemption copy states what #1001 ships.
+
+generated: 2026-09-28
+last_updated: 2026-09-28
+project: ERPify
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  epic-recovery-readiness: in-progress
+  rr-1-recovery-secret-readiness-warning: ready-for-dev
+  rr-2-evict-first-guidance: backlog
+  epic-recovery-readiness-retrospective: optional
