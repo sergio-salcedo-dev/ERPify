@@ -471,7 +471,7 @@ you change anything here.
       because minting runs only **after** the retire-then-act transaction commits). The opaque
       `<invitationId>.<secret>` token is **never rendered, logged, or persisted raw** — only its SHA-256 digest is
       stored (`iam_invitation.token_hash`). Every dead-token case (used, revoked, expired, already-accepted,
-      non-existent) collapses to one **byte-identical `400 invalid-token`** (SI-13 opacity); the invited email is
+      non-existent) collapses to one **byte-identical `400 invalid-token`** (token opacity, `docs/adr/identity-invitation-lifecycle.md` D11); the invited email is
       never surfaced. **CSRF is defence-in-depth, not the primary control:** the primary same-origin gate is
       `AcceptInvitationOriginListener` (403, mirror of the login guard) plus the opaque single-use token; the
       **stateless CSRF token** (`framework.csrf_protection.stateless_token_ids: [invitation_accept]` +
@@ -529,10 +529,10 @@ you change anything here.
 - [ ] **Password reset (`POST /api/v1/backoffice/forgot-password` · `/reset-password`):** the credential-recovery
       surface, mirroring the invitation flow. Forgot answers a **uniform 202** for every email/identity state
       (only an `ACTIVE` identity mints a token, and that work is never observable to the anonymous requester) — no
-      account enumeration (SI-12). The reset link is a selector-verifier `<id>.<secret>`: only the SHA-256 digest
+      account enumeration (`docs/adr/identity-invitation-lifecycle.md` D10). The reset link is a selector-verifier `<id>.<secret>`: only the SHA-256 digest
       is stored (`identity_password_reset_token.token_hash`), the raw token is **never rendered, logged, or
       persisted**. Every dead-token case (used, expired, unknown, malformed) collapses to one **byte-identical
-      `400 invalid-token`** (SI-13, cross-surface opacity with the invitation link — a distinct exception class
+      `400 invalid-token`** (D11 of that ADR, cross-surface opacity with the invitation link — a distinct exception class
       per context, one wire type). A successful reset **consumes the token atomically** (a conditional delete
       whose affected-row count is the single-use guard, so a concurrent replay collapses to `invalid-token`), sets
       the credential, clears the lockout, and **revokes every session** (best-effort teardown; a store outage is
@@ -625,8 +625,8 @@ you change anything here.
 - [ ] **Pre-identity cross-cutting hardening (login · invitation accept · forgot/reset):**
       every pre-identity rejection pays the same **constant-time floor** (`PreIdentityTimingFloor`, one password
       verification of the firewall's own hasher) — malformed/unknown login identifiers, the `INVITED` pre-auth
-      rejection and **every** forgot outcome, so latency correlates with nothing (SI-12). A dead reset/accept
-      link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (SI-13):
+      rejection and **every** forgot outcome, so latency correlates with nothing (`identity-invitation-lifecycle.md` D10). A dead reset/accept
+      link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (same ADR, D11):
       `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password` + `/backoffice/audit` and its
       subtree (the audit URL names the people under investigation, so it leaves the tab no more readily than a
       token does). **Read that header for what it is:** it is delivered with a DOCUMENT, so it governs a deep
@@ -1001,8 +1001,18 @@ mitigated state. Accepting one means recording who accepted it and against which
       over a person's id passes, and review is the only control on that direction — and it derives from
       entity properties, so references born in configuration and tables with no Doctrine entity
       (`audit_log.*`, `event_store.aggregate_id`) are outside it.
-- [ ] **The person-reference axis has no DETECTIVE control and no backfill.** The gate above is static: it
-      proves a deletion is _written_, never that a row _went_. Two consequences, both open. (1) Any subject
+- [ ] **A person's id persisted through configuration has no owner of its erasure.** The axis above is
+      derived from entity properties, so an id that reaches storage along a path no property declares — a
+      Messenger route, a scheduled message, a route default, a service argument, an integration or an
+      external event — is declared by nothing, and no rule names who erases it. Deferred for sequencing,
+      not excluded: closing it means deciding who owns a reference whose writer is configuration rather than
+      a context, a question the property-derived registry cannot answer. The transport half is fenced by
+      `api/.persistent-transport-policy` only by `aggregate_id`: a person-aggregate event stays unrouted,
+      but one whose id is safe while its PAYLOAD names a person (`SessionStarted`, `SessionRevoked`) is out
+      of its reach. The rest is unmeasured.
+      Revisit when a person's id is first seen reaching storage through configuration.
+- [x] **The person-reference axis has no DETECTIVE control and no backfill.** The gate above is static: it
+      proves a deletion is _written_, never that a row _went_. Two consequences, both now closed. (1) Any subject
       erased before this shipped left its `membership.user_id` / `iam_invitation.invited_user_id` row behind,
       and nothing in the codebase would ever name those rows again — they are not migrated or swept here.
       (2) A future write path that creates a person-referencing row without going through the erasure chain
@@ -1012,14 +1022,14 @@ mitigated state. Accepting one means recording who accepted it and against which
       **four** columns, not the two this axis closed: `membership.user_id`, `iam_invitation.invited_user_id`,
       `iam_session.user_id` and `identity_password_reset_token.user_id` carry the same defect exactly, and
       none of them has a foreign key — nothing in the schema references `identity_user` at all.
-      Tracked as **G-1c** in the GDPR-hardening epic. The ordering note against G-3b — which schedules the
-      same reconciler — is **moot under the option G-1c ships**: one reconciler extended with a lister per
+      Closed by #634, which gives each of the four columns a `PersonReferenceSource` the reconciler collects,
+      and #635, which schedules it with an alarm. The ordering note against G-3b — which schedules the
+      same reconciler — is **moot under the option #634 ships**: one reconciler extended with a lister per
       owning context, so a schedule created first picks the new axis up with no revisit. It bites only if
       that decision is reopened toward one reconciler per context, and is kept as that tripwire. The
       **backfill half is measured away** — no production environment exists, so there are no real erased
-      subjects with surviving orphan rows; the story is prospective. Close it before claiming the axis is
-      enforced at runtime rather than at build time.
-- [ ] **`event_store` retains a person's real id past their own erasure.** Every dispatched event is
+      subjects with surviving orphan rows; the story is prospective.
+- [x] **`event_store` retains a person's real id past their own erasure.** Every dispatched event is
       appended with its real `aggregate_id`, and no erasure path touches the table. As the `aggregate_id`:
       `PasswordResetCompleted`, `UserSuspended`, `UserDeactivated`, `UserRolesChanged`, `UserLocked`,
       `PasswordResetRequested`, plus `AllSessionsRevoked` and `OtherSessionsRevoked` — those last two are
@@ -1031,13 +1041,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       list of columns or keys.
       It is not reachable by the crypto-shredding used in `audit_log`: `aggregate_id` is `UUID NOT NULL`, a
       stream key and an index (`event_store_stream_version_uniq`, `event_store_aggregate_idx`), and a
-      lookup table is barred by [`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4. The
-      only viable route — the id being born a per-subject derived substitute whose derivation secret the
-      erasure destroys — touches every event, projection replay and checkpoint, so it is a persistence
-      strategy decision and ADR material, tracked as a story in the GDPR-hardening epic. Nothing in the
-      repo declares `event_store` erasable today
-      ([`docs/adr/regulatory-audit-trail.md`](docs/adr/regulatory-audit-trail.md) separates it, as the
-      business log, from the retention-bound PII-erasable trail).
+      lookup table is barred by [`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4.
+      Closed by #640 with a different route: inside the erasure transaction, one parameterised `UPDATE`
+      rewrites the subject's id to a fresh random UUID in the column and in the serialised `payload` and
+      `metadata`, by value and case-insensitively, so it reaches every event holding it without anyone
+      listing them. It is the log's one sanctioned mutation, recorded as D12 of
+      [`docs/adr/event-store-and-projections.md`](docs/adr/event-store-and-projections.md).
 - [ ] **`audit:gdpr:erase` is not atomic.** The anonymisation `UPDATE` commits and the
       `GDPR_ERASURE_EXECUTED` self-audit is written _after_, outside any transaction — a crash
       between them leaves the erasure done with no evidence of it, and the original id no longer
@@ -1874,9 +1883,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       multi-worker deployment behind a balancer needs a shared Redis), and with `lock_factory: null`
       concurrent workers *"may over- or under-count"*. What does not exist is a limit **per identity and per
       route**. `ImageId` is never an authorization mechanism and never a secret.
-      **What defends the frontier is now a tripwire rather than a promise.** The epic's argument for having
-      no voter is that no consumer relation exists to vote on, and its second half — that the first real
-      consumer brings its own policy — was prose that nothing enforced; an external security review named
+      **What defends the frontier is now a tripwire rather than a promise.** The argument for having no voter
+      (D1 of [`docs/adr/image-read-route-contract.md`](docs/adr/image-read-route-contract.md)) is that no
+      consumer relation exists to vote on, and its second half — that the first real consumer brings its
+      own policy — was prose that nothing enforced; an external security review named
       the exact failure that permits, a consumer wired without an owner check turning a documented
       provisional frontier into a silent cross-user read. `ImageConsumerAuthorizationGateTest` refuses any
       aggregate outside `Shared/Images` holding an image reference, so that question is forced into the diff
@@ -1897,7 +1907,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Six — a cached copy outlives the erasure, shortened to an hour rather than closed.** A conforming
       client does not revalidate while the response is fresh, so once the bytes and the row are gone every
       viewer keeps serving the image for up to `max-age` with no request reaching a server that could answer
-      404. The route emits `max-age=3600` rather than the year the epic wrote, which shortens the exposure
+      404. The route emits `max-age=3600` rather than the year first asked for (D3 of the same ADR), which shortens the exposure
       without turning every view into a full read; it is still the residual with the most personal-data
       content this route adds, and it is not immediate deletion. What the hour does **not** cover, said
       rather than implied: a copy the viewer downloaded, a screenshot, a page already open with the bytes in
@@ -1933,7 +1943,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       bounded by `PHP_MEM_LIMIT` — where an overrun is an OOM-kill of the container, not of one request.
       Nothing sizes that today, and nothing can until an upload endpoint exists to generate the load; it
       belongs to the epic that exposes one.
-      **Eight — nothing records who read what.** Deliberate and decided by the epic: the route name begins
+      **Eight — nothing records who read what.** Deliberate, and recorded as D2 of the same ADR: the route name begins
       `shared_`, which is the one exclusion of the generic activity audit that fits object serving, so a
       successful read writes no `audit_log` row. A single `resource_type` cannot be both person-denoting (an
       avatar) and not (a logo), and there is no consumer relation to vote on yet. It is a scope boundary, not
@@ -2005,9 +2015,9 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
       accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
       artefact that holds the revisit trigger. Two of them (#860, #870) carry an `@accepted-risk` tag under
-      `api/src` that `.github/workflows/accepted-risk-live-state.yml` requires to point at an open issue; #872's
-      tags sit in `docs/adr/image-deletion-signal-transport.md` and a story artifact, outside that job's scan,
-      so closing it reds nothing. Closing one means either fixing the risk or re-deciding it — never tidying the
+      `api/src` and #872 two in `docs/adr/image-deletion-signal-transport.md`, and
+      `.github/workflows/accepted-risk-live-state.yml` requires every such tag to point at an open issue, so
+      closing any of the three while its tag stands reds that job. Closing one means either fixing the risk or re-deciding it — never tidying the
       backlog. The reasoning lives in each issue; this list exists so a reader of §7 sees every watched
       acceptance in one place. **Accepted** states who accepted it and when **only where the issue records it**;
       `not recorded` is a gap in the record to close, never an acceptance by default. No row is accepted against
