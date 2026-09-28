@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditRedaction;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Domain\Exception\InvalidAuditLogEntry;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -22,6 +23,7 @@ use Symfony\Component\Uid\UuidV7;
  */
 #[CoversClass(AuditLogEntry::class)]
 #[CoversClass(InvalidAuditLogEntry::class)]
+#[CoversClass(AuditRedaction::class)]
 final class AuditLogEntryTest extends TestCase
 {
     public function testExposesEveryFieldItIsBuiltWith(): void
@@ -155,6 +157,26 @@ final class AuditLogEntryTest extends TestCase
         );
 
         $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
+    }
+
+    /**
+     * The rule itself is pinned case by case in AuditRedactionTest; this proves the one factory every
+     * `audit_log` row passes through applies it to both captured fields.
+     */
+    public function testNeutralisesACapturedIpAndUserAgentEqualToTheRedactionSentinel(): void
+    {
+        $entry = AuditLogEntry::create(
+            'BANK_ACCOUNTS_VIEWED',
+            AuditLevel::ACTIVITY,
+            ActorContext::anonymous(),
+            Uuid::generate(),
+            new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            ip: AuditRedaction::SENTINEL,
+            userAgent: '  [redacted] ',
+        );
+
+        $this->assertSame('[client-supplied] [REDACTED]', $entry->ip);
+        $this->assertSame('[client-supplied] [redacted]', $entry->userAgent);
     }
 
     private function anEntry(): AuditLogEntry

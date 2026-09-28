@@ -9,8 +9,10 @@ use Erpify\Iam\Identity\Infrastructure\Controller\ChangeMyPasswordController;
 use Erpify\Iam\Identity\Infrastructure\Http\InvalidCurrentPasswordAuditListener;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAuditDoubles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -21,10 +23,14 @@ use Throwable;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(InvalidCurrentPasswordAuditListener::class)]
 final class InvalidCurrentPasswordAuditListenerTest extends TestCase
 {
+    use RequestBoundarySecurityAuditDoubles;
+
     public function testRecordsARejectedCurrentPasswordAsASecurityEntrySealedWithTheRoute(): void
     {
         $logger = $this->createMock(AuditLogger::class);
@@ -47,7 +53,9 @@ final class InvalidCurrentPasswordAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onException($this->event(new RuntimeException('boom')));
+        $this->listener($logger, $this->untouchedBoundaryAudit($logger))
+            ->onException($this->event(new RuntimeException('boom')))
+        ;
     }
 
     public function testIgnoresAnIdenticalFailureRaisedOutsideTheApiPipeline(): void
@@ -55,7 +63,9 @@ final class InvalidCurrentPasswordAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onException($this->event(new InvalidCurrentPassword(), '/_profiler/0a1b'));
+        $this->listener($logger, $this->untouchedBoundaryAudit($logger))
+            ->onException($this->event(new InvalidCurrentPassword(), '/_profiler/0a1b'))
+        ;
     }
 
     public function testIgnoresSubRequests(): void
@@ -66,7 +76,7 @@ final class InvalidCurrentPasswordAuditListenerTest extends TestCase
         $request = Request::create('/api/v1/me/password', Request::METHOD_POST);
         $request->attributes->set('_route', ChangeMyPasswordController::ROUTE_NAME);
 
-        $this->listener($logger)->onException(new ExceptionEvent(
+        $this->listener($logger, $this->untouchedBoundaryAudit($logger))->onException(new ExceptionEvent(
             $this->createStub(HttpKernelInterface::class),
             $request,
             HttpKernelInterface::SUB_REQUEST,
@@ -84,6 +94,32 @@ final class InvalidCurrentPasswordAuditListenerTest extends TestCase
         $this->listener($logger)->onException($this->event(new InvalidCurrentPassword(), route: null));
     }
 
+    public function testHandsTheLeakedTransactionRefusalToTheEventChainedToTheRejection(): void
+    {
+        $logger = $this->createMock(AuditLogger::class);
+        $logger->expects($this->never())->method('log');
+        $rejection = new InvalidCurrentPassword();
+        $event = $this->event($rejection);
+
+        $this->listener($logger, $this->leakedTransactionBoundaryAudit($logger))->onException($event);
+
+        $this->assertRefusalOf($rejection, $event->getThrowable());
+    }
+
+    public function testHandsAFailedSecurityWriteToTheEventInsteadOfThrowingIt(): void
+    {
+        // Thrown from a `kernel.exception` listener the failure would escape HttpKernel with no Problem Details.
+        $failure = new RuntimeException('audit_log is unreachable');
+        $logger = $this->createStub(AuditLogger::class);
+        $logger->method('log')->willThrowException($failure);
+        $event = $this->event(new InvalidCurrentPassword());
+
+        $this->listener($logger)->onException($event);
+
+        $this->assertSame($failure, $event->getThrowable());
+        $this->assertFalse($event->hasResponse(), 'the responder, not this listener, answers the 5xx');
+    }
+
     public function testRunsBeforeTheProblemDetailsResponder(): void
     {
         // ExceptionEvent extends RequestEvent, whose setResponse() stops propagation, so a listener ordered
@@ -91,9 +127,14 @@ final class InvalidCurrentPasswordAuditListenerTest extends TestCase
         $this->assertGreaterThan(ExceptionResponder::PRIORITY, InvalidCurrentPasswordAuditListener::PRIORITY);
     }
 
-    private function listener(AuditLogger $logger): InvalidCurrentPasswordAuditListener
-    {
-        return new InvalidCurrentPasswordAuditListener($logger, new ApiRequestMatcher());
+    private function listener(
+        AuditLogger $logger,
+        ?RequestBoundarySecurityAudit $audit = null,
+    ): InvalidCurrentPasswordAuditListener {
+        return new InvalidCurrentPasswordAuditListener(
+            $audit ?? $this->boundaryAudit($logger),
+            new ApiRequestMatcher(),
+        );
     }
 
     private function event(

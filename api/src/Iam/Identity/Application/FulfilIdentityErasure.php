@@ -17,6 +17,8 @@ use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
+use Erpify\Shared\Event\Application\SubjectPseudonym;
+use Erpify\Shared\Event\Application\SubjectPseudonymisation;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
@@ -172,17 +174,17 @@ final readonly class FulfilIdentityErasure
                 // Locks both axes as one set before rewriting either — see the port for why ordering the two
                 // statements individually cannot prevent the deadlock they can reach.
                 $anonymisation = $this->auditTrail->beginForSubject($subject);
+                $pseudonymisation = SubjectPseudonymisation::of(
+                    subjectId: $subjectId,
+                    pseudonym: SubjectPseudonym::fromString($anonymisation->pseudonym),
+                );
 
                 $this->recordSubjectErasure($identity, $subject);
 
                 // Same pseudonym for both axes: one person must not split into two anonymous identities.
                 // It re-links nothing, because the original id is gone from both columns.
                 $anonymisedResourceRows = $this->auditTrail->completeForSubject($subject, $anonymisation);
-                $anonymisedEventRows = $this->anonymiseBusinessLog(
-                    $identity,
-                    $subjectId,
-                    $anonymisation->pseudonym,
-                );
+                $anonymisedEventRows = $this->anonymiseBusinessLog($identity, $pseudonymisation);
                 [$sessionsDeleted, $membershipsDeleted] = $this->purgeReferences($subjectId);
 
                 $result = new FulfilIdentityErasureResult(
@@ -253,14 +255,13 @@ final readonly class FulfilIdentityErasure
      */
     private function anonymiseBusinessLog(
         IdentityErasureResult $identity,
-        string $subjectId,
-        string $pseudonym,
+        SubjectPseudonymisation $pseudonymisation,
     ): int {
         if (!$identity->identityErased) {
             return 0;
         }
 
-        return $this->eventStoreSubjectAnonymiser->anonymise($subjectId, $pseudonym);
+        return $this->eventStoreSubjectAnonymiser->anonymise($pseudonymisation);
     }
 
     /**

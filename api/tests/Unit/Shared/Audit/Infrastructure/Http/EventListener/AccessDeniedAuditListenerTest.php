@@ -7,8 +7,10 @@ namespace Erpify\Tests\Unit\Shared\Audit\Infrastructure\Http\EventListener;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Infrastructure\Http\EventListener\AccessDeniedAuditListener;
+use Erpify\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAuditDoubles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -24,6 +26,8 @@ use Throwable;
 #[CoversClass(AccessDeniedAuditListener::class)]
 final class AccessDeniedAuditListenerTest extends TestCase
 {
+    use RequestBoundarySecurityAuditDoubles;
+
     public function testRecordsASecurityEntryForADeniedApiRequestSealedWithTheRoute(): void
     {
         $logger = $this->createMock(AuditLogger::class);
@@ -63,7 +67,9 @@ final class AccessDeniedAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onException($this->event(new RuntimeException('boom')));
+        $this->listener($logger, $this->untouchedBoundaryAudit($logger))
+            ->onException($this->event(new RuntimeException('boom')))
+        ;
     }
 
     public function testIgnoresDenialsRaisedOutsideTheApiPipeline(): void
@@ -71,7 +77,49 @@ final class AccessDeniedAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onException($this->event(new AccessDeniedException('Nope.'), '/_profiler/0a1b'));
+        $this->listener($logger, $this->untouchedBoundaryAudit($logger))
+            ->onException($this->event(new AccessDeniedException('Nope.'), '/_profiler/0a1b'))
+        ;
+    }
+
+    public function testIgnoresSubRequests(): void
+    {
+        $logger = $this->createMock(AuditLogger::class);
+        $logger->expects($this->never())->method('log');
+
+        $this->listener($logger, $this->untouchedBoundaryAudit($logger))->onException(new ExceptionEvent(
+            $this->createStub(HttpKernelInterface::class),
+            Request::create('/api/v1/backoffice/banks'),
+            HttpKernelInterface::SUB_REQUEST,
+            new AccessDeniedException('Nope.'),
+        ));
+    }
+
+    public function testHandsAFailedSecurityWriteToTheEventInsteadOfThrowingIt(): void
+    {
+        // A denial is never lost in silence, and the failure must still reach the Problem Details responder:
+        // thrown from here it would escape HttpKernel::handleThrowable(), which wraps no try around its listeners.
+        $failure = new RuntimeException('audit_log is unreachable');
+        $logger = $this->createStub(AuditLogger::class);
+        $logger->method('log')->willThrowException($failure);
+        $event = $this->event(new AccessDeniedException('Nope.'));
+
+        $this->listener($logger)->onException($event);
+
+        $this->assertSame($failure, $event->getThrowable());
+        $this->assertFalse($event->hasResponse(), 'the responder, not this listener, answers the 5xx');
+    }
+
+    public function testHandsTheLeakedTransactionRefusalToTheEventChainedToTheDenial(): void
+    {
+        $logger = $this->createMock(AuditLogger::class);
+        $logger->expects($this->never())->method('log');
+        $denial = new AccessDeniedException('Nope.');
+        $event = $this->event($denial);
+
+        $this->listener($logger, $this->leakedTransactionBoundaryAudit($logger))->onException($event);
+
+        $this->assertRefusalOf($denial, $event->getThrowable());
     }
 
     public function testRunsBeforeTheProblemDetailsResponder(): void
@@ -82,9 +130,14 @@ final class AccessDeniedAuditListenerTest extends TestCase
         $this->assertGreaterThan(ExceptionResponder::PRIORITY, AccessDeniedAuditListener::PRIORITY);
     }
 
-    private function listener(AuditLogger $logger): AccessDeniedAuditListener
-    {
-        return new AccessDeniedAuditListener($logger, new ApiRequestMatcher());
+    private function listener(
+        AuditLogger $logger,
+        ?RequestBoundarySecurityAudit $audit = null,
+    ): AccessDeniedAuditListener {
+        return new AccessDeniedAuditListener(
+            $audit ?? $this->boundaryAudit($logger),
+            new ApiRequestMatcher(),
+        );
     }
 
     private function event(

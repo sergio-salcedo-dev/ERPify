@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Shared\Event;
 
+use Closure;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
+use Erpify\Shared\Event\Application\SubjectPseudonym;
+use Erpify\Shared\Event\Application\SubjectPseudonymisation;
 use Erpify\Shared\Event\Infrastructure\Persistence\DbalEventStoreSubjectAnonymiser;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -22,9 +25,10 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * Three claims the scenario cannot make are made here. That the erasure is bounded to the identifier it was
  * given: rows belonging to somebody else come out byte-identical, which is what stops one subject's erasure
  * from being another's. That it is idempotent for the reason claimed rather than by luck — a second pass is
- * run, not reasoned about. And that both `Uuid::ensure()` guards fire before the driver sees anything: they
- * are the whole safety argument for interpolating either value into a regular expression, and without a test
- * they are indistinguishable from the comment that says they are not one.
+ * run, not reasoned about. And that the adapter's own `Uuid::ensure()` guards fire before the driver sees
+ * anything, even for a pair built around its factory: they are the safety argument for interpolating either
+ * value into a regular expression at the boundary where it becomes syntax. The value object's guards are
+ * proven in `SubjectPseudonymisationTest`; the adapter's boundary guards are proven here.
  *
  * The counterpart claim is here too, deliberately: handed an identifier that denotes no person, the statement
  * rewrites that aggregate's stream just as willingly. That is not a defect of the adapter — matching by value
@@ -86,7 +90,8 @@ final class EventStoreSubjectAnonymiserFunctionalTest extends KernelTestCase
                 \sprintf('{"invitedUserId": "%s"}', self::OTHER_SUBJECT_ID),
             );
 
-            $this->assertSame(3, $anonymiser->anonymise(self::SUBJECT_ID, $pseudonym), 'both axes, both shapes');
+            $affected = $anonymiser->anonymise($this->pair(self::SUBJECT_ID, $pseudonym));
+            $this->assertSame(3, $affected, 'both axes, both shapes');
 
             $this->assertSame($pseudonym, $this->columnOf($connection, $identityEvent, 'aggregate_id'));
             // The guarantee is not bought by deleting history: the row survives with its stream position.
@@ -125,7 +130,7 @@ final class EventStoreSubjectAnonymiserFunctionalTest extends KernelTestCase
             );
 
             $affected = (new DbalEventStoreSubjectAnonymiser($connection))
-                ->anonymise(self::BANK_ID, Uuid::generate())
+                ->anonymise($this->pair(self::BANK_ID, Uuid::generate()))
             ;
 
             // Two rows an erasure had no business touching. Nothing in this adapter could have told, which is
@@ -147,8 +152,12 @@ final class EventStoreSubjectAnonymiserFunctionalTest extends KernelTestCase
 
             $anonymiser = new DbalEventStoreSubjectAnonymiser($connection);
 
-            $this->assertSame(1, $anonymiser->anonymise(self::SUBJECT_ID, Uuid::generate()));
-            $this->assertSame(0, $anonymiser->anonymise(self::SUBJECT_ID, Uuid::generate()), 'a re-run finds none');
+            $this->assertSame(1, $anonymiser->anonymise($this->pair(self::SUBJECT_ID, Uuid::generate())));
+            $this->assertSame(
+                0,
+                $anonymiser->anonymise($this->pair(self::SUBJECT_ID, Uuid::generate())),
+                'a re-run finds none',
+            );
         });
     }
 
@@ -160,7 +169,9 @@ final class EventStoreSubjectAnonymiserFunctionalTest extends KernelTestCase
 
             // Interpolated into a regular expression and into a `LIKE` pattern: `%` and `.` would both be read
             // as syntax. The guard is what makes that interpolation safe, so it has to be the thing that fires.
-            (new DbalEventStoreSubjectAnonymiser($connection))->anonymise('%.*%', Uuid::generate());
+            (new DbalEventStoreSubjectAnonymiser($connection))
+                ->anonymise($this->unvalidatedPair('%.*%', Uuid::generate()))
+            ;
         });
     }
 
@@ -172,8 +183,31 @@ final class EventStoreSubjectAnonymiserFunctionalTest extends KernelTestCase
 
             // The replacement string has its own syntax in Postgres — `\1`…`\9` and `\&` — so it needs the
             // same guard as the pattern, and for a different reason.
-            (new DbalEventStoreSubjectAnonymiser($connection))->anonymise(self::SUBJECT_ID, '\1');
+            (new DbalEventStoreSubjectAnonymiser($connection))
+                ->anonymise($this->unvalidatedPair(self::SUBJECT_ID, '\1'))
+            ;
         });
+    }
+
+    /**
+     * A pair built through the private constructor, bypassing `of()` — the shape reflection or
+     * `unserialize()` can produce, and the one the adapter's own guards exist for.
+     */
+    private function unvalidatedPair(string $subjectId, string $pseudonym): SubjectPseudonymisation
+    {
+        return Closure::bind(
+            static fn (): SubjectPseudonymisation => new SubjectPseudonymisation($subjectId, $pseudonym),
+            null,
+            SubjectPseudonymisation::class,
+        )();
+    }
+
+    private function pair(string $subjectId, string $pseudonym): SubjectPseudonymisation
+    {
+        return SubjectPseudonymisation::of(
+            subjectId: $subjectId,
+            pseudonym: SubjectPseudonym::fromString($pseudonym),
+        );
     }
 
     private function seed(

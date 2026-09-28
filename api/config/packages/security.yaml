@@ -46,9 +46,13 @@ security:
     # widening that file does not carry — including the two spellings that admit an anonymous caller without
     # naming PUBLIC_ACCESS at all: a rule keyed on `route:`, and one whose `roles` are absent or empty.
     # First match wins, so the catch-all is last; it is scoped to `^/api` (not `^/`) so /_dev, /_wdt,
-    # /.well-known/mercure and the reverse-proxied PWA stay outside the firewall's remit. An unauthenticated
-    # hit raises AccessDeniedException, which UnauthenticatedAccessListener turns into a 401 through the
-    # Problem Details pipeline; adding a protected route needs no config — it falls through to the catch-all.
+    # /.well-known/mercure and the reverse-proxied PWA stay outside the firewall's remit. Its path is not
+    # written here but named from ApiRequestMatcher::PATH_PATTERN, the boundary the session admission gate
+    # and every other API-only listener evaluate — same regex, same percent-decoding — so a path the
+    # firewall authenticates can never skip the gate that checks the session is still live. Not `^/api/`:
+    # that would leave `/api` and `/apiX` anonymous. An unauthenticated hit raises AccessDeniedException,
+    # which UnauthenticatedAccessListener turns into a 401 through the Problem Details pipeline; adding a
+    # protected route needs no config — it falls through to the catch-all.
     access_control:
         - { path: '^/api/v1/backoffice/login$', roles: PUBLIC_ACCESS }
         # Invitation accept is a pre-identity write, but stays a PUBLIC_ACCESS route INSIDE the main firewall
@@ -82,7 +86,7 @@ security:
         # `/api/test/*` are when@test-only throwaway routes that drive the error pipeline through a real
         # kernel; this rule is inert in prod, where those routes are not registered.
         - { path: '^/api/test/', roles: PUBLIC_ACCESS }
-        - { path: '^/api', roles: IS_AUTHENTICATED_FULLY }
+        - { path: !php/const Erpify\Shared\Http\Infrastructure\ApiRequestMatcher::PATH_PATTERN, roles: IS_AUTHENTICATED_FULLY }
 
 when@test:
     security:

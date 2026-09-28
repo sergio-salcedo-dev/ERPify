@@ -206,33 +206,52 @@ function AuditEntryDrawerBody({
 
       {entry.level === AuditLevel.Change ? (
         <Section title="Changes">
-          {detail ? (
-            <AuditChangeDiff
-              changes={detail.metadata.changes ?? {}}
-              operation={detail.metadata.operation}
-              testId="audit-entry-drawer__diff"
-            />
-          ) : (
-            <DormantDetail />
-          )}
+          {detail ? <ChangesBody detail={detail} /> : <DormantDetail />}
         </Section>
       ) : null}
 
       <Section title="Metadata">
-        {detail ? <MetadataBlock value={nonDiffMetadata(detail.metadata)} /> : <DormantDetail />}
+        {detail ? <MetadataBlock value={nonDiffMetadata(detail)} /> : <DormantDetail />}
       </Section>
     </div>
   );
 }
 
 /**
- * The metadata minus `changes` and `operation` — the Changes section already renders the diff (and its
- * snapshot header, sourced from `operation`) in full.
+ * A diff the client could not read is said to be unreadable, never rendered as an empty diff: "No changes
+ * recorded" would claim the write changed nothing, which is not known for a corrupt stored record.
  */
-function nonDiffMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+function ChangesBody({ detail }: Readonly<{ detail: AuditEventDetail }>) {
+  if (detail.changesUnreadable) {
+    return (
+      <p
+        className="text-muted-foreground text-xs"
+        data-testid="audit-entry-drawer__diff--unreadable"
+      >
+        {"Diff unavailable — the stored change record is not a field-by-field diff."}
+      </p>
+    );
+  }
+
+  return (
+    <AuditChangeDiff
+      changes={detail.metadata.changes ?? {}}
+      operation={detail.metadata.operation}
+      testId="audit-entry-drawer__diff"
+    />
+  );
+}
+
+/**
+ * The metadata minus what the Changes section already renders: `changes` always, and `operation` only when
+ * the diff is readable — its snapshot header is sourced from it. An unreadable diff shows no header, so the
+ * write kind stays here rather than appearing nowhere.
+ */
+function nonDiffMetadata(detail: AuditEventDetail): Record<string, unknown> {
   const rest: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(metadata)) {
-    if (key !== "changes" && key !== "operation") rest[key] = value;
+  for (const [key, value] of Object.entries(detail.metadata)) {
+    const renderedAsDiff = key === "changes" || (key === "operation" && !detail.changesUnreadable);
+    if (!renderedAsDiff) rest[key] = value;
   }
   return rest;
 }

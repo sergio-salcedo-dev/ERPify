@@ -17,6 +17,7 @@ use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Request;
@@ -210,6 +211,43 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
         $this->assertStringContainsString('"changes":{}', $content);
         $this->assertStringNotContainsString('"changes":[]', $content);
         $this->assertStringContainsString('"operation":"UPDATED"', $content);
+    }
+
+    /**
+     * A `changes` stored as `null` or a scalar is served verbatim — neither sealed into a map nor deleted —
+     * and the client degrades it to an unreadable diff; the reasoning lives in the audit ADR (D4, `changes`
+     * on the wire). Asserted over the DECODED body: an identical value under the key rules out both an
+     * invented `{}` and a dropped key.
+     *
+     * @throws JsonException
+     */
+    #[DataProvider('provideANullOrScalarChangesIsServedVerbatimCases')]
+    public function testANullOrScalarChangesIsServedVerbatim(mixed $changes): void
+    {
+        $id = $this->seedChangeRow(['changes' => $changes, 'operation' => 'UPDATED']);
+
+        $data = $this->detail($id);
+
+        self::assertResponseStatusCodeSame(200);
+        $this->assertArrayHasKey('metadata', $data);
+        $this->assertIsArray($data['metadata']);
+        $this->assertArrayHasKey('changes', $data['metadata']);
+        $this->assertSame($changes, $data['metadata']['changes']);
+    }
+
+    /**
+     * @return iterable<string, array{mixed}>
+     */
+    public static function provideANullOrScalarChangesIsServedVerbatimCases(): iterable
+    {
+        yield 'null' => [null];
+        yield 'string' => ['corrupt'];
+        yield 'empty string' => [''];
+        yield 'int' => [7];
+        yield 'zero' => [0];
+        yield 'float' => [1.5];
+        yield 'true' => [true];
+        yield 'false' => [false];
     }
 
     /**
