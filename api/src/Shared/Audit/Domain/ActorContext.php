@@ -42,6 +42,22 @@ final readonly class ActorContext
         return self::withValidatedId(ActorType::API_KEY, $id);
     }
 
+    /**
+     * Whether this actor is the user identity `$userId` — the question every "an administrator may not do this
+     * to themselves" guard asks. Only a {@see ActorType::USER} actor can be a user identity: an API key's id
+     * names the key, never a person, and `anonymous`/`system` carry no id at all.
+     *
+     * RFC 4122 hex is case-insensitive, and the two sides reach a caller by different routes — the sealed actor
+     * id from the session, the target from a request path the caller spells — so the comparison ignores case.
+     * A `===` would let an administrator slip past a self-target guard by re-casing their own id.
+     */
+    public function isUser(string $userId): bool
+    {
+        return ActorType::USER === $this->type
+            && null !== $this->actorId
+            && 0 === \strcasecmp($this->actorId, $userId);
+    }
+
     private static function withValidatedId(ActorType $type, string $id): self
     {
         if (!Uuid::isValid($id)) {

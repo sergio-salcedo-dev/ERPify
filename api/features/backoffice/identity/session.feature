@@ -84,8 +84,9 @@ Feature: Server-side session registry and admission gate
   # count resets per SCENARIO and not per request: folded into the sign-out scenario above it would still
   # move on a stray query, but it could not say WHICH of that scenario's three requests moved it.
   #
-  # Read what it pins narrowly. Only one of the nine is the revocation — a single bulk UPDATE; the rest is
-  # the transaction envelope and the event-store write plus projection catch-up that publishing through the
+  # Read what it pins narrowly. Two of the ten are the revocation — the ordered locked read of the user's
+  # active sessions, which is what refuses a session evicted while its request waited, and the bulk UPDATE;
+  # the rest is the transaction envelope and the event-store write plus projection catch-up that publishing through the
   # outbox costs. No audit row is among them, because the policy audits GETs and lets writes fall through.
   # So the assertion is not a statement about what a sign-out should cost: it is the absence of ONE more
   # query, the one a controller resolving the admitted session for itself would add.
@@ -97,7 +98,7 @@ Feature: Server-side session registry and admission gate
   Scenario: Signing out other devices reads the admitted session without re-running its lookup
     When I send a "POST" request to "/sessions/revoke-others"
     Then the response status code should be 204
-    And 9 requests got executed only for doctrine connection "default"
+    And 10 requests got executed only for doctrine connection "default"
 
   Scenario: Signing out this device revokes its session so the cookie is inert
     When I send a "POST" request to "/sessions/revoke-current"

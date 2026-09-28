@@ -30,6 +30,8 @@ final class LockOrderJournal
 
     public const string RECOVERY_SECRET = 'identity_recovery_secret';
 
+    public const string IAM_SESSION = 'iam_session';
+
     /**
      * Repeats are kept rather than collapsed: a path that takes one table's lock twice around another's is a
      * different arrangement from one that takes it once, and folding them would hide the difference.

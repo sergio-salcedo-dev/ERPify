@@ -11,8 +11,9 @@ import { apiBaseURL } from "../fixtures/api";
  * owned by the Behat suite; this is a single happy-path smoke.
  *
  * Its target is a dedicated ACTIVE non-admin (`e2e-suspendable@erpify.test`) — NOT the admin, whose suspension
- * would hit the last-active-admin guard. The `make pwa.test.e2e` seed re-activates it before every run, so the
- * unidirectional lifecycle (no reinstate) never leaves it un-reseedable.
+ * the API refuses (409 `self-status-change-forbidden`) and whose detail offers no control. The
+ * `make pwa.test.e2e` seed re-activates it before every run, so the unidirectional lifecycle (no reinstate)
+ * never leaves it un-reseedable.
  */
 const SUSPENDABLE_EMAIL = "e2e-suspendable@erpify.test";
 

@@ -83,6 +83,18 @@ describe("UserStatusControl", () => {
     me.mockResolvedValue(ADMIN);
   });
 
+  it("offers no transition on the operator's own identity, whatever case the id is spelled in", async () => {
+    // The API refuses a self-targeted transition; a select that can only fail is not offered.
+    me.mockResolvedValue({ ...ADMIN, id: TARGET_ID.toUpperCase() });
+    renderControl(user(UserStatus.ACTIVE));
+
+    expect(await screen.findByTestId("user-status__self")).toHaveTextContent(
+      "You cannot suspend or deactivate your own account.",
+    );
+    expect(screen.queryByTestId("user-status__save")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("user-status__select")).not.toBeInTheDocument();
+  });
+
   it("suspends an active user and hands the transitioned user back", async () => {
     const onChanged = vi.fn();
     changeRun.mockResolvedValueOnce(user(UserStatus.SUSPENDED));

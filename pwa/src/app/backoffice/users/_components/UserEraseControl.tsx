@@ -20,11 +20,13 @@ import { FulfilIdentityErasure } from "@/context/backoffice/user/application/Ful
 import type { User } from "@/context/backoffice/user/domain/User";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { Can } from "@/context/shared/access/infrastructure/ui";
+import { useSession } from "@/context/shared/access/application/useSession";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { userRoutes } from "../_lib/userRoutes";
+import { isOwnIdentity } from "../_lib/isOwnIdentity";
 
 const INPUT_CLASS =
   "border-border bg-background text-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none";
@@ -39,6 +41,9 @@ interface UserEraseControlProps {
  * disabled until the operator retypes the user's email) mark it as irreversible and unmistakable — it can never
  * be confused with "deactivate". On success it redirects to the list (the detail is now a 404); on a mapped
  * `HttpError` the dialog closes and the problem surfaces in the persistent {@link MutationError}, never inline.
+ *
+ * On the operator's own identity it offers no trigger: the API refuses a self-targeted erasure, so the section
+ * says another administrator performs it.
  */
 export function UserEraseControl({ user }: Readonly<UserEraseControlProps>) {
   const router = useRouter();
@@ -46,6 +51,8 @@ export function UserEraseControl({ user }: Readonly<UserEraseControlProps>) {
   const [confirmText, setConfirmText] = useState("");
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [erasing, setErasing] = useState(false);
+
+  const { session } = useSession();
 
   const confirmed = confirmText === user.email;
 
@@ -73,6 +80,19 @@ export function UserEraseControl({ user }: Readonly<UserEraseControlProps>) {
       setErasing(false);
     }
   };
+
+  if (isOwnIdentity(session, user.id)) {
+    return (
+      <Can permission={Permission.USERS_ERASE}>
+        <section className="user-erase border-destructive/40 space-y-1 rounded-md border p-4">
+          <h2 className="text-foreground text-base font-semibold">Erase (GDPR)</h2>
+          <p className="text-muted-foreground text-sm" data-testid="user-erase__self">
+            You cannot erase your own identity. Another administrator has to perform the erasure.
+          </p>
+        </section>
+      </Can>
+    );
+  }
 
   return (
     <Can permission={Permission.USERS_ERASE}>

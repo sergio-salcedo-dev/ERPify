@@ -8,9 +8,11 @@ import type { User } from "@/context/backoffice/user/domain/User";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { Can } from "@/context/shared/access/infrastructure/ui";
+import { useSession } from "@/context/shared/access/application/useSession";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
+import { isOwnIdentity } from "../_lib/isOwnIdentity";
 
 /** The two legal transitions out of ACTIVE — the identity lifecycle is unidirectional, so there is no reinstate. */
 type TransitionTarget = typeof UserStatus.SUSPENDED | typeof UserStatus.DEACTIVATED;
@@ -34,14 +36,32 @@ interface UserStatusControlProps {
  * identity — the transition is unidirectional (no reinstate), so a suspended/deactivated user shows no
  * control. A failure (403 / 409 last-admin / 409 illegal transition / 422) surfaces in the persistent
  * {@link MutationError}, mirroring the bank-account status control.
+ *
+ * On the operator's own identity it offers no control either: the API refuses a self-targeted transition, so
+ * the section says another administrator makes it.
  */
 export function UserStatusControl({ user, onChanged }: Readonly<UserStatusControlProps>) {
   const [selected, setSelected] = useState<TransitionTarget>(UserStatus.SUSPENDED);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [saving, setSaving] = useState(false);
+  const { session } = useSession();
 
   if (user.status !== UserStatus.ACTIVE) {
     return null;
+  }
+
+  if (isOwnIdentity(session, user.id)) {
+    return (
+      <Can permission={Permission.USERS_CHANGE_STATUS}>
+        <section className="user-status border-border space-y-1 rounded-md border p-4">
+          <h2 className="text-foreground text-base font-semibold">Status</h2>
+          <p className="text-muted-foreground text-sm" data-testid="user-status__self">
+            You cannot suspend or deactivate your own account. Another administrator has to make
+            this change.
+          </p>
+        </section>
+      </Can>
+    );
   }
 
   const onSubmit = async (): Promise<void> => {

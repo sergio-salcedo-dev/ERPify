@@ -127,8 +127,8 @@ trait AuthenticatesFunctionalRequests
     /**
      * Ensures a user with exactly the required roles exists and logs it in via `loginUser` (no HTTP round
      * trip, no password verification). The User aggregate has no role mutator by design, so a stored row
-     * missing any required role — which would turn a gated route into a phantom 403 — is dropped and
-     * recreated rather than reused.
+     * missing any required role — which would turn a gated route into a phantom 403 — or no longer `ACTIVE` is
+     * dropped and recreated rather than reused.
      *
      * @param list<string> $roleValues the roles the seated user must carry
      */
@@ -144,7 +144,9 @@ trait AuthenticatesFunctionalRequests
 
         $user = $users->findByEmail(Email::from($email));
 
-        if (null !== $user && !$this->carriesAllRoles($user, $roleValues)) {
+        // A row left SUSPENDED by a run killed before its tearDown would otherwise be reused for ever, and every
+        // later test seated on it would start from an identity that is not in the active-admin pool.
+        if (null !== $user && (!$user->isActive() || !$this->carriesAllRoles($user, $roleValues))) {
             $entityManager->remove($user);
             $entityManager->flush();
             $user = null;

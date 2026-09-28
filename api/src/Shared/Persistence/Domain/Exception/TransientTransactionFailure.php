@@ -13,6 +13,11 @@ use Throwable;
  * (`40P01`) or a serialization failure (`40001`). Nothing about the request was wrong, and nothing about it
  * needs to change: the identical bytes sent again are expected to succeed.
  *
+ * A use case may raise it too, for the same claim decided one level up: a concurrent operation interfered and
+ * the identical request is expected to succeed. The recovery-secret redemption does, when the session it
+ * established is revoked before its consuming transaction takes the lock — the `previous` then names that
+ * interference rather than a SQLSTATE.
+ *
  * **Why {@see ServiceUnavailable} (503) and not {@see \Erpify\Shared\ErrorContract\Domain\Exception\Conflict}
  * (409).** A 409 tells the caller to go resolve a conflict, which here is advice it cannot act on — there is
  * no conflicting state to reconcile, only a lock order two transactions took in opposite directions. 503 is

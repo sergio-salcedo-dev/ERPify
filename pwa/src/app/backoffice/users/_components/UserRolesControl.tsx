@@ -9,6 +9,7 @@ import { ALL_ROLES, Role } from "@/context/shared/access/domain/Role";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { Can } from "@/context/shared/access/infrastructure/ui";
 import { useCan } from "@/context/shared/access/application/useCan";
+import { useSession } from "@/context/shared/access/application/useSession";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
@@ -19,6 +20,7 @@ import {
   type ChangeUserRolesFormValues,
 } from "@/context/backoffice/user/application/schemas/ChangeUserRolesSchema";
 import { ROLE_LABEL } from "../_lib/userLabels";
+import { isOwnIdentity } from "../_lib/isOwnIdentity";
 
 /** `"roles[0]"` / `"roles"` → the base field the violation belongs to. */
 function baseField(field: string): string {
@@ -37,9 +39,13 @@ interface UserRolesControlProps {
  * carry the COMPLETE target set (never a delta), pre-checked from the identity's current roles, so re-saving the
  * same set is a legitimate no-op. A 422 maps onto the `roles` field; every other failure (403 / 409 last-admin)
  * surfaces in the persistent {@link MutationError}.
+ *
+ * On the operator's own identity it offers no form: the API refuses a self-targeted change outright, so the
+ * section states that another administrator makes it instead of presenting checkboxes that can only fail.
  */
 export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlProps>) {
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  const { session } = useSession();
 
   // Roles this build's vocabulary does not know get no checkbox, and the form's schema would reject them
   // anyway, so they stay out of the form entirely and are re-attached on submit. A PWA deployed behind the
@@ -92,6 +98,19 @@ export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlP
     }
   });
 
+  if (isOwnIdentity(session, user.id)) {
+    return (
+      <Can permission={Permission.USERS_CHANGE_ROLES}>
+        <section className="user-roles border-border space-y-1 rounded-md border p-4">
+          <h2 className="text-foreground text-base font-semibold">Roles</h2>
+          <p className="text-muted-foreground text-sm" data-testid="user-roles__self">
+            You cannot change your own roles. Another administrator has to make this change.
+          </p>
+        </section>
+      </Can>
+    );
+  }
+
   return (
     <Can permission={Permission.USERS_CHANGE_ROLES}>
       <form
@@ -104,8 +123,7 @@ export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlP
           <h2 className="text-foreground text-base font-semibold">Roles</h2>
           <p className="text-muted-foreground text-sm">
             Grant what this member may do. Saving replaces their whole role set and signs the member
-            out of every device, so they sign back in with the new roles — including you, if you are
-            editing your own roles.
+            out of every device, so they sign back in with the new roles.
           </p>
         </div>
 

@@ -18,7 +18,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
  * reusing the existing marker — no new error-contract entry. Off-request callers (the CLI's `system` actor,
  * which carries no id) can never trip it, so it coexists with the shared erasure use case.
  */
-final class SelfErasureForbidden extends DomainException implements Conflict
+final class SelfErasureForbidden extends DomainException implements Conflict, SelfTargetedActForbidden
 {
     public static function forActor(string $userId): self
     {

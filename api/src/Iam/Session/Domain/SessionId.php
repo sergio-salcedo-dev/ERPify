@@ -47,4 +47,16 @@ final readonly class SessionId
     {
         return $this->value === $other->value;
     }
+
+    /**
+     * Membership compares case-insensitively, because the ids it is asked about come back from a `uuid` column,
+     * where equality normalises hex case: a spelling difference must never make a live session read as absent,
+     * which is the answer that refuses the caller or leaves a redemption unconsumed.
+     *
+     * @param list<self> $ids
+     */
+    public function isAmong(array $ids): bool
+    {
+        return \array_any($ids, fn (SessionId $id): bool => 0 === \strcasecmp($this->value, $id->value));
+    }
 }

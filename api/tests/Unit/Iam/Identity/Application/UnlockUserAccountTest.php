@@ -21,8 +21,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The lever `#602`'s design review demanded and the two properties it must never lose: the self-unlock refusal
- * runs before any row is touched or any audit entry is written, and the domain's own idempotency signal
+ * The administrative unlock lever and the two properties it must never lose: the self-unlock refusal runs before
+ * any row is touched, and the use case itself writes no audit entry for it (the refusal's `security` row is the
+ * exception listener's), and the domain's own idempotency signal
  * ({@see User::clearLockout()} returning `false` on an already-clear
  * identity) reaches the caller rather than being discarded in favour of an unconditional "success".
  *

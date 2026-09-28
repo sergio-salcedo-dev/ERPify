@@ -97,7 +97,10 @@ than an ordering habit. One recovery-secret audit row projects no event at all �
 `RECOVERY_SECRET_REDEMPTION_COMPENSATED`, written when a redemption's session was admitted and then revoked
 because the consuming transaction refused. The event died with that rollback, so there the prunable
 projection is the *only* durable trace, and the asymmetry is the point rather than an oversight: nothing
-persisted for an event to attest.
+persisted for an event to attest. `RECOVERY_SECRET_REDEMPTION_INTERRUPTED` is its sibling for the one
+redemption that commits without consuming — its own session was revoked before the lock, so it evicted every
+session and withheld the consumption. What persisted there is a session-context `erpify.iam.session.all-revoked`
+naming no cause, so the audit row is the only record attributing that eviction to the recovery channel.
 
 | `eventName` | ver | Producer (use case) | Payload |
 |-------------|:---:|---------------------|---------|
@@ -122,6 +125,22 @@ transaction — the shape every unrouted event in the app already has. The notif
 one of those handlers: `CompletePasswordReset` sends it itself, after the commit and after the session
 revocation, best-effort. A blocking mailer must be able neither to roll the reset back nor to delay the
 teardown this flow exists to perform.
+
+### Iam.Session (`aggregateType: Iam.Session`)
+
+Classified `person` in `api/.persistent-transport-policy`, so every event here is unrouted and handled in
+process. None has a consumer today. The two bulk facts are published by use cases rather than recorded on an
+aggregate, because their revocations are directed UPDATEs that hydrate no row.
+
+| `eventName` | ver | Producer (use case) | Payload |
+|-------------|:---:|---------------------|---------|
+| `erpify.iam.session.started` | 1 | `StartSession` (recorded by `Session::start()`) | `userId` |
+| `erpify.iam.session.revoked` | 1 | `RevokeSession` (recorded by `Session::revoke()`) | `userId` |
+| `erpify.iam.session.all-revoked` | 1 | `RevokeAllSessions`; `EvictOtherSessions` when the session it was to keep was already revoked (the interrupted recovery redemption) | *empty* `[]` |
+| `erpify.iam.session.others-revoked` | 1 | `RevokeOtherSessions` (sign out my other devices); `EvictOtherSessions` on every completed recovery redemption | `keptSessionId` |
+
+Neither bulk event names its cause, so `…others-revoked` from a recovery redemption and from the owner's own
+"sign out my other devices" are the same fact; the recovery-secret audit rows are what attribute it.
 
 #### `BankSnapshot` — the shared payload
 

@@ -12,9 +12,10 @@ use Erpify\Shared\Audit\Domain\AuditResource;
  *
  * It exists because those two axes answer different questions and can name the same person. The actor
  * anonymiser forgets *who acted*; this forgets *who was acted upon*. Leaving the second unforgotten is not
- * cosmetic: when a subject both acts and is the resource of the same row — a user changing their own roles —
- * erasing only the actor leaves the fresh pseudonym beside the real id in one row, a reversible crosswalk
- * that re-attributes every other anonymised row of that person through the indexed `resourceId` filter.
+ * cosmetic: when a subject both acts and is the resource of the same row — a role change a subject once made
+ * to their own identity is such a row — erasing only the actor leaves the fresh pseudonym beside the real id
+ * in one row, a reversible crosswalk that re-attributes every other anonymised row of that person through the
+ * indexed `resourceId` filter.
  *
  * **This module never decides which resource types denote a natural person.** The caller passes the type,
  * because that knowledge belongs to the bounded context that owns the person — the assignment
