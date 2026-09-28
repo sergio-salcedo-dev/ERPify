@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\ErrorContract\Application;
+namespace Erpify\Tests\Unit\Shared\ErrorContract\Infrastructure\Http;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
-use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

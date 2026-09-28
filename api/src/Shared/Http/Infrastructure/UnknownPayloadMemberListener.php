@@ -26,7 +26,7 @@ use Throwable;
  * resolution entirely.
  *
  * It classifies rather than formats, which is why it stops at a {@see ValidationFailedException}:
- * {@see \Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory} already answers any throwable carrying
+ * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory} already answers any throwable carrying
  * one in its chain with the `validation-failed` envelope and a `violations[]` extension. So the error contract
  * gains a producer, not a case — no marker interface, no new problem type, and nothing in the formatter that
  * knows a serializer exists.

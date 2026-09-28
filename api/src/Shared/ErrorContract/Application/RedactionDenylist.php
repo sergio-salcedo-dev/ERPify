@@ -7,8 +7,9 @@ namespace Erpify\Shared\ErrorContract\Application;
 /**
  * Exact-key case-insensitive denylist for sensitive context fields.
  *
- * Stripped from {@see ProblemDetailsFactory::redactKeys()} (body extensions before the
- * whitelist branch, so a denylisted `JsonSerializable` value cannot survive) AND from
+ * Stripped from {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory::redactKeys()}
+ * (body extensions before the whitelist branch, so a denylisted `JsonSerializable` value cannot survive)
+ * AND from
  * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder::buildLogContext()}
  * (log-record context, defense-in-depth: the canonical 8-field log shape contains no
  * denylist-named keys today, so the call is a runtime no-op — it pins the architectural
@@ -17,7 +18,8 @@ namespace Erpify\Shared\ErrorContract\Application;
  * **Strip semantics, not sentinel.** A denylisted key is REMOVED from the returned array;
  * its value is NOT replaced with `'[redacted]'`. Rationale: the presence of a key labelled
  * `password` is itself a signal to an attacker, and stripping composes cleanly with the
- * factory's sibling {@see ProblemDetailsFactory::RESERVED_KEYS} `unset()` layer.
+ * factory's sibling {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory::RESERVED_KEYS}
+ * `unset()` layer.
  *
  * **Match scope:** substring match, case-insensitive ASCII (`strtolower`),
  * single-level (no recursion into nested arrays). Value-pattern redaction
@@ -51,7 +53,8 @@ enum RedactionDenylist
     /**
      * Strips denylisted string keys from `$input` (case-insensitive ASCII, substring match).
      * Numeric-coerced integer keys pass through unchanged — the filter only acts on string
-     * keys, even though the canonical caller {@see ProblemDetailsFactory::redactKeys} only
+     * keys, even though the canonical caller
+     * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory::redactKeys} only
      * passes `array<string, mixed>`. The runtime `is_string` guard is defense-in-depth
      * against future callers (`buildLogContext`'s 8-field map is also string-keyed; the
      * guard pins the invariant cheaply).

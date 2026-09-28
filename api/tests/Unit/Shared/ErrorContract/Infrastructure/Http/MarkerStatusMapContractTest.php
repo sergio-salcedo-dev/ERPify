@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\ErrorContract\Application;
+namespace Erpify\Tests\Unit\Shared\ErrorContract\Infrastructure\Http;
 
-use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
 use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
@@ -16,6 +15,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
 use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use Erpify\Tests\Support\ApiSourceFiles;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -37,7 +37,7 @@ use Throwable;
  * {@see InvalidSearchCriteria}, {@see ServiceUnavailable} (the single 5xx marker).
  *
  * Co-located alongside {@see ProblemDetailsFactoryTest} under
- * `api/tests/Unit/Shared/ErrorContract/Application/`.
+ * `api/tests/Unit/Shared/ErrorContract/Infrastructure/Http/`.
  *
  * @internal
  *
@@ -283,7 +283,8 @@ final class MarkerStatusMapContractTest extends TestCase
      * non-interface) class implementing {@see Throwable}. FQCNs are derived from the PSR-4
      * mapping `Erpify\` → `src/`; files whose path does not resolve to a loadable class are
      * skipped. The directory sweep is the shared {@see ApiSourceFiles} walk that
-     * {@see ErrorContractGateTest} also uses; this gate layers FQCN + reflection on top.
+     * {@see \Erpify\Tests\Unit\Shared\ErrorContract\Application\ErrorContractGateTest} also uses; this gate
+     * layers FQCN + reflection on top.
      *
      * @return iterable<ReflectionClass<object>>
      */

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\ErrorContract\Application;
 
-use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use Erpify\Tests\Support\AllowlistFile;
 use Erpify\Tests\Support\ApiSourceFiles;
 use PHPUnit\Framework\Attributes\CoversNothing;
