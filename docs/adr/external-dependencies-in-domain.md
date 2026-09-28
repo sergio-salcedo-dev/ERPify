@@ -1,6 +1,6 @@
 # ADR — Dependencias externas en Domain/Application: PSR interface-only vs frameworks
 
-> **Status:** accepted · **Date:** 2026-06-15 · **Scope:** `api/src/**/Domain`, `api/src/**/Application` — cross-cutting guidance for every external dependency of the inner layers.
+> **Status:** accepted · **Date:** 2026-06-15 · **Last reviewed:** 2026-09-28 (D5 blesses the seam in `deptrac.yaml`; D6 moves `ProblemDetailsFactory`) · **Scope:** `api/src/**/Domain`, `api/src/**/Application` — cross-cutting guidance for every external dependency of the inner layers.
 >
 > Disparador: el PR #299 introdujo un puerto `Shared/Domain/Logging/Logger` (+ `LogLevel`, `NullLogger`, adaptador `PsrLogger`, wiring DI, test de contrato y docs) que envolvía `Psr\Log\LoggerInterface` 1:1. La pregunta de fondo no es el Logger, sino qué precedente sienta para `Clock`, `Cache`, `EventBus`, `MessageBus`, etc.
 
@@ -81,12 +81,13 @@ y un service id igual. Ahí sólo llega la revisión humana.
 
 ### D5 — Declined: porting `Erpify\Shared\Validation\Application\Validator` behind a domain interface (issue #305)
 
-The remaining baseline entry for `Validator` is **6 symbols** — `Constraint`, `ConstraintViolation`,
+`Validator` imports **6** Symfony Validator runtime symbols — `Constraint`, `ConstraintViolation`,
 `ConstraintViolationList`, `ConstraintViolationListInterface`, `Exception\ValidationFailedException`,
 `Validator\ValidatorInterface` — not 7: `Validator.php` also imports `Constraints\GroupSequence` for its
 `$groups` parameter, but that class already matches the `Symfony\Component\Validator\Constraints\*` regex
-`Vendor.PassiveMetadata` blesses inward (`deptrac.yaml:165`), so it was never a violation to begin with. Get the
-count from the baseline file, not from memory of the issue — this ADR itself repeated the wrong number once.
+the `Vendor.PassiveMetadata` layer in `deptrac.yaml` blesses inward, so it was never a violation to begin with. Get
+the count from the `Vendor.SymfonyValidatorRuntime` regex, not from memory of the issue — this ADR itself
+repeated the wrong number once.
 
 The 6-symbol shape looks like the one already paid down for `EventBus` (D2 table) and `TransactionManager` — an
 `Application`-layer class touching a Symfony runtime type directly. It is not: `EventBus`/`TransactionManager`
@@ -103,7 +104,7 @@ metadata — and hands `ensure()` an explicit `[new Assert\NotBlank(...), new Pa
 custom constraint included. That is exactly the "other inputs (uploads, non-id scalars) go through the shared
 `Validator::ensure()`" path the root `CLAUDE.md` security checklist mandates, so the explicit-`Constraint`
 capability is part of the contract, not a corner case a redesign could shed. `ValidationFailedException` is
-equally unavoidable one layer up: `Shared/Http/Infrastructure/UnknownPayloadMemberListener.php:61` constructs
+equally unavoidable one layer up: `Shared/Http/Infrastructure/UnknownPayloadMemberListener::__invoke()` constructs
 one by hand to answer a body carrying undeclared members, so it is already this app's native wire-level
 vocabulary for "validation failed" — a port that swapped it for a domain-shaped exception would leave the HTTP
 mapping layer speaking a second, parallel one.
@@ -143,6 +144,13 @@ class importing one of them still fails, as does `Validator` importing a seventh
 evaluates each depender layer independently, so both carve-outs are load-bearing: a class left in both
 `Shared.Application` and the seam layer is still refused by the former.
 
+Measured by planting each breach against `make php.deptrac` (baseline `Violations 0`): a seventh runtime import
+in `Validator` → `Violations 1`; one of the six in another `Shared/*/Application` class → `Violations 1`;
+removing either `must_not` → `Violations 10`, all exit 2. What deptrac cannot refuse is a widening of the grant
+itself — a seam regex matching a second class, a seventh type in the runtime regex, the runtime layer listed in
+an `*.Application` ruleset — so `DeptracBlessedLayerGateTest` pins the grant to one class and six types reached
+inward only by the seam, each of those three edits measured red.
+
 ### D6 — `ProblemDetailsFactory` se mueve a `Infrastructure/Http/`; no se bendice (issue #305)
 
 `ProblemDetailsFactory` vivía en `Shared/ErrorContract/Application/` importando **siete** tipos de runtime de
@@ -170,6 +178,14 @@ framework: `ProblemDetails`, `RedactionDenylist`, `RequestUriRedaction` o `Email
 consumidores en `Infrastructure` y se quedan, porque la dirección de la dependencia es legal y no hay deuda que
 pagar.
 
-Los barridos de la ruta de error (`NativeJsonEncodeContractTest`, `LoggerInterfaceContractTest`) recorren
-directorios (`Application/` e `Infrastructure/Http/`), no una lista de ficheros, y una raíz ausente falla: una
-lista que salta en silencio un fichero movido es justo lo que este movimiento habría dejado en verde.
+Los barridos de la ruta de error (`NativeJsonEncodeContractTest`, `LoggerInterfaceContractTest`,
+`BannedDoctrineApisTest`) recorren directorios (`Application/` e `Infrastructure/Http/`), no una lista de
+ficheros, y una raíz ausente falla: una lista que salta en silencio un fichero movido es justo lo que este
+movimiento habría dejado en verde.
+
+**Lo que el movimiento cuesta, y quién lo paga.** En `Application/`, cualquier import de framework nuevo en la
+factoría ponía deptrac en rojo; en `Shared.Infrastructure` el ruleset admite todo vendor, así que deptrac deja
+de acotarla. Ese límite lo sostiene ahora `ProblemDetailsFactoryTest::testSourceFileReferencesOnlyTheAllowedExternalNames`:
+una allowlist exacta de los nombres externos que la factoría escribe, leída con `token_get_all` (un FQCN inline
+cuenta igual que un `use`; un comentario no cuenta) y comparada en ambas direcciones, así que un import nuevo y
+una entrada rancia fallan por igual. Ampliarla es una decisión, no un arreglo.

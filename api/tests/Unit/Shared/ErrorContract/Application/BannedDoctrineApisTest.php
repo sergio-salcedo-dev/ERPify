@@ -22,7 +22,7 @@ use SplFileInfo;
  *   - `Connection::query(` — DBAL 4.0 removal; replaced by `executeQuery`.
  *   - `iterate(`     — DBAL 3.0 removal; replaced by `iterateAssociative` / etc.
  *
- * Curated grep — narrowest possible scope (the two error-path subtrees only). This is
+ * Curated grep — narrowest possible scope (the three error-path subtrees only). This is
  * deliberately tighter than the repo-wide CI gate, which can use a Make target once the
  * broader tree is audited. For the listener / factory shell, a unit test is the right
  * fit: it runs in `make php.unit`, it fails the CI build before merge, and it pins the
@@ -32,7 +32,7 @@ use SplFileInfo;
  * `flush($entity)`. The no-arg `flush()` form is still permitted, so the matcher excludes
  * `flush()` (no whitespace, no arg) and any string literal whose surroundings make it
  * obviously a comment / docblock — the source-text walk also checks the file is a `.php`
- * file under the two narrow trees, so collateral damage is minimal.
+ * file under the three narrow trees, so collateral damage is minimal.
  *
  * @internal
  */
@@ -126,10 +126,10 @@ final class BannedDoctrineApisTest extends TestCase
      */
     private function errorPathPhpFiles(): iterable
     {
+        // A missing root fails rather than shrinking the sweep: a moved directory would otherwise drop out
+        // in silence while the global zero-file floor still passed on the other two.
         foreach ($this->errorPathRoots() as $root) {
-            if (!\is_dir($root)) {
-                continue;
-            }
+            $this->assertDirectoryExists($root, 'Error-path directory moved or renamed; update this sweep.');
 
             $iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
