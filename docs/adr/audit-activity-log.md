@@ -126,10 +126,10 @@ negocio que puede revertirse.
 
 **Revisión (2026-09-28): el invariante se hace cumplir, no se afirma.** Aplica sólo a las filas
 `security` que registran un rehúso **en la frontera de la request** —`ACCESS_DENIED`,
-`INVALID_CURRENT_PASSWORD`, `AUDIT_TRAIL_READ`—. Los productores `security` de caso de uso
-(`ChangeUserRoles`, `InviteUser`, `UnlockUserAccount`, `FulfilIdentityErasure`…) escriben **dentro**
+`INVALID_CURRENT_PASSWORD`, `AUDIT_TRAIL_READ`, `SELF_TARGETED_ACT_REFUSED`—. Los productores
+`security` de caso de uso (`ChangeUserRoles`, `InviteUser`, `UnlockUserAccount`, `FulfilIdentityErasure`…) escriben **dentro**
 de su transacción a propósito: su fila debe revertirse con el cambio que describe, y siguen llamando a
-`AuditLogger` directamente. Los tres listeners de frontera pasan por un seam único,
+`AuditLogger` directamente. Los listeners de frontera pasan por un seam único,
 `Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit`, que antes de escribir pregunta
 `isTransactionActive()` a la **misma** `Connection` por defecto que usa `DbalAuditLogWriter`: sin
 transacción, escribe en autocommit y la fila está commiteada cuando el listener vuelve (antes de que el
@@ -137,7 +137,7 @@ responder fije la respuesta); con una abierta —que sólo puede ser una fuga, p
 revierte antes de relanzar— **rehúsa** con `LogicException` sin escribir. Ese rehúso, y un fallo de
 persistencia, **no se lanzan desde un listener de `kernel.exception`**: `HttpKernel::handleThrowable()` no
 envuelve a sus listeners en ningún `try`, así que un throwable que saliera de ahí escaparía del kernel sin
-Problem Details y perdería la excepción original. Esos dos listeners se lo entregan al evento a través de
+Problem Details y perdería la excepción original. Los listeners de `kernel.exception` se lo entregan al evento a través de
 `RequestBoundarySecurityAudit::recordOnException()` (`setThrowable()`), el rehúso encadena la excepción
 de la request como `previous`, y el responder contesta el 5xx como RFC 9457 y lo registra; el de
 `kernel.response` sí lanza, porque desde ahí el kernel lo reconduce por su propio manejo de excepciones.
